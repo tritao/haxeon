@@ -5,12 +5,11 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.ffi.HxiAbi;
-import compiler.ffi.HxiAbi.HxiAbiValue;
-import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.SemanticSignature;
 import compiler.types.NativeTypeDescriptor;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 import compiler.syntax.Ast.AstMapEntry;
 import compiler.syntax.Ast.AstObjectField;
 import compiler.syntax.Ast.AstExpression;
@@ -213,8 +212,19 @@ class ExpressionTyper {
 	function isFlatStruct(name:String):Bool {
 		var declaration = session.classDecls.get(name);
 		return declaration != null
-			&& declaration.isStruct == true
+			&& (declaration.isStruct == true || hasCRepresentation(declaration))
 			&& StructProperties.satisfies(session.declarations, TInstance(NominalKind.Class, name, []), StructProperties.FLAT_TYPE_NAME);
+	}
+
+	static function hasCRepresentation(declaration:compiler.syntax.Ast.AstClass):Bool {
+		for (metadata in declaration.metadata)
+			if (metadata.name == "repr" && metadata.arguments.length == 1)
+				switch metadata.arguments[0] {
+					case compiler.syntax.Ast.AstExpression.StringLiteral("C", _):
+						return true;
+					case _:
+				}
+		return false;
 	}
 
 	function typeRecordLayoutQuery(name:String, kind:compiler.syntax.Ast.NativeLayoutQueryKind, field:Null<String>, span:SourceSpan):TypedExpression {
@@ -240,46 +250,109 @@ class ExpressionTyper {
 	}
 
 	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
-		var name = switch resolved {
-			case TInstance(NominalKind.NativeValue, name, _): name;
-			case _:
-				fail("E1022", 'typeInfo requires a native value record type, got "${SemanticSignature.type(resolved)}"', span);
-				"";
-		}, layout = session.nativeLayoutsByName.get(name), declaration = session.classDecls.get(name);
-		if (layout == null)
-			fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+		var name = descriptorRecordName(resolved);
+		if (name == null)
+			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.type(resolved)}"', span);
+		var declaration = session.classDecls.get(name);
 		if (declaration == null)
-			fail("E1022", 'Native value "$name" has no source declaration for typeInfo', span);
-		var sourceFields:Map<String, compiler.syntax.Ast.AstField> = [];
-		for (field in declaration.fields)
-			if (!field.isStatic)
-				sourceFields.set(field.name, field);
-		var fields:Array<NativeTypeDescriptorField> = [];
-		for (placed in layout.fields) {
-			var source = sourceFields.get(placed.name);
-			if (source == null || source.type == null)
-				fail("E1022", 'Native value "$name" is missing source type information for field "${placed.name}"', span);
-			var fieldType = session.declarations.resolve(source.type, source.span, session.currentContext.typeSubstitutions),
-				fieldAnnotations = [for (metadata in source.metadata) metadata.name];
-			fields.push({
-				name: placed.name,
-				offset: placed.offset,
-				type: SemanticSignature.type(fieldType),
-				annotations: fieldAnnotations
-			});
-		}
-		var identity = SemanticSignature.type(resolved),
-			hash = NativeTypeDescriptor.contentHash(identity, name, layout.size, layout.alignment, fields),
-			fieldDescriptorFields:Array<AnonymousField> = [
+			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
+		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], []),
+			identity = SemanticSignature.type(resolved),
+			hash = NativeTypeDescriptor.contentHash(identity, name, root.type, root.flat, root.portable, root.size, root.alignment, root.annotations,
+				root.fields, root.arguments),
+			descriptor:NativeTypeDescriptorData = {
+				version: NativeTypeDescriptor.VERSION,
+				name: root.name,
+				type: root.type,
+				flat: root.flat,
+				portable: root.portable,
+				size: root.size,
+				alignment: root.alignment,
+				annotations: root.annotations,
+				fields: root.fields,
+				arguments: root.arguments,
+				hash: hash
+			},
+			nodeFields:Array<AnonymousField> = [],
+			nodeType:CompilerType = TAnonymous("$haxeon.TypeInfoNode.v2", nodeFields);
+		nodeFields.push({
+			name: "name",
+			type: TString,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "type",
+			type: TString,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "flat",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "portable",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "size",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "alignment",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "offset",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "annotations",
+			type: TArray(TString),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "fields",
+			type: TArray(nodeType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "arguments",
+			type: TArray(nodeType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "recursive",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		var descriptorSizeType:CompilerType = descriptor.size == null ? TNullable(TInt) : TInt,
+			descriptorAlignmentType:CompilerType = descriptor.alignment == null ? TNullable(TInt) : TInt,
+			descriptorFields:Array<AnonymousField> = [
 				{
-					name: "name",
-					type: TString,
+					name: "version",
+					type: TInt,
 					optional: false,
 					isFinal: true
 				},
 				{
-					name: "offset",
-					type: TInt,
+					name: "name",
+					type: TString,
 					optional: false,
 					isFinal: true
 				},
@@ -290,35 +363,44 @@ class ExpressionTyper {
 					isFinal: true
 				},
 				{
-					name: "annotations",
-					type: TArray(TString),
+					name: "flat",
+					type: TBool,
 					optional: false,
 					isFinal: true
-				}
-			],
-			fieldDescriptorType:CompilerType = TAnonymous(SemanticSignature.anonymousTypeName(fieldDescriptorFields), fieldDescriptorFields),
-			descriptorFields:Array<AnonymousField> = [
+				},
 				{
-					name: "name",
-					type: TString,
+					name: "portable",
+					type: TBool,
 					optional: false,
 					isFinal: true
 				},
 				{
 					name: "size",
-					type: TInt,
+					type: descriptorSizeType,
 					optional: false,
 					isFinal: true
 				},
 				{
 					name: "alignment",
-					type: TInt,
+					type: descriptorAlignmentType,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "annotations",
+					type: TArray(TString),
 					optional: false,
 					isFinal: true
 				},
 				{
 					name: "fields",
-					type: TArray(fieldDescriptorType),
+					type: TArray(nodeType),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "arguments",
+					type: TArray(nodeType),
 					optional: false,
 					isFinal: true
 				},
@@ -329,25 +411,158 @@ class ExpressionTyper {
 					isFinal: true
 				}
 			],
-			descriptorType:CompilerType = TAnonymous(SemanticSignature.anonymousTypeName(descriptorFields), descriptorFields),
-			fieldExpressions:Array<AstExpression> = [
-				for (field in fields)
-					ObjectLiteral([
-						objectField("name", StringLiteral(field.name, span), span),
-						objectField("offset", IntegerLiteral(field.offset, span), span),
-						objectField("type", StringLiteral(field.type, span), span),
-						objectField("annotations", ArrayLiteral([for (annotation in field.annotations) StringLiteral(annotation, span)], span), span)
-					], span)
-			],
-			descriptor = ObjectLiteral([
-				objectField("name", StringLiteral(name, span), span),
-				objectField("size", IntegerLiteral(layout.size, span), span),
-				objectField("alignment", IntegerLiteral(layout.alignment, span), span),
-				objectField("fields", ArrayLiteral(fieldExpressions, span), span),
-				objectField("hash", StringLiteral(hash, span), span)
+			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v2", descriptorFields),
+			descriptorExpression = ObjectLiteral([
+				objectField("version", IntegerLiteral(descriptor.version, span), span),
+				objectField("name", StringLiteral(descriptor.name, span), span),
+				objectField("type", StringLiteral(descriptor.type, span), span),
+				objectField("flat", BoolLiteral(descriptor.flat, span), span),
+				objectField("portable", BoolLiteral(descriptor.portable, span), span),
+				objectField("size", nullableInteger(descriptor.size, span), span),
+				objectField("alignment", nullableInteger(descriptor.alignment, span), span),
+				objectField("annotations", stringArray(descriptor.annotations, span), span),
+				objectField("fields", ArrayLiteral([for (field in descriptor.fields) descriptorFieldExpression(field, span)], span), span),
+				objectField("arguments", ArrayLiteral([for (argument in descriptor.arguments) descriptorFieldExpression(argument, span)], span), span),
+				objectField("hash", StringLiteral(descriptor.hash, span), span)
 			], span);
-		return typeExpressionCallback(descriptor, scope, descriptorType, false);
+		return typeExpressionCallback(descriptorExpression, scope, descriptorType, false);
 	}
+
+	function descriptorNode(fieldName:String, type:CompilerType, offset:Null<Int>, annotations:Array<String>,
+			visiting:Array<String>):NativeTypeDescriptorField {
+		var name = descriptorRecordName(type),
+			recursive = name != null && visiting.indexOf(name) >= 0,
+			facts = StructProperties.evaluate(session.declarations, type),
+			layout = facts.flat ? descriptorLayout(type) : null,
+			nested = recursive || name == null ? [] : descriptorFields(name, visiting),
+			arguments = descriptorArguments(type, visiting);
+		return {
+			name: fieldName,
+			type: SemanticSignature.type(type),
+			flat: facts.flat,
+			portable: facts.portable,
+			size: layout == null ? null : layout.size,
+			alignment: layout == null ? null : layout.alignment,
+			offset: offset,
+			annotations: annotations,
+			fields: nested,
+			arguments: arguments,
+			recursive: recursive
+		};
+	}
+
+	function descriptorFields(name:String, visiting:Array<String>):Array<NativeTypeDescriptorField> {
+		var declaration = session.classDecls.get(name);
+		if (declaration == null)
+			return [];
+		var layout = session.nativeLayoutsByName.get(name),
+			offsets:Map<String, Int> = [];
+		if (layout != null)
+			for (field in layout.fields)
+				offsets.set(field.name, field.offset);
+		var nestedVisiting = visiting.concat([name]),
+			fields:Array<NativeTypeDescriptorField> = [];
+		for (field in declaration.fields)
+			if (!field.isStatic && descriptorFieldHasStorage(field) && field.type != null) {
+				var fieldType = session.declarations.resolve(field.type, field.span, session.currentContext.typeSubstitutions),
+					fieldAnnotations = [for (metadata in field.metadata) metadata.name];
+				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations, nestedVisiting));
+			}
+		return fields;
+	}
+
+	function descriptorArguments(type:CompilerType, visiting:Array<String>):Array<NativeTypeDescriptorField> {
+		var arguments:Array<{name:String, type:CompilerType}> = switch type {
+			case TNullable(element) | TArray(element) | TIterator(element): [{name: "element", type: element}];
+			case TMap(key, value): [{name: "key", type: key}, {name: "value", type: value}];
+			case TFunction(parameters, result):
+				[
+					for (index in 0...parameters.length)
+						{name: 'parameter$index', type: parameters[index]}
+				].concat([{name: "result", type: result}]);
+			case TAbstract(_, parameters, representation):
+				var values = [
+					for (index in 0...parameters.length)
+						{name: 'argument$index', type: parameters[index]}
+				];
+				if (parameters.length == 0 && SemanticSignature.type(representation) != SemanticSignature.type(type))
+					values.push({name: "representation", type: representation});
+				values;
+			case TInstance(_, _, parameters): [
+					for (index in 0...parameters.length)
+						{name: 'argument$index', type: parameters[index]}
+				];
+			case _: [];
+		};
+		return [
+			for (argument in arguments)
+				descriptorNode(argument.name, argument.type, null, [], visiting)
+		];
+	}
+
+	function descriptorLayout(type:CompilerType):Null<{size:Int, alignment:Int}> {
+		var recordName = descriptorRecordName(type);
+		if (recordName != null) {
+			var record = session.nativeLayoutsByName.get(recordName);
+			return record == null ? null : {size: record.size, alignment: record.alignment};
+		}
+		var nativeType:compiler.ffi.HxiModel.HxiType;
+		try {
+			nativeType = NativeLayout.fieldType(type);
+		} catch (_:Dynamic) {
+			return null;
+		}
+		var layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(nativeType);
+		return layout == null ? null : {size: layout.size, alignment: layout.align};
+	}
+
+	function descriptorRecordName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			case TInstance(NominalKind.Class, name, _) if (isStructDeclaration(session.classDecls.get(name))): name;
+			case TNullable(element): descriptorRecordName(element);
+			case TAbstract(_, _, representation): descriptorRecordName(representation);
+			case _: null;
+		};
+
+	static function isStructDeclaration(declaration:Null<compiler.syntax.Ast.AstClass>):Bool
+		return declaration != null && (declaration.isStruct == true || hasCRepresentation(declaration));
+
+	static function descriptorFieldHasStorage(field:compiler.syntax.Ast.AstField):Bool {
+		if (descriptorHasDirectAccess(field.readAccess) || descriptorHasDirectAccess(field.writeAccess))
+			return true;
+		for (metadata in field.metadata)
+			if (metadata.name == "isVar")
+				return true;
+		return false;
+	}
+
+	static function descriptorHasDirectAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
+		return switch access {
+			case compiler.syntax.Ast.AstFieldAccess.GetAccess | compiler.syntax.Ast.AstFieldAccess.SetAccess | compiler.syntax.Ast.AstFieldAccess.NeverAccess: false;
+			case _: true;
+		};
+
+	static function nullableInteger(value:Null<Int>, span:SourceSpan):AstExpression
+		return value == null ? NullLiteral(span) : IntegerLiteral(cast value, span);
+
+	static function stringArray(values:Array<String>, span:SourceSpan):AstExpression
+		return ArrayLiteral([for (value in values) StringLiteral(value, span)], span);
+
+	static function descriptorFieldExpression(field:NativeTypeDescriptorField, span:SourceSpan):AstExpression
+		return ObjectLiteral([
+			objectField("name", StringLiteral(field.name, span), span),
+			objectField("type", StringLiteral(field.type, span), span),
+			objectField("flat", BoolLiteral(field.flat, span), span),
+			objectField("portable", BoolLiteral(field.portable, span), span),
+			objectField("size", nullableInteger(field.size, span), span),
+			objectField("alignment", nullableInteger(field.alignment, span), span),
+			objectField("offset", nullableInteger(field.offset, span), span),
+			objectField("annotations", stringArray(field.annotations, span), span),
+			objectField("fields", ArrayLiteral([for (child in field.fields) descriptorFieldExpression(child, span)], span), span),
+			objectField("arguments", ArrayLiteral([for (argument in field.arguments) descriptorFieldExpression(argument, span)], span), span),
+			objectField("recursive", BoolLiteral(field.recursive, span), span)
+		], span);
 
 	static function objectField(name:String, value:AstExpression, span:SourceSpan):AstObjectField
 		return {name: name, value: value, span: span};

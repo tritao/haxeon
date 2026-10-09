@@ -194,6 +194,7 @@ std-is-of-type	42
 native-memory	42
 NativeU32RuntimeValues	42
 native-nested-int16-store	42
+native-type-info-nonflat	42
 native-type-info	42
 struct-value-semantics	42
 struct-flat-layout	42

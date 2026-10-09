@@ -145,7 +145,7 @@ class NativeLayoutMain {
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function bad():Int return offsetof<Pair>("missing");', 'has no field "missing"');
 		expectError('function bad():Int return sizeof<String>();', "no fixed native ABI layout");
 		expectError('function bad():Int return offsetof<Int32>("x");', "requires a flat struct or native value record type");
-		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a native value record type");
+		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a struct or legacy C value record");
 		expectError('class Managed { public var x:Int32; }', "only appear in value structs");
 		expectError('enum Managed { Value(value:Int32); }', "cannot be stored in a Haxe enum yet");
 	}
