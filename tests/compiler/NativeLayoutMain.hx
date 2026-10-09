@@ -20,6 +20,7 @@ class NativeLayoutMain {
 			+ 'function pairSize():Int return sizeof<Pair>(); '
 			+ 'function pairAlignment():Int return alignof<Pair>(); '
 			+ 'function valueOffset():Int return offsetof<Pair>("value"); '
+			+ 'function pairInfoSize():Int return typeInfo<Pair>().size; '
 			+ 'function longSize():Int return sizeof<CLong>();',
 			program = new Parser(new Lexer(new SourceFile("native-layout.hx", source)).tokenize()).parseProgram(),
 			typed = Typer.typeLibrary(program),
@@ -132,6 +133,7 @@ class NativeLayoutMain {
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function bad():Int return offsetof<Pair>("missing");', 'has no field "missing"');
 		expectError('function bad():Int return sizeof<String>();', "no fixed native ABI layout");
 		expectError('function bad():Int return offsetof<Int32>("x");', "requires a native value record type");
+		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a native value record type");
 		expectError('class Managed { public var x:Int32; }', "only appear in native value record fields");
 		expectError('enum Managed { Value(value:Int32); }', "cannot be stored in a Haxe enum yet");
 	}

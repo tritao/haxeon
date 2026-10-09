@@ -24,6 +24,12 @@ typedef struct hxi_pointer {
 	void *value;
 } hxi_pointer;
 
+typedef struct hxi_type_info_pair {
+	hxi_u8 tag;
+	hxi_i64 value;
+	float ratio;
+} hxi_type_info_pair;
+
 _Static_assert(sizeof(hxi_point) == 8, "point size");
 _Static_assert(_Alignof(hxi_point) == 4, "point alignment");
 _Static_assert(sizeof(hxi_gapped) == 12, "gapped size");
@@ -32,6 +38,11 @@ _Static_assert(sizeof(hxi_padded) == 8, "padded size");
 _Static_assert(_Alignof(hxi_padded) == 4, "padded alignment");
 _Static_assert(sizeof(hxi_pointer) == __SIZEOF_POINTER__, "pointer size");
 _Static_assert(_Alignof(hxi_pointer) == __SIZEOF_POINTER__, "pointer alignment");
+_Static_assert(sizeof(hxi_type_info_pair) == 24, "typeInfo Pair size");
+_Static_assert(_Alignof(hxi_type_info_pair) == 8, "typeInfo Pair alignment");
+_Static_assert(__builtin_offsetof(hxi_type_info_pair, tag) == 0, "typeInfo Pair tag offset");
+_Static_assert(__builtin_offsetof(hxi_type_info_pair, value) == 8, "typeInfo Pair value offset");
+_Static_assert(__builtin_offsetof(hxi_type_info_pair, ratio) == 16, "typeInfo Pair ratio offset");
 
 extern int hxi_read_const(const hxi_point *value);
 extern void hxi_write_out(hxi_point *value);

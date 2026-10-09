@@ -1667,7 +1667,10 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier)
 			&& peekKind(1) == TokenKind.Less
-			&& (current().text == "sizeof" || current().text == "alignof" || current().text == "offsetof"))
+			&& (current().text == "sizeof"
+				|| current().text == "alignof"
+				|| current().text == "offsetof"
+				|| current().text == "typeInfo"))
 			return parseNativeLayoutQuery();
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
@@ -1704,6 +1707,7 @@ class Parser {
 			case "sizeof": SizeOf;
 			case "alignof": AlignOf;
 			case "offsetof": OffsetOf;
+			case "typeInfo": TypeInfo;
 			default: throw "Invalid native layout query";
 		};
 		consume(TokenKind.Less);

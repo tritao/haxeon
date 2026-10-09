@@ -217,6 +217,7 @@ enum NativeLayoutQueryKind {
 	SizeOf;
 	AlignOf;
 	OffsetOf;
+	TypeInfo;
 }
 
 /** Named value supplied by an object-literal expression. */

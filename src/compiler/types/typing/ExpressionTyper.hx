@@ -9,6 +9,8 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.SemanticSignature;
+import compiler.types.NativeTypeDescriptor;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
 import compiler.syntax.Ast.AstMapEntry;
 import compiler.syntax.Ast.AstObjectField;
 import compiler.syntax.Ast.AstExpression;
@@ -150,7 +152,7 @@ class ExpressionTyper {
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
-			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span);
+			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span, scope);
 			case NewGeneric(typeName, typeArguments, arguments, span):
 				callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
 			case New(typeName, arguments, span): callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
@@ -178,8 +180,11 @@ class ExpressionTyper {
 				call;
 		};
 
-	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan):TypedExpression {
+	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan,
+			scope:Scope):TypedExpression {
 		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
+		if (kind == TypeInfo)
+			return typeNativeTypeInfo(resolved, span, scope);
 		switch resolved {
 			case TInstance(NominalKind.NativeValue, name, _):
 				var layout = session.nativeLayoutsByName.get(name);
@@ -198,6 +203,7 @@ class ExpressionTyper {
 						if (found == null)
 							fail("E1022", 'Native value "$name" has no field "$field"', span);
 						size = cast found;
+					case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
 				}
 			case _:
 				if (kind == OffsetOf)
@@ -213,10 +219,124 @@ class ExpressionTyper {
 					case SizeOf: layout.size;
 					case AlignOf: layout.align;
 					case OffsetOf: 0;
+					case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
 				};
 		}
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
+
+	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
+		var name = switch resolved {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			case _:
+				fail("E1022", 'typeInfo requires a native value record type, got "${SemanticSignature.type(resolved)}"', span);
+				"";
+		}, layout = session.nativeLayoutsByName.get(name), declaration = session.classDecls.get(name);
+		if (layout == null)
+			fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+		if (declaration == null)
+			fail("E1022", 'Native value "$name" has no source declaration for typeInfo', span);
+		var sourceFields:Map<String, compiler.syntax.Ast.AstField> = [];
+		for (field in declaration.fields)
+			if (!field.isStatic)
+				sourceFields.set(field.name, field);
+		var fields:Array<NativeTypeDescriptorField> = [];
+		for (placed in layout.fields) {
+			var source = sourceFields.get(placed.name);
+			if (source == null || source.type == null)
+				fail("E1022", 'Native value "$name" is missing source type information for field "${placed.name}"', span);
+			var fieldType = session.declarations.resolve(source.type, source.span, session.currentContext.typeSubstitutions),
+				fieldAnnotations = [for (metadata in source.metadata) metadata.name];
+			fields.push({
+				name: placed.name,
+				offset: placed.offset,
+				type: SemanticSignature.type(fieldType),
+				annotations: fieldAnnotations
+			});
+		}
+		var identity = SemanticSignature.type(resolved),
+			hash = NativeTypeDescriptor.contentHash(identity, name, layout.size, layout.alignment, fields),
+			fieldDescriptorFields:Array<AnonymousField> = [
+				{
+					name: "name",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "offset",
+					type: TInt,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "type",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "annotations",
+					type: TArray(TString),
+					optional: false,
+					isFinal: true
+				}
+			],
+			fieldDescriptorType:CompilerType = TAnonymous(SemanticSignature.anonymousTypeName(fieldDescriptorFields), fieldDescriptorFields),
+			descriptorFields:Array<AnonymousField> = [
+				{
+					name: "name",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "size",
+					type: TInt,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "alignment",
+					type: TInt,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "fields",
+					type: TArray(fieldDescriptorType),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "hash",
+					type: TString,
+					optional: false,
+					isFinal: true
+				}
+			],
+			descriptorType:CompilerType = TAnonymous(SemanticSignature.anonymousTypeName(descriptorFields), descriptorFields),
+			fieldExpressions:Array<AstExpression> = [
+				for (field in fields)
+					ObjectLiteral([
+						objectField("name", StringLiteral(field.name, span), span),
+						objectField("offset", IntegerLiteral(field.offset, span), span),
+						objectField("type", StringLiteral(field.type, span), span),
+						objectField("annotations", ArrayLiteral([for (annotation in field.annotations) StringLiteral(annotation, span)], span), span)
+					], span)
+			],
+			descriptor = ObjectLiteral([
+				objectField("name", StringLiteral(name, span), span),
+				objectField("size", IntegerLiteral(layout.size, span), span),
+				objectField("alignment", IntegerLiteral(layout.alignment, span), span),
+				objectField("fields", ArrayLiteral(fieldExpressions, span), span),
+				objectField("hash", StringLiteral(hash, span), span)
+			], span);
+		return typeExpressionCallback(descriptor, scope, descriptorType, false);
+	}
+
+	static function objectField(name:String, value:AstExpression, span:SourceSpan):AstObjectField
+		return {name: name, value: value, span: span};
 
 	public function typeObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var objectExpected = objectLiteralExpectation(expectedType),
