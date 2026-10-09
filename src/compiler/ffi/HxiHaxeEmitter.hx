@@ -947,6 +947,8 @@ class HxiHaxeEmitter {
 						output.add('\tpublic function set(index:Int, value:$projectedName):Void ${model.name}.__hxi_struct_copy(this.bytes, this.offset(index), value, $size);\n');
 						for (field in fields) {
 							var projectedField = Lambda.find(projectedStruct.fields, value -> value.nativeName == field.name);
+							if (projectedField == null)
+								continue;
 							var fieldName = projectedField.name,
 								fieldOffset = requiredFieldOffset(field);
 							var nested = structureType(field.type, declarations, profile);
