@@ -42,6 +42,8 @@ class BlockingDiagnosticLanguageService extends LanguageService {
 class LspProtocolMain {
 	static function main():Void {
 		haxeonManifestWorkspace();
+		recoveredDefinitionNavigation();
+		recoveredTypeNavigation();
 		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
 		var converted:Dynamic = positions.position(6);
 		if (positions.offset(1, 2) != 6 || converted.line != 1 || converted.character != 2)
@@ -1412,6 +1414,85 @@ class LspProtocolMain {
 		Sys.println("PASS: standard LSP adapter maps compiler language queries");
 	}
 
+	static function recoveredTypeNavigation():Void {
+		var service = new LanguageService(), protocol = new LspProtocol(service), uri = "file:///app/Holder.hx";
+		service.update("left/Widget.hx", "package left; class Widget {}");
+		service.update("right/Widget.hx", "package right; class Widget {}");
+		var source = "package app; import left.Widget; import missing.Dependency; class Holder { final view:Widget; public function new(view:Widget) { this.view = view; } public function get():Widget return this.view; }";
+		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
+		}}));
+		for (offset in [source.indexOf("view:Widget") + 1, source.indexOf("= view") + 3, source.lastIndexOf("this.view") + 6, source.indexOf("get()") + 1]) {
+			var response = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8811, method: "textDocument/typeDefinition", params: {
+				textDocument: {uri: uri}, position: {line: 0, character: offset}
+			}}));
+			if (response.result == null || response.result.uri != "file://left/Widget.hx")
+				throw "type navigation did not use the declared import during dependency failure: " + Json.stringify(response);
+		}
+		var unknown = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8812, method: "textDocument/typeDefinition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: 0}
+		}}));
+		var failure:Dynamic = Json.parse(unknown[0]);
+		var message:String = failure.error == null ? "" : failure.error.message;
+		if (failure.error == null || message.indexOf("Missing module") < 0 || message.indexOf("missing.Dependency") < 0 || message.indexOf("snapshot") >= 0)
+			throw "blocked type navigation did not explain its compiler failure: " + Json.stringify(failure);
+		var rename = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8813, method: "textDocument/rename", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("this.view") + 6}, newName: "renamed"
+		}}));
+		var renameFailure:Dynamic = Json.parse(rename[0]);
+		var renameMessage:String = renameFailure.error == null ? "" : renameFailure.error.message;
+		if (renameFailure.error == null || renameMessage.indexOf("Missing module") < 0)
+			throw "rename failure did not explain incomplete analysis";
+		// Two imports with the same short name cannot safely identify a declaration.
+		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
+			textDocument: {uri: uri, version: 2}, contentChanges: [{text: StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;")}]
+		}}));
+		var ambiguous = service.typeDefinition("/app/Holder.hx", StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;").lastIndexOf("this.view") + 6);
+		if (ambiguous != null) throw "recovered type navigation guessed between ambiguous imports";
+		var genericSource = "package app; import left.Widget; import missing.Dependency; class Holder { public function take<Widget>(value:Widget):Widget return value; }";
+		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
+			textDocument: {uri: uri, version: 3}, contentChanges: [{text: genericSource}]
+		}}));
+		if (service.typeDefinition("/app/Holder.hx", genericSource.lastIndexOf("value") + 1) != null)
+			throw "recovered type navigation confused a generic parameter with an imported class";
+		Sys.println("PASS: declared type navigation survives dependency errors, imports stay unambiguous and failures report their cause");
+	}
+
+	static function recoveredDefinitionNavigation():Void {
+		var service = new LanguageService(), protocol = new LspProtocol(service), uri = "file:///workspace/Active.hx";
+		var source = "import missing.Dependency; class Active { final view:Int; public function new(view:Int) { this.view = view; } public function read():Int return this.view; }";
+		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
+		}}));
+		if (service.isCurrent("/workspace/Active.hx") || !service.hasCurrentSyntax("/workspace/Active.hx"))
+			throw "missing dependency did not preserve a current recovered syntax index";
+		for (offset in [source.indexOf("this.view") + 6, source.lastIndexOf("this.view") + 6]) {
+			var response = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8801, method: "textDocument/definition", params: {
+				textDocument: {uri: uri}, position: {line: 0, character: offset}
+			}}));
+			if (response.error != null || response.result == null || response.result.uri != uri || response.result.range.start.character != source.indexOf("view:Int"))
+				throw "this.member navigation failed with a broken dependency: " + Json.stringify(response);
+		}
+		var local = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8802, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: source.indexOf("= view") + 3}
+		}}));
+		if (local.result == null || local.result.range.start.character != source.indexOf("new(view") + 4)
+			throw "recovered member lookup confused a shadowing parameter with the field";
+		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
+			textDocument: {uri: uri, version: 2}, contentChanges: [{text: "\n\n" + source}]
+		}}));
+		var moved = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8803, method: "textDocument/definition", params: {
+			textDocument: {uri: uri}, position: {line: 2, character: source.indexOf("this.view") + 6}
+		}}));
+		if (moved.result == null || moved.result.range.start.line != 2) throw "recovered navigation reused pre-edit declaration spans";
+		var renameResponses = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8804, method: "textDocument/rename", params: {
+			textDocument: {uri: uri}, position: {line: 2, character: source.indexOf("this.view") + 6}, newName: "renamed"
+		}}));
+		var rename:Dynamic = Json.parse(renameResponses[0]);
+		if (rename.error == null || rename.error.code != -32801) throw "navigation fallback weakened rename freshness protection";
+		Sys.println("PASS: current recovered this.member definitions, shadowing and edits with broken dependencies; rename remains protected");
+	}
+
 	static function haxeonManifestWorkspace():Void {
 		var base = sys.FileSystem.absolutePath("out/lsp-haxeon-workspace");
 		deleteTree(base);
@@ -1420,15 +1501,19 @@ class LspProtocolMain {
 			base + "/app",
 			base + "/app/src",
 			base + "/app/src/app",
+			base + "/app/src/build",
+			base + "/app/src/generated",
 			base + "/lib",
 			base + "/lib/code",
 			base + "/lib/code/dep"
 		])
 			sys.FileSystem.createDirectory(directory);
 		sys.io.File.saveContent(base + "/app/haxeon.json",
-			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"scopeSourceRoots":false,"dependencies":{"helper":{"path":"../lib"}}}');
+			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"outputDir":"src/generated","scopeSourceRoots":false,"dependencies":{"helper":{"path":"../lib"}}}');
 		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"scopeSourceRoots":false}');
 		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx", "package dep; class Value { public static function answer():Int return 42; }");
+		sys.io.File.saveContent(base + "/app/src/build/BuildDiagnostic.hx", "package build; class BuildDiagnostic {} ");
+		sys.io.File.saveContent(base + "/app/src/generated/Artifact.hx", "invalid generated output");
 		var mainPath = base + "/app/src/app/Main.hx",
 			uri = "file://" + mainPath,
 			source = "package app; import dep.Value; class Main { public static function main():Int { var answer = Value.answer(); return answer; } }",
@@ -1442,7 +1527,9 @@ class LspProtocolMain {
 		}));
 		if (protocol.project.configurations.length != 1
 			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
-			|| !protocol.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
+			|| !protocol.project.hasDiskSource(base + "/lib/code/dep/Value.hx")
+			|| !protocol.project.hasDiskSource(base + "/app/src/build/BuildDiagnostic.hx")
+			|| protocol.project.hasDiskSource(base + "/app/src/generated/Artifact.hx"))
 			throw "haxeon.json source roots and local package dependencies were not discovered";
 		var broken = StringTools.replace(source, "var answer = Value.answer()", 'var answer:Int = "wrong"'),
 			messages = protocol.handle(Json.stringify({

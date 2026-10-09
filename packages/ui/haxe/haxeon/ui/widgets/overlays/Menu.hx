@@ -141,7 +141,8 @@ class Menu implements View {
 				focusableItems.push(node);
 		});
 		// Keep the modal keyboard owner independent of the highlighted action.
-		root.focusable = !selectFirstOnOpen || focusableItems.length == 0;
+		root.focusable = true;
+		if (selectFirstOnOpen) root.tabIndex = -1;
 		var initialFocusPending = context.state(root.id, true);
 		root.onResolved(function(_) {
 			if (!initialFocusPending.value) return;
@@ -151,13 +152,16 @@ class Menu implements View {
 		});
 		root.on(UiEventKind.PointerMove, function(event) {
 			var node = root.find(event.target);
+			var focusTarget = root;
 			while (node != null && node != root) {
 				if (node.enabled && node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem) {
-					context.requestFocus(node.id);
+					focusTarget = node;
 					break;
 				}
 				node = node.parent;
 			}
+			// The backdrop and blank menu space clear the previous hover selection.
+			context.requestFocus(focusTarget.id);
 		}, "capture");
 		var navigate = function(event:haxeon.ui.core.UiEvent) {
 			if (event.target.equals(root.id) && (event.key == UiKey.Enter || event.key == UiKey.Space)) {

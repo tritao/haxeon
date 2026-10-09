@@ -60,6 +60,8 @@ class ProjectWorkspace {
 	public final errors:Array<String> = [];
 
 	final diskSources:Map<String, String> = [];
+	final declaredSourceDirectories:Map<String, Bool> = [];
+	final outputDirectories:Map<String, Bool> = [];
 	final compilerPathByDisk:Map<String, String> = [];
 	final diskPathByCompiler:Map<String, String> = [];
 	final sourceRoots:Array<String> = [];
@@ -106,6 +108,7 @@ class ProjectWorkspace {
 		sourceRoots.resize(0);
 		unconfiguredSourceRoots.resize(0);
 		diskSources.clear();
+		declaredSourceDirectories.clear(); outputDirectories.clear();
 		compilerPathByDisk.clear();
 		diskPathByCompiler.clear();
 		for (path => compilerPath in previous)
@@ -380,6 +383,14 @@ class ProjectWorkspace {
 				roots:Array<String> = [],
 				interfaces:Map<String, String> = [], projections:Map<String, String> = [];
 			for (value in resolved.packages.packages) {
+				outputDirectories.set(resolve(value.root, value.manifest.outputDir), true);
+				for (source in value.sources) {
+					var directory = Path.directory(source);
+					while (directory.length > value.root.length) {
+						declaredSourceDirectories.set(normalize(directory), true);
+						directory = Path.directory(directory);
+					}
+				}
 				for (root in value.sourceRoots)
 					if (roots.indexOf(root) < 0) roots.push(root);
 				for (path in value.ffiInterfaces) interfaces.set(path, File.getContent(path));
@@ -421,9 +432,9 @@ class ProjectWorkspace {
 				names = FileSystem.readDirectory(directory);
 			names.sort(Reflect.compare);
 			for (name in names) {
-				if (name == ".git" || name == "node_modules" || name == "build" || name == "out" || name == "vendor")
-					continue;
 				var path = normalize(Path.join([directory, name]));
+				if (name == ".git" || name == "node_modules" || name == "vendor" || outputDirectories.exists(path) ||
+					((name == "build" || name == "out") && !declaredSourceDirectories.exists(path))) continue;
 				if (FileSystem.isDirectory(path))
 					pending.push(path);
 				else if (StringTools.endsWith(name, ".hx")) {

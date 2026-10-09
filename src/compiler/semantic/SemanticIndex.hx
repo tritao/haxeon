@@ -148,11 +148,11 @@ class SemanticIndex {
 			if (field.type != null)
 				try
 					setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span))
-				catch (_:Dynamic) {}
+				catch (_:Dynamic) setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
 		for (method in methods)
 			try
 				setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span))
-			catch (_:Dynamic) {}
+			catch (_:Dynamic) setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
 	}
 
 	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void {
@@ -272,10 +272,15 @@ class SemanticIndex {
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, owner, [])});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
+		if (currentCaller != null) declarationTypes.set(currentCaller, recoveredType(fn.result));
 		indexRecoveredStatementUses(fn.statements);
-		for (token in tokens)
+		for (index in 0...tokens.length) {
+			var token = tokens[index];
+			// Member names belong to the receiver, even when a parameter shares the name.
+			if (index > 0 && tokens[index - 1].kind == TokenKind.Dot) continue;
 			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start && token.span.end <= fn.span.end)
 				bindRecoveredLocal(token.text, token.span);
+		}
 		currentCaller = null;
 	}
 
@@ -336,10 +341,10 @@ class SemanticIndex {
 				case VarDeclaration(_, _, value, _), Return(value, _), Throw(value, _), Expression(value, _):
 					indexRecoveredExpression(value);
 				case Assignment(name, value, span):
-					bindRecoveredLocal(name, span);
+					indexRecoveredExpression(Variable(name, span));
 					indexRecoveredExpression(value);
 				case Increment(name, _, span):
-					bindRecoveredLocal(name, span);
+					indexRecoveredExpression(Variable(name, span));
 				case IndexAssignment(array, offset, value, _):
 					indexRecoveredExpression(array);
 					indexRecoveredExpression(offset);
@@ -506,6 +511,11 @@ class SemanticIndex {
 
 	function recoveredExpressionBindingType(expression:AstExpression):CompilerType
 		return switch expression {
+			case Variable("this", span):
+				var receiver:CompilerType = TDynamic;
+				for (candidate in functionReceivers)
+					if (span.start >= candidate.span.start && span.end <= candidate.span.end) receiver = candidate.type;
+				receiver;
 			case Variable(name, span): var id = bindRecoveredLocal(name,
 					span); id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);

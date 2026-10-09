@@ -105,6 +105,7 @@ class LspProtocol {
 	var completionSnippets = false;
 
 	public var lastForegroundAnalysisMs(default, null):Float = 0.0;
+	var foregroundAnalysisFailure:Null<String>;
 	public var lastBackgroundAnalysisMs(default, null):Float = 0.0;
 
 	var shutdownRequested = false;
@@ -1085,17 +1086,21 @@ class LspProtocol {
 		lastForegroundAnalysisMs = 0;
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		requireCurrent(document);
+		requireNavigationSyntax(document);
 		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
-		return location == null ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
+			throw new LspRequestError(-32801, "Definition could not be resolved because analysis failed: " + foregroundAnalysisFailure);
+		return location == null || location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function typeDefinition(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
-		requireCurrent(document);
+		requireNavigationSyntax(document);
 		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
-		return location == null ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
+			throw new LspRequestError(-32801, "Type information is unavailable because analysis failed: " + foregroundAnalysisFailure);
+		return location == null || location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function implementations(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -1120,6 +1125,7 @@ class LspProtocol {
 	}
 
 	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
+		foregroundAnalysisFailure = null; lastForegroundAnalysisMs = 0;
 		var path = compilerPath(document);
 		if (service.isCurrent(path))
 			return;
@@ -1129,7 +1135,8 @@ class LspProtocol {
 				service.analyze(ModulePath.fromFile(path), token)
 			catch (cancelled:CancellationError)
 				throw cancelled
-			catch (_:CompileError) {} catch (_:Dynamic) {}
+			catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
+			catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
 			lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
 			return;
 		}
@@ -1152,7 +1159,8 @@ class LspProtocol {
 				service.analyze(target, token)
 			catch (cancelled:CancellationError)
 				throw cancelled
-			catch (_:CompileError) {} catch (_:Dynamic) {}
+			catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
+			catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
 			if (service.isCurrent(path))
 				break;
 		}
@@ -1264,9 +1272,16 @@ class LspProtocol {
 	function document(request:Dynamic):LspDocument
 		return documents.get(documentUri(request));
 
+	function requireNavigationSyntax(document:LspDocument):Void {
+		var path = compilerPath(document);
+		if (!service.isCurrent(path) && !service.hasCurrentSyntax(path)) requireCurrent(document);
+	}
+
 	function requireCurrent(document:LspDocument):Void {
 		if (!service.isCurrent(compilerPath(document)))
-			throw new LspRequestError(-32801, "Semantic snapshot does not match the current document version");
+			throw new LspRequestError(-32801, foregroundAnalysisFailure == null
+				? "Language analysis has not produced current type information for this file"
+				: "Language analysis could not complete: " + foregroundAnalysisFailure);
 	}
 
 	function compilerPath(document:LspDocument):String

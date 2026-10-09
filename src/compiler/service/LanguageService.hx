@@ -649,6 +649,12 @@ class LanguageService {
 		return state != null && state.ast != null && state.lastGoodRevision == state.revision;
 	}
 
+	/** Current syntax facts remain safe for navigation when dependency typing fails. */
+	public function hasCurrentSyntax(path:String):Bool {
+		var state = stateFor(path), model = state == null ? null : effectiveSemanticModel(state);
+		return state != null && model != null && model.revision == state.revision;
+	}
+
 	public function documentSymbols(path:String):Array<DocumentSymbol> {
 		var state = stateFor(path),
 			result:Array<DocumentSymbol> = [],
@@ -1091,12 +1097,38 @@ class LanguageService {
 		else {
 			var declaration = typeDeclaration(context.model.index.typeAt(position));
 			if (declaration != null)
-				target = compiler.semanticWorkspace.resolveTypeSymbolId(declaration);
+				target = isCurrent(path) ? compiler.semanticWorkspace.resolveTypeSymbolId(declaration) : recoveredTypeSymbol(context.model, declaration, symbol == null ? position : symbol.symbol.declaration.start);
 		}
 		if (target == null)
 			return null;
 		var resolved = compiler.semanticWorkspace.indexedSymbol(target);
 		return resolved == null ? null : definitionLocation(resolved.state, resolved.symbol);
+	}
+
+	/** Resolve syntax-only type names in their declaring file; never guess between imports. */
+	function recoveredTypeSymbol(model:SemanticModel, name:String, position:Int):Null<SemanticSymbolId> {
+		var methods = model.program.functions.copy();
+		for (owner in model.program.classes) {
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			methods = methods.concat(owner.methods);
+		}
+		for (owner in model.program.abstracts) {
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			methods = methods.concat(owner.methods);
+		}
+		for (owner in model.program.interfaces) {
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			methods = methods.concat(owner.methods);
+		}
+		for (method in methods)
+			if (position >= method.span.start && position <= method.span.end && method.typeParameters.indexOf(name) >= 0) return null;
+		if (name.indexOf(".") >= 0) return compiler.semanticWorkspace.resolveTypeSymbolId(name);
+		for (symbol in model.index.symbols)
+			if (symbol.name == name && isTypeDeclaration(symbol.kind)) return symbol.id;
+		var imports = [for (path in model.program.imports) if (StringTools.endsWith(path, "." + name)) path];
+		if (imports.length > 0) return imports.length == 1 ? compiler.semanticWorkspace.resolveTypeSymbolId(imports[0]) : null;
+		var prefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
+		return compiler.semanticWorkspace.resolveTypeSymbolId(prefix + name);
 	}
 
 	public function implementations(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
