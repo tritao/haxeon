@@ -1,5 +1,7 @@
 package haxeon.ui.host;
 
+import hl.Gc;
+
 import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
@@ -44,6 +46,11 @@ class DesktopUiHost {
 		var session:Null<UiHostSession> = null;
 		var eventHistory:Array<String> = [];
 		var frameHistory:Array<Dynamic> = [];
+		var allocationCensusStarted = false;
+		var callbackSeconds = 0.0;
+		var loopTiming = {loops:0, waits:0, pollSeconds:0.0, backgroundSeconds:0.0,
+			waitSeconds:0.0, pollFrameSeconds:0.0, waitFrameSeconds:0.0,
+			pollFrames:0, waitFrames:0};
 		var eventCounts:Map<String, Int> = new Map();
 		var frameRequestCounts:Map<String, Int> = new Map();
 		var captureState = {startedAt: -1.0, readyFrames: 0};
@@ -175,6 +182,17 @@ class DesktopUiHost {
 				frameRequestSerial++;
 				incrementCount(frameRequestCounts, reason);
 			};
+			// GTK's paint phase needs the successor armed before control returns.
+			// Its backend pump yields after delivery; other desktop pumps may drain
+			// repeated callbacks, so keep their existing request timing.
+			var requestSuccessorDuringPaint = Sys.systemName() == "Linux";
+			var submitFrameRequest = function():Void {
+				if (active && surfaceAvailable && frameRequested && !framePending) {
+					if (NativeKit.nk_surface_request_frame(surface) != Result.Ok)
+						throw "Surface frame request failed";
+					framePending = true;
+				}
+			};
 			var scheduleFrame = function():Void scheduleFrameWithReason("api");
 			scheduleFrameWithReason("startup");
 			session = new UiHostSession(function() active = false);
@@ -244,23 +262,38 @@ class DesktopUiHost {
 									frameRequested = false;
 									runtime.resize(runtime.logicalWidth, runtime.logicalHeight, width, height);
 									var frameStartedAt = Sys.time();
+									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
+									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
+									runtime.measureFrameTimings = options.captureDirectory != null;
 									frameGc.beginFrame();
 									var rendered = runtime.render(Sys.time(), repaintOnly);
 									var collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
 									frameGc.endFrame();
 									var collectionSeconds = options.captureDirectory == null ? 0.0 : Sys.time() - collectionStartedAt;
+									if (options.captureDirectory != null) callbackSeconds += Sys.time() - frameStartedAt;
 									if (!rendered) return;
+									var frameRendered = options.onFrameRendered;
+									if (frameRendered != null) frameRendered();
+									var frameFinishedAt = options.captureDirectory == null ? 0.0 : Sys.time();
 									var renderedApp = runtime.app();
 									nextCaretFrameAt = renderedApp != null
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
 									if (captureReady) captureState.readyFrames++;
-									if (options.captureSeconds > 0.0 && captureState.startedAt < 0.0 && captureReady)
+									if (options.captureSeconds > 0.0 && captureState.startedAt < 0.0 && captureReady) {
 										captureState.startedAt = frameStartedAt;
+									}
+									if (!allocationCensusStarted && options.captureDirectory != null &&
+										captureState.startedAt >= 0.0 && frameStartedAt - captureState.startedAt >= 4.0 &&
+										Sys.getEnv("MATERIA_CAPTURE_ALLOCATIONS") == "1") {
+										allocationCensusStarted = true;
+										Gc.censusReset();
+										Gc.censusStart(65536);
+									}
 									if (options.captureDirectory != null) {
 										var metrics = runtime.app() == null ? null : runtime.app().context().frameMetrics;
-										frameHistory.push({
+										var record = {
 											frame: runtime.rendered,
 											repaintOnly: repaintOnly,
 											allocatedBytes: runtime.lastFrameAllocatedBytes,
@@ -271,7 +304,15 @@ class DesktopUiHost {
 											textInputRequestAgeSeconds: textInputRequestedAt < 0.0 ? null : frameStartedAt - textInputRequestedAt,
 											textInputDispatchSeconds: textInputDispatchSeconds,
 											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
-											frameSeconds: Sys.time() - frameStartedAt,
+											frameSeconds: frameFinishedAt - frameStartedAt,
+											prepareSeconds: runtime.lastPrepareSeconds,
+											applicationSubmitSeconds: runtime.lastApplicationSubmitSeconds,
+											paintSeconds: runtime.lastPaintSeconds,
+											bookkeepingSeconds: 0.0,
+											gcCollections: 0.0,
+											gcSeconds: 0.0,
+											gcCollectionsTotal: 0.0,
+											gcSecondsTotal: 0.0,
 											frameGcSeconds: collectionSeconds,
 											submitSeconds: metrics == null ? null : metrics.submitSeconds,
 											styleResolutions: metrics == null ? null : metrics.styleResolutions,
@@ -286,13 +327,19 @@ class DesktopUiHost {
 											customPaintSeconds: metrics == null ? null : metrics.customPaintSeconds,
 											nativeRenderSeconds: metrics == null ? null : metrics.nativeRenderSeconds,
 											nodeCount: metrics == null ? null : metrics.nodeCount
-										});
+										};
+										frameHistory.push(record);
+										record.bookkeepingSeconds = Sys.time() - frameFinishedAt;
+										record.gcCollectionsTotal = Gc.collections();
+										record.gcSecondsTotal = Gc.markMicros() / 1000000.0;
+										record.gcCollections = record.gcCollectionsTotal - gcCountBefore;
+										record.gcSeconds = record.gcSecondsTotal - gcMicrosBefore / 1000000.0;
 									}
 									if (session.state == UiHostLifecycle.Failed) active = false;
 									if (options.captureDirectory != null && options.frameLimit > 0 &&
 										captureState.readyFrames >= options.frameLimit) {
 										writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
-											eventHistory, frameHistory, eventCounts, frameRequestCounts);
+											eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 										session.stop();
 									}
 									var continueFrames = options.continuousFrames;
@@ -309,6 +356,8 @@ class DesktopUiHost {
 										else
 											scheduleFrameWithReason("continuous");
 									}
+									// Waiting until the next host tick can miss GTK's frame-clock deadline.
+									if (requestSuccessorDuringPaint) submitFrameRequest();
 								} catch (error:Dynamic) {
 									frameGc.endFrame();
 									recordFailure("frame-callback", error);
@@ -333,14 +382,28 @@ class DesktopUiHost {
 			step = function() {
 				if (!active) return false;
 				try {
+				var measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
+				var pollStarted = measureLoop ? Sys.time() : 0.0;
+				var framesBeforePoll = runtime.rendered;
+				var callbackBeforePoll = callbackSeconds;
 				var hadEvent = pump.poll();
+				// Surface callbacks run directly in the backend pump, without a queued event.
+				var hadFrame = runtime.rendered != framesBeforePoll;
+				var backgroundStarted = measureLoop ? Sys.time() : 0.0;
+				if (measureLoop) {
+					loopTiming.loops++;
+					loopTiming.pollSeconds += backgroundStarted - pollStarted;
+					loopTiming.pollFrameSeconds += callbackSeconds - callbackBeforePoll;
+					loopTiming.pollFrames += runtime.rendered - framesBeforePoll;
+				}
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
+				if (measureLoop) loopTiming.backgroundSeconds += Sys.time() - backgroundStarted;
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
 				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0 &&
 					Sys.time() - captureState.startedAt >= options.captureSeconds) {
 					writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
-						eventHistory, frameHistory, eventCounts, frameRequestCounts);
+						eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 					session.stop();
 				}
 				if (active && surfaceAvailable && nextCaretFrameAt >= 0.0 &&
@@ -348,13 +411,20 @@ class DesktopUiHost {
 					nextCaretFrameAt = -1.0;
 					scheduleFrameWithReason("text-caret");
 				}
-				if (active && surfaceAvailable && frameRequested && !framePending) {
-					if (NativeKit.nk_surface_request_frame(surface) != Result.Ok)
-						throw "Surface frame request failed";
-					framePending = true;
+				submitFrameRequest();
+				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) frameGc.idle();
+				if (active && !hadEvent && !hadFrame) {
+					var waitStarted = measureLoop ? Sys.time() : 0.0;
+					var callbackBeforeWait = callbackSeconds;
+					var framesBeforeWait = runtime.rendered;
+					pump.wait(1.0 / options.targetFps);
+					if (measureLoop) {
+						loopTiming.waits++;
+						loopTiming.waitSeconds += Sys.time() - waitStarted;
+						loopTiming.waitFrameSeconds += callbackSeconds - callbackBeforeWait;
+						loopTiming.waitFrames += runtime.rendered - framesBeforeWait;
+					}
 				}
-				if (active && !hadEvent && !frameRequested && !framePending) frameGc.idle();
-				if (active && !hadEvent) pump.wait(1.0 / options.targetFps);
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
 					recordFailure("desktop-host", error);
@@ -446,9 +516,16 @@ class DesktopUiHost {
 	static function writeDiagnostics(options:DesktopUiHostOptions,
 			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
 			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
-			frameRequestCounts:Map<String, Int>):Void {
+			frameRequestCounts:Map<String, Int>, loopTiming:Dynamic):Void {
 		var directory:String = cast options.captureDirectory;
 		createDirectories(directory);
+		if (Sys.getEnv("MATERIA_CAPTURE_ALLOCATIONS") == "1") {
+			Gc.censusStop();
+			var path = haxe.io.Bytes.ofString(directory + "/allocations.json");
+			var terminated = haxe.io.Bytes.alloc(path.length + 1);
+			terminated.blit(0, path, 0, path.length);
+			Gc.censusDump(terminated.getData());
+		}
 		File.saveContent(directory + "/ui-tree.txt", application.context().dumpTree() + "\n");
 		File.saveContent(directory + "/layout.json",
 			Json.stringify(application.context().inspect(), null, "  ") + "\n");
@@ -480,7 +557,8 @@ class DesktopUiHost {
 			},
 			scheduling: {
 				eventCounts: countsObject(eventCounts),
-				frameRequestCounts: countsObject(frameRequestCounts)
+				frameRequestCounts: countsObject(frameRequestCounts),
+				hostLoop: loopTiming
 			}
 		};
 		File.saveContent(directory + "/frame-metrics.json",

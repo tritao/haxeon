@@ -139,8 +139,8 @@ class BuildContext {
 	}
 
 	/** Resolves one node against the active inherited style and current layers. */
-	public function resolveStyle(target:StyleTarget, local:Null<LayoutStyle>):ComputedStyle
-		return styleResolver.resolve(target, styleParent, theme.styles, styleSheet, local, environment);
+	public function resolveStyle(target:StyleTarget, local:Null<LayoutStyle>, ?localTextColor:haxeon.ui.Color):ComputedStyle
+		return styleResolver.resolve(target, styleParent, theme.styles, styleSheet, local, environment, localTextColor);
 
 	/** Revision fingerprint used to classify style work before the next submission. */
 	public var styleRevision(get, never):Int;

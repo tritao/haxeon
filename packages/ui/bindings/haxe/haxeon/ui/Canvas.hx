@@ -12,6 +12,8 @@ import haxeon.ui.style.Mask;
 /** Stateful, typed immediate-mode graphics encoder. */
 class Canvas {
 	final commands:CanvasCommandBuffer;
+	// Native path creation copies elements; this scratch builder never escapes the canvas.
+	final rectanglePathBuilder = new PathBuilder();
 	var state:CanvasState;
 	var saved:Array<CanvasState>;
 	var savedDepth:Int;
@@ -185,7 +187,7 @@ class Canvas {
 	public function fillRect(rect:Rect, color:Color):Void {
 		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Filled rectangle requires positive bounds and a color";
-		var path = new PathBuilder().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
+		var path = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
 			.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
 			.close().build();
 		try {
@@ -242,7 +244,7 @@ class Canvas {
 			endX:Float, endY:Float, stops:Array<GradientStop>):Void {
 		if (rect == null || rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Gradient rectangle requires positive bounds";
-		var path = new PathBuilder().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
+		var path = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
 			.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
 			.close().build();
 		try {

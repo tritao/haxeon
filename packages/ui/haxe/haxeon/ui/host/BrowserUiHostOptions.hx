@@ -19,6 +19,8 @@ class BrowserUiFontAsset {
 
 class BrowserUiHostOptions extends UiHostOptions {
 	public var fonts:Array<BrowserUiFontAsset> = [];
+	/** Called only after a successful render and presentation. */
+	public var onFrameRendered:Null<Void->Void> = null;
 
 	public function new() super();
 

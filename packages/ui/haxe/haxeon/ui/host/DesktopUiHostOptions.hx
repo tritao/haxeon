@@ -15,6 +15,8 @@ class DesktopUiHostOptions extends UiHostOptions {
 	 * returns false do not count toward `frameLimit` or start the `captureSeconds` timer, so a capture of
 	 * an application that opens its document in the background shows the document, not its loading state.
 	 */
+	/** Called after a successful frame render, before capture bookkeeping. */
+	public var onFrameRendered:Null<Void->Void> = null;
 	public var captureReady:Null<Void->Bool> = null;
 	/** True while application state changes without input events, such as live simulation. */
 	public var continuousFrames:Null<Void->Bool> = null;

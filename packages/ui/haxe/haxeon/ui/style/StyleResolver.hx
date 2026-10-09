@@ -13,6 +13,7 @@ import haxeon.ui.animation.AnimationScheduler;
 /** Deterministic framework/inheritance/theme/application/state/local cascade. */
 class StyleResolver {
 	static inline var MaxCacheEntries:Int = 8192;
+	static final LocalTextSource = new StyleSource("local", "text", -1, "local");
 
 	final frameworkSource:StyleSource;
 	final scheduler:Null<AnimationScheduler>;
@@ -91,7 +92,7 @@ class StyleResolver {
 
 	public function resolve(target:StyleTarget, ?parent:ComputedStyle,
 			?theme:StyleSheet, ?application:StyleSheet, ?local:LayoutStyle,
-			?environment:StyleEnvironment):ComputedStyle {
+			?environment:StyleEnvironment, ?localTextColor:Color):ComputedStyle {
 		if (target == null)
 			throw "Style resolution requires a target";
 		resolutionCount++;
@@ -115,6 +116,7 @@ class StyleResolver {
 			cacheFingerprint = cacheHash(target.selectorHash, target.states,
 				parentInheritedKey, themeIdentity, themeRevision, applicationIdentity,
 				applicationRevision, localStyleKey, environmentIdentity, environmentRevision);
+			cacheFingerprint = colorFingerprint(cacheFingerprint, localTextColor);
 		}
 		if (cacheable) {
 			var bucket = cache.get(cacheFingerprint);
@@ -122,7 +124,7 @@ class StyleResolver {
 				for (entry in bucket)
 					if (entry.matches(target, target.states, parentInheritedKey,
 						themeIdentity, themeRevision, applicationIdentity, applicationRevision,
-						localStyleKey, environmentIdentity, environmentRevision)) {
+						localStyleKey, environmentIdentity, environmentRevision, localTextColor)) {
 						cacheHitCount++;
 						return entry.style.fork();
 					}
@@ -148,6 +150,7 @@ class StyleResolver {
 		applySheet(result, target, application, true, "application-state", environment);
 		applyLocal(result, local);
 		applyTransitions(result, target, theme, application);
+		if (localTextColor != null) result.set(StyleProperty.TextColor, localTextColor, LocalTextSource);
 		if (cacheable) {
 			var bucket = cache.get(cacheFingerprint);
 			if (bucket == null) {
@@ -157,7 +160,7 @@ class StyleResolver {
 			bucket.push(new StyleResolverCacheEntry(target, target.states,
 				parentInheritedKey, themeIdentity, themeRevision, applicationIdentity,
 				applicationRevision, localStyleKey, environmentIdentity, environmentRevision,
-				result.fork()));
+				result.fork(), localTextColor));
 			cacheEntryCount++;
 		}
 		return result;
@@ -562,11 +565,12 @@ class StyleResolverCacheEntry {
 	final environmentIdentity:Int;
 	final environmentRevision:Int;
 	public final style:ComputedStyle;
+	final localTextColor:Null<Color>;
 
 	public function new(target:StyleTarget, states:Int, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
-			environmentRevision:Int, style:ComputedStyle) {
+			environmentRevision:Int, style:ComputedStyle, localTextColor:Null<Color>) {
 		this.target = target;
 		this.states = states;
 		this.parentKey = parentKey;
@@ -578,17 +582,19 @@ class StyleResolverCacheEntry {
 		this.environmentIdentity = environmentIdentity;
 		this.environmentRevision = environmentRevision;
 		this.style = style;
+		this.localTextColor = localTextColor;
 	}
 
 	public function matches(target:StyleTarget, states:Int, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
-			environmentRevision:Int):Bool
+			environmentRevision:Int, localTextColor:Null<Color>):Bool
 		return this.target.sameSelector(target) && this.states == states &&
 			this.parentKey == parentKey && this.themeIdentity == themeIdentity &&
 			this.themeRevision == themeRevision &&
 			this.applicationIdentity == applicationIdentity &&
 			this.applicationRevision == applicationRevision && this.localKey == localKey &&
 			this.environmentIdentity == environmentIdentity &&
-			this.environmentRevision == environmentRevision;
+			this.environmentRevision == environmentRevision &&
+			StyleProperty.TextColor.isEqual(this.localTextColor, localTextColor);
 }

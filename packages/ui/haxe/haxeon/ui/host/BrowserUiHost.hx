@@ -250,13 +250,15 @@ class BrowserUiHost {
 				frameRequested = false;
 				if (NativeKit.nk_surface_make_current(surface) != Result.Ok)
 					throw "Browser surface activation failed";
-				activeRuntime.render(timeMilliseconds / 1000.0);
+				var rendered = activeRuntime.render(timeMilliseconds / 1000.0);
 				if (cleanupPending || session.state != UiHostLifecycle.Running) {
 					stopHost();
 					return session.state == UiHostLifecycle.Failed ? -1 : 0;
 				}
 				if (NativeKit.nk_surface_present(surface) != Result.Ok)
 					throw "Browser surface presentation failed";
+				var onFrameRendered = options.onFrameRendered;
+				if (rendered && onFrameRendered != null) onFrameRendered();
 				// Preserve the existing continuously animated showcase contract. A later
 				// idle policy can stop this implicit request without changing schedulers.
 				frameRequested = true;

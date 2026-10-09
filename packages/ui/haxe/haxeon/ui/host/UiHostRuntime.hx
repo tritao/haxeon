@@ -22,6 +22,11 @@ class UiHostRuntime {
 	public var scale(get, never):Float;
 	public var rendered(default, null):Int = 0;
 	public var lastFrameAllocatedBytes(default, null):Float = 0.0;
+	/** Capture-only phase timings; normal rendering does not read the clock. */
+	public var measureFrameTimings:Bool = false;
+	public var lastPrepareSeconds(default, null):Float = 0.0;
+	public var lastApplicationSubmitSeconds(default, null):Float = 0.0;
+	public var lastPaintSeconds(default, null):Float = 0.0;
 	/** The most recent skipped frame; cleared by the next successful render. */
 	public var lastRenderResourceError(default, null):Null<String> = null;
 	public var surfaceReady(get, never):Bool;
@@ -121,13 +126,16 @@ class UiHostRuntime {
 		var allocatedAt = AllocationProbe.now();
 		try {
 			callbackDepth++;
+			var phaseStarted = measureFrameTimings ? Sys.time() : 0.0;
 			var renderSurface = Surface.fromNativeHandle(surface);
 			context.setGpuRenderer(renderer.prepare(renderSurface));
 			frame.setViewport(frameState.layoutWidth, frameState.layoutHeight);
 			frame.deltaSeconds = frameState.nextDelta(timeSeconds);
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
+			if (measureFrameTimings) { lastPrepareSeconds = Sys.time() - phaseStarted; phaseStarted = Sys.time(); }
 			application.submit(frame);
+			if (measureFrameTimings) { lastApplicationSubmitSeconds = Sys.time() - phaseStarted; phaseStarted = Sys.time(); }
 			context.repaintOnly = false;
 			if (session.state != UiHostLifecycle.Running || disposeRequested) {
 				callbackDepth--;
@@ -135,6 +143,7 @@ class UiHostRuntime {
 				return false;
 			}
 			application.context().render(renderer, renderSurface, frameInfo);
+			if (measureFrameTimings) lastPaintSeconds = Sys.time() - phaseStarted;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
 			lastRenderResourceError = null;
 			rendered++;

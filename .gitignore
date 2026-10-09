@@ -5,3 +5,4 @@ out/
 /packages/ui/build*/
 /packages/ui/out/
 /packages/ui/tests/settings/build/
+packages/ui/tests/*/build/
