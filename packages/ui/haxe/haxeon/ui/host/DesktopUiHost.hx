@@ -82,9 +82,11 @@ class DesktopUiHost {
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
 
+			var initialWidth = Std.int(Math.max(options.width, options.minimumWidth));
+			var initialHeight = Std.int(Math.max(options.height, options.minimumHeight));
 			var windowOptions = new WindowOptions();
-			windowOptions.set_width(options.width);
-			windowOptions.set_height(options.height);
+			windowOptions.set_width(initialWidth);
+			windowOptions.set_height(initialHeight);
 			windowOptions.set_title(options.title);
 			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
 				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
@@ -95,6 +97,26 @@ class DesktopUiHost {
 			if (createdWindow.status != Result.Ok)
 				throw "Window creation failed: " + NativeKit.nk_last_error();
 			window = createdWindow.out_window.borrow();
+			var applySizeLimits = function(zoom:Float):Void {
+				if (options.minimumWidth == 0 && options.minimumHeight == 0) return;
+				var limits = new WindowSizeLimits();
+				limits.set_min_width(Math.ceil(options.minimumWidth * zoom));
+				limits.set_min_height(Math.ceil(options.minimumHeight * zoom));
+				if (NativeKit.nk_window_set_size_limits(window, limits) != Result.Ok)
+					throw "Window size limits failed: " + NativeKit.nk_last_error();
+				// Updating native hints alone need not resize an existing window.
+				var size = NativeKit.nk_window_get_size(window);
+				if (size.status != Result.Ok) throw "Window size query failed: " + NativeKit.nk_last_error();
+				var width = Std.int(Math.max(size.out_width, Math.ceil(options.minimumWidth * zoom)));
+				var height = Std.int(Math.max(size.out_height, Math.ceil(options.minimumHeight * zoom)));
+				if (width != size.out_width || height != size.out_height) {
+					var position = NativeKit.nk_window_get_position(window);
+					if (position.status != Result.Ok) throw "Window position query failed: " + NativeKit.nk_last_error();
+					if (NativeKit.nk_window_set_bounds(window, position.out_x, position.out_y, width, height) != Result.Ok)
+						throw "Window minimum resize failed: " + NativeKit.nk_last_error();
+				}
+			};
+			applySizeLimits(1.0);
 			if (options.icons != null) {
 				var icons = options.icons;
 				var pixels = Bytes.alloc(icons.byteCount);
@@ -124,8 +146,8 @@ class DesktopUiHost {
 			}
 			surfaceOptions.set_flags(surfaceFlags);
 			surfaceOptions.set_api(graphicsApi);
-			surfaceOptions.set_width(options.width);
-			surfaceOptions.set_height(options.height);
+			surfaceOptions.set_width(initialWidth);
+			surfaceOptions.set_height(initialHeight);
 			var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
 			if (createdSurface.status != Result.Ok)
 				throw "Surface creation failed: " + NativeKit.nk_last_error();
@@ -189,7 +211,7 @@ class DesktopUiHost {
 				function() session.stop(), scheduleFrame);
 			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
 			runtime = new UiHostRuntime(session, hostContext, window, surface,
-				options.width, options.height);
+				initialWidth, initialHeight, applySizeLimits);
 			runtime.start(function(_) return create(hostContext));
 			if (session.state == UiHostLifecycle.Failed) throw session.error;
 			if (runtime.app() != null)

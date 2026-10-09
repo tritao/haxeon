@@ -12,10 +12,13 @@ import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Row;
+import haxeon.ui.widgets.layout.SizedBox;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 
 /** Native drag surface with interactive child exclusions and accessible window controls. */
 class WindowTitleBar implements View {
+	public static inline final CONTROL_WIDTH:Float = 44.0;
+	public static inline final CONTROLS_WIDTH:Float = CONTROL_WIDTH * 3;
 	final key:String;
 	final content:View;
 	final controls:WindowControls;
@@ -26,7 +29,11 @@ class WindowTitleBar implements View {
 	public function build(context:BuildContext):RenderNode {
 		var style = new LayoutStyle(); style.width = LayoutAxis.grow(); style.height = LayoutAxis.fixed(height);
 		style.childAlignY = LayoutAlignmentY.Center; style.background = context.theme.tokens.surfaceRaised;
-		var node = new Row(key, [new KeyedView("content", content),
+		// The toolbar is the shrinkable viewport; fixed window controls never
+		// compete with the toolbar's intrinsic content width.
+		var viewport = new SizedBox("titlebar-content", content, LayoutAxis.grow(), LayoutAxis.fixed(height));
+		viewport.style.clipHorizontal = true;
+		var node = new Row(key, [new KeyedView("content", viewport),
 			new KeyedView("minimize", control("Minimize", IconName.WindowMinimize, controls.minimize)),
 			new KeyedView("maximize", control(controls.maximized ? "Restore" : "Maximize",
 				controls.maximized ? IconName.WindowRestore : IconName.WindowMaximize, controls.toggleMaximize)),
@@ -39,7 +46,7 @@ class WindowTitleBar implements View {
 		return node;
 	}
 	function control(label:String, icon:IconName, action:Void->Void):Button {
-		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(44); style.height = LayoutAxis.fixed(height);
+		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(CONTROL_WIDTH); style.height = LayoutAxis.fixed(height);
 		style.padding = new Insets(14, 0, 14, 0);
 		style.radiusTopLeft = style.radiusTopRight = style.radiusBottomLeft = style.radiusBottomRight = 0;
 		var button = new Button("", style, action, "window-" + label.toLowerCase());

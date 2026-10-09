@@ -3,6 +3,10 @@ package haxeon.ui.host;
 /** Window, pacing, and deterministic-capture policy for DesktopUiHost. */
 class DesktopUiHostOptions extends UiHostOptions {
 	public var customTitlebar:Bool = false;
+	/** Minimum application layout size, scaled by application zoom for native limits.
+	 * Zero leaves an axis unconstrained. */
+	public var minimumWidth:Int = 0;
+	public var minimumHeight:Int = 0;
 	public var inputScriptPath:Null<String> = null;
 	public var targetFps:Float = 60.0;
 	public var captureDirectory:Null<String> = null;
@@ -27,6 +31,7 @@ class DesktopUiHostOptions extends UiHostOptions {
 
 	public function validate():Void {
 		if (title == null || title.length == 0 || width <= 0 || height <= 0 ||
+			minimumWidth < 0 || minimumHeight < 0 ||
 			eventQueueCapacity <= 0 || targetFps <= 0.0 || frameLimit < 0 ||
 			captureSeconds < 0.0 || !Math.isFinite(captureSeconds) ||
 			eventHistoryLimit < 0)

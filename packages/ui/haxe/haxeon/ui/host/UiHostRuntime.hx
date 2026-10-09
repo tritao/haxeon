@@ -41,17 +41,19 @@ class UiHostRuntime {
 	var frame:LayoutFrame;
 	var frameInfo:FrameInfo;
 	final frameState:UiHostFrameState;
+	final zoomChanged:Null<Float->Void>;
 	var disposed:Bool = false;
 	var started:Bool = false;
 	var callbackDepth:Int = 0;
 	var disposeRequested:Bool = false;
 
 	public function new(session:UiHostSession, context:UiHostContext, window:WindowHandle,
-			surface:SurfaceHandle, width:Int, height:Int) {
+			surface:SurfaceHandle, width:Int, height:Int, ?zoomChanged:Float->Void) {
 		this.session = session;
 		this.context = context;
 		this.window = window;
 		this.surface = surface;
+		this.zoomChanged = zoomChanged;
 		frameState = new UiHostFrameState(width, height);
 		context.onZoomChanged = applyZoom;
 		frameState.setZoom(context.zoom);
@@ -109,6 +111,7 @@ class UiHostRuntime {
 	public function setScale(value:Float):Void frameState.setScale(value);
 
 	function applyZoom(value:Float):Void {
+		if (zoomChanged != null) zoomChanged(value);
 		frameState.setZoom(value);
 		if (input != null) input.coordinateScale = value;
 		if (application != null) {
