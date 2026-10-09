@@ -280,7 +280,8 @@ class TreeView implements View {
 		return context.withScope(new Key(key), function() {
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
-			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(context.id("tree")), StyleState.Hovered)
+			var treeId = context.id("tree");
+			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(treeId), StyleState.Hovered)
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
@@ -360,7 +361,7 @@ class TreeView implements View {
 			var content = new Column("tree-content", rowViews, contentStyle);
 			var scroll = new ScrollView("viewport", content, viewportStyle,
 				ScrollAxis.Vertical, controller);
-			var root = new RenderNode(context.id("tree"), LayoutVisualKind.Box);
+			var root = new RenderNode(treeId, LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
 			var semantics = new Semantics(AccessibilityRole.Tree);
