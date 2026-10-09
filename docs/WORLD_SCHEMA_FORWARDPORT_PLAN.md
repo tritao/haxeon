@@ -114,3 +114,58 @@ runtime schema API and schema tests; then the exact minimal repro and a local
 copy of the full World consumer suite. Rebuild the checked-in bootstrap and
 run the relevant driver, parity, bootstrap/self-host gates at the resulting
 source checkpoint. No World or root pins will be changed.
+
+## Current compiler checkpoint and acceptance boundary
+
+The latest committed review-tree checkpoint is
+`e6b53658e153562772122c00e1b16daeecb859c8` (`Support generic typeInfo across
+mixed record roots`), on the accepted-main lineage. Its HashLink gitlink is
+still `0e739431da931d8e21c98c485afb17f1f3164106`.
+
+At this checkpoint, `typeInfo<T>()` accepts concrete source-declared struct
+roots, including ordinary Flat and rich structs, and legacy C value records.
+The descriptor tree carries recursive field and nested-type layout, offsets,
+typed annotation values, and stable hashes. `size` and `alignment` have the
+same `Null<Int>` source type for Flat and rich roots. A generic helper can use
+`typeInfo<T>()` when called through nested generic helpers with a concrete
+struct type; the compiler does not provide identity for an unresolved generic
+type parameter or runtime-selected type. The generic and mixed-root
+regressions are `tests/programs/typeinfo-generic.hx` and
+`tests/programs/typeinfo-mixed-layout.hx`.
+
+This is not yet World schema support. `NativeTypeDescriptorField` has no
+ordinary field initializer/default property, so descriptors cannot preserve
+the absent-versus-zero-versus-explicit-null distinction or nested default
+values required by World. `stdlib/haxeon/wire/MessagePackSchema.hx` and its
+`fromJson`, `requireDescriptor`, and `fieldDefaultValue` APIs are also absent.
+The descriptor binary/JSON artifact format is version 2 and its descriptor
+tree schema is version 3; it does not encode ordinary field defaults. The
+full World consumer has not been run against `e6b53658`. The World gate at
+`a6e1114` records an `E2001` for the missing schema module against the earlier
+`77b2df1` compiler checkpoint; that result is not a passing consumer test for
+this branch.
+
+Acceptance evidence for this checkpoint:
+
+- Focused descriptor regressions: 7 passed, 0 failed; log
+  `out/gates/descriptor-generic-mixed-regressions.log`.
+- Full compiler driver at `e6b53658`: 528 passed, 0 failed. Command:
+  `.tools/haxe/haxe -cp tests --run driver.TestDriver --root "$PWD" --jobs 16`.
+  Session, source, artifact, and temporary caches were isolated under `out/`.
+  Log: `out/gates/compiler-driver-final-e6b53658.log`.
+- `scripts/bootstrap-compiler.sh`: bootstrap stages converged after two
+  self-host stages. `scripts/bootstrap-compiler.sh --self`: the checked-in
+  compiler rebuilt identically. Logs are
+  `out/gates/bootstrap-descriptor-generic-mixed.log` and
+  `out/gates/bootstrap-descriptor-generic-mixed-self.log`.
+- Wasm parity evidence remains the existing run after the Wasm flat-lowering
+  change at `aee78ba4d9b2d5f330132447e7ef51cda994faf5`: 356 fixtures passed
+  across Wasm32, Wasm GC, and HashLink, with 15 declared skips. It was not
+  rerun for `e6b53658`; that checkpoint changes descriptor typing and generic
+  dependency discovery, not Wasm lowering. Log:
+  `out/gates/wasm-parity-with-flat-structs.log`.
+
+No World pin or sibling checkout was changed. Until World reports its full
+consumer run against a candidate compiler checkpoint, do not describe this
+layout/typeInfo result as full World compatibility or add further descriptor
+schema behavior based only on the older `E2001` baseline.
