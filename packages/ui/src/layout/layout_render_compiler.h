@@ -74,6 +74,7 @@ class LayoutRenderFrame {
     std::vector<std::shared_ptr<PreparedPath>> paths_;
     // Retain capacity across frames; IDs link atlas preparation to publication.
     std::vector<TextLayoutId> text_layout_ids_;
+    std::vector<float> text_raster_scales_;
 };
 
 /** Compiles NativeKit-owned layout output into the backend-neutral render plan. */

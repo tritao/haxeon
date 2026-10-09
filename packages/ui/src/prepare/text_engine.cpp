@@ -1,4 +1,5 @@
 #include "text_engine.h"
+#include "text_raster.h"
 
 #include "system_fonts.h"
 
@@ -473,6 +474,10 @@ TextEngine::TextEngine(std::shared_ptr<FontCollection> fonts) : state_(new State
     atlas_config.init_width = 256;
     atlas_config.init_height = 256;
     atlas_config.expand_size = 256;
+    // Whole-point rounding rasterizes e.g. a 14px font at 110% as 16px,
+    // then shrinks that bitmap to 15.4px. Keep zoomed alpha glyphs at their
+    // device size so the renderer can align texels without resampling.
+    atlas_config.glyph_alpha.rounding = kAlphaGlyphSizeStep;
     state_->atlas = skb_image_atlas_create(&atlas_config);
     if (state_->atlas)
         skb_image_atlas_set_create_texture_callback(state_->atlas, atlas_texture_created, state_);
@@ -1053,14 +1058,15 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
                                                                    const std::vector<GlyphColorRange> &ranges, int32_t end_line,
                                                                    GlyphPreparation preparation) {
     const auto *layout = find_layout(*state_, id);
-    if (!layout || pixel_scale <= 0.0f || !valid_glyph_color_ranges(ranges))
+    const auto raster_scale = text_raster_scale(pixel_scale);
+    if (!layout || !raster_scale.key || !std::isfinite(origin_x) ||
+        !std::isfinite(origin_y) || !valid_glyph_color_ranges(ranges))
         return {};
+    pixel_scale = raster_scale.value;
     if (line_index >= 0 && end_line < 0 && static_cast<std::size_t>(line_index) >= layout->result.lines.size())
         return {};
 
     TextScratchScope scratch(state_->temporary);
-    const uint32_t scale_key =
-        static_cast<uint32_t>(std::max(1.0, std::round(static_cast<double>(pixel_scale) * 1024.0)));
     const bool single_line = line_index >= 0 && end_line < 0 &&
         static_cast<std::size_t>(line_index) < layout->line_revisions.size();
     // Row revisions are unique within this engine and may survive a fresh
@@ -1073,14 +1079,21 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     mix(single_line ? layout->line_revisions[line_index]
                     : skb_layout_get_generation(layout->layout.get()));
     mix(font_collection_generation());
-    mix(scale_key);
+    mix(raster_scale.key);
     mix(static_cast<uint64_t>(mode));
     if (!single_line) {
         mix(static_cast<uint64_t>(line_index + 1));
         mix(static_cast<uint64_t>(end_line + 1));
     }
-    mix(static_cast<uint64_t>(std::llround(static_cast<double>(origin_x) * 64.0)));
-    mix(static_cast<uint64_t>(std::llround(static_cast<double>(origin_y) * 64.0)));
+    // Origins remain unrounded in geometry, so their cache identity must too.
+    const auto mix_origin = [&mix](float origin) {
+        uint32_t bits = 0;
+        if (origin != 0.0f) // Normalize positive and negative zero.
+            std::memcpy(&bits, &origin, sizeof(bits));
+        mix(bits);
+    };
+    mix_origin(origin_x);
+    mix_origin(origin_y);
     mix(static_cast<uint64_t>(tint.red) << 24 | static_cast<uint64_t>(tint.green) << 16 |
         static_cast<uint64_t>(tint.blue) << 8 | static_cast<uint64_t>(tint.alpha));
 
@@ -1172,11 +1185,12 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                                          float line_y, int32_t line_index, int32_t end_line,
                                          GlyphPreparation preparation) {
     const auto *retained = find_layout(*state_, id);
-    if (!retained || pixel_scale <= 0.0f)
+    const auto raster_scale = text_raster_scale(pixel_scale);
+    if (!retained || !raster_scale.key || !std::isfinite(origin_x) || !std::isfinite(origin_y))
         return false;
+    pixel_scale = raster_scale.value;
     TextScratchScope scratch(state_->temporary);
-    const uint32_t scale_key =
-        static_cast<uint32_t>(std::max(1.0, std::round(static_cast<double>(pixel_scale) * 1024.0)));
+    const uint32_t scale_key = static_cast<uint32_t>(raster_scale.key);
     if (state_->last_scale_key != scale_key) {
         state_->last_scale_key = scale_key;
         ++state_->scale_generation;
@@ -1716,7 +1730,8 @@ uint64_t TextEngine::atlas_generation_key() const {
 bool TextEngine::prepare_glyph_atlas(TextLayoutId id, int32_t line_index, float pixel_scale,
                                      GlyphMode mode) {
     const auto *layout = find_layout(*state_, id);
-    if (!layout || !std::isfinite(pixel_scale) || pixel_scale <= 0.0f || line_index < -1 ||
+    const auto raster_scale = text_raster_scale(pixel_scale);
+    if (!layout || !raster_scale.key || line_index < -1 ||
         (line_index >= 0 && static_cast<std::size_t>(line_index) >= layout->result.lines.size()))
         return false;
     TextScratchScope scratch(state_->temporary);
@@ -1724,7 +1739,7 @@ bool TextEngine::prepare_glyph_atlas(TextLayoutId id, int32_t line_index, float 
         ? skb_range_t{0, skb_layout_get_lines_count(layout->layout.get())}
         : skb_range_t{line_index, line_index + 1};
     return skb_layout_prepare_glyphs_range(layout->layout.get(), lines, state_->atlas,
-                                          state_->temporary, state_->rasterizer, pixel_scale,
+                                          state_->temporary, state_->rasterizer, raster_scale.value,
                                           raster_mode(mode));
 }
 

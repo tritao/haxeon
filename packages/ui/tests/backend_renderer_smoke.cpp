@@ -331,8 +331,10 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
                        nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
                    "cached text layout submission"))
             return false;
-        nkui_renderer_stats stats[2]{};
-        for (int repeat = 0; repeat < 2; ++repeat) {
+        // The first frame establishes placement, the second builds stable
+        // row rasters, and the third reuses them. Moving rows stay direct.
+        nkui_renderer_stats stats[3]{};
+        for (int repeat = 0; repeat < 3; ++repeat) {
             int32_t width = 0, height = 0;
             nk_surface_frame_target target{};
             if (!acquire_surface_frame(window, surface, width, height, target))
@@ -374,8 +376,10 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
             if (!nk::core::render_executor_physical() && nk_surface_present(surface) != NK_OK)
                 return false;
         }
-        return check(stats[0].raster_cache_misses >= 2 &&
-                         stats[1].raster_cache_hits >= stats[0].raster_cache_hits + 2,
+        return check(stats[0].raster_cache_misses == 0 &&
+                         stats[1].raster_cache_misses >= 2 &&
+                         stats[2].raster_cache_misses == stats[1].raster_cache_misses &&
+                         stats[2].raster_cache_hits >= stats[1].raster_cache_hits + 2,
                      "cached text row reuse");
     }();
     if (renderer.id) nkui_renderer_destroy(renderer);

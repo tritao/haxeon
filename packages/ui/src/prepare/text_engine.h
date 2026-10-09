@@ -72,6 +72,8 @@ struct GlyphSourceRange {
 };
 
 struct PreparedGlyphs {
+    // Positions and origins are in layout units; UVs address atlas texels.
+    // pixel_scale is the canonical rasterization scale, not a baked transform.
     std::vector<GlyphVertex> vertices;
     std::vector<uint32_t> indices;
     std::vector<GlyphBatch> batches;

@@ -1,6 +1,7 @@
 #include "ui_renderer.h"
 
 #include "frame_resources.h"
+#include "prepare/text_raster.h"
 #include "ui_shader_sources.h"
 
 #include "adapter_internal.h"
@@ -2360,31 +2361,40 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, float opacity) {
     return drawGlyphs(glyphs, identity, 0.0f, 0.0f, opacity);
 }
 
+namespace {
+
+void align_native_alpha_glyph(std::array<GlyphVertex, 4> &corners,
+                              int atlas_width, int atlas_height) {
+    const float texel_width = (corners[1].u - corners[0].u) * atlas_width;
+    const float texel_height = (corners[3].v - corners[0].v) * atlas_height;
+    if (std::abs(corners[1].x - corners[0].x - texel_width) >= kGlyphTexelTolerance ||
+        std::abs(corners[3].y - corners[0].y - texel_height) >= kGlyphTexelTolerance)
+        return;
+
+    // Quantized raster sizes differ slightly from the draw scale. Eliminate
+    // that error as well as the subpixel origin to preserve a 1:1 texel mapping.
+    // floor(x + 0.5) is invariant under integer translations, including when
+    // a row-cache origin crosses negative half pixels.
+    const float left = std::floor(corners[0].x + 0.5f);
+    const float top = std::floor(corners[0].y + 0.5f);
+    corners[0].x = corners[3].x = left;
+    corners[1].x = corners[2].x = left + texel_width;
+    corners[0].y = corners[1].y = top;
+    corners[2].y = corners[3].y = top + texel_height;
+}
+
+} // namespace
+
 bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6],
                                 float origin_x, float origin_y, float opacity) {
     if (!state_->in_pass || !transform || !std::isfinite(opacity) || opacity < 0.0f ||
         opacity > 1.0f || !std::isfinite(glyphs.pixel_scale) || glyphs.pixel_scale <= 0.0f)
         return fail(*state_, "invalid glyph draw");
-    const float integral_scale = std::round(glyphs.pixel_scale);
-    // Preserve crisp texel alignment at integer scales; fractional device scales
-    // need coverage interpolation so glyph edges do not lose partial rows/columns.
-    const bool integral_pixel_scale = std::abs(glyphs.pixel_scale - integral_scale) < 0.0001f;
-    const nkgpu_sampler glyph_sampler = integral_pixel_scale ? state_->sampler : state_->glyph_sampler;
+    if (!std::isfinite(origin_x) || !std::isfinite(origin_y) ||
+        !std::all_of(transform, transform + 6, [](float value) { return std::isfinite(value); }))
+        return fail(*state_, "invalid glyph transform");
     const bool axis_aligned = transform[1] == 0.0f && transform[2] == 0.0f &&
                               transform[0] > 0.0f && transform[3] > 0.0f;
-    // Preserve run-origin snapping at integer scales.
-    const bool snap_quads = integral_pixel_scale && axis_aligned;
-    float snap_x = 0.0f;
-    float snap_y = 0.0f;
-    if (snap_quads) {
-        const float device_x = origin_x * transform[0] + transform[4];
-        const float device_y = origin_y * transform[3] + transform[5];
-        // Ties must round the same way after an integer translation. std::round
-        // rounds negative halves away from zero, shifting row-local rasters by
-        // one pixel relative to the same glyphs drawn in window coordinates.
-        snap_x = std::floor(device_x + 0.5f) - device_x;
-        snap_y = std::floor(device_y + 0.5f) - device_y;
-    }
     for (const auto &batch : glyphs.batches) {
         const auto atlas = state_->atlases.find(atlas_key(batch.atlas, batch.atlas_generation));
         if (atlas == state_->atlases.end())
@@ -2411,28 +2421,15 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
                 auto vertex = glyphs.vertices[batch.first_vertex + quad + corner];
                 const float x = vertex.x + origin_x;
                 const float y = vertex.y + origin_y;
-                vertex.x = x * transform[0] + y * transform[2] + transform[4] + snap_x;
-                vertex.y = x * transform[1] + y * transform[3] + transform[5] + snap_y;
+                vertex.x = x * transform[0] + y * transform[2] + transform[4];
+                vertex.y = x * transform[1] + y * transform[3] + transform[5];
                 vertex.alpha = static_cast<uint8_t>(vertex.alpha * opacity);
                 corners[corner] = vertex;
             }
-            // A bitmap drawn at its native size needs a whole-pixel origin,
-            // including at fractional DPI. Compare actual geometry to atlas
-            // texels so rounded/clamped sizes and additional scaling keep their
-            // interpolated placement.
-            const bool native_size_alpha = batch.mode == GlyphMode::Alpha && axis_aligned &&
-                std::abs((corners[1].x - corners[0].x) -
-                         (corners[1].u - corners[0].u) * atlas->second.width) < 0.001f &&
-                std::abs((corners[3].y - corners[0].y) -
-                         (corners[3].v - corners[0].v) * atlas->second.height) < 0.001f;
-            if (batch.mode == GlyphMode::Alpha && (snap_quads || native_size_alpha)) {
-                const float shift_x = std::floor(corners[0].x + 0.5f) - corners[0].x;
-                const float shift_y = std::floor(corners[0].y + 0.5f) - corners[0].y;
-                for (auto &vertex : corners) {
-                    vertex.x += shift_x;
-                    vertex.y += shift_y;
-                }
-            }
+            // Only native-size alpha bitmaps snap. Scaled, rotated, color and
+            // SDF glyphs retain interpolated placement regardless of zoom.
+            if (batch.mode == GlyphMode::Alpha && axis_aligned)
+                align_native_alpha_glyph(corners, atlas->second.width, atlas->second.height);
             for (const auto &vertex : corners) {
                 left = std::min(left, vertex.x);
                 top = std::min(top, vertex.y);
@@ -2446,8 +2443,10 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
             const uint32_t quad_indices[] = {base, base + 1, base + 2, base, base + 2, base + 3};
             indices.insert(indices.end(), std::begin(quad_indices), std::end(quad_indices));
         }
+        // Linear sampling is exact at aligned texel centers and also handles
+        // transformed glyphs correctly; integer zoom alone cannot choose it.
         if (!draw_mesh(*state_, pipeline, vertices, indices, nullptr, 0, atlas->second.image,
-                       glyph_sampler, state_->glyph_vertices))
+                       state_->glyph_sampler, state_->glyph_vertices))
             return false;
     }
     return true;

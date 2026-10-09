@@ -742,7 +742,7 @@ int main() {
         // stops, cached pixels must match the direct frame and then be reused.
         if (!result && nkui_layout_session_set_cache_policy(session, 2, NKUI_LAYOUT_CACHE_NONE) != NKUI_OK)
             result = 61;
-        for (float zoom : {1.0f, 1.5f, 2.0f}) {
+        for (float zoom : {1.0f, 1.1f, 1.2f, 1.5f, 2.0f}) {
             if (result) break;
             const nkui_frame_info moving_info{sizeof(moving_info), framebuffer_width / zoom,
                 framebuffer_height / zoom, framebuffer_width, framebuffer_height, zoom};
@@ -785,12 +785,14 @@ int main() {
                     nkui_renderer_get_stats(renderer, &cached) != NKUI_OK ||
                     cached.raster_cache_misses != stationary.raster_cache_misses ||
                     cached.raster_cache_hits <= stationary.raster_cache_hits)) result = 64;
-                // Two layout pixels are whole device pixels at every tested zoom.
-                // Moving by that amount must reuse the stationary row textures.
+                // Binary-exact transforms preserve the subpixel phase under
+                // whole-pixel movement. Decimal zoom can change it by an ulp;
+                // a conservative cache miss there is valid.
+                const bool exact_translation = zoom == 1.0f || zoom == 1.5f || zoom == 2.0f;
                 std::vector<uint8_t> translated_commands;
                 append_bytes(translated_commands, nkui_transform_command{
                     {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
-                    {1.0f, 0.0f, 0.0f, 1.0f, 8.0f, 4.75f}});
+                    {1.0f, 0.0f, 0.0f, 1.0f, 8.0f, 12.75f}});
                 append_bytes(translated_commands, nkui_draw_rect_command{
                     {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(nkui_draw_rect_command)},
                     wrapped_rows, 0, 0, 0, 0});
@@ -799,9 +801,9 @@ int main() {
                         static_cast<uint32_t>(translated_commands.size())) != NKUI_OK ||
                     nkui_layout_session_render_frame(renderer, session, surface, &moving_info, 0) != NKUI_OK ||
                     nkui_renderer_get_stats(renderer, &translated) != NKUI_OK ||
-                    translated.raster_cache_misses != cached.raster_cache_misses ||
-                    translated.raster_cache_hits <= cached.raster_cache_hits)) result = 65;
-                if (!result) std::puts("PASS: fractional movement draws directly; stationary and whole-pixel movement reuse exact row rasters");
+                    (exact_translation && (translated.raster_cache_misses != cached.raster_cache_misses ||
+                    translated.raster_cache_hits <= cached.raster_cache_hits)))) result = 65;
+                if (!result) std::printf("PASS: moving/stationary row rendering at zoom=%g\n", zoom);
             }
         }
         if (std::getenv("NKUI_MOVING_ROWS_TEST_ONLY")) return result;

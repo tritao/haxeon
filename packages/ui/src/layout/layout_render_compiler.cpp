@@ -3,6 +3,7 @@
 #include "compositor/compositor.h"
 #include "prepare/nanovg_path.h"
 #include "prepare/text_engine.h"
+#include "prepare/text_raster.h"
 
 #include <algorithm>
 #include <array>
@@ -291,6 +292,7 @@ void LayoutRenderFrame::reset() {
     plan_ = {};
     paths_.clear();
     text_layout_ids_.clear();
+    text_raster_scales_.clear();
     text_engine_source_ = nullptr;
 }
 
@@ -342,67 +344,6 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             }
         out.plan_.passes.reserve(pass_capacity);
         out.plan_.passes.push_back({main_target, {}, load_existing, {}});
-        bool has_text = false;
-        for (const auto &primitive : snapshot.primitives)
-            has_text = has_text || primitive.kind == LayoutPrimitiveKind::Text;
-
-        if (has_text) {
-            if (!text_engine_source && !out.text_engine_)
-                out.text_engine_ = std::make_unique<TextEngine>(fonts_);
-            TextEngine *text = out.text_engine();
-            if (!text || !text->valid())
-                return fail(error, 0, "text renderer is unavailable");
-
-            // Phase 1: shape and rasterize every visible label before any UVs
-            // are published. The retained ID table avoids shaping inline text
-            // again and reuses its storage on subsequent frames.
-            out.text_layout_ids_.resize(snapshot.primitives.size(), 0);
-            for (std::size_t index = 0; index < snapshot.primitives.size(); ++index) {
-                const auto &primitive = snapshot.primitives[index];
-                if (!primitive.visible || primitive.kind != LayoutPrimitiveKind::Text || primitive.text.empty())
-                    continue;
-                if (primitive.text_style.font_size <= 0.0f)
-                    return fail(error, index, "layout text preparation input is invalid");
-                const LayoutTextLayout *text_layout = nullptr;
-                if (primitive.text_layout_id) {
-                    const auto found =
-                        std::find_if(snapshot.text_layouts.begin(), snapshot.text_layouts.end(),
-                                 [&primitive](const LayoutTextLayout &candidate) {
-                                     return candidate.id == primitive.text_layout_id;
-                                 });
-                    if (found == snapshot.text_layouts.end() ||
-                        primitive.text_line_index >= found->lines.size())
-                        return fail(error, index, "layout text layout ID is invalid");
-                    text_layout = &*found;
-                    if (!text->has_layout(text_layout->id))
-                        return fail(error, index, "layout text resource is unavailable");
-                } else {
-                    const float width = std::max(primitive.bounds.width, 1.0f);
-                    TextLayoutOptions options;
-                    options.font_size = primitive.text_style.font_size;
-                    options.letter_spacing = primitive.text_style.letter_spacing;
-                    options.line_height = primitive.paragraph_style.line_height;
-                    options.tab_width = primitive.paragraph_style.tab_width;
-                    options.family = primitive.text_style.family;
-                    options.wrap = TextWrapMode::None;
-                    options.alignment = primitive.paragraph_style.alignment;
-                    options.direction = primitive.paragraph_style.direction;
-                    if (!text->layout_utf8(primitive.text.c_str(), width, options))
-                        return fail(error, index, "layout text shaping failed");
-                }
-
-                const auto layout_id = text_layout ? text_layout->id : text->active_layout_id();
-                out.text_layout_ids_[index] = layout_id;
-                if (!text->prepare_glyph_atlas(layout_id, text_layout ?
-                        static_cast<int32_t>(primitive.text_line_index) : -1, pixel_scale, GlyphMode::Alpha))
-                    return fail(error, index, "layout glyph atlas preparation failed");
-            }
-        }
-
-        // Phase 2: emit the plan against the settled atlas. Fail before handing
-        // out a frame if publication unexpectedly changes atlas coordinates.
-        const auto *frame_text = out.text_engine();
-        const uint64_t atlas_generation = frame_text ? frame_text->atlas_generation_key() : 0;
         std::vector<LayoutRect> clips;
         uint32_t transient_slot = 1;
         uint32_t transient_target_slot =
@@ -815,13 +756,86 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 index == raster_roots[active_raster_root].last)
                 end_raster_root();
         };
-        const auto draw_transform_for = [&](const LayoutPrimitive &primitive) {
-            if (active_raster_root == no_raster_root)
+        const auto draw_transform_for = [&](const LayoutPrimitive &primitive, std::size_t root_index) {
+            if (root_index == no_raster_root)
                 return primitive.transform;
             return transform_layout(
-                compose_transform(raster_roots[active_raster_root].world_to_cache,
+                compose_transform(raster_roots[root_index].world_to_cache,
                                   transform_array(primitive.transform)));
         };
+
+        bool has_text = false;
+        for (const auto &primitive : snapshot.primitives)
+            has_text = has_text || primitive.kind == LayoutPrimitiveKind::Text;
+
+        if (has_text) {
+            if (!text_engine_source && !out.text_engine_)
+                out.text_engine_ = std::make_unique<TextEngine>(fonts_);
+            TextEngine *text = out.text_engine();
+            if (!text || !text->valid())
+                return fail(error, 0, "text renderer is unavailable");
+
+            // Phase 1: shape and rasterize every visible label before any UVs
+            // are published. The retained ID table avoids shaping inline text
+            // again and reuses its storage on subsequent frames.
+            out.text_layout_ids_.resize(snapshot.primitives.size(), 0);
+            out.text_raster_scales_.resize(snapshot.primitives.size(), 0.0f);
+            std::size_t root_cursor = 0;
+            for (std::size_t index = 0; index < snapshot.primitives.size(); ++index) {
+                const auto &primitive = snapshot.primitives[index];
+                if (!primitive.visible || primitive.kind != LayoutPrimitiveKind::Text || primitive.text.empty())
+                    continue;
+                if (primitive.text_style.font_size <= 0.0f)
+                    return fail(error, index, "layout text preparation input is invalid");
+                const LayoutTextLayout *text_layout = nullptr;
+                if (primitive.text_layout_id) {
+                    const auto found =
+                        std::find_if(snapshot.text_layouts.begin(), snapshot.text_layouts.end(),
+                                 [&primitive](const LayoutTextLayout &candidate) {
+                                     return candidate.id == primitive.text_layout_id;
+                                 });
+                    if (found == snapshot.text_layouts.end() ||
+                        primitive.text_line_index >= found->lines.size())
+                        return fail(error, index, "layout text layout ID is invalid");
+                    text_layout = &*found;
+                    if (!text->has_layout(text_layout->id))
+                        return fail(error, index, "layout text resource is unavailable");
+                } else {
+                    const float width = std::max(primitive.bounds.width, 1.0f);
+                    TextLayoutOptions options;
+                    options.font_size = primitive.text_style.font_size;
+                    options.letter_spacing = primitive.text_style.letter_spacing;
+                    options.line_height = primitive.paragraph_style.line_height;
+                    options.tab_width = primitive.paragraph_style.tab_width;
+                    options.family = primitive.text_style.family;
+                    options.wrap = TextWrapMode::None;
+                    options.alignment = primitive.paragraph_style.alignment;
+                    options.direction = primitive.paragraph_style.direction;
+                    if (!text->layout_utf8(primitive.text.c_str(), width, options))
+                        return fail(error, index, "layout text shaping failed");
+                }
+
+                const auto layout_id = text_layout ? text_layout->id : text->active_layout_id();
+                out.text_layout_ids_[index] = layout_id;
+                while (root_cursor < raster_roots.size() && raster_roots[root_cursor].last < index)
+                    ++root_cursor;
+                const auto root_index = root_cursor < raster_roots.size() &&
+                    raster_roots[root_cursor].first <= index ? root_cursor : no_raster_root;
+                const auto transform = device_transform(draw_transform_for(primitive, root_index), pixel_scale);
+                const auto raster_scale = text_raster_scale_for_transform(transform.data());
+                if (!raster_scale.key)
+                    return fail(error, index, "layout text raster scale is invalid");
+                out.text_raster_scales_[index] = raster_scale.value;
+                if (!text->prepare_glyph_atlas(layout_id, text_layout ?
+                        static_cast<int32_t>(primitive.text_line_index) : -1, raster_scale.value, GlyphMode::Alpha))
+                    return fail(error, index, "layout glyph atlas preparation failed");
+            }
+        }
+
+        // Phase 2: emit the plan against the settled atlas. Fail before handing
+        // out a frame if publication unexpectedly changes atlas coordinates.
+        const auto *frame_text = out.text_engine();
+        const uint64_t atlas_generation = frame_text ? frame_text->atlas_generation_key() : 0;
         const auto clip_for = [&](const LayoutRect &clip) {
             if (active_raster_root == no_raster_root)
                 return clip;
@@ -880,7 +894,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 append_rounded_rect(path, primitive.bounds, primitive);
                 PathPreparationParams params;
                 params.device_pixel_ratio = pixel_scale;
-                const LayoutTransform draw_transform = draw_transform_for(primitive);
+                const LayoutTransform draw_transform = draw_transform_for(primitive, active_raster_root);
                 params.transform = device_transform(draw_transform, pixel_scale);
                 PreparedGeometry geometry;
                 if (!path.valid() || !prepared || !prepare_fill(path, params, geometry) ||
@@ -918,21 +932,22 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     transient_slot > kMaxTransientSlot)
                     return fail(error, index, "layout text preparation input is invalid");
                 const auto layout_id = out.text_layout_ids_[index];
+                const float raster_scale = out.text_raster_scales_[index];
                 const GlyphTint tint{
                     color_byte(primitive.color.red), color_byte(primitive.color.green),
                     color_byte(primitive.color.blue), color_byte(primitive.color.alpha)};
                 auto snapshot = primitive.text_layout_id
                                     ? text->published_glyphs_for_line(
                                           layout_id, primitive.text_line_index, 0.0f, 0.0f,
-                                          pixel_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas)
+                                          raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas)
                                     : text->published_glyphs(layout_id, 0.0f, 0.0f,
-                                                             pixel_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas);
+                                                             raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas);
                 if (!snapshot)
                     return fail(error, index, "layout glyph preparation failed");
                 const ResourceId id =
                     make_resource_id(ResourceKind::TextLayout, kTransientGeneration,
                                      static_cast<uint16_t>(transient_slot++));
-                const LayoutTransform draw_transform = draw_transform_for(primitive);
+                const LayoutTransform draw_transform = draw_transform_for(primitive, active_raster_root);
                 auto generation_primitive = primitive;
                 generation_primitive.transform = draw_transform;
                 const uint64_t content_generation = primitive_content_generation(

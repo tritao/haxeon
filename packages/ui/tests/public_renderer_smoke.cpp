@@ -873,6 +873,55 @@ int main(int argc, char **argv) {
             scaled_bounds.height() < native_bounds.height() * 1.5f)
             result = 17;
     }
+    if (!result) {
+        // Zooming a glyph to 17.5 device pixels must produce the same pixels
+        // as rasterizing it directly at 17.5px, without a rounded bitmap resize.
+        const auto render_glyph = [&](float font_size, float zoom,
+                                      std::vector<uint8_t> &pixels,
+                                      const std::array<float, 4> &linear = {1, 0, 0, 1}) {
+            nkui_resource glyph{};
+            nkui_display_list glyph_list{};
+            bool ok = nkui_text_layout_create(fonts, "H", 100.0f, font_size, &glyph) == NKUI_OK &&
+                      nkui_display_list_create(&glyph_list) == NKUI_OK;
+            std::vector<uint8_t> glyph_commands;
+            append(glyph_commands, nkui_transform_command{
+                {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(nkui_transform_command)},
+                {linear[0], linear[1], linear[2], linear[3], 32.0f / zoom, 32.0f / zoom}});
+            append(glyph_commands, nkui_draw_rect_command{
+                {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(nkui_draw_rect_command)},
+                glyph, 0, 0, 0, 0});
+            const nkui_frame_info info{sizeof(info), width / zoom, height / zoom, width, height, zoom};
+            if (ok)
+                ok = nkui_display_list_submit(glyph_list, glyph_commands.data(), glyph_commands.size()) == NKUI_OK &&
+                     nkui_renderer_render_frame(renderer, glyph_list, surface, &info) == NKUI_OK;
+            if (ok) {
+                pixels.resize(static_cast<size_t>(width) * height * 4);
+                glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+            }
+            nkui_display_list_destroy(glyph_list);
+            nkui_resource_destroy(glyph);
+            return ok;
+        };
+        std::vector<uint8_t> zoomed, native;
+        if (!render_glyph(14.0f, 1.25f, zoomed) || !render_glyph(17.5f, 1.0f, native) ||
+            zoomed != native) {
+            std::fprintf(stderr, "fractional zoom differs from native-size glyph raster\n");
+            result = 24;
+        }
+        // Rotation and nonuniform transforms must preserve raster resolution
+        // and interpolate scaled geometry, even when workbench zoom is 100%.
+        for (const auto &linear : {std::array<float, 4>{0, 2, -2, 0},
+                                  std::array<float, 4>{2, 0, 0, 1}}) {
+            if (result) break;
+            auto native_linear = linear;
+            for (float &component : native_linear) component *= 0.5f;
+            if (!render_glyph(14.0f, 1.0f, zoomed, linear) ||
+                !render_glyph(28.0f, 1.0f, native, native_linear) || zoomed != native) {
+                std::fprintf(stderr, "transformed glyph differs from native-density raster\n");
+                result = 25;
+            }
+        }
+    }
     nkui_renderer_stats stats{};
     if (!result &&
         (nkui_renderer_get_stats(renderer, &stats) != NKUI_OK ||

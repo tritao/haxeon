@@ -302,6 +302,31 @@ int main() {
     if (path_commands < 2 || text_commands != expected_text_commands)
         return 11;
 
+    // Ordinary labels use the full device transform for atlas preparation,
+    // including rotation and nonuniform scaling. Publication must use the
+    // very same scale so it cannot move atlas UVs after the preparation phase.
+    for (const LayoutTransform transform : {LayoutTransform{2, 0, 0, 2, 0, 0},
+                                            LayoutTransform{0, 2, -2, 0, 0, 0},
+                                            LayoutTransform{2, 0, 0, 1, 0, 0}}) {
+        auto transformed_snapshot = snapshot;
+        for (auto &primitive : transformed_snapshot.primitives)
+            if (primitive.kind == LayoutPrimitiveKind::Text)
+                primitive.transform = transform;
+        LayoutRenderFrame transformed_frame;
+        if (!compiler.compile(transformed_snapshot, main_target, 1.25f, transformed_frame,
+                              &compile_error, false, engine.text_engine())) return 310;
+        uint32_t labels = 0;
+        for (const auto &pass : transformed_frame.plan().passes)
+            for (const auto &command : pass.commands)
+                if (command.kind == RenderCommandKind::GlyphBatch) {
+                    const auto *glyphs = transformed_frame.resources().text(command.resource);
+                    if (!glyphs || glyphs->vertices.empty() || glyphs->pixel_scale != 2.5f)
+                        return 311;
+                    ++labels;
+                }
+        if (labels != expected_text_commands) return 312;
+    }
+
     // RTL lines keep a non-zero horizontal line origin in Skribidi. Verify
     // that the compiled glyphs retain it, so they remain aligned with the
     // selection rectangles painted in the text item's coordinate space.

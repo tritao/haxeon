@@ -1,7 +1,9 @@
 #include "prepare/text_engine.h"
+#include "prepare/text_raster.h"
 
 #include <cstring>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -15,6 +17,54 @@
 using namespace nkui;
 
 int main() {
+    // Fractional workbench zoom must not shrink a whole-point-rounded bitmap.
+    // Such resampling makes some zoom steps blurry while adjacent steps are crisp.
+    {
+        TextEngine zoom_text;
+        if (!zoom_text.add_font(NKUI_TEST_FONT_PATH)) return 220;
+        TextLayoutOptions options;
+        options.font_size = 14.0f;
+        if (!zoom_text.layout_utf8("core editor feedback jobs language", 500.0f, options)) return 221;
+        for (float scale : {0.9f, 1.0f, 1.1f, 1.2f, 1.25f, 1.3f, 1.5f}) {
+            PreparedGlyphs glyphs;
+            if (!zoom_text.prepare_glyphs(0, 0, scale, GlyphMode::Alpha, glyphs) ||
+                glyphs.vertices.empty()) return 222;
+            const auto uploads = zoom_text.atlas_uploads(true);
+            for (const auto &batch : glyphs.batches) {
+                const AtlasUpload *atlas = nullptr;
+                for (const auto &upload : uploads)
+                    if (upload.texture.value == batch.atlas.value) atlas = &upload;
+                if (!atlas) return 223;
+                for (uint32_t i = 0; i + 3 < batch.vertex_count; i += 4) {
+                    const auto &a = glyphs.vertices[batch.first_vertex + i];
+                    const auto &b = glyphs.vertices[batch.first_vertex + i + 1];
+                    const auto &d = glyphs.vertices[batch.first_vertex + i + 3];
+                    if (std::abs((b.x - a.x) * scale - (b.u - a.u) * atlas->texture_width) >= kGlyphTexelTolerance ||
+                        std::abs((d.y - a.y) * scale - (d.v - a.v) * atlas->texture_height) >= kGlyphTexelTolerance)
+                        return 224;
+                }
+            }
+        }
+        const auto layout_id = zoom_text.active_layout_id();
+        const auto first = zoom_text.published_glyphs(layout_id, 0.001f, 0, 1.1f, GlyphMode::Alpha);
+        const auto second = zoom_text.published_glyphs(layout_id, 0.002f, 0, 1.1f, GlyphMode::Alpha);
+        if (!first || !second || first == second || second->origin_x != 0.002f ||
+            std::abs((second->vertices.front().x - first->vertices.front().x) - 0.001f) > 0.00001f)
+            return 225;
+        // Scales in the same canonical bin must publish exactly the same geometry.
+        const auto nearby = zoom_text.published_glyphs(layout_id, 0.001f, 0, 1.10001f, GlyphMode::Alpha);
+        if (nearby != first || first->pixel_scale != text_raster_scale(1.1f).value)
+            return 226;
+        for (float invalid : {0.0f, -1.0f, std::numeric_limits<float>::infinity(),
+                              std::numeric_limits<float>::quiet_NaN(),
+                              std::numeric_limits<float>::max()}) {
+            PreparedGlyphs output;
+            if (zoom_text.prepare_glyphs(0, 0, invalid, GlyphMode::Alpha, output) ||
+                zoom_text.prepare_glyph_atlas(layout_id, -1, invalid, GlyphMode::Alpha) ||
+                zoom_text.published_glyphs(layout_id, 0, 0, invalid, GlyphMode::Alpha))
+                return 227;
+        }
+    }
     auto shared_fonts = std::make_shared<FontCollection>();
     if (!shared_fonts->valid() || !shared_fonts->add_font(NKUI_TEST_FONT_PATH) ||
         shared_fonts->font_load_count() != 1)

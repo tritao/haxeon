@@ -17,6 +17,7 @@
 #include "layout/layout_render_compiler.h"
 #include "prepare/nanovg_path.h"
 #include "prepare/text_engine.h"
+#include "prepare/text_raster.h"
 #if defined(NKUI_ENABLE_SHOWCASE_PRODUCER)
 #include "render/cube_surface_producer.h"
 #endif
@@ -1304,15 +1305,6 @@ void clear_path_cache(RendererSlot &renderer) {
     renderer.stats.path_geometry_bytes_retained = 0;
 }
 
-bool uniform_scale(const std::array<float, 6> &matrix, float &scale) {
-    constexpr float epsilon = 0.0001f;
-    if (std::abs(matrix[1]) > epsilon || std::abs(matrix[2]) > epsilon || matrix[0] <= 0.0f ||
-        matrix[3] <= 0.0f || std::abs(matrix[0] - matrix[3]) > epsilon)
-        return false;
-    scale = matrix[0];
-    return true;
-}
-
 std::array<float, 6> device_transform(const std::array<float, 6> &transform, float pixel_scale) {
     std::array<float, 6> result = transform;
     for (float &value : result)
@@ -1397,8 +1389,10 @@ std::shared_ptr<nkui::PreparedGlyphs> prepare_visible_text(
             const uint32_t vertex_base = static_cast<uint32_t>(glyphs->vertices.size());
             const uint32_t index_base = static_cast<uint32_t>(glyphs->indices.size());
             for (auto vertex : row->vertices) {
-                vertex.x += bounds.x * scale;
-                vertex.y += bounds.y * scale;
+                // Row geometry stays in layout units. The draw transform
+                // applies the device scale exactly once, including row offsets.
+                vertex.x += bounds.x;
+                vertex.y += bounds.y;
                 glyphs->vertices.push_back(vertex);
             }
             for (uint32_t vertex_index : row->indices)
@@ -3615,18 +3609,14 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                     valid = false;
                     break;
                 }
-                float requested_scale = 1.0f;
                 const auto transform = device_transform(command.transform, frame_info->pixel_scale);
-                if (!uniform_scale(transform, requested_scale))
-                    requested_scale = 1.0f;
-                // Coarse 1/8-scale steps can rasterize a fractional-DPR glyph
-                // atlas a full texel larger than its destination, shifting thin
-                // strokes under nearest sampling at browser zoom levels.
-                constexpr int32_t raster_scale_precision = 1024;
-                const int32_t raster_scale_key = std::max(
-                    1, static_cast<int32_t>(std::round(requested_scale * raster_scale_precision)));
-                const float raster_scale =
-                    static_cast<float>(raster_scale_key) / raster_scale_precision;
+                const auto scale = nkui::text_raster_scale_for_transform(transform.data());
+                if (!scale.key) {
+                    valid = false;
+                    break;
+                }
+                const int32_t raster_scale_key = scale.key;
+                const float raster_scale = scale.value;
                 const auto visible = visible_text_line_range(*layout, command, transform,
                                                                *frame_info, pass.target_descriptor);
                 const auto row_count = visible.second - visible.first;
@@ -4281,14 +4271,14 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                      : "too many prepared resources in one frame";
                     break;
                 }
-                float requested_scale = 1.0f;
-                if (!uniform_scale(command.transform, requested_scale))
-                    requested_scale = 1.0f;
-                constexpr int32_t raster_scale_precision = 1024;
-                const int32_t raster_scale_key = std::max(
-                    1, static_cast<int32_t>(std::round(requested_scale * raster_scale_precision)));
-                const float raster_scale =
-                    static_cast<float>(raster_scale_key) / raster_scale_precision;
+                const auto scale = nkui::text_raster_scale_for_transform(command.transform.data());
+                if (!scale.key) {
+                    valid = false;
+                    invalid_reason = "custom text raster scale is invalid";
+                    break;
+                }
+                const int32_t raster_scale_key = scale.key;
+                const float raster_scale = scale.value;
                 const auto visible = visible_text_line_range(*layout, command, command.transform,
                                                                *frame_info, pass.target_descriptor);
                 const uint32_t row_count = visible.second - visible.first;
