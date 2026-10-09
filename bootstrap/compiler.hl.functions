@@ -859,11 +859,11 @@
 1273	$lambda:compiler.types.typing.CallResolver.typeDeclaredCallArguments:17689
 1274	$lambda:compiler.types.typing.CallResolver.typeGenericCallArguments:20406
 1275	$lambda:compiler.types.typing.CallResolver.typeSubstr:73684
-1276	$lambda:compiler.types.typing.ExpressionTyper.comparison:82124
-1277	$lambda:compiler.types.typing.ExpressionTyper.notEqual:88310
+1276	$lambda:compiler.types.typing.ExpressionTyper.comparison:82053
+1277	$lambda:compiler.types.typing.ExpressionTyper.notEqual:88239
 1278	$lambda:compiler.types.typing.ExpressionTyper.typeNativeLayoutQuery:12111
-1279	$lambda:compiler.types.typing.ExpressionTyper.typeObjectLiteral:41212
-1280	$lambda:compiler.types.typing.ExpressionTyper.typeSwitchExpression:59619
+1279	$lambda:compiler.types.typing.ExpressionTyper.typeObjectLiteral:41141
+1280	$lambda:compiler.types.typing.ExpressionTyper.typeSwitchExpression:59548
 1281	$lambda:compiler.types.typing.ProgramTyper.computeNativeLayout:28002
 1282	$lambda:compiler.types.typing.ProgramTyper.new:1523
 1283	$lambda:compiler.types.typing.ProgramTyper.new:1569

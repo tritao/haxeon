@@ -20,7 +20,7 @@ class NativeLayoutMain {
 			+ 'function pairSize():Int return sizeof<Pair>(); '
 			+ 'function pairAlignment():Int return alignof<Pair>(); '
 			+ 'function valueOffset():Int return offsetof<Pair>("value"); '
-			+ 'function pairInfoSize():Int return typeInfo<Pair>().size; '
+			+ 'function pairInfoSize():Null<Int> return typeInfo<Pair>().size; '
 			+ 'function longSize():Int return sizeof<CLong>();',
 			program = new Parser(new Lexer(new SourceFile("native-layout.hx", source)).tokenize()).parseProgram(),
 			typed = Typer.typeLibrary(program),

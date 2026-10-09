@@ -78,21 +78,27 @@ class ModuleAnalyzer {
 		}
 		for (fn in ast.functions)
 			for (statement in fn.statements)
-				DependencyScanner.scanStatement(statement, dependencies);
+				DependencyScanner.scanStatement(statement, dependencies, fn.typeParameters);
 		for (classDecl in ast.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (initializer != null)
-					DependencyScanner.scanExpression(initializer, dependencies);
+					DependencyScanner.scanExpression(initializer, dependencies, classDecl.typeParameters);
 			}
-		for (classDecl in ast.classes)
+		for (classDecl in ast.classes) {
+			var ownerTypeParameters = classDecl.typeParameters;
 			for (method in classDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
-		for (abstractDecl in ast.abstracts)
+					DependencyScanner.scanStatement(statement, dependencies,
+						ownerTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
+		}
+		for (abstractDecl in ast.abstracts) {
+			var ownerTypeParameters = abstractDecl.typeParameters;
 			for (method in abstractDecl.methods)
 				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies);
+					DependencyScanner.scanStatement(statement, dependencies,
+						ownerTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
+		}
 		for (abstractDecl in ast.enumAbstracts)
 			for (value in abstractDecl.values)
 				DependencyScanner.scanExpression(value.value, dependencies);

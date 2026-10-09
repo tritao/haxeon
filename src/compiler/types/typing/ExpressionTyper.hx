@@ -374,8 +374,8 @@ class ExpressionTyper {
 			optional: false,
 			isFinal: true
 		});
-		var descriptorSizeType:CompilerType = descriptor.size == null ? TNullable(TInt) : TInt,
-			descriptorAlignmentType:CompilerType = descriptor.alignment == null ? TNullable(TInt) : TInt,
+		var descriptorSizeType:CompilerType = TNullable(TInt),
+			descriptorAlignmentType:CompilerType = TNullable(TInt),
 			descriptorFields:Array<AnonymousField> = [
 				{
 					name: "version",
