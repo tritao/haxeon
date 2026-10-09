@@ -287,3 +287,43 @@ helpers, have descriptor identity. An unresolved generic parameter and a
 runtime-selected type do not; callers must reach `typeInfo<T>()` through an
 instantiation where the compiler can resolve `T` to a concrete type. This is
 not runtime type-token support. No root or sibling pin was promoted.
+
+## Current source acceptance checkpoint
+
+The compiler/runtime selector was rerun against review-tree HEAD
+`2feb14e7c2edbb156f3931de7918d2b317ad50c0` plus its preserved local source
+changes. It passed 141/141:
+
+```sh
+.tools/haxe/haxe -cp tests --run driver.TestDriver \
+  --root "$PWD" --suite compiler,runtime --jobs 16
+```
+
+The captured log is `out/gates/final-driver-world-coordination-current.log`.
+This selector does not include the program fixture suite. In particular, the
+focused `native-memory-flat-struct` program currently fails to compile; its
+captured failure is `out/gates/rawptr-ref-program.log`. A captured
+`NativeSpan<FlatPacket>.get()` call reaches `NativeSpan.at()` with `T=Dynamic`,
+and `RawPtr.offset` correctly reports that it cannot derive a fixed element
+layout. The full archived World attempt reaches the same blocker at
+`NativeSpan.hx:86:10` after loading 37 sources; see
+`out/gates/world-a6e1114-native-span-debug.log`. Thus the 141-case selector
+does not close the active pointer/capture issue and does not establish full
+World compatibility.
+
+Existing bootstrap evidence for the current compiler source is
+`out/gates/bootstrap-world-native-span-debug.log`: bootstrap stages converged
+after two self-host stages. Existing Wasm parity evidence remains 356 fixtures
+passed with 15 declared skips at
+`aee78ba4d9b2d5f330132447e7ef51cda994faf5`, recorded in
+`out/gates/wasm-parity-with-flat-structs.log`. These checks were not rerun for
+this documentation checkpoint. The runtime pin remains
+`0e739431da931d8e21c98c485afb17f1f3164106`.
+
+The exact `typeInfo<T>()` boundary above remains unchanged. The local
+`MessagePackSchema.hx` candidate has only passed its minimal import probe; the
+full descriptor/default/schema consumer assertions are still unverified. The
+World lane owns the full consumer run and will report concrete gaps before
+this lane resumes descriptor-pipeline work. No World or sibling pin was
+changed, and the source tree is still dirty, so this is working-tree gate
+evidence rather than a stable compiler checkpoint.
