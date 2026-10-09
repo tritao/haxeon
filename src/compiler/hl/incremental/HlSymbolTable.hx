@@ -474,8 +474,7 @@ class HlSymbolTable {
 		return index;
 	}
 
-	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>,
-			nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
+	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';

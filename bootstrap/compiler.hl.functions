@@ -689,7 +689,7 @@
 1103	$lambda:compiler.hl.incremental.HlModuleAssembler.assemble:7628
 1104	$lambda:compiler.hl.incremental.HlSymbolTable.orderedMap:6441
 1105	$lambda:compiler.hl.incremental.HlSymbolTable.orderedNestedMap:6733
-1106	$lambda:compiler.hl.incremental.HlSymbolTable.stringConstantGlobals:20894
+1106	$lambda:compiler.hl.incremental.HlSymbolTable.stringConstantGlobals:20891
 1107	$lambda:compiler.ir.IrCopyElision.replaceArgument:7622
 1108	$lambda:compiler.ir.IrInliner.expand:25497
 1109	$lambda:compiler.ir.IrInliner.expand:25683
@@ -732,9 +732,9 @@
 1146	$lambda:compiler.ir.cfg.SsaBuilder.run:2635
 1147	$lambda:compiler.ir.codec.IrInstructionCodec.read:10039
 1148	$lambda:compiler.ir.codec.IrValueTableCodec.write:1340
-1149	$lambda:compiler.ir.hl.HlLower.closeInterfaces:70860
+1149	$lambda:compiler.ir.hl.HlLower.closeInterfaces:70852
 1150	$lambda:compiler.ir.hl.HlLower.lowerFunction:23297
-1151	$lambda:compiler.ir.hl.HlLower.lowerFunction:45352
+1151	$lambda:compiler.ir.hl.HlLower.lowerFunction:45344
 1152	$lambda:compiler.semantic.ImplicitConstructors.add:1804
 1153	$lambda:compiler.semantic.SemanticAssembly.run:24532
 1154	$lambda:compiler.semantic.SemanticAssembly.run:24765

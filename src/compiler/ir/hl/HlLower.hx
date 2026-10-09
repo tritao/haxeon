@@ -915,8 +915,7 @@ class HlLower {
 						if (nativeLayout != null && nativeLayout.size < 4) {
 							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 								bits = nativeLayout.size * 8;
-							instructions.push(HlInstruction.LoadInt(maskOrShift,
-								internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
+							instructions.push(HlInstruction.LoadInt(maskOrShift, internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
 							if (nativeLayout.signed) {
 								instructions.push(HlInstruction.ShiftLeft(destination, destination, maskOrShift));
 								instructions.push(HlInstruction.ShiftRight(destination, destination, maskOrShift));

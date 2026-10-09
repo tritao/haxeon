@@ -31,18 +31,18 @@ class IrProgramAssemblerMain {
 			childField = findObjectField(rootObject, "child");
 		expect(leafObject.nativeLayout != null && leafObject.nativeLayout.size == 8 && leafObject.nativeLayout.alignment == 4,
 			"IR objects must retain selected native record size and alignment");
-		expect(deltaField.nativeLayout != null
-			&& deltaField.nativeLayout.offset == 2
-			&& deltaField.nativeLayout.size == 2
-			&& deltaField.nativeLayout.signed,
+		expect(deltaField.nativeLayout != null && deltaField.nativeLayout.offset == 2 && deltaField.nativeLayout.size == 2 && deltaField.nativeLayout.signed,
 			"IR fields must retain signed narrow field placement for HashLink lowering");
 		expect(childField.nativeLayout != null && childField.nativeLayout.offset == 4 && childField.nativeLayout.inlineRecord,
 			"nested Flat fields must retain inline record placement");
 		var flatRecordsRoundTrip = CanonicalIrCodec.decode(CanonicalIrCodec.encode(flatRecords)),
 			roundTripLeaf = findObject(flatRecordsRoundTrip.objects, "Leaf"),
 			roundTripDelta = findObjectField(roundTripLeaf, "delta");
-		expect(roundTripLeaf.nativeLayout != null && roundTripLeaf.nativeLayout.size == 8
-			&& roundTripDelta.nativeLayout != null && roundTripDelta.nativeLayout.offset == 2 && roundTripDelta.nativeLayout.signed,
+		expect(roundTripLeaf.nativeLayout != null
+			&& roundTripLeaf.nativeLayout.size == 8
+			&& roundTripDelta.nativeLayout != null
+			&& roundTripDelta.nativeLayout.offset == 2
+			&& roundTripDelta.nativeLayout.signed,
 			"canonical IR must round-trip record and narrow-field layout facts");
 
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
