@@ -16,6 +16,20 @@ struct ManagedPayload {
   public var position:InnerRecord;
   public var values:Array<Int>;
 }
+
+struct DescriptorDefaultLeaf {
+  public var zero:Int = 0;
+  public var ratio:Float = 1.25;
+  public var explicitNull:Null<Int> = null;
+  public var absent:Int;
+  public var label:String = "leaf";
+  public var enabled:Bool = true;
+}
+
+struct DescriptorDefaultRoot {
+  public var leaf:DescriptorDefaultLeaf;
+}
+
 function main():Int {
   var info = typeInfo<ManagedPayload>();
   if (info.name != "ManagedPayload"
@@ -38,5 +52,24 @@ function main():Int {
   if (info.fields[2].arguments[0].type != "Int") return 9;
   if (info.fields[2].arguments[0].flat != true) return 10;
   if (info.hash.length != 64 || info.hash != typeInfo<ManagedPayload>().hash) return 11;
+  var defaults = typeInfo<DescriptorDefaultRoot>();
+  if (defaults.fields.length != 1 || defaults.fields[0].defaultValue != null) return 14;
+  var nestedDefaults = defaults.fields[0].fields;
+  if (nestedDefaults.length != 6) return 15;
+  var zeroDefault:Dynamic = nestedDefaults[0].defaultValue;
+  var ratioDefault:Dynamic = nestedDefaults[1].defaultValue;
+  var nullDefault:Dynamic = nestedDefaults[2].defaultValue;
+  var labelDefault:Dynamic = nestedDefaults[4].defaultValue;
+  var enabledDefault:Dynamic = nestedDefaults[5].defaultValue;
+  if (zeroDefault == null || zeroDefault.type != "Int" || zeroDefault.value != 0) return 16;
+  if (ratioDefault == null || ratioDefault.type != "Float" || ratioDefault.value != 1.25) return 17;
+  if (nullDefault == null || nullDefault.type != "Null" || nullDefault.value != null) return 18;
+  if (nestedDefaults[3].defaultValue != null) return 19;
+  if (labelDefault == null || labelDefault.type != "String" || labelDefault.value != "leaf") return 20;
+  if (enabledDefault == null || enabledDefault.type != "Bool" || enabledDefault.value != true) return 21;
+  var constructedDefaults = new DescriptorDefaultLeaf();
+  if (constructedDefaults.zero != 0
+    || constructedDefaults.ratio != 1.25 || constructedDefaults.explicitNull != null || constructedDefaults.absent != 0
+    || constructedDefaults.label != "leaf" || !constructedDefaults.enabled) return 22;
   return 42;
 }

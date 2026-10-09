@@ -1,5 +1,4 @@
-@:value @:repr("C")
-class Pair {
+@:value @:repr("C") class Pair {
 	public var tag:UInt8;
 	public var value:Int64;
 	public var ratio:Float32;
@@ -23,7 +22,7 @@ function main():Int {
 		return 5;
 	if (info.fields[0].annotations.length != 0 || info.fields[1].annotations.length != 0 || info.fields[2].annotations.length != 0)
 		return 6;
-	if (info.hash != "c44d59447215ca7ebbb410c1c61891b5550af04c19094b070a36194e9267094f" || info.hash != typeInfo<Pair>().hash)
+	if (info.hash != "158ead62c03ad8566d6e4e242cd28be1651c9cb63acf8a00b242ff193a0262f4" || info.hash != typeInfo<Pair>().hash)
 		return 7;
 	return 42;
 }

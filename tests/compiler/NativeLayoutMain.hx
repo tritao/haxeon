@@ -4,6 +4,7 @@ import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue.*;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.CompilerType;
 import compiler.ffi.HxiAbi;
@@ -155,6 +156,93 @@ class NativeLayoutMain {
 					if (reason.kind == compiler.semantic.Invalidation.InvalidationKind.StructuralDependency && reason.cause == "Record")
 						descriptorInvalidated = true;
 		expect(descriptorInvalidated, "changing a struct schema must report the typeInfo layout dependency invalidation");
+		var defaultCompiler = new Compiler();
+		defaultCompiler.configure("descriptor-defaults", "descriptor-defaults", ["native-abi-target=portable-abi64"]);
+		defaultCompiler.update("model/Leaf.hx",
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; " +
+			"public var unsignedByte:UInt8 = 250; public var signedByte:Int8 = -128; " +
+			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+		defaultCompiler.update("model/Root.hx", "package model; struct Root { public var leaf:Leaf; }");
+		defaultCompiler.update("Main.hx", "import model.Root; class Main { static function main():Int return typeInfo<Root>().hash.length; }");
+		defaultCompiler.compile("Main");
+		var defaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
+			defaultLeaf = descriptorField(defaultRoot.fields, "leaf");
+		expect(defaultLeaf.defaultValue == null, "a nested field without a source initializer must be explicitly absent");
+		var zeroDefault = descriptorField(defaultLeaf.fields, "zero").defaultValue,
+			absentDefault = descriptorField(defaultLeaf.fields, "absent").defaultValue,
+			nullDefault = descriptorField(defaultLeaf.fields, "nullable").defaultValue,
+			unsignedByteDefault = descriptorField(defaultLeaf.fields, "unsignedByte").defaultValue,
+			signedByteDefault = descriptorField(defaultLeaf.fields, "signedByte").defaultValue,
+			unsignedWordDefault = descriptorField(defaultLeaf.fields, "unsignedWord").defaultValue,
+			signedWordDefault = descriptorField(defaultLeaf.fields, "signedWord").defaultValue;
+		expect(zeroDefault != null && zeroDefault.type == "Int" && Type.enumEq(zeroDefault.value, IntValue(0)),
+			"an explicit integer zero must remain a typed default");
+		expect(absentDefault == null, "a field with no initializer must not be confused with a null value");
+		expect(nullDefault != null && nullDefault.type == "Null" && Type.enumEq(nullDefault.value, NullValue),
+			"an explicit nullable null must survive as a typed default value");
+		expect(unsignedByteDefault != null
+			&& unsignedByteDefault.type == "Int"
+			&& Type.enumEq(unsignedByteDefault.value, IntValue(250))
+			&& signedByteDefault != null
+			&& Type.enumEq(signedByteDefault.value, IntValue(-128))
+			&& unsignedWordDefault != null
+			&& Type.enumEq(unsignedWordDefault.value, IntValue(65535))
+			&& signedWordDefault != null
+			&& Type.enumEq(signedWordDefault.value, IntValue(-32768)),
+			"fixed-width 8-bit and 16-bit integer scalar defaults must preserve their signed and unsigned bounds");
+		var defaultRoundTrip = compiler.types.NativeTypeDescriptorCodec.decode(compiler.types.NativeTypeDescriptorCodec.encode([defaultRoot])),
+			roundTripLeaf = descriptorField(requireDescriptor(defaultRoundTrip, "model.Root").fields, "leaf");
+		expect(compiler.types.NativeTypeDescriptorCodec.toJson(defaultRoundTrip) == compiler.types.NativeTypeDescriptorCodec.toJson([defaultRoot])
+			&& descriptorField(roundTripLeaf.fields, "zero").defaultValue.type == "Int"
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "zero").defaultValue.value, IntValue(0))
+			&& descriptorField(roundTripLeaf.fields, "absent").defaultValue == null
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "nullable").defaultValue.value, NullValue)
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "unsignedByte").defaultValue.value, IntValue(250))
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "signedByte").defaultValue.value, IntValue(-128))
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "unsignedWord").defaultValue.value, IntValue(65535))
+			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "signedWord").defaultValue.value, IntValue(-32768)),
+			"nested absent, zero, null, and narrow native integer defaults must survive binary artifact round-trip");
+		var narrowDescriptor = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Leaf"),
+			malformedNarrowDescriptor:Dynamic = Reflect.copy(narrowDescriptor),
+			malformedNarrowFields = narrowDescriptor.fields.copy();
+		for (index in 0...malformedNarrowFields.length)
+			if (malformedNarrowFields[index].name == "unsignedByte") {
+				var malformedField:Dynamic = Reflect.copy(malformedNarrowFields[index]),
+					malformedDefault:Dynamic = Reflect.copy(malformedField.defaultValue);
+				Reflect.setField(malformedDefault, "value", IntValue(256));
+				Reflect.setField(malformedField, "defaultValue", malformedDefault);
+				malformedNarrowFields[index] = cast malformedField;
+			}
+		Reflect.setField(malformedNarrowDescriptor, "fields", malformedNarrowFields);
+		Reflect.setField(malformedNarrowDescriptor, "hash",
+			compiler.types.NativeTypeDescriptor.contentHash(malformedNarrowDescriptor.type, malformedNarrowDescriptor.name, malformedNarrowDescriptor.type,
+				malformedNarrowDescriptor.flat, malformedNarrowDescriptor.portable, malformedNarrowDescriptor.size, malformedNarrowDescriptor.alignment,
+				malformedNarrowDescriptor.annotations, malformedNarrowDescriptor.annotationValues, malformedNarrowDescriptor.fields,
+				malformedNarrowDescriptor.arguments));
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.encode([cast malformedNarrowDescriptor]), "does not match its semantic type");
+		var originalDefaultHash = defaultRoot.hash;
+		defaultCompiler.update("model/Leaf.hx",
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; " +
+			"public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; " +
+			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+		var changedDefaultCompile = defaultCompiler.compile("Main"),
+			changedDefaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
+			changedUnsignedByte = descriptorField(descriptorField(changedDefaultRoot.fields, "leaf").fields, "unsignedByte").defaultValue;
+		expect(changedUnsignedByte != null
+			&& Type.enumEq(changedUnsignedByte.value, IntValue(251))
+			&& changedDefaultRoot.hash != originalDefaultHash,
+			"changing a nested narrow scalar default must change the recursive descriptor value and hash");
+		expect(changedDefaultCompile.retyped.indexOf("Main.main") >= 0, "changing a field default in an imported module must invalidate typeInfo callers");
+		defaultCompiler.update("model/Leaf.hx",
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int>; " +
+			"public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; " +
+			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+		var absentDefaultCompile = defaultCompiler.compile("Main"),
+			absentDefaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
+			absentNullable = descriptorField(descriptorField(absentDefaultRoot.fields, "leaf").fields, "nullable").defaultValue;
+		expect(absentNullable == null && absentDefaultRoot.hash != changedDefaultRoot.hash,
+			"removing an explicit null initializer must produce an absent default and change the nested descriptor hash");
+		expect(absentDefaultCompile.retyped.indexOf("Main.main") >= 0, "removing an imported field default must invalidate typeInfo callers");
 		if ([
 			for (object in compiler.ir.IrProgramAssembler.objectsFrom(typed))
 				if (object.name == "Pair" || object.name == "Outer") object
@@ -192,6 +280,12 @@ class NativeLayoutMain {
 		expectError('function bad():Int return sizeof<String>();', "no fixed native ABI layout");
 		expectError('function bad():Int return offsetof<Int32>("x");', "requires a flat struct or native value record type");
 		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a struct or legacy C value record");
+		expectError('struct Bad { public var count:Int = next(); } function next():Int return 1;', "executable and computed defaults are unsupported");
+		expectError('struct Bad { public var value:UInt8 = 256; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
+		expectError('struct Bad { public var value:UInt8 = -1; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
+		expectError('struct Bad { public var value:Int8 = 128; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
+		expectError('struct Bad { public var value:UInt16 = 65536; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
+		expectError('struct Bad { public var value:Int16 = -32769; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
 		expectError('class Managed { public var x:Int32; }', "only appear in value structs");
 		expectError('enum Managed { Value(value:Int32); }', "cannot be stored in a Haxe enum yet");
 	}

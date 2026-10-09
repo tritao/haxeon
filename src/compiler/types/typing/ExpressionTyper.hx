@@ -10,6 +10,7 @@ import compiler.semantic.SemanticSignature;
 import compiler.types.NativeTypeDescriptor;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorDefault;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
@@ -286,22 +287,37 @@ class ExpressionTyper {
 				isFinal: true
 			}
 		]),
-			annotationType:CompilerType = TAnonymous("$haxeon.TypeInfoAnnotation.v3", [
+			annotationType:CompilerType = TAnonymous("$haxeon.TypeInfoAnnotation.v3",
+				[
+					{
+						name: "name",
+						type: TString,
+						optional: false,
+						isFinal: true
+					},
+					{
+						name: "arguments",
+						type: TArray(annotationArgumentType),
+						optional: false,
+						isFinal: true
+					}
+				]),
+			nodeFields:Array<AnonymousField> = [],
+			nodeType:CompilerType = TAnonymous("$haxeon.TypeInfoNode.v4", nodeFields),
+			defaultType:CompilerType = TAnonymous("$haxeon.TypeInfoDefault.v1", [
 				{
-					name: "name",
+					name: "type",
 					type: TString,
 					optional: false,
 					isFinal: true
 				},
 				{
-					name: "arguments",
-					type: TArray(annotationArgumentType),
+					name: "value",
+					type: TDynamic,
 					optional: false,
 					isFinal: true
 				}
-			]),
-			nodeFields:Array<AnonymousField> = [],
-			nodeType:CompilerType = TAnonymous("$haxeon.TypeInfoNode.v3", nodeFields);
+			]);
 		nodeFields.push({
 			name: "name",
 			type: TString,
@@ -341,6 +357,12 @@ class ExpressionTyper {
 		nodeFields.push({
 			name: "offset",
 			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "defaultValue",
+			type: TNullable(defaultType),
 			optional: false,
 			isFinal: true
 		});
@@ -450,7 +472,7 @@ class ExpressionTyper {
 					isFinal: true
 				}
 			],
-			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v2", descriptorFields),
+			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v3", descriptorFields),
 			descriptorExpression = ObjectLiteral([
 				objectField("version", IntegerLiteral(descriptor.version, span), span),
 				objectField("name", StringLiteral(descriptor.name, span), span),
@@ -740,7 +762,8 @@ class ExpressionTyper {
 	}
 
 	function descriptorNode(fieldName:String, type:CompilerType, offset:Null<Int>, annotations:Array<String>,
-			annotationValues:Array<NativeTypeAnnotationData>, visiting:Array<String>):NativeTypeDescriptorField {
+			annotationValues:Array<NativeTypeAnnotationData>, visiting:Array<String>,
+			defaultValue:Null<NativeTypeDescriptorDefault> = null):NativeTypeDescriptorField {
 		var name = descriptorRecordName(type),
 			recursive = name != null && visiting.indexOf(name) >= 0,
 			facts = StructProperties.evaluate(session.declarations, type),
@@ -755,6 +778,7 @@ class ExpressionTyper {
 			size: layout == null ? null : layout.size,
 			alignment: layout == null ? null : layout.alignment,
 			offset: offset,
+			defaultValue: defaultValue,
 			annotations: annotations,
 			annotationValues: annotationValues,
 			fields: nested,
@@ -777,11 +801,93 @@ class ExpressionTyper {
 		for (field in declaration.fields)
 			if (!field.isStatic && descriptorFieldHasStorage(field) && field.type != null) {
 				var fieldType = session.declarations.resolve(field.type, field.span, session.currentContext.typeSubstitutions),
-					fieldAnnotations = [for (metadata in field.metadata) metadata.name];
-				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations, typedMetadata(field.metadata), nestedVisiting));
+					fieldAnnotations = [for (metadata in field.metadata) metadata.name],
+					defaultValue = descriptorDefaultValue(name, field.name, fieldType, field.initializer, field.span);
+				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations, typedMetadata(field.metadata), nestedVisiting,
+					defaultValue));
 			}
 		return fields;
 	}
+
+	function descriptorDefaultValue(owner:String, fieldName:String, type:CompilerType, initializer:Null<AstExpression>,
+			span:SourceSpan):Null<NativeTypeDescriptorDefault> {
+		if (initializer == null)
+			return null;
+		var value = descriptorDefaultConstant(type, initializer);
+		if (value == null) {
+			var reason = switch initializer {
+				case NullLiteral(_) if (!isNullableDefaultType(type)): "null requires an explicitly nullable field type";
+				case _:
+					var nativeInteger = switch type {
+						case TNativeScalar(name): {name: name, range: NativeTypeDescriptor.narrowIntegerDefaultRange('native-scalar:$name')};
+						case _: null;
+					};
+					var integer = integerDefaultLiteral(initializer);
+					if (nativeInteger != null && nativeInteger.range != null && integer != null)
+						'integer literal $integer is outside the range of native scalar ${nativeInteger.name}' else
+						"only scalar literal defaults are supported; executable and computed defaults are unsupported";
+			};
+			fail("E1024", 'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
+		}
+		var valueType = switch value {
+			case IntValue(_): "Int";
+			case FloatValue(_): "Float";
+			case StringValue(_): "String";
+			case BoolValue(_): "Bool";
+			case NullValue: "Null";
+		};
+		return {type: valueType, value: value};
+	}
+
+	function descriptorDefaultConstant(type:CompilerType, initializer:AstExpression):Null<NativeTypeAnnotationValue>
+		return switch type {
+			case TNullable(element):
+				switch initializer {
+					case NullLiteral(_): NullValue;
+					case _: descriptorDefaultConstant(element, initializer);
+				};
+			case TAbstract(_, _, representation): descriptorDefaultConstant(representation, initializer);
+			case TNativeScalar(name): var range = NativeTypeDescriptor.narrowIntegerDefaultRange('native-scalar:$name'),
+					integer = integerDefaultLiteral(initializer); range == null || integer == null || integer < range.min || integer > range.max ? null : IntValue(integer);
+			case TInt:
+				switch initializer {
+					case IntegerLiteral(value, _): IntValue(value);
+					case Negate(IntegerLiteral(value, _), _): IntValue(-value);
+					case _: null;
+				};
+			case TFloat: var value:Null<Float> = switch initializer {
+					case IntegerLiteral(number, _): number;
+					case FloatLiteral(number, _): number;
+					case Negate(IntegerLiteral(number, _), _): -number;
+					case Negate(FloatLiteral(number, _), _): -number;
+					case _: null;
+				}; value == null || !Math.isFinite(value) ? null : FloatValue(value);
+			case TString:
+				switch initializer {
+					case StringLiteral(value, _): StringValue(value);
+					case _: null;
+				};
+			case TBool:
+				switch initializer {
+					case BoolLiteral(value, _): BoolValue(value);
+					case _: null;
+				};
+			case _: null;
+		};
+
+	static function integerDefaultLiteral(initializer:AstExpression):Null<Int>
+		return switch initializer {
+			case IntegerLiteral(value, _): value;
+			case Negate(IntegerLiteral(value, _), _): -value;
+			case _: null;
+		};
+
+	static function isNullableDefaultType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(_): true;
+			case TAbstract(_, _, representation): isNullableDefaultType(representation);
+			case _: false;
+		};
 
 	function descriptorArguments(type:CompilerType, visiting:Array<String>):Array<NativeTypeDescriptorField> {
 		var arguments:Array<{name:String, type:CompilerType}> = switch type {
@@ -870,11 +976,18 @@ class ExpressionTyper {
 			objectField("size", nullableInteger(field.size, span), span),
 			objectField("alignment", nullableInteger(field.alignment, span), span),
 			objectField("offset", nullableInteger(field.offset, span), span),
+			objectField("defaultValue", descriptorDefaultExpression(field.defaultValue, span), span),
 			objectField("annotations", stringArray(field.annotations, span), span),
 			objectField("annotationValues", annotationValuesExpression(field.annotationValues, span), span),
 			objectField("fields", ArrayLiteral([for (child in field.fields) descriptorFieldExpression(child, span)], span), span),
 			objectField("arguments", ArrayLiteral([for (argument in field.arguments) descriptorFieldExpression(argument, span)], span), span),
 			objectField("recursive", BoolLiteral(field.recursive, span), span)
+		], span);
+
+	static function descriptorDefaultExpression(value:Null<NativeTypeDescriptorDefault>, span:SourceSpan):AstExpression
+		return if (value == null) NullLiteral(span) else ObjectLiteral([
+			objectField("type", StringLiteral(value.type, span), span),
+			objectField("value", annotationConstantExpression(value.value, span), span)
 		], span);
 
 	static function annotationValuesExpression(values:Array<NativeTypeAnnotationData>, span:SourceSpan):AstExpression

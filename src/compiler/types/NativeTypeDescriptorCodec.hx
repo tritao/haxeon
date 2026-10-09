@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorDefault;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
@@ -12,7 +13,7 @@ import haxe.io.BytesOutput;
 
 /** Versioned container for the descriptors emitted by a compiled program. */
 class NativeTypeDescriptorCodec {
-	public static inline final FORMAT_VERSION:Int = 2;
+	public static inline final FORMAT_VERSION:Int = 3;
 	static inline final MAGIC = "HTD";
 	static inline final MAX_ITEMS = 0x100000;
 	static inline final MAX_DEPTH = 128;
@@ -106,16 +107,64 @@ class NativeTypeDescriptorCodec {
 		if (descriptor.hash != expected)
 			throw 'Native type descriptor hash mismatch for "${descriptor.name}"';
 		validateAnnotationValues(descriptor.annotationValues);
-		validateNodeAnnotations(descriptor.fields);
-		validateNodeAnnotations(descriptor.arguments);
+		validateNodes(descriptor.fields);
+		validateNodes(descriptor.arguments);
 	}
 
-	static function validateNodeAnnotations(nodes:Array<NativeTypeDescriptorField>):Void {
+	static function validateNodes(nodes:Array<NativeTypeDescriptorField>):Void {
 		for (node in nodes) {
 			validateAnnotationValues(node.annotationValues);
-			validateNodeAnnotations(node.fields);
-			validateNodeAnnotations(node.arguments);
+			validateDefaultValue(node);
+			validateNodes(node.fields);
+			validateNodes(node.arguments);
 		}
+	}
+
+	static function validateDefaultValue(node:NativeTypeDescriptorField):Void {
+		var descriptorDefault = node.defaultValue;
+		if (descriptorDefault == null)
+			return;
+		var valid = switch descriptorDefault.value {
+			case IntValue(value): descriptorDefault.type == "Int" && defaultIntValueAccepted(node, value);
+			case FloatValue(value): descriptorDefault.type == "Float" && defaultTypeAccepted(node, "Float") && Math.isFinite(value);
+			case StringValue(_): descriptorDefault.type == "String" && defaultTypeAccepted(node, "String");
+			case BoolValue(_): descriptorDefault.type == "Bool" && defaultTypeAccepted(node, "Bool");
+			case NullValue: descriptorDefault.type == "Null" && nullableDefaultType(node);
+		};
+		if (!valid)
+			throw 'Native type descriptor field "${node.name}" default does not match its semantic type';
+	}
+
+	static function defaultIntValueAccepted(node:NativeTypeDescriptorField, value:Int):Bool {
+		if (node.type == "Int")
+			return true;
+		var range = NativeTypeDescriptor.narrowIntegerDefaultRange(node.type);
+		if (range != null)
+			return value >= range.min && value <= range.max;
+		for (argument in node.arguments)
+			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+				if (defaultIntValueAccepted(argument, value))
+					return true;
+		return false;
+	}
+
+	static function defaultTypeAccepted(node:NativeTypeDescriptorField, valueType:String):Bool {
+		if (node.type == valueType)
+			return true;
+		for (argument in node.arguments)
+			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+				if (defaultTypeAccepted(argument, valueType))
+					return true;
+		return false;
+	}
+
+	static function nullableDefaultType(node:NativeTypeDescriptorField):Bool {
+		if (StringTools.startsWith(node.type, "Null<"))
+			return true;
+		for (argument in node.arguments)
+			if (argument.name == "representation" && nullableDefaultType(argument))
+				return true;
+		return false;
 	}
 
 	static function writeNodes(output:BytesOutput, nodes:Array<NativeTypeDescriptorField>, depth:Int):Void {
@@ -129,6 +178,7 @@ class NativeTypeDescriptorCodec {
 			writeNullableInt(output, node.size);
 			writeNullableInt(output, node.alignment);
 			writeNullableInt(output, node.offset);
+			writeDefault(output, node.defaultValue);
 			writeStrings(output, node.annotations);
 			writeAnnotationValues(output, node.annotationValues);
 			writeNodes(output, node.fields, depth + 1);
@@ -149,6 +199,7 @@ class NativeTypeDescriptorCodec {
 				size: readNullableInt(input),
 				alignment: readNullableInt(input),
 				offset: readNullableInt(input),
+				defaultValue: readDefault(input, limit),
 				annotations: readStrings(input, limit),
 				annotationValues: readAnnotationValues(input, limit),
 				fields: readNodes(input, limit, depth + 1),
@@ -255,6 +306,7 @@ class NativeTypeDescriptorCodec {
 			size: node.size,
 			alignment: node.alignment,
 			offset: node.offset,
+			defaultValue: defaultJson(node.defaultValue),
 			annotations: node.annotations,
 			annotationValues: annotationValuesJson(node.annotationValues),
 			fields: [for (field in node.fields) nodeJson(field)],
@@ -286,6 +338,47 @@ class NativeTypeDescriptorCodec {
 			case BoolValue(value): value;
 			case NullValue: null;
 		};
+
+	static function defaultJson(value:Null<NativeTypeDescriptorDefault>):Dynamic
+		return value == null ? null : {type: value.type, value: annotationConstantJson(value.value)};
+
+	static function writeDefault(output:BytesOutput, value:Null<NativeTypeDescriptorDefault>):Void {
+		writeBool(output, value != null);
+		if (value == null)
+			return;
+		writeString(output, value.type);
+		switch value.value {
+			case IntValue(number):
+				output.writeByte(0);
+				output.writeInt32(number);
+			case FloatValue(number):
+				output.writeByte(1);
+				output.writeDouble(number);
+			case StringValue(text):
+				output.writeByte(2);
+				writeString(output, text);
+			case BoolValue(flag):
+				output.writeByte(3);
+				writeBool(output, flag);
+			case NullValue:
+				output.writeByte(4);
+		}
+	}
+
+	static function readDefault(input:BytesInput, limit:Int):Null<NativeTypeDescriptorDefault> {
+		if (!readBool(input))
+			return null;
+		var type = readString(input, limit),
+			value:NativeTypeAnnotationValue = switch input.readByte() {
+				case 0: IntValue(input.readInt32());
+				case 1: FloatValue(input.readDouble());
+				case 2: StringValue(readString(input, limit));
+				case 3: BoolValue(readBool(input));
+				case 4: NullValue;
+				case _: throw "Invalid default constant tag in native type descriptor artifact";
+			};
+		return {type: type, value: value};
+	}
 
 	static function writeStrings(output:BytesOutput, values:Array<String>):Void {
 		writeCount(output, values.length);

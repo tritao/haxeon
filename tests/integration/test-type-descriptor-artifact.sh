@@ -29,12 +29,13 @@ const [binaryPath, jsonPath] = process.argv.slice(2);
 const binary = fs.readFileSync(binaryPath);
 const dump = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 assert.equal(binary.subarray(0, 3).toString('ascii'), 'HTD');
-assert.equal(binary.readUInt8(3), 2);
+assert.equal(binary.readUInt8(3), 3);
 assert.equal(binary.readUInt32LE(4), dump.descriptors.length);
-assert.equal(dump.formatVersion, 2);
-assert.deepEqual(dump.descriptors.map(item => item.name), ['InnerRecord', 'ManagedPayload', 'Range']);
+assert.equal(dump.formatVersion, 3);
+assert.deepEqual(dump.descriptors.map(item => item.name), ['DescriptorDefaultLeaf', 'DescriptorDefaultRoot', 'InnerRecord', 'ManagedPayload', 'Range']);
+assert(dump.descriptors.every(item => item.version === 4));
 
-const inner = dump.descriptors[0];
+const inner = dump.descriptors.find(item => item.name === 'InnerRecord');
 assert.equal(inner.flat, true);
 assert.equal(inner.size, 8);
 assert.equal(inner.alignment, 4);
@@ -51,7 +52,18 @@ assert.deepEqual(inner.fields[1].annotationValues[0], {
   arguments: [{ name: 'value', type: 'Int', value: 2 }],
 });
 
-const managed = dump.descriptors[1];
+const defaultRoot = dump.descriptors.find(item => item.name === 'DescriptorDefaultRoot');
+assert.equal(defaultRoot.fields[0].defaultValue, null);
+assert.deepEqual(defaultRoot.fields[0].fields.map(field => field.defaultValue), [
+  { type: 'Int', value: 0 },
+  { type: 'Float', value: 1.25 },
+  { type: 'Null', value: null },
+  null,
+  { type: 'String', value: 'leaf' },
+  { type: 'Bool', value: true },
+]);
+
+const managed = dump.descriptors.find(item => item.name === 'ManagedPayload');
 assert.equal(managed.flat, false);
 assert.equal(managed.size, null);
 assert.equal(managed.alignment, null);

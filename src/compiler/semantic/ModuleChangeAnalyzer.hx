@@ -235,19 +235,14 @@ class ModuleChangeAnalyzer {
 					for (method in classDecl.methods)
 						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
-			var isAnnotationSchema = false;
-			for (metadata in classDecl.metadata)
-				if (metadata.name == "annotation")
-					isAnnotationSchema = true;
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)
 					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
 			].join(";");
-			if (isAnnotationSchema)
-				wireFieldFingerprint += ":annotation-defaults:" + [
-					for (field in classDecl.fields)
-						field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
-				].join(";");
+			wireFieldFingerprint += ":field-defaults:" + [
+				for (field in classDecl.fields)
+					if (!field.isStatic) field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
+			].join(";");
 			wireFields.set(className, wireFieldFingerprint);
 			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
 				structuralChanged.set(className, true);

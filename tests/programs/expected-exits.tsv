@@ -196,6 +196,7 @@ NativeU32RuntimeValues	42
 native-nested-int16-store	42
 native-type-info-nonflat	42
 native-type-info	42
+native-type-info-narrow-default	42
 typeinfo-mixed-layout	42
 typeinfo-generic	42
 struct-value-semantics	42

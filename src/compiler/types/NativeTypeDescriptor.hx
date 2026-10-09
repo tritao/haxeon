@@ -22,6 +22,12 @@ typedef NativeTypeAnnotationData = {
 	final arguments:Array<NativeTypeAnnotationArgument>;
 }
 
+/** A supported constant used to initialize one ordinary source field. */
+typedef NativeTypeDescriptorDefault = {
+	final type:String;
+	final value:NativeTypeAnnotationValue;
+}
+
 /** One source field or nested type in a compile-time descriptor tree. */
 typedef NativeTypeDescriptorField = {
 	final name:String;
@@ -31,6 +37,10 @@ typedef NativeTypeDescriptorField = {
 	final size:Null<Int>;
 	final alignment:Null<Int>;
 	final offset:Null<Int>;
+
+	/** Null means no initializer; explicit null is `{type: "Null", value: null}`. */
+	final defaultValue:Null<NativeTypeDescriptorDefault>;
+
 	final annotations:Array<String>;
 	final annotationValues:Array<NativeTypeAnnotationData>;
 	final fields:Array<NativeTypeDescriptorField>;
@@ -56,7 +66,17 @@ typedef NativeTypeDescriptorData = {
 
 /** Stable, recursively length-prefixed content hashing for compiler-emitted type descriptors. */
 class NativeTypeDescriptor {
-	public static inline final VERSION = 3;
+	public static inline final VERSION = 4;
+
+	/** Haxe Int bounds supported for descriptor defaults on fixed-width native scalars. */
+	public static function narrowIntegerDefaultRange(type:String):Null<{min:Int, max:Int}>
+		return switch type {
+			case "native-scalar:i8": {min: -128, max: 127};
+			case "native-scalar:u8": {min: 0, max: 255};
+			case "native-scalar:i16": {min: -32768, max: 32767};
+			case "native-scalar:u16": {min: 0, max: 65535};
+			case _: null;
+		};
 
 	public static function contentHash(identity:String, name:String, type:String, flat:Bool, portable:Bool, size:Null<Int>, alignment:Null<Int>,
 			annotations:Array<String>, annotationValues:Array<NativeTypeAnnotationData>, fields:Array<NativeTypeDescriptorField>,
@@ -87,11 +107,33 @@ class NativeTypeDescriptor {
 			appendNullableInt(buffer, node.size);
 			appendNullableInt(buffer, node.alignment);
 			appendNullableInt(buffer, node.offset);
+			appendDefault(buffer, node.defaultValue);
 			appendStrings(buffer, node.annotations);
 			appendAnnotationValues(buffer, node.annotationValues);
 			appendNodes(buffer, node.fields);
 			appendNodes(buffer, node.arguments);
 			append(buffer, node.recursive ? "1" : "0");
+		}
+	}
+
+	static function appendDefault(buffer:StringBuf, value:Null<NativeTypeDescriptorDefault>):Void {
+		if (value == null) {
+			append(buffer, "0");
+			return;
+		}
+		append(buffer, "1");
+		append(buffer, value.type);
+		switch value.value {
+			case IntValue(number):
+				append(buffer, "i" + Std.string(number));
+			case FloatValue(number):
+				append(buffer, "f" + Std.string(number));
+			case StringValue(text):
+				append(buffer, "s" + text);
+			case BoolValue(flag):
+				append(buffer, flag ? "b1" : "b0");
+			case NullValue:
+				append(buffer, "n");
 		}
 	}
 
