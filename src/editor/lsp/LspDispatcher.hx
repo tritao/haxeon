@@ -8,6 +8,7 @@ import sys.thread.Thread;
 private typedef LspDispatchTask = {
 	final message:String;
 	final diagnostics:Bool;
+	final workspaceIndex:Bool;
 	final stop:Bool;
 	final generation:Int;
 	final ?submittedAt:Float;
@@ -26,6 +27,8 @@ class LspDispatcher {
 	final debounceStopped = new Lock();
 	final stopped = new Lock();
 	var debounceGeneration = 0;
+	var workspaceIndexScheduled = false;
+	var diagnosticsPending = false;
 	var finished = false;
 
 	public function new(protocol:LspProtocol, emit:String->Void, capacity:Int = 64, debounceMs:Int = 150) {
@@ -54,19 +57,30 @@ class LspDispatcher {
 			|| method == "textDocument/didChange"
 			|| method == "textDocument/didClose"
 			|| method == "workspace/didChangeWatchedFiles";
-		var navigation = method == "textDocument/definition" || method == "textDocument/typeDefinition";
-		if (changesDocument || navigation)
+		var requestId = messageId(message),
+			foregroundRequest = requestId != null
+				&& method != "textDocument/semanticTokens/full"
+				&& method != "textDocument/semanticTokens/full/delta",
+			resumeDiagnostics = changesDocument || foregroundRequest && hasDiagnosticsPending(),
+			workspaceChanged = method == "initialize"
+				|| changesDocument
+				|| method == "workspace/didChangeConfiguration"
+				|| method == "workspace/didChangeWorkspaceFolders";
+		if (resumeDiagnostics)
 			protocol.cancelPendingDiagnostics();
 		if (!enqueue({
 			message: message,
 			submittedAt: Sys.time(),
 			diagnostics: false,
+			workspaceIndex: false,
 			stop: false,
 			generation: 0
 		}, method != "textDocument/semanticTokens/full" && method != "textDocument/semanticTokens/full/delta"))
 			return false;
-		if (changesDocument || navigation)
+		if (resumeDiagnostics)
 			scheduleDiagnostics();
+		if (workspaceChanged)
+			scheduleWorkspaceIndex();
 		return method == "exit";
 	}
 
@@ -79,6 +93,7 @@ class LspDispatcher {
 		}
 		finished = true;
 		debounceGeneration++;
+		diagnosticsPending = false;
 		debounceWake.release();
 		background.resize(0);
 		protocol.cancelPendingDiagnostics();
@@ -87,6 +102,7 @@ class LspDispatcher {
 		interactive.push({
 			message: "",
 			diagnostics: false,
+			workspaceIndex: false,
 			stop: true,
 			generation: 0
 		});
@@ -103,9 +119,31 @@ class LspDispatcher {
 			if (task.stop)
 				break;
 			if (task.diagnostics) {
-				if (task.generation == currentDebounceGeneration())
+				if (task.generation == currentDebounceGeneration()) {
 					for (response in protocol.analyzePendingDiagnostics())
 						emit(response);
+					available.acquire();
+					if (task.generation == debounceGeneration)
+						diagnosticsPending = false;
+					available.broadcast();
+					available.release();
+				}
+				if (protocol.workspaceSymbolsIndexNeedsWork())
+					scheduleWorkspaceIndexFromWorker();
+			} else if (task.workspaceIndex) {
+				if (protocol.indexWorkspaceSymbolsChunk(4))
+					enqueueWorkspaceIndexContinuation({
+						message: "",
+						diagnostics: false,
+						workspaceIndex: true,
+						stop: false,
+						generation: 0
+					});
+				else {
+					available.acquire();
+					workspaceIndexScheduled = false;
+					available.release();
+				}
 			} else {
 				var started = Sys.time();
 				for (response in protocol.handle(task.message))
@@ -121,6 +159,8 @@ class LspDispatcher {
 				}
 				if (protocol.shouldExit())
 					break;
+				if (protocol.workspaceSymbolsIndexNeedsWork())
+					scheduleWorkspaceIndexFromWorker();
 			}
 		}
 		stopped.release();
@@ -129,8 +169,77 @@ class LspDispatcher {
 	function scheduleDiagnostics():Void {
 		available.acquire();
 		debounceGeneration++;
+		diagnosticsPending = true;
+		var index = background.length - 1;
+		while (index >= 0) {
+			if (background[index].diagnostics)
+				background.splice(index, 1);
+			index--;
+		}
 		available.release();
 		debounceWake.release();
+	}
+
+	function hasDiagnosticsPending():Bool {
+		available.acquire();
+		var pending = diagnosticsPending;
+		available.release();
+		return pending;
+	}
+
+	function scheduleWorkspaceIndex():Void {
+		available.acquire();
+		if (finished || workspaceIndexScheduled) {
+			available.release();
+			return;
+		}
+		while (!finished && interactive.length + background.length >= capacity)
+			available.wait();
+		if (finished) {
+			available.release();
+			return;
+		}
+		workspaceIndexScheduled = true;
+		background.push({
+			message: "",
+			diagnostics: false,
+			workspaceIndex: true,
+			stop: false,
+			generation: 0
+		});
+		available.broadcast();
+		available.release();
+	}
+
+	function scheduleWorkspaceIndexFromWorker():Void {
+		available.acquire();
+		if (finished || workspaceIndexScheduled) {
+			available.release();
+			return;
+		}
+		workspaceIndexScheduled = true;
+		background.push({
+			message: "",
+			diagnostics: false,
+			workspaceIndex: true,
+			stop: false,
+			generation: 0
+		});
+		available.broadcast();
+		available.release();
+	}
+
+	function enqueueWorkspaceIndexContinuation(task:LspDispatchTask):Void {
+		// The dispatcher worker cannot wait for queue capacity while requeuing its
+		// own low-priority slice: it is the only thread that can free capacity.
+		// Reserve one extra slot for this single coalesced continuation.
+		available.acquire();
+		if (!finished)
+			background.push(task);
+		else
+			workspaceIndexScheduled = false;
+		available.broadcast();
+		available.release();
 	}
 
 	function runDebounce():Void {
@@ -149,12 +258,13 @@ class LspDispatcher {
 			available.acquire();
 			var generation = debounceGeneration;
 			available.release();
-			enqueue({
+			enqueueDiagnostic({
 				message: "",
 				diagnostics: true,
+				workspaceIndex: false,
 				stop: false,
 				generation: generation
-			}, false);
+			});
 		}
 		debounceStopped.release();
 	}
@@ -173,11 +283,49 @@ class LspDispatcher {
 		return true;
 	}
 
+	function enqueueDiagnostic(task:LspDispatchTask):Void {
+		// Diagnostics must be able to pass the bounded request queue after an
+		// edit, even when low-priority refreshes are already waiting.
+		available.acquire();
+		if (!finished)
+			background.push(task);
+		available.broadcast();
+		available.release();
+	}
+
 	function dequeue():LspDispatchTask {
 		available.acquire();
-		while (interactive.length == 0 && background.length == 0)
-			available.wait();
-		var task = interactive.length > 0 ? interactive.shift() : background.shift();
+		var task:LspDispatchTask = {message: "", diagnostics: false, workspaceIndex: false, stop: false, generation: 0};
+		while (true) {
+			if (interactive.length > 0) {
+				task = interactive.shift();
+				break;
+			}
+			var diagnosticIndex = -1;
+			for (index in 0...background.length)
+				if (background[index].diagnostics) {
+					diagnosticIndex = index;
+					break;
+				}
+			if (diagnosticIndex >= 0) {
+				task = background.splice(diagnosticIndex, 1)[0];
+				break;
+			}
+			if (diagnosticsPending || background.length == 0) {
+				available.wait();
+				continue;
+			}
+			// Semantic-token refreshes and debounced diagnostics can unblock the
+			// editor, so keep incremental workspace indexing behind those tasks.
+			var priority = -1;
+			for (index in 0...background.length)
+				if (!background[index].workspaceIndex) {
+					priority = index;
+					break;
+				}
+			task = priority < 0 ? background.shift() : background.splice(priority, 1)[0];
+			break;
+		}
 		available.broadcast();
 		available.release();
 		return task;
@@ -195,6 +343,14 @@ class LspDispatcher {
 			var parsed:Dynamic = Json.parse(message),
 				method:Dynamic = Reflect.field(parsed, "method");
 			return Std.isOfType(method, String) ? cast method : null;
+		} catch (_:Dynamic) {
+			return null;
+		}
+	}
+
+	static function messageId(message:String):Dynamic {
+		try {
+			return Reflect.field(Json.parse(message), "id");
 		} catch (_:Dynamic) {
 			return null;
 		}

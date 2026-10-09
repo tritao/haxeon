@@ -94,6 +94,11 @@ typedef WorkspaceSymbol = {
 	final ?deprecated:Bool;
 }
 
+typedef WorkspaceCompletionIndex = {
+	final symbols:Array<WorkspaceSymbol>;
+	final isIncomplete:Bool;
+}
+
 typedef InlayHint = {
 	final position:Int;
 	final label:String;
@@ -202,6 +207,11 @@ class LanguageService {
 	var activeConfiguration:Null<String>;
 
 	final workspaceIndex:Map<String, WorkspaceIndexEntry> = [];
+	var workspaceIndexOrder:Array<String> = [];
+	var workspaceIndexCoverage:Map<String, Bool> = [];
+	var workspaceIndexCursor = 0;
+	var workspaceIndexScanActive = false;
+	var workspaceIndexComplete = false;
 	final documentationIndex:Map<String, DocumentationIndexEntry> = [];
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
@@ -214,13 +224,24 @@ class LanguageService {
 	public function update(path:String, source:String):ModuleState {
 		editorSources.set(path, source);
 		for (candidate in configurationCompilers) if (candidate != compiler) candidate.update(path, source);
-		return compiler.update(path, source);
+		var previous = compiler.modules.get(ModulePath.fromFile(path)),
+			previousRevision = previous == null ? 0 : previous.revision,
+			state = compiler.update(path, source);
+		if (state.revision != previousRevision)
+			invalidateWorkspaceIndex();
+		return state;
 	}
 
 	public function remove(path:String):Bool {
 		editorSources.remove(path);
 		for (candidate in configurationCompilers) if (candidate != compiler) candidate.remove(path);
-		return compiler.remove(path);
+		var name = ModulePath.fromFile(path),
+			removed = compiler.remove(path);
+		if (removed) {
+			workspaceIndex.remove(name);
+			invalidateWorkspaceIndex();
+		}
+		return removed;
 	}
 
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration, ffiIdentity:String = ""):Void {
@@ -243,6 +264,7 @@ class LanguageService {
 		}
 		editorDefines = [for (define in defines) define => "1"];
 		workspaceIndex.clear();
+		invalidateWorkspaceIndex();
 		documentationIndex.clear();
 		structuralIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
@@ -252,12 +274,36 @@ class LanguageService {
 		return compiler.compile(entryModule, token);
 
 	public function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
-		try
-			return compiler.analyze(entryModule, token)
-		catch (error:CompileError) {
+		try {
+			var result = compiler.analyze(entryModule, token);
+			if (workspaceIndexComplete) {
+				for (name in result.moduleNames) {
+					var state = compiler.modules.get(name),
+						cached = state == null ? null : workspaceIndex.get(name);
+					if (state != null && (cached == null || cached.revision != state.revision)) {
+						invalidateWorkspaceIndex();
+						break;
+					}
+				}
+			} else if (workspaceIndexScanActive)
+				for (name in result.moduleNames)
+					if (!workspaceIndexCoverage.exists(name)) {
+						invalidateWorkspaceIndex();
+						break;
+					}
+			return result;
+		} catch (error:CompileError) {
 			recoverCurrentSyntax();
 			throw error;
 		}
+	}
+
+	function invalidateWorkspaceIndex():Void {
+		workspaceIndexComplete = false;
+		workspaceIndexScanActive = false;
+		workspaceIndexOrder = [];
+		workspaceIndexCoverage = [];
+		workspaceIndexCursor = 0;
 	}
 
 	function recoverCurrentSyntax():Void {
@@ -336,6 +382,11 @@ class LanguageService {
 				if (normalized.length == 0 || symbol.name.toLowerCase().indexOf(normalized) >= 0)
 					result.push(symbol);
 		}
+		workspaceIndexComplete = true;
+		workspaceIndexScanActive = false;
+		workspaceIndexOrder = [];
+		workspaceIndexCoverage = [];
+		workspaceIndexCursor = 0;
 		result.sort(function(left, right) {
 			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized),
 				rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
@@ -345,6 +396,79 @@ class LanguageService {
 			return name == 0 ? Reflect.compare(left.identity, right.identity) : name;
 		});
 		return result.length > 200 ? result.slice(0, 200) : result;
+	}
+
+	/** Index a bounded number of workspace files for low-priority editor queries. */
+	public function indexWorkspaceSymbolsChunk(limit:Int, ?token:CancellationToken):Bool {
+		if (workspaceIndexComplete && !workspaceIndexScanActive)
+			return false;
+		if (limit < 1)
+			return true;
+		if (!workspaceIndexScanActive) {
+			workspaceIndexOrder = [for (name in compiler.modules.keys()) name];
+			workspaceIndexOrder.sort(Reflect.compare);
+			workspaceIndexCoverage = [for (name in workspaceIndexOrder) name => true];
+			workspaceIndexCursor = 0;
+			workspaceIndexScanActive = true;
+		}
+		var indexed = 0;
+		while (workspaceIndexCursor < workspaceIndexOrder.length && indexed < limit) {
+			if (token != null)
+				token.check();
+			var name = workspaceIndexOrder[workspaceIndexCursor++],
+				state = compiler.modules.get(name);
+			if (state == null)
+				continue;
+			var cached = workspaceIndex.get(name);
+			if (cached == null || cached.revision != state.revision) {
+				indexedWorkspaceSymbols(state);
+				indexed++;
+			}
+		}
+		if (workspaceIndexCursor >= workspaceIndexOrder.length) {
+			workspaceIndexComplete = true;
+			workspaceIndexScanActive = false;
+			workspaceIndexOrder = [];
+			workspaceIndexCoverage = [];
+			workspaceIndexCursor = 0;
+			return false;
+		}
+		return true;
+	}
+
+	public function workspaceSymbolsIndexNeedsWork():Bool
+		return !workspaceIndexComplete || workspaceIndexScanActive;
+
+	/** Return only indexed workspace candidates; never parse files on a completion request. */
+	public function cachedWorkspaceSymbols(query:String, ?token:CancellationToken):WorkspaceCompletionIndex {
+		var normalized = query.toLowerCase(),
+			result:Array<WorkspaceSymbol> = [],
+			incomplete = !workspaceIndexComplete;
+		for (state in compiler.modules) {
+			if (token != null)
+				token.check();
+			var cached = workspaceIndex.get(state.name);
+			if (cached == null || cached.revision != state.revision) {
+				incomplete = true;
+				continue;
+			}
+			for (symbol in cached.symbols)
+				if (normalized.length == 0 || symbol.name.toLowerCase().indexOf(normalized) >= 0)
+					result.push(symbol);
+		}
+		result.sort(function(left, right) {
+			var leftPrefix = StringTools.startsWith(left.name.toLowerCase(), normalized),
+				rightPrefix = StringTools.startsWith(right.name.toLowerCase(), normalized);
+			if (leftPrefix != rightPrefix)
+				return leftPrefix ? -1 : 1;
+			var name = Reflect.compare(left.name, right.name);
+			return name == 0 ? Reflect.compare(left.identity, right.identity) : name;
+		});
+		if (result.length > 200) {
+			result.resize(200);
+			incomplete = true;
+		}
+		return {symbols: result, isIncomplete: incomplete};
 	}
 
 	public function resolveWorkspaceSymbol(identity:String, revision:Int):Null<WorkspaceSymbol> {
@@ -735,7 +859,7 @@ class LanguageService {
 	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>
 		return completeResult(path, position, token).items;
 
-	public function completeResult(path:String, position:Int, ?token:CancellationToken):CompletionResult {
+	public function completeResult(path:String, position:Int, ?token:CancellationToken, ?allowPartialWorkspaceIndex:Bool = false):CompletionResult {
 		if (token != null)
 			token.check();
 		var state = stateFor(path),
@@ -747,6 +871,7 @@ class LanguageService {
 		var qualifier = memberQualifier(state.source, position),
 			model = effectiveSemanticModel(state),
 			semanticContext = model == null ? null : model.index.completionContext(position, qualifier);
+		var workspaceIndexIncomplete = false;
 		if (qualifier != null) {
 			if (semanticContext != null && semanticContext.receiver != null)
 				addInstanceMembers(semanticContext.receiver, prefix, result);
@@ -804,13 +929,6 @@ class LanguageService {
 					insertText = signature != null && signature.parameters.length > 0 ? label + "(" : label;
 				addMember(label, "enumCase", symbol.name, prefix, result, 1, insertText);
 			}
-		// Keep local completion useful in a broken file without waiting for the
-		// workspace-wide index, which may be large or blocked by the same error.
-		if (!isCurrent(path) && result.length > 0) {
-			sortCompletion(result);
-			tagResults(result, state);
-			return completionResult(result);
-		}
 		if (model != null)
 			for (symbol in compiler.semanticWorkspace.visibleSymbols(state, token))
 				if (symbol.name.indexOf(".") < 0) {
@@ -818,7 +936,7 @@ class LanguageService {
 					addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 3,
 						signature == null ? null : symbol.name + "(", Std.string(symbol.id));
 				}
-		if (qualifier == null)
+		if (qualifier == null && !allowPartialWorkspaceIndex)
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
 				var symbol = candidate.symbol,
 					signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
@@ -826,8 +944,14 @@ class LanguageService {
 					Std.string(symbol.id), candidate.importPath);
 			}
 		if (qualifier == null) {
-			var candidates = workspaceSymbols(prefix, token),
+			var workspace:WorkspaceCompletionIndex;
+			if (allowPartialWorkspaceIndex)
+				workspace = cachedWorkspaceSymbols(prefix, token);
+			else
+				workspace = {symbols: workspaceSymbols(prefix, token), isIncomplete: false};
+			var candidates = workspace.symbols,
 				counts:Map<String, Int> = [];
+			workspaceIndexIncomplete = workspace.isIncomplete;
 			for (candidate in candidates)
 				if (candidate.container == null && isImportableCompletionKind(candidate.kind))
 					counts.set(candidate.name, (counts.exists(candidate.name) ? counts.get(candidate.name) : 0) + 1);
@@ -835,16 +959,17 @@ class LanguageService {
 				var module = ModulePath.fromFile(candidate.path);
 				if (candidate.container == null
 					&& isImportableCompletionKind(candidate.kind)
-					&& counts.get(candidate.name) == 1
+					&& (counts.get(candidate.name) == 1 || workspaceIndexIncomplete)
 					&& module != state.name)
-					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity, module);
+					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity,
+						workspaceIndexIncomplete ? null : module);
 			}
 		}
 		for (symbol in documentSymbols(path))
 			addMember(symbol.name, symbol.kind, symbol.detail, prefix, result);
 		sortCompletion(result);
 		tagResults(result, state);
-		return completionResult(result);
+		return completionResult(result, workspaceIndexIncomplete);
 	}
 
 	public function resolveCompletion(path:String, identity:String, revision:Int, ?importPath:String):Null<ResolvedCompletion> {
@@ -1321,7 +1446,7 @@ class LanguageService {
 		};
 
 	static function isImportableCompletionKind(kind:String):Bool
-		return kind == "type" || kind == "class" || kind == "interface" || kind == "enum" || kind == "function";
+		return kind == "type" || kind == "abstract" || kind == "class" || kind == "interface" || kind == "enum" || kind == "function";
 
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
 		switch type {
@@ -1428,8 +1553,8 @@ class LanguageService {
 	static function sortCompletion(result:Array<CompletionItem>):Void
 		result.sort(function(left, right) return Reflect.compare(left.sortText, right.sortText));
 
-	static function completionResult(result:Array<CompletionItem>):CompletionResult {
-		var incomplete = result.length > MAX_COMPLETION_ITEMS;
+	static function completionResult(result:Array<CompletionItem>, ?workspaceIncomplete:Bool = false):CompletionResult {
+		var incomplete = workspaceIncomplete || result.length > MAX_COMPLETION_ITEMS;
 		return {items: incomplete ? result.slice(0, MAX_COMPLETION_ITEMS) : result, isIncomplete: incomplete};
 	}
 
@@ -1642,6 +1767,10 @@ class LanguageService {
 				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}', fn.span);
 			for (alias in ast.aliases)
 				addWorkspaceSymbol(result, state, alias.name, "type", null, 'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
+			for (decl in ast.abstracts)
+				addWorkspaceSymbol(result, state, decl.name, "type", null, 'abstract ${decl.name}', decl.span);
+			for (decl in ast.enumAbstracts)
+				addWorkspaceSymbol(result, state, decl.name, "type", null, 'enum abstract ${decl.name}', decl.span);
 			for (decl in ast.interfaces) {
 				addWorkspaceSymbol(result, state, decl.name, "interface", null, 'interface ${decl.name}', decl.span);
 				for (method in decl.methods)

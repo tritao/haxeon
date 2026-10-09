@@ -216,15 +216,15 @@ class LspProtocol {
 	public function analyzePendingDiagnostics():Array<String> {
 		if (!deferDiagnostics)
 			return [];
-		var generation = analysisGeneration,
-			targets = [for (target in pendingDiagnosticTargets.keys()) target],
-			token = new CancellationToken();
-		for (target in targets)
-			pendingDiagnosticTargets.remove(target);
-		targets.sort(Reflect.compare);
+		var token = new CancellationToken();
 		diagnosticMutex.acquire();
 		diagnosticToken = token;
 		diagnosticMutex.release();
+		var generation = analysisGeneration,
+			targets = [for (target in pendingDiagnosticTargets.keys()) target];
+		for (target in targets)
+			pendingDiagnosticTargets.remove(target);
+		targets.sort(Reflect.compare);
 		var started = Sys.time();
 		try {
 			for (target in targets)
@@ -703,7 +703,7 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		var offset = positionOffset(document, position(request)),
 			start = identifierStart(document.source, offset),
-			completion = service.completeResult(compilerPath(document), offset, token);
+			completion = service.completeResult(compilerPath(document), offset, token, deferDiagnostics);
 		return {
 			isIncomplete: completion.isIncomplete,
 			items: [
@@ -811,7 +811,7 @@ class LspProtocol {
 
 	function encodedSemanticTokens(document:LspDocument, token:CancellationToken):Array<Int> {
 		ensureAnalyzed(document, token);
-		requireCurrent(document);
+		requireNavigationSyntax(document);
 		var data:Array<Int> = [], previousLine = 0, previousCharacter = 0;
 		for (semantic in service.semanticTokens(compilerPath(document), token)) {
 			var start:Dynamic = document.position(semantic.span.start),
@@ -1127,7 +1127,7 @@ class LspProtocol {
 	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
 		foregroundAnalysisFailure = null; lastForegroundAnalysisMs = 0;
 		var path = compilerPath(document);
-		if (service.isCurrent(path))
+		if (service.isCurrent(path) || deferDiagnostics && service.hasCurrentSyntax(path))
 			return;
 		if (!deferDiagnostics) {
 			var started = Sys.time();
@@ -1141,31 +1141,22 @@ class LspProtocol {
 			return;
 		}
 		var module = ModulePath.fromFile(path),
-			targets = [for (target in pendingDiagnosticTargets.keys()) target],
 			started = Sys.time();
-		// Configuration switches can invalidate snapshots after diagnostics have drained.
-		if (targets.indexOf(module) < 0) targets.push(module);
-		targets.sort(function(left, right) {
-			if (left == module)
-				return -1;
-			if (right == module)
-				return 1;
-			return Reflect.compare(left, right);
-		});
-		for (target in targets) {
-			token.check();
-			pendingDiagnosticTargets.remove(target);
-			try
-				service.analyze(target, token)
-			catch (cancelled:CancellationError)
-				throw cancelled
-			catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
-			catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
-			if (service.isCurrent(path))
-				break;
-		}
+		token.check();
+		try
+			service.analyze(module, token)
+		catch (cancelled:CancellationError)
+			throw cancelled
+		catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
+		catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
 		lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
 	}
+
+	public function indexWorkspaceSymbolsChunk(limit:Int):Bool
+		return service.indexWorkspaceSymbolsChunk(limit);
+
+	public function workspaceSymbolsIndexNeedsWork():Bool
+		return service.workspaceSymbolsIndexNeedsWork();
 
 	function cancellable(id:Dynamic, query:CancellationToken->Dynamic):Array<String> {
 		var token = new CancellationToken(), key = requestKey(id);

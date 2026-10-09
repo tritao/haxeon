@@ -18,10 +18,10 @@ class BlockingLanguageService extends LanguageService {
 		return super.complete(path, position, token);
 	}
 
-	public override function completeResult(path:String, position:Int, ?token:CancellationToken):compiler.service.LanguageService.CompletionResult {
+	public override function completeResult(path:String, position:Int, ?token:CancellationToken, ?allowPartialWorkspaceIndex:Bool = false):compiler.service.LanguageService.CompletionResult {
 		entered.release();
 		resume.wait();
-		return super.completeResult(path, position, token);
+		return super.completeResult(path, position, token, allowPartialWorkspaceIndex);
 	}
 }
 
@@ -35,6 +35,34 @@ class BlockingDiagnosticLanguageService extends LanguageService {
 			entered.release();
 			resume.wait();
 		}
+		return super.analyze(entryModule, token);
+	}
+}
+
+class CancellableBlockingDiagnosticLanguageService extends LanguageService {
+	public final entered = new sys.thread.Lock();
+	public final cancellationObserved = new sys.thread.Lock();
+	public var block = false;
+
+	public override function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		if (block) {
+			entered.release();
+			while (token != null && !token.cancelled)
+				Sys.sleep(0.001);
+			block = false;
+			cancellationObserved.release();
+			if (token != null)
+				token.check();
+		}
+		return super.analyze(entryModule, token);
+	}
+}
+
+class CountingDiagnosticLanguageService extends LanguageService {
+	public var analyzeCalls = 0;
+
+	public override function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		analyzeCalls++;
 		return super.analyze(entryModule, token);
 	}
 }
@@ -891,27 +919,52 @@ class LspProtocolMain {
 				foregroundHasMain = true;
 		if (!foregroundHasMain || foregroundProtocol.lastForegroundAnalysisMs < 0)
 			throw "first-open completion did not demand a current semantic snapshot";
-		var interruptedService = new BlockingDiagnosticLanguageService(), interruptedProtocol = new LspProtocol(interruptedService),
-			interruptedDefinition:Dynamic = null, resumedDiagnostics = new sys.thread.Lock(), interruptedDone = new sys.thread.Lock();
+		var interruptedService = new CancellableBlockingDiagnosticLanguageService(), interruptedProtocol = new LspProtocol(interruptedService),
+			interruptedCompletion:Dynamic = null, resumedDiagnostics = new sys.thread.Lock(), interruptedDone = new sys.thread.Lock();
 		interruptedService.block = true;
 		var interruptedDispatcher = new LspDispatcher(interruptedProtocol, response -> {
 			var parsed:Dynamic = Json.parse(response);
-			if (parsed.id == 883) { interruptedDefinition = parsed; interruptedDone.release(); }
+			if (parsed.id == 883) { interruptedCompletion = parsed; interruptedDone.release(); }
 			if (parsed.method == "textDocument/publishDiagnostics") resumedDiagnostics.release();
 		}, 4, 20);
 		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
 			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
 		}}));
 		if (!interruptedService.entered.wait(10)) throw "background analysis did not start";
-		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 883, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 1}
+		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 883, method: "textDocument/completion", params: {
+			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 3}
 		}}));
+		if (!interruptedService.cancellationObserved.wait(10)) throw "completion did not cancel background diagnostics";
 		interruptedService.block = false;
-		interruptedService.resume.release();
-		if (!interruptedDone.wait(10) || !resumedDiagnostics.wait(10)) throw "navigation interruption lost diagnostic work";
+		if (!interruptedDone.wait(10)) throw "completion did not finish after interrupting diagnostics";
+		if (!resumedDiagnostics.wait(10)) throw "completion interruption did not resume diagnostics";
 		interruptedDispatcher.finish();
-		if (interruptedDefinition.result == null || interruptedDefinition.error != null) throw "navigation failed after interrupting diagnostics";
-		Sys.println("PASS: navigation priority, queue/analysis timings and resumed interrupted diagnostics");
+		var interruptedCompletionHasAnswer = false;
+		if (interruptedCompletion != null && interruptedCompletion.result != null)
+			for (item in cast(interruptedCompletion.result.items, Array<Dynamic>))
+				if (item.label == "answer") interruptedCompletionHasAnswer = true;
+		if (interruptedCompletion == null || interruptedCompletion.result == null || interruptedCompletion.error != null || !interruptedCompletionHasAnswer)
+			throw "completion did not return locals after interrupting background diagnostics";
+		Sys.println("PASS: foreground completion interrupts background diagnostics and they resume afterward");
+		var syntaxTokenService = new CountingDiagnosticLanguageService(), syntaxTokenProtocol = new LspProtocol(syntaxTokenService),
+			syntaxTokenUri = "file:///workspace/SyntaxTokens.hx",
+			syntaxTokenSource = 'class SyntaxTokens { static function value():Int { var answer = 42; var wrong:String = "bad"; return answer; } }';
+		syntaxTokenProtocol.enableDeferredDiagnostics();
+		request(syntaxTokenProtocol, Json.stringify({jsonrpc: "2.0", id: 884, method: "initialize", params: {}}));
+		syntaxTokenProtocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+			textDocument: {uri: syntaxTokenUri, version: 1, languageId: "haxe", text: syntaxTokenSource}
+		}}));
+		var syntaxTokens = request(syntaxTokenProtocol, Json.stringify({jsonrpc: "2.0", id: 885, method: "textDocument/semanticTokens/full", params: {
+			textDocument: {uri: syntaxTokenUri}
+		}}));
+		if (syntaxTokens.result.data.length == 0 || syntaxTokenService.analyzeCalls != 1)
+			throw "semantic tokens did not use the recovered current syntax snapshot";
+		request(syntaxTokenProtocol, Json.stringify({jsonrpc: "2.0", id: 886, method: "textDocument/semanticTokens/full", params: {
+			textDocument: {uri: syntaxTokenUri}
+		}}));
+		if (syntaxTokenService.analyzeCalls != 1)
+			throw "repeated semantic tokens reanalyzed an unchanged broken document";
+		Sys.println("PASS: semantic tokens reuse recovered syntax while diagnostics are deferred");
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
 			choiceUri = "file:///workspace/shape/Choice.hx",
