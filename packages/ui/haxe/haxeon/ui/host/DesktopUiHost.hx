@@ -302,7 +302,6 @@ class DesktopUiHost {
 									frameRequested = false;
 									runtime.resize(runtime.logicalWidth, runtime.logicalHeight, width, height);
 									var frameStartedAt = Sys.time();
-									var gcCollectionsAtStart = hl.Gc.collections();
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
 									runtime.measureFrameTimings = options.captureDirectory != null;
@@ -358,15 +357,13 @@ class DesktopUiHost {
 											textInputDispatchSeconds: textInputDispatchSeconds,
 											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
 											frameSeconds: frameFinishedAt - frameStartedAt,
-											prepareSeconds: runtime.lastPrepareSeconds,
-											applicationSubmitSeconds: runtime.lastApplicationSubmitSeconds,
 											paintSeconds: runtime.lastPaintSeconds,
 											bookkeepingSeconds: 0.0,
 											gcSeconds: 0.0,
 											gcCollectionsTotal: 0.0,
 											gcSecondsTotal: 0.0,
 											frameGcSeconds: collectionSeconds,
-											gcCollections: hl.Gc.collections() - gcCollectionsAtStart,
+											gcCollections: 0.0,
 											gcLastPauseSeconds: hl.Gc.lastPauseMicros() / 1000000.0,
 											submitSeconds: metrics == null ? null : metrics.submitSeconds,
 											styleResolutions: metrics == null ? null : metrics.styleResolutions,
