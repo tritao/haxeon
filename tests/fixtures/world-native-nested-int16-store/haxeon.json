@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "package": {"name": "world-native-nested-int16-store-repro"},
+  "entry": "Main",
+  "sourceRoots": ["src"],
+  "target": "host",
+  "outputDir": "../../../out/world-native-nested-int16-store/integration"
+}

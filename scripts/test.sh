@@ -141,6 +141,7 @@ run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatt
 run_timed native-call-integration "$root_dir/tests/integration/test-native-call.sh"
 run_timed hxi-call-integration "$root_dir/tests/integration/test-hxi-call.sh"
 run_timed world-native-record-layout-integration "$root_dir/tests/integration/test-world-native-record-layout.sh"
+run_timed world-native-nested-int16-store-integration "$root_dir/tests/integration/test-world-native-nested-int16-store.sh"
 
 # These project tests build below their own mktemp project roots and use
 # separate source caches, so they can share runner slots without racing on the

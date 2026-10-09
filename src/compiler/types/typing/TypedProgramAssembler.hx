@@ -50,6 +50,7 @@ class TypedProgramAssembler {
 	public function assemble(enums:Array<TypedEnum>, interfaces:Array<TypedInterface>, classes:Array<TypedClass>, functions:Array<TypedFunction>,
 			natives:Array<TypedNative>):TypedProgram {
 		return {
+			nativeAbiTarget: session.nativeAbiTarget,
 			enums: enums,
 			interfaces: interfaces,
 			classes: classes,

@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 10;
+	public static inline final VERSION:Int = 11;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -54,7 +54,7 @@ class CanonicalIrCodec {
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
 			program.natives = readNatives(input, bytes.length, version);
 			program.cNatives = version >= 2 ? readCNatives(input, bytes.length, version) : [];
-			program.objects = readObjects(input, bytes.length);
+			program.objects = readObjects(input, bytes.length, version);
 			program.interfaces = readInterfaces(input, bytes.length);
 			program.enums = readEnums(input, bytes.length);
 			program.staticFields = readStaticFields(input, bytes.length);
@@ -236,10 +236,26 @@ class CanonicalIrCodec {
 			output.writeByte(object.isValue ? 1 : 0);
 			writeNullableString(output, object.base);
 			writeStrings(output, object.interfaces);
+			var objectLayout = object.nativeLayout;
+			output.writeByte(objectLayout == null ? 0 : 1);
+			if (objectLayout != null) {
+				IrTypeCodec.writeString(output, objectLayout.target);
+				output.writeInt32(objectLayout.size);
+				output.writeInt32(objectLayout.alignment);
+			}
 			writeCount(output, object.fields.length);
 			for (field in object.fields) {
 				IrTypeCodec.writeString(output, field.name);
 				IrTypeCodec.writeType(output, field.type, 0);
+				var fieldLayout = field.nativeLayout;
+				output.writeByte(fieldLayout == null ? 0 : 1);
+				if (fieldLayout != null) {
+					output.writeInt32(fieldLayout.offset);
+					output.writeInt32(fieldLayout.size);
+					output.writeInt32(fieldLayout.alignment);
+					output.writeByte(fieldLayout.signed ? 1 : 0);
+					output.writeByte(fieldLayout.inlineRecord ? 1 : 0);
+				}
 			}
 			writeCount(output, object.methods.length);
 			for (method in object.methods) {
@@ -249,22 +265,42 @@ class CanonicalIrCodec {
 		}
 	}
 
-	static function readObjects(input:BytesInput, limit:Int):Array<IrObject> {
+	static function readObjects(input:BytesInput, limit:Int, version:Int):Array<IrObject> {
 		var result:Array<IrObject> = [];
 		for (_ in 0...readCount(input)) {
 			var name = IrTypeCodec.readString(input, limit),
 				isValue = input.readByte() != 0,
 				base = readNullableString(input, limit),
 				interfaces = readStrings(input, limit),
-				fields:Array<IrObjectField> = [],
+				nativeLayout:Null<compiler.ir.Ir.IrObjectNativeLayout> = null;
+			if (version >= 11 && readByteBool(input))
+				nativeLayout = {
+					target: IrTypeCodec.readString(input, limit),
+					size: input.readInt32(),
+					alignment: input.readInt32()
+				};
+			var fields:Array<IrObjectField> = [],
 				methods:Array<IrObjectMethod> = [];
-			for (_ in 0...readCount(input))
-				fields.push({name: IrTypeCodec.readString(input, limit), type: IrTypeCodec.readType(input, limit, 0)});
+			for (_ in 0...readCount(input)) {
+				var fieldName = IrTypeCodec.readString(input, limit),
+					fieldType = IrTypeCodec.readType(input, limit, 0),
+					fieldLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout> = null;
+				if (version >= 11 && readByteBool(input))
+					fieldLayout = {
+						offset: input.readInt32(),
+						size: input.readInt32(),
+						alignment: input.readInt32(),
+						signed: readByteBool(input),
+						inlineRecord: readByteBool(input)
+					};
+				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout});
+			}
 			for (_ in 0...readCount(input))
 				methods.push({name: IrTypeCodec.readString(input, limit), functionName: IrTypeCodec.readString(input, limit)});
 			result.push({
 				name: name,
 				isValue: isValue,
+				nativeLayout: nativeLayout,
 				base: base,
 				interfaces: interfaces,
 				fields: fields,

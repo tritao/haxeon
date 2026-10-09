@@ -416,7 +416,7 @@ class HlSymbolTable {
 		ensureWritable();
 		var fields:Array<HlObjectField> = [
 			for (field in object.fields)
-				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects)}
+				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects, field.nativeLayout)}
 		];
 		if (interfaceSlots != null)
 			for (slot in interfaceSlots) {
@@ -474,7 +474,8 @@ class HlSymbolTable {
 		return index;
 	}
 
-	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>):Int {
+	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>,
+			nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';
@@ -484,8 +485,32 @@ class HlSymbolTable {
 					typeIndices.set(key, index);
 					index;
 				}
-			default: internType(type);
+			default:
+				var nativeStorageType = internNativeFieldStorageType(type, nativeLayout);
+				nativeStorageType == null ? internType(type) : nativeStorageType;
 		};
+	}
+
+	/** Returns the HashLink type used for native field storage when it is narrower than the IR value type. */
+	public function internNativeFieldStorageType(type:IrType, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Null<Int> {
+		if (nativeLayout == null)
+			return null;
+		return switch type {
+			case I32 if (nativeLayout.size == 1): internStorageType("ui8", HlType.Ui8);
+			case I32 if (nativeLayout.size == 2): internStorageType("ui16", HlType.Ui16);
+			case I64 if (nativeLayout.size == 4): internStorageType("i32", HlType.I32);
+			default: null;
+		};
+	}
+
+	function internStorageType(key:String, type:HlType):Int {
+		var typeKey = 'native-storage:$key';
+		if (typeIndices.exists(typeKey))
+			return typeIndices.get(typeKey);
+		var index = types.length;
+		types.push(HlTypeDef.Simple(type));
+		typeIndices.set(typeKey, index);
+		return index;
 	}
 
 	public function hasType(key:String):Bool
