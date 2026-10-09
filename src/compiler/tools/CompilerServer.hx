@@ -1,6 +1,9 @@
 package compiler.tools;
 
 import compiler.Diagnostic.CompileError;
+import compiler.service.CancellationToken;
+import sys.thread.Thread;
+import sys.thread.Lock;
 import haxe.Json;
 import sys.io.File;
 import sys.FileSystem;
@@ -55,8 +58,7 @@ class CompilerServer {
 						#if (hl && !haxeon)
 						var memoryBefore = hl.Gc.stats();
 						#end
-						var result = CompilerDriver.compile(CompilerArguments.parse(cast request.arguments), message -> send(client, {message: message}),
-							session);
+						var result = compileConnected(client, cast request.arguments, session);
 						#if (hl && !haxeon)
 						var memoryAfter = hl.Gc.stats();
 						send(client,
@@ -91,6 +93,69 @@ class CompilerServer {
 			if (File.getContent(statePath) == descriptor)
 				FileSystem.deleteFile(statePath);
 		} catch (_:Dynamic) {}
+	}
+
+	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
+	static function compileConnected(client:Socket, arguments:Array<String>, session:CompilerSession):compiler.Compiler.CompileResult {
+		var cancellation = new CancellationToken(), done = new Lock();
+		var result:compiler.Compiler.CompileResult = null;
+		var failure:Dynamic = null;
+		var request = CompilerArguments.parse(arguments);
+		// Stage every artifact so cancellation preserves the previous successful publication.
+		var staged:Dynamic = Reflect.copy(request);
+		var outputs:Array<{temporary:String, destination:String}> = [];
+		var stagingSuffix = ".request-" + Std.string(Std.random(0x3fffffff));
+		for (field in ["output", "xmlOutput", "irOutput", "ffiHeader"]) {
+			var destination:Null<String> = Reflect.field(request, field);
+			if (destination == null) continue;
+			var temporary = destination + stagingSuffix;
+			Reflect.setField(staged, field, temporary);
+			for (suffix in (field == "output" ? ["", ".functions", ".hli", ".hlp", ".live.json", ".live.json.tmp", ".build-id"] : [""]))
+				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
+		}
+		Thread.create(function() {
+			try result = CompilerDriver.compile(cast staged, message -> {
+				cancellation.check();
+				send(client, {message: message});
+			}, session, cancellation)
+			catch (error:Dynamic) failure = error;
+			done.release();
+		});
+		var disconnected = false;
+		while (!done.wait(0.05)) {
+			if (!disconnected) try {
+				if (Socket.select([client], [], [], 0).read.length > 0) {
+					// No further bytes are part of this protocol; readability means disconnect or invalid input.
+					try client.input.readByte() catch (_:Dynamic) {}
+					disconnected = true;
+					cancellation.cancel();
+				}
+			} catch (_:Dynamic) {
+				disconnected = true;
+				cancellation.cancel();
+			}
+		}
+		if (!disconnected) try {
+			if (Socket.select([client], [], [], 0).read.length > 0) {
+				disconnected = true;
+				cancellation.cancel();
+			}
+		} catch (_:Dynamic) { disconnected = true; cancellation.cancel(); }
+		if (disconnected || failure != null) {
+			for (output in outputs)
+				try if (FileSystem.exists(output.temporary)) FileSystem.deleteFile(output.temporary) catch (_:Dynamic) {}
+			if (disconnected) {
+				session.reset();
+				cancellation.check();
+			}
+			throw failure;
+		}
+		for (output in outputs) {
+			if (FileSystem.exists(output.temporary)) FileSystem.rename(output.temporary, output.destination);
+			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
+				FileSystem.deleteFile(output.destination);
+		}
+		return result;
 	}
 
 	static function idleTimeout():Float {

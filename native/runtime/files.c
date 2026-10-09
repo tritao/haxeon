@@ -106,7 +106,7 @@ HL_PRIM varray *HL_NAME(__sys_read_dir)( vstring *path ) {
 	vbyte **source = hl_aptr(platform,vbyte *);
 	vstring **target = hl_aptr(result,vstring *);
 	for( int index = 0; index < platform->size; index++ )
-		target[index] = realtime_string_from_platform(source[index]);
+		hl_gc_store_ref(&target[index],realtime_string_from_platform(source[index]),hl_string_type);
 	return result;
 }
 
@@ -228,4 +228,10 @@ HL_PRIM realtime_bytes *HL_NAME(__file_get_bytes)( vstring *path ) {
 	if( length > 0 ) memcpy(result->data,data,(size_t)length);
 	free(data);
 	return result;
+}
+
+/* The loaded bytecode path, independent of the HashLink executable's installation. */
+extern vbyte *hl_sys_hl_file(void);
+HL_PRIM vstring *HL_NAME(__sys_program_path)(void) {
+  return realtime_string_from_platform(hl_sys_hl_file());
 }
