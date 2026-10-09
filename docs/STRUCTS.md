@@ -62,9 +62,11 @@ struct Health : Component {
 ### Flat and Portable
 
 The compiler works out two properties from a struct's fields. Neither has to
-be written, but either can be asserted (`struct Vec3 : Portable`), and an
-assertion that doesn't hold is a compile error that names the offending
-field.
+be written. Explicit assertions use `@flat` or `@portable` on a struct;
+an assertion that does not hold is a compile error that names the offending
+field. These attributes verify the inferred property; they cannot grant it.
+`Flat` and `Portable` are compiler-recognized representation constraints,
+not base classes or ordinary marker interfaces.
 
 - **`Flat`:** no managed references. A struct is flat when every field is one
   of these:
@@ -82,13 +84,64 @@ field.
   - Its layout is identical on every supported target. Pointer width is the
     only layout difference between `hl` (64-bit), `wasm32` and native
     x86-64/arm64, and all of them are little-endian.
-  - So a portable struct's bytes can move between a 32-bit Wasm module, a
-    64-bit host, the network and saved files without any layout translation.
+  - Its record representation needs no layout translation between supported
+    targets. This is not proof that its logical value transfers as raw bytes:
+    process/world-local tokens still require descriptor codecs to translate
+    their referents. Portable layout, ownership and logical serialization are
+    separate contracts.
   - A cross-target layout test enforces this claim.
 
 Both properties can be used as generic constraints: `T:Flat`, `T:Portable`.
 FFI records are flat. Data that crosses processes or targets should be
 portable.
+
+### Interface requirements and compiler checking
+
+An interface can require representation properties of its implementing types.
+Requirements propagate transitively through interface conformance. For example,
+a GPU library could define:
+
+```haxe
+interface GpuRecord : Portable {
+}
+
+struct Vertex : GpuRecord {
+    var x:Float32;
+    var y:Float32;
+}
+
+struct Invalid : GpuRecord {
+    var name:String; // Error: GpuRecord requires Portable; name is managed.
+}
+```
+
+`interface GpuRecord : Portable` requires implementers to be portable; it does
+not assert a storage layout for the interface itself. `Vertex : GpuRecord`
+declares conformance, not implementation inheritance. No additional
+`@portable` assertion is necessary on `Vertex`.
+
+The compiler knows `Flat` and `Portable`, but has no special knowledge of any
+library interface. This is a general interface requirement mechanism available
+to libraries, including interfaces such as `NativeRecord : Flat`.
+
+An interface doesn't have to require a property to use it. Beartooth's
+`Component` requires none: a component may hold strings and sequences, and the
+world reads the inferred flatness from the descriptor to choose native or
+managed storage. Engine components that native code reads assert `@flat`.
+
+After resolving field types, the compiler recursively infers the properties,
+records them in type metadata, and checks explicit assertions, generic
+constraints and inherited interface requirements against that metadata.
+`Portable` implies `Flat`. For generic structs, inference uses the actual type
+arguments, or their proven constraints inside generic code. Declaring
+conformance cannot bypass the field checks. Diagnostics identify the required
+property and the field path that violates it, including nested fields.
+
+The inferred properties determine layout, native-memory eligibility, descriptor
+form and whether fields require GC tracing. They add no runtime interface
+object or dispatch. Tests must cover transitive interface requirements,
+nested pointer/reference rejection and generic instantiations, as well as the
+cross-target layout checks.
 
 A struct that isn't flat is still a valid value type. It can't be placed in
 native memory or exported as a C header, and it gets a reduced descriptor
@@ -136,6 +189,14 @@ them in its first foundation.
   `WasmFunctionLower` currently rejects them, and creator scripts in
   Beartooth need them. `wasm-gc` native memory is deferred.
 
+## Scoped mutable access
+
+[SCOPED_PLACES.md](SCOPED_PLACES.md) proposes restricted `ref` parameters and
+scoped callbacks, which operate on caller-provided places without granting
+pointer escape. Ordinary struct parameters still copy. The proposal is
+deferred: Beartooth's component API uses whole-value `get`/`set`/`update`
+and doesn't need it.
+
 ## Fixed arrays
 
 A flat struct field can be a fixed array, `var slots:Int32[4];`.
@@ -159,12 +220,14 @@ A flat struct field can be a fixed array, `var slots:Int32[4];`.
   offsets or size, because the layout is not a C layout. Element types of
   arrays and nested structs are described recursively.
 
-Non-flat descriptors have three known consumers in Beartooth:
+Non-flat descriptors have these known consumers in Beartooth:
+- components and resources with string or sequence fields, stored in
+  managed columns;
 - generator parameters, which hold child lists and arrays;
 - remote-event payloads, which hold strings and lists;
 - saved player data.
 
-All three need tooling, codecs and schema evolution without being flat.
+All of them need tooling, codecs and schema evolution without being flat.
 
 The build also writes descriptors out as an artifact, in a versioned binary
 format with a JSON dump for tests. Descriptors are cached incrementally and
@@ -237,6 +300,18 @@ compiler knows contexts and rules, not what "server" means. Beartooth uses
 this for server-only component fields; an application can use it for
 editor-only data.
 
+The same annotation can also mark a type (a struct or a class) or a method. A
+hidden declaration is left out of builds whose context doesn't make it visible,
+and naming it from code compiled in such a build is a compile error that names
+the declaration, the annotation and the active context. An override takes the
+context of the method it overrides. Beartooth uses this at every level, so one
+behavior class can hold server, client and shared members while each build of a
+game contains only its own side's code (Beartooth's script plan, SR-D7).
+
+Beartooth's remote methods also need the other build to see a hidden method's
+signature, but not its body, so that it can be called through a typed proxy.
+Whether that is a compiler feature or generated proxies is decided with S8.
+
 ## C headers
 
 Flat structs marked for export are emitted as C headers. A header exported
@@ -287,8 +362,10 @@ point green.
    - Checkpoint: value-class tests pass when rewritten with `struct`, and the
      Wasm parity suite runs them.
 2. **`Flat` and `Portable`.**
-   - Working out the two properties, asserting them, and using them as
-     constraints.
+   - Working out the two properties, asserting them with attributes, and
+     using them as constraints, including transitive interface requirements.
+   - Field-path diagnostics and generic-instantiation checks; no engine-specific
+     compiler knowledge.
    - C layout for flat structs inline in GC objects; the padding rule.
    - Checkpoint: the cross-target layout test (`hl`, `wasm32`, x86-64 and
      arm64 headers) agrees for portable structs.
@@ -296,6 +373,10 @@ point green.
    - Whole-record `load`/`store`, `p.ref` places, `NativeSpan` of structs,
      and zero-filling `Arena.alloc`.
    - Migrate native records and HXI records to structs.
+3a. **Scoped mutable places** (deferred; no current consumer).
+   - Validate the restricted ref/scoped callback contract in SCOPED_PLACES.md.
+   - Include escape diagnostics, transitive non-suspension checks and module
+     contract preservation. Native and Wasm parity gate the creator edit API.
 4. **Wasm32 native memory.**
    - Lower `RawPtr` operations to linear memory.
    - Checkpoint: the native-memory parity programs pass on `wasm32`.
@@ -307,7 +388,7 @@ point green.
      matched by name across builds.
 6. **C header output.** The HXI round-trip test.
 7. **Fixed arrays.**
-8. **Context-hidden fields.**
+8. **Context-hidden fields, types and methods.**
 
 ## Open questions
 
