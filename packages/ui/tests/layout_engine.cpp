@@ -43,6 +43,26 @@ int main(int argc, char **argv) {
     if (!engine.valid() || !engine.add_font(NKUI_TEST_FONT_PATH))
         return 3;
 
+    // Unmeasured custom paint planes must keep their layout-assigned Grow size.
+    // The optional intrinsic callback must not turn absence into a zero size.
+    for (float width : {320.0f, 800.0f}) {
+        auto root = box(950, -1);
+        root.style.height = {LayoutSizing::Grow, 0.0f};
+        root.style.padding_left = root.style.padding_right = 16;
+        auto canvas = box(951, 0);
+        canvas.visual_kind = LayoutVisualKind::Custom;
+        canvas.style.height = {LayoutSizing::Fixed, 190.0f};
+        LayoutSnapshot snapshot;
+        LayoutError error;
+        if (!engine.layout({root, canvas}, width, 400, 0, snapshot, &error)) return 97;
+        const auto *resolved = snapshot.find(951);
+        if (!resolved || std::abs(resolved->bounds.width - (width - 32)) > 0.01f ||
+            std::abs(resolved->bounds.height - 190) > 0.01f) {
+            std::cerr << "unmeasured custom paint lost its grow width\n";
+            return 98;
+        }
+    }
+
     // Fit-sized floating text must not wrap from rounding through its padding,
     // nor inherit the width of its narrow anchor. Truly constrained text wraps.
     for (float font_size : {11.0f, 12.0f, 13.0f, 14.0f, 15.5f, 18.0f}) {

@@ -269,7 +269,11 @@ Clay_MeasureResult LayoutEngine::Impl::measure_element(Clay_ElementId id,
                                                        Clay_MeasureConstraints constraints,
                                                        void *user_data) {
     auto &state = *static_cast<Impl *>(user_data);
+    // No intrinsic measurer means layout owns the size. A zero result would
+    // overwrite resolved Grow dimensions and collapse ordinary paint planes.
     Clay_MeasureResult result{};
+    result.dimensions = {std::numeric_limits<float>::quiet_NaN(),
+                         std::numeric_limits<float>::quiet_NaN()};
     if (!state.measure_callback)
         return result;
     ++state.measure_requests;
