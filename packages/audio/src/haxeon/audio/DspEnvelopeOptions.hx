@@ -3,7 +3,7 @@ package haxeon.audio;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
-/** Configures the ADSR amplitude envelope of a DSP patch. */
+/** Configures the ADSR amplitude or filter envelope of a DSP patch. */
 class DspEnvelopeOptions {
 	public var attackSeconds:Float = 0.01;
 	public var decaySeconds:Float = 0.1;

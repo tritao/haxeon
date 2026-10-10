@@ -97,6 +97,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Specialized physical, percussion, spectral, noise and granular generators.
 		 */
 		NK_AUDIO_DSP_CAPABILITY_SPECIALIZED_SOURCE = 512;
+		/**
+		 * Specialized physical, percussion, spectral, noise and granular generators.
+		 */
+		NK_AUDIO_DSP_CAPABILITY_STEREO_UNISON = 1024;
+		/**
+		 * Specialized physical, percussion, spectral, noise and granular generators.
+		 */
+		NK_AUDIO_DSP_CAPABILITY_FILTER_ENVELOPE = 2048;
 	}
 	/**
 	 * Events applied at exact sample offsets while rendering a block.
@@ -965,6 +973,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_patch_create(options: ptr<const<nk_audio_dsp_patch_options>>, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
 	/**
+	 * Extended factory; null voice_options preserves the legacy sound.
+	 */
+	extern fn nk_audio_dsp_patch_create_extended(options: ptr<const<nk_audio_dsp_patch_options>>, voice_options: ptr<const<nk_audio_dsp_voice_options>>, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
+	/**
 	 * Copies mono PCM at the engine sample rate for Granular; all other sources require zero samples.
 	 * Samples are finite in [-1,1], between 2 and 1048576 frames. Note pitch is relative to RootNote.
 	 * Specialized sources replace oscillator output except KarplusString/Resonator, which process it.
@@ -974,6 +986,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Resonator resolution is a multiple of four; harmonic index and root note are integers.
 	 */
 	extern fn nk_audio_dsp_patch_create_source(options: ptr<const<nk_audio_dsp_patch_options>>, source: ptr<const<nk_audio_dsp_source_options>>, samples: ptr<const<f32>> @in_array("sample_count"), sample_count: u32, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
+	/**
+	 * Extended specialized-source factory; unison_count must be zero or one.
+	 */
+	extern fn nk_audio_dsp_patch_create_source_extended(options: ptr<const<nk_audio_dsp_patch_options>>, voice_options: ptr<const<nk_audio_dsp_voice_options>>, source: ptr<const<nk_audio_dsp_source_options>>, samples: ptr<const<f32>> @in_array("sample_count"), sample_count: u32, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
 	/**
 	 * Destroys a patch definition; instruments created from it retain their copy.
 	 */
@@ -1836,6 +1852,35 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		kind: nk_audio_dsp_source_kind @offset(4);
 		values: array<f32, 38> @offset(8);
 		amplitudes: array<f32, 16> @offset(160);
+	}
+	/**
+	 * Advanced voice controls, supplied separately to preserve the original patch ABI.
+	 * Zero unison_count selects one copy. Copies are normalized by count, symmetrically
+	 * detuned and panned with constant-sum gains. Stereo renders use L/R; mono renders
+	 * average them, and channels beyond L/R receive that average. Specialized Daisy
+	 * sources support the filter envelope but require one unison copy.
+	 * Both envelopes share the note gate; amplitude release determines voice lifetime.
+	 */
+	struct nk_audio_dsp_voice_options @layout(80, 8) {
+		struct_size: u32 @offset(0) @struct_size;
+		/**
+		 * Number of oscillator/wavetable copies, 0 (default one) or [1, 8].
+		 */
+		unison_count: u32 @offset(4);
+		/**
+		 * Maximum detuning on either side of the base pitch, [0, 100] cents.
+		 */
+		unison_detune_cents: f32 @offset(8);
+		/**
+		 * Stereo spread, [0, 1]. One copy always remains centered.
+		 */
+		unison_stereo_spread: f32 @offset(12);
+		filter_envelope: nk_audio_dsp_envelope_options @offset(16);
+		/**
+		 * Cutoff sweep in semitones, [-96, 96]; zero disables the envelope.
+		 */
+		filter_envelope_amount_semitones: f32 @offset(56);
+		reserved2: array<u64, 2> @offset(64);
 	}
 	/**
 	 * Three-dimensional audio coordinate in the right-handed OpenGL convention.

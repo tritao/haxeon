@@ -9,6 +9,10 @@ class DspPatchBuilder {
 	public final oscillators:Array<DspOscillatorOptions> = [new DspOscillatorOptions()];
 	public var noise:DspNoiseOptions = new DspNoiseOptions();
 	public var envelope:DspEnvelopeOptions = new DspEnvelopeOptions();
+	/** Independent brightness envelope; amplitude envelope controls voice lifetime. */
+	public var filterEnvelope:DspEnvelopeOptions = new DspEnvelopeOptions();
+	public var filterEnvelopeAmountSemitones:Float = 0;
+	public var unison:DspUnisonOptions = new DspUnisonOptions();
 	public var filter:DspFilterOptions = new DspFilterOptions();
 	public var lfo:DspLfoOptions = new DspLfoOptions();
 	public var gain:Float = 1.0;
@@ -55,7 +59,7 @@ class DspPatchBuilder {
 
 	/** Materializes the current builder state into an immutable native patch. */
 	public function build():DspPatch {
-		if (oscillators == null || noise == null || envelope == null || filter == null || lfo == null)
+		if (oscillators == null || noise == null || envelope == null || filter == null || lfo == null || filterEnvelope == null || unison == null)
 			throw "DSP patch components must not be null";
 		if (oscillators.length > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
 			throw "DSP patch oscillator limit exceeded";
@@ -75,12 +79,19 @@ class DspPatchBuilder {
 		for (index in 0...routes.length)
 			options.set_routes(index, routes[index].nativeValue());
 		options.set_route_count(routes.length);
+		var voice = new NativeDspVoiceOptions();
+		voice.set_struct_size(NativeDspVoiceOptions.size());
+		voice.set_unison_count(unison.count);
+		voice.set_unison_detune_cents(unison.detuneCents);
+		voice.set_unison_stereo_spread(unison.stereoSpread);
+		voice.set_filter_envelope(filterEnvelope.nativeValue());
+		voice.set_filter_envelope_amount_semitones(filterEnvelopeAmountSemitones);
 		if (source != null) {
-			var made = NativeKitAudio.nk_audio_dsp_patch_create_source(options,source.nativeValue(),source.samples);
+			var made = NativeKitAudio.nk_audio_dsp_patch_create_source_extended(options,voice,source.nativeValue(),source.samples);
 			AudioResult.check(made.status, "audio.dsp.patch.buildSource");
 			return new DspPatch(made.out_patch);
 		}
-		var made = NativeKitAudio.nk_audio_dsp_patch_create(options);
+		var made = NativeKitAudio.nk_audio_dsp_patch_create_extended(options,voice);
 		AudioResult.check(made.status, "audio.dsp.patch.build");
 		return new DspPatch(made.out_patch);
 	}

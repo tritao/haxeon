@@ -52,6 +52,7 @@
     "nk_audio_dsp_lfo_options": "NativeDspLfoOptions",
     "nk_audio_dsp_modulation_route_options": "NativeDspModulationRouteOptions",
     "nk_audio_dsp_patch_options": "NativeDspPatchOptions",
+    "nk_audio_dsp_voice_options": "NativeDspVoiceOptions",
     "nk_audio_dsp_render_target": "NativeDspRenderTarget",
     "nk_audio_dsp_event": "NativeDspEvent",
     "nk_audio_bus_send": "BusSendHandle",

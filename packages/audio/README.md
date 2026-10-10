@@ -94,3 +94,36 @@ application thread. Counts/maxima are cumulative for the engine lifetime and
 survive disabling collection. Callback gaps and render budget overruns are
 observations rather than backend/hardware XRUN reports. Disabling collection
 removes timestamp sampling; the disabled branch remains in the callback.
+
+## Stereo unison and filter envelopes
+
+`DspPatchBuilder.unison` configures 1–8 detuned copies of each built-in oscillator
+or wavetable. `detuneCents` is the maximum deviation on either side (0–100 cents);
+`stereoSpread` pans copies from the center towards left/right (0–1). Copy gains
+are normalized by count with constant-sum panning. Each copy retains its own
+FM/phase-modulation operator graph. A single copy remains centered.
+
+`filterEnvelope` is an independent ADSR, sharing the note gate with `envelope`.
+`filterEnvelopeAmountSemitones` sweeps cutoff by `2^(level * amount / 12)` before
+existing cutoff-Hz modulation is added and the cutoff is clamped. Its range is
+−96 to +96 semitones; zero preserves the original filter behavior. Amplitude
+release determines voice lifetime, even if filter release is longer.
+
+```haxe
+var patch = new DspPatchBuilder();
+patch.oscillators[0].waveform = DspWaveform.Saw;
+patch.unison.count = 5;
+patch.unison.detuneCents = 12;
+patch.unison.stereoSpread = 0.9;
+patch.filter.type = DspFilterType.SvfLowPass;
+patch.filter.cutoffHz = 550;
+patch.filterEnvelope.attackSeconds = 1.2;
+patch.filterEnvelopeAmountSemitones = 30;
+patch.envelope.attackSeconds = 0.6;
+```
+
+Defaults preserve centered single-copy synthesis with no filter sweep. Specialized
+Daisy sources support the independent filter envelope and reject more than one
+unison copy. Stereo rendering preserves L/R; mono averages them. These controls
+are immutable patch settings, rebuilt between auditions rather than automated
+through the instrument parameter API.
