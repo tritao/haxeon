@@ -187,6 +187,13 @@ class NativeTypeDescriptor {
 			case _: null;
 		};
 
+	/** Int32 and UInt32 defaults use the exact signed Int carrier bit pattern. */
+	public static function integerDefaultFits(type:String, value:Int):Bool
+		return switch type {
+			case "native-scalar:i32" | "native-scalar:u32": true;
+			case _: var range = narrowIntegerDefaultRange(type); range != null && value >= range.min && value <= range.max;
+		};
+
 	public static function contentHash(identity:String, name:String, type:String, sourceKind:String, interfaces:Array<String>, flat:Bool, portable:Bool,
 			size:Null<Int>, alignment:Null<Int>, annotations:Array<String>, annotationValues:Array<NativeTypeAnnotationData>,
 			fields:Array<NativeTypeDescriptorField>, arguments:Array<NativeTypeDescriptorField>):String {

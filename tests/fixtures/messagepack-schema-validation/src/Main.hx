@@ -12,6 +12,11 @@ interface SchemaBase extends SchemaResource {
 interface GenericMarker < T > {
 }
 
+@:annotation struct Range {
+  public var min:Float;
+  public var max:Float;
+}
+
 @:value @:repr("C") class SchemaNative {
   public var count:Int;
 }
@@ -22,6 +27,9 @@ struct SchemaLeaf {
   public var narrow:UInt8 = 250;
   public var ratio:Float32 = 0.1;
   public var absent:Int;
+  @:Range(0.0, 4294967295.0) public var unsigned32:UInt32 = 0;
+  public var signed32:Int32 = 123456789;
+  public var highBit:UInt32 = -1;
 }
 struct SchemaRoot:SchemaBase, GenericMarker<Int>, SchemaRole {
   public var leaf:SchemaLeaf;
@@ -90,10 +98,29 @@ function main():Int {
     info.type,
     ["title"]
   );
+  var unsigned32 = schema.fieldDefaultValue(info.hash,
+    info.type, ["leaf", "unsigned32"]), signed32 = schema.fieldDefaultValue(
+      info.hash,
+      info.type,
+      [
+        "leaf",
+        "signed32"
+      ]
+    ), highBit = schema.fieldDefaultValue(
+      info.hash,
+      info.type,
+      [
+        "leaf",
+        "highBit"
+      ]
+    );
   if (zero == null || zero.type != "Int" || zero.value != 0
     || optional == null || optional.type != "Null" || optional.value != null || narrow == null || narrow.type != "Int"
     || narrow.value != 250 || ratio == null || ratio.type != "Float" || ratio.value != 0.10000000149011612
     || absent != null || title == null || title.type != "String" || title.value != "root") return 1;
+  if (unsigned32 == null
+    || unsigned32.type != "Int" || unsigned32.value != 0 || signed32 == null || signed32.type != "Int"
+    || signed32.value != 123456789 || highBit == null || highBit.type != "Int" || highBit.value != -1) return 16;
   if (!rejects(function() MessagePackSchema.fromJson('{"formatVersion":2,"descriptors":[]}'))) return 2;
   if (!rejects(function() schema.fieldDefaultValue(info.hash, info.type, ["leaf", "missing"]))) return 3;
   if (!rejects(function() MessagePackSchema.fromJson(StringTools.replace(json,

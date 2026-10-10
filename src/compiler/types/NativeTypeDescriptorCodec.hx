@@ -172,11 +172,8 @@ class NativeTypeDescriptorCodec {
 	}
 
 	static function defaultIntValueAccepted(node:NativeTypeDescriptorField, value:Int):Bool {
-		if (node.type == "Int")
+		if (node.type == "Int" || NativeTypeDescriptor.integerDefaultFits(node.type, value))
 			return true;
-		var range = NativeTypeDescriptor.narrowIntegerDefaultRange(node.type);
-		if (range != null)
-			return value >= range.min && value <= range.max;
 		for (argument in node.arguments)
 			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
 				if (defaultIntValueAccepted(argument, value))
@@ -329,7 +326,7 @@ class NativeTypeDescriptorCodec {
 			size: descriptor.size,
 			alignment: descriptor.alignment,
 			annotations: descriptor.annotations,
-			annotationValues: annotationValuesJson(descriptor.annotationValues),
+			annotationValues: annotationValuesJson(descriptor.annotationValues, replacements),
 			fields: [for (field in descriptor.fields) nodeJson(field, replacements)],
 			arguments: [for (argument in descriptor.arguments) nodeJson(argument, replacements)],
 			hash: descriptor.hash
@@ -346,13 +343,13 @@ class NativeTypeDescriptorCodec {
 			offset: node.offset,
 			defaultValue: defaultJson(node, node.defaultValue, replacements),
 			annotations: node.annotations,
-			annotationValues: annotationValuesJson(node.annotationValues),
+			annotationValues: annotationValuesJson(node.annotationValues, replacements),
 			fields: [for (field in node.fields) nodeJson(field, replacements)],
 			arguments: [for (argument in node.arguments) nodeJson(argument, replacements)],
 			recursive: node.recursive
 		};
 
-	static function annotationValuesJson(values:Array<NativeTypeAnnotationData>):Array<Dynamic>
+	static function annotationValuesJson(values:Array<NativeTypeAnnotationData>, replacements:Array<{marker:String, number:String}>):Array<Dynamic>
 		return [
 			for (annotation in values)
 				{
@@ -362,20 +359,35 @@ class NativeTypeDescriptorCodec {
 							{
 								name: argument.name,
 								type: argument.type,
-								value: annotationConstantJson(argument.value)
+								value: annotationConstantJson(argument.value, replacements)
 							}
 					]
 				}
 		];
 
-	static function annotationConstantJson(value:NativeTypeAnnotationValue):Dynamic
+	static function annotationConstantJson(value:NativeTypeAnnotationValue, replacements:Array<{marker:String, number:String}>):Dynamic
 		return switch value {
 			case IntValue(value): value;
-			case FloatValue(value): value;
+			case FloatValue(value):
+				var marker = '__HAXEON_FLOAT_VALUE_${replacements.length}__';
+				replacements.push({marker: marker, number: exactAnnotationFloatJson(value)});
+				marker;
 			case StringValue(value): value;
 			case BoolValue(value): value;
 			case NullValue: null;
 		};
+
+	static function exactAnnotationFloatJson(value:Float):String {
+		var number = Std.string(value);
+		// JSON integers outside Haxeon's signed Int range are parsed as wrapping Ints.
+		// Keep Float metadata in the floating-point parse path so its exact value hashes identically.
+		if ((value > 2147483647.0 || value < -2147483648.0)
+			&& number.indexOf(".") < 0
+			&& number.indexOf("e") < 0
+			&& number.indexOf("E") < 0)
+			number += ".0";
+		return number;
+	}
 
 	static function defaultJson(node:NativeTypeDescriptorField, value:Null<NativeTypeDescriptorDefault>,
 			replacements:Array<{marker:String, number:String}>):Dynamic {
@@ -387,7 +399,7 @@ class NativeTypeDescriptorCodec {
 				replacements.push({marker: marker, number: exactFloat32Decimal(number)});
 				{type: value.type, value: marker};
 			case _:
-				{type: value.type, value: annotationConstantJson(value.value)};
+				{type: value.type, value: annotationConstantJson(value.value, replacements)};
 		};
 	}
 

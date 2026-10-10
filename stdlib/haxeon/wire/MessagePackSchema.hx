@@ -191,7 +191,8 @@ class MessagePackSchema {
 	static function validInterfaceIdentity(value:String):Bool {
 		if (!StringTools.startsWith(value, "interface:"))
 			return false;
-		var open = value.indexOf("<"), length = value.length,
+		var open = value.indexOf("<"),
+			length = value.length,
 			prefixLength = "interface:".length;
 		if (open <= prefixLength || length <= open + 1 || !StringTools.endsWith(value, ">"))
 			return false;
@@ -204,7 +205,8 @@ class MessagePackSchema {
 			if (code <= 32 || code == 127)
 				return false;
 			switch code {
-				case 60: depth++;
+				case 60:
+					depth++;
 				case 62:
 					depth--;
 					if (depth < 0 || (depth == 0 && index != length - 1))
@@ -275,25 +277,25 @@ class MessagePackSchema {
 
 	static function integerDefaultTypeAccepted(node:Dynamic, value:Int):Bool {
 		var fieldType = fieldString(node, "type");
-		if (fieldType == "Int")
+		if (fieldType == "Int" || integerDefaultFits(fieldType, value))
 			return true;
-		switch fieldType {
-			case "native-scalar:i8":
-				return value >= -128 && value <= 127;
-			case "native-scalar:u8":
-				return value >= 0 && value <= 255;
-			case "native-scalar:i16":
-				return value >= -32768 && value <= 32767;
-			case "native-scalar:u16":
-				return value >= 0 && value <= 65535;
-			case _:
-		}
 		for (argument in fieldArray(node, "arguments"))
 			if (fieldString(argument, "name") == "representation"
 				|| (StringTools.startsWith(fieldType, "Null<") && fieldString(argument, "name") == "element"))
 				if (integerDefaultTypeAccepted(argument, value))
 					return true;
 		return false;
+	}
+
+	static function integerDefaultFits(fieldType:String, value:Int):Bool {
+		return switch fieldType {
+			case "native-scalar:i8": value >= -128 && value <= 127;
+			case "native-scalar:u8": value >= 0 && value <= 255;
+			case "native-scalar:i16": value >= -32768 && value <= 32767;
+			case "native-scalar:u16": value >= 0 && value <= 65535;
+			case "native-scalar:i32" | "native-scalar:u32": true;
+			case _: false;
+		};
 	}
 
 	static function containsFloat32(node:Dynamic):Bool {

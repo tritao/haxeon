@@ -84,6 +84,25 @@ HAXEON_SOURCE_CACHE="$output_dir/schema-validation/source-cache" \
 HAXEON_DISABLE_ARTIFACT_CACHE=1 HAXEON_COMPILER_SERVER=0 HAXEON_CCACHE=0 \
 	"$repo_dir/scripts/haxeon" build --project="$repo_dir/tests/fixtures/messagepack-schema-validation/haxeon.json"
 schema_output="$output_dir/schema-validation/host/main.hl"
+node - "$schema_output.descriptors.json" <<'NODE'
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const dump = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const schemaRoot = dump.descriptors.find(item => item.name === 'SchemaRoot');
+assert(schemaRoot);
+const schemaLeaf = schemaRoot.fields.find(field => field.name === 'leaf');
+const integerFields = Object.fromEntries(schemaLeaf.fields.map(field => [field.name, field]));
+assert.deepEqual(integerFields.unsigned32.defaultValue, { type: 'Int', value: 0 });
+assert.deepEqual(integerFields.signed32.defaultValue, { type: 'Int', value: 123456789 });
+assert.deepEqual(integerFields.highBit.defaultValue, { type: 'Int', value: -1 });
+assert.deepEqual(integerFields.unsigned32.annotationValues[0], {
+  name: 'Range',
+  arguments: [
+    { name: 'min', type: 'Float', value: 0 },
+    { name: 'max', type: 'Float', value: 4294967295 },
+  ],
+});
+NODE
 schema_status=0
 HAXEON_SCHEMA_VALIDATION_ARTIFACT="$schema_output.descriptors.json" \
 HAXEON_SCHEMA_LEGACY_ARTIFACT="$repo_dir/tests/fixtures/native-type-descriptor-v4-legacy.json" \

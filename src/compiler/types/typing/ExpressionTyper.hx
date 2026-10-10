@@ -855,12 +855,14 @@ class ExpressionTyper {
 				case NullLiteral(_) if (!isNullableDefaultType(type)): "null requires an explicitly nullable field type";
 				case _:
 					var nativeInteger = switch type {
-						case TNativeScalar(name): {name: name, range: NativeTypeDescriptor.narrowIntegerDefaultRange('native-scalar:$name')};
+						case TNativeScalar(name): {name: name};
 						case _: null;
 					};
 					var integer = integerDefaultLiteral(initializer);
-					if (nativeInteger != null && nativeInteger.range != null && integer != null)
-						'integer literal $integer is outside the range of native scalar ${nativeInteger.name}' else
+					if (nativeInteger != null
+						&& integer != null
+						&& !NativeTypeDescriptor.integerDefaultFits('native-scalar:${nativeInteger.name}',
+							integer)) 'integer literal $integer is outside the range of native scalar ${nativeInteger.name}' else
 						"only scalar literal defaults are supported; executable and computed defaults are unsupported";
 			};
 			fail("E1024", 'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
@@ -892,8 +894,8 @@ class ExpressionTyper {
 					else
 						FloatValue(cast rounded);
 				};
-			case TNativeScalar(name): var range = NativeTypeDescriptor.narrowIntegerDefaultRange('native-scalar:$name'),
-					integer = integerDefaultLiteral(initializer); range == null || integer == null || integer < range.min || integer > range.max ? null : IntValue(integer);
+			case TNativeScalar(name): var integer = integerDefaultLiteral(initializer); integer == null || !NativeTypeDescriptor.integerDefaultFits('native-scalar:$name',
+					integer) ? null : IntValue(integer);
 			case TInt:
 				switch initializer {
 					case IntegerLiteral(value, _): IntValue(value);
