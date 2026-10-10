@@ -86,3 +86,11 @@ patch. Supply PCM at the engine sample rate, set `RootNote` to its original MIDI
 pitch, and choose `Speed` and `GrainMs`. Destroying the patch or replacing the
 caller’s sample array does not invalidate an existing instrument. This is PCM
 granulation; SoundFont/SF2 loading is a separate feature.
+
+Callback telemetry is opt-in through `Mixer.setDiagnosticsEnabled(true)` and
+`Mixer.diagnostics()`. Collection uses lock-free atomic counters and monotonic
+clock samples, with no callback logging or allocation. Read snapshots on the
+application thread. Counts/maxima are cumulative for the engine lifetime and
+survive disabling collection. Callback gaps and render budget overruns are
+observations rather than backend/hardware XRUN reports. Disabling collection
+removes timestamp sampling; the disabled branch remains in the callback.

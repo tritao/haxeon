@@ -1001,6 +1001,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_get_channels(out_channels: ptr<u32> @out) -> nk_result;
 	/**
+	 * Reads telemetry without resetting it. Initialize struct_size before calling.
+	 */
+	extern fn nk_audio_get_diagnostics(out_diagnostics: ptr<nk_audio_diagnostics> @inout) -> nk_result;
+	/**
 	 * Returns linear gain for the process-wide NativeKit audio mixer.
 	 */
 	extern fn nk_audio_get_master_volume(out_volume: ptr<f32> @out) -> nk_result;
@@ -1096,6 +1100,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Sets or replaces one bus target in the snapshot.
 	 */
 	extern fn nk_audio_mix_snapshot_set_bus(snapshot: nk_audio_mix_snapshot, bus: nk_audio_bus, volume: f32, muted: nk_bool) -> nk_result;
+	/**
+	 * Enables timing collection. Disabled by default; counters persist when disabled.
+	 */
+	extern fn nk_audio_set_diagnostics_enabled(enabled: nk_bool) -> nk_result;
 	/**
 	 * Sets linear gain for the process-wide NativeKit audio mixer.
 	 */
@@ -1416,6 +1424,23 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Reserved for compatible extensions; set all elements to zero.
 		 */
 		reserved2: array<u64, 2> @offset(32);
+	}
+	/**
+	 * Opt-in callback telemetry, cumulative for the engine lifetime. Fields are independent
+	 * atomic samples, not a transaction. Late gaps are timing observations, not backend XRUNs.
+	 */
+	struct nk_audio_diagnostics @layout(80, 8) {
+		struct_size: u32 @offset(0);
+		enabled: nk_bool @offset(4);
+		callback_count: u64 @offset(8);
+		rendered_frames: u64 @offset(16);
+		budget_overruns: u64 @offset(24);
+		late_callback_gaps: u64 @offset(32);
+		short_reads: u64 @offset(40);
+		read_errors: u64 @offset(48);
+		max_callback_ms: f64 @offset(56);
+		max_gap_ms: f64 @offset(64);
+		last_budget_ms: f64 @offset(72);
 	}
 	/**
 	 * Configuration for one standalone DSP renderer. Zero fields select defaults.

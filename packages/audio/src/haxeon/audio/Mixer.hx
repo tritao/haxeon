@@ -53,6 +53,19 @@ class Mixer {
 		return result.out_state;
 	}
 
+	/** Opt-in callback timing; no callback logging or allocations. */
+	public static function setDiagnosticsEnabled(enabled:Bool):Void
+		AudioResult.check(NativeKitAudio.nk_audio_set_diagnostics_enabled(enabled), "audio.diagnostics.enable");
+
+	/** Cumulative independent atomic samples for the current engine lifetime. */
+	public static function diagnostics():AudioDiagnostics {
+		var value = new NativeAudioDiagnostics();
+		value.set_struct_size(NativeAudioDiagnostics.size());
+		var result = NativeKitAudio.nk_audio_get_diagnostics(value);
+		AudioResult.check(result.status, "audio.diagnostics.read");
+		return new AudioDiagnostics(result.out_diagnostics);
+	}
+
 	/** Returns the monotonic process-wide playback-device clock in PCM frames. */
 	public static function timeFrames():haxe.Int64 {
 		var result = NativeKitAudio.nk_audio_get_time_pcm_frames();
