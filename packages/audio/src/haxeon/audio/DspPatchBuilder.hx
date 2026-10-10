@@ -15,6 +15,8 @@ class DspPatchBuilder {
 	public var unison:DspUnisonOptions = new DspUnisonOptions();
 	public var filter:DspFilterOptions = new DspFilterOptions();
 	public var lfo:DspLfoOptions = new DspLfoOptions();
+	/** Optional second and third LFOs, addressed by Lfo2 and Lfo3 routes. */
+	public final additionalLfos:Array<DspLfoOptions> = [];
 	public var gain:Float = 1.0;
 	/** Optional specialized generator, sharing this patch envelope and filter. */
 	public var source:Null<DspSourceOptions>;
@@ -27,6 +29,14 @@ class DspPatchBuilder {
 		if (oscillators.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
 			throw "DSP patch oscillator limit exceeded";
 		oscillators.push(oscillator == null ? new DspOscillatorOptions() : oscillator);
+		return this;
+	}
+
+	/** Adds another independent LFO; existing lfo is always the first source. */
+	public function addLfo(?options:DspLfoOptions):DspPatchBuilder {
+		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS - 1)
+			throw "DSP patch LFO limit exceeded";
+		additionalLfos.push(options == null ? new DspLfoOptions() : options);
 		return this;
 	}
 
@@ -86,6 +96,13 @@ class DspPatchBuilder {
 		voice.set_unison_stereo_spread(unison.stereoSpread);
 		voice.set_filter_envelope(filterEnvelope.nativeValue());
 		voice.set_filter_envelope_amount_semitones(filterEnvelopeAmountSemitones);
+		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS)
+			throw "DSP patch LFO limit exceeded";
+		for (index in 0...additionalLfos.length) {
+			if (additionalLfos[index] == null) throw "DSP LFO must not be null";
+			voice.set_additional_lfos(index, additionalLfos[index].nativeValue());
+		}
+		voice.set_additional_lfo_count(additionalLfos.length);
 		if (source != null) {
 			var made = NativeKitAudio.nk_audio_dsp_patch_create_source_extended(options,voice,source.nativeValue(),source.samples);
 			AudioResult.check(made.status, "audio.dsp.patch.buildSource");

@@ -127,3 +127,34 @@ Daisy sources support the independent filter envelope and reject more than one
 unison copy. Stereo rendering preserves L/R; mono averages them. These controls
 are immutable patch settings, rebuilt between auditions rather than automated
 through the instrument parameter API.
+
+## Independent modulation sources
+
+A patch supports three LFOs. `lfo` remains the original source;
+`addLfo()` appends optional sources addressed by `DspModulationSource.Lfo2` and
+`Lfo3`. A route to an unconfigured additional LFO is rejected. Every LFO has its
+own waveform, rate, phase and retrigger/free-running mode. Each referenced LFO
+advances once per sample, regardless of how many routes use it. Free-running
+phase continues while a voice is sounding and is retained when that same voice
+is retriggered; this is per-voice modulation, not a global transport oscillator.
+
+`DspModulationSource.FilterEnvelope` routes the independent filter ADSR to any
+control destination even when its direct cutoff sweep is zero. Envelope sources
+are naturally unipolar; bipolar routes center them around zero. Oscillator
+operator routes continue to support only frequency and phase destinations.
+
+`FilterCutoffSemitones` adds logarithmic brightness movement to the direct
+filter-envelope sweep. The combined sweep is clamped to ±96 semitones before
+conversion and the existing cutoff-Hz offset is added afterwards. `Pan` adjusts
+stereo balance after filtering; its summed offset is clamped to [−1, 1], with
+zero preserving both channels and each endpoint silencing the far channel.
+
+```haxe
+var drift = new DspLfoOptions();
+drift.rateHz = 0.18;
+drift.mode = DspLfoMode.FreeRunning;
+patch.addLfo(drift);
+patch.modulate(DspModulationSource.Lfo2, DspModulationDestination.PitchSemitones, 0.035);
+patch.modulate(DspModulationSource.FilterEnvelope,
+    DspModulationDestination.OscillatorLevel, 0.18, DspModulationPolarity.Unipolar, 1);
+```

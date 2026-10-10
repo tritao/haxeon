@@ -25,6 +25,9 @@ enum abstract DspModulationSource(Int) from Int to Int {
 	var Lfo = 0;
 	var Envelope = 1;
 	var Oscillator = 2;
+	var FilterEnvelope = 3;
+	var Lfo2 = 4;
+	var Lfo3 = 5;
 }
 
 /** Destinations available to a generic modulation route. */
@@ -35,6 +38,8 @@ enum abstract DspModulationDestination(Int) from Int to Int {
 	var OscillatorLevel = 3;
 	var OscillatorPhase = 4;
 	var OscillatorFrequencyHz = 5;
+	var Pan = 6;
+	var FilterCutoffSemitones = 7;
 }
 
 /** Normalizes a modulation source before its route amount is applied. */
