@@ -218,6 +218,13 @@ class Bus {
 		if (destination == null) throw "Audio send destination must not be null";
 		var made = NativeKitAudio.nk_audio_bus_send_create(value, destination.nativeHandle(), volume);
 		AudioResult.check(made.status, "audio.bus.addSend");
+		// Applications may dispose borrowed sends while retaining their source bus.
+		// Repeated rerouting must not retain every closed wrapper until bus shutdown.
+		var index = 0;
+		while (index < sends.length) {
+			if (sends[index].isDisposed()) sends.splice(index, 1);
+			else index++;
+		}
 		var send = new BusSend(made.out_send);
 		sends.push(send);
 		return send;
