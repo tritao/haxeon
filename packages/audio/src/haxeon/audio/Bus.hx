@@ -192,6 +192,26 @@ class Bus {
 	}
 
 	/** Releases the bus; sounds already routed through it retain native ownership. */
+	/** Adds a stereo algorithmic reverb, with a 3-second decay by default. */
+	public function addReverb():BusEffect {
+		ensureLive();
+		var made = NativeKitAudio.nk_audio_bus_effect_create_reverb(value);
+		AudioResult.check(made.status, "audio.bus.addReverb");
+		var effect = new BusEffect(made.out_effect);
+		effects.push(effect);
+		return effect;
+	}
+
+	/** Adds a compressor/expander/gate with neutral compression and expansion. */
+	public function addDynamics():BusEffect {
+		ensureLive();
+		var made = NativeKitAudio.nk_audio_bus_effect_create_dynamics(value);
+		AudioResult.check(made.status, "audio.bus.addDynamics");
+		var effect = new BusEffect(made.out_effect);
+		effects.push(effect);
+		return effect;
+	}
+
 	public function dispose():Void {
 		if (disposed)
 			return;

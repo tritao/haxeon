@@ -7,7 +7,7 @@ build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/audio/native"}
 cmake -S "$nativekit_dir" -B "$build_dir" -GNinja -DCMAKE_BUILD_TYPE=Debug \
     -DNK_BUILD_AUDIO=ON -DNK_BUILD_TESTS=ON -DNK_BUILD_EXAMPLES=OFF
 cmake --build "$build_dir"
-ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|resource_cache)$'
+ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|audio_effects|audio_routing|resource_cache)$'
 "$package_dir/tools/check-hxi.sh"
 if [[ ! -f "$haxeon_dir/out/haxeon_runtime.hdll" ]]; then
     (cd "$haxeon_dir" && ./scripts/build-native.sh)
@@ -19,6 +19,8 @@ for fixture in AudioSmoke; do
         --root="$haxeon_dir/packages/platform/tests" --root="$package_dir/tests" --root="$package_dir/src" --root="$haxeon_dir/packages/platform/src" \
         --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \
         --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap" \
+        --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net.hxi" \
+        --ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap" \
         --ffi-interface="$package_dir/bindings/nativekit-audio.hxi" \
         --ffi-projection="$package_dir/bindings/nativekit-audio.hxmap" \
         "$package_dir/tests/$fixture.hx" "$haxeon_dir/packages/platform/tests/NativeKitEventDecoderTests.hx" "${sources[@]}")

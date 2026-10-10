@@ -70,7 +70,7 @@ class Main {
 			context.attachPlatformSurface(surface);
 			context.attachPlatformWindow(window.nativeHandle());
 
-			lab = new AudioLabEngine();
+			lab = new AudioLabEngine(true);
 			var view = new AudioLabView(lab);
 			var events = runtime.events;
 			var windowHandle = window.nativeHandle();

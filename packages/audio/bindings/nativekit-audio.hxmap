@@ -9,6 +9,7 @@
     "nk_audio_attenuation_model": "AttenuationModel",
     "nk_audio_positioning": "Positioning",
     "nk_audio_effect_type": "EffectType",
+    "nk_audio_effect_parameter": "EffectParameter",
     "nk_audio_dsp_capabilities": "DspCapabilities",
     "nk_audio_dsp_event_kind": "DspEventKind",
     "nk_audio_dsp_filter_type": "DspFilterType",

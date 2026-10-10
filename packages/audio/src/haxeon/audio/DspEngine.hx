@@ -60,6 +60,14 @@ class DspEngine {
 		deviceAttached = true;
 	}
 
+	/** Routes live output through a bus, or directly to master when null.
+	 * Attach to the device first. Destroying the bus restores master routing. */
+	public function setBus(bus:Null<Bus>):Void {
+		ensureLive();
+		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_set_bus(value,
+			bus == null ? BusHandle.invalid() : bus.nativeHandle()), "audio.dsp.engine.setBus");
+	}
+
 	/** Stops routing this renderer into the process-wide NativeKit playback device. */
 	public function detachFromDevice():Void {
 		ensureLive();

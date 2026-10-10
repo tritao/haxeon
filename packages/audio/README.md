@@ -6,7 +6,7 @@ and DSP patches, oscillators, envelopes, filters, modulation, and wavetables.
 It depends on `haxeon-platform`; it has no UI or GPU dependency.
 
 The native implementation remains in NativeKit `modules/audio`, backed by
-pinned miniaudio and DaisySP submodules. Audio calls use the NativeKit UI thread;
+pinned miniaudio, DaisySP, and Signalsmith submodules. Audio calls use the NativeKit UI thread;
 the playback callback and streaming workers are internal to the native backend.
 The C ABI and library name (`nativekit`) stay unchanged. Raw generated bindings
 live in `nativekit.ffi.NativeKitAudio` and `NativeKitAudioTypes`.
@@ -35,3 +35,10 @@ Tools accept `NATIVEKIT_DIR`, `HAXEON_DIR`, and `NATIVEKIT_BUILD_DIR` overrides.
 Audio device tests can skip when no device is available; DSP rendering also has
 offline coverage. Browser playback and Windows/macOS devices need separate
 runtime qualification. The native API guide is in NativeKit `modules/audio/README.md`.
+
+Live synthesis can route through `DspEngine.setBus()` into the mixer graph.
+`Bus.addReverb()` and `addDynamics()` provide stereo reverb and dynamics controls
+through `haxeon.audio.EffectParameter`, with smoothed parameter changes, reset,
+and latency/tail queries. Signalsmith Basics is pinned from the
+[`tritao/signalsmith-basics`](https://github.com/tritao/signalsmith-basics) fork;
+DaisySP is unchanged. See the native guide for parameter ranges and routing.

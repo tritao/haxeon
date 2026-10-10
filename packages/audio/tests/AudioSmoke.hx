@@ -264,6 +264,32 @@ class AudioSmoke {
 			highPass = null;
 			delay.dispose();
 			delay = null;
+			if (Mixer.channels() == 2) {
+				var reverb = bus.addReverb();
+				reverb.setParameter(EffectParameter.Wet, 0.25);
+				reverb.setParameter(EffectParameter.DecaySeconds, 0.6);
+				if (reverb.type() != EffectType.Reverb || reverb.parameter(EffectParameter.Wet) != 0.25 ||
+					reverb.latencyFrames() != 0 || Math.abs(reverb.tailFrames() - sampleRate * 0.6) > 1)
+					throw "Haxe reverb controls did not round-trip";
+				reverb.reset();
+				reverb.setEnabled(false);
+				reverb.dispose();
+			}
+			var dynamics = bus.addDynamics();
+			dynamics.setParameter(EffectParameter.ThresholdDb, -20.0);
+			dynamics.setParameter(EffectParameter.Ratio, 4.0);
+			if (dynamics.type() != EffectType.Dynamics || dynamics.parameter(EffectParameter.Ratio) != 4.0)
+				throw "Haxe dynamics controls did not round-trip";
+			dynamics.reset();
+			dynamics.dispose();
+			var liveOptions = new haxeon.audio.DspEngineOptions();
+			liveOptions.sampleRate = sampleRate;
+			liveOptions.channels = Mixer.channels();
+			var live = haxeon.audio.DspEngine.create(liveOptions);
+			live.attachToDevice();
+			live.setBus(bus);
+			live.setBus(null);
+			live.dispose();
 			bus.fade(Bus.CURRENT_VOLUME, 0.75, haxe.Int64.ofInt(1));
 			bus.fadeAt(0.75, 0.5, haxe.Int64.ofInt(1),
 				haxe.Int64.add(nowFrames, haxe.Int64.ofInt(sampleRate)));

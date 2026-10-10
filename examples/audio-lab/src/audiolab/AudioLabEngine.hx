@@ -2,6 +2,11 @@ package audiolab;
 
 import haxe.io.Bytes;
 import haxeon.audio.DspEngine;
+import haxeon.audio.Bus;
+import haxeon.audio.BusEffect;
+import haxeon.audio.DeviceOptions;
+import haxeon.audio.Mixer;
+import nativekit.ffi.NativeKitAudioTypes.EffectParameter;
 import haxeon.audio.DspEngineOptions;
 import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEvent;
@@ -54,6 +59,18 @@ class AudioLabEngine {
 	public var trackerStep(default, null):Int = 0;
 	public final scope:Array<Float> = [];
 
+	public var playbackStatus(default, null):String = "Offline preview";
+	public var reverbWet(default, null):Float = 0.15;
+	public var reverbDecay(default, null):Float = 3.0;
+	public var compressionRatio(default, null):Float = 1.0;
+	var liveDsp:Null<DspEngine> = null;
+	var liveInstrument:Null<DspInstrument> = null;
+	var musicBus:Null<Bus> = null;
+	var reverb:Null<BusEffect> = null;
+	var dynamics:Null<BusEffect> = null;
+	var nextLiveFrame:haxe.Int64 = haxe.Int64.ofInt(0);
+	static inline var LOOKAHEAD:Int = 4800;
+
 	final target:DspRenderTarget;
 	final pendingNotes:Array<PendingNote> = [];
 	final active:Array<ActiveVoice> = [];
@@ -64,7 +81,7 @@ class AudioLabEngine {
 	var trackerClock:Float = 0.0;
 	var trackerNotes:Array<Int> = [48, 48, 55, 60, 48, 48, 55, 62, 43, 43, 50, 55, 45, 45, 52, 57];
 
-	public function new() {
+	public function new(playback:Bool = false) {
 		var options = new DspEngineOptions();
 		options.sampleRate = SAMPLE_RATE;
 		options.channels = CHANNELS;
@@ -74,10 +91,36 @@ class AudioLabEngine {
 		target = new DspRenderTarget(BLOCK_SIZE, CHANNELS);
 		for (_ in 0...64)
 			scope.push(0.0);
+		if (playback) {
+			try {
+				var device = new DeviceOptions();
+				device.sampleRate = SAMPLE_RATE;
+				device.channels = CHANNELS;
+				Mixer.configureDevice(device);
+				musicBus = Bus.create();
+				musicBus.setVolume(0.35);
+				reverb = musicBus.addReverb();
+				reverb.setParameter(EffectParameter.Wet, reverbWet);
+				dynamics = musicBus.addDynamics();
+				liveDsp = DspEngine.create(options);
+				playbackStatus = "Live playback • monitor shows dry synth";
+			} catch (error:Dynamic) {
+				if (liveDsp != null) liveDsp.dispose();
+				liveDsp = null;
+				if (musicBus != null) musicBus.dispose();
+				musicBus = null;
+				reverb = null;
+				dynamics = null;
+				playbackStatus = "Playback unavailable: " + Std.string(error);
+			}
+		}
 		selectPreset(AudioLabPreset.Subtractive);
 	}
 
 	public function selectPreset(next:AudioLabPresetId):Void {
+		// Detach before replacing live instruments so the callback has stopped using them.
+		if (liveDsp != null) liveDsp.detachFromDevice();
+		if (liveInstrument != null) liveInstrument.dispose();
 		if (instrument != null)
 			instrument.dispose();
 		if (patch != null)
@@ -86,6 +129,13 @@ class AudioLabEngine {
 		var builder:DspPatchBuilder = AudioLabPreset.build(next);
 		patch = builder.build();
 		instrument = dsp.createInstrument(patch);
+		if (liveDsp != null) {
+			liveInstrument = liveDsp.createInstrument(patch);
+			liveDsp.attachToDevice();
+			liveDsp.setBus(musicBus);
+			nextLiveFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(LOOKAHEAD));
+			if (reverb != null) reverb.reset();
+		}
 		patch.dispose();
 		preset = next;
 		filterCutoff = builder.filter.cutoffHz;
@@ -113,6 +163,24 @@ class AudioLabEngine {
 		pendingFilter = bounded;
 	}
 
+	public function setReverbWet(value:Float):Void {
+		reverbWet = clamp(value, 0.0, 1.0);
+		if (reverb != null) reverb.setParameter(EffectParameter.Wet, reverbWet);
+	}
+
+	public function setReverbDecay(value:Float):Void {
+		reverbDecay = clamp(value, 0.1, 10.0);
+		if (reverb != null) reverb.setParameter(EffectParameter.DecaySeconds, reverbDecay);
+	}
+
+	public function setCompressionRatio(value:Float):Void {
+		compressionRatio = clamp(value, 1.0, 10.0);
+		if (dynamics != null) {
+			dynamics.setParameter(EffectParameter.ThresholdDb, -20.0);
+			dynamics.setParameter(EffectParameter.Ratio, compressionRatio);
+		}
+	}
+
 	public function toggleTracker():Void {
 		trackerPlaying = !trackerPlaying;
 		if (trackerPlaying)
@@ -124,6 +192,11 @@ class AudioLabEngine {
 		if (deltaSeconds < 0.0)
 			deltaSeconds = 0.0;
 		elapsed += Math.min(deltaSeconds, 0.1);
+		if (liveDsp != null) {
+			var minimumFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(BLOCK_SIZE * 2));
+			if (haxe.Int64.compare(nextLiveFrame, minimumFrame) < 0)
+				nextLiveFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(LOOKAHEAD));
+		}
 		var blockSeconds = BLOCK_SIZE / SAMPLE_RATE;
 		var guard = 0;
 		while (elapsed >= blockSeconds && guard++ < 12) {
@@ -145,8 +218,12 @@ class AudioLabEngine {
 	function renderBlock():Void {
 		var startedAt = Sys.cpuTime();
 		var events:Array<DspEvent> = [];
-		for (note in pendingNotes)
+		var liveEvents:Array<DspEvent> = [];
+		for (note in pendingNotes) {
 			events.push(DspEvent.noteOn(instrument, note.voiceId, note.note, note.velocity, 0));
+			if (liveInstrument != null)
+				liveEvents.push(DspEvent.noteOn(liveInstrument, note.voiceId, note.note, note.velocity, 0));
+		}
 		pendingNotes.resize(0);
 
 		var survivors:Array<ActiveVoice> = [];
@@ -154,6 +231,7 @@ class AudioLabEngine {
 			if (voice.releaseFrame <= frame + BLOCK_SIZE) {
 				var offset = Std.int(Math.max(0, voice.releaseFrame - frame));
 				events.push(DspEvent.noteOff(voice.voiceId, offset));
+				if (liveDsp != null) liveEvents.push(DspEvent.noteOff(voice.voiceId, offset));
 			} else {
 				survivors.push(voice);
 			}
@@ -166,12 +244,21 @@ class AudioLabEngine {
 			var targetFilter:Float = pendingFilter;
 			events.push(DspEvent.parameterRamp(instrument, DspParameter.FilterCutoffHz,
 				appliedFilterCutoff, targetFilter, BLOCK_SIZE, 0));
+			if (liveInstrument != null)
+				liveEvents.push(DspEvent.parameterRamp(liveInstrument, DspParameter.FilterCutoffHz,
+					appliedFilterCutoff, targetFilter, BLOCK_SIZE, 0));
 			appliedFilterCutoff = targetFilter;
 			pendingFilter = null;
 		}
 		lastBlockEventCount = events.length;
 		eventCount += events.length;
+		events.sort(function(a, b) return a.frameOffset - b.frameOffset);
 		dsp.render(target, events);
+		if (liveDsp != null) {
+			liveEvents.sort(function(a, b) return a.frameOffset - b.frameOffset);
+			if (liveEvents.length > 0) liveDsp.schedule(nextLiveFrame, liveEvents);
+			nextLiveFrame = haxe.Int64.add(nextLiveFrame, haxe.Int64.ofInt(BLOCK_SIZE));
+		}
 		var total:Float = 0.0;
 		var highest:Float = 0.0;
 		var scopeLength = scope.length;
@@ -193,6 +280,8 @@ class AudioLabEngine {
 	}
 
 	public function dispose():Void {
+		if (liveDsp != null) liveDsp.dispose();
+		if (musicBus != null) musicBus.dispose();
 		if (instrument != null)
 			instrument.dispose();
 		if (patch != null)

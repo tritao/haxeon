@@ -31,6 +31,24 @@ class AudioLabSmoke {
 		if (!lab.trackerPlaying || lab.trackerStep == 0)
 			throw "Audio Lab tracker clock did not advance";
 		lab.dispose();
+		// Exercise the live path when a device is available; offline coverage above
+		// remains mandatory on headless hosts.
+		if (haxeon.audio.Mixer.deviceCount() > 0) {
+			var live = new AudioLabEngine(true);
+			if (StringTools.startsWith(live.playbackStatus, "Live playback")) {
+				live.setReverbWet(0.3);
+				live.setReverbDecay(1.2);
+				live.setCompressionRatio(4.0);
+				live.noteOn(60);
+				live.advance(0.03);
+				live.selectPreset(AudioLabPreset.Pad);
+				live.noteOn(64);
+				live.advance(0.03);
+				if (live.eventCount <= 0 || live.reverbWet != 0.3 || live.compressionRatio != 4.0)
+					throw "Audio Lab live controls did not reach the playback host";
+			}
+			live.dispose();
+		}
 		NativeKit.nk_shutdown();
 	}
 }

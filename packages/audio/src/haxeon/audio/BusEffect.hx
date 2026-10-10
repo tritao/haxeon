@@ -125,6 +125,42 @@ class BusEffect {
 		return result.out_decay;
 	}
 
+	/** Sets a processor parameter; values are range-checked and changes smoothed. */
+	public function setParameter(parameter:EffectParameter, value:Float):Void {
+		ensureLive();
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_parameter(this.value, parameter, value),
+			"audio.busEffect.setParameter");
+	}
+
+	/** Returns the target value, rather than its intermediate smoothed value. */
+	public function parameter(parameter:EffectParameter):Float {
+		ensureLive();
+		var result = NativeKitAudio.nk_audio_bus_effect_get_parameter(value, parameter);
+		AudioResult.check(result.status, "audio.busEffect.parameter");
+		return result.out_value;
+	}
+
+	/** Clears processor state/tails at its next processing block. */
+	public function reset():Void {
+		ensureLive();
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_reset(value), "audio.busEffect.reset");
+	}
+
+	public function latencyFrames():Int {
+		ensureLive();
+		var result = NativeKitAudio.nk_audio_bus_effect_get_latency(value);
+		AudioResult.check(result.status, "audio.busEffect.latency");
+		return result.out_frames;
+	}
+
+	/** Estimated frames to decay to -60 dB. */
+	public function tailFrames():Int {
+		ensureLive();
+		var result = NativeKitAudio.nk_audio_bus_effect_get_tail(value);
+		AudioResult.check(result.status, "audio.busEffect.tail");
+		return result.out_frames;
+	}
+
 	/** Removes this effect from its bus, or marks it released with its parent bus. */
 	public function dispose():Void {
 		if (disposed)

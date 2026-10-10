@@ -228,6 +228,77 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		NK_AUDIO_DSP_WAVEFORM_SQUARE = 3;
 	}
 	/**
+	 * Parameters for reverb and dynamics processors; unsupported combinations are rejected.
+	 */
+	enum nk_audio_effect_parameter : u32 {
+		NK_AUDIO_EFFECT_PARAMETER_WET = 0;
+		NK_AUDIO_EFFECT_PARAMETER_DRY = 1;
+		/**
+		 * Reverb room size in milliseconds, [10, 200].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_ROOM_MS = 2;
+		/**
+		 * Reverb decay to -60 dB in seconds, [0.03, 90].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_DECAY_SECONDS = 3;
+		/**
+		 * Reverb decay to -60 dB in seconds, [0.03, 90].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_LOW_CUT_HZ = 4;
+		/**
+		 * Reverb decay to -60 dB in seconds, [0.03, 90].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_HIGH_CUT_HZ = 5;
+		/**
+		 * Reverb damping multipliers, [1, 10].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_LOW_DAMPING = 6;
+		/**
+		 * Reverb damping multipliers, [1, 10].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_HIGH_DAMPING = 7;
+		/**
+		 * Reverb early-reflection gain, [0, 2.5].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_EARLY_REFLECTIONS = 8;
+		/**
+		 * Compressor threshold in dB, [-60, 0].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_THRESHOLD_DB = 9;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_RATIO = 10;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_ATTACK_MS = 11;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_RELEASE_MS = 12;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_MAKEUP_DB = 13;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_GATE_THRESHOLD_DB = 14;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_EXPANDER_THRESHOLD_DB = 15;
+		/**
+		 * Compressor ratio, [1, 100].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_EXPANDER_RATIO = 16;
+		/**
+		 * Dynamics wet/dry mix, [0, 1].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_MIX = 17;
+	}
+	/**
 	 * Built-in processing effect types available on mixer buses.
 	 */
 	enum nk_audio_effect_type : u32 {
@@ -243,6 +314,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * A feedback delay with configurable wet/dry mix.
 		 */
 		NK_AUDIO_EFFECT_DELAY = 2;
+		/**
+		 * A stereo algorithmic reverb.
+		 */
+		NK_AUDIO_EFFECT_REVERB = 3;
+		/**
+		 * A compressor, expander, and noise gate.
+		 */
+		NK_AUDIO_EFFECT_DYNAMICS = 4;
 	}
 	/**
 	 * Coordinate space used by a voice's spatial position.
@@ -443,6 +522,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_bus_effect_create_delay(bus: nk_audio_bus, delay_pcm_frames: u32, decay: f32, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
 	/**
+	 * Creates dynamics with compression/expansion disabled and gate at -80 dB.
+	 */
+	extern fn nk_audio_bus_effect_create_dynamics(bus: nk_audio_bus, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
+	/**
 	 * Appends a high-pass filter to the bus effect chain.
 	 */
 	extern fn nk_audio_bus_effect_create_high_pass(bus: nk_audio_bus, cutoff_frequency_hz: f32, order: u32, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
@@ -451,6 +534,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * order must be in the range [1, 8].
 	 */
 	extern fn nk_audio_bus_effect_create_low_pass(bus: nk_audio_bus, cutoff_frequency_hz: f32, order: u32, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
+	/**
+	 * Creates a stereo reverb (room 80 ms, decay 3 s, wet 0.5, dry 1).
+	 */
+	extern fn nk_audio_bus_effect_create_reverb(bus: nk_audio_bus, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
 	/**
 	 * Removes an effect from its bus and invalidates its handle.
 	 */
@@ -472,13 +559,25 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_bus_effect_get_high_pass(effect: nk_audio_bus_effect, out_cutoff_frequency_hz: ptr<f32> @out, out_order: ptr<u32> @out) -> nk_result;
 	/**
+	 * Returns algorithmic latency in PCM frames for reverb/dynamics processors.
+	 */
+	extern fn nk_audio_bus_effect_get_latency(effect: nk_audio_bus_effect, out_frames: ptr<u32> @out) -> nk_result;
+	/**
 	 * Returns a low-pass filter's cutoff and order.
 	 */
 	extern fn nk_audio_bus_effect_get_low_pass(effect: nk_audio_bus_effect, out_cutoff_frequency_hz: ptr<f32> @out, out_order: ptr<u32> @out) -> nk_result;
 	/**
+	 * Returns the target parameter value, rather than its intermediate smoothed value.
+	 */
+	extern fn nk_audio_bus_effect_get_parameter(effect: nk_audio_bus_effect, parameter: nk_audio_effect_parameter, out_value: ptr<f32> @out) -> nk_result;
+	/**
 	 * Returns an effect's zero-based position in its bus chain.
 	 */
 	extern fn nk_audio_bus_effect_get_position(effect: nk_audio_bus_effect, out_position: ptr<u32> @out) -> nk_result;
+	/**
+	 * Returns an estimated -60 dB tail in PCM frames for reverb/dynamics processors.
+	 */
+	extern fn nk_audio_bus_effect_get_tail(effect: nk_audio_bus_effect, out_frames: ptr<u32> @out) -> nk_result;
 	/**
 	 * Returns the effect type.
 	 */
@@ -487,6 +586,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Returns whether an effect is active in its bus chain.
 	 */
 	extern fn nk_audio_bus_effect_is_enabled(effect: nk_audio_bus_effect, out_enabled: ptr<nk_bool> @out) -> nk_result;
+	/**
+	 * Requests state/tail reset at the next processing block, preserving target parameters.
+	 */
+	extern fn nk_audio_bus_effect_reset(effect: nk_audio_bus_effect) -> nk_result;
 	/**
 	 * Sets a delay's feedback decay.
 	 */
@@ -511,6 +614,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Updates a low-pass filter's cutoff and order.
 	 */
 	extern fn nk_audio_bus_effect_set_low_pass(effect: nk_audio_bus_effect, cutoff_frequency_hz: f32, order: u32) -> nk_result;
+	/**
+	 * Sets a finite, range-checked parameter; changes are smoothed by the processor.
+	 */
+	extern fn nk_audio_bus_effect_set_parameter(effect: nk_audio_bus_effect, parameter: nk_audio_effect_parameter, value: f32) -> nk_result;
 	/**
 	 * Moves an effect to a zero-based position in its bus chain.
 	 */
@@ -696,6 +803,12 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * copied and may be released after this call.
 	 */
 	extern fn nk_audio_dsp_engine_schedule(engine: nk_audio_dsp_engine, start_frame: u64, events: ptr<const<nk_audio_dsp_event>> @in_array("event_count"), event_count: u32) -> nk_result;
+	/**
+	 * Routes the attached DSP renderer through a bus, or the master endpoint when
+	 * bus is NK_INVALID_HANDLE. Does not reset voices or queued events. The device
+	 * must be initialized. Destroying the routed bus restores master routing.
+	 */
+	extern fn nk_audio_dsp_engine_set_bus(engine: nk_audio_dsp_engine, bus: nk_audio_bus) -> nk_result;
 	/**
 	 * Creates an instrument from the legacy flat options. Prefer patch_create().
 	 */

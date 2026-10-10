@@ -23,11 +23,13 @@ Run the Haxeon app from the Haxeon root with:
 ./examples/audio-lab/tools/test-audio-lab.sh --run
 ```
 
-Audio Lab currently renders into caller-owned PCM buffers for its oscilloscope,
-meters, and diagnostics. It does not attach its engine to the playback device;
-its controls produce offline PCM rather than audible output. The audio package
-also provides device attachment and scheduling APIs for applications that need
-playback.
+The desktop app now plays its presets and tracker through a music bus with
+stereo reverb and dynamics. Reverb wet/decay and compression-ratio sliders
+control the actual effects. A separate offline renderer supplies the dry synth
+oscilloscope, meters, and diagnostics; these do not show the processed output.
+If the audio device cannot initialize, the app reports the failure and keeps
+its offline preview available. Smoke tests use offline rendering by default.
+Live events are submitted in chronological blocks with a 100 ms lookahead.
 
 The example namespace is `audiolab`. Its managed dependencies are
 `haxeon.audio` and `haxeon.ui`; `CMakeLists.txt` builds one shared NativeKit

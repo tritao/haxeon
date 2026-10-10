@@ -6,7 +6,8 @@ import nativekit.ffi.NativeKitAudioTypes;
 /** One sample-accurate operation applied during a DSP render block. */
 class DspEvent {
 	final kind:DspEventKind;
-	final frameOffset:Int;
+	/** Sample offset used to merge/sort events before rendering or scheduling. */
+	public final frameOffset:Int;
 	final instrument:Null<DspInstrument>;
 	final voiceId:Int;
 	final note:Int;
