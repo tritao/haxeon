@@ -56,7 +56,7 @@ class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
 	static var valueClasses:Map<String, Bool> = [];
-	static var boxValueClassMapEntries:Bool = true;
+	static var headerlessValueClasses:Bool = true;
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 
@@ -74,7 +74,7 @@ class IrGenerator {
 	}
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
-	/** Supply the program's value classes, whose map entries are stored boxed (see `mapValueBox`). */
+	/** Supply the program's value classes (see `isHeaderlessValueClass`). */
 	public static function bindValueClasses(classes:Array<TypedClass>):Void {
 		valueClasses = [];
 		for (classDecl in classes)
@@ -83,8 +83,8 @@ class IrGenerator {
 	}
 
 	/** HashLink stores value classes as headerless structs; Wasm represents them as ordinary references. */
-	public static function bindValueClassMapBoxing(enabled:Bool):Void
-		boxValueClassMapEntries = enabled;
+	public static function bindHeaderlessValueClasses(enabled:Bool):Void
+		headerlessValueClasses = enabled;
 
 	public static function bindDynamicObjectLiterals(enabled:Bool):Void
 		dynamicObjectLiterals = enabled;
@@ -803,15 +803,27 @@ class IrGenerator {
 	}
 
 	/**
-	 * The box a map stores `valueType` entries in, or null when they are stored directly. A HashLink value class is a
-	 * struct with no `hl_type *` header, so it can neither be boxed into the map runtime's dynamic value slot nor cast
-	 * back from it; each entry is stored as a one-element array of the value class instead.
+	 * True for a value class compiled as a HashLink struct, which has no `hl_type *` header. Such a value never passes
+	 * through a checked cast from `Dyn`: the cast would read the header it does not have. Runtime storage that holds it
+	 * as a reference hands back the stored pointer, which is typed directly (`lowerArrayNativeCall`), and storage that
+	 * holds dynamic values boxes it (`mapValueBox`).
+	 */
+	static function isHeaderlessValueClass(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(_, _, representation): isHeaderlessValueClass(representation);
+			case TInstance(NominalKind.Class, name, _): headerlessValueClasses && valueClasses.exists(Std.string(name));
+			default: false;
+		};
+
+	/**
+	 * The box a map stores `valueType` entries in, or null when they are stored directly. A headerless value class can
+	 * neither be boxed into the map runtime's dynamic value slot nor cast back from it, so each entry is stored as a
+	 * one-element array of the value class instead.
 	 */
 	static function mapValueBox(valueType:CompilerType):Null<CompilerType>
 		return switch valueType {
 			case TAbstract(_, _, representation): mapValueBox(representation);
-			case TInstance(NominalKind.Class, name, _) if (boxValueClassMapEntries && valueClasses.exists(Std.string(name))): TArray(valueType);
-			default: null;
+			default: isHeaderlessValueClass(valueType) ? TArray(valueType) : null;
 		};
 
 	static function boxMapValue(builder:CfgBuilder, value:CfgValue, valueType:CompilerType):CfgValue {
@@ -2549,6 +2561,8 @@ class IrGenerator {
 		var nativeName = arrayNativeName(element, operation);
 		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
 			case Array(_): return builder.call(nativeName, arguments, resultType);
+			// The runtime hands back the stored element pointer, which a headerless value class cannot be cast from.
+			case Obj(_) if (isHeaderlessValueClass(element)): return builder.call(nativeName, arguments, resultType);
 			case Obj(_), Enum(_), ManagedBytes, Abstract(_), Virtual(_), Function(_, _), Nullable(_): Dyn;
 			default: resultType;
 		} : resultType;

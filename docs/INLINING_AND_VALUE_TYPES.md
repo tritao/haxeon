@@ -31,6 +31,10 @@ in. HashLink has no stack structs, so removing those temporaries has to happen i
   header it does not have (SIGSEGV at address 0). Each entry is now stored as a one-element array of the value class,
   unboxed by `get`, key-value iteration and `values`. Wasm keeps storing references directly
   (`tests/programs/value-class-map.hx`).
+- Array `pop` and `shift` of value classes: the reference array runtime hands back the stored element pointer, which
+  the IR generator cast back from `Dyn`, reading the same missing header (SIGSEGV at address 0, even when the result
+  was discarded). The call is now typed as the element directly. `IrGenerator.isHeaderlessValueClass` is the one test
+  for both cases (`tests/programs/value-class-array-pop.hx`).
 
 ## Value semantics
 

@@ -161,7 +161,7 @@ class FrontendCompilation {
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindValueClasses(typedNew.classes);
-			IrGenerator.bindValueClassMapBoxing(!context.isWasmTarget());
+			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);
 			IrGenerator.bindNativeStringFastPaths(!context.isWasmTarget());
