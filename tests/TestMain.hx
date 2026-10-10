@@ -1477,6 +1477,10 @@ class TestMain {
 			'class Service { public var failure:Null<String>; public function new() { failure = null; } function mutate():Void { failure = "changed"; } public function update():Void { if (failure != null) return; mutate(); if (failure != null) return; } } function main():Int { new Service().update(); return 42; }');
 		callEffectCompiler.compile("Main");
 		Sys.println("PASS: calls invalidate stale nullable field refinements before IR lowering");
+		var knownNullFields = Frontend.compile(File.getContent("tests/programs/known-null-field.hx"));
+		if (new IrInterpreter(knownNullFields).run("main") != 42)
+			throw "Known-null instance, static and record fields must retain their nullable ABI and invalidate on mutation";
+		Sys.println("PASS: known-null field reads preserve nullable storage without casts to Void");
 		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower) || limits.lower < 0); function main():Int return valid({lower: 1.0}) ? 1 : 0;',
 			"Comparison requires matching numeric operands");
 		Sys.println("PASS: impure calls invalidate nullable numeric field refinements");

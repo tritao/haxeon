@@ -1702,7 +1702,19 @@ class BodyTyper {
 		var field = new TypedExpression(TStaticField(owner, name), type, span),
 			path = FlowAnalysis.accessPath(field),
 			refined = path == null ? null : scope.resolveExpression(path);
-		return refined == null || sameType(type, refined) ? field : new TypedExpression(TCast(field), refined, span);
+		return refinedFieldValue(field, refined);
+	}
+
+	/** A proven-null field has a null value in its declared storage type, not an ABI cast to TNull. */
+	function refinedFieldValue(field:TypedExpression, refined:Null<CompilerType>):TypedExpression {
+		if (refined == TNull) switch field.type {
+			case TNullable(_):
+				return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, field.span)),
+					field.type, field.span, field.stableFlowValue);
+			default:
+		}
+		return refined == null || sameType(field.type, refined) ? field
+			: new TypedExpression(TCast(field), refined, field.span, field.stableFlowValue);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
@@ -1717,8 +1729,7 @@ class BodyTyper {
 		if (path == null)
 			return member;
 		var refined = scope.resolveExpression(path);
-		return refined == null
-			|| sameType(member.type, refined) ? member : new TypedExpression(TCast(member), refined, member.span, member.stableFlowValue);
+		return refinedFieldValue(member, refined);
 	}
 
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,
