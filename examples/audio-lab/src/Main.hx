@@ -89,6 +89,9 @@ class Main {
 				switch (value) {
 					case WindowClose(source) if (source.rawValue() == windowHandle.rawValue()):
 						running = false;
+					case WindowResize(source, width, height) if (source.rawValue() == windowHandle.rawValue()):
+						if (width > 0 && height > 0)
+							NativeKit.nk_surface_set_bounds_checked(nativeSurface, 0, 0, width, height);
 					case SurfaceResize(source, width, height, _, _) if (source.rawValue() == nativeSurface.rawValue()):
 						logicalWidth = width;
 						logicalHeight = height;
@@ -102,7 +105,8 @@ class Main {
 				try {
 					if (errorView != null) {
 						layoutFrame.setViewport(logicalWidth, logicalHeight);
-						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight, 1.0);
+						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+						framebufferWidth / logicalWidth);
 						context.submit(errorView, layoutFrame);
 						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
@@ -118,7 +122,8 @@ class Main {
 					lab.advance(deltaSeconds);
 					layoutFrame.setViewport(logicalWidth, logicalHeight);
 					layoutFrame.deltaSeconds = deltaSeconds;
-					frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight, 1.0);
+					frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+						framebufferWidth / logicalWidth);
 					context.submit(view, layoutFrame);
 					context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
 					if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
@@ -130,7 +135,8 @@ class Main {
 					errorView = new FrameworkErrorView(message, stage);
 					try {
 						layoutFrame.setViewport(logicalWidth, logicalHeight);
-						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight, 1.0);
+						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+						framebufferWidth / logicalWidth);
 						context.submit(errorView, layoutFrame);
 						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)

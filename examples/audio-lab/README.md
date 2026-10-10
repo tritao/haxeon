@@ -23,6 +23,11 @@ Run the Haxeon app from the Haxeon root with:
 ./examples/audio-lab/tools/test-audio-lab.sh --run
 ```
 
+The graphics surface follows window resizing and display scale. Synth controls
+scroll independently on wide windows; below 960 logical pixels the panels stack
+in one scrollable view. The keyboard occupies its own panel, and patch names
+and slider labels remain visible.
+
 The desktop app now plays its presets and tracker through a music bus with
 dynamics, plus sends to shared stereo reverb and ping-pong delay returns.
 The delay is synced to an eighth note at 120 BPM. The reverb wet slider controls

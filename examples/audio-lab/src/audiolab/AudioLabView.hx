@@ -59,7 +59,7 @@ class AudioLabView implements View {
 			case "tracker": buildTracker();
 			case "matrix": buildMatrix();
 			case "diagnostics": buildDiagnostics();
-			case _: buildSynth();
+			case _: buildSynth(context.viewportWidth);
 		};
 		return new Column("audio-lab-root", [
 			new KeyedView("header", buildHeader()),
@@ -71,6 +71,11 @@ class AudioLabView implements View {
 	function buildHeader():Row {
 		var style = rowStyle(52.0);
 		style.childAlignY = LayoutAlignmentY.Center;
+		style.childGap = 14.0;
+		style.height = LayoutAxis.fit();
+		style.padding = new Insets(0.0, 12.0, 0.0, 12.0);
+		style.wrapMode = LayoutWrapMode.Wrap;
+		style.rowGap = 6.0;
 		return new Row("header-row", [
 			new KeyedView("title", new Text("NATIVEKIT AUDIO LAB", null, white, null, TextRole.Heading)),
 			new KeyedView("subtitle", new Text("interactive DSP playground", null, muted, null, TextRole.Caption)),
@@ -96,17 +101,22 @@ class AudioLabView implements View {
 			children.push(new KeyedView(navItem.key, button));
 		}
 		var style = rowStyle(38.0);
+		style.height = LayoutAxis.fit();
+		style.wrapMode = LayoutWrapMode.Wrap;
+		style.rowGap = 6.0;
 		style.childGap = 6.0;
 		return new Row("navigation-row", children, style);
 	}
 
-	function buildSynth():View {
+	function buildSynth(viewportWidth:Float):View {
+		var compact = viewportWidth < 960.0;
 		var presetButtons:Array<KeyedView> = [];
 		for (id in AudioLabPreset.ids()) {
 			var selected = id;
 			var button = new Button(AudioLabPreset.label(selected), compactButtonStyle(), function() {
 				lab.selectPreset(selected);
-			});
+			}
+			);
 			button.selected = lab.preset == selected;
 			presetButtons.push(new KeyedView(AudioLabPreset.label(selected), button));
 		}
@@ -116,49 +126,248 @@ class AudioLabView implements View {
 		presetsStyle.wrapMode = LayoutWrapMode.Wrap;
 		presetsStyle.rowGap = 6.0;
 		presetsStyle.columnGap = 6.0;
-		var presetPanel = new Column("preset-panel", [
-			new KeyedView("preset-title", label("PATCH BROWSER")),
-			new KeyedView("preset-buttons", new Row("preset-buttons-row", presetButtons, presetsStyle))
-		], panelStyle());
+		var presetPanel = new Column(
+			"preset-panel",
+			[
+				new KeyedView("preset-title", label("PATCH BROWSER")),
+				new KeyedView(
+					"preset-buttons",
+					new Row(
+						"preset-buttons-row",
+						presetButtons,
+						presetsStyle
+					)
+				)
+			],
+			panelStyle()
+		);
 
-		var cutoff = new Slider("filter-cutoff", "Filter cutoff", lab.filterCutoff,
-			80.0, 18000.0, 10.0, function(value) lab.setFilterCutoff(value), sliderStyle());
-		var controlPanel = new Column("synth-controls", [
-			new KeyedView("section", title("SYNTH PLAYGROUND")),
-			new KeyedView("description", caption("Every control reaches the NativeKit DSP event path.")),
-			new KeyedView("presets", presetPanel),
-			new KeyedView("cutoff", cutoff),
-			new KeyedView("playback-status", caption(lab.playbackStatus)),
-			new KeyedView("reverb-wet", new Slider("reverb-wet", "Reverb wet", lab.reverbWet,
-				0.0, 1.0, 0.01, function(value) lab.setReverbWet(value), sliderStyle())),
-			new KeyedView("reverb-decay", new Slider("reverb-decay", "Reverb decay (s)", lab.reverbDecay,
-				0.1, 10.0, 0.1, function(value) lab.setReverbDecay(value), sliderStyle())),
-			new KeyedView("compression-ratio", new Slider("compression-ratio", "Compression ratio", lab.compressionRatio,
-				1.0, 10.0, 0.1, function(value) lab.setCompressionRatio(value), sliderStyle())),
-			new KeyedView("cutoff-value", label('cutoff ${Std.int(lab.filterCutoff)} Hz')),
-			new KeyedView("voices", label('voices ${lab.activeVoices}  •  events ${lab.eventCount}')),
-			new KeyedView("piano-label", label("VIRTUAL PIANO")),
-			new KeyedView("piano", buildPiano())
-		], panelStyle(312.0));
+		var cutoff = new Slider(
+			"filter-cutoff",
+			"Filter cutoff",
+			lab.filterCutoff,
+			80.0,
+			18000.0,
+			10.0,
+			function(value) lab.setFilterCutoff(value),
+			sliderStyle()
+		);
+		var controlPanel = new Column(
+			"synth-controls",
+			[
+				new KeyedView("section", title("SYNTH PLAYGROUND")),
+				new KeyedView(
+					"description",
+					caption("Every control reaches the NativeKit DSP event path.")
+				),
+				new KeyedView(
+					"presets",
+					presetPanel
+				),
+				new KeyedView(
+					"cutoff",
+					labeledControl(
+						"Filter cutoff",
+						Std.int(lab.filterCutoff) + " Hz",
+						cutoff
+					)
+				),
+				new KeyedView(
+					"playback-status",
+					caption(lab.playbackStatus)
+				),
+				new KeyedView(
+					"reverb-wet",
+					labeledControl(
+						"Room send",
+						format(lab.reverbWet),
+						new Slider(
+							"reverb-wet",
+							"Reverb wet",
+							lab.reverbWet,
+							0.0,
+							1.0,
+							0.01,
+							function(value) lab.setReverbWet(value),
+							sliderStyle()
+						)
+					)
+				),
+				new KeyedView(
+					"reverb-decay",
+					labeledControl(
+						"Reverb decay",
+						format(lab.reverbDecay) + " s",
+						new Slider(
+							"reverb-decay",
+							"Reverb decay (s)",
+							lab.reverbDecay,
+							0.1,
+							10.0,
+							0.1,
+							function(value) lab.setReverbDecay(value),
+							sliderStyle()
+						)
+					)
+				),
+				new KeyedView(
+					"compression-ratio",
+					labeledControl(
+						"Compression ratio",
+						format(lab.compressionRatio) + ":1",
+						new Slider(
+							"compression-ratio",
+							"Compression ratio",
+							lab.compressionRatio,
+							1.0,
+							10.0,
+							0.1,
+							function(value) lab.setCompressionRatio(value),
+							sliderStyle()
+						)
+					)
+				),
+				new KeyedView(
+					"voices",
+					label('voices ${lab.activeVoices}  •  events ${lab.eventCount}')
+				)
+			],
+			panelStyle(compact ? null : 400.0)
+		);
 
-		var monitorPanel = new Column("monitor-panel", [
-			new KeyedView("monitor-title", title("SIGNAL MONITOR")),
-			new KeyedView("monitor-subtitle", caption('preset ${AudioLabPreset.label(lab.preset)}  •  48 kHz stereo')),
-			new KeyedView("scope", buildScope()),
-			new KeyedView("meter", buildMeter()),
-			new KeyedView("monitor-stats", label('peak ${format(lab.peak)}   rms ${format(lab.rms)}   render ${format(lab.renderMilliseconds)} ms')),
-			new KeyedView("routes-title", label("ACTIVE ROUTES")),
-			new KeyedView("routes", buildRouteSummary())
-		], panelStyle());
+		var monitorPanel = new Column(
+			"monitor-panel",
+			[
+				new KeyedView("monitor-title", title("SIGNAL MONITOR")),
+				new KeyedView(
+					"monitor-subtitle",
+					caption('preset ${AudioLabPreset.label(lab.preset)}  •  48 kHz stereo')
+				),
+				new KeyedView(
+					"scope",
+					buildScope()
+				),
+				new KeyedView(
+					"meter",
+					buildMeter()
+				),
+				new KeyedView(
+					"monitor-stats",
+					label('peak ${format(lab.peak)}   rms ${format(lab.rms)}   render ${format(lab.renderMilliseconds)} ms')
+				),
+				new KeyedView(
+					"routes-title",
+					label("ACTIVE ROUTES")
+				),
+				new KeyedView(
+					"routes",
+					buildRouteSummary()
+				)
+			],
+			panelStyle()
+		);
 
+		var keyboard = new Column(
+			"keyboard-panel",
+			[
+				new KeyedView("piano-label", label("VIRTUAL PIANO")),
+				new KeyedView(
+					"piano-hint",
+					caption("Click a note to audition the active patch.")
+				),
+				new KeyedView(
+					"piano",
+					buildPiano()
+				)
+			],
+			panelStyle()
+		);
+		if (compact) {
+			return new ScrollView(
+				"synth-scroll",
+				new Column(
+					"synth-stack",
+					[
+						new KeyedView("controls", controlPanel),
+						new KeyedView(
+							"monitor",
+							monitorPanel
+						),
+						new KeyedView(
+							"keyboard",
+							keyboard
+						)
+					],
+					fitColumnStyle()
+				),
+				scrollStyle(),
+				ScrollAxis.Vertical
+			);
+		}
 		var bodyStyle = new LayoutStyle();
 		bodyStyle.width = LayoutAxis.grow();
 		bodyStyle.height = LayoutAxis.grow();
 		bodyStyle.childGap = 14.0;
-		return new Row("synth-body", [
-			new KeyedView("controls", controlPanel),
-			new KeyedView("monitor", monitorPanel)
-		], bodyStyle);
+		var controlsStyle = scrollStyle();
+		controlsStyle.width = LayoutAxis.fixed(400.0);
+		monitorPanel.style.height = LayoutAxis.grow();
+		var screenStyle = fitColumnStyle();
+		screenStyle.height = LayoutAxis.grow();
+		screenStyle.childGap = 14.0;
+		return new Column(
+			"synth-screen",
+			[
+				new KeyedView(
+					"body",
+					new Row(
+						"synth-body",
+						[
+							new KeyedView(
+								"controls",
+								new ScrollView(
+									"controls-scroll",
+									controlPanel,
+									controlsStyle,
+									ScrollAxis.Vertical
+								)
+							),
+							new KeyedView(
+								"monitor",
+								monitorPanel
+							)
+						],
+						bodyStyle
+					)
+				),
+				new KeyedView(
+					"keyboard",
+					keyboard
+				)
+			],
+			screenStyle
+		);
+	}
+
+	function scrollStyle():LayoutStyle {
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.grow();
+		style.height = LayoutAxis.grow();
+		style.clipVertical = true;
+		return style;
+	}
+
+	function labeledControl(name:String, value:String, control:View):Column {
+		return new Column(
+			"control-" + name,
+			[
+				new KeyedView("label", label(name + "  ·  " + value)),
+				new KeyedView(
+					"slider",
+					control
+				)
+			],
+			fitColumnStyle()
+		);
 	}
 
 	function buildPiano():Row {
@@ -166,15 +375,16 @@ class AudioLabView implements View {
 		var keys:Array<KeyedView> = [];
 		for (note in notes) {
 			var selectedNote = note;
-			var button = new Button(noteName(note), pianoStyle(), function() lab.noteOn(selectedNote),
-				"piano-" + note);
+			var button = new Button(noteName(note), pianoStyle(), function() lab.noteOn(selectedNote), "piano-" + note);
 			button.classes.push(isBlackKey(note) ? "black-key" : "white-key");
 			keys.push(new KeyedView("key-" + note, button));
 		}
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
-		style.height = LayoutAxis.fixed(52.0);
-		style.childGap = 2.0;
+		style.height = LayoutAxis.fit();
+		style.wrapMode = LayoutWrapMode.Wrap;
+		style.rowGap = 4.0;
+		style.childGap = 4.0;
 		return new Row("piano-row", keys, style);
 	}
 
@@ -360,10 +570,10 @@ class AudioLabView implements View {
 	}
 
 	function navButtonStyle():LayoutStyle
-		return fixedStyle(156.0, 36.0);
+		return fixedStyle(180.0, 36.0);
 
 	function compactButtonStyle():LayoutStyle
-		return fixedStyle(112.0, 30.0);
+		return fixedStyle(160.0, 30.0);
 
 	function trackerCellStyle():LayoutStyle
 		return fixedStyle(112.0, 26.0);
