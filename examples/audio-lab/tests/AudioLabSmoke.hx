@@ -26,8 +26,23 @@ class AudioLabSmoke {
 				throw "Audio Lab preset did not produce signal: " + AudioLabPreset.label(id);
 		}
 
+		// Bursts before a render boundary and overlapping release tails must
+		// reuse bounded voice slots rather than exhaust native polyphony.
+		lab.selectPreset(AudioLabPreset.Pad);
+		for (_ in 0...3) {
+			for (note in 0...128) lab.noteOn(48 + note % 24, 0.5);
+			if (lab.activeVoices != AudioLabEngine.MAX_VOICES)
+				throw "Audio Lab burst exceeded bounded polyphony";
+			lab.advance(0.03);
+		}
+		// DaisySP release is an exponential time constant, not time to silence.
+		for (_ in 0...1000) lab.advance(0.01);
+		if (lab.activeVoices != 0 || lab.peak > 0.001)
+			throw "Audio Lab replacement voices did not release: active=" + lab.activeVoices + " peak=" + lab.peak + " frame=" + lab.frame;
+
 		lab.toggleTracker();
 		lab.advance(0.25);
+		for (_ in 0...2000) lab.advance(0.01);
 		if (!lab.trackerPlaying || lab.trackerStep == 0)
 			throw "Audio Lab tracker clock did not advance";
 		lab.dispose();

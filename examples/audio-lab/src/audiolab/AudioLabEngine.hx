@@ -43,6 +43,7 @@ class AudioLabEngine {
 	public static inline var SAMPLE_RATE:Int = 48000;
 	public static inline var BLOCK_SIZE:Int = 256;
 	public static inline var CHANNELS:Int = 2;
+	public static inline var MAX_VOICES:Int = 32;
 
 	public final dsp:DspEngine;
 	public var patch(default, null):DspPatch;
@@ -91,7 +92,7 @@ class AudioLabEngine {
 		options.sampleRate = SAMPLE_RATE;
 		options.channels = CHANNELS;
 		options.blockSize = BLOCK_SIZE;
-		options.maxVoices = 32;
+		options.maxVoices = MAX_VOICES;
 		dsp = DspEngine.create(options);
 		target = new DspRenderTarget(BLOCK_SIZE, CHANNELS);
 		for (_ in 0...64)
@@ -173,7 +174,22 @@ class AudioLabEngine {
 
 	/** Queues a short piano note; the actual NOTE_ON is applied at a render boundary. */
 	public function noteOn(note:Int, velocity:Float = 0.9):Void {
-		var voiceId = nextVoiceId++;
+		// Reuse a bounded pool, including voices still in their release tail.
+		// Retriggering an existing native voice replaces it without exceeding
+		// polyphony. Cancel its old pending start/release so neither can affect
+		// the replacement note later in the block.
+		var voiceId = nextVoiceId;
+		nextVoiceId = nextVoiceId % MAX_VOICES + 1;
+		var index = pendingNotes.length;
+		while (index > 0) {
+			index--;
+			if (pendingNotes[index].voiceId == voiceId) pendingNotes.splice(index, 1);
+		}
+		index = active.length;
+		while (index > 0) {
+			index--;
+			if (active[index].voiceId == voiceId) active.splice(index, 1);
+		}
 		pendingNotes.push(new PendingNote(voiceId, note, clamp(velocity, 0.0, 1.0)));
 		active.push(new ActiveVoice(voiceId, frame + Std.int(SAMPLE_RATE * 0.42)));
 		activeVoices = active.length;
@@ -250,7 +266,7 @@ class AudioLabEngine {
 
 		var survivors:Array<ActiveVoice> = [];
 		for (voice in active) {
-			if (voice.releaseFrame <= frame + BLOCK_SIZE) {
+			if (voice.releaseFrame < frame + BLOCK_SIZE) {
 				var offset = Std.int(Math.max(0, voice.releaseFrame - frame));
 				events.push(DspEvent.noteOff(voice.voiceId, offset));
 				if (liveDsp != null) liveEvents.push(DspEvent.noteOff(voice.voiceId, offset));

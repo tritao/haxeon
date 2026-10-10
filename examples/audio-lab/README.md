@@ -35,6 +35,9 @@ the room send level; decay and compression-ratio sliders control their processor
 oscilloscope, meters, and diagnostics; these do not show the processed output.
 If the audio device cannot initialize, the app reports the failure and keeps
 its offline preview available. Smoke tests use offline rendering by default.
+Piano and tracker input share a bounded 32-slot voice pool. On overflow the
+oldest slot is retriggered, including release tails, and its old pending release
+is cancelled. Rapid input and sustained tracker playback therefore keep running.
 Live events are submitted in chronological blocks with a 100 ms lookahead.
 
 The example namespace is `audiolab`. Its managed dependencies are

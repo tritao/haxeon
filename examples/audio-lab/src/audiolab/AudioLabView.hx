@@ -461,11 +461,16 @@ class AudioLabView implements View {
 		scrollStyle.width = LayoutAxis.grow();
 		scrollStyle.height = LayoutAxis.grow();
 		scrollStyle.clipVertical = true;
+		var toolbarStyle = rowStyle(38.0);
+		toolbarStyle.height = LayoutAxis.fit();
+		toolbarStyle.childGap = 14.0;
+		toolbarStyle.wrapMode = LayoutWrapMode.Wrap;
+		toolbarStyle.rowGap = 8.0;
 		var toolbar = new Row("tracker-toolbar", [
 			new KeyedView("play", new Button(lab.trackerPlaying ? "Stop" : "Play 16-step pattern",
-				compactButtonStyle(), function() lab.toggleTracker(), "tracker-play")),
+				fixedStyle(190.0, 36.0), function() lab.toggleTracker(), "tracker-play")),
 			new KeyedView("tempo", label("120 BPM  •  16th-note clock  •  sample-accurate note events"))
-		], rowStyle(38.0));
+		], toolbarStyle);
 		return new Column("tracker-screen", [
 			new KeyedView("title", title("TRACKER / SEQUENCER")),
 			new KeyedView("description", caption("The grid drives the same DspEngine as the piano.")),
