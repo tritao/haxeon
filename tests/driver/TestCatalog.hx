@@ -72,6 +72,7 @@ class TestCatalog {
 		"LoopArrayEffectsMain",
 		"PrimitiveStringEffectsMain",
 		"PrimitiveMapEffectsMain",
+		"FieldAssignmentContextMain",
 		"NullArrayContextMain",
 		"DiagnosticLocationMain",
 		"BindingAnalysisMain",

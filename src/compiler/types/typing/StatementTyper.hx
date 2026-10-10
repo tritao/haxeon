@@ -500,10 +500,9 @@ class StatementTyper {
 
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope):TypedStatement {
-		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false)),
-			value = typeExpression(expression, scope, null, false);
+		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false));
 		if (sameType(object.type, TDynamic))
-			return dynamicFieldStore(object, fieldName, value, span);
+			return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		return switch object.expression {
@@ -511,15 +510,15 @@ class StatementTyper {
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
-				var assignedType = value.type;
-				value = coerce(value, staticField.type, 'field "$fieldName"', "E1002");
-				refineStaticStore(scope, staticField.owner, fieldName, assignedType, staticField.type);
+				var assignedValue = typeExpression(expression, scope, staticField.type, false),
+					value = coerce(assignedValue, staticField.type, 'field "$fieldName"', "E1002");
+				refineStaticStore(scope, staticField.owner, fieldName, assignedValue.type, staticField.type);
 				TStaticFieldAssign(staticField.owner, fieldName, value, span);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
-					expected = assignmentRules.fieldType(object.type, fieldName, span);
-				var assignedValue = value;
-				value = coerce(value, expected, 'field "$fieldName"', "E1002");
+					expected = assignmentRules.fieldType(object.type, fieldName, span),
+					assignedValue = typeExpression(expression, scope, expected, false),
+					value = coerce(assignedValue, expected, 'field "$fieldName"', "E1002");
 				var setter:Null<String> = platformField == null ? null : platformField.set;
 				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
 					var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
