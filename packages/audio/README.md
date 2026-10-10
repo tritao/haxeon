@@ -41,7 +41,8 @@ Live synthesis can route through `DspEngine.setBus()` into the mixer graph.
 through `haxeon.audio.EffectParameter`, with smoothed parameter changes, reset,
 and latency/tail queries. Signalsmith Basics is pinned from the
 [`tritao/signalsmith-basics`](https://github.com/tritao/signalsmith-basics) fork;
-DaisySP is unchanged. See the native guide for parameter ranges and routing.
+The DaisySP checkout stays pinned; NativeKit keeps small safety adaptations behind
+its private backend. See the native guide for parameter ranges and routing.
 
 `Bus.addSend(returnBus, gain)` routes a post-fader contribution to a shared
 return, with up to eight sends per source and routing-cycle checks. Use wet-only
@@ -51,3 +52,37 @@ and ping-pong feedback through `EffectParameter` and
 `BusEffect.setDelayTempo(bpm, quarterNoteBeats)`. Its maximum delay is four seconds.
 The miniaudio dependency is pinned to `tritao/miniaudio`'s `nativekit` branch,
 based on upstream `dev`, with graph-clock synchronization fixes and regression tests.
+
+## Specialized DaisySP sources
+
+Set `DspPatchBuilder.source` to `new DspSourceOptions(DspSourceKind.Fm2)` or
+another `DspSourceKind`. The 24 generators include physical strings and modal
+voices, five drums, formant and spectral oscillators, noise textures, and granular
+playback. They share the existing patch envelope, filter, modulation, mixer
+routing, and score note lifecycle.
+
+```haxe
+var builder = new DspPatchBuilder();
+builder.source = new DspSourceOptions(DspSourceKind.Fm2)
+    .set(DspSourceParameter.Ratio, 3)
+    .set(DspSourceParameter.Index, 7);
+var patch = builder.build();
+```
+
+`set()` rejects unsupported controls and invalid domains before building.
+`Sustain` is 0/1 on drums, StringVoice and ModalVoice; `SyncEnabled` is 0/1 on
+VariableShape. Resonator resolution uses groups of four modes. `spectrum()`
+normalizes seven bank registrations or sixteen harmonic weights.
+
+Source-specific settings are immutable per patch; existing gain, envelope,
+noise, filter, oscillator level/detune, and compatible modulation routes remain
+available. Replacement sources require the builder's single default oscillator
+slot and use its level/detune. KarplusString and Resonator accept the oscillator
+and noise graph as excitation. Sources with their own decay may fall silent
+while an ADSR gate is held; use Sustain where available for held tones.
+
+Granular playback copies finite mono PCM from `source.samples` when building a
+patch. Supply PCM at the engine sample rate, set `RootNote` to its original MIDI
+pitch, and choose `Speed` and `GrainMs`. Destroying the patch or replacing the
+caller’s sample array does not invalidate an existing instrument. This is PCM
+granulation; SoundFont/SF2 loading is a separate feature.

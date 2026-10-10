@@ -93,6 +93,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Generic patch modulation sources and destinations.
 		 */
 		NK_AUDIO_DSP_CAPABILITY_MODULATION = 256;
+		/**
+		 * Specialized physical, percussion, spectral, noise and granular generators.
+		 */
+		NK_AUDIO_DSP_CAPABILITY_SPECIALIZED_SOURCE = 512;
 	}
 	/**
 	 * Events applied at exact sample offsets while rendering a block.
@@ -217,6 +221,75 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Per-source normalized phase offset in the inclusive range [0, 1].
 		 */
 		NK_AUDIO_DSP_PARAMETER_OSCILLATOR_PHASE = 12;
+	}
+	/**
+	 * Specialized DaisySP generator. Existing patches keep the oscillator graph.
+	 */
+	enum nk_audio_dsp_source_kind : u32 {
+		NK_AUDIO_DSP_SOURCE_FM2 = 1;
+		NK_AUDIO_DSP_SOURCE_STRING_VOICE = 2;
+		NK_AUDIO_DSP_SOURCE_KARPLUS_STRING = 3;
+		NK_AUDIO_DSP_SOURCE_MODAL_VOICE = 4;
+		NK_AUDIO_DSP_SOURCE_RESONATOR = 5;
+		NK_AUDIO_DSP_SOURCE_DRIP = 6;
+		NK_AUDIO_DSP_SOURCE_ANALOG_BASS_DRUM = 7;
+		NK_AUDIO_DSP_SOURCE_SYNTHETIC_BASS_DRUM = 8;
+		NK_AUDIO_DSP_SOURCE_ANALOG_SNARE_DRUM = 9;
+		NK_AUDIO_DSP_SOURCE_SYNTHETIC_SNARE_DRUM = 10;
+		NK_AUDIO_DSP_SOURCE_HI_HAT = 11;
+		NK_AUDIO_DSP_SOURCE_FORMANT = 12;
+		NK_AUDIO_DSP_SOURCE_VOSIM = 13;
+		NK_AUDIO_DSP_SOURCE_ZOSC = 14;
+		NK_AUDIO_DSP_SOURCE_VARIABLE_SAW = 15;
+		NK_AUDIO_DSP_SOURCE_VARIABLE_SHAPE = 16;
+		NK_AUDIO_DSP_SOURCE_OSCILLATOR_BANK = 17;
+		NK_AUDIO_DSP_SOURCE_HARMONIC = 18;
+		NK_AUDIO_DSP_SOURCE_GRAINLET = 19;
+		NK_AUDIO_DSP_SOURCE_PARTICLE = 20;
+		NK_AUDIO_DSP_SOURCE_DUST = 21;
+		NK_AUDIO_DSP_SOURCE_CLOCKED_NOISE = 22;
+		NK_AUDIO_DSP_SOURCE_FRACTAL_NOISE = 23;
+		NK_AUDIO_DSP_SOURCE_GRANULAR = 24;
+	}
+	enum nk_audio_dsp_source_parameter : u32 {
+		NK_AUDIO_DSP_SOURCE_PARAMETER_RATIO = 0;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_INDEX = 1;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_ACCENT = 2;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_STRUCTURE = 3;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_BRIGHTNESS = 4;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_DAMPING = 5;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_NONLINEARITY = 6;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_POSITION = 7;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_RESOLUTION = 8;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_DETTACK = 9;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_TONE = 10;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_DECAY = 11;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_ATTACK_FM = 12;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SELF_FM = 13;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_DIRTINESS = 14;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_FM_AMOUNT = 15;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_FM_DECAY = 16;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SNAPPY = 17;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_NOISINESS = 18;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_FORMANT_RATIO = 19;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_PHASE_SHIFT = 20;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SECOND_FORMANT_RATIO = 21;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SHAPE = 22;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_MODE = 23;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_PULSE_WIDTH = 24;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SYNC_RATIO = 25;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_FIRST_HARMONIC = 26;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_BLEED = 27;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_RESONANCE = 28;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_RANDOM_RATE = 29;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_DENSITY = 30;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SPREAD = 31;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_COLOR = 32;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SPEED = 33;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_ROOT_NOTE = 34;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_GRAIN_MS = 35;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SUSTAIN = 36;
+		NK_AUDIO_DSP_SOURCE_PARAMETER_SYNC_ENABLED = 37;
 	}
 	/**
 	 * Built-in pitched oscillator shapes.
@@ -655,8 +728,9 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_bus_effect_set_position(effect: nk_audio_bus_effect, position: u32) -> nk_result;
 	/**
-	 * Fades the bus between linear gains over a duration in PCM frames. The
-	 * starting volume may be NK_AUDIO_VOLUME_CURRENT.
+	 * Fades the bus between absolute linear gains over a duration in PCM frames. The
+	 * starting volume may be NK_AUDIO_VOLUME_CURRENT. The configured gain becomes
+	 * the target gain; set_volume cancels any active fade.
 	 */
 	extern fn nk_audio_bus_fade(bus: nk_audio_bus, volume_begin: f32, volume_end: f32, duration_pcm_frames: u64) -> nk_result;
 	/**
@@ -801,11 +875,13 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_device_stop() -> nk_result;
 	/**
-	 * Routes one DSP renderer into the process-wide playback device output.
+	 * Routes a DSP renderer into the process-wide playback device output.
+	 * Multiple renderers may attach independently; repeated attachment is idempotent.
 	 */
 	extern fn nk_audio_dsp_engine_attach_device(engine: nk_audio_dsp_engine) -> nk_result;
 	/**
-	 * Discards queued events and requests a voice reset at the next audio block.
+	 * Invalidates queued events and requests a voice reset on the audio consumer.
+	 * Attached queue slots become reusable when the consumer next drains them.
 	 */
 	extern fn nk_audio_dsp_engine_clear_schedule(engine: nk_audio_dsp_engine) -> nk_result;
 	/**
@@ -840,7 +916,8 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_engine_render_buffer(engine: nk_audio_dsp_engine, samples: ptr<void> @in_array("sample_bytes"), sample_bytes: u64, frame_count: u32, channels: u32, events: ptr<const<nk_audio_dsp_event>> @in_array("event_count"), event_count: u32) -> nk_result;
 	/**
-	 * Restores instruments and voices to their creation state.
+	 * Restores instruments and voices to their creation state. Detach before calling;
+	 * use clear_schedule to reset voices during live playback.
 	 */
 	extern fn nk_audio_dsp_engine_reset(engine: nk_audio_dsp_engine) -> nk_result;
 	/**
@@ -888,9 +965,27 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_patch_create(options: ptr<const<nk_audio_dsp_patch_options>>, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
 	/**
+	 * Copies mono PCM at the engine sample rate for Granular; all other sources require zero samples.
+	 * Samples are finite in [-1,1], between 2 and 1048576 frames. Note pitch is relative to RootNote.
+	 * Specialized sources replace oscillator output except KarplusString/Resonator, which process it.
+	 * Replacement sources require one neutral oscillator slot (SINE, no wavetable or phase).
+	 * Its level and detune control the generator. Pitch/level routes target oscillator 1;
+	 * oscillator operator and phase routes are rejected. Noise remains additive.
+	 * Resonator resolution is a multiple of four; harmonic index and root note are integers.
+	 */
+	extern fn nk_audio_dsp_patch_create_source(options: ptr<const<nk_audio_dsp_patch_options>>, source: ptr<const<nk_audio_dsp_source_options>>, samples: ptr<const<f32>> @in_array("sample_count"), sample_count: u32, out_patch: ptr<nk_audio_dsp_patch> @out @owned) -> nk_result;
+	/**
 	 * Destroys a patch definition; instruments created from it retain their copy.
 	 */
 	extern fn nk_audio_dsp_patch_destroy(patch: nk_audio_dsp_patch) -> nk_result;
+	/**
+	 * Initializes all fields, including struct_size.
+	 */
+	extern fn nk_audio_dsp_source_defaults(kind: nk_audio_dsp_source_kind, out_options: ptr<nk_audio_dsp_source_options> @out) -> nk_result;
+	/**
+	 * Returns domains for supported controls; unsupported controls return INVALID_ARGUMENT.
+	 */
+	extern fn nk_audio_dsp_source_parameter_info(kind: nk_audio_dsp_source_kind, parameter: nk_audio_dsp_source_parameter, out_minimum: ptr<f32> @out, out_maximum: ptr<f32> @out, out_default: ptr<f32> @out) -> nk_result;
 	/**
 	 * Creates an immutable, periodic wavetable from one source cycle. The source
 	 * length must be a power of two in the inclusive range [32, 4096]. NativeKit
@@ -1705,6 +1800,17 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Number of float elements available at samples.
 		 */
 		sample_count: u64 @offset(24);
+	}
+	/**
+	 * Values use source-specific domains; obtain defaults before editing.
+	 * Spectral amplitudes are nonnegative and must sum to one (7 for bank, 16 for harmonic).
+	 * Other sources require zero amplitudes. Source configuration is immutable.
+	 */
+	struct nk_audio_dsp_source_options @layout(224, 4) {
+		struct_size: u32 @offset(0);
+		kind: nk_audio_dsp_source_kind @offset(4);
+		values: array<f32, 38> @offset(8);
+		amplitudes: array<f32, 16> @offset(160);
 	}
 	/**
 	 * Three-dimensional audio coordinate in the right-handed OpenGL convention.

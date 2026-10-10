@@ -12,6 +12,8 @@ class DspPatchBuilder {
 	public var filter:DspFilterOptions = new DspFilterOptions();
 	public var lfo:DspLfoOptions = new DspLfoOptions();
 	public var gain:Float = 1.0;
+	/** Optional specialized generator, sharing this patch envelope and filter. */
+	public var source:Null<DspSourceOptions>;
 	public final routes:Array<DspModulationRoute> = [];
 
 	public function new() {}
@@ -73,6 +75,11 @@ class DspPatchBuilder {
 		for (index in 0...routes.length)
 			options.set_routes(index, routes[index].nativeValue());
 		options.set_route_count(routes.length);
+		if (source != null) {
+			var made = NativeKitAudio.nk_audio_dsp_patch_create_source(options,source.nativeValue(),source.samples);
+			AudioResult.check(made.status, "audio.dsp.patch.buildSource");
+			return new DspPatch(made.out_patch);
+		}
 		var made = NativeKitAudio.nk_audio_dsp_patch_create(options);
 		AudioResult.check(made.status, "audio.dsp.patch.build");
 		return new DspPatch(made.out_patch);

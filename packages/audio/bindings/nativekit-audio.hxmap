@@ -18,7 +18,9 @@
     "nk_audio_dsp_modulation_polarity": "DspModulationPolarity",
     "nk_audio_dsp_modulation_source": "DspModulationSource",
     "nk_audio_dsp_parameter": "DspParameter",
-    "nk_audio_dsp_waveform": "DspWaveform"
+    "nk_audio_dsp_waveform": "DspWaveform",
+    "nk_audio_dsp_source_kind": "DspSourceKind",
+    "nk_audio_dsp_source_parameter": "DspSourceParameter"
   },
   "enumValuePrefixes": [
     "NK_AUDIO_VOICE_"
@@ -51,7 +53,8 @@
     "nk_audio_dsp_patch_options": "NativeDspPatchOptions",
     "nk_audio_dsp_render_target": "NativeDspRenderTarget",
     "nk_audio_dsp_event": "NativeDspEvent",
-    "nk_audio_bus_send": "BusSendHandle"
+    "nk_audio_bus_send": "BusSendHandle",
+    "nk_audio_dsp_source_options": "NativeDspSourceOptions"
   },
   "package": "nativekit.ffi",
   "modules": {
