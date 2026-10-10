@@ -145,16 +145,18 @@ class Scope {
 					expressionKeys.set(key, true);
 		for (key in expressionKeys.keys()) {
 			var merged = scopes[0].facts.resolve(key),
-				consistent = merged != null;
+				consistent = merged != null,
+				stable = scopes[0].facts.isStable(key);
 			for (index in 1...scopes.length) {
 				var candidate = scopes[index].facts.resolve(key);
 				if (candidate == null || merged == null || !TypeRelations.equals(merged, candidate)) {
 					consistent = false;
 					break;
 				}
+				stable = stable && scopes[index].facts.isStable(key);
 			}
 			if (consistent)
-				facts.refine(key, merged);
+				facts.refine(key, merged, stable);
 			else
 				facts.invalidate(key);
 		}

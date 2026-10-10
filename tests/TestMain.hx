@@ -1481,6 +1481,13 @@ class TestMain {
 		if (new IrInterpreter(knownNullFields).run("main") != 42)
 			throw "Known-null instance, static and record fields must retain their nullable ABI and invalidate on mutation";
 		Sys.println("PASS: known-null field reads preserve nullable storage without casts to Void");
+		var finalFieldFlow = Frontend.compile(File.getContent("tests/programs/final-field-branch-flow.hx"));
+		if (new IrInterpreter(finalFieldFlow).run("main") != 42)
+			throw "Final-field facts must survive continuing branch joins and later calls";
+		Sys.println("PASS: final-field facts preserve stability across guards, if, switch and loop joins");
+		expectCompileError('class Part { public var value:Int = 7; public function new() {} } class Machine { public var part:Null<Part>; var count:Int = 0; public function new() part = new Part(); function change():Void part = null; public function check(flag:Bool):Int { if (part == null) return 0; if (flag) count++ else count += 2; change(); return part.value; } } function main():Int return new Machine().check(true);',
+			'Field "value" requires an object');
+		Sys.println("PASS: branch joins do not promote mutable-field facts to call-stable facts");
 		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower) || limits.lower < 0); function main():Int return valid({lower: 1.0}) ? 1 : 0;',
 			"Comparison requires matching numeric operands");
 		Sys.println("PASS: impure calls invalidate nullable numeric field refinements");

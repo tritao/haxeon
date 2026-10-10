@@ -101,6 +101,20 @@ class FlowFacts {
 		return parent == null ? null : parent.resolveStable(bindingId);
 	}
 
+	/** Whether the visible fact survives calls, including facts inherited through a branch. */
+	public function isStable(bindingId:String):Bool {
+		if (resolve(bindingId) == null || refinedTypes.exists(bindingId))
+			return false;
+		if (stableRefinedTypes.exists(bindingId))
+			return true;
+		for (prefix in invalidatedNamespaces)
+			if (StringTools.startsWith(bindingId, prefix))
+				return parent != null && parent.resolveStable(bindingId) != null;
+		if (mentionsInvalidatedField(bindingId))
+			return parent != null && parent.resolveStable(bindingId) != null;
+		return parent != null && parent.isStable(bindingId);
+	}
+
 	public function invalidatePrefix(prefix:String):Void {
 		for (bindingId in refinedTypes.keys())
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
