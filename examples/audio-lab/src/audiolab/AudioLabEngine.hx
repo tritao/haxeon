@@ -4,6 +4,7 @@ import haxe.io.Bytes;
 import haxeon.audio.DspEngine;
 import haxeon.audio.Bus;
 import haxeon.audio.BusEffect;
+import haxeon.audio.BusSend;
 import haxeon.audio.DeviceOptions;
 import haxeon.audio.Mixer;
 import nativekit.ffi.NativeKitAudioTypes.EffectParameter;
@@ -66,6 +67,10 @@ class AudioLabEngine {
 	var liveDsp:Null<DspEngine> = null;
 	var liveInstrument:Null<DspInstrument> = null;
 	var musicBus:Null<Bus> = null;
+	var roomBus:Null<Bus> = null;
+	var delayBus:Null<Bus> = null;
+	var roomSend:Null<BusSend> = null;
+	var stereoDelay:Null<BusEffect> = null;
 	var reverb:Null<BusEffect> = null;
 	var dynamics:Null<BusEffect> = null;
 	var nextLiveFrame:haxe.Int64 = haxe.Int64.ofInt(0);
@@ -99,8 +104,18 @@ class AudioLabEngine {
 				Mixer.configureDevice(device);
 				musicBus = Bus.create();
 				musicBus.setVolume(0.35);
-				reverb = musicBus.addReverb();
-				reverb.setParameter(EffectParameter.Wet, reverbWet);
+				roomBus = Bus.create();
+				reverb = roomBus.addReverb();
+				reverb.setParameter(EffectParameter.Dry, 0.0);
+				reverb.setParameter(EffectParameter.Wet, 1.0);
+				roomSend = musicBus.addSend(roomBus, reverbWet);
+				delayBus = Bus.create();
+				stereoDelay = delayBus.addStereoDelay();
+				stereoDelay.setParameter(EffectParameter.Dry, 0.0);
+				stereoDelay.setParameter(EffectParameter.Wet, 1.0);
+				stereoDelay.setParameter(EffectParameter.PingPong, 1.0);
+				stereoDelay.setDelayTempo(120.0, 0.5);
+				musicBus.addSend(delayBus, 0.1);
 				dynamics = musicBus.addDynamics();
 				liveDsp = DspEngine.create(options);
 				playbackStatus = "Live playback • monitor shows dry synth";
@@ -108,7 +123,13 @@ class AudioLabEngine {
 				if (liveDsp != null) liveDsp.dispose();
 				liveDsp = null;
 				if (musicBus != null) musicBus.dispose();
+				if (roomBus != null) roomBus.dispose();
+				if (delayBus != null) delayBus.dispose();
 				musicBus = null;
+				roomBus = null;
+				delayBus = null;
+				roomSend = null;
+				stereoDelay = null;
 				reverb = null;
 				dynamics = null;
 				playbackStatus = "Playback unavailable: " + Std.string(error);
@@ -135,6 +156,7 @@ class AudioLabEngine {
 			liveDsp.setBus(musicBus);
 			nextLiveFrame = haxe.Int64.add(Mixer.timeFrames(), haxe.Int64.ofInt(LOOKAHEAD));
 			if (reverb != null) reverb.reset();
+			if (stereoDelay != null) stereoDelay.reset();
 		}
 		patch.dispose();
 		preset = next;
@@ -165,7 +187,7 @@ class AudioLabEngine {
 
 	public function setReverbWet(value:Float):Void {
 		reverbWet = clamp(value, 0.0, 1.0);
-		if (reverb != null) reverb.setParameter(EffectParameter.Wet, reverbWet);
+		if (roomSend != null) roomSend.setVolume(reverbWet);
 	}
 
 	public function setReverbDecay(value:Float):Void {
@@ -282,6 +304,8 @@ class AudioLabEngine {
 	public function dispose():Void {
 		if (liveDsp != null) liveDsp.dispose();
 		if (musicBus != null) musicBus.dispose();
+		if (roomBus != null) roomBus.dispose();
+		if (delayBus != null) delayBus.dispose();
 		if (instrument != null)
 			instrument.dispose();
 		if (patch != null)

@@ -125,6 +125,13 @@ class BusEffect {
 		return result.out_decay;
 	}
 
+	/** Sets delay tempo and duration in quarter-note beats as one validated update. */
+	public function setDelayTempo(bpm:Float, beats:Float):Void {
+		ensureLive();
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_delay_tempo(value, bpm, beats),
+			"audio.busEffect.setDelayTempo");
+	}
+
 	/** Sets a processor parameter; values are range-checked and changes smoothed. */
 	public function setParameter(parameter:EffectParameter, value:Float):Void {
 		ensureLive();

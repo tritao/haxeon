@@ -14,6 +14,7 @@ class Bus {
 	final value:BusHandle;
 	final owned:OwnedBusHandle;
 	final effects:Array<BusEffect> = [];
+	final sends:Array<BusSend> = [];
 	var disposed:Bool = false;
 
 	private function new(owned:OwnedBusHandle) {
@@ -191,7 +192,6 @@ class Bus {
 		return effect;
 	}
 
-	/** Releases the bus; sounds already routed through it retain native ownership. */
 	/** Adds a stereo algorithmic reverb, with a 3-second decay by default. */
 	public function addReverb():BusEffect {
 		ensureLive();
@@ -212,9 +212,32 @@ class Bus {
 		return effect;
 	}
 
+	/** Adds an independent post-fader route to a shared return bus. */
+	public function addSend(destination:Bus, volume:Float = 0.0):BusSend {
+		ensureLive();
+		if (destination == null) throw "Audio send destination must not be null";
+		var made = NativeKitAudio.nk_audio_bus_send_create(value, destination.nativeHandle(), volume);
+		AudioResult.check(made.status, "audio.bus.addSend");
+		var send = new BusSend(made.out_send);
+		sends.push(send);
+		return send;
+	}
+
+	/** Adds a stereo delay with smoothed controls and tempo synchronization. */
+	public function addStereoDelay():BusEffect {
+		ensureLive();
+		var made = NativeKitAudio.nk_audio_bus_effect_create_stereo_delay(value);
+		AudioResult.check(made.status, "audio.bus.addStereoDelay");
+		var effect = new BusEffect(made.out_effect);
+		effects.push(effect);
+		return effect;
+	}
+
 	public function dispose():Void {
 		if (disposed)
 			return;
+		for (send in sends) send.dispose();
+		sends.resize(0);
 		for (effect in effects)
 			effect.dispose();
 		effects.resize(0);

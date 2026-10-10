@@ -24,8 +24,9 @@ Run the Haxeon app from the Haxeon root with:
 ```
 
 The desktop app now plays its presets and tracker through a music bus with
-stereo reverb and dynamics. Reverb wet/decay and compression-ratio sliders
-control the actual effects. A separate offline renderer supplies the dry synth
+dynamics, plus sends to shared stereo reverb and ping-pong delay returns.
+The delay is synced to an eighth note at 120 BPM. The reverb wet slider controls
+the room send level; decay and compression-ratio sliders control their processors. A separate offline renderer supplies the dry synth
 oscilloscope, meters, and diagnostics; these do not show the processed output.
 If the audio device cannot initialize, the app reports the failure and keeps
 its offline preview available. Smoke tests use offline rendering by default.

@@ -264,7 +264,27 @@ class AudioSmoke {
 			highPass = null;
 			delay.dispose();
 			delay = null;
+			var returnBus = Bus.create();
+			var send = bus.addSend(returnBus, 0.25);
+			send.setVolume(0.5);
+			if (send.volume() != 0.5)
+				throw "Haxe audio send gain did not round-trip";
+			returnBus.dispose();
+			send.dispose(); // Native destruction of either endpoint invalidates the send.
+			send.dispose();
+			if (!send.isDisposed())
+				throw "Haxe audio send did not dispose after its destination";
 			if (Mixer.channels() == 2) {
+				var stereoDelay = bus.addStereoDelay();
+				stereoDelay.setDelayTempo(120.0, 0.5);
+				stereoDelay.setParameter(EffectParameter.PingPong, 1.0);
+				if (stereoDelay.type() != EffectType.StereoDelay ||
+					stereoDelay.parameter(EffectParameter.DelaySeconds) != 0.25 ||
+					stereoDelay.parameter(EffectParameter.DelayBeats) != 0.5 ||
+					stereoDelay.parameter(EffectParameter.PingPong) != 1.0)
+					throw "Haxe stereo delay tempo controls did not round-trip";
+				stereoDelay.reset();
+				stereoDelay.dispose();
 				var reverb = bus.addReverb();
 				reverb.setParameter(EffectParameter.Wet, 0.25);
 				reverb.setParameter(EffectParameter.DecaySeconds, 0.6);

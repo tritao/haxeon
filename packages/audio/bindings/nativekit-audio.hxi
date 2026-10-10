@@ -228,7 +228,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		NK_AUDIO_DSP_WAVEFORM_SQUARE = 3;
 	}
 	/**
-	 * Parameters for reverb and dynamics processors; unsupported combinations are rejected.
+	 * Parameters for reverb, dynamics, and stereo delay processors; unsupported combinations are rejected.
 	 */
 	enum nk_audio_effect_parameter : u32 {
 		NK_AUDIO_EFFECT_PARAMETER_WET = 0;
@@ -297,6 +297,26 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Dynamics wet/dry mix, [0, 1].
 		 */
 		NK_AUDIO_EFFECT_PARAMETER_MIX = 17;
+		/**
+		 * Manual delay time in seconds, [one PCM frame, 4]; disables tempo sync.
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_DELAY_SECONDS = 18;
+		/**
+		 * Delay feedback gain, [0, 0.95].
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_FEEDBACK = 19;
+		/**
+		 * Stereo feedback crossfeed, [0, 1]; 1 is ping-pong.
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_PING_PONG = 20;
+		/**
+		 * Delay tempo, [20, 300] beats per minute.
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_BPM = 21;
+		/**
+		 * Delay length in quarter-note beats, [0, 8]; 0 selects manual time.
+		 */
+		NK_AUDIO_EFFECT_PARAMETER_DELAY_BEATS = 22;
 	}
 	/**
 	 * Built-in processing effect types available on mixer buses.
@@ -322,6 +342,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * A compressor, expander, and noise gate.
 		 */
 		NK_AUDIO_EFFECT_DYNAMICS = 4;
+		/**
+		 * A tempo-aware interpolated stereo/ping-pong delay.
+		 */
+		NK_AUDIO_EFFECT_STEREO_DELAY = 5;
 	}
 	/**
 	 * Coordinate space used by a voice's spatial position.
@@ -539,6 +563,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_bus_effect_create_reverb(bus: nk_audio_bus, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
 	/**
+	 * Creates a stereo delay: 250 ms, feedback 0.35, wet 0.3, dry 1; max delay 4 s.
+	 */
+	extern fn nk_audio_bus_effect_create_stereo_delay(bus: nk_audio_bus, out_effect: ptr<nk_audio_bus_effect> @out @owned) -> nk_result;
+	/**
 	 * Removes an effect from its bus and invalidates its handle.
 	 */
 	extern fn nk_audio_bus_effect_destroy(effect: nk_audio_bus_effect) -> nk_result;
@@ -598,6 +626,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Sets a delay's dry gain.
 	 */
 	extern fn nk_audio_bus_effect_set_delay_dry(effect: nk_audio_bus_effect, dry: f32) -> nk_result;
+	/**
+	 * Sets tempo and beat length together. Effective time must not exceed 4 seconds.
+	 */
+	extern fn nk_audio_bus_effect_set_delay_tempo(effect: nk_audio_bus_effect, bpm: f32, beats: f32) -> nk_result;
 	/**
 	 * Sets a delay's wet gain.
 	 */
@@ -662,6 +694,20 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * process-wide audio time in PCM frames.
 	 */
 	extern fn nk_audio_bus_schedule_stop(bus: nk_audio_bus, absolute_time_pcm_frames: u64) -> nk_result;
+	/**
+	 * Creates a post-fader send with gain in [0, 1]. Parent/send routing cycles are rejected.
+	 */
+	extern fn nk_audio_bus_send_create(source: nk_audio_bus, destination: nk_audio_bus, volume: f32, out_send: ptr<nk_audio_bus_send> @out @owned) -> nk_result;
+	/**
+	 * Disconnects the send without resetting the destination's effect tails.
+	 */
+	extern fn nk_audio_bus_send_destroy(send: nk_audio_bus_send) -> nk_result;
+	/**
+	 * Sends are invalidated when either endpoint's bus handle is destroyed.
+	 */
+	extern fn nk_audio_bus_send_get_destination(send: nk_audio_bus_send, out_destination: ptr<nk_audio_bus> @out) -> nk_result;
+	extern fn nk_audio_bus_send_get_volume(send: nk_audio_bus_send, out_volume: ptr<f32> @out) -> nk_result;
+	extern fn nk_audio_bus_send_set_volume(send: nk_audio_bus_send, volume: f32) -> nk_result;
 	/**
 	 * Configures the voice limit and admission policy for a bus subtree.
 	 */
@@ -1790,6 +1836,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Opaque handle for one effect inserted into an audio mixer bus.
 	 */
 	handle nk_audio_bus_effect : u32 @destroy("nk_audio_bus_effect_destroy");
+	/**
+	 * An independently controlled post-fader route to another bus.
+	 */
+	handle nk_audio_bus_send : u32 @destroy("nk_audio_bus_send_destroy");
 	/**
 	 * Opaque handle for one reusable audio clip source.
 	 */

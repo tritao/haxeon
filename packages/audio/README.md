@@ -42,3 +42,12 @@ through `haxeon.audio.EffectParameter`, with smoothed parameter changes, reset,
 and latency/tail queries. Signalsmith Basics is pinned from the
 [`tritao/signalsmith-basics`](https://github.com/tritao/signalsmith-basics) fork;
 DaisySP is unchanged. See the native guide for parameter ranges and routing.
+
+`Bus.addSend(returnBus, gain)` routes a post-fader contribution to a shared
+return, with up to eight sends per source and routing-cycle checks. Use wet-only
+processors on returns; disconnecting a send preserves their existing tails.
+`Bus.addStereoDelay()` exposes manual/tempo-synced delay, smoothed time changes,
+and ping-pong feedback through `EffectParameter` and
+`BusEffect.setDelayTempo(bpm, quarterNoteBeats)`. Its maximum delay is four seconds.
+The miniaudio dependency is pinned to `tritao/miniaudio`'s `nativekit` branch,
+based on upstream `dev`, with graph-clock synchronization fixes and regression tests.

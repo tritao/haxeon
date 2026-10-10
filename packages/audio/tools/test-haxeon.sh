@@ -7,7 +7,7 @@ build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/audio/native"}
 cmake -S "$nativekit_dir" -B "$build_dir" -GNinja -DCMAKE_BUILD_TYPE=Debug \
     -DNK_BUILD_AUDIO=ON -DNK_BUILD_TESTS=ON -DNK_BUILD_EXAMPLES=OFF
 cmake --build "$build_dir"
-ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|audio_effects|audio_routing|resource_cache)$'
+ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|audio_effects|audio_routing|audio_sends|miniaudio_splitter|resource_cache)$'
 "$package_dir/tools/check-hxi.sh"
 if [[ ! -f "$haxeon_dir/out/haxeon_runtime.hdll" ]]; then
     (cd "$haxeon_dir" && ./scripts/build-native.sh)
