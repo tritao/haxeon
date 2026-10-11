@@ -1,6 +1,7 @@
 package compiler.types;
 
 import haxe.crypto.Sha256;
+import haxe.io.Bytes;
 
 /** Typed constant captured from one checked source metadata annotation argument. */
 enum NativeTypeAnnotationValue {
@@ -212,7 +213,11 @@ class NativeTypeDescriptor {
 		appendAnnotationValues(canonical, annotationValues);
 		appendNodes(canonical, fields);
 		appendNodes(canonical, arguments);
-		return Sha256.encode(canonical.toString());
+		var digest = Sha256.make(Bytes.ofString(canonical.toString())),
+			result = new StringBuf();
+		for (index in 0...digest.length)
+			result.add(StringTools.hex(digest.get(index), 2));
+		return result.toString().toLowerCase();
 	}
 
 	static function appendNodes(buffer:StringBuf, nodes:Array<NativeTypeDescriptorField>):Void {
