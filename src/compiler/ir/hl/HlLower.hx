@@ -914,7 +914,9 @@ class HlLower {
 						var destination = defineRegister(output, registers, registerTypes),
 							nativeLayout = objectFieldNativeLayout(object, fieldName);
 						instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers), requireObjectField(object, fieldName)));
-						if (nativeLayout != null && nativeLayout.size < 4) {
+						// Inline records produce an HSTRUCT pointer into their owner. Only scalar
+						// narrow fields need sign or zero extension after the field load.
+						if (nativeLayout != null && !nativeLayout.inlineRecord && nativeLayout.size < 4) {
 							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 								bits = nativeLayout.size * 8;
 							instructions.push(HlInstruction.LoadInt(maskOrShift, internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));

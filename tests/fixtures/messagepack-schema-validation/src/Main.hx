@@ -17,6 +17,10 @@ interface GenericMarker < T > {
   public var max:Float;
 }
 
+@:annotation struct maxLength {
+  public var value:Int;
+}
+
 @:value @:repr("C") class SchemaNative {
   public var count:Int;
 }
@@ -35,6 +39,11 @@ struct SchemaRoot:SchemaBase, GenericMarker<Int>, SchemaRole {
   public var leaf:SchemaLeaf;
   public var title:String = "root";
 }
+
+struct SchemaUnicodeDefault {
+  @:maxLength(1) public var title:String = "é";
+}
+
 function rejects(action:Void -> Void):Bool {
   try {
     action();
@@ -65,6 +74,10 @@ function main():Int {
   var nativeFacts = schema.requireSourceFacts(nativeInfo.hash, nativeInfo.type);
   if (nativeInfo.type != "native-value:SchemaNative<>" || nativeFacts.sourceKind
     != MessagePackSchemaSourceKind.NativeValue || nativeFacts.interfaces.length != 0) return 15;
+  var unicodeInfo:Dynamic = typeInfo<SchemaUnicodeDefault>();
+  schema.requireDescriptor(unicodeInfo.hash, unicodeInfo.type);
+  var unicodeDefault = schema.fieldDefaultValue(unicodeInfo.hash, unicodeInfo.type, ["title"]);
+  if (unicodeDefault == null || unicodeDefault.type != "String" || unicodeDefault.value != "é") return 17;
   var zero = schema.fieldDefaultValue(info.hash, info.type, ["leaf", "zero"]), optional = schema.fieldDefaultValue(
     info.hash,
     info.type,
