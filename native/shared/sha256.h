@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef HAXEON_FUEL_BACKEDGE
+#define HAXEON_FUEL_BACKEDGE() ((void)0)
+#endif
+
 static uint32_t realtime_sha256_rotate(uint32_t value, unsigned count) {
 	return (value >> count) | (value << (32 - count));
 }
@@ -12,11 +16,13 @@ static void realtime_sha256_block(uint32_t state[8], const unsigned char block[6
 		unsigned at = i * 4;
 		words[i] = ((uint32_t)block[at] << 24) | ((uint32_t)block[at + 1] << 16)
 			| ((uint32_t)block[at + 2] << 8) | (uint32_t)block[at + 3];
+		HAXEON_FUEL_BACKEDGE();
 	}
 	for (unsigned i = 16; i < 64; ++i) {
 		uint32_t a = words[i - 15], b = words[i - 2];
 		words[i] = words[i - 16] + (realtime_sha256_rotate(a, 7) ^ realtime_sha256_rotate(a, 18) ^ (a >> 3))
 			+ words[i - 7] + (realtime_sha256_rotate(b, 17) ^ realtime_sha256_rotate(b, 19) ^ (b >> 10));
+		HAXEON_FUEL_BACKEDGE();
 	}
 	uint32_t a = state[0], b = state[1], c = state[2], d = state[3];
 	uint32_t e = state[4], f = state[5], g = state[6], h = state[7];
@@ -104,18 +110,33 @@ static void realtime_sha256_digest(const unsigned char *input, size_t length, un
 	while (length - offset >= 64) {
 		realtime_sha256_block(state, input + offset, words);
 		offset += 64;
+		HAXEON_FUEL_BACKEDGE();
 	}
 	unsigned char *tail = (unsigned char *)(scratch + 72);
-	for (unsigned i = 0; i < 128; ++i) ((volatile unsigned char *)tail)[i] = 0;
+	for (unsigned i = 0; i < 128; ++i) {
+		((volatile unsigned char *)tail)[i] = 0;
+		HAXEON_FUEL_BACKEDGE();
+	}
 	size_t remainder = length - offset;
-	for (size_t i = 0; i < remainder; ++i) tail[i] = input[offset + i];
+	for (size_t i = 0; i < remainder; ++i) {
+		tail[i] = input[offset + i];
+		HAXEON_FUEL_BACKEDGE();
+	}
 	tail[remainder] = 0x80;
 	size_t padded = remainder < 56 ? 64 : 128;
 	uint64_t bits = (uint64_t)length * 8;
-	for (unsigned i = 0; i < 8; ++i) tail[padded - 1 - i] = (unsigned char)(bits >> (i * 8));
+	for (unsigned i = 0; i < 8; ++i) {
+		tail[padded - 1 - i] = (unsigned char)(bits >> (i * 8));
+		HAXEON_FUEL_BACKEDGE();
+	}
 	realtime_sha256_block(state, tail, words);
 	if (padded == 128) realtime_sha256_block(state, tail + 64, words);
-	for (unsigned i = 0; i < 8; ++i)
-		for (unsigned j = 0; j < 4; ++j) output[i * 4 + j] = (unsigned char)(state[i] >> (24 - j * 8));
+	for (unsigned i = 0; i < 8; ++i) {
+		for (unsigned j = 0; j < 4; ++j) {
+			output[i * 4 + j] = (unsigned char)(state[i] >> (24 - j * 8));
+			HAXEON_FUEL_BACKEDGE();
+		}
+		HAXEON_FUEL_BACKEDGE();
+	}
 }
 

@@ -840,6 +840,145 @@ const cases = [
 });
 JS
 
+# The opt-in WAMR profile keeps the default module's exception behavior available while adding the exact scalar
+# fuel import. The Script-owned AOT consumer performs the production WAMR load/run gate separately.
+haxeon_compile \
+	--target=wasm32 --wasm-runtime-neutral --wasm-gc-stress \
+	--output=out/wasm-cli-runtime-neutral.wasm --entry=wasm-runtime-neutral \
+	--export=RuntimeNeutralProbe.fuelLoop --export=RuntimeNeutralProbe.fuelTrapCatch \
+	--root=tests/programs tests/programs/wasm-runtime-neutral.hx
+haxeon_compile \
+	--target=wasm32 --wasm-gc-stress \
+	--output=out/wasm-cli-runtime-neutral-default.wasm --entry=wasm-runtime-neutral \
+	--export=RuntimeNeutralProbe.fuelLoop --export=RuntimeNeutralProbe.fuelTrapCatch \
+	--root=tests/programs tests/programs/wasm-runtime-neutral.hx
+haxeon_compile \
+	--target=wasm32 --wasm-runtime-neutral \
+	--output=out/wasm-cli-runtime-neutral-sha256.wasm --entry=sha256 \
+	--root=tests/programs tests/programs/sha256.hx
+node - "$root_dir" <<'JS'
+const fs = require("fs"), path = require("path");
+const root = process.argv[2];
+function readU32(bytes, cursor) {
+  let value = 0, shift = 0, byte;
+  do { byte = bytes[cursor.offset++]; value |= (byte & 0x7f) << shift; shift += 7; } while (byte & 0x80);
+  return value >>> 0;
+}
+function readName(bytes, cursor) {
+  const length = readU32(bytes, cursor), name = bytes.toString("utf8", cursor.offset, cursor.offset + length);
+  cursor.offset += length;
+  return name;
+}
+function parse(bytes) {
+  const sections = new Map(), customs = new Map();
+  for (let offset = 8; offset < bytes.length;) {
+    const id = bytes[offset++], cursor = {offset}, length = readU32(bytes, cursor), end = cursor.offset + length;
+    if (id === 0) {
+      const name = readName(bytes, cursor);
+      customs.set(name, bytes.subarray(cursor.offset, end));
+    } else {
+      sections.set(id, bytes.subarray(cursor.offset, end));
+    }
+    offset = end;
+  }
+  const types = [];
+  if (sections.has(1)) {
+    const cursor = {offset: 0}, section = sections.get(1), count = readU32(section, cursor);
+    for (let index = 0; index < count; index++) {
+      if (section[cursor.offset++] !== 0x60) throw new Error("expected a function type");
+      const parameterCount = readU32(section, cursor), parameters = Array.from(section.subarray(cursor.offset, cursor.offset + parameterCount));
+      cursor.offset += parameterCount;
+      const resultCount = readU32(section, cursor), results = Array.from(section.subarray(cursor.offset, cursor.offset + resultCount));
+      cursor.offset += resultCount;
+      types.push({parameters, results});
+    }
+  }
+  const imports = [];
+  if (sections.has(2)) {
+    const cursor = {offset: 0}, section = sections.get(2), count = readU32(section, cursor);
+    for (let index = 0; index < count; index++) {
+      const module = readName(section, cursor), name = readName(section, cursor), kind = section[cursor.offset++];
+      if (kind !== 0) throw new Error(`unexpected import kind ${kind} for ${module}.${name}`);
+      imports.push({module, name, type: types[readU32(section, cursor)]});
+    }
+  }
+  return {sections, customs, imports};
+}
+function hasSection(module, id) { return module.sections.has(id); }
+const profileBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral.wasm"));
+const profile = parse(profileBytes), profileId = profile.customs.get("haxeon.runtime.profile");
+if (hasSection(profile, 13) || !profile.customs.has("haxeon.gc.roots") || !profileId)
+  throw new Error("runtime-neutral module retained Wasm EH or omitted profile/precise-root metadata");
+if (profile.imports.length !== 1 || profile.imports[0].module !== "haxeon_host" || profile.imports[0].name !== "fuel_charge"
+    || profile.imports[0].type.parameters.length !== 0 || JSON.stringify(profile.imports[0].type.results) !== JSON.stringify([0x7f]))
+  throw new Error(`wrong runtime-neutral import surface/signature: ${JSON.stringify(profile.imports)}`);
+const identity = profileId.toString("utf8");
+if (!identity.includes('"profile":"haxeon.wasm.runtime-neutral"')
+    || !identity.includes('"protocol":"pending-global-v1"')
+    || !identity.includes('"charges":["function-entry","loop-backedge"]'))
+  throw new Error(`incomplete profile identity: ${identity}`);
+
+let remaining = 20_000_000, charges = 0;
+const imports = {haxeon_host: {fuel_charge(...args) {
+  if (args.length !== 0) throw new Error("fuel_charge received unexpected parameters");
+  charges++;
+  if (remaining <= 0) return 0;
+  remaining--;
+  return 1;
+}}};
+const module = new WebAssembly.Module(profileBytes);
+const instance = new WebAssembly.Instance(module, imports);
+if (instance.exports.main() !== 42 || charges < 1000)
+  throw new Error(`runtime-neutral main/fuel regression: charges=${charges}`);
+remaining = 20_000_000;
+let before = charges;
+const cryptoBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral-sha256.wasm"));
+const cryptoModule = new WebAssembly.Module(cryptoBytes), cryptoImports = WebAssembly.Module.imports(cryptoModule);
+if (cryptoImports.length !== 1 || cryptoImports[0].module !== "haxeon_host" || cryptoImports[0].name !== "fuel_charge")
+  throw new Error(`runtime-neutral crypto exposed an unexpected import surface: ${JSON.stringify(cryptoImports)}`);
+const cryptoInstance = new WebAssembly.Instance(cryptoModule, imports);
+if (cryptoInstance.exports.main() !== 42 || charges - before < 10_000_000)
+  throw new Error(`runtime-neutral crypto/linked-loop fuel regression: charges=${charges - before}`);
+if (hasSection(parse(cryptoBytes), 13) || !cryptoBytes.toString("latin1").includes("haxeon.runtime.profile"))
+  throw new Error("runtime-neutral crypto omitted its profile identity or retained Wasm EH");
+remaining = 20_000_000;
+before = charges;
+if (instance.exports["RuntimeNeutralProbe.fuelLoop"](0) !== 0)
+  throw new Error("zero-iteration loop changed its result");
+const zeroLoopCharges = charges - before;
+remaining = 20_000_000;
+before = charges;
+if (instance.exports["RuntimeNeutralProbe.fuelTrapCatch"](0) !== 42)
+  throw new Error("catchable path changed its result with sufficient fuel");
+const catchZeroLoopCharges = charges - before;
+function expectTrap(name, action) {
+  let trapped = false;
+  try { action(); } catch (error) {
+    if (!(error instanceof WebAssembly.RuntimeError)) throw error;
+    trapped = true;
+  }
+  if (!trapped) throw new Error(`${name} returned instead of trapping`);
+}
+remaining = 0;
+expectTrap("function-entry exhaustion", () => instance.exports["RuntimeNeutralProbe.fuelLoop"](0));
+remaining = zeroLoopCharges;
+expectTrap("loop-backedge exhaustion", () => instance.exports["RuntimeNeutralProbe.fuelLoop"](3));
+remaining = catchZeroLoopCharges;
+expectTrap("Haxe catch of fuel exhaustion", () => instance.exports["RuntimeNeutralProbe.fuelTrapCatch"](3));
+remaining = 20_000_000;
+if (instance.exports["RuntimeNeutralProbe.fuelLoop"](0) !== 0)
+  throw new Error("Wasm module did not recover after a fuel trap");
+remaining = 0;
+expectTrap("initialization fuel exhaustion", () => new WebAssembly.Instance(module, imports));
+
+const defaultBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral-default.wasm"));
+const defaultModule = parse(defaultBytes);
+if (!hasSection(defaultModule, 13) || defaultModule.customs.has("haxeon.runtime.profile")
+    || defaultModule.imports.some(entry => entry.name === "fuel_charge"))
+  throw new Error("default wasm32 output was changed by opting out of the runtime-neutral profile");
+console.log(`PASS: WAMR profile driver, precise exceptions/roots, entry/back-edge/start fuel (${charges} accepted charges)`);
+JS
+
 # haxeon-host.js throws haxeon.wasm.HostError into a guest that calls an import it cannot provide.
 for target in wasm32 wasm-gc; do
 	haxeon_compile_async \

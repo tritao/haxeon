@@ -11,6 +11,13 @@
 
 #include <stdint.h>
 
+#ifdef HAXEON_WASM_RUNTIME_NEUTRAL
+__attribute__((import_module("haxeon_guest"), import_name("fuel_charge"))) extern void guest_fuel_charge(void);
+#define HAXEON_FUEL_BACKEDGE() guest_fuel_charge()
+#else
+#define HAXEON_FUEL_BACKEDGE() ((void)0)
+#endif
+
 #define HEADER_SIZE 16u
 #define SIZE_OFFSET 0
 #define FLAGS_OFFSET 4
@@ -94,6 +101,7 @@ static uint32_t take_free(hx_heap *heap, uint32_t size, uint32_t *taken) {
 			return block + remainder;
 		}
 		previous = block;
+		HAXEON_FUEL_BACKEDGE();
 	}
 	return 0;
 }
@@ -160,8 +168,10 @@ __attribute__((export_name("haxeon_heap_alloc"))) uint32_t haxeon_heap_alloc(hx_
  * adjacent free blocks. Traps on a malformed block, which means the heap was corrupted.
  */
 __attribute__((export_name("haxeon_heap_sweep"))) void haxeon_heap_sweep(hx_heap *heap) {
-	for (uint32_t index = 0; index < CLASS_COUNT; index++)
+	for (uint32_t index = 0; index < CLASS_COUNT; index++) {
 		heap->classes[index] = 0;
+		HAXEON_FUEL_BACKEDGE();
+	}
 	heap->large_head = 0;
 	heap->collection_count++;
 	uint32_t live = 0, run_start = 0, run_size = 0;
@@ -181,6 +191,7 @@ __attribute__((export_name("haxeon_heap_sweep"))) void haxeon_heap_sweep(hx_heap
 			run_size += size;
 		}
 		block += size;
+		HAXEON_FUEL_BACKEDGE();
 	}
 	if (run_size != 0)
 		push_free(heap, run_start, run_size);

@@ -64,6 +64,7 @@ class CompilerDriver {
 					memoryContract: memoryContract,
 					wasmMemoryStats: request.wasmMemoryStats,
 					wasmGcStress: request.wasmGcStress,
+					wasmRuntimeNeutral: request.wasmRuntimeNeutral,
 					exports: request.exports
 				});
 			outputBytes = backendResult.bytes;

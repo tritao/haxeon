@@ -1,3 +1,10 @@
+#ifdef HAXEON_WASM_RUNTIME_NEUTRAL
+__attribute__((import_module("haxeon_guest"), import_name("fuel_charge"))) extern void guest_fuel_charge(void);
+#define HAXEON_FUEL_BACKEDGE() guest_fuel_charge()
+#else
+#define HAXEON_FUEL_BACKEDGE() ((void)0)
+#endif
+
 #include "../../shared/sha256.h"
 
 __attribute__((export_name("haxeon_sha256")))
