@@ -2005,7 +2005,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * sources support the filter envelope but require one unison copy.
 	 * Both envelopes share the note gate; amplitude release determines voice lifetime.
 	 */
-	struct nk_audio_dsp_voice_options @layout(160, 8) {
+	struct nk_audio_dsp_voice_options @layout(184, 8) {
 		struct_size: u32 @offset(0) @struct_size;
 		/**
 		 * Number of oscillator/wavetable copies, 0 (default one) or [1, 8].
@@ -2040,6 +2040,32 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		filter_drive: f32 @offset(152);
 		reserved4: u32 @offset(156);
+		/**
+		 * Optional articulation extension. Ordinary oscillator/wavetable patches only.
+		 * One sounding voice per instrument; bounded last-note priority (16 held notes).
+		 * Releasing the current note returns to the most recently held remaining note.
+		 */
+		monophonic: u32 @offset(160);
+		/**
+		 * Preserve oscillator/filter/envelope state across strictly overlapping notes.
+		 */
+		legato: u32 @offset(164);
+		/**
+		 * Overlapping-note pitch glide, [0, 2] seconds, linear in semitones.
+		 */
+		glide_seconds: f32 @offset(168);
+		/**
+		 * Extra relative gain on accented notes, [0, 1]; reserve output headroom.
+		 */
+		accent_gain: f32 @offset(172);
+		/**
+		 * Extra cutoff opening on accented notes, [0, 36] semitones.
+		 */
+		accent_filter_semitones: f32 @offset(176);
+		/**
+		 * Velocity above this threshold drives accent continuously to 1 at velocity 1; [0, 1).
+		 */
+		accent_velocity_threshold: f32 @offset(180);
 	}
 	/**
 	 * Native voice admission. Configure before attaching the engine. Legacy engines

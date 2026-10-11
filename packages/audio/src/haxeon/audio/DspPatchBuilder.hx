@@ -18,6 +18,7 @@ class DspPatchBuilder {
 	/** Optional second and third LFOs, addressed by Lfo2 and Lfo3 routes. */
 	public final additionalLfos:Array<DspLfoOptions> = [];
 	public var gain:Float = 1.0;
+	public var articulation:DspArticulationOptions = new DspArticulationOptions();
 	/** Optional specialized generator, sharing this patch envelope and filter. */
 	public var source:Null<DspSourceOptions>;
 	public final routes:Array<DspModulationRoute> = [];
@@ -69,7 +70,7 @@ class DspPatchBuilder {
 
 	/** Materializes the current builder state into an immutable native patch. */
 	public function build():DspPatch {
-		if (oscillators == null || noise == null || envelope == null || filter == null || lfo == null || filterEnvelope == null || unison == null)
+		if (oscillators == null || noise == null || envelope == null || filter == null || lfo == null || filterEnvelope == null || unison == null || articulation == null)
 			throw "DSP patch components must not be null";
 		if (oscillators.length > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
 			throw "DSP patch oscillator limit exceeded";
@@ -97,6 +98,12 @@ class DspPatchBuilder {
 		voice.set_filter_envelope(filterEnvelope.nativeValue());
 		voice.set_filter_envelope_amount_semitones(filterEnvelopeAmountSemitones);
 		voice.set_filter_drive(filter.drive);
+		voice.set_monophonic(articulation.monophonic ? 1 : 0);
+		voice.set_legato(articulation.legato ? 1 : 0);
+		voice.set_glide_seconds(articulation.glideSeconds);
+		voice.set_accent_gain(articulation.accentGain);
+		voice.set_accent_filter_semitones(articulation.accentFilterSemitones);
+		voice.set_accent_velocity_threshold(articulation.accentVelocityThreshold);
 		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS)
 			throw "DSP patch LFO limit exceeded";
 		for (index in 0...additionalLfos.length) {
