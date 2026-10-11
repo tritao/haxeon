@@ -32,7 +32,9 @@ Script now also has a native WAMR host harness and a small C surface probe at
 `std.sys_exit`, tests per-instance memory caps/isolation and trap recovery,
 and does not yet register or test a fuel import. It exercises a hand-written C
 module rather than either Haxe probe, so it does not establish Haxeon AOT
-compatibility.
+compatibility. Script's `run_wamr_surface_probe.sh` also builds that harness
+and runs a HashLink-to-WAMR bridge probe; its host interface still has no
+`fuel_charge` function.
 
 On this compiler checkout, the exact requested option is rejected before
 compilation:
@@ -199,6 +201,22 @@ action identity. The Wasm builder currently creates the exception tag and
 publishes metadata; `WasmFunctionLower` lowers Haxe try/catch and
 cross-function calls, and `WasmCfgAnalysis.backEdges()` identifies CFG loop
 back-edges. The profile must not affect `wasm-gc` or default `wasm32`.
+
+Exception emission is not confined to Haxe IR lowering: `WasmFunctionLower`
+emits Wasm tags for Haxe throws, while `WasmLinearGc`,
+`WasmLinearRuntime.runtimeFailure`, and `WasmLinearDynamicArrays.fail()` also
+emit tags for runtime failures. The explicit protocol must cover each site.
+The pending payload can use the existing precise-root path by adding its
+global to `rootGlobals`, which the generated collector scans; it must only be
+added for the opt-in profile.
+
+Fuel metering has a separate linked-runtime edge. `WasmLinearRuntime` and the
+collector produce instruction bodies that the backend can rewrite, but
+`WasmRuntimeLinker` copies the C heap runtime bodies into `encodedBody` bytes
+and `WasmEncoder` writes those bytes unchanged. A complete profile must meter
+those function entries and loop back-edges by extending the compiler linker
+rewriter or the compiler-owned runtime build. Haxe CFG metering alone would
+leave the allocator and sweeper outside the budget.
 
 The relevant regression homes are `tests/TestMain.hx` for argument
 validation, `tests/compiler/WasmBackendMain.hx` for Wasm structure and bytes,
