@@ -6,8 +6,10 @@ and DSP patches, oscillators, envelopes, filters, modulation, and wavetables.
 It depends on `haxeon-platform`; it has no UI or GPU dependency.
 
 The native implementation remains in NativeKit `modules/audio`, backed by
-pinned miniaudio, DaisySP, and Signalsmith submodules. Audio calls use the NativeKit UI thread;
-the playback callback and streaming workers are internal to the native backend.
+pinned miniaudio, DaisySP, Signalsmith and TinySoundFont submodules. Device and
+graph calls use the NativeKit UI thread. Standalone DSP/sample/SF2 preparation
+can run on a worker that owns those objects until publication. The playback
+callback and streaming workers are internal to the native backend.
 The C ABI and library name (`nativekit`) stay unchanged. Raw generated bindings
 live in `nativekit.ffi.NativeKitAudio` and `NativeKitAudioTypes`.
 
@@ -158,3 +160,59 @@ patch.modulate(DspModulationSource.Lfo2, DspModulationDestination.PitchSemitones
 patch.modulate(DspModulationSource.FilterEnvelope,
     DspModulationDestination.OscillatorLevel, 0.18, DspModulationPolarity.Unipolar, 1);
 ```
+
+
+## Native transport and instrument resources
+
+`DspEngine.noteOn()` returns a unique `Int64` note token. Optional `holdFrames`
+releases it on the native clock; `noteOff(token, frame)` releases or cancels a
+future onset. `tryNoteOn()` returns null on command admission overflow.
+`setVoicePolicy(tailVoices, fadeFrames)` enables bounded native stealing.
+`runtimeStatus()` reports actual stealing, dropped notes and clock gaps.
+
+`prepareTransport()` copies immutable sections/events. `DspTransport.playGroup`
+and `requestGroup` atomically publish an action to tracks with matching bar and
+section boundaries. Attach engines before scheduling device-time notes or
+playing a transport: first attachment cancels commands from the offline clock.
+`BusEffect.followTransportTempo(engine, beats)` binds a stereo delay to the
+native tempo snapshot. Explicit `setDelayTempo` removes that binding.
+
+`InstrumentDefinition.createInstrument(engine)` is shared by procedural
+`DspPatch`, PCM `SampleInstrument` and `SoundFont.SoundFontPreset` definitions.
+The provider stays private to NativeKit; score/playback code uses the same note
+identity, stealing, release and routing contracts for each kind.
+
+```haxe
+var bank = SoundFont.fromFile("assets/instruments.sf2");
+var metadata = bank.presets(); // index, bank, program, name
+var definition = bank.preset(metadata[0].index, 0.5);
+var instrument = definition.createInstrument(engine);
+bank.dispose(); // Existing instruments retain decoded sample data.
+engine.attachToDevice();
+var token = engine.noteOn(instrument, 60, 0.8, Mixer.timeFrames() + haxe.Int64.ofInt(512),
+    haxe.Int64.ofInt(24000));
+// Later: retire the instrument; engine.collect() reclaims it after voices finish.
+```
+
+`SoundFont.fromMemory(Bytes)` and `fromFile` decode uncompressed SF2 with the
+pinned MIT TinySoundFont backend. Preset selection uses a zero-based index;
+metadata separately exposes MIDI bank/program numbers. SF3, SF2 modulators and
+region chorus/reverb sends are unsupported. Use mixer effect sends explicitly.
+Loading validates RIFF/hydra bounds, generator sample ranges and envelope/LFO
+counter limits. Before decoding it conservatively bounds expansion to 4096
+regions per preset, 65536 regions per bank and 4096 presets. Preparation rejects
+more than 64 overlapping layers. Qualify real banks on target devices; the minimal
+sine fixture verifies the contract, not complete third-party bank fidelity.
+
+`AudioPreparation<T>` is a bounded Haxeon worker. Submit preparation plus ready,
+failed and discard callbacks; call `update()` on the owner to publish completed
+work. Dispose joins the worker and discards unpublished resources. Keep a fresh
+engine/renderer exclusively owned by its preparation job until handoff; managed
+wrappers are not designed for concurrent mutation/disposal. Device/graph setup
+stays on the UI thread. On wasm preparation runs synchronously.
+
+Instrument retirement and program retirement keep control-side pins until no
+queued command, active program, voice or tail uses them. Call `collect()` from
+the owning control thread to release those pins; final sample/provider destruction
+occurs there, outside the callback. Native voices use preallocated slots and
+tails. Queue/voice limits are admission limits, not reasons to allocate on demand.

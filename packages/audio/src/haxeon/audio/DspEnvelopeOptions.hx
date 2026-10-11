@@ -13,6 +13,7 @@ class DspEnvelopeOptions {
 	public function new() {}
 
 	@:allow(haxeon.audio.DspPatchBuilder)
+	@:allow(haxeon.audio.SampleInstrument)
 	private function nativeValue():NativeDspEnvelopeOptions {
 		var result = new NativeDspEnvelopeOptions();
 		result.set_struct_size(NativeDspEnvelopeOptions.size());

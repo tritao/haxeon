@@ -30,6 +30,14 @@ class BusEffect {
 		return result.out_type;
 	}
 
+    /** Native clock binding; tempo continues to follow music during UI stalls. */
+    public function followTransportTempo(engine:DspEngine, beats:Float = 0.5):Void {
+        ensureLive();
+        if (engine == null) throw "Transport tempo requires a DSP engine";
+        AudioResult.check(NativeKitAudio.nk_audio_bus_effect_bind_dsp_tempo(value,
+            engine.nativeHandle(), beats), "audio.busEffect.followTransportTempo");
+    }
+
 	public function setEnabled(enabled:Bool):Void {
 		ensureLive();
 		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_enabled(value, enabled),

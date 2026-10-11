@@ -56,7 +56,16 @@
     "nk_audio_dsp_render_target": "NativeDspRenderTarget",
     "nk_audio_dsp_event": "NativeDspEvent",
     "nk_audio_bus_send": "BusSendHandle",
-    "nk_audio_dsp_source_options": "NativeDspSourceOptions"
+    "nk_audio_dsp_source_options": "NativeDspSourceOptions",
+    "nk_audio_dsp_voice_policy_options": "NativeDspVoicePolicyOptions",
+    "nk_audio_dsp_note_options": "NativeDspNoteOptions",
+    "nk_audio_dsp_transport_event": "NativeDspTransportEvent",
+    "nk_audio_dsp_transport_section": "NativeDspTransportSection",
+    "nk_audio_dsp_runtime_status": "NativeDspRuntimeStatus",
+    "nk_audio_soundfont": "SoundFontHandle",
+    "nk_audio_soundfont_preset_info": "NativeSoundFontPresetInfo",
+    "nk_audio_dsp_transport_track": "NativeDspTransportTrack",
+    "nk_audio_dsp_sample_options": "NativeDspSampleOptions"
   },
   "package": "nativekit.ffi",
   "modules": {

@@ -651,6 +651,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_bus_destroy(bus: nk_audio_bus) -> nk_result;
 	/**
+	 * Sets tempo and beat length together. Effective time must not exceed 4 seconds.
+	 */
+	extern fn nk_audio_bus_effect_bind_dsp_tempo(effect: nk_audio_bus_effect, engine: nk_audio_dsp_engine, beats: f32) -> nk_result;
+	/**
 	 * Appends a delay to the bus effect chain. Delay frames must be positive and
 	 * decay is in the range [0, 1].
 	 */
@@ -736,9 +740,6 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Sets a delay's dry gain.
 	 */
 	extern fn nk_audio_bus_effect_set_delay_dry(effect: nk_audio_bus_effect, dry: f32) -> nk_result;
-	/**
-	 * Sets tempo and beat length together. Effective time must not exceed 4 seconds.
-	 */
 	extern fn nk_audio_bus_effect_set_delay_tempo(effect: nk_audio_bus_effect, bpm: f32, beats: f32) -> nk_result;
 	/**
 	 * Sets a delay's wet gain.
@@ -914,6 +915,8 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Routes a DSP renderer into the process-wide playback device output.
 	 * Multiple renderers may attach independently; repeated attachment is idempotent.
+	 * First attachment cancels queued notes and native playback from the offline
+	 * clock domain. Attach before scheduling/play; prepared programs remain valid.
 	 */
 	extern fn nk_audio_dsp_engine_attach_device(engine: nk_audio_dsp_engine) -> nk_result;
 	/**
@@ -921,6 +924,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Attached queue slots become reusable when the consumer next drains them.
 	 */
 	extern fn nk_audio_dsp_engine_clear_schedule(engine: nk_audio_dsp_engine) -> nk_result;
+	extern fn nk_audio_dsp_engine_collect(engine: nk_audio_dsp_engine) -> nk_result;
 	/**
 	 * Creates a standalone DSP renderer; no playback device is required.
 	 */
@@ -941,6 +945,15 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Returns the renderer's normalized configuration.
 	 */
 	extern fn nk_audio_dsp_engine_get_options(engine: nk_audio_dsp_engine, out_options: ptr<nk_audio_dsp_engine_options> @out) -> nk_result;
+	extern fn nk_audio_dsp_engine_get_runtime_status(engine: nk_audio_dsp_engine, out_status: ptr<nk_audio_dsp_runtime_status> @inout) -> nk_result;
+	extern fn nk_audio_dsp_engine_note_off(engine: nk_audio_dsp_engine, note_token: u64, frame: u64) -> nk_result;
+	extern fn nk_audio_dsp_engine_note_on(engine: nk_audio_dsp_engine, instrument: nk_audio_dsp_instrument, options: ptr<const<nk_audio_dsp_note_options>>, out_note_token: ptr<u64> @out) -> nk_result;
+	extern fn nk_audio_dsp_engine_play_transport(engine: nk_audio_dsp_engine, program_id: u64, initial_section: u32, start_frame: u64) -> nk_result;
+	/**
+	 * Copies/validates an immutable program on the calling thread. A program ID is
+	 * engine-local. prepare never attaches nodes or changes the sounding program.
+	 */
+	extern fn nk_audio_dsp_engine_prepare_transport(engine: nk_audio_dsp_engine, sections: ptr<const<nk_audio_dsp_transport_section>> @in_array("section_count"), section_count: u32, events: ptr<const<nk_audio_dsp_transport_event>> @in_array("event_count"), event_count: u32, bars: ptr<const<f64>> @in_array("bar_count"), bar_count: u32, out_program_id: ptr<u64> @out) -> nk_result;
 	/**
 	 * Renders one interleaved float block. The destination is cleared before
 	 * voices are mixed. Events are consumed only for this call and are applied at
@@ -953,10 +966,15 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_engine_render_buffer(engine: nk_audio_dsp_engine, samples: ptr<void> @in_array("sample_bytes"), sample_bytes: u64, frame_count: u32, channels: u32, events: ptr<const<nk_audio_dsp_event>> @in_array("event_count"), event_count: u32) -> nk_result;
 	/**
+	 * Changes section at the next bar not yet consumed by the native renderer.
+	 */
+	extern fn nk_audio_dsp_engine_request_section(engine: nk_audio_dsp_engine, section: u32) -> nk_result;
+	/**
 	 * Restores instruments and voices to their creation state. Detach before calling;
 	 * use clear_schedule to reset voices during live playback.
 	 */
 	extern fn nk_audio_dsp_engine_reset(engine: nk_audio_dsp_engine) -> nk_result;
+	extern fn nk_audio_dsp_engine_retire_transport(engine: nk_audio_dsp_engine, program_id: u64) -> nk_result;
 	/**
 	 * Queues sorted events against the playback device's PCM-frame clock. The
 	 * block-local frame offsets in events are added to start_frame. Events are
@@ -969,6 +987,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * must be initialized. Destroying the routed bus restores master routing.
 	 */
 	extern fn nk_audio_dsp_engine_set_bus(engine: nk_audio_dsp_engine, bus: nk_audio_bus) -> nk_result;
+	extern fn nk_audio_dsp_engine_set_voice_policy(engine: nk_audio_dsp_engine, options: ptr<const<nk_audio_dsp_voice_policy_options>>) -> nk_result;
+	extern fn nk_audio_dsp_engine_stop_transport(engine: nk_audio_dsp_engine) -> nk_result;
+	/**
+	 * Batch publication keeps independently routed tracks on the same musical boundary.
+	 * All commands are admitted together; a full queue leaves every engine unchanged.
+	 */
+	extern fn nk_audio_dsp_group_play_transport(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, initial_section: u32, start_frame: u64) -> nk_result;
+	extern fn nk_audio_dsp_group_request_section(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, section_index: u32) -> nk_result;
 	/**
 	 * Creates an instrument from the legacy flat options. Prefer patch_create().
 	 */
@@ -977,6 +1003,13 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Creates an instrument from an immutable reusable patch definition.
 	 */
 	extern fn nk_audio_dsp_instrument_create_from_patch(engine: nk_audio_dsp_engine, patch: nk_audio_dsp_patch, out_instrument: ptr<nk_audio_dsp_instrument> @out @owned) -> nk_result;
+	extern fn nk_audio_dsp_instrument_create_from_sample(engine: nk_audio_dsp_engine, options: ptr<const<nk_audio_dsp_sample_options>>, samples: ptr<const<f32>> @in_array("sample_count"), sample_count: u32, out_instrument: ptr<nk_audio_dsp_instrument> @out @owned) -> nk_result;
+	/**
+	 * Prepare independent note slots and layered voices before attaching/playing.
+	 * SF2 envelopes and filters are preserved; gain is applied to the dry output.
+	 * SF2 modulators and per-region reverb/chorus sends are not supported.
+	 */
+	extern fn nk_audio_dsp_instrument_create_from_soundfont(engine: nk_audio_dsp_engine, soundfont: nk_audio_soundfont, preset_index: u32, gain: f32, out_instrument: ptr<nk_audio_dsp_instrument> @out @owned) -> nk_result;
 	/**
 	 * Destroys an instrument and releases any voices using it.
 	 */
@@ -1153,6 +1186,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Sets linear gain for the process-wide NativeKit audio mixer.
 	 */
 	extern fn nk_audio_set_master_volume(volume: f32) -> nk_result;
+	extern fn nk_audio_soundfont_destroy(soundfont: nk_audio_soundfont) -> nk_result;
+	extern fn nk_audio_soundfont_get_preset_count(soundfont: nk_audio_soundfont, out_count: ptr<u32> @out) -> nk_result;
+	extern fn nk_audio_soundfont_get_preset_info(soundfont: nk_audio_soundfont, index: u32, out_info: ptr<nk_audio_soundfont_preset_info> @inout) -> nk_result;
+	extern fn nk_audio_soundfont_load_memory(bytes: ptr<const<u8>> @in_array("byte_count"), byte_count: u32, out_soundfont: ptr<nk_audio_soundfont> @out @owned) -> nk_result;
 	/**
 	 * Returns whether a voice has reached its end.
 	 */
@@ -1753,6 +1790,18 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		reserved2: array<u64, 2> @offset(16);
 	}
 	/**
+	 * A note identity is independent of the physical voice slot. The returned
+	 * 64-bit token is never reused within an engine. Zero hold_frames means held.
+	 */
+	struct nk_audio_dsp_note_options @layout(32, 8) {
+		struct_size: u32 @offset(0);
+		note: u32 @offset(4);
+		velocity: f32 @offset(8);
+		priority: i32 @offset(12);
+		start_frame: u64 @offset(16);
+		hold_frames: u64 @offset(24);
+	}
+	/**
 	 * Oscillator source component in a reusable patch.
 	 */
 	struct nk_audio_dsp_oscillator_options @layout(32, 8) {
@@ -1872,6 +1921,40 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		sample_count: u64 @offset(24);
 	}
 	/**
+	 * Coherent consumer snapshot. Counters are cumulative until engine destruction.
+	 * collect() reclaims resources off the callback after consumer acknowledgement.
+	 */
+	struct nk_audio_dsp_runtime_status @layout(72, 8) {
+		struct_size: u32 @offset(0);
+		playing: u32 @offset(4);
+		section: u32 @offset(8);
+		reserved: u32 @offset(12);
+		frame: u64 @offset(16);
+		loops: u64 @offset(24);
+		stolen_voices: u64 @offset(32);
+		dropped_notes: u64 @offset(40);
+		retired_resources: u64 @offset(48);
+		bpm: f64 @offset(56);
+		/**
+		 * Source-clock gaps skipped without replaying overdue score notes.
+		 */
+		clock_discontinuities: u64 @offset(64);
+	}
+	/**
+	 * Immutable interleaved PCM instrument, pitched relative to root_note.
+	 * A nonempty loop repeats through the release envelope. All PCM is copied.
+	 */
+	struct nk_audio_dsp_sample_options @layout(72, 8) {
+		struct_size: u32 @offset(0);
+		sample_rate: u32 @offset(4);
+		channels: u32 @offset(8);
+		root_note: u32 @offset(12);
+		loop_start_frame: u32 @offset(16);
+		loop_end_frame: u32 @offset(20);
+		gain: f32 @offset(24);
+		envelope: nk_audio_dsp_envelope_options @offset(32);
+	}
+	/**
 	 * Values use source-specific domains; obtain defaults before editing.
 	 * Spectral amplitudes are nonnegative and must sum to one (7 for bank, 16 for harmonic).
 	 * Other sources require zero amplitudes. Source configuration is immutable.
@@ -1881,6 +1964,31 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		kind: nk_audio_dsp_source_kind @offset(4);
 		values: array<f32, 38> @offset(8);
 		amplitudes: array<f32, 16> @offset(160);
+	}
+	/**
+	 * Prepared event offsets preserve fractional frames across loops. kind is 0
+	 * for note-on, 1 for note-off, 2 for tempo. note_id is section-local and pairs
+	 * starts/releases; native note tokens distinguish different loop generations.
+	 */
+	struct nk_audio_dsp_transport_event @layout(32, 8) {
+		frame: f64 @offset(0);
+		kind: u32 @offset(8);
+		note_id: u32 @offset(12);
+		instrument: nk_audio_dsp_instrument @offset(16);
+		note: u32 @offset(20);
+		velocity: f32 @offset(24);
+		bpm: f32 @offset(28);
+	}
+	struct nk_audio_dsp_transport_section @layout(24, 8) {
+		length_frames: f64 @offset(0);
+		event_offset: u32 @offset(8);
+		event_count: u32 @offset(12);
+		bar_offset: u32 @offset(16);
+		bar_count: u32 @offset(20);
+	}
+	struct nk_audio_dsp_transport_track @layout(16, 8) {
+		engine: nk_audio_dsp_engine @offset(0);
+		program_id: u64 @offset(8);
 	}
 	/**
 	 * Advanced voice controls, supplied separately to preserve the original patch ABI.
@@ -1919,6 +2027,26 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		additional_lfo_count: u32 @offset(144);
 		reserved3: u32 @offset(148);
+	}
+	/**
+	 * Native voice admission. Configure before attaching the engine. Legacy engines
+	 * retain strict admission until explicitly configured. Reserved tails continue
+	 * stolen waveforms through a bounded fade; admission fails if all tails are busy.
+	 */
+	struct nk_audio_dsp_voice_policy_options @layout(16, 4) {
+		struct_size: u32 @offset(0);
+		steal_enabled: u32 @offset(4);
+		tail_voices: u32 @offset(8);
+		fade_frames: u32 @offset(12);
+	}
+	struct nk_audio_soundfont_preset_info @layout(24, 8) {
+		struct_size: u32 @offset(0);
+		bank: u32 @offset(4);
+		program: u32 @offset(8);
+		/**
+		 * UTF-8 name borrowed until the bank is destroyed.
+		 */
+		name: utf8 @offset(16);
 	}
 	/**
 	 * Three-dimensional audio coordinate in the right-handed OpenGL convention.
@@ -2078,6 +2206,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * Opaque handle for one reusable set of mixer bus targets.
 	 */
 	handle nk_audio_mix_snapshot : u32 @destroy("nk_audio_mix_snapshot_destroy");
+	/**
+	 * Immutable decoded SF2 bank; loading must run outside the audio callback.
+	 */
+	handle nk_audio_soundfont : u32 @destroy("nk_audio_soundfont_destroy");
 	/**
 	 * Opaque handle for one independent playback voice.
 	 */

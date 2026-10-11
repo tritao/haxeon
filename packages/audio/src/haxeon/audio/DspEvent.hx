@@ -37,7 +37,11 @@ class DspEvent {
 		this.durationFrames = durationFrames;
 	}
 
-	/** Starts a voice at an inclusive MIDI note and normalized velocity. */
+	/** Starts a voice at an inclusive MIDI note and normalized velocity.
+	 * Reusing a sounding identity restarts its note and retriggered LFO phases
+	 * through a five-millisecond stereo continuity bridge. It replaces that
+	 * voice; use distinct identities for notes that should overlap.
+	 */
 	public static function noteOn(instrument:DspInstrument, voiceId:Int, note:Int,
 		velocity:Float = 1.0, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)

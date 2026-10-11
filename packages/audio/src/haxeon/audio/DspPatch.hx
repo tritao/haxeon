@@ -7,7 +7,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import haxeon.platform.NativeKitError;
 
 /** Immutable reusable native DSP patch definition. */
-class DspPatch {
+class DspPatch implements InstrumentDefinition {
 	final value:DspPatchHandle;
 	final owned:OwnedDspPatchHandle;
 	var disposed:Bool = false;

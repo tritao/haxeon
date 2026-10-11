@@ -6,6 +6,8 @@ import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import haxeon.platform.NativeKitError;
 import haxe.io.Bytes;
+import haxe.Int64;
+import haxeon.audio.DspTransport;
 
 /** Owns a standalone native DSP renderer and its instruments. */
 class DspEngine {
@@ -44,6 +46,118 @@ class DspEngine {
 		instruments.push(result);
 		return result;
 	}
+
+    @:allow(haxeon.audio.SampleInstrument)
+    private function createSampleInstrument(options:NativeDspSampleOptions, samples:Array<Float>):DspInstrument {
+        ensureLive();
+        var made = NativeKitAudio.nk_audio_dsp_instrument_create_from_sample(value, options, samples);
+        AudioResult.check(made.status, "audio.dsp.instrument.sample");
+        var result = new DspInstrument(made.out_instrument);
+        instruments.push(result);
+        return result;
+    }
+
+    public function createSoundFontInstrument(font:SoundFont, preset:Int, gain:Float = 1.0):DspInstrument {
+        ensureLive();
+        if (font == null) throw "SoundFont must not be null";
+        var made = NativeKitAudio.nk_audio_dsp_instrument_create_from_soundfont(value,
+            font.nativeHandle(), preset, gain);
+        AudioResult.check(made.status, "audio.dsp.instrument.soundfont");
+        var result = new DspInstrument(made.out_instrument);
+        instruments.push(result);
+        return result;
+    }
+
+    /** Configure bounded voice stealing before attachment or playback. */
+    public function setVoicePolicy(tailVoices:Int = 8, fadeFrames:Int = 240):Void {
+        ensureLive();
+        var policy = new NativeDspVoicePolicyOptions();
+        policy.set_struct_size(NativeDspVoicePolicyOptions.size());
+        policy.set_steal_enabled(1); policy.set_tail_voices(tailVoices); policy.set_fade_frames(fadeFrames);
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_set_voice_policy(value, policy),
+            "audio.dsp.engine.voicePolicy");
+    }
+
+    /** Native identity and release deadline; no application-thread note-off pumping. */
+    public function noteOn(instrument:DspInstrument, note:Int, velocity:Float,
+        startFrame:Int64, holdFrames:Int64, priority:Int = 0):Int64 {
+        var token = tryNoteOn(instrument, note, velocity, startFrame, holdFrames, priority);
+        if (token == null) throw new NativeKitError(Result.ErrorQueueFull, "audio.dsp.engine.noteOn",
+            "DSP runtime command queue is full");
+        return cast token;
+    }
+    /** Ordinary overload admission: null means the bounded ingress queue is full. */
+    public function tryNoteOn(instrument:DspInstrument, note:Int, velocity:Float,
+        startFrame:Int64, holdFrames:Int64, priority:Int = 0):Null<Int64> {
+        ensureLive();
+        if (instrument == null) throw "DSP note instrument must not be null";
+        var options = new NativeDspNoteOptions();
+        options.set_struct_size(NativeDspNoteOptions.size()); options.set_note(note);
+        options.set_velocity(velocity); options.set_start_frame(startFrame);
+        options.set_hold_frames(holdFrames); options.set_priority(priority);
+        var result = NativeKitAudio.nk_audio_dsp_engine_note_on(value, instrument.nativeHandle(), options);
+        if (result.status == Result.ErrorQueueFull) return null;
+        AudioResult.check(result.status, "audio.dsp.engine.noteOn");
+        return result.out_note_token;
+    }
+    public function noteOff(token:Int64, frame:Int64):Void {
+        ensureLive();
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_note_off(value, token, frame),
+            "audio.dsp.engine.noteOff");
+    }
+    public function prepareTransport(sections:Array<DspTransportSection>):DspTransport {
+        ensureLive();
+        var nativeSections:Array<NativeDspTransportSection> = [];
+        var nativeEvents:Array<NativeDspTransportEvent> = [];
+        var bars:Array<Float> = [];
+        for (section in sections) {
+            var prepared = new NativeDspTransportSection();
+            prepared.set_length_frames(section.lengthFrames);
+            prepared.set_event_offset(nativeEvents.length); prepared.set_event_count(section.events.length);
+            prepared.set_bar_offset(bars.length); prepared.set_bar_count(section.bars.length);
+            nativeSections.push(prepared);
+            for (event in section.events) {
+                var item = new NativeDspTransportEvent();
+                item.set_frame(event.frame); item.set_kind(event.kind); item.set_note_id(event.noteId);
+                item.set_instrument(event.instrument == null ? DspInstrumentHandle.invalid() : event.instrument.nativeHandle());
+                item.set_note(event.note); item.set_velocity(event.velocity); item.set_bpm(event.bpm);
+                nativeEvents.push(item);
+            }
+            for (bar in section.bars) bars.push(bar);
+        }
+        var result = NativeKitAudio.nk_audio_dsp_engine_prepare_transport(value, nativeSections, nativeEvents, bars);
+        AudioResult.check(result.status, "audio.dsp.transport.prepare");
+        return new DspTransport(this, result.out_program_id);
+    }
+    public function requestSection(section:Int):Void {
+        ensureLive();
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_request_section(value, section),
+            "audio.dsp.transport.requestSection");
+    }
+    public function stopTransport():Void {
+        ensureLive();
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_stop_transport(value), "audio.dsp.transport.stop");
+    }
+    public function runtimeStatus():DspRuntimeStatus {
+        ensureLive();
+        var status = new NativeDspRuntimeStatus(); status.set_struct_size(NativeDspRuntimeStatus.size());
+        var result = NativeKitAudio.nk_audio_dsp_engine_get_runtime_status(value, status);
+        AudioResult.check(result.status, "audio.dsp.runtime.status");
+        status = result.out_status;
+        return {playing:status.get_playing()!=0, section:status.get_section(), frame:status.get_frame(),
+            loops:status.get_loops(), bpm:status.get_bpm(), stolenVoices:status.get_stolen_voices(),
+            droppedNotes:status.get_dropped_notes(), retiredResources:status.get_retired_resources(),
+            clockDiscontinuities:status.get_clock_discontinuities()};
+    }
+    public function collect():Void {
+        ensureLive();
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_collect(value), "audio.dsp.engine.collect");
+        var index = instruments.length;
+        while (index > 0) {
+            --index;
+            if (instruments[index].isDisposed()) instruments.splice(index, 1);
+        }
+    }
 
 	public function reset():Void {
 		ensureLive();
