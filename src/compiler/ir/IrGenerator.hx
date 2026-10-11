@@ -57,6 +57,7 @@ class IrGenerator {
 	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
 	static var valueClasses:Map<String, Bool> = [];
 	static var headerlessValueClasses:Bool = true;
+	static var flatValueObjects:Map<String, IrObject> = [];
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 
@@ -80,6 +81,14 @@ class IrGenerator {
 		for (classDecl in classes)
 			if (classDecl.isValue)
 				valueClasses.set(Std.string(classDecl.name), true);
+	}
+
+	/** Flat value objects also have a selected native field layout for RawPtr aggregate copies. */
+	public static function bindFlatValueObjects(objects:Array<IrObject>):Void {
+		flatValueObjects = [];
+		for (object in objects)
+			if (object.isValue && object.nativeLayout != null)
+				flatValueObjects.set(object.name, object);
 	}
 
 	/** HashLink stores value classes as headerless structs; Wasm represents them as ordinary references. */
@@ -323,9 +332,31 @@ class IrGenerator {
 						builder.fieldSet(cell, "value", loweredValue);
 					}
 				case TFieldAssign(object, name, value, _):
-					var operands = lowerOperands([object, value], builder, localTypes);
-					if (!builder.isTerminated())
-						builder.fieldSet(operands[0], name, operands[1]);
+					var projection = flatRawPointerProjection(object);
+					if (projection != null) {
+						var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
+							layout = field.field.nativeLayout;
+						if (layout == null)
+							throw 'Missing Flat field layout for "${field.field.name}"';
+						var operands = lowerOperands([projection.pointer, value], builder, localTypes);
+						if (!builder.isTerminated()) {
+							var address = flatFieldPointer(operands[0], field.offset, builder);
+							if (layout.inlineRecord) {
+								var nested = flatObjectName(field.field.type);
+								if (nested == null)
+									throw 'Flat inline field "${field.field.name}" has no Flat value type';
+								lowerFlatValueStore(nested, address, operands[1], builder, []);
+							} else {
+								if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
+									throw 'Unsupported scalar field width ${layout.size} in Flat value "${projection.recordName}"';
+								builder.memoryStore(address, operands[1], layout.size);
+							}
+						}
+					} else {
+						var operands = lowerOperands([object, value], builder, localTypes);
+						if (!builder.isTerminated())
+							builder.fieldSet(operands[0], name, operands[1]);
+					}
 				case TStaticFieldAssign(name, field, value, _):
 					var loweredValue = lowerExpression(value, builder, localTypes);
 					if (!builder.isTerminated())
@@ -838,7 +869,12 @@ class IrGenerator {
 
 	static function unboxMapValue(builder:CfgBuilder, stored:CfgValue, box:CompilerType, target:IrType):CfgValue {
 		var array = abiBoundaryCast(builder, stored, lowerType(box));
-		return elementGet(builder, array, builder.constInt(0), target);
+		var elementType = switch box {
+			case TArray(element): lowerType(element);
+			default: throw 'Map value box $box is not an array';
+		};
+		var value = elementGet(builder, array, builder.constInt(0), elementType);
+		return sameIrType(value.type, target) ? value : abiBoundaryCast(builder, value, target);
 	}
 
 	/** `Map.values` of boxed entries: the native values array holds the boxes, so each is unboxed into a typed array. */
@@ -1045,6 +1081,128 @@ class IrGenerator {
 				};
 			default: left == right;
 		};
+
+	static function flatValueObjectName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.Class, name, []) if (flatValueObjects.exists(name)): name;
+			case TAbstract(_, _, representation): flatValueObjectName(representation);
+			case _: null;
+		};
+
+	static function flatObjectName(type:IrType):Null<String>
+		return switch type {
+			case Obj(name) if (flatValueObjects.exists(name)): name;
+			case _: null;
+		};
+
+	static function flatRawPointerProjection(expression:TypedExpression):Null<{pointer:TypedExpression, recordName:String, path:Array<String>}> {
+		return switch expression.expression {
+			case TCall("$rawptr.load.flat", [pointer]):
+				var recordName = flatValueObjectName(expression.type);
+				recordName == null ? null : {pointer: pointer, recordName: recordName, path: []};
+			case TField(object, name):
+				var projection = flatRawPointerProjection(object);
+				projection == null ? null : {
+					pointer: projection.pointer,
+					recordName: projection.recordName,
+					path: projection.path.concat([name])
+				};
+			case TCast(inner), TAbiCast(inner): flatRawPointerProjection(inner);
+			case _: null;
+		};
+	}
+
+	static function flatFieldAtPath(recordName:String, path:Array<String>):{offset:Int, field:IrObjectField} {
+		if (path.length == 0)
+			throw 'Empty Flat field path for "$recordName"';
+		var currentName = recordName, offset = 0, selected:Null<IrObjectField> = null;
+		for (index in 0...path.length) {
+			var object = flatValueObjects.get(currentName);
+			if (object == null)
+				throw 'Missing Flat value layout for "$currentName"';
+			var field:Null<IrObjectField> = null;
+			for (candidate in object.fields)
+				if (candidate.name == path[index]) {
+					field = candidate;
+					break;
+				}
+			if (field == null)
+				throw 'Missing Flat field "$currentName.${path[index]}"';
+			var layout = field.nativeLayout;
+			if (layout == null)
+				throw 'Missing Flat field layout for "$currentName.${field.name}"';
+			offset += layout.offset;
+			selected = field;
+			if (index + 1 < path.length) {
+				if (!layout.inlineRecord)
+					throw 'Flat field path traverses non-record field "$currentName.${field.name}"';
+				var nested = flatObjectName(field.type);
+				if (nested == null)
+					throw 'Flat inline field "$currentName.${field.name}" has no Flat value type';
+				currentName = nested;
+			}
+		}
+		if (selected == null)
+			throw 'Empty Flat field path for "$recordName"';
+		return {offset: offset, field: selected};
+	}
+
+	static function flatFieldPointer(pointer:CfgValue, offset:Int, builder:CfgBuilder):CfgValue
+		return offset == 0 ? pointer : builder.pointerOffset(pointer, builder.constInt(offset));
+
+	static function lowerFlatValueLoad(name:String, pointer:CfgValue, builder:CfgBuilder, visiting:Array<String>):CfgValue {
+		if (visiting.indexOf(name) >= 0)
+			throw 'Recursive Flat value layout while loading "$name"';
+		var object = flatValueObjects.get(name);
+		if (object == null)
+			throw 'Missing Flat value layout for "$name"';
+		var result = builder.newObject(name),
+			nextVisiting = visiting.concat([name]);
+		for (field in object.fields) {
+			var layout = field.nativeLayout;
+			if (layout == null)
+				throw 'Missing Flat field layout for "$name.${field.name}"';
+			var fieldPointer = flatFieldPointer(pointer, layout.offset, builder),
+				value = if (layout.inlineRecord) {
+					var nested = flatObjectName(field.type);
+					if (nested == null)
+						throw 'Flat inline field "$name.${field.name}" has no Flat value type';
+					lowerFlatValueLoad(nested, fieldPointer, builder, nextVisiting);
+				} else {
+					if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
+						throw 'Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"';
+					builder.memoryLoad(fieldPointer, field.type, layout.size, layout.signed);
+				};
+			builder.fieldSet(result, field.name, value);
+		}
+		return result;
+	}
+
+	static function lowerFlatValueStore(name:String, pointer:CfgValue, value:CfgValue, builder:CfgBuilder, visiting:Array<String>):Void {
+		if (visiting.indexOf(name) >= 0)
+			throw 'Recursive Flat value layout while storing "$name"';
+		var object = flatValueObjects.get(name);
+		if (object == null)
+			throw 'Missing Flat value layout for "$name"';
+		var nextVisiting = visiting.concat([name]);
+		for (field in object.fields) {
+			var layout = field.nativeLayout;
+			if (layout == null)
+				throw 'Missing Flat field layout for "$name.${field.name}"';
+			var fieldPointer = flatFieldPointer(pointer, layout.offset, builder),
+				fieldValue = builder.fieldGet(value, field.name, field.type);
+			if (layout.inlineRecord) {
+				var nested = flatObjectName(field.type);
+				if (nested == null)
+					throw 'Flat inline field "$name.${field.name}" has no Flat value type';
+				lowerFlatValueStore(nested, fieldPointer, fieldValue, builder, nextVisiting);
+			} else {
+				if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
+					throw 'Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"';
+				builder.memoryStore(fieldPointer, fieldValue, layout.size);
+			}
+		}
+	}
 
 	static function lowerExpression(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var previous = builder.enterSource(expression.span);
@@ -1258,6 +1416,11 @@ class IrGenerator {
 					default: throw "RawPtr.load signedness must be constant";
 				};
 				builder.memoryLoad(lowerExpression(pointer, builder, localTypes), lowerType(expression.type), width, isSigned);
+			case TCall("$rawptr.load.flat", [pointer]):
+				var name = flatValueObjectName(expression.type);
+				if (name == null)
+					throw 'RawPtr flat load lost its concrete value record type: ${expression.type}';
+				lowerFlatValueLoad(name, lowerExpression(pointer, builder, localTypes), builder, []);
 			case TCall("$rawptr.store", [pointer, value, size]):
 				var width = switch size.expression {
 					case TIntLiteral(value): value;
@@ -1268,6 +1431,13 @@ class IrGenerator {
 					builder.memoryStore(operands[0], operands[1], width);
 					builder.constVoid();
 				}
+			case TCall("$rawptr.store.flat", [pointer, value]):
+				var name = flatValueObjectName(value.type);
+				if (name == null)
+					throw 'RawPtr flat store lost its concrete value record type: ${value.type}';
+				var operands = lowerOperands([pointer, value], builder, localTypes);
+				lowerFlatValueStore(name, operands[0], operands[1], builder, []);
+				builder.constVoid();
 			case TCall("$rawptr.offset", [pointer, count, stride]):
 				var elementSize = switch stride.expression {
 					case TIntLiteral(value): value;
@@ -1371,8 +1541,10 @@ class IrGenerator {
 					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
 					checkedCast(builder, builder.toDyn(source),
 					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
-					builder.intToFloat(source); else
-					throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+					builder.intToFloat(source); else if ((source.type == F64
+					&& target == F32)
+					|| (source.type == F32 && target == F64)) builder.floatToFloat(source,
+						target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -2282,6 +2454,10 @@ class IrGenerator {
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
+			// Struct and @:value instances are stored inline in HashLink value fields. Keep
+			// Null<V> boxed so nullable captures/cells can represent the absent state instead
+			// of writing a null pointer into a packed inline field.
+			case TNullable(TInstance(NominalKind.Class, name, _)) if (valueClasses.exists(name)): Dyn;
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : nullablePrimitive(lowerType(element));
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));

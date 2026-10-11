@@ -188,6 +188,7 @@ class ModuleCanonicalizer {
 			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
+			metadata: canonicalMetadata(decl.metadata, module, entry, locals, aliases),
 			underlying: canonicalType(decl.underlying, aliases),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
@@ -201,6 +202,20 @@ class ModuleCanonicalizer {
 			],
 			span: decl.span
 		};
+
+	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String, entry:String, locals:Map<String, Bool>,
+			aliases:AliasTable):Array<compiler.syntax.Ast.AstMetadata>
+		return [
+			for (annotation in metadata)
+				{
+					name: resolveTypeName(annotation.name, aliases),
+					arguments: [
+						for (argument in annotation.arguments)
+							canonicalExpression(argument, module, entry, locals, aliases)
+					],
+					span: annotation.span
+				}
+		];
 
 	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable, packageName:Null<String>, module:String, entry:String,
 			locals:Map<String, Bool>):compiler.syntax.Ast.AstAbstract

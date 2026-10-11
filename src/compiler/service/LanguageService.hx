@@ -196,6 +196,7 @@ class LanguageService {
 	static inline final MAX_REFERENCE_RESULTS = 10000;
 
 	public var compiler(default, null):Compiler;
+
 	final editorSources:Map<String, String> = [];
 	final configurationCompilers:Map<String, Compiler> = [];
 	final configurationOrder:Array<String> = [];
@@ -213,17 +214,22 @@ class LanguageService {
 
 	public function update(path:String, source:String):ModuleState {
 		editorSources.set(path, source);
-		for (candidate in configurationCompilers) if (candidate != compiler) candidate.update(path, source);
+		for (candidate in configurationCompilers)
+			if (candidate != compiler)
+				candidate.update(path, source);
 		return compiler.update(path, source);
 	}
 
 	public function remove(path:String):Bool {
 		editorSources.remove(path);
-		for (candidate in configurationCompilers) if (candidate != compiler) candidate.remove(path);
+		for (candidate in configurationCompilers)
+			if (candidate != compiler)
+				candidate.remove(path);
 		return compiler.remove(path);
 	}
 
-	public function configure(identity:String, scopeIdentity:String, defines:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration, ffiIdentity:String = ""):Void {
+	public function configure(identity:String, scopeIdentity:String, defines:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration,
+			ffiIdentity:String = ""):Void {
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
 			// Typed declarations and frozen FFI models belong to one configuration.
@@ -232,14 +238,16 @@ class LanguageService {
 			if (selected == null) {
 				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
 				selected.addSourceRoot("stdlib");
-				for (path => source in editorSources) selected.update(path, source);
+				for (path => source in editorSources)
+					selected.update(path, source);
 				configurationCompilers.set(key, selected);
 			}
 			compiler = selected;
 			activeConfiguration = key;
 			configurationOrder.remove(key);
 			configurationOrder.push(key);
-			while (configurationOrder.length > 3) configurationCompilers.remove(configurationOrder.shift());
+			while (configurationOrder.length > 3)
+				configurationCompilers.remove(configurationOrder.shift());
 		}
 		editorDefines = [for (define in defines) define => "1"];
 		workspaceIndex.clear();
@@ -651,7 +659,8 @@ class LanguageService {
 
 	/** Current syntax facts remain safe for navigation when dependency typing fails. */
 	public function hasCurrentSyntax(path:String):Bool {
-		var state = stateFor(path), model = state == null ? null : effectiveSemanticModel(state);
+		var state = stateFor(path),
+			model = state == null ? null : effectiveSemanticModel(state);
 		return state != null && model != null && model.revision == state.revision;
 	}
 
@@ -708,8 +717,8 @@ class LanguageService {
 		for (classDecl in ast.classes) {
 			result.push({
 				name: classDecl.name,
-				kind: "class",
-				detail: 'class ${classDecl.name}',
+				kind: classDecl.isStruct == true ? "struct" : "class",
+				detail: '${classDecl.isStruct == true ? "struct" : "class"} ${classDecl.name}',
 				span: classDecl.span
 			});
 			for (field in classDecl.fields)
@@ -920,8 +929,8 @@ class LanguageService {
 			if (lexical.kind == Eof)
 				continue;
 			var type:Null<String> = switch lexical.kind {
-				case Identifier: var semantic = semanticTokenType(model,
-						lexical.span.start, semanticTypes); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+				case Identifier: var semantic = semanticTokenType(model, lexical.span.start,
+						semanticTypes); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
 				case StringLiteral: "string";
@@ -1104,7 +1113,8 @@ class LanguageService {
 		else {
 			var declaration = typeDeclaration(context.model.index.typeAt(position));
 			if (declaration != null)
-				target = isCurrent(path) ? compiler.semanticWorkspace.resolveTypeSymbolId(declaration) : recoveredTypeSymbol(context.model, declaration, symbol == null ? position : symbol.symbol.declaration.start);
+				target = isCurrent(path) ? compiler.semanticWorkspace.resolveTypeSymbolId(declaration) : recoveredTypeSymbol(context.model, declaration,
+					symbol == null ? position : symbol.symbol.declaration.start);
 		}
 		if (target == null)
 			return null;
@@ -1116,24 +1126,34 @@ class LanguageService {
 	function recoveredTypeSymbol(model:SemanticModel, name:String, position:Int):Null<SemanticSymbolId> {
 		var methods = model.program.functions.copy();
 		for (owner in model.program.classes) {
-			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0)
+				return null;
 			methods = methods.concat(owner.methods);
 		}
 		for (owner in model.program.abstracts) {
-			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0)
+				return null;
 			methods = methods.concat(owner.methods);
 		}
 		for (owner in model.program.interfaces) {
-			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0) return null;
+			if (position >= owner.span.start && position <= owner.span.end && owner.typeParameters.indexOf(name) >= 0)
+				return null;
 			methods = methods.concat(owner.methods);
 		}
 		for (method in methods)
-			if (position >= method.span.start && position <= method.span.end && method.typeParameters.indexOf(name) >= 0) return null;
-		if (name.indexOf(".") >= 0) return compiler.semanticWorkspace.resolveTypeSymbolId(name);
+			if (position >= method.span.start && position <= method.span.end && method.typeParameters.indexOf(name) >= 0)
+				return null;
+		if (name.indexOf(".") >= 0)
+			return compiler.semanticWorkspace.resolveTypeSymbolId(name);
 		for (symbol in model.index.symbols)
-			if (symbol.name == name && isTypeDeclaration(symbol.kind)) return symbol.id;
-		var imports = [for (path in model.program.imports) if (StringTools.endsWith(path, "." + name)) path];
-		if (imports.length > 0) return imports.length == 1 ? compiler.semanticWorkspace.resolveTypeSymbolId(imports[0]) : null;
+			if (symbol.name == name && isTypeDeclaration(symbol.kind))
+				return symbol.id;
+		var imports = [
+			for (path in model.program.imports)
+				if (StringTools.endsWith(path, "." + name)) path
+		];
+		if (imports.length > 0)
+			return imports.length == 1 ? compiler.semanticWorkspace.resolveTypeSymbolId(imports[0]) : null;
 		var prefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
 		return compiler.semanticWorkspace.resolveTypeSymbolId(prefix + name);
 	}
@@ -1175,9 +1195,16 @@ class LanguageService {
 	function definitionLocation(state:ModuleState, symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
 		var origin = compiler.ffiSourceOrigin(symbol.declaration.file.path, symbol.name);
 		return origin == null ? {
-			path: symbol.declaration.file.path, span: symbol.declaration,
-			revision: snapshotRevision(state), stale: snapshotRevision(state) != state.revision
-		} : {path: origin.file.path, span: origin, revision: 0, stale: false};
+			path: symbol.declaration.file.path,
+			span: symbol.declaration,
+			revision: snapshotRevision(state),
+			stale: snapshotRevision(state) != state.revision
+		} : {
+			path: origin.file.path,
+			span: origin,
+			revision: 0,
+			stale: false
+			};
 	}
 
 	public function references(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
@@ -1456,13 +1483,16 @@ class LanguageService {
 
 	function semanticTokenType(model:Null<SemanticModel>, position:Int, cache:Map<String, String>):String {
 		var id = model == null ? null : model.index.symbolIdAt(position + 1);
-		if (id == null) return "variable";
+		if (id == null)
+			return "variable";
 		var key = Std.string(id), cached = cache.get(key);
-		if (cached != null) return cached;
+		if (cached != null)
+			return cached;
 		var symbol = model.index.symbol(id);
 		if (symbol == null) {
 			var resolved = compiler.semanticWorkspace.indexedSymbol(id);
-			if (resolved != null) symbol = resolved.symbol;
+			if (resolved != null)
+				symbol = resolved.symbol;
 		}
 		if (symbol == null)
 			return "variable";
@@ -1475,7 +1505,8 @@ class LanguageService {
 			case DeclarationKind.TypeParameter: "typeParameter";
 			case DeclarationKind.Function: "function";
 			case DeclarationKind.Member:
-				compiler.semanticWorkspace.indexedSignature(symbol.id) != null ? "method" : Std.string(symbol.id).indexOf(":local:") >= 0 ? "variable" : "property";
+				compiler.semanticWorkspace.indexedSignature(symbol.id) != null ? "method" : Std.string(symbol.id)
+					.indexOf(":local:") >= 0 ? "variable" : "property";
 		};
 		cache.set(key, type);
 		return type;

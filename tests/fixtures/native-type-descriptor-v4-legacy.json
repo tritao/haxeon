@@ -1,0 +1,38 @@
+{
+  "descriptors": [
+    {
+      "alignment": 4,
+      "annotationValues": [],
+      "annotations": [],
+      "arguments": [],
+      "fields": [
+        {
+          "alignment": 4,
+          "annotationValues": [],
+          "annotations": [],
+          "arguments": [],
+          "defaultValue": {
+            "type": "Int",
+            "value": 7
+          },
+          "fields": [],
+          "flat": true,
+          "name": "value",
+          "offset": 0,
+          "portable": true,
+          "recursive": false,
+          "size": 4,
+          "type": "Int"
+        }
+      ],
+      "flat": true,
+      "hash": "c53ad0bec33902b10b2cb636be67e3b3c5e32eb198e08ea7fe8e76f88272e9ee",
+      "name": "LegacySchemaProbe",
+      "portable": true,
+      "size": 4,
+      "type": "class:LegacySchemaProbe<>",
+      "version": 4
+    }
+  ],
+  "formatVersion": 3
+}

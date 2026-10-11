@@ -24,7 +24,10 @@ typedef WasmAnalysisVisitor = IrFunction->Array<WasmSafepoint>->Void;
 class WasmGcRoots {
 	public static inline final SECTION_VERSION:Int = 1;
 
-	public static function analyze(fn:IrFunction):Array<WasmSafepoint> {
+	public static function analyze(fn:IrFunction, ?program:IrProgram):Array<WasmSafepoint>
+		return analyzeWithFields(fn, allocatingFields(program));
+
+	static function analyzeWithFields(fn:IrFunction, fields:Map<String, Bool>):Array<WasmSafepoint> {
 		var graph = new IrGraph(fn),
 			referenceIds:Array<Int> = [],
 			seenReferences:Map<Int, Bool> = [];
@@ -89,7 +92,7 @@ class WasmGcRoots {
 				for (input in IrOperands.inputs(instruction))
 					if (WasmTarget.isReference(input.type))
 						setBit(current, requiredIndex(referenceIndices, input.id));
-				if (isSafepoint(instruction))
+				if (isSafepoint(instruction, fields))
 					result.push({block: id, instruction: block.instructions.length - 1 - index, liveReferences: liveReferenceIds(current, referenceIds)});
 			}
 		}
@@ -103,14 +106,14 @@ class WasmGcRoots {
 
 	/** Encodes root metadata and lets the caller consume each function analysis before moving on. */
 	public static function encodeAndVisit(program:IrProgram, ?visit:WasmAnalysisVisitor):Bytes {
-		var output = new BytesOutput();
+		var fields = allocatingFields(program), output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HGR");
 		output.writeByte(SECTION_VERSION);
 		output.writeInt32(program.functions.length);
 		for (fn in program.functions) {
 			IrTypeCodec.writeString(output, fn.name);
-			var points = analyze(fn);
+			var points = analyzeWithFields(fn, fields);
 			output.writeInt32(points.length);
 			for (point in points) {
 				output.writeInt32(point.block);
@@ -125,10 +128,26 @@ class WasmGcRoots {
 		return output.getBytes();
 	}
 
-	static function isSafepoint(instruction:IrInstruction):Bool
+	/** Inline-record reads allocate an owning view; live copies must remain rooted there. */
+	static function allocatingFields(program:Null<IrProgram>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		if (program != null)
+			for (object in program.objects)
+				for (field in object.fields)
+					if (field.nativeLayout != null && field.nativeLayout.inlineRecord)
+						result.set(object.name + "." + field.name, true);
+		return result;
+	}
+
+	static function isSafepoint(instruction:IrInstruction, fields:Map<String, Bool>):Bool
 		return switch instruction {
 			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _), NewObject(_, _), InstanceClosure(_, _, _),
 				MakeEnum(_, _, _, _), IteratorNew(_, _), BeginTry(_, _): true;
+			case FieldGet(_, object, name):
+				switch object.type {
+					case Obj(typeName): fields.exists(typeName + "." + name);
+					default: false;
+				};
 			case ToDyn(_, value):
 				switch value.type {
 					case I32, Bool, I64, F64: true;

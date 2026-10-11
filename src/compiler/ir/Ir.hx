@@ -72,6 +72,7 @@ enum IrInstruction {
 	IntToFloat(output:IrValue, value:IrValue);
 	IntToInt64(output:IrValue, value:IrValue);
 	FloatToInt(output:IrValue, value:IrValue);
+	FloatToFloat(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry(catchBlock:Int);
@@ -181,8 +182,20 @@ typedef IrCNative = {
 	final result:IrType;
 }
 
+/** C-compatible placement metadata for one field in an inferred Flat record. */
+typedef IrObjectFieldNativeLayout = {
+	final offset:Int;
+	final size:Int;
+	final alignment:Int;
+	final signed:Bool;
+	final inlineRecord:Bool;
+}
+
+/** C-compatible payload layout for a Flat record on the active ABI. */
+typedef IrObjectNativeLayout = {final target:String; final size:Int; final alignment:Int;}
+
 /** Runtime-visible field in an IR object layout. */
-typedef IrObjectField = {final name:String; final type:IrType;}
+typedef IrObjectField = {final name:String; final type:IrType; @:optional final nativeLayout:Null<IrObjectFieldNativeLayout>;}
 
 /** Method name and implementing function attached to an IR object. */
 typedef IrObjectMethod = {final name:String; final functionName:String;}
@@ -191,6 +204,7 @@ typedef IrObjectMethod = {final name:String; final functionName:String;}
 typedef IrObject = {
 	final name:String;
 	final isValue:Bool;
+	@:optional final nativeLayout:Null<IrObjectNativeLayout>;
 	final base:Null<String>;
 	final interfaces:Array<String>;
 	final fields:Array<IrObjectField>;

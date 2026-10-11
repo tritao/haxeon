@@ -2,6 +2,7 @@
   "version": 1,
   "package": { "name": "haxeon-compiler" },
   "sourceRoots": ["../src"],
+  "sources": ["../src/compiler/Compiler.hx", "../src/runtime/Runtime.hx"],
   "scopeSourceRoots": false,
   "target": "host"
 }

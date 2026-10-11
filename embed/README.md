@@ -10,8 +10,11 @@ Haxeon source inside a host application:
 ```
 
 The package exposes the existing `compiler` and `runtime` APIs from `src`.
-It has no entry point and leaves their package names unchanged. The host CLI
-supplies the matching standard library and native runtime; this is currently a
+It has no entry point and leaves their package names unchanged. Its explicit
+source manifest seeds the compiler and runtime APIs; their remaining modules
+resolve on demand from the source root. Compiler command-line entry modules
+are excluded, so the package does not replace a host application's `Main`.
+The host CLI supplies the matching standard library and native runtime; this is currently a
 HashLink host package.
 
 Create a compiler with `new Compiler(null, CompilerIntrinsics.configuration())`.

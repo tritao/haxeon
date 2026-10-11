@@ -799,6 +799,7 @@ class IrInliner {
 			case IntToFloat(out, value): IntToFloat(use(out), use(value));
 			case IntToInt64(out, value): IntToInt64(use(out), use(value));
 			case FloatToInt(out, value): FloatToInt(use(out), use(value));
+			case FloatToFloat(out, value): FloatToFloat(use(out), use(value));
 			case SafeCast(out, value): SafeCast(use(out), use(value));
 			// Callees with handlers are never cloned (see fits); these arise when a caller is rewritten in place.
 			case BeginTry(catchBlock, afterBlock): BeginTry(block(catchBlock), block(afterBlock));

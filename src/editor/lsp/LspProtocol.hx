@@ -105,7 +105,9 @@ class LspProtocol {
 	var completionSnippets = false;
 
 	public var lastForegroundAnalysisMs(default, null):Float = 0.0;
+
 	var foregroundAnalysisFailure:Null<String>;
+
 	public var lastBackgroundAnalysisMs(default, null):Float = 0.0;
 
 	var shutdownRequested = false;
@@ -234,7 +236,8 @@ class LspProtocol {
 					throw cancelled
 				catch (_:CompileError) {} catch (_:Dynamic) {}
 		} catch (_:CancellationError) {
-			for (target in targets) pendingDiagnosticTargets.set(target, true);
+			for (target in targets)
+				pendingDiagnosticTargets.set(target, true);
 			clearDiagnosticToken(token);
 			lastBackgroundAnalysisMs = (Sys.time() - started) * 1000.0;
 			return [];
@@ -383,7 +386,8 @@ class LspProtocol {
 		}
 		if (document == null)
 			return [];
-		if (opening) project.includeDocument(document.path, service, path -> documents.forPath(path) != null);
+		if (opening)
+			project.includeDocument(document.path, service, path -> documents.forPath(path) != null);
 		var generation = ++analysisGeneration;
 		var path = activateConfiguration(document.path);
 		service.update(path, document.source);
@@ -462,7 +466,8 @@ class LspProtocol {
 		}
 		if (configurationChanged) {
 			project.reload(service, path -> documents.forPath(path) != null);
-			if (configurationSource != null) activateConfiguration(configurationSource);
+			if (configurationSource != null)
+				activateConfiguration(configurationSource);
 			for (module in service.compiler.modules.keys())
 				targets.set(module, true);
 			mutated = true;
@@ -1090,7 +1095,8 @@ class LspProtocol {
 		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
 		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
 			throw new LspRequestError(-32801, "Definition could not be resolved because analysis failed: " + foregroundAnalysisFailure);
-		return location == null || location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+		return location == null
+			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function typeDefinition(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1100,7 +1106,8 @@ class LspProtocol {
 		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
 		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
 			throw new LspRequestError(-32801, "Type information is unavailable because analysis failed: " + foregroundAnalysisFailure);
-		return location == null || location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+		return location == null
+			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
 	}
 
 	function implementations(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -1125,7 +1132,8 @@ class LspProtocol {
 	}
 
 	function ensureAnalyzed(document:LspDocument, token:CancellationToken):Void {
-		foregroundAnalysisFailure = null; lastForegroundAnalysisMs = 0;
+		foregroundAnalysisFailure = null;
+		lastForegroundAnalysisMs = 0;
 		var path = compilerPath(document);
 		if (service.isCurrent(path))
 			return;
@@ -1135,8 +1143,13 @@ class LspProtocol {
 				service.analyze(ModulePath.fromFile(path), token)
 			catch (cancelled:CancellationError)
 				throw cancelled
-			catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
-			catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
+			catch (error:CompileError) {
+				if (foregroundAnalysisFailure == null)
+					foregroundAnalysisFailure = error.diagnostic.format();
+			} catch (error:Dynamic) {
+				if (foregroundAnalysisFailure == null)
+					foregroundAnalysisFailure = Std.string(error);
+			}
 			lastForegroundAnalysisMs = (Sys.time() - started) * 1000.0;
 			return;
 		}
@@ -1144,7 +1157,8 @@ class LspProtocol {
 			targets = [for (target in pendingDiagnosticTargets.keys()) target],
 			started = Sys.time();
 		// Configuration switches can invalidate snapshots after diagnostics have drained.
-		if (targets.indexOf(module) < 0) targets.push(module);
+		if (targets.indexOf(module) < 0)
+			targets.push(module);
 		targets.sort(function(left, right) {
 			if (left == module)
 				return -1;
@@ -1159,8 +1173,13 @@ class LspProtocol {
 				service.analyze(target, token)
 			catch (cancelled:CancellationError)
 				throw cancelled
-			catch (error:CompileError) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = error.diagnostic.format(); }
-			catch (error:Dynamic) { if (foregroundAnalysisFailure == null) foregroundAnalysisFailure = Std.string(error); }
+			catch (error:CompileError) {
+				if (foregroundAnalysisFailure == null)
+					foregroundAnalysisFailure = error.diagnostic.format();
+			} catch (error:Dynamic) {
+				if (foregroundAnalysisFailure == null)
+					foregroundAnalysisFailure = Std.string(error);
+			}
 			if (service.isCurrent(path))
 				break;
 		}
@@ -1274,14 +1293,15 @@ class LspProtocol {
 
 	function requireNavigationSyntax(document:LspDocument):Void {
 		var path = compilerPath(document);
-		if (!service.isCurrent(path) && !service.hasCurrentSyntax(path)) requireCurrent(document);
+		if (!service.isCurrent(path) && !service.hasCurrentSyntax(path))
+			requireCurrent(document);
 	}
 
 	function requireCurrent(document:LspDocument):Void {
 		if (!service.isCurrent(compilerPath(document)))
-			throw new LspRequestError(-32801, foregroundAnalysisFailure == null
-				? "Language analysis has not produced current type information for this file"
-				: "Language analysis could not complete: " + foregroundAnalysisFailure);
+			throw new LspRequestError(-32801,
+				foregroundAnalysisFailure == null ? "Language analysis has not produced current type information for this file" : "Language analysis could not complete: " +
+				foregroundAnalysisFailure);
 	}
 
 	function compilerPath(document:LspDocument):String
@@ -1486,6 +1506,7 @@ class LspProtocol {
 	static function symbolKind(kind:String):Int
 		return switch kind {
 			case "class": 5;
+			case "struct": 23;
 			case "method": 6;
 			case "field": 8;
 			case "function": 12;
@@ -1501,6 +1522,7 @@ class LspProtocol {
 			case "function": 3;
 			case "field": 5;
 			case "class": 7;
+			case "struct": 22;
 			case "interface": 8;
 			case "enum": 13;
 			case "enumCase": 20;

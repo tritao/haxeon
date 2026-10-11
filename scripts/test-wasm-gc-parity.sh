@@ -48,6 +48,12 @@ haxeon_compile_async \
 	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-bytes-view-stress.wasm \
 	--entry=bytes-view --root=tests/programs tests/programs/bytes-view.hx
 
+# Inline-record FieldGet allocates an owning view. Stress GC must retain the live
+# destination copy while constructing that view, before any later call safepoint.
+haxeon_compile_async \
+	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-value-nested-roots-stress.wasm \
+	--entry=wasm-value-nested-roots --root=tests/programs tests/programs/wasm-value-nested-roots.hx
+
 cases+=(bytes-compare)
 haxeon_compile_wait
 
@@ -65,6 +71,9 @@ function table(file) {
 const modes = new Map(table("wasm-parity-skips.tsv").map(([name, mode]) => [name, mode]));
 const cases = gcCases.map(name => ({name, expected: 42}))
   .concat(table("expected-exits.tsv").map(([name, expected]) => ({name, expected: Number(expected)})));
+for (const [name, mode] of modes)
+  if (!["skip", "gc-linear-memory"].includes(mode))
+    throw new Error(`Unknown Wasm parity mode ${mode} for ${name}`);
 for (const name of modes.keys())
   if (!cases.some(entry => entry.name === name))
     throw new Error(`wasm-parity-skips.tsv lists ${name}, which is not in expected-exits.tsv`);
@@ -107,8 +116,10 @@ async function run(name, target) {
   if (missing.length !== 0)
     return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
   if (target === "wasm-gc") {
-    if (WebAssembly.Module.exports(module).some(entry => entry.name === "memory"))
-      return {failure: "GC module contains linear memory"};
+    const hasMemory = WebAssembly.Module.exports(module).some(entry => entry.name === "memory" && entry.kind === "memory");
+    const expectsMemory = modes.get(name) === "gc-linear-memory";
+    if (hasMemory !== expectsMemory)
+      return {failure: expectsMemory ? "GC C-native module is missing scratch memory" : "GC module contains undeclared linear memory"};
     if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
       return {failure: "GC module contains custom root metadata"};
   }
@@ -152,6 +163,10 @@ async function run(name, target) {
   const stressInstance = await WebAssembly.instantiate(stressBytes, {});
   if (stressInstance.instance.exports.main() !== 42)
     failures.push("bytes-view (wasm32 stress GC): view failed to retain and alias its source");
+  const nestedBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-value-nested-roots-stress.wasm"));
+  const nestedInstance = await WebAssembly.instantiate(nestedBytes, {haxeon_runtime: runtime, std});
+  if (nestedInstance.instance.exports.main() !== 42)
+    failures.push("nested-value (wasm32 stress GC): inline view allocation lost live value copies");
   if (failures.length !== 0)
     throw new Error(`Wasm parity failures:\n  ${failures.join("\n  ")}`);
   console.log(`PASS: ${cases.length - skipped} Haxe fixtures agree across Wasm32, Wasm GC and HL (${skipped} skipped)`);

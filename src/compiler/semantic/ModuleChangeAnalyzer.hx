@@ -103,6 +103,25 @@ class ModuleChangeAnalyzer {
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);
 		}
+		for (abstractDecl in ast.enumAbstracts) {
+			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
+				signature = abstractName
+					+ "["
+					+ fieldMetadataFingerprint(state, abstractDecl.metadata)
+					+ "]("
+					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
+					+ ") from "
+					+ [
+						for (type in abstractDecl.fromTypes)
+							SemanticSignature.parsed(type, ast.aliases)
+					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",") + " {" + [
+						for (value in abstractDecl.values)
+							value.name + "=" + state.source.slice(value.span.start, value.span.end)
+					].join(";") + "}";
+			abstracts.set(abstractName, signature);
+			if (state.abstractFingerprints.get(abstractName) != signature)
+				structuralChanged.set('abstract:$abstractName', true);
+		}
 		for (old in state.abstractFingerprints.keys())
 			if (!abstracts.exists(old))
 				structuralChanged.set('abstract:$old', true);
@@ -111,7 +130,7 @@ class ModuleChangeAnalyzer {
 		for (classDecl in ast.classes) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases),
-				isValue = false,
+				isValue = classDecl.isStruct == true,
 				isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
@@ -122,7 +141,8 @@ class ModuleChangeAnalyzer {
 							isNativeValue = true;
 						case _:
 					}
-			signature += isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
+			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
+			signature += ":metadata:" + fieldMetadataFingerprint(state, classDecl.metadata);
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
@@ -215,14 +235,7 @@ class ModuleChangeAnalyzer {
 					for (method in classDecl.methods)
 						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
 				];
-			var wireFieldFingerprint = [
-				for (field in classDecl.fields)
-					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
-			].join(";");
-			wireFields.set(className, wireFieldFingerprint);
-			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
-				structuralChanged.set(className, true);
-			var isValue = false, isNativeValue = false;
+			var isValue = classDecl.isStruct == true, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
 					isValue = true;
@@ -232,6 +245,24 @@ class ModuleChangeAnalyzer {
 							isNativeValue = true;
 						case _:
 					}
+			var wireFieldFingerprint = [
+				for (field in classDecl.fields)
+					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
+			].join(";");
+			wireFieldFingerprint += ":field-defaults:" + [
+				for (field in classDecl.fields)
+					if (!field.isStatic) field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
+			].join(";");
+			var sourceKind = classDecl.isStruct == true ? "struct" : isNativeValue ? "native-value" : "class",
+				declaredInterfaces = [
+					for (interfaceType in classDecl.interfaces)
+						SemanticSignature.parsed(interfaceType, ast.aliases)
+				];
+			declaredInterfaces.sort(Reflect.compare);
+			wireFieldFingerprint += ":source-kind:" + sourceKind + ":interfaces:" + declaredInterfaces.join(";");
+			wireFields.set(className, wireFieldFingerprint);
+			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
+				structuralChanged.set(className, true);
 			var typeResult = types.declareClass(className, baseName, classFields, classMethods, isValue && !isNativeValue);
 			if (compiledOnce && typeResult.compatibility != Compatible)
 				structuralChanged.set(className, true);

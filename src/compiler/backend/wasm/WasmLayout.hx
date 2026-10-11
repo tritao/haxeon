@@ -1,6 +1,8 @@
 package compiler.backend.wasm;
 
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrObjectFieldNativeLayout;
+import compiler.ir.Ir.IrObjectNativeLayout;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -9,12 +11,14 @@ typedef WasmFieldLayout = {
 	final name:String;
 	final offset:Int;
 	final type:IrType;
+	final nativeLayout:Null<IrObjectFieldNativeLayout>;
 }
 
 typedef WasmObjectLayout = {
 	final name:String;
 	final size:Int;
 	final fields:Array<WasmFieldLayout>;
+	final nativeLayout:Null<IrObjectNativeLayout>;
 }
 
 typedef WasmEnumLayout = {
@@ -28,6 +32,10 @@ class WasmLayout {
 	public final program:IrProgram;
 
 	public static inline final HEADER_SIZE = 8;
+
+	/** Flat objects reserve two words after the type id for an optional owner and byte offset. */
+	public static inline final FLAT_HEADER_SIZE = 16;
+
 	public static inline final ARRAY_LENGTH_OFFSET = 8;
 	public static inline final ARRAY_CAPACITY_OFFSET = 12;
 	public static inline final ARRAY_DATA_POINTER_OFFSET = 16;
@@ -129,6 +137,29 @@ class WasmLayout {
 			throw 'Cyclic Wasm object inheritance at "${object.name}"';
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(object.name);
+		var nativeLayout = object.nativeLayout;
+		if (nativeLayout != null) {
+			var fields:Array<WasmFieldLayout> = [
+				for (field in object.fields) {
+					var native = field.nativeLayout;
+					if (native == null) throw 'Flat Wasm object "${object.name}" is missing native field layout "${field.name}"';
+					{
+						name: field.name,
+						offset: FLAT_HEADER_SIZE + native.offset,
+						type: field.type,
+						nativeLayout: native
+					};
+				}
+			];
+			var result:WasmObjectLayout = {
+				name: object.name,
+				size: align(FLAT_HEADER_SIZE + nativeLayout.size, 8),
+				fields: fields,
+				nativeLayout: nativeLayout
+			};
+			objects.set(object.name, result);
+			return result;
+		}
 		var offset = HEADER_SIZE, fields:Array<WasmFieldLayout> = [];
 		if (object.base != null) {
 			var baseDecl:Null<IrObject> = null;
@@ -143,10 +174,20 @@ class WasmLayout {
 		}
 		for (field in object.fields) {
 			offset = align(offset, alignmentOf(field.type));
-			fields.push({name: field.name, offset: offset, type: field.type});
+			fields.push({
+				name: field.name,
+				offset: offset,
+				type: field.type,
+				nativeLayout: null
+			});
 			offset += sizeOf(field.type);
 		}
-		var result:WasmObjectLayout = {name: object.name, size: align(offset, 8), fields: fields};
+		var result:WasmObjectLayout = {
+			name: object.name,
+			size: align(offset, 8),
+			fields: fields,
+			nativeLayout: null
+		};
 		objects.set(object.name, result);
 		return result;
 	}

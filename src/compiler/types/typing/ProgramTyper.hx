@@ -9,6 +9,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
+import compiler.types.StructProperties;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.NativeConvention;
@@ -45,6 +46,8 @@ class ProgramTyper {
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		session.bindSemantic(semantic);
+		if (cachedMetadata != null)
+			bindCachedNativeLayouts(cachedMetadata.classes);
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
 			var emptySubstitutions:Map<String, CompilerType> = [];
@@ -54,6 +57,7 @@ class ProgramTyper {
 					'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
 		session.bindNominalDeclarations();
+		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
 				var aliasType = bodyTyper.lowerType(alias.type);
@@ -160,7 +164,10 @@ class ProgramTyper {
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
-					bases: [for (base in interfaceDecl.bases) BodyTyper.inheritanceName(base)],
+					bases: [
+						for (base in interfaceDecl.bases)
+							if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
+					],
 					methods: [
 						for (method in interfaceDecl.methods)
 							{
@@ -178,7 +185,7 @@ class ProgramTyper {
 			] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected)
+					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
 			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
 		if (cachedMetadata == null)
 			for (enumDecl in typedEnums)
@@ -200,10 +207,12 @@ class ProgramTyper {
 						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
 				}
 			}
-		if (cachedMetadata == null)
+		if (cachedMetadata == null) {
 			typedClasses = layoutNativeClasses(typedClasses);
-		else
+			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
+		} else {
 			bindCachedNativeLayouts(typedClasses);
+		}
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
 		for (fn in program.functions)
@@ -224,6 +233,7 @@ class ProgramTyper {
 			}
 		for (lambda in session.closureConversion.generatedFunctions())
 			typedFunctions.push(lambda);
+		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
 		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
@@ -235,7 +245,7 @@ class ProgramTyper {
 		var allocationAfterBodies = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
-		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives);
+		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives, nativeTypeDescriptors);
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(Finalized);
@@ -298,6 +308,8 @@ class ProgramTyper {
 					{
 						name: refreshed.name,
 						isValue: refreshed.isValue,
+						isFlat: refreshed.isFlat,
+						isPortable: refreshed.isPortable,
 						isNativeValue: refreshed.isNativeValue,
 						nativeLayouts: cachedClass.nativeLayouts,
 						base: refreshed.base,
@@ -313,18 +325,24 @@ class ProgramTyper {
 
 	function bindCachedNativeLayouts(classes:Array<TypedClass>):Void
 		for (classDecl in classes)
-			if (classDecl.isNativeValue)
+			if (classDecl.isNativeValue || classDecl.isFlat)
 				for (layout in classDecl.nativeLayouts)
 					if (layout.target == session.nativeAbiTarget)
 						session.nativeLayoutsByName.set(classDecl.name, layout);
 
-	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>):TypedClass {
-		var requestedValue = hasMetadata(classDecl.metadata, "value"),
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, deferMethodBodies:Bool = false):TypedClass {
+		var isStruct = classDecl.isStruct == true,
+			requestedValue = isStruct || hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue;
+		validateStructPropertyMetadata(classDecl, isValue, isNativeValue);
+		if (isStruct && isNativeValue)
+			BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields', classDecl.span);
+		if (isStruct && classDecl.typeParameters.length > 0)
+			BodyTyper.fail("E1022", 'Generic struct "${classDecl.name}" is not supported yet', classDecl.span);
 		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
-		if ((isValue || isNativeValue) && classDecl.interfaces.length > 0)
+		if ((isValue && !isStruct || isNativeValue) && classDecl.interfaces.length > 0)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
 		if (isNativeValue && classDecl.typeParameters.length > 0)
 			BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
@@ -352,8 +370,8 @@ class ProgramTyper {
 			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
 			if (type == TVoid)
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
-			if (!isNativeValue && NativeLayout.containsNativeLayoutType(type))
-				BodyTyper.fail("E1022", 'Native layout types can only appear in native value record fields', field.span);
+			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
+				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
 			if (!field.isStatic && session.relations.isNullableValueClass(type))
 				BodyTyper.fail("E1022",
 					'Field "${classDecl.name}.${field.name}" cannot be Null<V> for value class V: value fields are stored inline and cannot be null',
@@ -399,16 +417,72 @@ class ProgramTyper {
 				span: field.span
 			});
 		}
+		var propertyFacts = StructProperties.evaluate(session.declarations, TInstance(NominalKind.Class, classDecl.name, []));
+		for (metadata in classDecl.metadata) {
+			if (metadata.name == "flat" && !propertyFacts.flat)
+				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" asserts @:flat but field "${propertyFacts.flatPath}" is not Flat', metadata.span);
+			if (metadata.name == "portable" && !propertyFacts.portable)
+				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" asserts @:portable but field "${propertyFacts.portablePath}" is not Portable',
+					metadata.span);
+		}
 		var classSemanticSubstitutions:Map<String, CompilerType> = [];
 		for (parameter in classDecl.typeParameters)
 			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
 		for (interfaceType in classDecl.interfaces) {
 			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
 				interfaceName = BodyTyper.inheritanceName(interfaceType);
-			if (!session.interfaceDecls.exists(interfaceName))
+			if (!session.interfaceDecls.exists(interfaceName) && !StructProperties.isConstraintType(interfaceInstance))
 				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
+		var parsedBase = classDecl.base, baseName:Null<String> = null;
+		if (parsedBase != null)
+			baseName = BodyTyper.inheritanceName(parsedBase);
+		return {
+			name: classDecl.name,
+			isValue: isValue,
+			isFlat: propertyFacts.flat,
+			isPortable: propertyFacts.portable,
+			isNativeValue: isNativeValue,
+			nativeLayouts: [],
+			base: baseName,
+			interfaces: [
+				for (interfaceType in classDecl.interfaces)
+					if (!StructProperties.isConstraintSyntax(interfaceType)) BodyTyper.inheritanceName(interfaceType)
+			],
+			fields: fields,
+			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions),
+			span: classDecl.span
+		};
+	}
+
+	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration];
+		return [
+			for (typed in classes) {
+				var declaration = byName.get(typed.name);
+				if (declaration == null) typed else {
+					var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
+					{
+						name: typed.name,
+						isValue: typed.isValue,
+						isFlat: typed.isFlat,
+						isPortable: typed.isPortable,
+						isNativeValue: typed.isNativeValue,
+						nativeLayouts: typed.nativeLayouts,
+						base: typed.base,
+						interfaces: typed.interfaces,
+						fields: typed.fields,
+						methods: typeClassMethods(declaration, typed.fields, selected, false, substitutions),
+						span: typed.span
+					};
+				}
+			}
+		];
+	}
+
+	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>, deferBodies:Bool,
+			substitutions:Map<String, CompilerType>):Array<TypedFunction> {
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
 			hasConstructor = false;
@@ -419,9 +493,9 @@ class ProgramTyper {
 			if (BodyTyper.isGeneric(method))
 				continue;
 			var qualified = classDecl.name + "." + method.name,
-				typeBody = selected == null || selected.exists(qualified),
+				typeBody = !deferBodies && (selected == null || selected.exists(qualified)),
 				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					erasedSubstitutions) : methodSignature(method, classDecl.name, erasedSubstitutions);
+					substitutions) : methodSignature(method, classDecl.name, substitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
@@ -429,7 +503,10 @@ class ProgramTyper {
 			}
 			typedMethods.push(typedMethod);
 		}
-		if (!hasConstructor && instanceInitializers.length > 0 && (selected == null || selected.exists(classDecl.name + ".new")))
+		if (!hasConstructor
+			&& instanceInitializers.length > 0
+			&& !deferBodies
+			&& (selected == null || selected.exists(classDecl.name + ".new")))
 			typedMethods.push({
 				name: classDecl.name + ".new",
 				owner: classDecl.name,
@@ -442,29 +519,17 @@ class ProgramTyper {
 				cellCaptures: [],
 				span: classDecl.span
 			});
-		var parsedBase = classDecl.base, baseName:Null<String> = null;
-		if (parsedBase != null)
-			baseName = BodyTyper.inheritanceName(parsedBase);
-		return {
-			name: classDecl.name,
-			isValue: isValue,
-			isNativeValue: isNativeValue,
-			nativeLayouts: [],
-			base: baseName,
-			interfaces: [
-				for (interfaceType in classDecl.interfaces)
-					BodyTyper.inheritanceName(interfaceType)
-			],
-			fields: fields,
-			methods: typedMethods,
-			span: classDecl.span
-		};
+		return typedMethods;
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
-		var byName:Map<String, TypedClass> = [],
-			layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [],
-			targets = ["portable-abi32", "portable-abi64"];
+		var byName:Map<String, TypedClass> = [], layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [], targets = [
+			"portable-abi32",
+			"portable-abi64",
+			"wasm32-wasi",
+			"x86_64-pc-linux-gnu",
+			"aarch64-unknown-linux-gnu"
+		];
 		if (targets.indexOf(session.nativeAbiTarget) < 0)
 			targets.push(session.nativeAbiTarget);
 		for (classDecl in classes)
@@ -472,21 +537,24 @@ class ProgramTyper {
 		for (target in targets) {
 			var layouts:Map<String, TypedNativeLayout> = [];
 			for (classDecl in classes)
-				if (classDecl.isNativeValue)
+				if (classDecl.isNativeValue || classDecl.isFlat)
 					computeNativeLayout(classDecl.name, target, byName, layouts, []);
 			layoutsByTarget.set(target, layouts);
 		}
 		return [
 			for (classDecl in classes) {
-				var nativeLayouts:Array<TypedNativeLayout> = classDecl.isNativeValue ? [
-					for (target in targets)
-						requiredNativeLayout(layoutsByTarget, target, classDecl.name)
-				] : [];
-				if (classDecl.isNativeValue) session.nativeLayoutsByName.set(classDecl.name,
+				var hasNativeLayout = classDecl.isNativeValue || classDecl.isFlat,
+					nativeLayouts:Array<TypedNativeLayout> = hasNativeLayout ? [
+						for (target in targets)
+							requiredNativeLayout(layoutsByTarget, target, classDecl.name)
+					] : [];
+				if (hasNativeLayout) session.nativeLayoutsByName.set(classDecl.name,
 					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
 				{
 					name: classDecl.name,
 					isValue: classDecl.isValue,
+					isFlat: classDecl.isFlat,
+					isPortable: classDecl.isPortable,
 					isNativeValue: classDecl.isNativeValue,
 					nativeLayouts: nativeLayouts,
 					base: classDecl.base,
@@ -515,22 +583,21 @@ class ProgramTyper {
 		if (cached != null)
 			return cached;
 		var key = target + ":" + name, declaration = classes.get(name);
-		if (declaration == null || !declaration.isNativeValue)
-			throw 'Missing native value record "$name"';
+		if (declaration == null || (!declaration.isNativeValue && !declaration.isFlat))
+			throw 'Missing flat or native value record "$name"';
 		if (visiting.exists(key))
-			BodyTyper.fail("E1022", 'Native value record "$name" contains a by-value layout cycle', declaration.span);
-		if (declaration.fields.length == 0)
-			BodyTyper.fail("E1022", 'Native value record "$name" must declare at least one field', declaration.span);
+			BodyTyper.fail("E1022", 'Flat value record "$name" contains a by-value layout cycle', declaration.span);
 		visiting.set(key, true);
 		var nativeDeclarations:Map<String, HxiDeclaration> = [];
 		for (field in declaration.fields)
-			collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
+			if (!field.isStatic)
+				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
 			for (field in declaration.fields)
-				{name: field.name, type: field.type, span: field.span}
+				if (!field.isStatic) {name: field.name, type: field.type, span: field.span}
 		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
 			visiting.remove(key);
-			BodyTyper.fail("E1022", 'Invalid native value record "$name": ${Std.string(error)}', declaration.span);
+			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;
 		};
 		visiting.remove(key);
@@ -546,13 +613,22 @@ class ProgramTyper {
 			case TInstance(NominalKind.NativeValue, name, arguments):
 				if (arguments.length != 0)
 					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
-				var nested = computeNativeLayout(name, target, classes, layouts, visiting),
-					nestedClass = classes.get(name);
-				if (nestedClass == null)
-					throw 'Missing native value record "$name"';
-				result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
+				addNestedNativeDeclaration(name, target, classes, layouts, visiting, result);
+			case TInstance(NominalKind.Class, name, arguments):
+				if (arguments.length != 0)
+					BodyTyper.fail("E1022", 'Generic struct field "$name" has no fixed layout', span);
+				addNestedNativeDeclaration(name, target, classes, layouts, visiting, result);
 			case _:
 		}
+	}
+
+	function addNestedNativeDeclaration(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>):Void {
+		var nested = computeNativeLayout(name, target, classes, layouts, visiting),
+			nestedClass = classes.get(name);
+		if (nestedClass == null)
+			throw 'Missing flat or native value record "$name"';
+		result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 	}
 
 	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
@@ -564,6 +640,16 @@ class ProgramTyper {
 			if (entry.name == name)
 				return true;
 		return false;
+	}
+
+	static function validateStructPropertyMetadata(classDecl:AstClass, isValue:Bool, isNativeValue:Bool):Void {
+		for (metadata in classDecl.metadata)
+			if (metadata.name == "flat" || metadata.name == "portable") {
+				if (metadata.arguments.length != 0)
+					BodyTyper.fail("E1022", '@:${metadata.name} does not accept arguments', metadata.span);
+				if (!isValue && !isNativeValue)
+					BodyTyper.fail("E1022", '@:${metadata.name} may only assert a value struct layout', metadata.span);
+			}
 	}
 
 	function validateRepresentationMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, isValue:Bool):Bool {
@@ -601,9 +687,9 @@ class ProgramTyper {
 				}
 		], result = substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions);
 		for (argument in arguments)
-			if (NativeLayout.containsNativeLayoutType(argument.type))
+			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet', method.span);
-		if (NativeLayout.containsNativeLayoutType(result))
+		if (NativeLayout.containsUnsupportedRuntimeValueType(result))
 			BodyTyper.fail("E1022", 'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet', method.span);
 		return {
 			name: owner + "." + method.name,
@@ -655,6 +741,15 @@ class ProgramTyper {
 				BodyTyper.fail("E1007", "Implemented type must be an interface", span);
 				return;
 		};
+		if (StructProperties.isConstraintType(interfaceInstance)) {
+			var property = interfaceName == StructProperties.FLAT_TYPE_NAME ? "Flat" : "Portable",
+				actual = TInstance(NominalKind.Class, classDecl.name, []);
+			if (!session.relations.satisfiesConstraint(actual, interfaceInstance)) {
+				var detail = session.relations.constraintFailure(actual, interfaceInstance);
+				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not satisfy $property: $detail', span);
+			}
+			return;
+		}
 		if (!session.interfaceDecls.exists(interfaceName))
 			return;
 		var interfaceDecl = session.interfaceDecls.get(interfaceName),
@@ -662,14 +757,15 @@ class ProgramTyper {
 		for (baseType in interfaceDecl.bases) {
 			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = BodyTyper.inheritanceName(baseType);
-			if (!session.interfaceDecls.exists(base))
+			if (!session.interfaceDecls.exists(base) && !StructProperties.isConstraintType(baseInstance))
 				BodyTyper.fail("E1007", 'Unknown interface "$base"', span);
 			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
 		for (method in interfaceDecl.methods) {
 			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
-				BodyTyper.fail("E1007", 'Class "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
+				BodyTyper.fail("E1007",
+					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
 			var implementationName = implementation.owner + "." + method.name;
 			if (!session.signatures.exists(implementationName)
 				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))

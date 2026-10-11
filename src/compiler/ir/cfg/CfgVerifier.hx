@@ -136,6 +136,11 @@ class CfgVerifier {
 					expect(value, F64);
 					expect(out, I32);
 					define(out, defined, available, block.id);
+				case FloatToFloat(out, value):
+					require(value, available, block.id);
+					if (!((value.type == F64 && out.type == F32) || (value.type == F32 && out.type == F64)))
+						throw "CFG Float-to-Float conversion requires F64/F32 or F32/F64 types";
+					define(out, defined, available, block.id);
 				case SafeCast(out, value):
 					require(value, available, block.id);
 					if (!IrTypeTools.isDynamic(value.type))

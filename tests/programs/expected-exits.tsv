@@ -192,6 +192,17 @@ dynamic-object-literal	42
 # Std.isOfType lowers type expressions through the native runtime type ABI.
 std-is-of-type	42
 native-memory	42
+native-memory-flat-struct	42
+NativeU32RuntimeValues	42
+native-nested-int16-store	42
+native-type-info-nonflat	42
+native-type-info	42
+native-type-info-narrow-default	42
+native-type-info-wide-integer-default	42
+typeinfo-mixed-layout	42
+typeinfo-generic	42
+struct-value-semantics	42
+struct-flat-layout	42
 string-null-equality	42
 generic-array-storage	42
 dynamic-array-views	42
@@ -335,6 +346,7 @@ int-const-divide	42
 ereg-split-offsets	42
 dynamic-unbox	42
 nullable-primitives	42
+nullable-struct-capture	42
 loadstore-array-alias	42
 loadstore-call-kill	42
 loadstore-dynamic-field	42
@@ -358,6 +370,7 @@ test-shards	42
 array-key-value-comprehension	42
 enum-array-contains	42
 float-div-pow2	42
+native-float32-casts	42
 counted-array-loops	42
 bytes-ascii-decode	42
 jit-inline-allocation	42

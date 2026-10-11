@@ -98,14 +98,21 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         build()
         run(11)
         # A missing sidecar is a missing build output, even with unchanged source.
-        (root / 'build/host/main.hl.functions').unlink()
-        assert 'reusing compiler session' in build()
-        assert (root / 'build/host/main.hl.functions').is_file()
+        for suffix in ('.functions', '.descriptors', '.descriptors.json'):
+            sidecar = root / ('build/host/main.hl' + suffix)
+            expected = sidecar.read_bytes()
+            sidecar.unlink()
+            assert 'reusing compiler session' in build()
+            assert sidecar.read_bytes() == expected, 'rebuild changed an unchanged sidecar: ' + suffix
         state = next(states.glob('*.json'))
         # Closing a requester cancels its transaction and leaves the worker reusable.
         descriptor = json.loads(state.read_text())
         cancelled_output = root / 'build/cancelled.hl'
         cancelled_output.write_bytes(b'previous successful publication')
+        cancelled_sidecars = [pathlib.Path(str(cancelled_output) + suffix)
+                              for suffix in ('.descriptors', '.descriptors.json')]
+        for sidecar in cancelled_sidecars:
+            sidecar.write_bytes(b'previous successful descriptor publication')
         with socket.create_connection(('127.0.0.1', descriptor['port']), timeout=5) as client:
             arguments = ['--target=hl', '--entry=Main', '--root=' + str(root / 'src'),
                          '--output=' + str(cancelled_output), str(main)]
@@ -117,6 +124,8 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         build()
         run(14)
         assert cancelled_output.read_bytes() == b'previous successful publication', 'cancellation damaged previous bytecode'
+        for sidecar in cancelled_sidecars:
+            assert sidecar.read_bytes() == b'previous successful descriptor publication', 'cancellation damaged previous descriptors'
         assert not list((root / 'build').glob('cancelled.hl.request-*')), 'cancelled staging artifacts leaked'
         assert json.loads(state.read_text())['token'] == descriptor['token'], 'cancellation killed the shared worker'
         old_token = json.loads(state.read_text())['token']

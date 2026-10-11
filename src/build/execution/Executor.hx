@@ -360,7 +360,7 @@ class Executor implements ExecutionBackend {
 	/** A successful process must actually produce every output it promised. */
 	static function requireOutputs(action:ExecutionAction):Void {
 		for (output in action.outputs)
-			if (!sys.FileSystem.exists(output) || sys.FileSystem.isDirectory(output))
+			if (!action.outputExists(output))
 				throw 'Action ${action.id} did not produce required output $output';
 	}
 

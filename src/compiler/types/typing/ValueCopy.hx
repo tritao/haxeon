@@ -36,7 +36,7 @@ class ValueCopy {
 		};
 		var declaration = session.declarations.classes.get(name);
 		if (declaration == null
-			|| !hasMetadata(declaration, "value")
+			|| (declaration.isStruct != true && !hasMetadata(declaration, "value"))
 			|| hasMetadata(declaration, "repr")
 			|| declaration.typeParameters.length > 0
 			|| visiting.indexOf(name) >= 0)

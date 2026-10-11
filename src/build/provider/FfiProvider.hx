@@ -45,7 +45,7 @@ class FfiProvider {
 			outputs.push(projectionManifest);
 		}
 		return new ExecutionAction(actionId, [], inputs, outputs, 'Import ${ffi.config.language} FFI ${ffi.config.name} -> $output',
-			Process(compiler, arguments, context.compilerHome, new Map()));
+			Process(compiler, arguments, context.compilerHome, new Map()), true, false, false, ffi.config.projection ? [projectionDirectory] : []);
 	}
 
 	public static function clangTarget(target:Target):String {

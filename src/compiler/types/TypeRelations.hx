@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.StructProperties;
 
 /** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {
@@ -87,6 +88,14 @@ class TypeRelations {
 			return true;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
+		if (StructProperties.isConstraintType(expected))
+			return false;
+		if (isStructType(actual))
+			switch expected {
+				case TInstance(NominalKind.Interface, _, _):
+					return false;
+				default:
+			}
 		if (actual == TNull && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
@@ -157,6 +166,40 @@ class TypeRelations {
 			default: false;
 		};
 	}
+
+	/** Struct conformance is available to generic constraints without enabling interface boxing. */
+	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
+		switch actual {
+			case TTypeParameter(_, _):
+				return declarations.typeParameterSatisfies(actual, expected);
+			case _:
+		}
+		if (StructProperties.isConstraintType(expected))
+			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
+		if (isStructType(actual))
+			switch expected {
+				case TInstance(NominalKind.Interface, _, _):
+					return nominalReaches(actual, expected);
+				default:
+			}
+		return isAssignable(actual, expected);
+	}
+
+	public function constraintFailure(actual:CompilerType, expected:CompilerType):Null<String> {
+		if (!StructProperties.isConstraintType(expected)
+			|| StructProperties.satisfies(declarations, actual, representationConstraintName(expected)))
+			return null;
+		var constraintName = representationConstraintName(expected),
+			property = constraintName == StructProperties.FLAT_TYPE_NAME ? "Flat" : "Portable",
+			fieldPath = StructProperties.failurePath(declarations, actual, constraintName);
+		return fieldPath == null ? 'type ${compiler.semantic.SemanticSignature.type(actual)} is not $property' : 'field "$fieldPath" is not $property';
+	}
+
+	static function representationConstraintName(type:CompilerType):String
+		return switch type {
+			case TInstance(NominalKind.Interface, name, _): name;
+			case _: throw 'Not a representation constraint: $type';
+		};
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool
 		return equalsWithin(left, right, null);
@@ -292,17 +335,17 @@ class TypeRelations {
 			default: false;
 		};
 
-	/** Reference types hold null, except @:value classes: their instances are stored inline in fields and are never null. */
+	/** Reference types hold null, except value classes and structs: their values are copied into their storage. */
 	function acceptsNull(type:CompilerType):Bool
 		return isReference(type) && !isValueClass(type);
 
-	/** Whether `type` is a class declared `@:value`, which is a plain (non-record) value structure. */
+	/** Whether `type` is a value class or a struct with non-null value semantics. */
 	public function isValueClass(type:CompilerType):Bool
 		return switch type {
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = declarations.classes.get(name);
 				if (declaration == null) false; else {
-					var found = false;
+					var found = declaration.isStruct == true;
 					for (entry in declaration.metadata)
 						if (entry.name == "value")
 							found = true;
@@ -310,6 +353,15 @@ class TypeRelations {
 				}
 			default: false;
 		};
+
+	function isStructType(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.get(name); declaration != null && declaration.isStruct == true;
+			default: false;
+		};
+
+	public inline function isStruct(type:CompilerType):Bool
+		return isStructType(type);
 
 	/** `Null<V>` for a value class V, which cannot be stored in an inline field. */
 	public function isNullableValueClass(type:CompilerType):Bool

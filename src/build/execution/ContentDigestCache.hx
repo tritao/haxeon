@@ -34,7 +34,7 @@ class ContentDigestCache {
 					+ stat.ctime.getTime(),
 				value = values.get(key);
 			if (value == null) {
-				value = ContentDigest.make(File.getBytes(path)).toHex();
+				value = ContentDigest.makeHex(File.getBytes(path));
 				values.set(key, value);
 			}
 			#if (target.threaded && !eval)

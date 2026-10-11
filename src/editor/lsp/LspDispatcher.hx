@@ -113,11 +113,17 @@ class LspDispatcher {
 				var method = messageMethod(task.message);
 				if (method == "textDocument/definition" || method == "textDocument/typeDefinition") {
 					var request:Dynamic = Json.parse(task.message);
-					emit(Json.stringify({jsonrpc: "2.0", method: "$/haxeon/requestTiming", params: {
-						id: Reflect.field(request, "id"), method: method,
-						queueMs: task.submittedAt == null ? 0 : (started - task.submittedAt) * 1000,
-						analysisMs: protocol.lastForegroundAnalysisMs, executionMs: (Sys.time() - started) * 1000
-					}}));
+					emit(Json.stringify({
+						jsonrpc: "2.0",
+						method: "$/haxeon/requestTiming",
+						params: {
+							id: Reflect.field(request, "id"),
+							method: method,
+							queueMs: task.submittedAt == null ? 0 : (started - task.submittedAt) * 1000,
+							analysisMs: protocol.lastForegroundAnalysisMs,
+							executionMs: (Sys.time() - started) * 1000
+						}
+					}));
 				}
 				if (protocol.shouldExit())
 					break;

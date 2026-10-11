@@ -6,7 +6,8 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 /** Declaration provenance travels with each generated module, independent of naming policy. */
 class HxiSourceOrigins {
 	public static function forModule(plan:HaxeProjectionModel, kind:String):Map<String, SourceSpan> {
-		var result:Map<String, SourceSpan> = [], declarations:Map<String, HxiDeclaration> = [];
+		var result:Map<String, SourceSpan> = [],
+			declarations:Map<String, HxiDeclaration> = [];
 		for (declaration in plan.source.declarations)
 			declarations.set(HxiHaxeEmitter.declarationName(declaration), declaration);
 		var profile = plan.profile;
@@ -19,8 +20,10 @@ class HxiSourceOrigins {
 			for (handle in plan.handles) {
 				var origin = span(declarations.get(handle.nativeName));
 				result.set(handle.name, origin);
-				if (handle.ownedName != null) result.set(handle.ownedName, origin);
-				if (handle.owned != null) result.set(handle.owned.name, origin);
+				if (handle.ownedName != null)
+					result.set(handle.ownedName, origin);
+				if (handle.owned != null)
+					result.set(handle.owned.name, origin);
 			}
 			for (callback in plan.callbacks) {
 				var origin = span(declarations.get(callback.nativeName));
@@ -33,8 +36,9 @@ class HxiSourceOrigins {
 				switch declaration {
 					case Enumeration(_, _, _, values, _):
 						for (value in enumeration.values)
-							for (native in values) if (native.name == value.nativeName)
-								result.set(enumeration.name + "." + value.name, native.span);
+							for (native in values)
+								if (native.name == value.nativeName)
+									result.set(enumeration.name + "." + value.name, native.span);
 					case _:
 				}
 			}
@@ -44,34 +48,39 @@ class HxiSourceOrigins {
 				switch declaration {
 					case Structure(_, _, _, fields, _):
 						for (field in structure.fields)
-							for (native in fields) if (native.name == field.nativeName) {
-								result.set(structure.name + "." + field.name, native.span);
-								result.set(structure.name + ".get_" + field.name, native.span);
-								result.set(structure.name + ".set_" + field.name, native.span);
-							}
+							for (native in fields)
+								if (native.name == field.nativeName) {
+									result.set(structure.name + "." + field.name, native.span);
+									result.set(structure.name + ".get_" + field.name, native.span);
+									result.set(structure.name + ".set_" + field.name, native.span);
+								}
 					case _:
 				}
 			}
-			if (profile.typeModule != null) result.set(profile.typeModule, plan.source.span);
+			if (profile.typeModule != null)
+				result.set(profile.typeModule, plan.source.span);
 		}
 		if (functions) {
 			for (fn in plan.functions) {
 				var origin = span(declarations.get(fn.nativeName));
 				result.set(fn.name, origin);
 				result.set(fn.rawName, origin);
-				if (fn.checked != null) result.set(fn.checked.name, origin);
-				if (fn.byteSliceName != null) result.set(fn.byteSliceName, origin);
+				if (fn.checked != null)
+					result.set(fn.checked.name, origin);
+				if (fn.byteSliceName != null)
+					result.set(fn.byteSliceName, origin);
 			}
 			result.set(profile.functionModule == null ? plan.source.name : profile.functionModule, plan.source.span);
 		}
 		if (constants) {
 			var container = plan.source.name.substr(0, 1).toUpperCase() + plan.source.name.substr(1) + "Constants";
 			result.set(container, plan.source.span);
-			for (declaration in plan.source.declarations) switch declaration {
-				case Constant(name, _, origin) if (!HxiHaxeEmitter.isOmitted(plan.omitted, name)):
-					result.set(container + "." + HxiHaxeEmitter.projectedConstantName(name, profile), origin);
-				case _:
-			}
+			for (declaration in plan.source.declarations)
+				switch declaration {
+					case Constant(name, _, origin) if (!HxiHaxeEmitter.isOmitted(plan.omitted, name)):
+						result.set(container + "." + HxiHaxeEmitter.projectedConstantName(name, profile), origin);
+					case _:
+				}
 		}
 		return result;
 	}

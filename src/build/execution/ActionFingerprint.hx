@@ -39,6 +39,8 @@ class ActionFingerprint {
 		fields.add(action.id.key());
 		fields.add(target);
 		fields.add(action.description);
+		for (output in action.outputs)
+			fields.add(action.directoryOutputs.indexOf(output) >= 0 ? "output:directory" : "output:file");
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
 				appendCommand(fields, command, arguments, cwd, environment, digests);
@@ -74,6 +76,8 @@ class ActionFingerprint {
 		fields.add(action.id.key());
 		fields.add(target);
 		fields.add(action.description);
+		for (output in action.outputs)
+			fields.add(action.directoryOutputs.indexOf(output) >= 0 ? "output:directory" : "output:file");
 		switch action.action {
 			case Process(command, arguments, cwd, environment):
 				appendPortableCommand(fields, command, arguments, environment, action, digests);
@@ -117,7 +121,7 @@ class ActionFingerprint {
 		if (action.outputs.length == 0)
 			return false;
 		for (output in action.outputs)
-			if (!FileSystem.exists(output) || FileSystem.isDirectory(output))
+			if (!action.outputExists(output))
 				return false;
 		return true;
 	}

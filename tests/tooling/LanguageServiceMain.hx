@@ -5,13 +5,16 @@ import compiler.Diagnostic.CompileError;
 
 class LanguageServiceMain {
 	static function main():Void {
-		var inlineService = new LanguageService(), inlineSource = "class Constants { public static inline final VALUE:Int = 42; } function main():Int return Constants.VALUE;";
+		var inlineService = new LanguageService(),
+			inlineSource = "class Constants { public static inline final VALUE:Int = 42; } function main():Int return Constants.VALUE;";
 		inlineService.update("InlineNavigation.hx", inlineSource);
 		inlineService.compile("InlineNavigation");
-		var inlinePosition = inlineSource.lastIndexOf("VALUE") + 1, inlineDefinition = inlineService.definition("InlineNavigation.hx", inlinePosition);
-		if (inlineDefinition == null || inlineDefinition.path != "InlineNavigation.hx" ||
-			inlineDefinition.span.file.slice(inlineDefinition.span.start, inlineDefinition.span.end).indexOf("VALUE") < 0 ||
-			inlineService.references("InlineNavigation.hx", inlinePosition).length != 2)
+		var inlinePosition = inlineSource.lastIndexOf("VALUE") + 1,
+			inlineDefinition = inlineService.definition("InlineNavigation.hx", inlinePosition);
+		if (inlineDefinition == null
+			|| inlineDefinition.path != "InlineNavigation.hx"
+			|| inlineDefinition.span.file.slice(inlineDefinition.span.start, inlineDefinition.span.end).indexOf("VALUE") < 0
+			|| inlineService.references("InlineNavigation.hx", inlinePosition).length != 2)
 			throw "constant folding discarded declaration or reference identity";
 
 		var library = new LanguageService();
@@ -73,14 +76,15 @@ class LanguageServiceMain {
 			throw "source formatting did not preserve conditional compilation";
 		var service = new LanguageService();
 		service.update("Main.hx",
-			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");
+			"typedef Count = Int; enum Kind { One; Two(Int); } interface Plugin { function activate():Void; } class Editor { public static var version:Int; public static function make():Int { return 1; } public var active:Int; public function open():Void { return; } } struct Point { public var x:Int; } function main():Int { var editor = new Editor(); editor.open(); editor.active; var text:String = \"x\"; text.length; var kind:Kind = Kind.One; var values = new Array<Int>(0); values.push(1); values.pop(); Editor.make(); return 42; }");
 		service.compile("Main");
 		var symbols = service.documentSymbols("Main.hx"),
 			foundClass = false,
 			foundMethod = false,
 			foundAlias = false,
 			foundInterface = false,
-			foundEnum = false;
+			foundEnum = false,
+			foundStruct = false;
 		for (symbol in symbols) {
 			if (symbol.name == "Editor" && symbol.kind == "class")
 				foundClass = true;
@@ -92,8 +96,10 @@ class LanguageServiceMain {
 				foundInterface = true;
 			if (symbol.name == "Kind" && symbol.kind == "enum")
 				foundEnum = true;
+			if (symbol.name == "Point" && symbol.kind == "struct" && symbol.detail == "struct Point")
+				foundStruct = true;
 		}
-		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum)
+		if (!foundClass || !foundMethod || !foundAlias || !foundInterface || !foundEnum || !foundStruct)
 			throw "language service did not expose document symbols";
 		if (symbols[0].revision != 1 || symbols[0].stale)
 			throw "language service did not tag the current semantic snapshot";
@@ -246,7 +252,10 @@ class LanguageServiceMain {
 		importService.update("editor/Main.hx", importSource);
 		importService.compile("editor.Main");
 		var importedTokens = importService.semanticTokens("editor/Main.hx");
-		if ([for (token in importedTokens) if (token.span.start == importSource.indexOf("Math.add") + "Math.".length && token.type == "function") token].length != 1)
+		if ([
+			for (token in importedTokens)
+				if (token.span.start == importSource.indexOf("Math.add") + "Math.".length && token.type == "function") token
+		].length != 1)
 			throw "semantic tokens did not classify an imported function through the workspace index";
 		var importedPosition = importSource.indexOf("Math.add") + "Math.".length,
 			importedDefinition = importService.definition("editor/Main.hx", importedPosition),
@@ -383,9 +392,15 @@ class LanguageServiceMain {
 		typeService.update("usecase/Main.hx", typeSource);
 		typeService.compile("usecase.Main");
 		var importedTypes = typeService.semanticTokens("usecase/Main.hx");
-		for (position in [typeSource.indexOf("extends Entity") + "extends ".length, typeSource.indexOf("entity:Entity") + "entity:".length,
-			typeSource.indexOf(":Entity return") + 1])
-			if ([for (token in importedTypes) if (token.span.start == position && token.type == "class") token].length != 1)
+		for (position in [
+			typeSource.indexOf("extends Entity") + "extends ".length,
+			typeSource.indexOf("entity:Entity") + "entity:".length,
+			typeSource.indexOf(":Entity return") + 1
+		])
+			if ([
+				for (token in importedTypes)
+					if (token.span.start == position && token.type == "class") token
+			].length != 1)
 				throw "semantic tokens did not classify an imported class reference";
 		var typePosition = typeSource.indexOf(":Entity return") + 1,
 			typeDefinition = typeService.definition("usecase/Main.hx", typePosition),
@@ -648,7 +663,8 @@ class LanguageServiceMain {
 			brokenLocalCompletion = brokenLocalService.complete("BrokenLocal.hx", localPrefix),
 			foundSlash = false;
 		for (item in brokenLocalCompletion)
-			if (item.label == "slash") foundSlash = true;
+			if (item.label == "slash")
+				foundSlash = true;
 		if (!foundSlash)
 			throw "local completion stopped suggesting a declared variable after a type error";
 		Sys.println("PASS: compiler-backed language service snapshot works");

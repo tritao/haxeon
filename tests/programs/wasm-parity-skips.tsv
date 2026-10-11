@@ -1,6 +1,7 @@
 # Manifest programs the Wasm parity suite does not require yet (scripts/test-wasm-gc-parity.sh).
 # Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
 # mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets).
+# mode: gc-linear-memory = supported C-native scratch memory; execution is still required.
 # name	mode	reason
 messagepack-interop	skip	Reads its vectors from fixture files through sys.io.File and Sys.args
 trace	skip	trace needs host output (wasm32 __sys_print import; no Wasm GC lowering)
@@ -8,8 +9,8 @@ short-circuit	skip	Uses trace, which needs host output on Wasm
 date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
+native-memory-flat-struct	skip	The native memory runtime is not implemented on Wasm
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
-object-map-remove	skip	haxe.ds.ObjectMap natives are not implemented on Wasm
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
 profile-span	skip	Profile spans are a HashLink diagnostics feature
 dynamic-method-call	skip	Calling a method of a Dynamic value is HashLink-only so far; neither Wasm backend lowers it
@@ -17,3 +18,4 @@ sys-println-dynamic	skip	Prints through the host print import, which this suite 
 string-buffer-unicode	skip	String.fromCharCode for a character beyond ASCII is wrong on Wasm (its charCodeAt differs from the literal)
 thread-gc-stress	skip	Threads are not implemented on Wasm
 test-shards	skip	A harness for HashLink test programs: it reads Sys.args and times its groups, which the Wasm hosts do not provide
+sha256	gc-linear-memory	C crypto uses validated linear scratch memory on the GC backend

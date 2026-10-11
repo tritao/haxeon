@@ -48,23 +48,172 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return UseDefault;
 
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction> {
-		return [
-			I32Const(layout.object(typeName).size),
-			Call(allocator),
-			LocalTee(destination),
+		var object = layout.object(typeName),
+			nativeLayout = object.nativeLayout,
+			body:Array<WasmInstruction> = [I32Const(layout.object(typeName).size), Call(allocator), LocalSet(destination)];
+		if (nativeLayout != null)
+			body = body.concat([
+				LocalGet(destination),
+				I32Const(0),
+				I32Const(nativeLayout.size + WasmLayout.FLAT_HEADER_SIZE),
+				MemoryFill
+			]);
+		body = body.concat([
+			LocalGet(destination),
 			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
 			I32Store(0)
-		];
+		]);
+		return body;
 	}
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var field = objectField(object, fieldName);
+		if (field.nativeLayout != null) {
+			if (field.nativeLayout.inlineRecord)
+				return inlineRecordGet(field, destination, objectLocal);
+			return nativeFieldGet(field, destination, objectLocal);
+		}
 		return [LocalGet(objectLocal), load(field.type, field.offset), LocalSet(destination)];
 	}
 
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
 		var field = objectField(object, fieldName);
+		if (field.nativeLayout != null) {
+			if (field.nativeLayout.inlineRecord)
+				return inlineRecordSet(field, objectLocal, valueLocal);
+			return nativeFieldSet(field, objectLocal, valueLocal);
+		}
 		return [LocalGet(objectLocal), LocalGet(valueLocal), store(field.type, field.offset)];
+	}
+
+	function nativeFieldGet(field:WasmFieldLayout, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
+		var body = flatFieldBase(objectLocal, native.offset),
+			load:Array<WasmInstruction> = [];
+		if (field.type == I32 && native.size == 1)
+			load = [native.signed ? I32Load8S(0) : I32Load8U(0)];
+		else if (field.type == Bool && native.size == 1)
+			load = [I32Load8U(0)];
+		else if (field.type == I32 && native.size == 2)
+			load = [native.signed ? I32Load16S(0) : I32Load16U(0)];
+		else if (field.type == I64 && native.size == 4)
+			load = [I32Load(0), native.signed ? I64ExtendI32S : I64ExtendI32U];
+		else if (field.type == F32 && native.size == 4)
+			load = [F32Load(0), F64PromoteF32];
+		else if ((field.type == I32 || field.type == Bool || field.type == RawPtr) && native.size == 4)
+			load = [I32Load(0)];
+		else if (field.type == I64 && native.size == 8)
+			load = [I64Load(0)];
+		else if (field.type == F64 && native.size == 8)
+			load = [F64Load(0)];
+		else
+			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
+		return body.concat(load).concat([LocalSet(destination)]);
+	}
+
+	function nativeFieldSet(field:WasmFieldLayout, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
+		var body:Array<WasmInstruction> = flatFieldBase(objectLocal, native.offset).concat([LocalGet(valueLocal)]);
+		if ((field.type == I32 || field.type == Bool) && native.size == 1)
+			body.push(I32Store8(0));
+		else if (field.type == I32 && native.size == 2)
+			body.push(I32Store16(0));
+		else if (field.type == I64 && native.size == 4)
+			body = body.concat([I32WrapI64, I32Store(0)]);
+		else if (field.type == F32 && native.size == 4)
+			body = body.concat([F32DemoteF64, F32Store(0)]);
+		else if ((field.type == I32 || field.type == Bool || field.type == RawPtr) && native.size == 4)
+			body.push(I32Store(0));
+		else if (field.type == I64 && native.size == 8)
+			body.push(I64Store(0));
+		else if (field.type == F64 && native.size == 8)
+			body.push(F64Store(0));
+		else
+			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
+		return body;
+	}
+
+	function inlineRecordGet(field:WasmFieldLayout, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Inline flat Wasm field "${field.name}" is missing layout metadata';
+		var childName = switch field.type {
+			case Obj(name): name;
+			case _: throw 'Inline flat Wasm field "${field.name}" is not a source struct';
+		};
+		var body = newObject(childName, destination);
+		body.push(LocalGet(destination));
+		body = body.concat(flatViewOwner(objectLocal));
+		body.push(I32Store(4));
+		body.push(LocalGet(destination));
+		body = body.concat(flatViewOffset(objectLocal, native.offset));
+		body.push(I32Store(8));
+		return body;
+	}
+
+	function inlineRecordSet(field:WasmFieldLayout, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+		var native = field.nativeLayout;
+		if (native == null)
+			throw 'Inline flat Wasm field "${field.name}" is missing layout metadata';
+		var body:Array<WasmInstruction> = [];
+		for (offset in 0...native.size) {
+			body = body.concat(flatFieldBase(objectLocal, native.offset));
+			body = body.concat(flatFieldBase(valueLocal, 0));
+			body = body.concat([I32Load8U(offset), I32Store8(offset)]);
+		}
+		return body;
+	}
+
+	function flatFieldBase(objectLocal:Int, fieldOffset:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(objectLocal),
+			I32Load(4),
+			If(I32),
+			LocalGet(objectLocal),
+			I32Load(4),
+			LocalGet(objectLocal),
+			I32Load(8),
+			I32Add,
+			Else,
+			LocalGet(objectLocal),
+			End,
+			I32Const(WasmLayout.FLAT_HEADER_SIZE),
+			I32Add,
+			I32Const(fieldOffset),
+			I32Add
+		];
+	}
+
+	function flatViewOwner(objectLocal:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(objectLocal),
+			I32Load(4),
+			If(I32),
+			LocalGet(objectLocal),
+			I32Load(4),
+			Else,
+			LocalGet(objectLocal),
+			End
+		];
+	}
+
+	function flatViewOffset(objectLocal:Int, fieldOffset:Int):Array<WasmInstruction> {
+		return [
+			LocalGet(objectLocal),
+			I32Load(4),
+			If(I32),
+			LocalGet(objectLocal),
+			I32Load(8),
+			Else,
+			I32Const(0),
+			End,
+			I32Const(fieldOffset),
+			I32Add
+		];
 	}
 
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult

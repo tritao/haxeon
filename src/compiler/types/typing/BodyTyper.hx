@@ -255,11 +255,11 @@ class BodyTyper {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
 			var argumentValueType = argumentType(argument, substitutions);
-			if (compiler.ffi.NativeLayout.containsNativeLayoutType(argumentValueType))
+			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
 				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
 		}
 		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
-		if (compiler.ffi.NativeLayout.containsNativeLayoutType(result))
+		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
@@ -1746,6 +1746,22 @@ class BodyTyper {
 		return initializer;
 	}
 
+	function rawPointerPointeeType(type:CompilerType):Null<CompilerType>
+		return switch type {
+			case TAbstract(name, arguments, _) if (name == "RawPtr" || StringTools.endsWith(name, ".RawPtr")):
+				arguments.length == 1 ? arguments[0] : null;
+			case _:
+				null;
+		};
+
+	function flatRawPointerPointee(type:CompilerType):Null<CompilerType> {
+		var pointee = rawPointerPointeeType(type);
+		return switch pointee {
+			case TInstance(NominalKind.Class, name, []) if (session.nativeLayoutsByName.exists(name)): pointee;
+			case _: null;
+		};
+	}
+
 	/** Resolve an inline static field to its memoized compile-time value. */
 	function inlineStaticFieldExpression(owner:String, name:String, span:SourceSpan):Null<TypedExpression> {
 		var resolved = resolveInlineConstant(owner, name, span);
@@ -1762,6 +1778,14 @@ class BodyTyper {
 			case TNullable(_):
 				fail("E1005", 'Field "$name" requires an object', span);
 			default:
+		}
+		if (name == "ref") {
+			var pointee = rawPointerPointeeType(typedObject.type);
+			if (pointee != null) {
+				if (flatRawPointerPointee(typedObject.type) == null)
+					fail("E1022", 'RawPtr.ref requires a Flat struct pointee; "$pointee" has no writable Flat field layout', span);
+				return new TypedExpression(TCall("$rawptr.load.flat", [typedObject]), pointee, span);
+			}
 		}
 		switch typedObject.expression {
 			case TClassRef(className):

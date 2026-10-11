@@ -87,3 +87,11 @@ task_haxe=${HAXEON_HAXE:-"$task_haxeon_home/.tools/haxe/haxe"}
 HAXEON_HOME="$task_haxeon_home" HAXEON_COMPILER_SOURCE="$repo_dir/src" \
     "$task_haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli \
     run --project "$project_dir/haxeon.json" "$@"
+
+# The library must not replace the consumer's entry with its own compiler CLI Main.
+source_manifest="$project_dir/build/host/main.hl.sources.txt"
+if rg -F -x -q "$repo_dir/src/Main.hx" "$source_manifest"; then
+    echo "compiler library must exclude command-line Main from explicit consumer inputs" >&2
+    exit 1
+fi
+rg -F -x -q "$project_dir/src/Main.hx" "$source_manifest"

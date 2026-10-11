@@ -6,6 +6,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedCaptureSource;
+import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
@@ -15,6 +16,7 @@ import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.types.TypedAst.NativeConvention;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
+import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
@@ -26,8 +28,10 @@ class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
 		IrGenerator.bindValueClasses(typed.classes);
+		var objects = objectsFrom(typed);
+		IrGenerator.bindFlatValueObjects(objects);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
-		return assemble(functions, nativesFrom(typed), objectsFrom(typed), interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
+		return assemble(functions, nativesFrom(typed), objects, interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
 			staticInitializersFrom(typed, null, functions), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
 	}
 
@@ -258,13 +262,26 @@ class IrProgramAssembler {
 	}
 
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
-		var objects:Array<IrObject> = [];
+		var objects:Array<IrObject> = [],
+			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
+		for (classDecl in typed.classes)
+			classesByName.set(classDecl.name, classDecl);
 		for (classDecl in typed.classes)
 			if (!classDecl.isNativeValue) {
-				var fields:Array<IrObjectField> = [];
+				var nativeLayout = selectedNativeLayout(classDecl.nativeLayouts, typed.nativeAbiTarget),
+					fields:Array<IrObjectField> = [];
 				for (field in classDecl.fields)
-					if (!field.isStatic && hasPhysicalStorage(field))
-						fields.push({name: field.name, type: IrGenerator.lowerType(field.type)});
+					if (!field.isStatic && hasPhysicalStorage(field)) {
+						var layout = nativeFieldLayout(nativeLayout, field.name),
+							fieldLayout:Null<IrObjectFieldNativeLayout> = layout == null ? null : {
+								offset: layout.offset,
+								size: layout.size,
+								alignment: layout.alignment,
+								signed: isSignedField(field.type),
+								inlineRecord: isFlatRecordField(field.type, classesByName, typed.nativeAbiTarget)
+							};
+						fields.push({name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout});
+					}
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)
 					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
@@ -280,6 +297,7 @@ class IrProgramAssembler {
 				objects.push({
 					name: classDecl.name,
 					isValue: classDecl.isValue,
+					nativeLayout: nativeLayout == null ? null : {target: nativeLayout.target, size: nativeLayout.size, alignment: nativeLayout.alignment},
 					base: classDecl.base,
 					interfaces: classDecl.interfaces,
 					fields: fields,
@@ -328,6 +346,47 @@ class IrProgramAssembler {
 			});
 		return objects;
 	}
+
+	static function selectedNativeLayout(layouts:Array<TypedNativeLayout>, target:String):Null<TypedNativeLayout> {
+		for (layout in layouts)
+			if (layout.target == target)
+				return layout;
+		return null;
+	}
+
+	static function nativeFieldLayout(layout:Null<TypedNativeLayout>, fieldName:String):Null<compiler.types.TypedAst.TypedNativeFieldLayout> {
+		if (layout == null)
+			return null;
+		for (field in layout.fields)
+			if (field.name == fieldName)
+				return field;
+		throw 'Missing Flat field layout "${layout.target}:$fieldName"';
+	}
+
+	static function isFlatRecordField(type:CompilerType, classes:Map<String, compiler.types.TypedAst.TypedClass>, target:String):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): var declaration = classes.get(name); declaration != null && declaration.isFlat && selectedNativeLayout(declaration.nativeLayouts,
+					target) != null;
+			case _: false;
+		};
+
+	static function isSignedField(type:CompilerType):Bool
+		return switch type {
+			case TInt | TInt64: true;
+			case TNativeScalar(name):
+				name == "i8"
+				|| name == "i16"
+				|| name == "i32"
+				|| name == "i64"
+				|| name == "c_schar"
+				|| name == "c_short"
+				|| name == "c_int"
+				|| name == "c_long"
+				|| name == "c_long_long"
+				|| name == "c_wchar";
+			case TAbstract(_, _, representation): isSignedField(representation);
+			case _: false;
+		};
 
 	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
 	static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
