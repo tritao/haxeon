@@ -224,3 +224,36 @@ queued command, active program, voice or tail uses them. Call `collect()` from
 the owning control thread to release those pins; final sample/provider destruction
 occurs there, outside the callback. Native voices use preallocated slots and
 tails. Queue/voice limits are admission limits, not reasons to allocate on demand.
+
+## Shared SoundFont assets
+
+`SoundFontCache` is an explicitly owned scope for immutable SF2 files. Acquire
+leases on preparation threads; the cache coalesces concurrent requests for the
+same canonical path. Decoding and native destruction happen outside its mutex.
+Each lease can create independent native instruments; voice state is never
+shared. Returned inventory records are copies. A definition obtained from a
+lease can create instruments only while that lease is live.
+
+```haxe
+var assets = new haxeon.audio.SoundFontCache(4, 8 * 1024 * 1024);
+var bank = assets.acquire(path); // preparation thread
+var instrument = bank.preset(0, 0.5).createInstrument(engine);
+bank.dispose(); // instrument retains its native sample data
+// Close the scope before shutting down NativeKit:
+assets.dispose();
+```
+
+Limits cover bank count and encoded source bytes, including in-flight load
+reservations. They are not a measurement of total decoded or playback memory.
+Idle banks are evicted in least-recently-used order. Pinned banks cannot be
+evicted; insufficient capacity fails admission without removing useful idle
+banks unless the complete request can fit. Failed loads remove their reservations
+and can be retried. Files are treated as immutable within a scope; use a new
+scope to load changed assets.
+
+`stats()` reports resident/reserved banks, loading count, consumer pins (including
+waiting acquisitions), source bytes, successful loads, hits, evictions and failed
+loads. Closing a cache rejects new acquisitions and wakes waiters. Existing
+leases stay usable until released; already-created instruments outlive their
+leases. Join preparation workers, dispose graph owners, then close the cache
+before NativeKit shutdown. None of these operations belongs on the audio callback.
