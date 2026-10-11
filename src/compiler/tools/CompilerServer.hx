@@ -111,7 +111,17 @@ class CompilerServer {
 				continue;
 			var temporary = destination + stagingSuffix;
 			Reflect.setField(staged, field, temporary);
-			for (suffix in (field == "output" ? ["", ".functions", ".hli", ".hlp", ".live.json", ".live.json.tmp", ".build-id"] : [""]))
+			for (suffix in (field == "output" ? [
+				"",
+				".functions",
+				".hli",
+				".hlp",
+				".live.json",
+				".live.json.tmp",
+				".build-id",
+				".descriptors",
+				".descriptors.json"
+			] : [""]))
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
 		Thread.create(function() {

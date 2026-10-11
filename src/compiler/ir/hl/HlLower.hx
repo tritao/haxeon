@@ -15,6 +15,7 @@ import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -730,6 +731,8 @@ class HlLower {
 						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case FloatToInt(output, value):
 						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+					case FloatToFloat(output, value):
+						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case BeginTry(catchBlock, _):
@@ -908,11 +911,30 @@ class HlLower {
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
 					case FieldGet(output, object, fieldName):
-						instructions.push(HlInstruction.FieldGet(defineRegister(output, registers, registerTypes), requireRegister(object, registers),
-							requireObjectField(object, fieldName)));
+						var destination = defineRegister(output, registers, registerTypes),
+							nativeLayout = objectFieldNativeLayout(object, fieldName);
+						instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers), requireObjectField(object, fieldName)));
+						if (nativeLayout != null && nativeLayout.size < 4) {
+							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
+								bits = nativeLayout.size * 8;
+							instructions.push(HlInstruction.LoadInt(maskOrShift, internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
+							if (nativeLayout.signed) {
+								instructions.push(HlInstruction.ShiftLeft(destination, destination, maskOrShift));
+								instructions.push(HlInstruction.ShiftRight(destination, destination, maskOrShift));
+							} else
+								instructions.push(HlInstruction.BitAnd(destination, destination, maskOrShift));
+						}
 					case FieldSet(object, fieldName, value):
-						instructions.push(HlInstruction.FieldSet(requireRegister(object, registers), requireObjectField(object, fieldName),
-							requireRegister(value, registers)));
+						var receiver = requireRegister(object, registers),
+							field = requireObjectField(object, fieldName),
+							source = requireRegister(value, registers),
+							nativeStorageType = symbols.internNativeFieldStorageType(value.type, objectFieldNativeLayout(object, fieldName));
+						if (nativeStorageType != null) {
+							var storageSource = temporaryRegisterType(nativeStorageType, registerTypes);
+							instructions.push(HlInstruction.ToInt(storageSource, source));
+							source = storageSource;
+						}
+						instructions.push(HlInstruction.FieldSet(receiver, field, source));
 					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
 						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
 							requireRegister(index, registers)));
@@ -1257,9 +1279,9 @@ class HlLower {
 	static function keepsArrayBounds(instruction:IrInstruction):Bool
 		return switch instruction {
 			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), ToDyn(_, _),
-				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
-				BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _),
-				FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
+				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _),
+				BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
+				Equal(_, _, _), FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
 			default: false;
 		};
 
@@ -1316,6 +1338,12 @@ class HlLower {
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {
 		var index = types.length;
 		types.push(internType(type));
+		return index;
+	}
+
+	function temporaryRegisterType(type:Int, types:Array<Int>):Int {
+		var index = types.length;
+		types.push(type);
 		return index;
 	}
 
@@ -1437,6 +1465,24 @@ class HlLower {
 		if (baseName.length > 0)
 			return requireObjectFieldByType(baseName, name);
 		throw 'Unknown IR field "$typeName.$name"';
+	}
+
+	function objectFieldNativeLayout(object:IrValue, name:String):Null<IrObjectFieldNativeLayout> {
+		var typeName = switch object.type {
+			case Obj(value): value;
+			default: return null;
+		};
+		return objectFieldNativeLayoutForType(typeName, name);
+	}
+
+	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<IrObjectFieldNativeLayout> {
+		var descriptor = objects.get(typeName);
+		if (descriptor == null)
+			return null;
+		for (field in descriptor.fields)
+			if (field.name == name)
+				return field.nativeLayout;
+		return descriptor.base == null ? null : objectFieldNativeLayoutForType(Std.string(descriptor.base), name);
 	}
 
 	/** The implementing function of `name` when `value` is an instance of a value class, whose methods are not virtual. */

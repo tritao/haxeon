@@ -148,11 +148,13 @@ class SemanticIndex {
 			if (field.type != null)
 				try
 					setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span))
-				catch (_:Dynamic) setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
+				catch (_:Dynamic)
+					setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
 		for (method in methods)
 			try
 				setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span))
-			catch (_:Dynamic) setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
+			catch (_:Dynamic)
+				setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
 	}
 
 	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void {
@@ -272,12 +274,14 @@ class SemanticIndex {
 			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, owner, [])});
 		indexRecoveredStatements(functionKey, fn.statements, fn.span, 0);
 		currentCaller = recoveredDeclaredSymbol(functionKey);
-		if (currentCaller != null) declarationTypes.set(currentCaller, recoveredType(fn.result));
+		if (currentCaller != null)
+			declarationTypes.set(currentCaller, recoveredType(fn.result));
 		indexRecoveredStatementUses(fn.statements);
 		for (index in 0...tokens.length) {
 			var token = tokens[index];
 			// Member names belong to the receiver, even when a parameter shares the name.
-			if (index > 0 && tokens[index - 1].kind == TokenKind.Dot) continue;
+			if (index > 0 && tokens[index - 1].kind == TokenKind.Dot)
+				continue;
 			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start && token.span.end <= fn.span.end)
 				bindRecoveredLocal(token.text, token.span);
 		}
@@ -514,7 +518,8 @@ class SemanticIndex {
 			case Variable("this", span):
 				var receiver:CompilerType = TDynamic;
 				for (candidate in functionReceivers)
-					if (span.start >= candidate.span.start && span.end <= candidate.span.end) receiver = candidate.type;
+					if (span.start >= candidate.span.start && span.end <= candidate.span.end)
+						receiver = candidate.type;
 				receiver;
 			case Variable(name, span): var id = bindRecoveredLocal(name,
 					span); id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
@@ -851,7 +856,8 @@ class SemanticIndex {
 
 	function indexExpression(fn:TypedFunction, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
-		if (expression.semanticReference != null) bindNamed(resolve, expression.semanticReference, expression.span);
+		if (expression.semanticReference != null)
+			bindNamed(resolve, expression.semanticReference, expression.span);
 		completionTypes.push({span: expression.span, type: expression.type});
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):

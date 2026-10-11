@@ -108,7 +108,9 @@ class CompilerProvider {
 			output + ".functions",
 			output + ".hli",
 			output + ".live.json",
-			output + ".build-id"
+			output + ".build-id",
+			output + ".descriptors",
+			output + ".descriptors.json"
 		],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke), false);

@@ -140,6 +140,12 @@ class FormatterMain {
 			throw "formatter did not preserve CRLF output";
 		if (SourceFormatter.format("function main(:Int {", 2, true) != null)
 			throw "formatter accepted malformed source";
+		var structSource = "struct Vec2 {\npublic var x:Int;\n}\n",
+			structFormatted = SourceFormatter.format(structSource, 2, true);
+		if (structFormatted == null
+			|| structFormatted.indexOf("struct Vec2") < 0
+			|| SourceFormatter.format(structFormatted, 2, true) != structFormatted)
+			throw "formatter did not preserve struct declaration syntax";
 
 		Sys.println("PASS: lossless width-aware formatter");
 	}

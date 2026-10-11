@@ -119,7 +119,10 @@ class ArtifactCache {
 	}
 
 	public static function isShareable(action:ExecutionAction):Bool {
-		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1" || action.outputs.length == 0 || action.alwaysRun)
+		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1"
+			|| action.outputs.length == 0
+			|| action.directoryOutputs.length > 0
+			|| action.alwaysRun)
 			return false;
 		// A test result describes this checkout's data and runtime, so it stays local.
 		if (StringTools.startsWith(action.id.key(), "test:"))

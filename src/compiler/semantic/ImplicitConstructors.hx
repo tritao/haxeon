@@ -130,6 +130,7 @@ class ImplicitConstructors {
 	static function withMethod(declaration:AstClass, method:AstFunction):AstClass
 		return {
 			name: declaration.name,
+			isStruct: declaration.isStruct,
 			isExtern: declaration.isExtern,
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,

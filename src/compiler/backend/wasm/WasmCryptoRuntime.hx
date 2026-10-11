@@ -19,7 +19,6 @@ class WasmCryptoRuntime {
 			runtime = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime.wasm");
 		var exports = WasmRuntimeLinker.link(module, runtime, name -> {
 			throw 'Unexpected crypto guest import "$name"';
-			return 0;
 		});
 		for (native in needed) {
 			var index = exports.get(native.symbol);

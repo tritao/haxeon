@@ -250,7 +250,7 @@ class LspProtocolMain {
 			watchMainPath = Path.join([watchAppRoot, "Main.hx"]),
 			watchHelperPath = Path.join([watchLibRoot, "Helper.hx"]),
 			watchConfigPath = Path.join([watchRoot, "haxe.json"]),
-			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
+			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nstruct BuildPoint { public var x:Int; }\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
 		sys.FileSystem.createDirectory(watchRoot);
 		sys.FileSystem.createDirectory(watchSourceRoot);
 		sys.FileSystem.createDirectory(watchAppRoot);
@@ -285,14 +285,16 @@ class LspProtocolMain {
 			id: 430,
 			method: "textDocument/documentSymbol",
 			params: {textDocument: {uri: watchMainUri}}
-		})), hasSelectedBuild = false, hasWrongBuild = false;
+		})), hasSelectedBuild = false, hasWrongBuild = false, hasStruct = false;
 		for (symbol in cast(Json.parse(buildSymbols[0]).result, Array<Dynamic>)) {
 			if (symbol.name == "buildSelected")
 				hasSelectedBuild = true;
 			if (symbol.name == "wrongBuild")
 				hasWrongBuild = true;
+			if (symbol.name == "BuildPoint" && symbol.kind == 23)
+				hasStruct = true;
 		}
-		if (!hasSelectedBuild || hasWrongBuild)
+		if (!hasSelectedBuild || hasWrongBuild || !hasStruct)
 			throw "selected build defines did not control LSP symbols";
 		var firstWorkspaceDiagnostics = request(watchProtocol,
 			Json.stringify({
@@ -807,14 +809,20 @@ class LspProtocolMain {
 		var blockingService = new BlockingLanguageService(),
 			blockingProtocol = new LspProtocol(blockingService),
 			cancelledResponse:String = null,
-			cancelledDone = new sys.thread.Lock(), navigationDone = new sys.thread.Lock(), coloringDone = new sys.thread.Lock(),
-			priorityOrder:Array<Int> = [], navigationTiming:Dynamic = null;
+			cancelledDone = new sys.thread.Lock(),
+			navigationDone = new sys.thread.Lock(),
+			coloringDone = new sys.thread.Lock(),
+			priorityOrder:Array<Int> = [],
+			navigationTiming:Dynamic = null;
 		var dispatcher = new LspDispatcher(blockingProtocol, response -> {
 			var parsed:Dynamic = Json.parse(response);
-			if (parsed.id == 881 || parsed.id == 882) priorityOrder.push(parsed.id);
-			if (parsed.id == 881) coloringDone.release();
+			if (parsed.id == 881 || parsed.id == 882)
+				priorityOrder.push(parsed.id);
+			if (parsed.id == 881)
+				coloringDone.release();
 			if (parsed.method == "$/haxeon/requestTiming" && parsed.params.id == 882) {
-				navigationTiming = parsed.params; navigationDone.release();
+				navigationTiming = parsed.params;
+				navigationDone.release();
 			}
 			if (parsed.id == 88) {
 				cancelledResponse = response;
@@ -840,16 +848,32 @@ class LspProtocolMain {
 			params: {textDocument: {uri: uri}, position: {line: 0, character: source.length}}
 		}));
 		blockingService.entered.wait();
-		dispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 881, method: "textDocument/semanticTokens/full", params: {textDocument: {uri: uri}}}));
-		dispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 882, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 1}
-		}}));
+		dispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 881,
+			method: "textDocument/semanticTokens/full",
+			params: {textDocument: {uri: uri}}
+		}));
+		dispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 882,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.lastIndexOf("answer") + 1}
+			}
+		}));
 		dispatcher.dispatch('{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":88}}');
 		blockingService.resume.release();
 		cancelledDone.wait();
-		if (!navigationDone.wait(10) || !coloringDone.wait(10)) throw "navigation/color priority test timed out";
+		if (!navigationDone.wait(10) || !coloringDone.wait(10))
+			throw "navigation/color priority test timed out";
 		dispatcher.finish();
-		if (priorityOrder.length != 2 || priorityOrder[0] != 882 || navigationTiming.queueMs < 0 || navigationTiming.analysisMs < 0 || navigationTiming.executionMs < navigationTiming.analysisMs)
+		if (priorityOrder.length != 2
+			|| priorityOrder[0] != 882
+			|| navigationTiming.queueMs < 0
+			|| navigationTiming.analysisMs < 0
+			|| navigationTiming.executionMs < navigationTiming.analysisMs)
 			throw "navigation did not outrank coloring or report valid queue/analysis timing";
 		if (Json.parse(cancelledResponse).error.code != -32800)
 			throw "LSP did not cancel an active completion request";
@@ -891,26 +915,51 @@ class LspProtocolMain {
 				foregroundHasMain = true;
 		if (!foregroundHasMain || foregroundProtocol.lastForegroundAnalysisMs < 0)
 			throw "first-open completion did not demand a current semantic snapshot";
-		var interruptedService = new BlockingDiagnosticLanguageService(), interruptedProtocol = new LspProtocol(interruptedService),
-			interruptedDefinition:Dynamic = null, resumedDiagnostics = new sys.thread.Lock(), interruptedDone = new sys.thread.Lock();
+		var interruptedService = new BlockingDiagnosticLanguageService(),
+			interruptedProtocol = new LspProtocol(interruptedService),
+			interruptedDefinition:Dynamic = null,
+			resumedDiagnostics = new sys.thread.Lock(),
+			interruptedDone = new sys.thread.Lock();
 		interruptedService.block = true;
 		var interruptedDispatcher = new LspDispatcher(interruptedProtocol, response -> {
 			var parsed:Dynamic = Json.parse(response);
-			if (parsed.id == 883) { interruptedDefinition = parsed; interruptedDone.release(); }
-			if (parsed.method == "textDocument/publishDiagnostics") resumedDiagnostics.release();
+			if (parsed.id == 883) {
+				interruptedDefinition = parsed;
+				interruptedDone.release();
+			}
+			if (parsed.method == "textDocument/publishDiagnostics")
+				resumedDiagnostics.release();
 		}, 4, 20);
-		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
-		}}));
-		if (!interruptedService.entered.wait(10)) throw "background analysis did not start";
-		interruptedDispatcher.dispatch(Json.stringify({jsonrpc: "2.0", id: 883, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 1}
-		}}));
+		interruptedDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					languageId: "haxe",
+					version: 1,
+					text: source
+				}
+			}
+		}));
+		if (!interruptedService.entered.wait(10))
+			throw "background analysis did not start";
+		interruptedDispatcher.dispatch(Json.stringify({
+			jsonrpc: "2.0",
+			id: 883,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.lastIndexOf("answer") + 1}
+			}
+		}));
 		interruptedService.block = false;
 		interruptedService.resume.release();
-		if (!interruptedDone.wait(10) || !resumedDiagnostics.wait(10)) throw "navigation interruption lost diagnostic work";
+		if (!interruptedDone.wait(10) || !resumedDiagnostics.wait(10))
+			throw "navigation interruption lost diagnostic work";
 		interruptedDispatcher.finish();
-		if (interruptedDefinition.result == null || interruptedDefinition.error != null) throw "navigation failed after interrupting diagnostics";
+		if (interruptedDefinition.result == null || interruptedDefinition.error != null)
+			throw "navigation failed after interrupting diagnostics";
 		Sys.println("PASS: navigation priority, queue/analysis timings and resumed interrupted diagnostics");
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
@@ -1415,81 +1464,179 @@ class LspProtocolMain {
 	}
 
 	static function recoveredTypeNavigation():Void {
-		var service = new LanguageService(), protocol = new LspProtocol(service), uri = "file:///app/Holder.hx";
+		var service = new LanguageService(),
+			protocol = new LspProtocol(service),
+			uri = "file:///app/Holder.hx";
 		service.update("left/Widget.hx", "package left; class Widget {}");
 		service.update("right/Widget.hx", "package right; class Widget {}");
 		var source = "package app; import left.Widget; import missing.Dependency; class Holder { final view:Widget; public function new(view:Widget) { this.view = view; } public function get():Widget return this.view; }";
-		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
-		}}));
-		for (offset in [source.indexOf("view:Widget") + 1, source.indexOf("= view") + 3, source.lastIndexOf("this.view") + 6, source.indexOf("get()") + 1]) {
-			var response = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8811, method: "textDocument/typeDefinition", params: {
-				textDocument: {uri: uri}, position: {line: 0, character: offset}
-			}}));
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					languageId: "haxe",
+					version: 1,
+					text: source
+				}
+			}
+		}));
+		for (offset in [
+			source.indexOf("view:Widget") + 1,
+			source.indexOf("= view") + 3,
+			source.lastIndexOf("this.view") + 6,
+			source.indexOf("get()") + 1
+		]) {
+			var response = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 8811,
+				method: "textDocument/typeDefinition",
+				params: {
+					textDocument: {uri: uri},
+					position: {line: 0, character: offset}
+				}
+			}));
 			if (response.result == null || response.result.uri != "file://left/Widget.hx")
 				throw "type navigation did not use the declared import during dependency failure: " + Json.stringify(response);
 		}
-		var unknown = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8812, method: "textDocument/typeDefinition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: 0}
-		}}));
+		var unknown = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 8812,
+			method: "textDocument/typeDefinition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: 0}
+			}
+		}));
 		var failure:Dynamic = Json.parse(unknown[0]);
 		var message:String = failure.error == null ? "" : failure.error.message;
-		if (failure.error == null || message.indexOf("Missing module") < 0 || message.indexOf("missing.Dependency") < 0 || message.indexOf("snapshot") >= 0)
+		if (failure.error == null
+			|| message.indexOf("Missing module") < 0
+			|| message.indexOf("missing.Dependency") < 0
+			|| message.indexOf("snapshot") >= 0)
 			throw "blocked type navigation did not explain its compiler failure: " + Json.stringify(failure);
-		var rename = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8813, method: "textDocument/rename", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("this.view") + 6}, newName: "renamed"
-		}}));
+		var rename = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 8813,
+			method: "textDocument/rename",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.lastIndexOf("this.view") + 6},
+				newName: "renamed"
+			}
+		}));
 		var renameFailure:Dynamic = Json.parse(rename[0]);
 		var renameMessage:String = renameFailure.error == null ? "" : renameFailure.error.message;
 		if (renameFailure.error == null || renameMessage.indexOf("Missing module") < 0)
 			throw "rename failure did not explain incomplete analysis";
 		// Two imports with the same short name cannot safely identify a declaration.
-		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
-			textDocument: {uri: uri, version: 2}, contentChanges: [{text: StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;")}]
-		}}));
-		var ambiguous = service.typeDefinition("/app/Holder.hx", StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;").lastIndexOf("this.view") + 6);
-		if (ambiguous != null) throw "recovered type navigation guessed between ambiguous imports";
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: uri, version: 2},
+				contentChanges: [
+					{text: StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;")}
+				]
+			}
+		}));
+		var ambiguous = service.typeDefinition("/app/Holder.hx",
+			StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;").lastIndexOf("this.view") + 6);
+		if (ambiguous != null)
+			throw "recovered type navigation guessed between ambiguous imports";
 		var genericSource = "package app; import left.Widget; import missing.Dependency; class Holder { public function take<Widget>(value:Widget):Widget return value; }";
-		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
-			textDocument: {uri: uri, version: 3}, contentChanges: [{text: genericSource}]
-		}}));
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: uri, version: 3},
+				contentChanges: [{text: genericSource}]
+			}
+		}));
 		if (service.typeDefinition("/app/Holder.hx", genericSource.lastIndexOf("value") + 1) != null)
 			throw "recovered type navigation confused a generic parameter with an imported class";
 		Sys.println("PASS: declared type navigation survives dependency errors, imports stay unambiguous and failures report their cause");
 	}
 
 	static function recoveredDefinitionNavigation():Void {
-		var service = new LanguageService(), protocol = new LspProtocol(service), uri = "file:///workspace/Active.hx";
+		var service = new LanguageService(),
+			protocol = new LspProtocol(service),
+			uri = "file:///workspace/Active.hx";
 		var source = "import missing.Dependency; class Active { final view:Int; public function new(view:Int) { this.view = view; } public function read():Int return this.view; }";
-		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: uri, languageId: "haxe", version: 1, text: source}
-		}}));
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					languageId: "haxe",
+					version: 1,
+					text: source
+				}
+			}
+		}));
 		if (service.isCurrent("/workspace/Active.hx") || !service.hasCurrentSyntax("/workspace/Active.hx"))
 			throw "missing dependency did not preserve a current recovered syntax index";
 		for (offset in [source.indexOf("this.view") + 6, source.lastIndexOf("this.view") + 6]) {
-			var response = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8801, method: "textDocument/definition", params: {
-				textDocument: {uri: uri}, position: {line: 0, character: offset}
-			}}));
-			if (response.error != null || response.result == null || response.result.uri != uri || response.result.range.start.character != source.indexOf("view:Int"))
+			var response = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 8801,
+				method: "textDocument/definition",
+				params: {
+					textDocument: {uri: uri},
+					position: {line: 0, character: offset}
+				}
+			}));
+			if (response.error != null
+				|| response.result == null
+				|| response.result.uri != uri
+				|| response.result.range.start.character != source.indexOf("view:Int"))
 				throw "this.member navigation failed with a broken dependency: " + Json.stringify(response);
 		}
-		var local = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8802, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: source.indexOf("= view") + 3}
-		}}));
+		var local = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 8802,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.indexOf("= view") + 3}
+			}
+		}));
 		if (local.result == null || local.result.range.start.character != source.indexOf("new(view") + 4)
 			throw "recovered member lookup confused a shadowing parameter with the field";
-		protocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
-			textDocument: {uri: uri, version: 2}, contentChanges: [{text: "\n\n" + source}]
-		}}));
-		var moved = request(protocol, Json.stringify({jsonrpc: "2.0", id: 8803, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 2, character: source.indexOf("this.view") + 6}
-		}}));
-		if (moved.result == null || moved.result.range.start.line != 2) throw "recovered navigation reused pre-edit declaration spans";
-		var renameResponses = protocol.handle(Json.stringify({jsonrpc: "2.0", id: 8804, method: "textDocument/rename", params: {
-			textDocument: {uri: uri}, position: {line: 2, character: source.indexOf("this.view") + 6}, newName: "renamed"
-		}}));
+		protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: uri, version: 2},
+				contentChanges: [{text: "\n\n" + source}]
+			}
+		}));
+		var moved = request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 8803,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 2, character: source.indexOf("this.view") + 6}
+			}
+		}));
+		if (moved.result == null || moved.result.range.start.line != 2)
+			throw "recovered navigation reused pre-edit declaration spans";
+		var renameResponses = protocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			id: 8804,
+			method: "textDocument/rename",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 2, character: source.indexOf("this.view") + 6},
+				newName: "renamed"
+			}
+		}));
 		var rename:Dynamic = Json.parse(renameResponses[0]);
-		if (rename.error == null || rename.error.code != -32801) throw "navigation fallback weakened rename freshness protection";
+		if (rename.error == null || rename.error.code != -32801)
+			throw "navigation fallback weakened rename freshness protection";
 		Sys.println("PASS: current recovered this.member definitions, shadowing and edits with broken dependencies; rename remains protected");
 	}
 
@@ -1568,96 +1715,219 @@ class LspProtocolMain {
 		}));
 		if (symbols.error != null || symbols.result.length == 0)
 			throw "manifest-backed symbols did not recover after a fix";
-		for (roots in [[base + "/app/src/app"], [base + "/app", base + "/app/src", base + "/app/src/app"], [base]]) {
+		for (roots in [
+			[base + "/app/src/app"],
+			[base + "/app", base + "/app/src", base + "/app/src/app"],
+			[base]
+		]) {
 			var nested = new LspProtocol();
-			request(nested, Json.stringify({jsonrpc: "2.0", id: 803, method: "initialize", params: {
-				workspaceFolders: [for (root in roots) {uri: "file://" + root, name: root}]
-			}}));
-			var published = nested.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-				textDocument: {uri: uri, version: 1, languageId: "haxe", text: source}
-			}}));
+			request(nested, Json.stringify({
+				jsonrpc: "2.0",
+				id: 803,
+				method: "initialize",
+				params: {
+					workspaceFolders: [for (root in roots) {uri: "file://" + root, name: root}]
+				}
+			}));
+			var published = nested.handle(Json.stringify({
+				jsonrpc: "2.0",
+				method: "textDocument/didOpen",
+				params: {
+					textDocument: {
+						uri: uri,
+						version: 1,
+						languageId: "haxe",
+						text: source
+					}
+				}
+			}));
 			if (nested.project.compilerPath(mainPath) != "app/Main.hx" || !nested.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
 				throw "source-folder or nested workspace lost owning manifest dependencies";
 			var clean = false;
 			for (raw in published) {
 				var message:Dynamic = Json.parse(raw);
 				if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri) {
-					if (message.params.diagnostics.length > 0) throw "nested workspace published false import diagnostics: " + raw;
+					if (message.params.diagnostics.length > 0)
+						throw "nested workspace published false import diagnostics: " + raw;
 					clean = true;
 				}
 			}
-			if (!clean) throw "nested workspace did not publish document diagnostics";
+			if (!clean)
+				throw "nested workspace did not publish document diagnostics";
 			if (roots.length == 3 && nested.project.configurations.length != 1)
 				throw "overlapping source folders duplicated the manifest configuration";
-			if (!nested.project.isConfiguration(base + "/app/haxeon.json")) throw "manifest edits are not watched";
+			if (!nested.project.isConfiguration(base + "/app/haxeon.json"))
+				throw "manifest edits are not watched";
 		}
-		var deferred = new LspProtocol(), dependencyPath = base + "/lib/code/dep/Value.hx",
+		var deferred = new LspProtocol(),
+			dependencyPath = base + "/lib/code/dep/Value.hx",
 			deferredSource = StringTools.replace(source, "var answer =", 'var expression = new EReg("x", ""); var answer =');
 		deferred.enableDeferredDiagnostics();
-		request(deferred, Json.stringify({jsonrpc: "2.0", id: 809, method: "initialize", params: {rootUri: "file://" + base}}));
-		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: uri, version: 1, languageId: "haxe", text: deferredSource}
-		}}));
+		request(deferred, Json.stringify({
+			jsonrpc: "2.0",
+			id: 809,
+			method: "initialize",
+			params: {rootUri: "file://" + base}
+		}));
+		deferred.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					version: 1,
+					languageId: "haxe",
+					text: deferredSource
+				}
+			}
+		}));
 		deferred.analyzePendingDiagnostics();
-		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: "file://" + dependencyPath, version: 1, languageId: "haxe", text: sys.io.File.getContent(dependencyPath)}
-		}}));
+		deferred.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: "file://" + dependencyPath,
+					version: 1,
+					languageId: "haxe",
+					text: sys.io.File.getContent(dependencyPath)
+				}
+			}
+		}));
 		deferred.analyzePendingDiagnostics();
-		var returnedDefinition = request(deferred, Json.stringify({jsonrpc: "2.0", id: 810, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: deferredSource.lastIndexOf("answer") + 1}
-		}}));
+		var returnedDefinition = request(deferred, Json.stringify({
+			jsonrpc: "2.0",
+			id: 810,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: deferredSource.lastIndexOf("answer") + 1}
+			}
+		}));
 		if (returnedDefinition.result == null || returnedDefinition.result.uri != uri)
 			throw "definition failed after switching configurations with drained diagnostics: " + Json.stringify(returnedDefinition);
-		var editedSource = StringTools.replace(StringTools.replace(deferredSource, "var answer =", "var newAnswerValue ="), "return answer;", "return newAnswerValue;");
-		deferred.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didChange", params: {
-			textDocument: {uri: uri, version: 2}, contentChanges: [{text: editedSource}]
-		}}));
+		var editedSource = StringTools.replace(StringTools.replace(deferredSource, "var answer =", "var newAnswerValue ="), "return answer;",
+			"return newAnswerValue;");
+		deferred.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didChange",
+			params: {
+				textDocument: {uri: uri, version: 2},
+				contentChanges: [{text: editedSource}]
+			}
+		}));
 		deferred.analyzePendingDiagnostics();
-		request(deferred, Json.stringify({jsonrpc: "2.0", id: 811, method: "textDocument/documentSymbol", params: {textDocument: {uri: "file://" + dependencyPath}}}));
-		var editedDefinition = request(deferred, Json.stringify({jsonrpc: "2.0", id: 812, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: editedSource.lastIndexOf("newAnswerValue") + 1}
-		}}));
-		if (editedDefinition.result == null || editedDefinition.result.uri != uri || editedDefinition.result.range.start.character != editedSource.indexOf("newAnswerValue"))
+		request(deferred, Json.stringify({
+			jsonrpc: "2.0",
+			id: 811,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: "file://" + dependencyPath}}
+		}));
+		var editedDefinition = request(deferred, Json.stringify({
+			jsonrpc: "2.0",
+			id: 812,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: editedSource.lastIndexOf("newAnswerValue") + 1}
+			}
+		}));
+		if (editedDefinition.result == null
+			|| editedDefinition.result.uri != uri
+			|| editedDefinition.result.range.start.character != editedSource.indexOf("newAnswerValue"))
 			throw "configuration cache lost unsaved edits or returned a stale definition";
 		Sys.println("PASS: foreground definition reanalyzes its document after configuration switches");
 		Sys.println("PASS: ancestor manifests, overlapping source folders and lazy nested project dependencies");
 		// Project FFI metadata supplies virtual Haxe modules, without native builds.
 		sys.io.File.saveContent(base + "/app/fixture.hxi", 'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 17; }');
-		sys.io.File.saveContent(base + "/app/fixture.hxmap", '{"interface":"fixture","package":"projected","modules":{"functions":"Fixture","types":"FixtureTypes","constants":"FixtureConstants"}}');
-		sys.io.File.saveContent(base + "/app/haxeon.json", '{"version":1,"package":{"name":"demo"},"sourceRoots":["src"],"scopeSourceRoots":false,"ffi":{"interfaces":["fixture.hxi"],"projections":["fixture.hxmap"]}}');
-		var ffiProtocol = new LspProtocol(), ffiSource = "package app; import projected.FixtureConstants; class Main { public static function main():Int { var value = FixtureConstants.VALUE; return value; } }";
-		request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 804, method: "initialize", params: {rootUri: "file://" + base + "/app/src"}}));
-		var ffiMessages = ffiProtocol.handle(Json.stringify({jsonrpc: "2.0", method: "textDocument/didOpen", params: {
-			textDocument: {uri: uri, version: 1, languageId: "haxe", text: ffiSource}
-		}}));
+		sys.io.File.saveContent(base + "/app/fixture.hxmap",
+			'{"interface":"fixture","package":"projected","modules":{"functions":"Fixture","types":"FixtureTypes","constants":"FixtureConstants"}}');
+		sys.io.File.saveContent(base + "/app/haxeon.json",
+			'{"version":1,"package":{"name":"demo"},"sourceRoots":["src"],"scopeSourceRoots":false,"ffi":{"interfaces":["fixture.hxi"],"projections":["fixture.hxmap"]}}');
+		var ffiProtocol = new LspProtocol(),
+			ffiSource = "package app; import projected.FixtureConstants; class Main { public static function main():Int { var value = FixtureConstants.VALUE; return value; } }";
+		request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 804,
+			method: "initialize",
+			params: {rootUri: "file://" + base + "/app/src"}
+		}));
+		var ffiMessages = ffiProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: uri,
+					version: 1,
+					languageId: "haxe",
+					text: ffiSource
+				}
+			}
+		}));
 		for (raw in ffiMessages) {
 			var message:Dynamic = Json.parse(raw);
 			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
 				throw "manifest FFI projection did not resolve: " + raw;
 		}
-		var ffiHover = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 805, method: "textDocument/hover", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
-		}}));
-		if (ffiHover.result == null) throw "FFI projection did not produce a current semantic snapshot";
-		var ffiDefinition = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 813, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
-		}}));
+		var ffiHover = request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 805,
+			method: "textDocument/hover",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
+			}
+		}));
+		if (ffiHover.result == null)
+			throw "FFI projection did not produce a current semantic snapshot";
+		var ffiDefinition = request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 813,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
+			}
+		}));
 		if (ffiDefinition.result == null || ffiDefinition.result.uri != "file://" + base + "/app/fixture.hxi")
 			throw "projected FFI constant definition did not reach its ABI declaration: " + Json.stringify(ffiDefinition);
 		var oldConfiguration = ffiProtocol.project.configurations[0].id;
-		sys.io.File.saveContent(base + "/app/fixture.hxi", '// Updated ABI\ninterface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
+		sys.io.File.saveContent(base + "/app/fixture.hxi",
+			'// Updated ABI\ninterface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
 		ffiProtocol.handle(watchedFileMessage("file://" + base + "/app/fixture.hxi", 2));
-		if (ffiProtocol.project.configurations[0].id == oldConfiguration) throw "FFI edits did not invalidate project configuration";
-		var afterFfiEdit = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 806, method: "textDocument/documentSymbol", params: {textDocument: {uri: uri}}}));
-		if (afterFfiEdit.result.length == 0) throw "FFI reconfiguration lost the unsaved document overlay";
-		var afterFfiHover = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 807, method: "textDocument/hover", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
-		}}));
-		if (afterFfiHover.result == null) throw "FFI edit did not restore semantic analysis";
-		var reloadedDefinition = request(ffiProtocol, Json.stringify({jsonrpc: "2.0", id: 814, method: "textDocument/definition", params: {
-			textDocument: {uri: uri}, position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
-		}}));
-		if (reloadedDefinition.result == null || reloadedDefinition.result.uri != "file://" + base + "/app/fixture.hxi" || reloadedDefinition.result.range.start.line != 1)
+		if (ffiProtocol.project.configurations[0].id == oldConfiguration)
+			throw "FFI edits did not invalidate project configuration";
+		var afterFfiEdit = request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 806,
+			method: "textDocument/documentSymbol",
+			params: {textDocument: {uri: uri}}
+		}));
+		if (afterFfiEdit.result.length == 0)
+			throw "FFI reconfiguration lost the unsaved document overlay";
+		var afterFfiHover = request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 807,
+			method: "textDocument/hover",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: ffiSource.lastIndexOf("value") + 1}
+			}
+		}));
+		if (afterFfiHover.result == null)
+			throw "FFI edit did not restore semantic analysis";
+		var reloadedDefinition = request(ffiProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 814,
+			method: "textDocument/definition",
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
+			}
+		}));
+		if (reloadedDefinition.result == null
+			|| reloadedDefinition.result.uri != "file://" + base + "/app/fixture.hxi"
+			|| reloadedDefinition.result.range.start.line != 1)
 			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
 
 		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");

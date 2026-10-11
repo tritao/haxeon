@@ -5,10 +5,21 @@ import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.ffi.HxiAbi;
-import compiler.ffi.HxiAbi.HxiAbiValue;
-import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.SemanticSignature;
+import compiler.types.NativeTypeDescriptor;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorDefault;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue.*;
+import compiler.syntax.Ast.AstMetadata;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstField;
+import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstMapEntry;
 import compiler.syntax.Ast.AstObjectField;
 import compiler.syntax.Ast.AstExpression;
@@ -32,6 +43,7 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
+import compiler.types.StructProperties;
 
 typedef ExpressionTypeCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
@@ -89,6 +101,7 @@ class ExpressionTyper {
 	final arrayElementType:ExpressionArrayElementTypeCallback;
 	final lowerType:LowerExpressionTypeCallback;
 	final dispatchRules:ExpressionDispatchRules;
+	var typedAnnotationValues:Map<String, Array<NativeTypeAnnotationData>> = [];
 
 	public function new(session:TypingSession, conversionResolver:ConversionResolver, callResolver:CallResolver, typeExpression:ExpressionTypeCallback,
 			coerce:ExpressionCoerceCallback, switchRules:ExpressionSwitchRules, anonymousTypeRegistry:AnonymousTypeRegistry,
@@ -150,7 +163,7 @@ class ExpressionTyper {
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
-			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span);
+			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span, scope);
 			case NewGeneric(typeName, typeArguments, arguments, span):
 				callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
 			case New(typeName, arguments, span): callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
@@ -178,45 +191,882 @@ class ExpressionTyper {
 				call;
 		};
 
-	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan):TypedExpression {
+	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan,
+			scope:Scope):TypedExpression {
 		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
-		switch resolved {
-			case TInstance(NominalKind.NativeValue, name, _):
-				var layout = session.nativeLayoutsByName.get(name);
-				if (layout == null)
-					fail("E1022", 'Native value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
-				switch kind {
-					case SizeOf: size = layout.size;
-					case AlignOf: size = layout.alignment;
-					case OffsetOf:
-						if (field == null)
-							fail("E1022", "offsetof requires a field name", span);
-						var found:Null<Int> = null;
-						for (candidate in layout.fields)
-							if (candidate.name == field)
-								found = candidate.offset;
-						if (found == null)
-							fail("E1022", 'Native value "$name" has no field "$field"', span);
-						size = cast found;
-				}
-			case _:
-				if (kind == OffsetOf)
-					fail("E1022", "offsetof requires a native value record type", span);
-				var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
-					fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
-					cast null;
-				},
-					layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
-				if (layout == null)
-					fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
-				size = switch kind {
-					case SizeOf: layout.size;
-					case AlignOf: layout.align;
-					case OffsetOf: 0;
-				};
-		}
+		if (kind == TypeInfo)
+			return typeNativeTypeInfo(resolved, span, scope);
+		var recordName:Null<String> = switch resolved {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			case TInstance(NominalKind.Class, name, _) if (isFlatStruct(name)): name;
+			case _: null;
+		};
+		if (recordName != null)
+			return typeRecordLayoutQuery(recordName, kind, field, span);
+		if (kind == OffsetOf)
+			fail("E1022", "offsetof requires a flat struct or native value record type", span);
+		var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
+			fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
+			cast null;
+		}, layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
+		if (layout == null)
+			fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
+		size = switch kind {
+			case SizeOf: layout.size;
+			case AlignOf: layout.align;
+			case OffsetOf: 0;
+			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+		};
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
+
+	function isFlatStruct(name:String):Bool {
+		var declaration = session.classDecls.get(name);
+		return declaration != null
+			&& (declaration.isStruct == true || hasCRepresentation(declaration))
+			&& StructProperties.satisfies(session.declarations, TInstance(NominalKind.Class, name, []), StructProperties.FLAT_TYPE_NAME);
+	}
+
+	static function hasCRepresentation(declaration:compiler.syntax.Ast.AstClass):Bool {
+		for (metadata in declaration.metadata)
+			if (metadata.name == "repr" && metadata.arguments.length == 1)
+				switch metadata.arguments[0] {
+					case compiler.syntax.Ast.AstExpression.StringLiteral("C", _):
+						return true;
+					case _:
+				}
+		return false;
+	}
+
+	function typeRecordLayoutQuery(name:String, kind:compiler.syntax.Ast.NativeLayoutQueryKind, field:Null<String>, span:SourceSpan):TypedExpression {
+		var layout = session.nativeLayoutsByName.get(name);
+		if (layout == null)
+			fail("E1022", 'Record "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+		var size = switch kind {
+			case SizeOf: layout.size;
+			case AlignOf: layout.alignment;
+			case OffsetOf:
+				if (field == null)
+					fail("E1022", "offsetof requires a field name", span);
+				var found:Null<Int> = null;
+				for (candidate in layout.fields)
+					if (candidate.name == field)
+						found = candidate.offset;
+				if (found == null)
+					fail("E1022", 'Record "$name" has no field "$field"', span);
+				cast found;
+			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+		};
+		return new TypedExpression(TIntLiteral(size), TInt, span);
+	}
+
+	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
+		var name = descriptorRecordName(resolved);
+		if (name == null)
+			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.type(resolved)}"', span);
+		var descriptor = buildNativeTypeDescriptor(resolved);
+		if (descriptor == null)
+			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
+		var annotationArgumentType:CompilerType = TAnonymous("$haxeon.TypeInfoAnnotationArgument.v3", [
+			{
+				name: "name",
+				type: TString,
+				optional: false,
+				isFinal: true
+			},
+			{
+				name: "type",
+				type: TString,
+				optional: false,
+				isFinal: true
+			},
+			{
+				name: "value",
+				type: TDynamic,
+				optional: false,
+				isFinal: true
+			}
+		]),
+			annotationType:CompilerType = TAnonymous("$haxeon.TypeInfoAnnotation.v3",
+				[
+					{
+						name: "name",
+						type: TString,
+						optional: false,
+						isFinal: true
+					},
+					{
+						name: "arguments",
+						type: TArray(annotationArgumentType),
+						optional: false,
+						isFinal: true
+					}
+				]),
+			nodeFields:Array<AnonymousField> = [],
+			nodeType:CompilerType = TAnonymous("$haxeon.TypeInfoNode.v4", nodeFields),
+			defaultType:CompilerType = TAnonymous("$haxeon.TypeInfoDefault.v1", [
+				{
+					name: "type",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "value",
+					type: TDynamic,
+					optional: false,
+					isFinal: true
+				}
+			]);
+		nodeFields.push({
+			name: "name",
+			type: TString,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "type",
+			type: TString,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "flat",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "portable",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "size",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "alignment",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "offset",
+			type: TNullable(TInt),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "defaultValue",
+			type: TNullable(defaultType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "annotations",
+			type: TArray(TString),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "annotationValues",
+			type: TArray(annotationType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "fields",
+			type: TArray(nodeType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "arguments",
+			type: TArray(nodeType),
+			optional: false,
+			isFinal: true
+		});
+		nodeFields.push({
+			name: "recursive",
+			type: TBool,
+			optional: false,
+			isFinal: true
+		});
+		var descriptorSizeType:CompilerType = TNullable(TInt),
+			descriptorAlignmentType:CompilerType = TNullable(TInt),
+			descriptorFields:Array<AnonymousField> = [
+				{
+					name: "version",
+					type: TInt,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "name",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "type",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "sourceKind",
+					type: TString,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "interfaces",
+					type: TArray(TString),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "flat",
+					type: TBool,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "portable",
+					type: TBool,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "size",
+					type: descriptorSizeType,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "alignment",
+					type: descriptorAlignmentType,
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "annotations",
+					type: TArray(TString),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "annotationValues",
+					type: TArray(annotationType),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "fields",
+					type: TArray(nodeType),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "arguments",
+					type: TArray(nodeType),
+					optional: false,
+					isFinal: true
+				},
+				{
+					name: "hash",
+					type: TString,
+					optional: false,
+					isFinal: true
+				}
+			],
+			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v4", descriptorFields),
+			descriptorExpression = ObjectLiteral([
+				objectField("version", IntegerLiteral(descriptor.version, span), span),
+				objectField("name", StringLiteral(descriptor.name, span), span),
+				objectField("type", StringLiteral(descriptor.type, span), span),
+				objectField("sourceKind", StringLiteral(descriptor.sourceKind, span), span),
+				objectField("interfaces", stringArray(descriptor.interfaces, span), span),
+				objectField("flat", BoolLiteral(descriptor.flat, span), span),
+				objectField("portable", BoolLiteral(descriptor.portable, span), span),
+				objectField("size", nullableInteger(descriptor.size, span), span),
+				objectField("alignment", nullableInteger(descriptor.alignment, span), span),
+				objectField("annotations", stringArray(descriptor.annotations, span), span),
+				objectField("annotationValues", annotationValuesExpression(descriptor.annotationValues, span), span),
+				objectField("fields", ArrayLiteral([for (field in descriptor.fields) descriptorFieldExpression(field, span)], span), span),
+				objectField("arguments", ArrayLiteral([for (argument in descriptor.arguments) descriptorFieldExpression(argument, span)], span), span),
+				objectField("hash", StringLiteral(descriptor.hash, span), span)
+			], span);
+		return typeExpressionCallback(descriptorExpression, scope, descriptorType, false);
+	}
+
+	/** Descriptors for every source struct and legacy C record in this typed program. */
+	public function nativeTypeDescriptors():Array<NativeTypeDescriptorData> {
+		var names = [
+			for (name in session.classDecls.keys())
+				if (isStructDeclaration(session.classDecls.get(name))) name
+		];
+		names.sort(Reflect.compare);
+		var descriptors:Array<NativeTypeDescriptorData> = [];
+		for (name in names) {
+			var declaration = session.classDecls.get(name),
+				kind = hasCRepresentation(declaration) ? NominalKind.NativeValue : NominalKind.Class,
+				descriptor = buildNativeTypeDescriptor(TInstance(kind, name, []));
+			if (descriptor != null)
+				descriptors.push(descriptor);
+		}
+		return descriptors;
+	}
+
+	/** Type-checks declared annotations on struct declarations and stored fields and records their constant values. */
+	public function prepareNativeTypeAnnotations(program:AstProgram):Void {
+		typedAnnotationValues = [];
+		var structSchemas:Map<String, AstClass> = [],
+			abstractSchemas:Map<String, AstEnumAbstract> = [];
+		for (declaration in program.classes)
+			if (hasMetadata(declaration.metadata, "annotation")) {
+				validateAnnotationMarker(declaration.metadata);
+				if (declaration.isStruct != true)
+					fail("E1024", '@:annotation requires a value struct declaration', declaration.span);
+				if (declaration.methods.length != 0)
+					fail("E1024", 'Annotation struct "${declaration.name}" cannot declare methods', declaration.span);
+				for (field in declaration.fields)
+					if (field.isStatic || field.type == null)
+						fail("E1024", 'Annotation struct "${declaration.name}" requires explicitly typed instance fields', field.span);
+				if (abstractSchemas.exists(declaration.name))
+					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
+				structSchemas.set(declaration.name, declaration);
+			}
+		for (declaration in program.enumAbstracts)
+			if (hasMetadata(declaration.metadata, "annotation")) {
+				if (structSchemas.exists(declaration.name))
+					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
+				validateAnnotationMarker(declaration.metadata);
+				var underlying = session.declarations.resolve(declaration.underlying, declaration.span, []);
+				if (!isAnnotationScalar(underlying))
+					fail("E1024", 'Annotation enum abstract "${declaration.name}" must use a supported scalar representation', declaration.span);
+				abstractSchemas.set(declaration.name, declaration);
+			}
+
+		var annotationNames:Map<String, Bool> = [];
+		for (name in structSchemas.keys())
+			annotationNames.set(name, true);
+		for (name in abstractSchemas.keys())
+			annotationNames.set(name, true);
+		for (name in structSchemas.keys()) {
+			var schema = structSchemas.get(name);
+			for (field in schema.fields) {
+				var expected = session.declarations.resolve(field.type, field.span, []);
+				if (!isAnnotationScalar(expected))
+					fail("E1024", 'Annotation field "${name}.${field.name}" must use a supported scalar type', field.span);
+				if (field.initializer != null)
+					typeAnnotationArgument(field.name, expected, field.initializer, {name: name, arguments: [], span: field.span});
+			}
+		}
+
+		for (declaration in program.classes)
+			if (isStructDeclaration(session.classDecls.get(declaration.name))) {
+				typeAnnotationUses(declaration.metadata, declaration.name, annotationNames, structSchemas, abstractSchemas);
+				for (field in declaration.fields)
+					if (!field.isStatic)
+						typeAnnotationUses(field.metadata, declaration.name + "." + field.name, annotationNames, structSchemas, abstractSchemas);
+			}
+	}
+
+	function typeAnnotationUses(metadata:Array<AstMetadata>, owner:String, annotationNames:Map<String, Bool>, structSchemas:Map<String, AstClass>,
+			abstractSchemas:Map<String, AstEnumAbstract>):Void {
+		var seen:Map<String, Bool> = [];
+		for (annotation in metadata) {
+			if (annotation.name == "annotation" || isBuiltInMetadata(annotation.name))
+				continue;
+			if (!annotationNames.exists(annotation.name))
+				fail("E1024", 'Unknown annotation "${annotation.name}" on "$owner"', annotation.span);
+			if (seen.exists(annotation.name))
+				fail("E1024", 'Annotation "${annotation.name}" is repeated on "$owner"', annotation.span);
+			seen.set(annotation.name, true);
+			var arguments:Array<NativeTypeAnnotationArgument> = [];
+			if (structSchemas.exists(annotation.name)) {
+				var schema = structSchemas.get(annotation.name),
+					fields = [for (field in schema.fields) if (!field.isStatic) field],
+					fieldsByName:Map<String, AstField> = [for (field in fields) field.name => field],
+					argumentsByName:Map<String, AstExpression> = [],
+					namedSeen = false,
+					positionalCount = 0;
+				for (argument in annotation.arguments) {
+					var named = namedAnnotationArgument(argument);
+					if (named != null) {
+						namedSeen = true;
+						if (!fieldsByName.exists(named.name))
+							fail("E1024", 'Annotation "${annotation.name}" has unknown named argument "${named.name}"', named.span);
+						if (argumentsByName.exists(named.name))
+							fail("E1024", 'Duplicate named argument "${named.name}" for annotation "${annotation.name}"', named.span);
+						argumentsByName.set(named.name, named.value);
+					} else {
+						if (namedSeen)
+							fail("E1024", "Positional annotation arguments cannot follow named arguments", annotation.span);
+						if (positionalCount >= fields.length)
+							fail("E1024", 'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
+								annotation.span);
+						argumentsByName.set(fields[positionalCount].name, argument);
+						positionalCount++;
+					}
+				}
+				for (index in 0...fields.length) {
+					var field = fields[index],
+						expected = session.declarations.resolve(field.type, field.span, []),
+						expression = argumentsByName.get(field.name);
+					if (expression == null)
+						expression = field.initializer;
+					if (expression == null) {
+						if (!namedSeen && annotation.arguments.length < fields.length)
+							fail("E1024", 'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
+								annotation.span);
+						fail("E1024", 'Annotation "${annotation.name}" is missing required argument "${field.name}"', annotation.span);
+					}
+					arguments.push(typeAnnotationArgument(field.name, expected, expression, annotation));
+				}
+			} else {
+				var schema = abstractSchemas.get(annotation.name);
+				if (schema == null)
+					fail("E1024", 'Unknown annotation "${annotation.name}" on "$owner"', annotation.span);
+				var expected = session.declarations.resolve(schema.underlying, schema.span, []);
+				if (annotation.arguments.length != 1)
+					fail("E1024", 'Annotation "${annotation.name}" expects one argument, got ${annotation.arguments.length}', annotation.span);
+				arguments.push(typeAnnotationArgument("value", expected, annotation.arguments[0], annotation));
+			}
+			typedAnnotationValues.set(metadataKey(annotation), [{name: annotation.name, arguments: arguments}]);
+		}
+	}
+
+	static function namedAnnotationArgument(expression:AstExpression):Null<{
+		name:String,
+		value:AstExpression,
+		span:SourceSpan
+	}> {
+		return switch expression {
+			case BlockExpression(statements, result, span) if (statements.length == 1):
+				switch statements[0] {
+					case compiler.syntax.Ast.AstStatement.Assignment(assignedName, value, _):
+						switch result {
+							case Variable(resultName, _) if (assignedName == resultName): {name: assignedName, value: value, span: span};
+							case _: null;
+						}
+					case _: null;
+				}
+			case _: null;
+		};
+	}
+
+	function typeAnnotationArgument(name:String, expected:CompilerType, expression:AstExpression, annotation:AstMetadata):NativeTypeAnnotationArgument {
+		var typed = coerce(typeExpressionCallback(expression, new Scope(), expected, false), expected, 'annotation argument "$name"', "E1024"),
+			value = annotationConstant(typed, annotation);
+		return {name: name, type: SemanticSignature.type(expected), value: value};
+	}
+
+	function annotationConstant(expression:TypedExpression, annotation:AstMetadata):NativeTypeAnnotationValue
+		return switch expression.expression {
+			case TIntLiteral(value): IntValue(value);
+			case TFloatLiteral(value) if (Math.isFinite(value)): FloatValue(value);
+			case TStringLiteral(value): StringValue(value);
+			case TBoolLiteral(value): BoolValue(value);
+			case TNullLiteral: NullValue;
+			case TNullableWrap(value): annotationConstant(value, annotation);
+			case TNegate(value):
+				switch value.expression {
+					case TIntLiteral(integer): IntValue(-integer);
+					case TFloatLiteral(number) if (Math.isFinite(number)): FloatValue(-number);
+					case _: invalidAnnotationConstant(annotation);
+				}
+			case TIntToFloat(value):
+				switch value.expression {
+					case TIntLiteral(integer): FloatValue(integer);
+					case _: invalidAnnotationConstant(annotation);
+				}
+			case TFloatToInt(value):
+				switch value.expression {
+					case TFloatLiteral(number): IntValue(Std.int(number));
+					case _: invalidAnnotationConstant(annotation);
+				}
+			case _: invalidAnnotationConstant(annotation);
+		};
+
+	static function invalidAnnotationConstant(annotation:AstMetadata):NativeTypeAnnotationValue
+		return throw new CompileError(new Diagnostic("E1024", "Annotation values must be compile-time scalar constants", annotation.span));
+
+	function typedMetadata(metadata:Array<AstMetadata>):Array<NativeTypeAnnotationData> {
+		var result:Array<NativeTypeAnnotationData> = [];
+		for (annotation in metadata) {
+			if (annotation.name == "renamedFrom") {
+				if (annotation.arguments.length != 1)
+					fail("E1024", "@:renamedFrom requires exactly one string literal", annotation.span);
+				var oldName = switch annotation.arguments[0] {
+					case StringLiteral(value, _): value;
+					case _: throw new CompileError(new Diagnostic("E1024", "@:renamedFrom requires exactly one string literal", annotation.span));
+				};
+				if (oldName.length == 0)
+					fail("E1024", "@:renamedFrom cannot name an empty field", annotation.span);
+				result.push({name: "renamedFrom", arguments: [{name: "value", type: "String", value: StringValue(oldName)}]});
+				continue;
+			}
+			var values = typedAnnotationValues.get(metadataKey(annotation));
+			if (values != null)
+				for (value in values)
+					result.push(value);
+		}
+		return result;
+	}
+
+	static function metadataKey(metadata:AstMetadata):String
+		return metadata.span.file.path + ":" + metadata.span.start;
+
+	static function hasMetadata(metadata:Array<AstMetadata>, name:String):Bool {
+		for (annotation in metadata)
+			if (annotation.name == name)
+				return true;
+		return false;
+	}
+
+	static function validateAnnotationMarker(metadata:Array<AstMetadata>):Void
+		for (annotation in metadata)
+			if (annotation.name == "annotation" && annotation.arguments.length != 0)
+				fail("E1024", "@:annotation does not accept arguments", annotation.span);
+
+	static function isAnnotationScalar(type:CompilerType):Bool
+		return switch type {
+			case TInt | TFloat | TString | TBool: true;
+			case TNullable(element): isAnnotationScalar(element);
+			case TAbstract(_, _, representation): isAnnotationScalar(representation);
+			case _: false;
+		};
+
+	static function isBuiltInMetadata(name:String):Bool
+		return switch name {
+			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat" | "forward" | "from" | "hiddenUnless" |
+				"hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata" | "noCompletion" | "noInline" | "op" | "optional" | "portable" |
+				"privateAccess" | "pure" | "renamedFrom" | "repr" | "value" | "wire": true;
+			case _: false;
+		};
+
+	function buildNativeTypeDescriptor(resolved:CompilerType):Null<NativeTypeDescriptorData> {
+		var name = descriptorRecordName(resolved);
+		if (name == null)
+			return null;
+		var declaration = session.classDecls.get(name);
+		if (declaration == null)
+			return null;
+		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], typedMetadata(declaration.metadata), []),
+			identity = SemanticSignature.type(resolved),
+			sourceKind = descriptorSourceKind(declaration),
+			interfaces = descriptorInterfaces(resolved);
+		return {
+			version: NativeTypeDescriptor.VERSION,
+			name: root.name,
+			type: root.type,
+			sourceKind: sourceKind,
+			interfaces: interfaces,
+			flat: root.flat,
+			portable: root.portable,
+			size: root.size,
+			alignment: root.alignment,
+			annotations: root.annotations,
+			annotationValues: root.annotationValues,
+			fields: root.fields,
+			arguments: root.arguments,
+			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, sourceKind, interfaces, root.flat, root.portable, root.size, root.alignment,
+				root.annotations, root.annotationValues, root.fields, root.arguments)
+		};
+	}
+
+	static function descriptorSourceKind(declaration:AstClass):String
+		return if (declaration.isStruct == true) "struct" else if (hasCRepresentation(declaration)) "native-value" else "class";
+
+	function descriptorInterfaces(type:CompilerType):Array<String> {
+		var unique:Map<String, Bool> = [], values:Array<String> = [];
+		for (interfaceType in session.declarations.inheritance.inheritedInterfaces(type)) {
+			var identity = SemanticSignature.type(interfaceType);
+			if (!unique.exists(identity)) {
+				unique.set(identity, true);
+				values.push(identity);
+			}
+		}
+		values.sort(Reflect.compare);
+		return values;
+	}
+
+	function descriptorNode(fieldName:String, type:CompilerType, offset:Null<Int>, annotations:Array<String>,
+			annotationValues:Array<NativeTypeAnnotationData>, visiting:Array<String>,
+			defaultValue:Null<NativeTypeDescriptorDefault> = null):NativeTypeDescriptorField {
+		var name = descriptorRecordName(type),
+			recursive = name != null && visiting.indexOf(name) >= 0,
+			facts = StructProperties.evaluate(session.declarations, type),
+			layout = facts.flat ? descriptorLayout(type) : null,
+			nested = recursive || name == null ? [] : descriptorFields(name, visiting),
+			arguments = descriptorArguments(type, visiting);
+		return {
+			name: fieldName,
+			type: SemanticSignature.type(type),
+			flat: facts.flat,
+			portable: facts.portable,
+			size: layout == null ? null : layout.size,
+			alignment: layout == null ? null : layout.alignment,
+			offset: offset,
+			defaultValue: defaultValue,
+			annotations: annotations,
+			annotationValues: annotationValues,
+			fields: nested,
+			arguments: arguments,
+			recursive: recursive
+		};
+	}
+
+	function descriptorFields(name:String, visiting:Array<String>):Array<NativeTypeDescriptorField> {
+		var declaration = session.classDecls.get(name);
+		if (declaration == null)
+			return [];
+		var layout = session.nativeLayoutsByName.get(name),
+			offsets:Map<String, Int> = [];
+		if (layout != null)
+			for (field in layout.fields)
+				offsets.set(field.name, field.offset);
+		var nestedVisiting = visiting.concat([name]),
+			fields:Array<NativeTypeDescriptorField> = [];
+		for (field in declaration.fields)
+			if (!field.isStatic && descriptorFieldHasStorage(field) && field.type != null) {
+				var fieldType = session.declarations.resolve(field.type, field.span, session.currentContext.typeSubstitutions),
+					fieldAnnotations = [for (metadata in field.metadata) metadata.name],
+					defaultValue = descriptorDefaultValue(name, field.name, fieldType, field.initializer, field.span);
+				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations, typedMetadata(field.metadata), nestedVisiting,
+					defaultValue));
+			}
+		return fields;
+	}
+
+	function descriptorDefaultValue(owner:String, fieldName:String, type:CompilerType, initializer:Null<AstExpression>,
+			span:SourceSpan):Null<NativeTypeDescriptorDefault> {
+		if (initializer == null)
+			return null;
+		var value = descriptorDefaultConstant(type, initializer);
+		if (value == null) {
+			var reason = switch initializer {
+				case NullLiteral(_) if (!isNullableDefaultType(type)): "null requires an explicitly nullable field type";
+				case _:
+					var nativeInteger = switch type {
+						case TNativeScalar(name): {name: name};
+						case _: null;
+					};
+					var integer = integerDefaultLiteral(initializer);
+					if (nativeInteger != null
+						&& integer != null
+						&& !NativeTypeDescriptor.integerDefaultFits('native-scalar:${nativeInteger.name}',
+							integer)) 'integer literal $integer is outside the range of native scalar ${nativeInteger.name}' else
+						"only scalar literal defaults are supported; executable and computed defaults are unsupported";
+			};
+			fail("E1024", 'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
+		}
+		var valueType = switch value {
+			case IntValue(_): "Int";
+			case FloatValue(_): "Float";
+			case StringValue(_): "String";
+			case BoolValue(_): "Bool";
+			case NullValue: "Null";
+		};
+		return {type: valueType, value: value};
+	}
+
+	function descriptorDefaultConstant(type:CompilerType, initializer:AstExpression):Null<NativeTypeAnnotationValue>
+		return switch type {
+			case TNullable(element):
+				switch initializer {
+					case NullLiteral(_): NullValue;
+					case _: descriptorDefaultConstant(element, initializer);
+				};
+			case TAbstract(_, _, representation): descriptorDefaultConstant(representation, initializer);
+			case TNativeScalar("f32"):
+				var value = floatDefaultLiteral(initializer);
+				if (value == null) null; else {
+					var rounded = NativeTypeDescriptor.float32DefaultValue(value);
+					if (rounded == null)
+						null
+					else
+						FloatValue(cast rounded);
+				};
+			case TNativeScalar(name): var integer = integerDefaultLiteral(initializer); integer == null || !NativeTypeDescriptor.integerDefaultFits('native-scalar:$name',
+					integer) ? null : IntValue(integer);
+			case TInt:
+				switch initializer {
+					case IntegerLiteral(value, _): IntValue(value);
+					case Negate(IntegerLiteral(value, _), _): IntValue(-value);
+					case _: null;
+				};
+			case TFloat: var value = floatDefaultLiteral(initializer); value == null || !Math.isFinite(value) ? null : FloatValue(value);
+			case TString:
+				switch initializer {
+					case StringLiteral(value, _): StringValue(value);
+					case _: null;
+				};
+			case TBool:
+				switch initializer {
+					case BoolLiteral(value, _): BoolValue(value);
+					case _: null;
+				};
+			case _: null;
+		};
+
+	static function floatDefaultLiteral(initializer:AstExpression):Null<Float>
+		return switch initializer {
+			case IntegerLiteral(value, _): value;
+			case FloatLiteral(value, _): value;
+			case Negate(IntegerLiteral(value, _), _): -value;
+			case Negate(FloatLiteral(value, _), _): -value;
+			case _: null;
+		};
+
+	static function integerDefaultLiteral(initializer:AstExpression):Null<Int>
+		return switch initializer {
+			case IntegerLiteral(value, _): value;
+			case Negate(IntegerLiteral(value, _), _): -value;
+			case _: null;
+		};
+
+	static function isNullableDefaultType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(_): true;
+			case TAbstract(_, _, representation): isNullableDefaultType(representation);
+			case _: false;
+		};
+
+	function descriptorArguments(type:CompilerType, visiting:Array<String>):Array<NativeTypeDescriptorField> {
+		var arguments:Array<{name:String, type:CompilerType}> = switch type {
+			case TNullable(element) | TArray(element) | TIterator(element): [{name: "element", type: element}];
+			case TMap(key, value): [{name: "key", type: key}, {name: "value", type: value}];
+			case TFunction(parameters, result):
+				[
+					for (index in 0...parameters.length)
+						{name: 'parameter$index', type: parameters[index]}
+				].concat([{name: "result", type: result}]);
+			case TAbstract(_, parameters, representation):
+				var values = [
+					for (index in 0...parameters.length)
+						{name: 'argument$index', type: parameters[index]}
+				];
+				if (parameters.length == 0 && SemanticSignature.type(representation) != SemanticSignature.type(type))
+					values.push({name: "representation", type: representation});
+				values;
+			case TInstance(_, _, parameters): [
+					for (index in 0...parameters.length)
+						{name: 'argument$index', type: parameters[index]}
+				];
+			case _: [];
+		};
+		return [
+			for (argument in arguments)
+				descriptorNode(argument.name, argument.type, null, [], [], visiting)
+		];
+	}
+
+	function descriptorLayout(type:CompilerType):Null<{size:Int, alignment:Int}> {
+		var recordName = descriptorRecordName(type);
+		if (recordName != null) {
+			var record = session.nativeLayoutsByName.get(recordName);
+			return record == null ? null : {size: record.size, alignment: record.alignment};
+		}
+		var nativeType:compiler.ffi.HxiModel.HxiType;
+		try {
+			nativeType = NativeLayout.fieldType(type);
+		} catch (_:Dynamic) {
+			return null;
+		}
+		var layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(nativeType);
+		return layout == null ? null : {size: layout.size, alignment: layout.align};
+	}
+
+	function descriptorRecordName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.NativeValue, name, _): name;
+			case TInstance(NominalKind.Class, name, _) if (isStructDeclaration(session.classDecls.get(name))): name;
+			case TNullable(element): descriptorRecordName(element);
+			case TAbstract(_, _, representation): descriptorRecordName(representation);
+			case _: null;
+		};
+
+	static function isStructDeclaration(declaration:Null<compiler.syntax.Ast.AstClass>):Bool
+		return declaration != null && (declaration.isStruct == true || hasCRepresentation(declaration));
+
+	static function descriptorFieldHasStorage(field:compiler.syntax.Ast.AstField):Bool {
+		if (descriptorHasDirectAccess(field.readAccess) || descriptorHasDirectAccess(field.writeAccess))
+			return true;
+		for (metadata in field.metadata)
+			if (metadata.name == "isVar")
+				return true;
+		return false;
+	}
+
+	static function descriptorHasDirectAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
+		return switch access {
+			case compiler.syntax.Ast.AstFieldAccess.GetAccess | compiler.syntax.Ast.AstFieldAccess.SetAccess | compiler.syntax.Ast.AstFieldAccess.NeverAccess: false;
+			case _: true;
+		};
+
+	static function nullableInteger(value:Null<Int>, span:SourceSpan):AstExpression
+		return value == null ? NullLiteral(span) : IntegerLiteral(cast value, span);
+
+	static function stringArray(values:Array<String>, span:SourceSpan):AstExpression
+		return ArrayLiteral([for (value in values) StringLiteral(value, span)], span);
+
+	static function descriptorFieldExpression(field:NativeTypeDescriptorField, span:SourceSpan):AstExpression
+		return ObjectLiteral([
+			objectField("name", StringLiteral(field.name, span), span),
+			objectField("type", StringLiteral(field.type, span), span),
+			objectField("flat", BoolLiteral(field.flat, span), span),
+			objectField("portable", BoolLiteral(field.portable, span), span),
+			objectField("size", nullableInteger(field.size, span), span),
+			objectField("alignment", nullableInteger(field.alignment, span), span),
+			objectField("offset", nullableInteger(field.offset, span), span),
+			objectField("defaultValue", descriptorDefaultExpression(field.defaultValue, span), span),
+			objectField("annotations", stringArray(field.annotations, span), span),
+			objectField("annotationValues", annotationValuesExpression(field.annotationValues, span), span),
+			objectField("fields", ArrayLiteral([for (child in field.fields) descriptorFieldExpression(child, span)], span), span),
+			objectField("arguments", ArrayLiteral([for (argument in field.arguments) descriptorFieldExpression(argument, span)], span), span),
+			objectField("recursive", BoolLiteral(field.recursive, span), span)
+		], span);
+
+	static function descriptorDefaultExpression(value:Null<NativeTypeDescriptorDefault>, span:SourceSpan):AstExpression
+		return if (value == null) NullLiteral(span) else ObjectLiteral([
+			objectField("type", StringLiteral(value.type, span), span),
+			objectField("value", annotationConstantExpression(value.value, span), span)
+		], span);
+
+	static function annotationValuesExpression(values:Array<NativeTypeAnnotationData>, span:SourceSpan):AstExpression
+		return ArrayLiteral([
+			for (annotation in values)
+				ObjectLiteral([
+					objectField("name", StringLiteral(annotation.name, span), span),
+					objectField("arguments", ArrayLiteral([
+						for (argument in annotation.arguments)
+							ObjectLiteral([
+								objectField("name", StringLiteral(argument.name, span), span),
+								objectField("type", StringLiteral(argument.type, span), span),
+								objectField("value", annotationConstantExpression(argument.value, span), span)
+							], span)
+					], span), span)
+				], span)
+		], span);
+
+	static function annotationConstantExpression(value:NativeTypeAnnotationValue, span:SourceSpan):AstExpression
+		return switch value {
+			case IntValue(value): IntegerLiteral(value, span);
+			case FloatValue(value): FloatLiteral(value, span);
+			case StringValue(value): StringLiteral(value, span);
+			case BoolValue(value): BoolLiteral(value, span);
+			case NullValue: NullLiteral(span);
+		};
+
+	static function objectField(name:String, value:AstExpression, span:SourceSpan):AstObjectField
+		return {name: name, value: value, span: span};
 
 	public function typeObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var objectExpected = objectLiteralExpectation(expectedType),
@@ -1084,6 +1934,10 @@ class ExpressionTyper {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2 && TypeRelations.equals(left.type, right.type) && session.relations.isValueClass(left.type)) {
+			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+		}
 		if (operation == 2 && session.relations.isAssignable(left.type, right.type)) {
 			left = coerce(left, right.type, "equality comparison", "E1011");
 			return new TypedExpression(TEqual(left, right), TBool, span);

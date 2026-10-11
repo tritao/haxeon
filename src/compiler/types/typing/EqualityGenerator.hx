@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.Source.SourceSpan;
 import compiler.runtime.RuntimeType;
+import compiler.syntax.Ast.AstFieldAccess;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -59,7 +60,7 @@ class EqualityGenerator {
 		if (!requests.exists(key))
 			requests.set(key, {type: type, origin: root.origin, span: root.span});
 		switch type {
-			case TInt, TInt64, TFloat, TBool, TString, TBytes, TNull:
+			case TInt, TInt64, TFloat, TBool, TString, TBytes, TNull, TNativeScalar(_):
 			case TAbstract(_, _, representation):
 				collect(session, representation, root, reachable, requests);
 			case TNullable(element):
@@ -82,6 +83,15 @@ class EqualityGenerator {
 				for (constructor in declaration.cases)
 					for (parameter in constructor.params)
 						collect(session, session.representation.enumParameterType(declaration.typeParameters, parameter, type), root, reachable, requests);
+			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
+				var declaration = session.classDecls.get(name);
+				if (declaration == null)
+					unsupported(type, span);
+				for (field in declaration.fields)
+					if (!field.isStatic && hasStoredField(field)) {
+						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span);
+						collect(session, fieldType, root, reachable, requests);
+					}
 			default:
 				unsupported(type, span);
 		}
@@ -143,7 +153,7 @@ class EqualityGenerator {
 	static function compareStatements(session:TypingSession, type:CompilerType, left:TypedExpression, right:TypedExpression,
 			span:SourceSpan):Array<TypedStatement> {
 		return switch type {
-			case TInt, TInt64, TFloat, TBool, TString:
+			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_):
 				[TReturn(equal(left, right, span), span)];
 			case TAbstract(_, _, representation):
 				[
@@ -229,10 +239,39 @@ class EqualityGenerator {
 				}
 				result.push(TReturn(bool(false, span), span));
 				result;
+			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
+				var declaration = session.classDecls.get(name),
+					result:Array<TypedStatement> = [];
+				if (declaration == null)
+					throw 'Missing value type declaration "$name"';
+				for (field in declaration.fields)
+					if (!field.isStatic && hasStoredField(field)) {
+						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span),
+							leftField = new TypedExpression(TField(left, field.name), fieldType, span),
+							rightField = new TypedExpression(TField(right, field.name), fieldType, span);
+						result.push(ifFalse(call(fieldType, leftField, rightField, span), span));
+					}
+				result.push(TReturn(bool(true, span), span));
+				result;
 			default:
 				throw 'No structural equality generator for "$type"';
 		};
 	}
+
+	static function hasStoredField(field:compiler.syntax.Ast.AstField):Bool {
+		if (hasDirectAccess(field.readAccess) || hasDirectAccess(field.writeAccess))
+			return true;
+		for (metadata in field.metadata)
+			if (metadata.name == "isVar")
+				return true;
+		return false;
+	}
+
+	static function hasDirectAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
+		return switch access {
+			case GetAccess, SetAccess, NeverAccess: false;
+			default: true;
+		};
 
 	static function referenceGuards(type:CompilerType, left:TypedExpression, right:TypedExpression, span:SourceSpan):Array<TypedStatement> {
 		var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);

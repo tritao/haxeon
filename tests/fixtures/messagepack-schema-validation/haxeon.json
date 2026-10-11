@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "package": { "name": "messagepack-schema-validation" },
+  "entry": "Main",
+  "sourceRoots": ["src"],
+  "target": "host",
+  "outputDir": "../../../out/type-descriptor-artifact/schema-validation"
+}

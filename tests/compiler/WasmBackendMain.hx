@@ -151,6 +151,24 @@ class WasmBackendMain {
 					}
 		if (!rootsBoxingSafepoint)
 			throw "Primitive ToDyn allocation must be a safepoint that retains live managed references";
+		var nestedProgram = Frontend.compile("@:value class RootChild { public final number:Int; public function new() number = 1; } @:value class RootParent { public final child:RootChild; public final tag:Int; public function new() { child = new RootChild(); tag = 2; } } function main():Int return new RootParent().tag;");
+		var nestedBuilder = new IrBuilder(),
+			nestedSource = nestedBuilder.argument("source", Obj("RootParent")),
+			nestedCopy = nestedBuilder.newObject("RootParent"),
+			nestedChild = nestedBuilder.fieldGet(nestedSource, "child", Obj("RootChild"));
+		nestedBuilder.fieldGet(nestedSource, "tag", I32);
+		nestedBuilder.call("retain", [nestedCopy, nestedChild], Void);
+		nestedBuilder.returnValue(nestedBuilder.constInt(42));
+		var nestedFunction = new IrFunction("nestedRoots", nestedBuilder.arguments, I32, nestedBuilder.blocks),
+			rootedInlineRead = false;
+		for (point in WasmGcRoots.analyze(nestedFunction, nestedProgram)) {
+			if (point.instruction == 1)
+				rootedInlineRead = point.liveReferences.indexOf(nestedSource.id) >= 0 && point.liveReferences.indexOf(nestedCopy.id) >= 0;
+			if (point.instruction == 2)
+				throw "Scalar field reads must not become allocation safepoints";
+		}
+		if (!rootedInlineRead)
+			throw "Inline-record view allocation must root both source and live destination copy";
 		var manyRootsBuilder = new IrBuilder(),
 			manyRootArguments:Array<IrValue> = [];
 		for (index in 0...40)

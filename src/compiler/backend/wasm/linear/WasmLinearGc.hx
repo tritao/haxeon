@@ -352,12 +352,23 @@ class WasmLinearGc {
 		});
 		for (object in program.objects)
 			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Obj(object.name)), function(builder) {
-				for (field in layout.object(object.name).fields)
-					if (WasmTarget.isReference(field.type)) {
-						builder.localGet(value);
-						builder.emit(I32Load(field.offset));
+				if (object.nativeLayout != null) {
+					// A nested flat-value view keeps its owning root object alive in header word one.
+					builder.localGet(value);
+					builder.emit(I32Load(4));
+					builder.localTee(backingOwner);
+					builder.i32Eqz();
+					builder.ifElse(function(_) {}, function(builder) {
+						builder.localGet(backingOwner);
 						builder.call(builder.functionRef(mark));
-					}
+					});
+				} else
+					for (field in layout.object(object.name).fields)
+						if (WasmTarget.isReference(field.type)) {
+							builder.localGet(value);
+							builder.emit(I32Load(field.offset));
+							builder.call(builder.functionRef(mark));
+						}
 			});
 		for (enumDecl in program.enums) {
 			var enumLayout = layout.enumType(enumDecl.name);

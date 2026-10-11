@@ -303,7 +303,7 @@ class WasmGcModuleBuilder {
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
-							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), BeginTry(_, _), EndTry(_), Catch(_):
+							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _), EndTry(_), Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):

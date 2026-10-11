@@ -1,6 +1,8 @@
 package compiler.tools;
 
 import compiler.Compiler;
+import compiler.Compiler.FfiInterfaceSource;
+import compiler.Compiler.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
@@ -62,8 +64,8 @@ class CompilerSession {
 		var host = hostInterfaces(request.target),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
-		var interfaces = [for (path in interfacePaths) {path: path, text: read(path)}],
-			projections = [for (path in projectionPaths) {path: path, text: read(path)}],
+		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {path: path, text: read(path)}],
+			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {path: path, text: read(path)}],
 			identity = Json.stringify({
 				target: request.target,
 				importMemory: request.importMemory,

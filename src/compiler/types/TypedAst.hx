@@ -10,6 +10,7 @@ class TypedExpression {
 	public final type:CompilerType;
 	public final span:SourceSpan;
 	public final stableFlowValue:Bool;
+
 	/** Source symbol retained when a compile-time constant becomes a literal. */
 	public final semanticReference:Null<String>;
 
@@ -19,7 +20,8 @@ class TypedExpression {
 	/** Declared storage type for a captured value whose flow type may be narrowed. */
 	public final storageType:Null<CompilerType>;
 
-	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType, ?semanticReference:String) {
+	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType,
+			?semanticReference:String) {
 		this.expression = expression;
 		this.type = type;
 		this.span = span;
@@ -344,6 +346,8 @@ typedef TypedField = {
 typedef TypedClass = {
 	final name:String;
 	final isValue:Bool;
+	final isFlat:Bool;
+	final isPortable:Bool;
 
 	/** C-layout record with no HashLink object or value-structure representation. */
 	final isNativeValue:Bool;
@@ -425,6 +429,8 @@ typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.T
 
 /** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {
+	final nativeAbiTarget:String;
+	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
 	final enums:Array<TypedEnum>;
 	final interfaces:Array<TypedInterface>;
 	final classes:Array<TypedClass>;

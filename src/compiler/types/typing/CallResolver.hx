@@ -281,6 +281,8 @@ class CallResolver {
 					fail("E1008", "RawPtr.load expects no arguments", span);
 				if (NativeLayout.isNativeValue(pointee))
 					fail("E1022", "Native records are address-only and cannot be loaded by value", span);
+				if (flatValueRecordName(pointee) != null)
+					return new TypedExpression(TCall("$rawptr.load.flat", [receiver]), pointee, span);
 				var layout = nativeMemoryLayout(pointee, span);
 				return new TypedExpression(TCall("$rawptr.load", [
 					receiver,
@@ -292,16 +294,20 @@ class CallResolver {
 					fail("E1008", "RawPtr.store expects one value", span);
 				if (NativeLayout.isNativeValue(pointee))
 					fail("E1022", "Native records are address-only and cannot be stored by value", span);
+				if (flatValueRecordName(pointee) != null) {
+					var flatValue = coerce(typeExpression(arguments[0], scope, pointee, false), pointee, "RawPtr.store value", "E1002");
+					return new TypedExpression(TCall("$rawptr.store.flat", [receiver, flatValue]), TVoid, span);
+				}
 				var layout = nativeMemoryLayout(pointee, span),
 					value = coerce(typeExpression(arguments[0], scope, pointee, false), pointee, "RawPtr.store value", "E1002");
 				return new TypedExpression(TCall("$rawptr.store", [receiver, value, new TypedExpression(TIntLiteral(layout.size), TInt, span)]), TVoid, span);
 			case "offset":
 				if (arguments.length != 1)
 					fail("E1008", "RawPtr.offset expects one element count", span);
-				var layout = nativeMemoryLayout(pointee, span),
+				var stride = nativePointerStride(pointee, span),
 					count = coerce(typeExpression(arguments[0], scope, TInt, false), TInt, "RawPtr.offset count", "E1002");
-				return new TypedExpression(TCall("$rawptr.offset", [receiver, count, new TypedExpression(TIntLiteral(layout.size), TInt, span)]),
-					receiver.type, span);
+				return new TypedExpression(TCall("$rawptr.offset", [receiver, count, new TypedExpression(TIntLiteral(stride), TInt, span)]), receiver.type,
+					span);
 			case "byteOffset":
 				if (arguments.length != 1)
 					fail("E1008", "RawPtr.byteOffset expects one byte count", span);
@@ -345,6 +351,31 @@ class CallResolver {
 			case _: false;
 		};
 		return {size: layout.size, signed: signed};
+	}
+
+	function flatValueRecordName(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.Class, name, []) if (session.nativeLayoutsByName.exists(name)): name;
+			case _: null;
+		};
+
+	function nativePointerStride(type:CompilerType, span:SourceSpan):Int {
+		var name = flatValueRecordName(type);
+		if (name != null) {
+			var layout = session.nativeLayoutsByName.get(name);
+			if (layout == null)
+				fail("E1022", 'Flat value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+			return layout.size;
+		}
+		if (type == TDynamic) {
+			var context = session.currentContext, substitutions = [
+				for (parameter in context.typeSubstitutions.keys())
+					'$parameter=${Std.string(context.typeSubstitutions.get(parameter))}'
+			].join(", ");
+			fail("E1022",
+				'RawPtr.offset needs a concrete element layout, got Dynamic while typing "${context.functionName}" (substitutions: [$substitutions])', span);
+		}
+		return nativeMemoryLayout(type, span).size;
 	}
 
 	static function isRawPointerType(type:CompilerType):Bool
@@ -1598,7 +1629,7 @@ class CallResolver {
 		}
 		if (name == "indexOf") {
 			switch element {
-				case TInt, TFloat, TBool, TString:
+				case TInt, TFloat, TBool, TString, TNativeScalar("u32"):
 				default:
 					if (RuntimeType.arrayName(element) != "ref")
 						fail("E1016", "Array.indexOf currently supports primitive, String, and reference arrays only", span);
@@ -1939,8 +1970,13 @@ class CallResolver {
 		for (constraint in constraints) {
 			var actual = requiredMapValue(substitutions, constraint.parameter),
 				expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-			if (!session.relations.isAssignable(actual, expected))
-				fail("E1003", 'Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${SemanticSignature.type(expected)}"', span);
+			if (!session.relations.satisfiesConstraint(actual, expected)) {
+				var detail = session.relations.constraintFailure(actual, expected);
+				fail("E1003",
+					'Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${SemanticSignature.type(expected)}"' +
+					(detail == null ? "" : ': $detail'),
+					span);
+			}
 		}
 	}
 

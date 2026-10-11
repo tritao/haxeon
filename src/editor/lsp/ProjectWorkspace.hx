@@ -20,7 +20,8 @@ class HaxeProjectConfiguration {
 	public final ffi:compiler.Compiler.FfiConfiguration;
 	public final ffiIdentity:String;
 
-	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>, libraries:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration) {
+	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>, libraries:Array<String>,
+			?ffi:compiler.Compiler.FfiConfiguration) {
 		this.ffi = ffi == null ? new compiler.Compiler.FfiConfiguration() : ffi;
 		ffiIdentity = Sha256.encode(haxe.Json.stringify({interfaces: this.ffi.interfaceSources(), projections: this.ffi.projectionSources()}));
 		this.file = file;
@@ -108,7 +109,8 @@ class ProjectWorkspace {
 		sourceRoots.resize(0);
 		unconfiguredSourceRoots.resize(0);
 		diskSources.clear();
-		declaredSourceDirectories.clear(); outputDirectories.clear();
+		declaredSourceDirectories.clear();
+		outputDirectories.clear();
 		compilerPathByDisk.clear();
 		diskPathByCompiler.clear();
 		for (path => compilerPath in previous)
@@ -156,7 +158,8 @@ class ProjectWorkspace {
 
 	public function isConfiguration(path:String):Bool {
 		var name = Path.withoutDirectory(path);
-		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml") || StringTools.endsWith(name, ".hxi") || StringTools.endsWith(name, ".hxmap");
+		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml") || StringTools.endsWith(name, ".hxi")
+			|| StringTools.endsWith(name, ".hxmap");
 	}
 
 	public function selectConfiguration(id:Null<String>):Bool {
@@ -206,11 +209,15 @@ class ProjectWorkspace {
 			configuredRoots:Map<String, Bool> = [];
 		for (root in workspaceRootPaths) {
 			var files = nearestConfigurations(root);
-			if (files.length > 0) configuredRoots.set(root, true);
-			for (file in files) if (configFiles.indexOf(file) < 0) configFiles.push(file);
+			if (files.length > 0)
+				configuredRoots.set(root, true);
+			for (file in files)
+				if (configFiles.indexOf(file) < 0)
+					configFiles.push(file);
 		}
 		for (file in documentConfigurations.keys())
-			if (FileSystem.exists(file) && configFiles.indexOf(file) < 0) configFiles.push(file);
+			if (FileSystem.exists(file) && configFiles.indexOf(file) < 0)
+				configFiles.push(file);
 		configFiles.sort(Reflect.compare);
 		for (file in configFiles)
 			try
@@ -239,16 +246,21 @@ class ProjectWorkspace {
 	public function includeDocument(path:String, service:LanguageService, isOpen:String->Bool):Void {
 		for (file in nearestConfigurations(Path.directory(normalize(path)))) {
 			var known = false;
-			for (configuration in configurations) if (configuration.file == file) known = true;
-			if (known) continue;
+			for (configuration in configurations)
+				if (configuration.file == file)
+					known = true;
+			if (known)
+				continue;
 			try {
 				var configuration = parseConfiguration(file);
 				documentConfigurations.set(file, true);
 				configurations.push(configuration);
 				for (root in configuration.classPaths)
-					if (sourceRoots.indexOf(root) < 0) sourceRoots.push(root);
+					if (sourceRoots.indexOf(root) < 0)
+						sourceRoots.push(root);
 				sourceRoots.sort(Reflect.compare);
-				for (root in configuration.classPaths) loadSources(root, service, isOpen);
+				for (root in configuration.classPaths)
+					loadSources(root, service, isOpen);
 			} catch (failure:Dynamic) {
 				errors.push('$file: ${Std.string(failure)}');
 			}
@@ -264,9 +276,13 @@ class ProjectWorkspace {
 				for (name in FileSystem.readDirectory(directory))
 					if (name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
 						files.push(normalize(Path.join([directory, name])));
-			if (files.length > 0) { files.sort(Reflect.compare); return files; }
+			if (files.length > 0) {
+				files.sort(Reflect.compare);
+				return files;
+			}
 			var parent = Path.directory(directory);
-			if (parent == directory) break;
+			if (parent == directory)
+				break;
 			directory = parent;
 		}
 		return [];
@@ -381,7 +397,8 @@ class ProjectWorkspace {
 			// not acquire remote dependencies or build native artifacts.
 			var resolved = ProjectDiscovery.discover(file),
 				roots:Array<String> = [],
-				interfaces:Map<String, String> = [], projections:Map<String, String> = [];
+				interfaces:Map<String, String> = [],
+				projections:Map<String, String> = [];
 			for (value in resolved.packages.packages) {
 				outputDirectories.set(resolve(value.root, value.manifest.outputDir), true);
 				for (source in value.sources) {
@@ -392,15 +409,24 @@ class ProjectWorkspace {
 					}
 				}
 				for (root in value.sourceRoots)
-					if (roots.indexOf(root) < 0) roots.push(root);
-				for (path in value.ffiInterfaces) interfaces.set(path, File.getContent(path));
-				for (path in value.ffiProjections) projections.set(path, File.getContent(path));
+					if (roots.indexOf(root) < 0)
+						roots.push(root);
+				for (path in value.ffiInterfaces)
+					interfaces.set(path, File.getContent(path));
+				for (path in value.ffiProjections)
+					projections.set(path, File.getContent(path));
 			}
-			var interfacePaths = [for (path in interfaces.keys()) path], projectionPaths = [for (path in projections.keys()) path];
-			interfacePaths.sort(Reflect.compare); projectionPaths.sort(Reflect.compare);
-			var ffi = new compiler.Compiler.FfiConfiguration(
-				compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (path in interfacePaths) {path: path, text: interfaces.get(path)}]),
-				[for (path in projectionPaths) {path: path, text: projections.get(path)}]);
+			var interfacePaths = [for (path in interfaces.keys()) path],
+				projectionPaths = [for (path in projections.keys()) path];
+			interfacePaths.sort(Reflect.compare);
+			projectionPaths.sort(Reflect.compare);
+			var ffi = new compiler.Compiler.FfiConfiguration(compiler.ffi.HxiInterfaceOrder.dependenciesFirst([
+				for (path in interfacePaths)
+					{
+						path: path,
+						text: interfaces.get(path)
+					}
+			]), [for (path in projectionPaths) {path: path, text: projections.get(path)}]);
 			var defines = resolved.manifest.defines.concat(compiler.tools.CompilerDriver.targetDefines(resolved.manifest.target == "host" ? "hl" : resolved.manifest.target));
 			return new HaxeProjectConfiguration(file, roots, resolved.manifest.entry == null ? [] : [resolved.manifest.entry], defines, [], ffi);
 		}
@@ -433,8 +459,12 @@ class ProjectWorkspace {
 			names.sort(Reflect.compare);
 			for (name in names) {
 				var path = normalize(Path.join([directory, name]));
-				if (name == ".git" || name == "node_modules" || name == "vendor" || outputDirectories.exists(path) ||
-					((name == "build" || name == "out") && !declaredSourceDirectories.exists(path))) continue;
+				if (name == ".git"
+					|| name == "node_modules"
+					|| name == "vendor"
+					|| outputDirectories.exists(path)
+					|| ((name == "build" || name == "out") && !declaredSourceDirectories.exists(path)))
+					continue;
 				if (FileSystem.isDirectory(path))
 					pending.push(path);
 				else if (StringTools.endsWith(name, ".hx")) {

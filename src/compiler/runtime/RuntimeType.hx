@@ -16,6 +16,7 @@ class RuntimeType {
 		return switch element {
 			case TAbstract(_, _, representation): arrayName(representation);
 			case TInt: "i32";
+			case TNativeScalar("u32"): "i32";
 			case TInt64: "i64";
 			case TFloat: "f64";
 			case TBool: "bool";

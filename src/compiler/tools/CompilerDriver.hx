@@ -19,6 +19,7 @@ import compiler.ir.codec.CanonicalIrCodec;
 import compiler.compilation.AllocationMeter;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
 import compiler.abi.AbiChangeSchema;
+import compiler.types.NativeTypeDescriptorCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -105,13 +106,18 @@ class CompilerDriver {
 			FileSystem.rename(temporary, manifest);
 			compiler.acknowledgePublication(result.revision);
 		}
-		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.make(File.getBytes(request.output)).toHex());
+		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
 		if (request.xmlOutput != null)
 			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 		if (request.irOutput != null)
 			File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 		if (request.ffiHeader != null && request.ffiLibrary != null)
 			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
+		var typedProgram = compiler.lastTypedProgram;
+		if (typedProgram == null)
+			throw "Compiler completed without a typed program for descriptor emission";
+		File.saveBytes(request.output + ".descriptors", NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
+		File.saveContent(request.output + ".descriptors.json", NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
 		var artifactsWrittenAt = Sys.time() * 1000.0;
 		var allocationAfterWrite = AllocationMeter.sample();
 		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)

@@ -63,6 +63,10 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
+
+	/** Set when this declaration used the `struct` keyword. */
+	final ?isStruct:Bool;
+
 	final ?isExtern:Bool;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
@@ -126,6 +130,7 @@ typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; fi
 /** Parsed enum abstract, including explicit conversion relationships. */
 typedef AstEnumAbstract = {
 	final name:String;
+	final metadata:Array<AstMetadata>;
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;
@@ -217,6 +222,7 @@ enum NativeLayoutQueryKind {
 	SizeOf;
 	AlignOf;
 	OffsetOf;
+	TypeInfo;
 }
 
 /** Named value supplied by an object-literal expression. */

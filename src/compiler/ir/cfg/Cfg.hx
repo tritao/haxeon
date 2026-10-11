@@ -39,6 +39,7 @@ enum CfgInstruction {
 	IntToFloat(output:CfgValue, value:CfgValue);
 	IntToInt64(output:CfgValue, value:CfgValue);
 	FloatToInt(output:CfgValue, value:CfgValue);
+	FloatToFloat(output:CfgValue, value:CfgValue);
 	SafeCast(output:CfgValue, value:CfgValue);
 	BeginTry(catchBlock:Int, afterBlock:Int);
 	EndTry(catchBlock:Int);

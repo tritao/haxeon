@@ -13,6 +13,7 @@ import build.WorkspaceBuild;
 import build.WorkspaceBuild.LoweredWorkspace;
 import build.WorkspaceBuild.LoweredWorkspaceProject;
 import build.execution.ActionFingerprint;
+import build.execution.ArtifactCache;
 import build.execution.ActionId;
 import build.execution.ActionResult;
 import build.execution.ExecutionAction;
@@ -65,6 +66,7 @@ class BuildSystemMain {
 		testDelegatedNativeInvalidation();
 		testCMakeLibraryOutputs();
 		testMissingDeclaredOutputs();
+		testDirectoryOutputs();
 		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testFfiProjectIntegration();
@@ -143,6 +145,43 @@ class BuildSystemMain {
 						})), failure = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([process, dependent]));
 			expect(failure.exitCode != 0 && !ran, "a missing process output must block dependents in either executor backend");
 		}
+		removeTree(root);
+	}
+
+	static function testDirectoryOutputs():Void {
+		var root = temporaryDirectory("directory-output"),
+			directory = root + "/projection",
+			environment = new BuildEnvironment(root, root + "/build"),
+			invocations = 0,
+			action = new ExecutionAction(new ActionId("projection-fixture"), [], [], [directory], "directory output",
+				Compiler("fixture", [], root, new Map(), () -> {
+					invocations++;
+					ensureDirectory(directory);
+					return 0;
+				}), true, false, false, [directory]),
+			plan = new ExecutionPlan([action]);
+		expect(!ActionFingerprint.outputsExist(action), "a missing directory output invalidates the action");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0, "declared directory outputs must pass execution validation");
+		expect(ActionFingerprint.outputsExist(action), "an existing declared directory completes the action");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && invocations == 1,
+			"complete directory outputs permit project-local skipping");
+		var fileAction = new ExecutionAction(action.id, [], [], [directory], action.description, action.action);
+		expect(!ActionFingerprint.outputsExist(fileAction), "a directory cannot satisfy a file output");
+		expect(ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
+			[]) != ActionFingerprint.compute(fileAction, environment.buildRoot, environment.target.toString(), []),
+			"output kinds participate in the fingerprint");
+		var processAction = new ExecutionAction(new ActionId("projection-process"), [], [], [directory], "directory output",
+			Process("fixture", [], root, new Map()), true, false, false, [directory]);
+		expect(!ArtifactCache.isShareable(processAction), "directory outputs are excluded from the portable file artifact cache");
+		removeTree(directory);
+		File.saveContent(directory, "wrong kind");
+		expect(!ActionFingerprint.outputsExist(action), "a file cannot satisfy a directory output");
+		var wrongKind = new ExecutionAction(new ActionId("wrong-output-kind"), [], [], [directory], "directory output",
+			Compiler("fixture", [], root, new Map(), () -> 0), true, true, false, [directory]);
+		expect(new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([wrongKind])).exitCode != 0,
+			"a successful process with the wrong output kind fails validation");
+		expectThrows(() -> new ExecutionAction(action.id, [], [], [], "invalid", action.action, true, false, false, [directory]),
+			"directory outputs must also appear in declared outputs");
 		removeTree(root);
 	}
 
@@ -420,6 +459,10 @@ class BuildSystemMain {
 	#end
 
 	static function testFingerprintsAndSkipping():Void {
+		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString("")) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"empty content digest must retain the canonical lowercase SHA-256 identity");
+		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString("abc")) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+			"content digest must preserve the published SHA-256 test vector");
 		var root = temporaryDirectory("fingerprints"),
 			buildRoot = Path.join([root, "build"]),
 			source = Path.join([root, "source.c"]),
@@ -598,6 +641,12 @@ class BuildSystemMain {
 		// The compiler reads only FFI interfaces, so it does not wait for native package actions and the two build side by side.
 		var compileAction = compilerAction(execution);
 		expect(compileAction != null && compileAction.dependencies.length == 0, "the Haxe compiler request must not wait for native package actions");
+		var hasDescriptorBinary = false, hasDescriptorJson = false;
+		for (output in compileAction.outputs) {
+			hasDescriptorBinary = hasDescriptorBinary || StringTools.endsWith(output, ".descriptors");
+			hasDescriptorJson = hasDescriptorJson || StringTools.endsWith(output, ".descriptors.json");
+		}
+		expect(hasDescriptorBinary && hasDescriptorJson, "project module builds must track both descriptor sidecar outputs");
 		expect(execution.actions.length > 1, "the native package actions are still part of the plan");
 		// ... but whatever runs the module waits for everything built for it, the native libraries it loads included.
 		if (Sys.systemName() != "Windows") {

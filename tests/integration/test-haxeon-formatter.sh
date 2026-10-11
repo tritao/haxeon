@@ -6,6 +6,27 @@ cli="$repo_dir/scripts/haxeon"
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-formatter.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
+node - "$repo_dir" <<'JS'
+const assert = require('assert');
+const fs = require('fs');
+const {hasStructDeclaration} = require(process.argv[2] + '/scripts/format-source-profile.js');
+for (const source of [
+  'struct Vec2 { public var x:Int; }',
+  '@:value struct /* comment */ Vec2 { public var x:Int; }',
+  '/* struct Fake {} */ struct Real {}'
+]) assert.strictEqual(hasStructDeclaration(source), true, source);
+for (const source of [
+  'class Main { var text = "\nstruct Fake {}"; }',
+  "class Main { var text = '\nstruct Fake {}'; }",
+  '// struct Fake {}\nclass Main {}',
+  '/* struct Fake {} */ class Main {}',
+  'class Main { var pattern = ~/struct Fake [/] {}/; }',
+  "class Main { var text = '${'struct Fake {}'}'; }"
+]) assert.strictEqual(hasStructDeclaration(source), false, source);
+assert.strictEqual(hasStructDeclaration(fs.readFileSync(process.argv[2] + '/tests/runtime/HxiNumericStorageMain.hx', 'utf8')), false);
+console.log('PASS: formatter profiles ignore embedded structs in literals/comments/regex/interpolation');
+JS
+
 source='function main():Int { var value=compute(firstArgument,secondArgument,thirdArgument); return value; }'
 formatted=$(printf '%s\n' "$source" | "$cli" fmt --stdin --line-width 40)
 [[ "$formatted" == *$'compute(\n'* ]]
@@ -35,4 +56,10 @@ fi
 "$cli" fmt --line-width 40 "$source_path"
 "$cli" fmt --line-width 40 --check "$source_path"
 
-echo "PASS: built-in formatter CLI stdin, check, and file modes"
+struct_path="$project_dir/Struct.hx"
+printf 'struct Vec2 { public var x:Int; }\n' > "$struct_path"
+"$cli" fmt "$struct_path"
+grep -q '^struct Vec2 {' "$struct_path"
+"$cli" fmt --check "$struct_path"
+
+echo "PASS: built-in formatter CLI stdin, check, file, and struct modes"

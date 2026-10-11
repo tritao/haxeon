@@ -453,21 +453,23 @@ class Compiler {
 				if (projection.source.length > 0) {
 					ffiSourceOrigins.set(projection.path + ".hx", projection.origins);
 					update(projection.path + ".hx", projection.source);
-				}
-				else
+				} else
 					sourceGeneration++;
 	}
 
 	/** Resolve generated declarations and their helper members to the owning ABI source. */
 	public function ffiSourceOrigin(path:String, name:String):Null<compiler.Source.SourceSpan> {
 		var origins = ffiSourceOrigins.get(path);
-		if (origins == null) return null;
+		if (origins == null)
+			return null;
 		var candidate = name;
 		while (candidate.length > 0) {
 			var origin = origins.get(candidate);
-			if (origin != null) return origin;
+			if (origin != null)
+				return origin;
 			var dot = candidate.indexOf(".");
-			if (dot < 0) break;
+			if (dot < 0)
+				break;
 			candidate = candidate.substr(dot + 1);
 		}
 		// Synthesized methods such as SurfaceHandle.invalid() belong to their type.

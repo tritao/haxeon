@@ -11,6 +11,10 @@ class ExecutionAction {
 	public final dependencies:Array<ActionId>;
 	public final inputs:Array<String>;
 	public final outputs:Array<String>;
+
+	/** Explicit directory outputs; all other declared outputs must be files. */
+	public final directoryOutputs:Array<String>;
+
 	public final description:String;
 	public final action:ActionKind;
 
@@ -27,7 +31,7 @@ class ExecutionAction {
 	public final jobserverClient:Bool;
 
 	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>, description:String, action:ActionKind,
-			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false) {
+			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false, ?directoryOutputs:Array<String>) {
 		this.jobserverClient = jobserverClient;
 		this.id = id;
 		this.dependencies = dependencies.copy();
@@ -36,9 +40,17 @@ class ExecutionAction {
 		this.inputs.sort(Reflect.compare);
 		this.outputs = outputs.copy();
 		this.outputs.sort(Reflect.compare);
+		this.directoryOutputs = directoryOutputs == null ? [] : directoryOutputs.copy();
+		this.directoryOutputs.sort(Reflect.compare);
+		for (directory in this.directoryOutputs)
+			if (this.outputs.indexOf(directory) < 0)
+				throw 'Directory output $directory is not a declared action output';
 		this.description = description;
 		this.action = action;
 		this.fingerprintDependencies = fingerprintDependencies;
 		this.alwaysRun = alwaysRun;
 	}
+
+	public function outputExists(output:String):Bool
+		return sys.FileSystem.exists(output) && sys.FileSystem.isDirectory(output) == (directoryOutputs.indexOf(output) >= 0);
 }
