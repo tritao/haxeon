@@ -13,6 +13,14 @@ class DspFilterOptions {
 
 	public function new() {}
 
+	/** Nominal linear SVF Q, [0.5, 100]. Drive suppresses the measured resonance peak. */
+	public function setQ(q:Float):DspFilterOptions {
+		if (!Math.isFinite(q) || q<0.5 || q>100) throw "SVF Q must be 0.5..100";
+		// Daisy's damping is 2*(1-resonance^(1/4)); keep its domain behind the facade.
+		resonance=Math.pow(1-0.5/q,4);
+		return this;
+	}
+
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspFilterOptions {
 		var result = new NativeDspFilterOptions();

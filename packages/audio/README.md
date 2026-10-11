@@ -257,3 +257,8 @@ loads. Closing a cache rejects new acquisitions and wakes waiters. Existing
 leases stay usable until released; already-created instruments outlive their
 leases. Join preparation workers, dispose graph owners, then close the cache
 before NativeKit shutdown. None of these operations belongs on the audio callback.
+
+`DspFilterOptions.setQ(q)` sets nominal linear SVF quality in [0.5, 100], mapping
+through Daisy's damping domain inside the typed facade. Existing `resonance`
+remains the native normalized amount. Drive suppresses the measured peak; use
+`drive = 0` for a linear response and reserve output headroom separately.
