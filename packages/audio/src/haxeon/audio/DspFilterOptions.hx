@@ -8,6 +8,8 @@ class DspFilterOptions {
 	public var type:DspFilterType = DspFilterType.None;
 	public var cutoffHz:Float = 0.0;
 	public var resonance:Float = 0.0;
+	/** Nonlinear saturation, [0, 1]; zero gives a linear resonance response. */
+	public var drive:Float = 0.5;
 
 	public function new() {}
 

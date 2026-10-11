@@ -2005,7 +2005,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * sources support the filter envelope but require one unison copy.
 	 * Both envelopes share the note gate; amplitude release determines voice lifetime.
 	 */
-	struct nk_audio_dsp_voice_options @layout(152, 8) {
+	struct nk_audio_dsp_voice_options @layout(160, 8) {
 		struct_size: u32 @offset(0) @struct_size;
 		/**
 		 * Number of oscillator/wavetable copies, 0 (default one) or [1, 8].
@@ -2034,6 +2034,12 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		additional_lfo_count: u32 @offset(144);
 		reserved3: u32 @offset(148);
+		/**
+		 * Optional appended filter drive, [0, 1]. Zero is linear; 0.5 matches
+		 * Daisy's legacy saturation. Older callers retain legacy drive.
+		 */
+		filter_drive: f32 @offset(152);
+		reserved4: u32 @offset(156);
 	}
 	/**
 	 * Native voice admission. Configure before attaching the engine. Legacy engines

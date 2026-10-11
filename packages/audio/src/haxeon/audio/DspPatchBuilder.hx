@@ -96,6 +96,7 @@ class DspPatchBuilder {
 		voice.set_unison_stereo_spread(unison.stereoSpread);
 		voice.set_filter_envelope(filterEnvelope.nativeValue());
 		voice.set_filter_envelope_amount_semitones(filterEnvelopeAmountSemitones);
+		voice.set_filter_drive(filter.drive);
 		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS)
 			throw "DSP patch LFO limit exceeded";
 		for (index in 0...additionalLfos.length) {
