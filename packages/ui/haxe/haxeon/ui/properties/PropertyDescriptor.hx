@@ -4,6 +4,7 @@ import haxeon.ui.core.CommandContext;
 
 /** Stable property schema plus model read/write/validation hooks. */
 class PropertyDescriptor {
+	public final structure:Null<PropertyStructure>;
 	public final commit:Null<PropertyCommitter>;
 	public final id:String;
 	public final label:String;
@@ -39,6 +40,7 @@ class PropertyDescriptor {
 					throw "Custom property types require a stable type ID";
 			default:
 		}
+		this.structure = config.structure;
 		this.commit = config.commit;
 		this.id = id;
 		this.label = label;

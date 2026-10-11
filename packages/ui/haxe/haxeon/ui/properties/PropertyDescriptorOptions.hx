@@ -12,6 +12,7 @@ typedef PropertyValidator = CommandContext->PropertyValue->Null<String>;
 class PropertyDescriptorOptions {
 	/** Optional external transaction owner. Bypasses UI document history after validation.
 	 * Completion and observers must run on the UI thread. */
+	public var structure:Null<PropertyStructure>;
 	public var commit:Null<PropertyCommitter>;
 	public var category:String;
 	public var readOnly:Bool;
@@ -26,6 +27,7 @@ class PropertyDescriptorOptions {
 	public var validator:Null<PropertyValidator>;
 
 	public function new() {
+		structure = null;
 		commit = null;
 		category = "";
 		readOnly = false;

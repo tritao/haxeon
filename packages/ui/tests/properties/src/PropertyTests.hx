@@ -93,6 +93,13 @@ class PropertyTests {
 		check(haxe.Json.stringify(current) == "[false,true,true]", "Reorder moves the selected item");
 		action("Items Add item", false);
 		check(haxe.Json.stringify(current) == "[false,true,true]", "Disabled controls cannot submit");
+		var options = new PropertyDescriptorOptions();
+		options.structure = PropertyStructure.List(PropertyStructure.Value(PropertyType.Bool), 3, 3, "toggle");
+		descriptor = new PropertyDescriptor("items", "Items", PropertyType.Custom(ListPropertyEditor.TYPE),
+			_ -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {}, options);
+		action("Items Add item"); action("Items item 0 Remove"); action("Apply Items");
+		check(haxe.Json.stringify(current) == "[false,true,true]", "Typed list cardinality disables invalid add/remove actions");
+
 	}
 
 }

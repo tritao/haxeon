@@ -85,28 +85,49 @@ class ListPropertyEditor implements PropertyEditorExtension {
 			try { var copy = candidate(); var items:Array<Dynamic> = cast at(copy, path); edit(items); stage(copy); }
 			catch (_:Dynamic) { apply(Custom(id, "Invalid list item")); }
 		}
-		function leaf(path:Array<Int>, item:Dynamic):View {
+		function leaf(path:Array<Int>, item:Dynamic, compact:Bool = false, component:String = null):View {
 			var address = path.join(":"), draftKey = address;
-			var label = descriptor.label + " " + (vector && path.length == 1 ? (path[0] < 4 ? ["X", "Y", "Z", "W"][path[0]] : Std.string(path[0])) : "item " + path.join("."));
+			var label = component == null ? descriptor.label + " " + (vector && path.length == 1 ?
+				(path[0] < 4 ? ["X", "Y", "Z", "W"][path[0]] : Std.string(path[0])) : "item " + path.join(".")) :
+				descriptor.label + (path.length == 1 ? "" : " item " + path.slice(0, path.length - 1).join(".")) + " " + component;
 			if (Std.isOfType(item, Bool)) {
 				var box = new Checkbox("item:" + address, label, cast item, next -> send(path, next)); box.enabled = enabled; return box;
 			}
 			var initial = Std.isOfType(item, String) ? (cast item:String) : haxe.Json.stringify(item);
 			var field = new TextField("item:" + address, drafts.exists(draftKey) ? drafts.get(draftKey) : initial,
-				text -> { drafts.set(draftKey, text); draftState.update(local); }, style(), label);
+				text -> { drafts.set(draftKey, text); draftState.update(local); }, compact ? new LayoutStyle() : style(), label);
 			field.enabled = enabled;
 			field.onSubmit = text -> {
 				drafts.set(draftKey, text); draftState.update(local); commit();
 			};
-			return new Column("leaf:" + address, [new KeyedView("label", new Text(label)), new KeyedView("input", field)], style());
+			return new Column("leaf:" + address, [new KeyedView("label", new Text(compact ? component : label)), new KeyedView("input", field)], style());
 		}
-		function tree(path:Array<Int>, item:Dynamic):View {
+		function tree(path:Array<Int>, item:Dynamic, structure:Null<PropertyStructure>):View {
 			if (!Std.isOfType(item, Array) || path.length >= 8) return leaf(path, item);
 			var items:Array<Dynamic> = cast item;
+			var itemStructure:Null<PropertyStructure> = null;
+			var minimumLength:Null<Int> = null, maximumLength:Null<Int> = null;
+			var itemLabel = "Item";
+			if (structure != null) switch structure {
+				case Vector(components):
+					if (components <= 0 || items.length != components) return new Text("Invalid vector dimensions");
+					var columns:Array<KeyedView> = [];
+					for (index in 0...components) {
+						var label = index < 4 ? ["X", "Y", "Z", "W"][index] : Std.string(index);
+						columns.push(new KeyedView("component:" + index, leaf(path.concat([index]), items[index], true, label)));
+					}
+					return new Row("vector:" + path.join(":"), columns, style());
+				case List(child, minimum, maximum, label):
+					itemStructure = child; minimumLength = minimum; maximumLength = maximum;
+					itemLabel = label == null || label.length == 0 ? "Item" : label;
+				default:
+			}
 			var children:Array<KeyedView> = [];
 			for (index in 0...items.length) {
 				var childPath = path.concat([index]);
-				children.push(new KeyedView("item:" + index, tree(childPath, items[index])));
+				if (structure != null && !vector) children.push(new KeyedView("heading:" + index,
+					new Text(itemLabel.charAt(0).toUpperCase() + itemLabel.substr(1) + " " + (index + 1))));
+				children.push(new KeyedView("item:" + index, tree(childPath, items[index], itemStructure)));
 				if (!vector) {
 					var actions:Array<KeyedView> = [];
 					function action(label:String, suffix:String, edit:Array<Dynamic>->Void, available:Bool):Void {
@@ -115,18 +136,18 @@ class ListPropertyEditor implements PropertyEditorExtension {
 						button.accessibilityLabel = descriptor.label + " item " + childPath.join(".") + " " + label;
 						button.enabled = enabled && available; actions.push(new KeyedView(suffix, button));
 					}
-					action("Remove", "remove", copy -> { copy.splice(index, 1); }, true);
+					action("Remove", "remove", copy -> { copy.splice(index, 1); }, minimumLength == null || items.length > minimumLength);
 					action("Up", "up", copy -> { var previous = copy[index - 1]; copy[index - 1] = copy[index]; copy[index] = previous; }, index > 0);
 					children.push(new KeyedView("actions:" + index, new Row("actions", actions, style())));
 				}
 			}
 			if (!vector) {
-				var add = new Button("Add item", null, () -> editList(path, copy -> {
+				var add = new Button("Add " + itemLabel.toLowerCase(), null, () -> editList(path, copy -> {
 					// Duplicate the last structure; an empty list starts with null.
 					copy.push(copy.length == 0 ? null : haxe.Json.parse(haxe.Json.stringify(copy[copy.length - 1])));
 				}), "add:" + path.join(":"));
 				add.accessibilityLabel = descriptor.label + (path.length == 0 ? "" : " item " + path.join(".")) + " Add item";
-				add.enabled = enabled; children.push(new KeyedView("add", add));
+				add.enabled = enabled && (maximumLength == null || items.length < maximumLength); children.push(new KeyedView("add", add));
 			}
 			return new Column("list:" + path.join(":"), children, style());
 		}
@@ -141,7 +162,7 @@ class ListPropertyEditor implements PropertyEditorExtension {
 			revert.enabled = enabled;
 			children.push(new KeyedView("revert", revert));
 		}
-		children.push(new KeyedView("items", tree(new Array<Int>(), root)));
+		children.push(new KeyedView("items", tree(new Array<Int>(), root, descriptor.structure)));
 		return new Column(key, children, style());
 	}
 	static function at(value:Dynamic, path:Array<Int>):Dynamic {

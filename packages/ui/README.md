@@ -453,7 +453,11 @@ Register `NumericVectorPropertyEditor` and `ListPropertyEditor` in the inspector
 `PropertyEditorRegistry`, using their `TYPE` constants with `PropertyType.Custom`
 and `PropertyValue.Custom`. Payloads are JSON-compatible arrays. Vectors expose
 numeric components; lists expose nested items, add, remove and move-up controls.
-Add duplicates the last item's structure, or inserts null into an empty list.
+Set `PropertyDescriptorOptions.structure` to a recursive `PropertyStructure`
+when item shapes are known. `Vector` renders compact component rows without
+list actions; `List` supplies item labels and minimum/maximum length affordances.
+The host still validates the submitted value. Add duplicates the last item's
+structure, or inserts null into an empty list.
 List changes are staged until Apply or Enter, allowing dependent items to change
 in one atomic edit. Vector components submit directly. Descriptor validation owns dimensions,
 item shapes and domain rules. Draft state follows the scoped widget lifecycle,
