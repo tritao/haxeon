@@ -168,6 +168,10 @@ patch.modulate(DspModulationSource.FilterEnvelope,
 releases it on the native clock; `noteOff(token, frame)` releases or cancels a
 future onset. `tryNoteOn()` returns null on command admission overflow.
 `setVoicePolicy(tailVoices, fadeFrames)` enables bounded native stealing.
+`DspInstrument.setChokeGroup(1..255)` makes admitted note onsets release older
+notes in the same engine-local group. Group zero disables choking. Groups are
+captured at onset, so changing an instrument group affects future notes only.
+Release envelopes still smooth the transition; configure a short release for hats.
 `runtimeStatus()` reports actual stealing, dropped notes and clock gaps.
 `voiceCounts()` snapshots occupied note slots (including releases) and active
 stealing tails from the last completed native render block. SF2 sample layers

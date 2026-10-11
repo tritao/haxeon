@@ -1029,12 +1029,13 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_instrument_get_parameter(instrument: nk_audio_dsp_instrument, parameter: nk_audio_dsp_parameter, out_value: ptr<f32> @out) -> nk_result;
 	/**
+	 * Sets one instrument parameter between render calls.
+	 */
+	extern fn nk_audio_dsp_instrument_set_choke_group(instrument: nk_audio_dsp_instrument, group: u32) -> nk_result;
+	/**
 	 * Sets one oscillator-specific parameter between render calls.
 	 */
 	extern fn nk_audio_dsp_instrument_set_oscillator_parameter(instrument: nk_audio_dsp_instrument, oscillator_index: u32, parameter: nk_audio_dsp_parameter, value: f32) -> nk_result;
-	/**
-	 * Sets one instrument parameter between render calls.
-	 */
 	extern fn nk_audio_dsp_instrument_set_parameter(instrument: nk_audio_dsp_instrument, parameter: nk_audio_dsp_parameter, value: f32) -> nk_result;
 	/**
 	 * Creates an immutable, renderer-independent patch definition.

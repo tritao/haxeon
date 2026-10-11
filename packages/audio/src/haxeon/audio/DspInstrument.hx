@@ -22,6 +22,13 @@ class DspInstrument {
 		return value;
 	}
 
+	/** Future notes release peers in this engine-local group; zero disables choking. */
+	public function setChokeGroup(group:Int):Void {
+		ensureLive();
+		if (group < 0 || group > 255) throw "Choke group must be 0..255";
+		AudioResult.check(NativeKitAudio.nk_audio_dsp_instrument_set_choke_group(value, group), "audio.dsp.instrument.chokeGroup");
+	}
+
 	/** Sets an instrument parameter between render calls. */
 	public function setParameter(parameter:DspParameter, value:Float):Void {
 		ensureLive();
