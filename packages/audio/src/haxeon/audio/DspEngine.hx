@@ -149,6 +149,13 @@ class DspEngine {
             droppedNotes:status.get_dropped_notes(), retiredResources:status.get_retired_resources(),
             clockDiscontinuities:status.get_clock_discontinuities()};
     }
+    /** Last completed block's occupied note slots and stealing tails, including releases. */
+    public function voiceCounts():{activeVoices:Int, activeTails:Int} {
+        ensureLive();
+        var result = NativeKitAudio.nk_audio_dsp_engine_get_voice_counts(value);
+        AudioResult.check(result.status, "audio.dsp.voiceCounts");
+        return {activeVoices:result.out_active_voices, activeTails:result.out_active_tails};
+    }
     public function collect():Void {
         ensureLive();
         AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_collect(value), "audio.dsp.engine.collect");

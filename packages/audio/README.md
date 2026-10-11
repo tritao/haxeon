@@ -169,6 +169,10 @@ releases it on the native clock; `noteOff(token, frame)` releases or cancels a
 future onset. `tryNoteOn()` returns null on command admission overflow.
 `setVoicePolicy(tailVoices, fadeFrames)` enables bounded native stealing.
 `runtimeStatus()` reports actual stealing, dropped notes and clock gaps.
+`voiceCounts()` snapshots occupied note slots (including releases) and active
+stealing tails from the last completed native render block. SF2 sample layers
+and queued future notes are not counted; callback-owned voice objects stay
+private to the renderer.
 
 `prepareTransport()` copies immutable sections/events. `DspTransport.playGroup`
 and `requestGroup` atomically publish an action to tracks with matching bar and

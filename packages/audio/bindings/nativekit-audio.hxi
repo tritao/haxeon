@@ -946,6 +946,12 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 */
 	extern fn nk_audio_dsp_engine_get_options(engine: nk_audio_dsp_engine, out_options: ptr<nk_audio_dsp_engine_options> @out) -> nk_result;
 	extern fn nk_audio_dsp_engine_get_runtime_status(engine: nk_audio_dsp_engine, out_status: ptr<nk_audio_dsp_runtime_status> @inout) -> nk_result;
+	/**
+	 * Last completed render block's occupied note slots and stealing tails.
+	 * Counts include release envelopes, and exclude queued notes and SF2 layers.
+	 * Reading these counters never inspects callback-owned voices directly.
+	 */
+	extern fn nk_audio_dsp_engine_get_voice_counts(engine: nk_audio_dsp_engine, out_active_voices: ptr<u32> @out, out_active_tails: ptr<u32> @out) -> nk_result;
 	extern fn nk_audio_dsp_engine_note_off(engine: nk_audio_dsp_engine, note_token: u64, frame: u64) -> nk_result;
 	extern fn nk_audio_dsp_engine_note_on(engine: nk_audio_dsp_engine, instrument: nk_audio_dsp_instrument, options: ptr<const<nk_audio_dsp_note_options>>, out_note_token: ptr<u64> @out) -> nk_result;
 	extern fn nk_audio_dsp_engine_play_transport(engine: nk_audio_dsp_engine, program_id: u64, initial_section: u32, start_frame: u64) -> nk_result;
