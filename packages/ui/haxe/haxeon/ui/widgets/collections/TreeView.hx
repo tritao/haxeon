@@ -53,6 +53,8 @@ class TreeView implements View {
 	public var selectedKey(default, null):Null<String>;
 	public var onSelectionChanged:Null<String->Void>;
 	public var onItemActivated:Null<String->Void>;
+	/** Event-aware activation for callers that need pointer or keyboard modifiers. */
+	public var onItemActivatedWithEvent:Null<String->UiEvent->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
 	public var onItemClicked:Null<String->Int->Void>;
 	/** Optional non-blocking hint used to draw expand controls without loading children. */
@@ -112,6 +114,7 @@ class TreeView implements View {
 		this.selectedKey = selectedKey;
 		this.onSelectionChanged = onSelectionChanged;
 		this.onItemActivated = onItemActivated;
+		onItemActivatedWithEvent = null;
 		onItemClicked = null;
 		hasChildrenHint = null;
 		onItemContextMenu = null;
@@ -329,7 +332,7 @@ class TreeView implements View {
 					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
 						compactLeafIndent, selectedKey == nodeKey, guideOpacity,
 						function() { select(nodeKey); },
-						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
+						function(event) { if (entry.hasChildren) toggleExpanded(nodeKey); else activateItem(nodeKey, event); },
 						function() { toggleExpanded(nodeKey); },
 						function(event) {
 							var count = clicks.value.register(nodeKey, event);
@@ -338,7 +341,7 @@ class TreeView implements View {
 								// Single-click expansion applies to every click, including the
 								// second click recognized as part of a double-click sequence.
 								if (expandOnSingleClick || count == 2) toggleExpanded(nodeKey);
-							} else if (count == 2 && onItemActivated != null) onItemActivated(nodeKey);
+							} else if (count == 2) activateItem(nodeKey, event);
 						},
 						function(event) { handleNodeKey(context, entry, event); },
 						function(id) { itemIds.set(nodeKey, id); },
@@ -428,6 +431,11 @@ class TreeView implements View {
 		var target = itemIds.get(nextKey);
 		if (target != null)
 			context.requestFocus(target);
+	}
+
+	function activateItem(nodeKey:String, event:UiEvent):Void {
+		if (onItemActivatedWithEvent != null) onItemActivatedWithEvent(nodeKey, event);
+		else if (onItemActivated != null) onItemActivated(nodeKey);
 	}
 
 	function adjacentKey(nodeKey:String, delta:Int):Null<String> {
@@ -842,7 +850,7 @@ private class TreeViewRow implements View {
 	final selected:Bool;
 	final guideOpacity:Float;
 	final onSelect:Void->Void;
-	final onActivate:Void->Void;
+	final onActivate:UiEvent->Void;
 	final onToggle:Void->Void;
 	final onClick:UiEvent->Void;
 	final onKey:UiEvent->Void;
@@ -851,7 +859,7 @@ private class TreeViewRow implements View {
 
 	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
 			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool, guideOpacity:Float,
-			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
+			onSelect:Void->Void, onActivate:UiEvent->Void, onToggle:Void->Void,
 			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
 		this.itemKey = itemKey;
@@ -903,7 +911,7 @@ private class TreeViewRow implements View {
 			semantics.hierarchyLevel = entry.depth + 1;
 			node.semantics = semantics;
 			node.on(UiEventKind.Click, function(event) { if (event.button == 0) { onSelect(); onClick(event); } });
-			node.on(UiEventKind.Activate, function(_) { onSelect(); onActivate(); });
+			node.on(UiEventKind.Activate, function(event) { onSelect(); onActivate(event); });
 			node.on(UiEventKind.KeyDown, onKey);
 			node.on(UiEventKind.KeyRepeat, onKey);
 			node.on(UiEventKind.PointerDown, function(event) {
