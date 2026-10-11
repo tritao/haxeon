@@ -8,13 +8,13 @@ and the consumer gate.
 
 ## Evidence inspected
 
-Script's [SR-D9 plan](../script-sr0/plans/SCRIPT.md) calls for Wasm modules
+Script's [SR-D9 plan](../../script-sr0/plans/SCRIPT.md) calls for Wasm modules
 without Wasm exception handling, Haxe exception propagation through explicit
 state checks, fuel charges at function entries and loop back-edges, and a host
 refill for each invocation. It also requires a per-instance memory cap and
 preserves Haxe's precise collector.
 
-The only current SR0 source probes are:
+The two current SR0 Haxe application probes are:
 
 - `RuntimeNeutralProbe.hx`: a callee throws, its caller catches the dynamic
   value, and a loop returns a checksum.
@@ -25,6 +25,14 @@ Neither probe currently checks `finally`, rethrow, fuel exhaustion, nor live
 references during forced collection. The paired gate below adds those cases
 as compiler regressions and asks Script to keep the two existing probes in its
 AOT consumer run.
+
+Script now also has a native WAMR host harness and a small C surface probe at
+`../../script-sr0/libs/script/experiments/sr0/WamrSurfaceHarness.c` and
+`WamrSurfaceProbe.c`. That harness registers `haxeon_host.print` and
+`std.sys_exit`, tests per-instance memory caps/isolation and trap recovery,
+and does not yet register or test a fuel import. It exercises a hand-written C
+module rather than either Haxe probe, so it does not establish Haxeon AOT
+compatibility.
 
 On this compiler checkout, the exact requested option is rejected before
 compilation:
@@ -41,6 +49,20 @@ Wasm tag section (section 13), includes `haxeon.gc.roots`, imports
 `__haxeon_exception`. This confirms that the default artifact still uses Wasm
 exception handling; setting `HAXEON_WASM_LEGACY_EXCEPTIONS=1` only changes the
 encoding and does not make it suitable for WAMR AOT.
+
+The latest Script-side `wamrc` logs in
+`../../script-sr0/libs/script/build/repro/` report `WASM module load failed:
+invalid section id` for the default, legacy-encoding, and AOT-surface Haxe
+modules. The default `RuntimeNeutralProbe` artifact there is 334,774 bytes and
+has the same SHA-256 as this checkout's baseline build. Walking its section
+headers shows section ID 13 (the Wasm tag section, length 3), immediately
+before the code and data sections. This is the exact feature boundary in the
+rejected fixture and matches SR-D9's requirement to remove Wasm EH. The
+separate `runtime-neutral-option.log` records the current compiler option
+rejection. Script's latest build IDs therefore confirm that stale or
+different compiler output does not explain this failure. The relevant logs
+are `wamrc-default-module.log`, `wamrc-legacy-module.log`,
+`wamrc-aot-surface.log`, and `runtime-neutral-option.log`.
 
 The compiler's `wasm32` target uses linear memory, its precise mark/sweep
 collector, and static plus shadow-frame roots. `wasm-gc` instead uses the Wasm
@@ -129,10 +151,11 @@ uncatchable exhaustion at function entry and a loop back-edge. Add compiler
 fixtures for `finally`, rethrow, GC stress while an exception is pending, and
 both zero and just-sufficient fuel budgets.
 
-SR0 currently has no WAMR AOT runner or import implementation in
-`libs/script/experiments/sr0`. The `wamrc` invocation, native import
-registration, WAMR memory limit, and exact AOT pass/fail are therefore
-Script-owned follow-up gates; this document does not invent or claim them.
+Script's C harness now covers WAMR AOT loading and native imports for its C
+surface probe, but its current host registration does not include the
+proposed fuel import and it has not run a Haxeon profile artifact. The
+`wamrc` invocation and exact profile AOT pass/fail remain Script-owned gates;
+this document does not claim them.
 
 ## Implementation subgates
 
@@ -154,3 +177,19 @@ Do not advertise a complete profile until all are covered:
 
 Until Script confirms the fuel import signature and invocation semantics,
 implementation is intentionally held at this handoff boundary.
+
+## Compiler implementation boundary
+
+The opt-in flag belongs in `CompilerArguments` and `CompilerRequest`, then
+must pass through `CompilerDriver` and `BackendOptions` into the linear
+`WasmLinearModuleBuilder`. That builder currently creates the exception tag
+and publishes metadata; `WasmFunctionLower` lowers Haxe try/catch and
+cross-function calls, and `WasmCfgAnalysis.backEdges()` identifies CFG loop
+back-edges. The profile must not affect `wasm-gc` or default `wasm32`.
+
+The relevant direct regression homes are `tests/TestMain.hx` for argument
+validation and `tests/compiler/WasmBackendMain.hx` for Wasm structure and
+bytes. The Script AOT execution gate stays in Script; the compiler-side
+regressions should validate sections, imports, metadata, control-flow
+semantics, fuel traps, and unchanged default artifact bytes without taking
+ownership of WAMR setup.
