@@ -166,7 +166,7 @@ class Bus {
 			actualOrder);
 		AudioResult.check(made.status, "audio.bus.addLowPass");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
 
@@ -178,7 +178,7 @@ class Bus {
 			actualOrder);
 		AudioResult.check(made.status, "audio.bus.addHighPass");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
 
@@ -188,7 +188,7 @@ class Bus {
 		var made = NativeKitAudio.nk_audio_bus_effect_create_delay(value, delayFrames, decay);
 		AudioResult.check(made.status, "audio.bus.addDelay");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
 
@@ -198,7 +198,7 @@ class Bus {
 		var made = NativeKitAudio.nk_audio_bus_effect_create_reverb(value);
 		AudioResult.check(made.status, "audio.bus.addReverb");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
 
@@ -208,9 +208,18 @@ class Bus {
 		var made = NativeKitAudio.nk_audio_bus_effect_create_dynamics(value);
 		AudioResult.check(made.status, "audio.bus.addDynamics");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
+
+    /** Attenuates this bus from post-fader key audio without mixing it in. */
+    public function addDucking(key:Bus):BusEffect {
+        ensureLive();
+        if (key==null) throw "Ducking requires a key bus";
+        var made=NativeKitAudio.nk_audio_bus_effect_create_ducking(value,key.nativeHandle());
+        AudioResult.check(made.status,"audio.bus.addDucking");
+        var effect=new BusEffect(made.out_effect); retainEffect(effect); return effect;
+    }
 
 	/** Adds an independent post-fader route to a shared return bus. */
 	public function addSend(destination:Bus, volume:Float = 0.0):BusSend {
@@ -236,9 +245,18 @@ class Bus {
 		var made = NativeKitAudio.nk_audio_bus_effect_create_stereo_delay(value);
 		AudioResult.check(made.status, "audio.bus.addStereoDelay");
 		var effect = new BusEffect(made.out_effect);
-		effects.push(effect);
+		retainEffect(effect);
 		return effect;
 	}
+
+    function retainEffect(effect:BusEffect):Void {
+        // Repeated application-owned effect replacement must not grow wrapper retention.
+        var index=0;
+        while(index<effects.length) {
+            if(effects[index].isDisposed()) effects.splice(index,1); else index++;
+        }
+        effects.push(effect);
+    }
 
 	public function dispose():Void {
 		if (disposed)

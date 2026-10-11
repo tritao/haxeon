@@ -23,6 +23,14 @@ class BusEffect {
 		return value;
 	}
 
+    /** Latest applied linear duck gain; read without altering the audio envelope. */
+    public function duckGain():Float {
+        ensureLive();
+        var result=NativeKitAudio.nk_audio_bus_effect_get_duck_gain(value);
+        AudioResult.check(result.status,"audio.busEffect.duckGain");
+        return result.out_gain;
+    }
+
 	public function type():EffectType {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_bus_effect_get_type(value);
