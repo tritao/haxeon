@@ -735,9 +735,9 @@
 1164	$lambda:compiler.ir.cfg.SsaBuilder.run:2635
 1165	$lambda:compiler.ir.codec.IrInstructionCodec.read:10171
 1166	$lambda:compiler.ir.codec.IrValueTableCodec.write:1340
-1167	$lambda:compiler.ir.hl.HlLower.closeInterfaces:71045
+1167	$lambda:compiler.ir.hl.HlLower.closeInterfaces:71229
 1168	$lambda:compiler.ir.hl.HlLower.lowerFunction:23297
-1169	$lambda:compiler.ir.hl.HlLower.lowerFunction:45517
+1169	$lambda:compiler.ir.hl.HlLower.lowerFunction:45701
 1170	$lambda:compiler.semantic.ImplicitConstructors.add:1804
 1171	$lambda:compiler.semantic.SemanticAssembly.run:24692
 1172	$lambda:compiler.semantic.SemanticAssembly.run:24925

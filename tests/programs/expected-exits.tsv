@@ -203,6 +203,9 @@ typeinfo-mixed-layout	42
 typeinfo-generic	42
 struct-value-semantics	42
 struct-flat-layout	42
+struct-nested-narrow-direct	42
+struct-nested-narrow-explicit	42
+struct-nested-narrow-factory	42
 string-null-equality	42
 generic-array-storage	42
 dynamic-array-views	42
