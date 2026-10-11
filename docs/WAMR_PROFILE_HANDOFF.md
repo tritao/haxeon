@@ -191,14 +191,19 @@ implementation is intentionally held at this handoff boundary.
 
 The opt-in flag belongs in `CompilerArguments` and `CompilerRequest`, then
 must pass through `CompilerDriver` and `BackendOptions` into the linear
-`WasmLinearModuleBuilder`. That builder currently creates the exception tag
-and publishes metadata; `WasmFunctionLower` lowers Haxe try/catch and
+`WasmLinearModuleBuilder`. If surfaced through project `haxeon build` or
+`haxeon run`, `HaxeonCli` must forward it into the same compiler argument
+list. `ActionFingerprint` hashes compiler arguments for both local and global
+artifact keys, so carrying the mode as an argument makes it part of the
+action identity. The Wasm builder currently creates the exception tag and
+publishes metadata; `WasmFunctionLower` lowers Haxe try/catch and
 cross-function calls, and `WasmCfgAnalysis.backEdges()` identifies CFG loop
 back-edges. The profile must not affect `wasm-gc` or default `wasm32`.
 
-The relevant direct regression homes are `tests/TestMain.hx` for argument
-validation and `tests/compiler/WasmBackendMain.hx` for Wasm structure and
-bytes. The Script AOT execution gate stays in Script; the compiler-side
-regressions should validate sections, imports, metadata, control-flow
-semantics, fuel traps, and unchanged default artifact bytes without taking
-ownership of WAMR setup.
+The relevant regression homes are `tests/TestMain.hx` for argument
+validation, `tests/compiler/WasmBackendMain.hx` for Wasm structure and bytes,
+and `tests/integration/test-haxeon-cli.sh` if the project CLI exposes the
+mode. The Script AOT execution gate stays in Script; compiler regressions
+should validate sections, imports, metadata, control-flow semantics, fuel
+traps, and unchanged default artifact bytes without taking ownership of WAMR
+setup.
