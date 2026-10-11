@@ -4,10 +4,15 @@ import haxeon.ui.core.CommandContext;
 
 typedef PropertyReader = CommandContext->PropertyValue;
 typedef PropertyWriter = CommandContext->PropertyValue->Void;
+typedef PropertyCommitter = CommandContext->PropertyValue->Null<String>->PropertyEditResult;
+
 typedef PropertyValidator = CommandContext->PropertyValue->Null<String>;
 
 /** Optional presentation and validation policy for one editable property. */
 class PropertyDescriptorOptions {
+	/** Optional external transaction owner. Bypasses UI document history after validation.
+	 * Completion and observers must run on the UI thread. */
+	public var commit:Null<PropertyCommitter>;
 	public var category:String;
 	public var readOnly:Bool;
 	/** Whether edits enter the owning editor document's undo history. */
@@ -21,6 +26,7 @@ class PropertyDescriptorOptions {
 	public var validator:Null<PropertyValidator>;
 
 	public function new() {
+		commit = null;
 		category = "";
 		readOnly = false;
 		recordHistory = true;

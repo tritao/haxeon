@@ -118,6 +118,12 @@ class PropertyInspector implements View {
 		return result;
 	}
 
+	/** Current validation/transaction error for a descriptor, if any. */
+	public function errorFor(descriptorId:String):Null<String> {
+		var editor = sectionByDescriptor.get(descriptorId);
+		return editor == null ? null : editor.errorFor(descriptorId);
+	}
+
 	/** Applies through the row editor assigned to the descriptor's section. */
 	public function applyValue(context:BuildContext, descriptor:PropertyDescriptor,
 		value:PropertyValue, ?coalesceKey:String):Bool {

@@ -1,5 +1,6 @@
 package haxeon.ui.properties;
 import haxeon.ui.editing.EditOperation;
+import haxeon.ui.properties.PropertyDescriptorOptions.PropertyCommitter;
 
 import haxeon.ui.core.CommandContext;
 
@@ -34,7 +35,7 @@ class PropertyBinding {
 	}
 
 	/**
-	 * Applies one value through the active document. The optional coalescing key
+	 * Applies one value through the descriptor's external owner or active document. The optional coalescing key
 	 * is intended for continuous drags or slider edits.
 	 */
 	public function apply(value:PropertyValue, ?coalesceKey:String):PropertyEditResult {
@@ -45,6 +46,22 @@ class PropertyBinding {
 		var before = read();
 		if (registry.same(before, value))
 			return report(value, PropertyEditResult.Unchanged);
+		if (descriptor.commit != null) {
+			var result:PropertyEditResult;
+			try {
+				var commit:PropertyCommitter = descriptor.commit;
+				result = commit(context, value, coalesceKey);
+			}
+			catch (error:Dynamic) { result = Rejected(Std.string(error)); }
+			if (result == null) result = Rejected("Property committer returned no result");
+			switch result { case Pending(null): result = Rejected("Property committer returned no completion"); default: }
+			report(value, result);
+			switch result {
+				case Pending(edit): edit.onComplete(done -> { report(value, done); });
+				default:
+			}
+			return result;
+		}
 		// Edits outside undo history, such as editor settings, need no open document.
 		if (!descriptor.recordHistory) {
 			try {

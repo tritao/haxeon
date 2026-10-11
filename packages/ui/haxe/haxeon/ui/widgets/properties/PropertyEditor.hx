@@ -43,6 +43,7 @@ class PropertyEditor implements View {
 	public var showCategories:Bool;
 	final drafts:Map<String, String>;
 	final errors:Map<String, String>;
+	final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
 	var cachedChildren:Null<Array<KeyedView>>;
 	var cachedShowCategories:Null<Bool>;
 	var cachedColumn:Null<Column>;
@@ -74,33 +75,37 @@ class PropertyEditor implements View {
 		cachedColumn = null;
 	}
 
-	/** Applies a validated property value as one undoable document operation. */
+	/** Applies through the document or external transaction owner. Pending returns false. */
 	public function applyValue(context:BuildContext, descriptor:PropertyDescriptor,
 			next:PropertyValue, ?coalesceKey:String):Bool {
-		if (!enabled || context == null || descriptor == null)
+		if (!enabled || context == null || descriptor == null || pending.exists(descriptor.id))
 			return false;
 		var commandContext = context.commandContext == null ? new CommandContext() : context.commandContext;
 		var result = new PropertyBinding(descriptor, commandContext, registry).apply(next, coalesceKey);
-		switch (result) {
-			case PropertyEditResult.Rejected(message):
-				if (errors.get(descriptor.id) != message)
-					revision++;
-				errors.set(descriptor.id, message);
+		switch result {
+			case Pending(edit):
+				pending.set(descriptor.id, edit); revision++;
+				edit.onComplete(done -> {
+					if (pending.get(descriptor.id) != edit) return;
+					pending.remove(descriptor.id);
+					finishValue(context, descriptor, done);
+				});
 				context.commands.refresh();
 				return false;
-			case PropertyEditResult.Unchanged:
-				if (errors.exists(descriptor.id))
-					revision++;
-				errors.remove(descriptor.id);
-				return false;
-			case PropertyEditResult.Applied:
-				if (drafts.exists(descriptor.id) || errors.exists(descriptor.id))
-					revision++;
-				drafts.remove(descriptor.id);
-				errors.remove(descriptor.id);
-				context.commands.refresh();
-				return true;
+			default: return finishValue(context, descriptor, result);
 		}
+	}
+
+	function finishValue(context:BuildContext, descriptor:PropertyDescriptor, result:PropertyEditResult):Bool {
+		revision++;
+		switch result {
+			case Rejected(message): errors.set(descriptor.id, message);
+			case Applied | Unchanged:
+				drafts.remove(descriptor.id); errors.remove(descriptor.id);
+			case Pending(_): throw "Expected a completed edit";
+		}
+		context.commands.refresh();
+		return result == PropertyEditResult.Applied;
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -147,7 +152,7 @@ class PropertyEditor implements View {
 	public static function accessibleName(descriptor:PropertyDescriptor):String
 		return descriptor.unit == null ? descriptor.label : descriptor.label + " (" + descriptor.unit + ")";
 
-	function errorFor(id:String):Null<String>
+	public function errorFor(id:String):Null<String>
 		return errors.get(id);
 
 	/**
@@ -157,7 +162,7 @@ class PropertyEditor implements View {
 	 */
 	function rowRevision(descriptor:PropertyDescriptor, value:PropertyValue):String {
 		var result = descriptor.id + ":value=" + valueKey(value) +
-			":enabled=" + enabled + ":labelWidth=" + labelWidth + ":generation=" + generation;
+			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":labelWidth=" + labelWidth + ":generation=" + generation;
 		if (drafts.exists(descriptor.id))
 			result += ":draft=" + drafts.get(descriptor.id);
 		var error = errors.get(descriptor.id);
@@ -182,7 +187,7 @@ class PropertyEditor implements View {
 	function editorView(context:BuildContext, descriptor:PropertyDescriptor,
 			value:PropertyValue):View {
 		var editorKey = "editor:" + descriptor.id;
-		var writable = enabled && !descriptor.readOnly;
+		var writable = enabled && !descriptor.readOnly && !pending.exists(descriptor.id);
 		if (isMixed(value)) {
 			if (descriptor.type == PropertyType.Bool || descriptor.type == PropertyType.Enum)
 				return mixedChoice(context, descriptor, editorKey, writable);
@@ -367,7 +372,7 @@ private class PropertyEditorRowContent implements View {
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fit();
 		rowStyle.direction = LayoutDirection.LeftToRight;
-		rowStyle.childAlignY = LayoutAlignmentY.Center;
+		rowStyle.childAlignY = switch descriptor.type { case Custom(_): LayoutAlignmentY.Start; default: LayoutAlignmentY.Center; };
 		rowStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [
 			new KeyedView("label", new Text(PropertyEditor.accessibleName(descriptor), labelStyle)),
@@ -378,7 +383,7 @@ private class PropertyEditorRowContent implements View {
 			&& !owner.registry.same(value, descriptor.defaultValue)) {
 			var reset = new IconButton("reset", IconName.Reset, "Reset " + descriptor.label + " to default",
 				function() owner.applyValue(context, descriptor, descriptor.defaultValue));
-			reset.enabled = owner.enabled;
+			reset.enabled = owner.enabled && !owner.pending.exists(descriptor.id);
 			children.push(new KeyedView("reset", reset));
 		}
 		var row = new Row("row", children, rowStyle);

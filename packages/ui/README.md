@@ -430,3 +430,37 @@ Budget exhaustion or failure to allocate another page returns
 `NKUI_ERROR_RESOURCE_LIMIT`. The renderer discards the incomplete frame and
 invalidates its unfinished cached passes. The shared Haxe host keeps running,
 records `lastRenderResourceError`, and allows a subsequent frame to succeed.
+
+## Property inspectors and external transactions
+
+`PropertyInspector` consumes application-owned `PropertyDescriptor` values.
+The default binding writes synchronously through `CommandContext.document` and
+records UI undo history. `recordHistory = false` supports synchronous settings.
+For an external transaction owner, set `PropertyDescriptorOptions.commit`.
+It receives the context, candidate value and optional coalescing key after
+validation and equality checks, and returns `Applied`, `Unchanged`, `Rejected`,
+or `Pending(new PropertyPendingEdit())`. This path bypasses UI document history;
+the external owner handles atomicity and undo.
+
+Resolve a pending edit exactly once **on the UI thread**, after the owner commits
+or rejects it. Resolve cancellation when disposing the owner. The inspector
+blocks duplicate submissions for that row, retains drafts during pending work
+and rejection, and clears scalar drafts on acceptance. Observers receive both
+submission and eventual completion; queue acceptance is never reported as a
+committed mutation. Hosts can read `PropertyInspector.errorFor(id)` for diagnostics.
+
+Register `NumericVectorPropertyEditor` and `ListPropertyEditor` in the inspector's
+`PropertyEditorRegistry`, using their `TYPE` constants with `PropertyType.Custom`
+and `PropertyValue.Custom`. Payloads are JSON-compatible arrays. Vectors expose
+numeric components; lists expose nested items, add, remove and move-up controls.
+Add duplicates the last item's structure, or inserts null into an empty list.
+List changes are staged until Apply or Enter, allowing dependent items to change
+in one atomic edit. Vector components submit directly. Descriptor validation owns dimensions,
+item shapes and domain rules. Draft state follows the scoped widget lifecycle,
+and resets when the committed array changes. Nested content beyond eight levels
+uses a JSON text input. These controls have no application schema or history.
+
+```sh
+scripts/haxeon run --project packages/ui/tests/properties/haxeon.json
+scripts/haxeon run --project packages/ui/tests/settings/haxeon.json
+```

@@ -9,8 +9,8 @@ import haxeon.ui.core.CommandContext;
  *
  * Extensions keep app model types out of the core property enum while still
  * giving the inspector one consistent read/validate/write path. The editor
- * callback must be used for mutations so the owning PropertyEditor can create
- * an undoable document operation.
+ * callback must be used for mutations so the owning PropertyEditor can route
+ * them through document history or an external transaction owner.
  */
 interface PropertyEditorExtension {
 	/** Stable ID used by PropertyType.Custom and PropertyValue.Custom. */
