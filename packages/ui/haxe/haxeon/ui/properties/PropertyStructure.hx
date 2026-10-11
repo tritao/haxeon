@@ -4,6 +4,7 @@ package haxeon.ui.properties;
  * application-owned. Vectors have fixed components; lists own item actions. */
 enum PropertyStructure {
 	Value(type:PropertyType);
+	Record(fields:Array<PropertyRecordField>);
 	Vector(components:Int);
 	List(items:Null<PropertyStructure>, minimumLength:Null<Int>, maximumLength:Null<Int>, itemLabel:String);
 }
