@@ -270,6 +270,24 @@ class WasmBackendMain {
 			.run("main") != 42)
 			throw "The SSA interpreter must preserve inherited object fields";
 		var first = compile("function main():Int return 40 + 2;");
+		var neutralProgram = Frontend.compile(File.getContent("tests/programs/wasm-runtime-neutral.hx")),
+			neutralProfile = new WasmBackend().compile(neutralProgram, {
+				target: Wasm32,
+				debugNames: true,
+				wasmGcStress: true,
+				wasmRuntimeNeutral: true,
+				exports: ["RuntimeNeutralProbe.fuelLoop", "RuntimeNeutralProbe.fuelTrapCatch"]
+			}).bytes;
+		if (hasSection(neutralProfile, 13)
+			|| !containsBytes(neutralProfile, "haxeon.runtime.profile")
+			|| !containsBytes(neutralProfile, '"profile":"haxeon.wasm.runtime-neutral"')
+			|| !containsBytes(neutralProfile, '"initialization":{"kind":"metered-start-v1"')
+			|| !containsBytes(neutralProfile, '"exhaustion":"unreachable"')
+			|| !containsBytes(neutralProfile, "haxeon_host")
+			|| !containsBytes(neutralProfile, "fuel_charge")
+			|| !containsBytes(neutralProfile, "haxeon.gc.roots"))
+			throw "Runtime-neutral Wasm omitted its profile identity, fuel ABI or precise-GC roots, or retained exception tags";
+		File.saveBytes("out/wasm-runtime-neutral-profile.wasm", neutralProfile);
 		var int64FlagsBuilder = new IrBuilder(),
 			highWord = int64FlagsBuilder.constInt(-2147483648),
 			zeroWord = int64FlagsBuilder.constInt(0),
@@ -1048,6 +1066,22 @@ class WasmBackendMain {
 				}
 			if (found)
 				return true;
+		}
+		return false;
+	}
+
+	static function hasSection(bytes:haxe.io.Bytes, wanted:Int):Bool {
+		var offset = 8;
+		while (offset < bytes.length) {
+			var id = bytes.get(offset++), size = 0, shift = 0, byte:Int;
+			do {
+				byte = bytes.get(offset++);
+				size |= (byte & 0x7f) << shift;
+				shift += 7;
+			} while (byte & 0x80 != 0);
+			if (id == wanted)
+				return true;
+			offset += size;
 		}
 		return false;
 	}

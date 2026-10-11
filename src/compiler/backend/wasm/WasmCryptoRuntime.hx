@@ -7,19 +7,29 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 class WasmCryptoRuntime {
 	public static inline var LIBRARY = "haxeon_crypto";
 	static var runtime:Null<haxe.io.Bytes>;
+	static var runtimeNeutral:Null<haxe.io.Bytes>;
 
-	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
+	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>, ?fuelChargeFunction:Int):Void {
 		var needed = [
 			for (native in program.cNatives)
 				if (native.library == LIBRARY && used.exists(native.name)) native
 		];
 		if (needed.length == 0)
 			return;
-		if (runtime == null)
-			runtime = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime.wasm");
-		var exports = WasmRuntimeLinker.link(module, runtime, name -> {
-			throw 'Unexpected crypto guest import "$name"';
-		});
+		var runtimeBytes:haxe.io.Bytes;
+		if (fuelChargeFunction == null) {
+			if (runtime == null)
+				runtime = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime.wasm");
+			runtimeBytes = runtime;
+		} else {
+			if (runtimeNeutral == null)
+				runtimeNeutral = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime-neutral.wasm");
+			runtimeBytes = runtimeNeutral;
+		}
+		var exports = WasmRuntimeLinker.link(module, runtimeBytes, name -> switch name {
+			case "fuel_charge" if (fuelChargeFunction != null): fuelChargeFunction;
+			default: throw 'Unexpected crypto guest import "$name"';
+		}, fuelChargeFunction);
 		for (native in needed) {
 			var index = exports.get(native.symbol);
 			if (index == null)

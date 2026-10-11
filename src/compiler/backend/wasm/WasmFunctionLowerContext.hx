@@ -22,7 +22,7 @@ typedef WasmFunctionExceptionState = {
 	final exception:Int;
 	final saved:Map<Int, Int>;
 	final blocks:Map<Int, Int>;
-	final tag:Int;
+	final tag:Null<Int>;
 }
 
 typedef WasmFunctionGcRootState = {
@@ -44,6 +44,10 @@ class WasmFunctionLowerContext {
 	public final tableSlots:Map<String, Int>;
 	public final staticDataAddresses:Map<String, Int>;
 	public final exceptionTag:Null<Int>;
+	public final runtimeNeutral:Bool;
+	public final hasHaxeExceptions:Bool;
+	public final pendingExceptionFlag:Null<Int>;
+	public final pendingExceptionValue:Null<Int>;
 	public final rootPoints:Array<WasmSafepoint>;
 
 	public final placement:WasmValuePlacement;
@@ -52,15 +56,21 @@ class WasmFunctionLowerContext {
 	public final arrayTemps:WasmFunctionArrayTemps;
 	public var exceptionState:Null<WasmFunctionExceptionState>;
 	public var gcRootState:Null<WasmFunctionGcRootState>;
+	public var exceptionDispatchIndex:Int = 0;
 
 	public function new(module:WasmModule, fn:IrFunction, program:IrProgram, moduleRepresentation:WasmRepresentationSet, tableSlots:Map<String, Int>,
-			staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>) {
+			staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>, ?runtimeNeutral:Bool = false,
+			?hasHaxeExceptions:Bool = false, ?pendingExceptionFlag:Null<Int>, ?pendingExceptionValue:Null<Int>) {
 		this.module = module;
 		this.irFunction = fn;
 		this.program = program;
 		this.tableSlots = tableSlots;
 		this.staticDataAddresses = staticDataAddresses;
 		this.exceptionTag = exceptionTag;
+		this.runtimeNeutral = runtimeNeutral;
+		this.hasHaxeExceptions = hasHaxeExceptions;
+		this.pendingExceptionFlag = pendingExceptionFlag;
+		this.pendingExceptionValue = pendingExceptionValue;
 		this.rootPoints = rootPoints;
 
 		placement = new WasmValuePlacement(fn, moduleRepresentation.values);

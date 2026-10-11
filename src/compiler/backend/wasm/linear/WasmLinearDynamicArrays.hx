@@ -309,8 +309,20 @@ class WasmLinearDynamicArrays {
 			var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: []}),
 				message = builder.parameter("message", 0);
 			if (throws) {
-				builder.localGet(message);
-				builder.emit(Throw(0));
+				if (context.options.wasmRuntimeNeutral == true) {
+					var pendingFlag = context.pendingExceptionFlag,
+						pendingValue = context.pendingExceptionValue;
+					if (pendingFlag == null || pendingValue == null)
+						throw "Runtime-neutral exception globals were not initialized";
+					builder.localGet(message);
+					builder.emit(GlobalSet(pendingValue));
+					builder.i32Const(1);
+					builder.emit(GlobalSet(pendingFlag));
+					builder.return_();
+				} else {
+					builder.localGet(message);
+					builder.emit(Throw(0));
+				}
 			} else
 				builder.emit(Unreachable);
 			return module.addFunction(builder.finish());

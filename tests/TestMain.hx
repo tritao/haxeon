@@ -1172,6 +1172,7 @@ class TestMain {
 			"--dump-function=42",
 			"--wasm-memory-stats",
 			"--wasm-gc-stress",
+			"--wasm-runtime-neutral",
 			"--ffi-header=out/sample.h",
 			"--ffi-library=sample",
 			"--ffi-interface=generated/nativekit.hxi",
@@ -1187,6 +1188,7 @@ class TestMain {
 			|| compilerRequest.dumpFunction != 42
 			|| !compilerRequest.wasmMemoryStats
 			|| !compilerRequest.wasmGcStress
+			|| !compilerRequest.wasmRuntimeNeutral
 			|| compilerRequest.roots.length != 1
 			|| compilerRequest.packageRoots.length != 1
 			|| compilerRequest.packageRoots[0].packageName != "library"
@@ -1195,6 +1197,20 @@ class TestMain {
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var runtimeNeutralRejectedForHashLink = false;
+		try {
+			CompilerArguments.parse(["--wasm-runtime-neutral", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			runtimeNeutralRejectedForHashLink = true;
+		}
+		var runtimeNeutralRejectedForWasmGc = false;
+		try {
+			CompilerArguments.parse(["--target=wasm-gc", "--wasm-runtime-neutral", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			runtimeNeutralRejectedForWasmGc = true;
+		}
+		if (!runtimeNeutralRejectedForHashLink || !runtimeNeutralRejectedForWasmGc)
+			throw "Compiler CLI accepted the runtime-neutral profile outside wasm32";
 		var manifestRequest = CompilerArguments.parse(["--sources-file=tests/fixtures/compiler-source-manifest.txt"]);
 		if (manifestRequest.paths.join(",") != "source/Main.hx,source/Library.hx")
 			throw "Compiler CLI did not load the explicit source manifest file";

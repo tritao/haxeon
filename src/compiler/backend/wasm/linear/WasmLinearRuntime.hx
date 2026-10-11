@@ -17,6 +17,10 @@ class WasmLinearRuntime {
 	/** Whether runtime errors throw a catchable Haxe exception; set per module by `register`. */
 	static var runtimeErrorsThrow = false;
 
+	static var runtimeNeutral = false;
+	static var pendingExceptionFlag:Null<Int>;
+	static var pendingExceptionValue:Null<Int>;
+
 	public static function addImports(context:WasmLinearContext, used:Map<String, Bool>):Void {
 		var module = context.module, program = context.program;
 		for (native in program.natives)
@@ -32,17 +36,42 @@ class WasmLinearRuntime {
 
 	public static function register(context:WasmLinearContext):Void {
 		runtimeErrorsThrow = WasmModuleSupport.hasExceptions(context.program);
+		runtimeNeutral = context.options.wasmRuntimeNeutral == true;
+		pendingExceptionFlag = context.pendingExceptionFlag;
+		pendingExceptionValue = context.pendingExceptionValue;
 		addRuntimeFunctions(context);
 	}
 
 	/** Fail a runtime check: throw a null Haxe exception when the program can catch one, else trap. */
 	static function runtimeFailure(builder:WasmFunctionBuilder):Void {
 		if (runtimeErrorsThrow) {
-			builder.i32Const(0);
-			builder.emit(Throw(0));
+			if (runtimeNeutral) {
+				var pendingFlag = pendingExceptionFlag,
+					pendingValue = pendingExceptionValue;
+				if (pendingFlag == null || pendingValue == null)
+					throw "Runtime-neutral exception globals were not initialized";
+				builder.i32Const(0);
+				builder.emit(GlobalSet(pendingValue));
+				builder.i32Const(1);
+				builder.emit(GlobalSet(pendingFlag));
+				for (result in builder.type.results)
+					builder.emitAll(zeroWasmResult(result));
+				builder.return_();
+			} else {
+				builder.i32Const(0);
+				builder.emit(Throw(0));
+			}
 		} else
 			builder.emit(Unreachable);
 	}
+
+	static function zeroWasmResult(type:WasmValueType):Array<WasmInstruction>
+		return switch type {
+			case I32 | Ref(_): [I32Const(0)];
+			case I64: [I64Const(0)];
+			case F32: [F64Const(0.0), F32DemoteF64];
+			case F64: [F64Const(0.0)];
+		};
 
 	static function runtimeImport(module:WasmModule, native:compiler.ir.Ir.IrNative):Int {
 		var existing = runtimeImportIndex(module, native);

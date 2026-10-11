@@ -59,6 +59,9 @@ class WasmLinearContext {
 	public var heapSweepFunction:Int = -1;
 	public var allocatorFunction:Int = -1;
 	public var exceptionTag:Null<Int> = null;
+	public var pendingExceptionFlag:Null<Int>;
+	public var pendingExceptionValue:Null<Int>;
+	public var fuelChargeFunction:Null<Int>;
 
 	public function new(module:WasmModule, program:IrProgram, layout:WasmLayout, options:BackendOptions, state:WasmLinearContextState) {
 		this.module = module;

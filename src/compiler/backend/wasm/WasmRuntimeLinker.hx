@@ -3,8 +3,10 @@ package compiler.backend.wasm;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmModule.WasmGlobal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
+import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 /**
@@ -29,18 +31,18 @@ class WasmRuntimeLinker {
 	 * the module function index of each runtime export. Imports must all be in `module` already: appended
 	 * functions take the indices after the last one.
 	 */
-	public static function link(module:WasmModule, runtime:Bytes, guest:String->Int):Map<String, Int>
-		return new WasmRuntimeLinker(runtime).linkInto(module, guest);
+	public static function link(module:WasmModule, runtime:Bytes, guest:String->Int, ?entryFuelFunction:Int):Map<String, Int>
+		return new WasmRuntimeLinker(runtime).linkInto(module, guest, entryFuelFunction);
 
-	function linkInto(module:WasmModule, guest:String->Int):Map<String, Int> {
+	function linkInto(module:WasmModule, guest:String->Int, entryFuelFunction:Null<Int>):Map<String, Int> {
 		if (bytes.length < 8 || bytes.getInt32(0) != 0x6d736100 || bytes.getInt32(4) != 1)
 			throw "The Wasm runtime is not a version 1 WebAssembly module";
 		position = 8;
-		var types:Array<WasmFunctionType> = [],
-			importedFunctions:Array<String> = [],
-			functionTypes:Array<Int> = [],
-			exports:Array<{name:String, index:Int}> = [],
-			bodies:Array<{start:Int, end:Int}> = [];
+		var types:Array<WasmFunctionType> = [], importedFunctions:Array<String> = [], functionTypes:Array<Int> = [], runtimeGlobals:Array<WasmGlobal> = [],
+			exports:Array<{
+				name:String,
+				index:Int
+			}> = [], bodies:Array<{start:Int, end:Int}> = [];
 		while (position < bytes.length) {
 			var id = bytes.get(position++), size = u32(), end = position + size;
 			switch id {
@@ -73,6 +75,33 @@ class WasmRuntimeLinker {
 				case 3:
 					for (_ in 0...u32())
 						functionTypes.push(u32());
+				case 4 if (entryFuelFunction != null):
+					var tableCount = u32();
+					if (tableCount > 1)
+						throw "The runtime-neutral Wasm runtime declares more than one table";
+					for (_ in 0...tableCount) {
+						if (bytes.get(position++) != 0x70)
+							throw "The runtime-neutral Wasm runtime uses a non-funcref table";
+						var flags = u32();
+						u32();
+						if (flags & 1 != 0)
+							u32();
+						// wasm-ld emits an empty private table for these C helpers. Calls through it are rejected below.
+					}
+				case 6 if (entryFuelFunction != null):
+					for (_ in 0...u32()) {
+						var type = valueType(),
+							mutable = bytes.get(position++) != 0,
+							initializer:Array<WasmInstruction> = [];
+						if (type != I32)
+							throw "The runtime-neutral Wasm runtime defines a non-i32 global";
+						if (bytes.get(position++) != 0x41)
+							throw "The runtime-neutral Wasm runtime uses a non-constant global initializer";
+						initializer.push(I32Const(s32()));
+						if (bytes.get(position++) != 0x0b)
+							throw "The runtime-neutral Wasm runtime has an unsupported global initializer";
+						runtimeGlobals.push({type: type, mutable: mutable, init: initializer});
+					}
 				case 7:
 					for (_ in 0...u32()) {
 						var exportName = name(), kind = bytes.get(position++), index = u32();
@@ -93,19 +122,23 @@ class WasmRuntimeLinker {
 		}
 		if (bodies.length != functionTypes.length)
 			throw "The Wasm runtime's function and code sections disagree";
-		var importCount = importedFunctions.length, firstIndex = module.functionCount(), targets = [
+		var importCount = importedFunctions.length, firstIndex = module.functionCount(), globalBase = module.globals.length, targets = [
 			for (index in 0...importCount + bodies.length)
 				index < importCount ? guest(importedFunctions[index]) : firstIndex + index - importCount
 		];
+		for (global in runtimeGlobals)
+			module.globals.push(global);
 		for (index in 0...bodies.length) {
 			var body = bodies[index], type = types[functionTypes[index]];
-			module.addFunction(new WasmFunction('__haxeon_runtime_$index', type, null, null, relocate(body.start, body.end, targets, types, module)));
+			module.addFunction(new WasmFunction('__haxeon_runtime_$index', type, null, null,
+				relocate(body.start, body.end, targets, types, module, entryFuelFunction, globalBase)));
 		}
 		return [for (entry in exports) entry.name => targets[entry.index]];
 	}
 
 	/** Copies one body, renumbering `call` targets and block types. */
-	function relocate(start:Int, end:Int, targets:Array<Int>, types:Array<WasmFunctionType>, module:WasmModule):Bytes {
+	function relocate(start:Int, end:Int, targets:Array<Int>, types:Array<WasmFunctionType>, module:WasmModule, entryFuelFunction:Null<Int>,
+			globalBase:Int):Bytes {
 		var output = new BytesOutput();
 		position = start;
 		var groups = u32();
@@ -117,6 +150,12 @@ class WasmRuntimeLinker {
 		function flush(upTo:Int):Void {
 			output.writeBytes(bytes, copied, upTo - copied);
 			copied = upTo;
+		}
+		if (entryFuelFunction != null) {
+			flush(position);
+			output.writeByte(0x10);
+			writeU32(output, entryFuelFunction);
+			copied = position;
 		}
 		while (position < end) {
 			var opcode = bytes.get(position++);
@@ -134,6 +173,11 @@ class WasmRuntimeLinker {
 					}
 				case 0x0c | 0x0d | 0x20 | 0x21 | 0x22:
 					u32();
+				case 0x23 | 0x24 if (entryFuelFunction != null):
+					var at = position, index = u32();
+					flush(at);
+					writeU32(output, globalBase + index);
+					copied = position;
 				case 0x0e:
 					for (_ in 0...u32() + 1)
 						u32();

@@ -13,6 +13,8 @@ import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
 import compiler.backend.wasm.WasmRuntimeLinker;
+import compiler.backend.wasm.WasmRuntimeNeutralProfile;
+import compiler.backend.wasm.WasmFuelMetering;
 import compiler.backend.wasm.linear.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTarget.WasmTargetConfig;
@@ -66,6 +68,11 @@ class WasmLinearModuleBuilder {
 	var representation:WasmRepresentationSet;
 	var tableSlots:Map<String, Int>;
 	var exceptionTag:Null<Int>;
+	var runtimeNeutral:Bool;
+	var hasHaxeExceptions:Bool;
+	var pendingExceptionFlag:Null<Int>;
+	var pendingExceptionValue:Null<Int>;
+	var fuelChargeFunction:Null<Int>;
 	var closureAdapters:WasmLinearClosureAdapters;
 
 	public function new(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
@@ -89,10 +96,14 @@ class WasmLinearModuleBuilder {
 		var gcRootMetadata = lowerFunctions();
 		publishMetadata(gcRootMetadata);
 		finalizeExports();
+		if (runtimeNeutral)
+			WasmFuelMetering.instrument(module, requiredFuelFunction());
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
 	}
 
 	function prepareModule():Void {
+		runtimeNeutral = options.wasmRuntimeNeutral == true;
+		hasHaxeExceptions = WasmModuleSupport.hasExceptions(program);
 		importMemory = options.importMemory == true;
 		contract = options.memoryContract;
 		var memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
@@ -186,6 +197,13 @@ class WasmLinearModuleBuilder {
 			if (WasmTarget.isReference(field.type))
 				rootGlobals.push(WasmModuleSupport.requiredGlobal(globals, field.name));
 		}
+		if (runtimeNeutral && hasHaxeExceptions) {
+			pendingExceptionFlag = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+			pendingExceptionValue = module.globals.length;
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+			rootGlobals.push(pendingExceptionValue);
+		}
 		functions = [];
 		var linearState:WasmLinearContextState = {
 			functions: functions,
@@ -204,13 +222,20 @@ class WasmLinearModuleBuilder {
 			reflectionBytes: reflectionBytes
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
+		linear.pendingExceptionFlag = pendingExceptionFlag;
+		linear.pendingExceptionValue = pendingExceptionValue;
 	}
 
 	function buildRuntime():Void {
 		WasmModuleSupport.addCNativeImports(module, functions, program, usedCNatives);
 		WasmLinearRuntime.addImports(linear, usedNatives);
+		if (runtimeNeutral) {
+			var fuelImport = WasmRuntimeNeutralProfile.addFuelImport(module);
+			fuelChargeFunction = WasmRuntimeNeutralProfile.addFuelFunction(module, fuelImport);
+			linear.fuelChargeFunction = fuelChargeFunction;
+		}
 		linkRuntime();
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives);
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, runtimeNeutral ? requiredFuelFunction() : null);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
@@ -226,12 +251,15 @@ class WasmLinearModuleBuilder {
 	 * reserved here and defined by WasmLinearGc.
 	 */
 	function linkRuntime():Void {
-		var runtime = options.wasmLinearRuntime != null ? options.wasmLinearRuntime : defaultRuntime();
+		if (runtimeNeutral && options.wasmLinearRuntime != null)
+			throw "--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation";
+		var runtime = options.wasmLinearRuntime != null ? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
 		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {parameters: [], results: []}));
 		var exports = WasmRuntimeLinker.link(module, runtime, name -> switch name {
 			case "collect": linear.collectorFunction;
+			case "fuel_charge" if (runtimeNeutral): requiredFuelFunction();
 			default: throw 'The wasm32 runtime imports unknown guest function "$name"';
-		});
+		}, runtimeNeutral ? requiredFuelFunction() : null);
 		function required(name:String):Int {
 			var index = exports.get(name);
 			if (index == null)
@@ -243,6 +271,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	static var cachedRuntime:Null<haxe.io.Bytes> = null;
+	static var cachedRuntimeNeutral:Null<haxe.io.Bytes> = null;
 
 	/** The committed runtime, found like the stdlib host interfaces: relative to the Haxeon root. */
 	static function defaultRuntime():haxe.io.Bytes {
@@ -252,6 +281,16 @@ class WasmLinearModuleBuilder {
 			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
 		}
 		return cachedRuntime;
+	}
+
+	static function runtimeNeutralRuntime():haxe.io.Bytes {
+		if (cachedRuntimeNeutral == null) {
+			var path = "stdlib/haxeon/wasm/linear-runtime-neutral.wasm";
+			if (!sys.FileSystem.exists(path))
+				throw 'The runtime-neutral wasm32 runtime $path is missing; run scripts/build-wasm-runtime.sh';
+			cachedRuntimeNeutral = sys.io.File.getBytes(path);
+		}
+		return cachedRuntimeNeutral;
 	}
 
 	static inline final DEFAULT_RUNTIME = "stdlib/haxeon/wasm/linear-runtime.wasm";
@@ -292,7 +331,7 @@ class WasmLinearModuleBuilder {
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
 		closureAdapters.defineKeyQuery(module, functions, tableSlots);
 		WasmLinearReflection.finalize(linear, tableSlots);
-		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
+		var exceptionTagType:Null<Int> = !runtimeNeutral && WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
 			results: []
 		}) : null; // The module declares one tag; instruction immediates use its tag index, not this type index.
@@ -313,16 +352,25 @@ class WasmLinearModuleBuilder {
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
 				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit,
-					globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses));
+					globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses,
+					runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
 		});
 	}
 
 	function publishMetadata(gcRootMetadata:haxe.io.Bytes):Void {
 		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
+		if (runtimeNeutral)
+			module.customSections.push({name: WasmRuntimeNeutralProfile.SECTION_NAME, bytes: WasmRuntimeNeutralProfile.sectionBytes()});
 		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
 		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
+	}
+
+	function requiredFuelFunction():Int {
+		if (fuelChargeFunction == null)
+			throw "Runtime-neutral fuel helper was not initialized";
+		return fuelChargeFunction;
 	}
 
 	function heapStateWord(offset:Int):Array<compiler.backend.wasm.WasmTypes.WasmInstruction>
@@ -332,14 +380,15 @@ class WasmLinearModuleBuilder {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
 			throw 'Wasm entry point $preferredEntry was not emitted';
-		if (WasmModuleSupport.hasFunction(program, "__init"))
-			module.start = functions.get("__init");
-		module.exports.push({name: "main", functionIndex: entry});
+		var initializer = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
+		if (initializer != null)
+			module.start = runtimeNeutral ? addNeutralStart(initializer) : initializer;
+		module.exports.push({name: "main", functionIndex: runtimeNeutral ? addNeutralBoundary("__haxeon_export_main", entry) : entry});
 		for (exported in exportedFunctions) {
 			var exportIndex = functions.get(exported);
 			if (exportIndex == null)
 				throw 'Wasm export "$exported" is not a reachable function';
-			module.exports.push({name: exported, functionIndex: exportIndex});
+			module.exports.push({name: exported, functionIndex: runtimeNeutral ? addNeutralBoundary('__haxeon_export_$exported', exportIndex) : exportIndex});
 		}
 		if (options.wasmMemoryStats == true) {
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
@@ -356,5 +405,50 @@ class WasmLinearModuleBuilder {
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", heapStateWord(WasmLayout.HEAP_STATE_LARGEST_ALLOCATION));
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count", heapStateWord(WasmLayout.HEAP_STATE_COLLECTION_COUNT));
 		}
+	}
+
+	function addNeutralStart(initializer:Int):Int {
+		var type = module.functionType(initializer);
+		if (type.parameters.length != 0 || type.results.length != 0)
+			throw "Runtime-neutral profile requires __init to have type () -> ()";
+		var body:Array<compiler.backend.wasm.WasmTypes.WasmInstruction> = [Call(initializer)];
+		var pendingFlag = pendingExceptionFlag;
+		if (pendingFlag != null)
+			body = body.concat([GlobalGet(pendingFlag), If(null), Unreachable, End]);
+		body.push(Return);
+		return module.addFunction(new WasmFunction("__haxeon_start", {parameters: [], results: []}, [], body));
+	}
+
+	function addNeutralBoundary(name:String, target:Int):Int {
+		var type = module.functionType(target),
+			locals:Array<compiler.backend.wasm.WasmModule.WasmLocal> = [],
+			body:Array<compiler.backend.wasm.WasmTypes.WasmInstruction> = [];
+		var pendingFlag = pendingExceptionFlag;
+		if (pendingFlag != null) {
+			var pendingValue = pendingExceptionValue;
+			if (pendingValue == null)
+				throw "Runtime-neutral exception payload was not initialized";
+			body.push(I32Const(0));
+			body.push(GlobalSet(pendingFlag));
+			body.push(I32Const(0));
+			body.push(GlobalSet(pendingValue));
+		}
+		for (index in 0...type.parameters.length)
+			body.push(LocalGet(index));
+		body.push(Call(target));
+		var resultLocals:Array<Int> = [];
+		for (result in type.results) {
+			var local = type.parameters.length + locals.length;
+			locals.push({type: result});
+			resultLocals.push(local);
+		}
+		for (index in 0...resultLocals.length)
+			body.push(LocalSet(resultLocals[resultLocals.length - index - 1]));
+		if (pendingFlag != null)
+			body = body.concat([GlobalGet(pendingFlag), If(null), Unreachable, End]);
+		for (local in resultLocals)
+			body.push(LocalGet(local));
+		body.push(Return);
+		return module.addFunction(new WasmFunction(name, type, locals, body));
 	}
 }

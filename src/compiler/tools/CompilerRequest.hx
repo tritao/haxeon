@@ -18,6 +18,7 @@ typedef CompilerRequest = {
 	final memoryContract:Null<String>;
 	final wasmMemoryStats:Bool;
 	final wasmGcStress:Bool;
+	final wasmRuntimeNeutral:Bool;
 
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be

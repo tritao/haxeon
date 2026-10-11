@@ -42,7 +42,8 @@ class WasmLinearGc {
 		var rootTop = context.rootTop,
 			rootFrameTop = context.rootFrameTop,
 			rootLimit = context.rootLimit,
-			exceptionTag = context.exceptionTag;
+			exceptionTag = context.exceptionTag,
+			runtimeNeutral = context.options.wasmRuntimeNeutral == true;
 		var rootSlots:Array<Int> = [];
 		for (index in 0...fn.type.parameters.length)
 			if (fn.type.parameters[index] == I32)
@@ -50,55 +51,67 @@ class WasmLinearGc {
 		for (index in 0...fn.locals.length)
 			if (fn.locals[index].type == I32)
 				rootSlots.push(fn.type.parameters.length + index);
-		if (rootSlots.length == 0)
+		if (rootSlots.length == 0 && !runtimeNeutral)
 			return fn;
-		var frame = fn.type.parameters.length + fn.locals.length,
+		var frame:Null<Int> = null,
 			locals = fn.locals.copy(),
-			exceptionLocal = frame + 1;
-		locals.push({type: I32});
+			functionFrame = fn.type.parameters.length + locals.length,
+			exceptionLocal = functionFrame + 1;
+		if (rootSlots.length > 0) {
+			frame = functionFrame;
+			locals.push({type: I32});
+		}
 		if (exceptionTag != null)
 			locals.push({type: I32});
-		var frameSize = WasmModuleSupport.align(12 + rootSlots.length * 4, 8),
-			guardBuilder = new WasmFunctionBuilder(fn.name, fn.type);
-		guardBuilder.emit(GlobalGet(rootTop));
-		guardBuilder.emit(I32Const(frameSize));
-		guardBuilder.emit(I32Add);
-		guardBuilder.emit(I32Const(rootLimit));
-		guardBuilder.emit(I32LeS);
-		guardBuilder.emit(I32Eqz);
-		guardBuilder.if_(function(builder) builder.emit(Unreachable));
-		guardBuilder.emit(GlobalGet(rootTop));
-		guardBuilder.emit(LocalTee(frame));
-		guardBuilder.emit(GlobalGet(rootTop));
-		guardBuilder.emit(I32Store(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
-		guardBuilder.emit(LocalGet(frame));
-		guardBuilder.emit(GlobalGet(rootFrameTop));
-		guardBuilder.emit(I32Store(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
-		guardBuilder.emit(LocalGet(frame));
-		guardBuilder.emit(I32Const(rootSlots.length));
-		guardBuilder.emit(I32Store(WasmLayout.ROOT_COUNT_OFFSET));
-		guardBuilder.emit(LocalGet(frame));
-		guardBuilder.emit(I32Const(frameSize));
-		guardBuilder.emit(I32Add);
-		guardBuilder.emit(GlobalSet(rootTop));
-		guardBuilder.emit(LocalGet(frame));
-		guardBuilder.emit(GlobalSet(rootFrameTop));
-		var body:Array<WasmInstruction> = guardBuilder.body.copy();
+		var body:Array<WasmInstruction> = [];
+		if (frame != null) {
+			var frameSize = WasmModuleSupport.align(12 + rootSlots.length * 4, 8),
+				guardBuilder = new WasmFunctionBuilder(fn.name, fn.type);
+			guardBuilder.emit(GlobalGet(rootTop));
+			guardBuilder.emit(I32Const(frameSize));
+			guardBuilder.emit(I32Add);
+			guardBuilder.emit(I32Const(rootLimit));
+			guardBuilder.emit(I32LeS);
+			guardBuilder.emit(I32Eqz);
+			guardBuilder.if_(function(builder) builder.emit(Unreachable));
+			guardBuilder.emit(GlobalGet(rootTop));
+			guardBuilder.emit(LocalTee(frame));
+			guardBuilder.emit(GlobalGet(rootTop));
+			guardBuilder.emit(I32Store(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
+			guardBuilder.emit(LocalGet(frame));
+			guardBuilder.emit(GlobalGet(rootFrameTop));
+			guardBuilder.emit(I32Store(WasmLayout.ROOT_PREVIOUS_FRAME_OFFSET));
+			guardBuilder.emit(LocalGet(frame));
+			guardBuilder.emit(I32Const(rootSlots.length));
+			guardBuilder.emit(I32Store(WasmLayout.ROOT_COUNT_OFFSET));
+			guardBuilder.emit(LocalGet(frame));
+			guardBuilder.emit(I32Const(frameSize));
+			guardBuilder.emit(I32Add);
+			guardBuilder.emit(GlobalSet(rootTop));
+			guardBuilder.emit(LocalGet(frame));
+			guardBuilder.emit(GlobalSet(rootFrameTop));
+			body = guardBuilder.body.copy();
+		}
 		for (instruction in fn.body) {
-			if (isRuntimeCall(instruction))
+			if (frame != null && (isRuntimeCall(instruction) || (runtimeNeutral && isRuntimeIndirectCall(instruction))))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
-			if (instruction == Return) {
+			if (instruction == Return && frame != null) {
 				emitRuntimeRootFrameRestore(body, frame, context);
 			}
 			body.push(instruction);
-			if (isRuntimeLocalWrite(instruction))
+			if (frame != null && isRuntimeLocalWrite(instruction))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
+			if (runtimeNeutral && context.pendingExceptionFlag != null) {
+				var callType = runtimeCallType(context.module, instruction);
+				if (callType != null)
+					appendRuntimePendingCheck(body, locals, fn, callType, frame, context);
+			}
 		}
 		// Runtime helpers often use Wasm's implicit void return instead of an
 		// explicit Return instruction. Balance their shadow-root frame on that
 		// normal fallthrough path as well; otherwise each helper call permanently
 		// consumes root-stack space until a later call traps at rootLimit.
-		if (fn.body.length == 0 || fn.body[fn.body.length - 1] != Return)
+		if (frame != null && (fn.body.length == 0 || fn.body[fn.body.length - 1] != Return))
 			emitRuntimeRootFrameRestore(body, frame, context);
 		if (exceptionTag != null) {
 			var wrapper = new WasmFunctionBuilder(fn.name, fn.type);
@@ -108,7 +121,8 @@ class WasmLinearGc {
 				builder.emitAll(body);
 				builder.emit(Catch(exceptionTag));
 				builder.localSet(new WasmLocalRef(exceptionLocal));
-				emitRuntimeRootFrameRestore(builder.body, frame, context);
+				if (frame != null)
+					emitRuntimeRootFrameRestore(builder.body, frame, context);
 				builder.localGet(new WasmLocalRef(exceptionLocal));
 				builder.emit(Throw(exceptionTag));
 			});
@@ -121,6 +135,53 @@ class WasmLinearGc {
 		}
 		return WasmFunctionBuilder.fromRaw(fn.name, fn.type, locals, body);
 	}
+
+	static function isRuntimeIndirectCall(instruction:WasmInstruction):Bool
+		return switch instruction {
+			case CallIndirect(_): true;
+			default: false;
+		};
+
+	static function runtimeCallType(module:WasmModule, instruction:WasmInstruction):Null<WasmFunctionType>
+		return switch instruction {
+			case Call(index): module.functionType(index);
+			case CallIndirect(typeIndex): module.functionTypeAt(typeIndex);
+			default: null;
+		};
+
+	static function appendRuntimePendingCheck(body:Array<WasmInstruction>, locals:Array<compiler.backend.wasm.WasmModule.WasmLocal>, fn:WasmFunction,
+			callType:WasmFunctionType, frame:Null<Int>, context:WasmLinearContext):Void {
+		var pendingFlag = context.pendingExceptionFlag;
+		if (pendingFlag == null)
+			throw "Runtime-neutral exception flag was not initialized";
+		var resultLocals:Array<Int> = [];
+		for (result in callType.results) {
+			var index = fn.type.parameters.length + locals.length;
+			locals.push({type: result});
+			resultLocals.push(index);
+		}
+		for (index in 0...resultLocals.length)
+			body.push(LocalSet(resultLocals[resultLocals.length - index - 1]));
+		body.push(GlobalGet(pendingFlag));
+		body.push(If(null));
+		if (frame != null)
+			emitRuntimeRootFrameRestore(body, frame, context);
+		for (result in fn.type.results)
+			for (instruction in runtimeZero(result))
+				body.push(instruction);
+		body.push(Return);
+		body.push(End);
+		for (local in resultLocals)
+			body.push(LocalGet(local));
+	}
+
+	static function runtimeZero(type:WasmValueType):Array<WasmInstruction>
+		return switch type {
+			case I32 | Ref(_): [I32Const(0)];
+			case I64: [I64Const(0)];
+			case F32: [F64Const(0.0), F32DemoteF64];
+			case F64: [F64Const(0.0)];
+		};
 
 	static function emitRuntimeRootFrameRestore(body:Array<WasmInstruction>, frame:Int, context:WasmLinearContext):Void {
 		var rootTop = context.rootTop, rootFrameTop = context.rootFrameTop;

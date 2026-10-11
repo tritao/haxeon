@@ -20,6 +20,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionGcRootState;
+import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionExceptionState;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.gc.WasmGcRepresentation;
@@ -103,8 +104,10 @@ class WasmFunctionLower {
 	public static function lower(module:WasmModule, fn:IrFunction, functions:Map<String, Int>, type:WasmFunctionType, layout:WasmLayout, allocator:Int,
 			rootTop:Int, rootFrameTop:Int, rootLimit:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>, tableSlots:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
-			program:IrProgram, representation:WasmRepresentationSet, staticDataAddresses:Map<String, Int>):WasmFunction {
-		var context = new WasmFunctionLowerContext(module, fn, program, representation, tableSlots, staticDataAddresses, exceptionTag, rootPoints);
+			program:IrProgram, representation:WasmRepresentationSet, staticDataAddresses:Map<String, Int>, ?runtimeNeutral:Bool = false,
+			?hasHaxeExceptions:Bool = false, ?pendingExceptionFlag:Null<Int>, ?pendingExceptionValue:Null<Int>):WasmFunction {
+		var context = new WasmFunctionLowerContext(module, fn, program, representation, tableSlots, staticDataAddresses, exceptionTag, rootPoints,
+			runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue);
 		return new WasmFunctionLower(context).lowerFunction(functions, type, layout, allocator, rootTop, rootFrameTop, rootLimit, globals, strings, methods,
 			closureTypes);
 	}
@@ -147,11 +150,11 @@ class WasmFunctionLower {
 			live: live,
 			size: align(12 + rootLocals.length * 4, 8)
 		};
-		// Handler state exists only for a function that contains a try. Any function in an exception-enabled module still
-		// throws with the module's tag, but one without a try needs no handler dispatch and can be emitted structured.
+		// In the neutral profile every function in an exception-enabled module needs a dispatcher: a callee can return a
+		// pending exception to a caller that owns the active Haxe handler.
 		context.exceptionState = null;
 		var saved:Map<Int, Int> = [];
-		if (context.exceptionTag != null)
+		if (context.exceptionTag != null || (context.runtimeNeutral && context.hasHaxeExceptions))
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
@@ -160,7 +163,7 @@ class WasmFunctionLower {
 								saved.set(catchBlock, placement.allocate(I32));
 						default:
 					}
-		if (context.exceptionTag != null && saved.keys().hasNext()) {
+		if ((context.exceptionTag != null && saved.keys().hasNext()) || (context.runtimeNeutral && context.hasHaxeExceptions)) {
 			var blocks:Map<Int, Int> = [], orderIndex = 0;
 			for (id in analysis.graph.order)
 				blocks.set(id, orderIndex++);
@@ -186,7 +189,7 @@ class WasmFunctionLower {
 		if (rootState != null) {
 			var rooted:Array<WasmInstruction> = rootPrologue(rootState, rootLimit);
 			rooted = rooted.concat(body);
-			if (context.exceptionTag != null) {
+			if (context.exceptionTag != null && !context.runtimeNeutral) {
 				var exceptionLocal = placement.allocate(context.representation.values.valueType(Dyn)),
 					protectedBody:Array<WasmInstruction> = [Try(null)];
 				protectedBody = protectedBody.concat(rooted);
@@ -334,7 +337,9 @@ class WasmFunctionLower {
 		var next = 0;
 		for (id in analysis.graph.order)
 			blockIndex.set(id, next++);
-		var exceptionState = context.exceptionState;
+		var exceptionState = context.exceptionState,
+			exceptionTag = exceptionState == null ? null : exceptionState.tag,
+			usesWasmExceptions = exceptionState != null && exceptionTag != null;
 		emit(body, [
 			I32Const(requiredBlockIndex(blockIndex, fn.blocks[0].id)),
 			LocalSet(pc),
@@ -345,8 +350,10 @@ class WasmFunctionLower {
 			emit(body, [I32Const(-1), LocalSet(exceptionState.handler)]);
 		}
 		emit(body, [Block(null), Loop(null)]);
-		if (exceptionState != null)
+		if (usesWasmExceptions)
 			body.push(Try(null));
+		else if (context.runtimeNeutral && exceptionState != null)
+			emitPendingExceptionDispatch(body, fn, pc, exceptionState);
 		for (index in 0...analysis.graph.order.length) {
 			var block = analysis.graph.block(analysis.graph.order[index]);
 			emit(body, [LocalGet(pc), I32Const(index), I32Eq, If(null)]);
@@ -358,12 +365,12 @@ class WasmFunctionLower {
 		}
 		for (_ in 0...analysis.graph.order.length)
 			body.push(End);
-		if (exceptionState == null) {
+		if (exceptionState == null || exceptionTag == null) {
 			emit(body, [Br(0), End, End, Unreachable]);
 		} else {
-			emit(body, [Br(1), Catch(exceptionState.tag), LocalSet(exceptionState.exception)]);
+			emit(body, [Br(1), Catch(exceptionTag), LocalSet(exceptionState.exception)]);
 			emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
-			emit(body, [LocalGet(exceptionState.exception), Throw(exceptionState.tag), Else]);
+			emit(body, [LocalGet(exceptionState.exception), Throw(exceptionTag), Else]);
 			var catches = [for (catchBlock in exceptionState.saved.keys()) catchBlock];
 			catches.sort(function(left, right) return left - right);
 			for (catchBlock in catches) {
@@ -388,6 +395,48 @@ class WasmFunctionLower {
 		return body;
 	}
 
+	function emitPendingExceptionDispatch(body:Array<WasmInstruction>, fn:IrFunction, pc:Int, exceptionState:WasmFunctionExceptionState):Void {
+		body.push(GlobalGet(requiredPendingExceptionFlag()));
+		body.push(If(null));
+		emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
+		restoreRoots(body);
+		emit(body, context.representation.values.zeroValue(fn.result));
+		body.push(Return);
+		body.push(Else);
+		emit(body, [
+			GlobalGet(requiredPendingExceptionValue()),
+			LocalSet(exceptionState.exception),
+			I32Const(0),
+			GlobalSet(requiredPendingExceptionFlag()),
+			I32Const(0),
+			GlobalSet(requiredPendingExceptionValue())
+		]);
+		var catches = [for (catchBlock in exceptionState.saved.keys()) catchBlock];
+		catches.sort(function(left, right) return left - right);
+		for (index in 0...catches.length) {
+			var catchBlock = catches[index];
+			emit(body, [
+				LocalGet(exceptionState.handler),
+				I32Const(requiredBlockIndex(exceptionState.blocks, catchBlock)),
+				I32Eq,
+				If(null)
+			]);
+			emit(body, [
+				LocalGet(exceptionState.handler),
+				LocalSet(pc),
+				LocalGet(requiredLocal(exceptionState.saved, catchBlock)),
+				LocalSet(exceptionState.handler),
+				Br(index + 3)
+			]);
+			body.push(Else);
+		}
+		body.push(Unreachable);
+		for (_ in catches)
+			body.push(End);
+		body.push(End);
+		body.push(End);
+	}
+
 	public static function hasExceptions(fn:IrFunction):Bool {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
@@ -409,6 +458,8 @@ class WasmFunctionLower {
 	function lowerBlock(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, pc:Int, predecessor:Int,
 			blockIndex:Map<Int, Int>, layout:WasmLayout, allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>):Void {
+		var dispatchIndex = requiredBlockIndex(blockIndex, block.id);
+		context.exceptionDispatchIndex = dispatchIndex;
 		emitPhiGroup(body, block, values, predecessor);
 		for (index in 0...block.instructions.length) {
 			var located = block.instructions[index];
@@ -416,7 +467,10 @@ class WasmFunctionLower {
 			switch located.value {
 				case Phi(_, _):
 				default:
+					var start = body.length;
 					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
+					if (context.runtimeNeutral && context.exceptionState != null && containsCall(body.slice(start)))
+						emitPendingCallBranch(body, dispatchIndex);
 			}
 		}
 		if (block.terminator == null)
@@ -428,7 +482,10 @@ class WasmFunctionLower {
 					body.push(LocalGet(requiredLocal(values, value.id)));
 				body.push(Return);
 			case Throw(value), Rethrow(value):
-				emitThrow(body, requiredLocal(values, value.id));
+				if (context.runtimeNeutral && context.exceptionState != null)
+					emitNeutralThrow(body, requiredLocal(values, value.id), dispatchIndex);
+				else
+					emitThrow(body, requiredLocal(values, value.id));
 			case Jump(target):
 				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, target));
 			case Branch(condition, yes, no):
@@ -444,18 +501,64 @@ class WasmFunctionLower {
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor), I32Const(target), LocalSet(pc)]);
 	}
 
-	function trapOrThrow():Array<WasmInstruction> {
+	function trapOrThrow(extraIfs:Int = 0):Array<WasmInstruction> {
 		var tag = context.exceptionTag;
-		return tag == null ? [Unreachable] : context.representation.values.zeroValue(Dyn).concat([Throw(tag)]);
+		if (tag != null)
+			return context.representation.values.zeroValue(Dyn).concat([Throw(tag)]);
+		if (!context.runtimeNeutral || context.exceptionState == null)
+			return [Unreachable];
+		return [
+			I32Const(0),
+			GlobalSet(requiredPendingExceptionValue()),
+			I32Const(1),
+			GlobalSet(requiredPendingExceptionFlag()),
+			Br(context.exceptionDispatchIndex + 1 + extraIfs)
+		];
 	}
 
 	/** A Haxe throw: the module's exception tag when it has exceptions, otherwise a trap. */
 	function emitThrow(body:Array<WasmInstruction>, valueLocal:Int):Void {
 		var tag = context.exceptionTag;
-		if (tag == null)
+		if (context.runtimeNeutral && context.exceptionState != null)
+			emitNeutralThrow(body, valueLocal, context.exceptionDispatchIndex);
+		else if (tag == null)
 			body.push(Unreachable);
 		else
 			emit(body, [LocalGet(valueLocal), Throw(tag)]);
+	}
+
+	function emitNeutralThrow(body:Array<WasmInstruction>, valueLocal:Int, dispatchIndex:Int):Void
+		emit(body, [
+			LocalGet(valueLocal),
+			GlobalSet(requiredPendingExceptionValue()),
+			I32Const(1),
+			GlobalSet(requiredPendingExceptionFlag()),
+			Br(dispatchIndex + 1)
+		]);
+
+	function emitPendingCallBranch(body:Array<WasmInstruction>, dispatchIndex:Int):Void
+		emit(body, [GlobalGet(requiredPendingExceptionFlag()), If(null), Br(dispatchIndex + 2), End]);
+
+	function requiredPendingExceptionFlag():Int {
+		if (context.pendingExceptionFlag == null)
+			throw "Runtime-neutral exception flag was not initialized";
+		return context.pendingExceptionFlag;
+	}
+
+	function requiredPendingExceptionValue():Int {
+		if (context.pendingExceptionValue == null)
+			throw "Runtime-neutral exception payload was not initialized";
+		return context.pendingExceptionValue;
+	}
+
+	static function containsCall(instructions:Array<WasmInstruction>):Bool {
+		for (instruction in instructions)
+			switch instruction {
+				case Call(_) | CallIndirect(_):
+					return true;
+				default:
+			}
+		return false;
 	}
 
 	static function setPredecessor(body:Array<WasmInstruction>, predecessor:Int, sourceBlock:Int):Void
@@ -858,7 +961,7 @@ class WasmFunctionLower {
 					var element = arrayElement(array),
 						stride = WasmLayout.arrayStride(element);
 					var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
-					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat(trapOrThrow(1));
 					arrayBody = arrayBody.concat([
 						Else,
 						LocalGet(requiredLocal(values, index.id)),
@@ -876,7 +979,7 @@ class WasmFunctionLower {
 						LocalSet(requiredLocal(values, output.id)),
 					]);
 					arrayBody.push(Else);
-					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat(trapOrThrow(2));
 					arrayBody = arrayBody.concat([End, End]);
 					emit(body, arrayBody);
 				}
@@ -887,7 +990,7 @@ class WasmFunctionLower {
 					var element = arrayElement(array),
 						stride = WasmLayout.arrayStride(element);
 					var arrayBody:Array<WasmInstruction> = [LocalGet(requiredLocal(values, index.id)), I32Const(0), I32LtS, If(null)];
-					arrayBody = arrayBody.concat(trapOrThrow());
+					arrayBody = arrayBody.concat(trapOrThrow(1));
 					arrayBody = arrayBody.concat([
 						Else,
 						LocalGet(requiredLocal(values, index.id)),
@@ -1056,9 +1159,9 @@ class WasmFunctionLower {
 						stride = WasmLayout.arrayStride(output.type),
 						outputLocal = requiredLocal(values, output.id);
 					var iteratorBody:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Eqz, If(null)];
-					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat(trapOrThrow(1));
 					iteratorBody = iteratorBody.concat([Else, LocalGet(iteratorLocal), I32Load(arrayOffset), I32Eqz, If(null)]);
-					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat(trapOrThrow(2));
 					iteratorBody = iteratorBody.concat([
 						Else,
 						LocalGet(iteratorLocal),
@@ -1098,7 +1201,7 @@ class WasmFunctionLower {
 						I32Store(positionOffset),
 						Else
 					]);
-					iteratorBody = iteratorBody.concat(trapOrThrow());
+					iteratorBody = iteratorBody.concat(trapOrThrow(3));
 					iteratorBody = iteratorBody.concat([End, End, End]);
 					emit(body, iteratorBody);
 				}
