@@ -260,8 +260,11 @@ class EventDispatcher {
 	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
 		var node = focus.focusedNode();
 		if (node == null) {
-			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)
-				routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
+			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
+				var handled = routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
+				if (!handled && key == UiKey.Tab && (modifiers & ~UiModifier.Shift) == 0)
+					moveFocus((modifiers & UiModifier.Shift) != 0);
+			}
 			return;
 		}
 		var path = HitTest.pathTo(node);

@@ -254,6 +254,29 @@ import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHostPendingResources;
 
 class FrameworkSmoke {
+	static function decorationNormalizationValid(fonts:FontCollection):Bool {
+		var session=LayoutSession.create();
+		var context=new UiContext(session,fonts);
+		// A wrapper can add decorations to a stock box button. Submission must
+		// normalize its native kind before layout reuse compares either frame.
+		var undecorated=context.submit(new DecoratedButtonSmoke(false),new LayoutFrame(256,192));
+		if(undecorated.layout.visualKind!=LayoutVisualKind.Box) throw "Undecorated button must stay Box";
+		context.key(UiEventKind.KeyDown,UiKey.Tab);
+		if(context.focus.focusedId==null || !context.focus.focusedId.equals(undecorated.id))
+			throw "Tab must enter an unfocused interface";
+		var decorated=context.submit(new DecoratedButtonSmoke(true),new LayoutFrame(256,192));
+		if(decorated.layout.visualKind!=LayoutVisualKind.Custom) throw "Decorated button must become Custom";
+		var outlineCanvas=new Canvas();
+		outlineCanvas.fillRect(new Rect(0,0,10,10),Color.fromBytes(255,0,0));
+		var outlineList=DisplayList.create(); outlineCanvas.update(outlineList);
+		session.setCustomPaint(decorated.id.value,outlineList);
+		session.clearCustomPaint(decorated.id.value); outlineList.dispose();
+		var plainAgain=context.submit(new DecoratedButtonSmoke(false),new LayoutFrame(256,192));
+		if(plainAgain.layout.visualKind!=LayoutVisualKind.Box) throw "Removed decoration must restore Box";
+		context.dispose();
+		return true;
+	}
+
 	static function newlineChunksValid(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...220)
@@ -670,8 +693,15 @@ class FrameworkSmoke {
 			Sys.println("PASS: selection geometry, cache invalidation, affinity, bidi and clipping");
 			return 0;
 		}
+		if (!decorationNormalizationValid(fonts)) return 1030;
+		Sys.println("PASS: decorated stock boxes normalize before native layout and restore plain rendering");
+		if (Sys.getEnv("NKUI_DECORATION_TEST_ONLY") == "1") {
+			fonts.dispose();
+			return 0;
+		}
 		var session = LayoutSession.create();
 		var context = new UiContext(session, fonts);
+
 		if (Sys.getEnv("NKUI_DRAG_TEST_ONLY") == "1") {
 			SelectionDragTests.run(fonts, context);
 			context.dispose();
@@ -6255,4 +6285,20 @@ private class ExternalScrollbarSmoke implements View {
 			return host;
 		});
 	}
+}
+
+private class DecoratedButtonSmoke implements View {
+    final decorated:Bool;
+    public function new(decorated:Bool) this.decorated=decorated;
+    public function build(context:BuildContext):RenderNode {
+        var node=new Button("Decorated",null,function(){},"decoration-normalization").build(context);
+        if(decorated) {
+            var computed=node.computedStyle.copy();
+            computed.set(StyleProperty.Decorations,new DecorationChain([
+                new BorderDecoration(Color.fromBytes(255,0,0),2)
+            ]),null);
+            node.computedStyle=computed;
+        }
+        return node;
+    }
 }

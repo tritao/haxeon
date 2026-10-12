@@ -288,6 +288,9 @@ class UiContext {
 		var next = buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext));
 		if (next == null || next.parent != null)
 			throw "A view must produce one unparented render tree root";
+		// Decorations may be assigned by view wrappers after widget construction.
+		// Promote those boxes before invalidation compares their native visual kind.
+		next.walk(function(node) node.syncPaintKind());
 		diagnosticStage = 5;
 		var treeBuiltAllocatedAt = AllocationProbe.now();
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,

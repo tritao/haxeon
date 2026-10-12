@@ -468,3 +468,9 @@ uses a JSON text input. These controls have no application schema or history.
 scripts/haxeon run --project packages/ui/tests/properties/haxeon.json
 scripts/haxeon run --project packages/ui/tests/settings/haxeon.json
 ```
+
+Computed custom decorations on Box nodes are normalized to Custom nodes before
+layout comparison and submission. Widgets and wrappers can decorate a stock box
+without manually changing its native render type. Text and image content should
+use a decorated Box wrapper; their native visual types remain dedicated to their
+content. Explicit Canvas paint handlers still require a Custom node.

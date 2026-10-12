@@ -365,6 +365,15 @@ class RenderNode {
 	function hasPaintHandler():Bool
 		return paintHandlers != null || decorations != null || hasStyleDecorations();
 
+	/** Normalize styled boxes before comparing or submitting native layout. */
+	@:allow(haxeon.ui.core.UiContext)
+	function syncPaintKind():Void {
+		if (!hasPaintHandler() || layout.visualKind == LayoutVisualKind.Custom) return;
+		if (layout.visualKind != LayoutVisualKind.Box)
+			throw "Custom decorations require a Box or Custom render node (" + styleKey + ")";
+		layout.visualKind = LayoutVisualKind.Custom;
+	}
+
 	/** Copies the framework hit policy into the native transaction payload. */
 	@:allow(haxeon.ui.core.UiContext)
 	function syncHitTestPolicy():Void {
