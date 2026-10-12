@@ -9,6 +9,10 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Builds mutable-local basic blocks while tracking lexical trap scopes. */
 class CfgBuilder {
+	/** Expressions and statements share the lexical loop targets of this function. */
+	@:allow(compiler.ir.IrGenerator)
+	final loopContexts:Array<CfgLoopContext> = [];
+
 	public final blocks:Array<CfgBlock> = [];
 	public final debugLocals:Array<CfgDebugLocal> = [];
 

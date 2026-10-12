@@ -23,6 +23,7 @@ import compiler.ir.cfg.Cfg.CfgBlock;
 import compiler.ir.cfg.Cfg.CfgValue;
 import compiler.ir.cfg.Cfg.CfgArgument;
 import compiler.ir.cfg.CfgBuilder;
+import compiler.ir.cfg.CfgLoopContext;
 import compiler.ir.cfg.SsaBuilder;
 import compiler.ir.cfg.CfgIteratorReplacement;
 import compiler.ir.IrBuilder;
@@ -36,17 +37,6 @@ import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
-
-/** Active structured-loop targets and the trap depth at their declaration. */
-private typedef LoopContext = {
-	final breakBlock:CfgBlock;
-	final continueBlock:CfgBlock;
-	final breakFlag:String;
-	final trapDepth:Int;
-
-	/** Set when a `break` of this loop is lowered; a loop that never breaks needs no break flag. */
-	var breakUsed:Bool;
-}
 
 /** Resolved key and value types of a map operation being lowered. */
 private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
@@ -270,7 +260,7 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
 					builder.store('$' + 'cell:$name', cell);
 				}
-		lowerStatements(fn.statements, builder, localTypes, [], fn.span.end);
+		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
 		if (!builder.isTerminated()) {
 			if (lowerType(fn.result) == Void)
 				builder.returnVoid();
@@ -297,8 +287,8 @@ class IrGenerator {
 			}
 	}
 
-	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, loops:Array<LoopContext>,
-			scopeEnd:Int):Void {
+	static function lowerStatements(statements:Array<TypedStatement>, builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
+		var loops = builder.loopContexts;
 		for (statement in statements) {
 			if (builder.isTerminated())
 				break;
@@ -388,7 +378,7 @@ class IrGenerator {
 					var catchBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
 					builder.beginTry(catchBlock, afterBlock);
-					lowerStatements(tryBranch, builder, localTypes, loops, statementsScopeEnd(tryBranch, span.end));
+					lowerStatements(tryBranch, builder, localTypes, statementsScopeEnd(tryBranch, span.end));
 					var tryActive = !builder.isTerminated();
 					if (!tryActive)
 						builder.discardTry();
@@ -421,7 +411,7 @@ class IrGenerator {
 						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
 						var caught = builder.load(exceptionLocal, Dyn);
 						initializeLocal(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
-						lowerStatements(catchClause.statements, builder, localTypes, loops, catchClause.span.end);
+						lowerStatements(catchClause.statements, builder, localTypes, catchClause.span.end);
 						if (!builder.isTerminated()) {
 							catchActive = true;
 							builder.jump(afterBlock);
@@ -470,17 +460,17 @@ class IrGenerator {
 						case TBoolLiteral(true): thenBranch;
 						default: elseBranch;
 					};
-					lowerStatements(taken, builder, localTypes, loops, statementsScopeEnd(taken, span.end));
+					lowerStatements(taken, builder, localTypes, statementsScopeEnd(taken, span.end));
 				case TIf(condition, thenBranch, elseBranch, span):
 					var thenBlock = builder.createBlock(),
 						elseBlock = builder.createBlock();
 					lowerBranch(condition, thenBlock, elseBlock, builder, localTypes);
 					builder.select(thenBlock);
-					lowerStatements(thenBranch, builder, localTypes, loops, statementsScopeEnd(thenBranch, span.end));
+					lowerStatements(thenBranch, builder, localTypes, statementsScopeEnd(thenBranch, span.end));
 					var thenActive = !builder.isTerminated(),
 						thenExit = builder.currentBlock();
 					builder.select(elseBlock);
-					lowerStatements(elseBranch, builder, localTypes, loops, statementsScopeEnd(elseBranch, span.end));
+					lowerStatements(elseBranch, builder, localTypes, statementsScopeEnd(elseBranch, span.end));
 					var elseActive = !builder.isTerminated(),
 						elseExit = builder.currentBlock(),
 						joinBlock = builder.createBlock();
@@ -503,7 +493,7 @@ class IrGenerator {
 					builder.select(checkBlock);
 					lowerBranch(condition, bodyBlock, afterBlock, builder, localTypes);
 					builder.select(bodyBlock);
-					var loop:LoopContext = {
+					var loop:CfgLoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
@@ -511,7 +501,7 @@ class IrGenerator {
 						breakUsed: false
 					};
 					loops.push(loop);
-					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
+					lowerStatements(body, builder, localTypes, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
@@ -531,7 +521,7 @@ class IrGenerator {
 						afterBlock = builder.createBlock();
 					builder.jump(bodyBlock);
 					builder.select(bodyBlock);
-					var loop:LoopContext = {
+					var loop:CfgLoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
@@ -539,7 +529,7 @@ class IrGenerator {
 						breakUsed: false
 					};
 					loops.push(loop);
-					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
+					lowerStatements(body, builder, localTypes, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated())
 						builder.jump(conditionBlock);
@@ -645,7 +635,7 @@ class IrGenerator {
 							lowerMapGet(builder, localTypes, builder.load(mapName, lowerType(iterable.type)), builder.load(name, elementType), mapKey,
 								mapValue),
 							builder, localTypes);
-					var loop:LoopContext = {
+					var loop:CfgLoopContext = {
 						breakBlock: afterBlock,
 						continueBlock: conditionBlock,
 						breakFlag: breakFlag,
@@ -653,7 +643,7 @@ class IrGenerator {
 						breakUsed: false
 					};
 					loops.push(loop);
-					lowerStatements(body, builder, localTypes, loops, statementsScopeEnd(body, span.end));
+					lowerStatements(body, builder, localTypes, statementsScopeEnd(body, span.end));
 					loops.pop();
 					if (!builder.isTerminated()) {
 						builder.jump(conditionBlock);
@@ -737,7 +727,7 @@ class IrGenerator {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 							builder.select(bodyBlock);
 						}
-						lowerStatements(switchCase.statements, builder, localTypes, loops, switchCase.span.end);
+						lowerStatements(switchCase.statements, builder, localTypes, switchCase.span.end);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
 						checkBlock = nextBlock;
@@ -746,7 +736,7 @@ class IrGenerator {
 					if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
 						builder.markUnreachable();
 					else
-						lowerStatements(defaultBranch, builder, localTypes, loops, statementsScopeEnd(defaultBranch, span.end));
+						lowerStatements(defaultBranch, builder, localTypes, statementsScopeEnd(defaultBranch, span.end));
 					if (!builder.isTerminated())
 						exits.push(builder.currentBlock());
 					if (exits.length > 0) {
@@ -1525,7 +1515,7 @@ class IrGenerator {
 				builder.load(localName, resultType);
 			case TBlockExpression(statements, result):
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
-				lowerStatements(statements, builder, localTypes, [], expression.span.end);
+				lowerStatements(statements, builder, localTypes, expression.span.end);
 				if (builder.isTerminated()) placeholder; else lowerExpression(result, builder, localTypes);
 			case TThrowExpression(value):
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
@@ -2583,7 +2573,7 @@ class IrGenerator {
 	 * Closes a loop's header once its body has been lowered, so a loop that never breaks tests nothing: its
 	 * `break` flag is only read when some `break` stored to it.
 	 */
-	static function lowerLoopHeader(builder:CfgBuilder, header:CfgBlock, check:CfgBlock, after:CfgBlock, loop:LoopContext):Void {
+	static function lowerLoopHeader(builder:CfgBuilder, header:CfgBlock, check:CfgBlock, after:CfgBlock, loop:CfgLoopContext):Void {
 		builder.select(header);
 		if (loop.breakUsed)
 			builder.branch(builder.load(loop.breakFlag, Bool), after, check);
