@@ -449,19 +449,25 @@ and rejection, and clears scalar drafts on acceptance. Observers receive both
 submission and eventual completion; queue acceptance is never reported as a
 committed mutation. Hosts can read `PropertyInspector.errorFor(id)` for diagnostics.
 
-Register `NumericVectorPropertyEditor` and `ListPropertyEditor` in the inspector's
+Register `NumericVectorPropertyEditor`, `ListPropertyEditor` and `RecordPropertyEditor` in the inspector's
 `PropertyEditorRegistry`, using their `TYPE` constants with `PropertyType.Custom`
-and `PropertyValue.Custom`. Payloads are JSON-compatible arrays. Vectors expose
+and `PropertyValue.Custom`. Payloads are JSON-compatible arrays or named objects. Vectors expose
 numeric components; lists expose nested items, add, remove and move-up controls.
 Set `PropertyDescriptorOptions.structure` to a recursive `PropertyStructure`
 when item shapes are known. `Vector` renders compact component rows without
 list actions; `List` supplies item labels and minimum/maximum length affordances.
+`Record` carries `PropertyRecordField` values for named structures, optional
+presence, and detached initial values. Missing fields are added explicitly;
+optional fields expose Remove. The shared `StructuredPropertyEditor` owns staging
+for lists, records and nested combinations. Required fields have no Remove action.
 The host still validates the submitted value. Add duplicates the last item's
-structure, or inserts null into an empty list.
-List changes are staged until Apply or Enter, allowing dependent items to change
+structure; typed empty lists start from their item metadata, while untyped
+empty lists insert null. Initial values are editing placeholders, not validation
+guarantees.
+List and record changes are staged until Apply or Enter, allowing dependent items to change
 in one atomic edit. Vector components submit directly. Descriptor validation owns dimensions,
 item shapes and domain rules. Draft state follows the scoped widget lifecycle,
-and resets when the committed array changes. Nested content beyond eight levels
+and resets when the committed value changes. Nested content beyond eight levels
 uses a JSON text input. These controls have no application schema or history.
 
 ```sh

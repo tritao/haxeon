@@ -57,10 +57,50 @@ class PropertyTests {
 			check(registry.validate(commands, vectorDescriptor, Custom(NumericVectorPropertyEditor.TYPE, [20.0, 2.0])) != null, "Component bounds validated");
 			check(registry.parse(PropertyType.Custom(ListPropertyEditor.TYPE), "[[[0,0],[4,0],[4,3]]]") != null, "Nested lists import without domain dependencies");
 			check(registry.parse(PropertyType.Custom(ListPropertyEditor.TYPE), "{}") == null, "List import rejects objects");
-			structuredControls();
+			structuredControls(); recordControls();
 			Sys.println("Property asynchronous binding, synchronous history and structured value tests passed"); return 0;
 		} catch (error:Dynamic) { Sys.println(Std.string(error)); return 1; }
 	}
+	static function recordControls():Void {
+		var editor = new RecordPropertyEditor(), options = new PropertyDescriptorOptions();
+		options.structure = Record([
+			new PropertyRecordField("enabled", Value(Bool)),
+			new PropertyRecordField("nested", Record([new PropertyRecordField("flag", Value(Bool))])),
+			new PropertyRecordField("extra", Value(Bool), true, false)
+		]);
+		var original:Dynamic = {enabled:true, nested:{flag:true}};
+		var current:Dynamic = original, submissions = 0, reject = true;
+		var descriptor = new PropertyDescriptor("settings", "Settings", Custom(RecordPropertyEditor.TYPE),
+			_ -> Custom(RecordPropertyEditor.TYPE, current), (_, _) -> {}, options);
+		var context = new BuildContext(new StateStore());
+		function action(label:String, enabled:Bool = true):Void {
+			context.beginFrame();
+			var root = editor.build("settings", descriptor, Custom(RecordPropertyEditor.TYPE, current), context, enabled, next -> {
+				submissions++; if (!reject) switch next { case Custom(_, data): current = data; default: }
+			}).build(context);
+			var target:RenderNode = null;
+			root.walk(node -> { if (node.semantics != null && node.semantics.label == label) target = node; });
+			check(target != null, "Record action exists: " + label);
+			var dispatcher = new EventDispatcher(new FocusManager()); dispatcher.setRoot(root);
+			dispatcher.targetEvent(UiEventKind.Activate, target.id);
+		}
+		action("Settings item extra Add");
+		action("Settings item enabled"); action("Settings item nested.flag");
+		check(current == original && submissions == 0 && !Reflect.hasField(original, "extra"), "Record changes stage without mutating omitted fields");
+		action("Apply Settings"); check(submissions == 1 && current == original, "Rejected record remains uncommitted");
+		reject = false; action("Apply Settings");
+		check(submissions == 2 && current.enabled == false && current.nested.flag == false && current.extra == false,
+			"Rejected record draft retains related nested changes for one retry");
+		check(original.enabled == true && original.nested.flag == true && !Reflect.hasField(original, "extra"), "Original nested record stays detached");
+		action("Settings item extra Remove"); action("Apply Settings");
+		check(!Reflect.hasField(current, "extra"), "Optional record presence can be removed");
+		action("Settings item extra Add"); action("Revert record draft"); action("Apply Settings");
+		check(!Reflect.hasField(current, "extra"), "Revert restores absent optional field");
+		action("Settings item extra Add", false); action("Apply Settings");
+		check(!Reflect.hasField(current, "extra"), "Disabled record controls cannot stage edits");
+		check(editor.parse("[]") == null && editor.parse("{}") != null, "Record root type is enforced");
+	}
+
 	static function structuredControls():Void {
 		var list = new ListPropertyEditor();
 		var original:Array<Dynamic> = [true, false, true];
