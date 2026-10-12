@@ -262,3 +262,10 @@ before NativeKit shutdown. None of these operations belongs on the audio callbac
 through Daisy's damping domain inside the typed facade. Existing `resonance`
 remains the native normalized amount. Drive suppresses the measured peak; use
 `drive = 0` for a linear response and reserve output headroom separately.
+
+Device configuration also exposes `DeviceOptions.resourceLoading`. It defaults to
+`RESOURCE_LOADING_BACKGROUND`; use `RESOURCE_LOADING_SYNCHRONOUS` for apps with
+prepared/decoded, SF2 and DSP sources that need teardown without miniaudio
+resource-worker joins. Configure it before the first audio use. Synchronous file
+loading runs on the caller and is unsuitable for background file decoding or
+streamed miniaudio file voices; NativeKit stream workers remain independent.

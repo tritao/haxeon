@@ -483,6 +483,22 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		NK_AUDIO_POSITIONING_RELATIVE = 1;
 	}
 	/**
+	 * Policy for loading miniaudio file resources; DSP and prepared sources are independent.
+	 */
+	enum nk_audio_resource_loading : u32 {
+		/**
+		 * Default: use miniaudio's background file-resource workers.
+		 */
+		NK_AUDIO_RESOURCE_LOADING_BACKGROUND = 0;
+		/**
+		 * Load file resources synchronously, with no resource workers to join.
+		 * Suitable for browser apps using preloaded/decoded, SF2 and DSP sources.
+		 * File loading can block the caller; do not use for background file decoding
+		 * or streamed miniaudio file voices. Does not change NativeKit stream workers.
+		 */
+		NK_AUDIO_RESOURCE_LOADING_SYNCHRONOUS = 1;
+	}
+	/**
 	 * Flags controlling how a voice is loaded and played.
 	 */
 	flags nk_audio_voice_flags : u32 {
@@ -1543,9 +1559,10 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		no_auto_start: nk_bool @offset(24);
 		/**
-		 * Reserved; set to zero.
+		 * File-resource loading policy. Zero retains background loading. Uses the
+		 * formerly reserved 32-bit slot, preserving this structure's ABI layout.
 		 */
-		reserved: u32 @offset(28);
+		resource_loading: nk_audio_resource_loading @offset(28);
 		/**
 		 * Reserved for compatible extensions; set all elements to zero.
 		 */

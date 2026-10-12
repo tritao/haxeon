@@ -20,7 +20,8 @@
     "nk_audio_dsp_parameter": "DspParameter",
     "nk_audio_dsp_waveform": "DspWaveform",
     "nk_audio_dsp_source_kind": "DspSourceKind",
-    "nk_audio_dsp_source_parameter": "DspSourceParameter"
+    "nk_audio_dsp_source_parameter": "DspSourceParameter",
+    "nk_audio_resource_loading": "ResourceLoading"
   },
   "enumValuePrefixes": [
     "NK_AUDIO_VOICE_"
