@@ -971,6 +971,11 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	extern fn nk_audio_dsp_engine_get_options(engine: nk_audio_dsp_engine, out_options: ptr<nk_audio_dsp_engine_options> @out) -> nk_result;
 	extern fn nk_audio_dsp_engine_get_runtime_status(engine: nk_audio_dsp_engine, out_status: ptr<nk_audio_dsp_runtime_status> @inout) -> nk_result;
 	/**
+	 * Last completed block's coherent section and local frame position.
+	 * Position includes fractional tempo origins and wraps with the native loop.
+	 */
+	extern fn nk_audio_dsp_engine_get_transport_position(engine: nk_audio_dsp_engine, out_section: ptr<u32> @out, out_frame: ptr<f64> @out) -> nk_result;
+	/**
 	 * Last completed render block's occupied note slots and stealing tails.
 	 * Counts include release envelopes, and exclude queued notes and SF2 layers.
 	 * Reading these counters never inspects callback-owned voices directly.
@@ -1541,6 +1546,8 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Opt-in callback telemetry, cumulative for the engine lifetime. Fields are independent
 	 * atomic samples, not a transaction. Late gaps are timing observations, not backend XRUNs.
+	 * In browser AudioWorklets without a monotonic wall clock, callback/frame/error
+	 * counts remain available; timing and timing-overrun fields remain zero.
 	 */
 	struct nk_audio_diagnostics @layout(80, 8) {
 		struct_size: u32 @offset(0);

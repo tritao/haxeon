@@ -138,6 +138,13 @@ class DspEngine {
         ensureLive();
         AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_stop_transport(value), "audio.dsp.transport.stop");
     }
+    /** Coherent section-local playhead from the last native render block. */
+    public function transportPosition():{section:Int,frame:Float} {
+        ensureLive();
+        var result=NativeKitAudio.nk_audio_dsp_engine_get_transport_position(value);
+        AudioResult.check(result.status,"audio.dsp.transport.position");
+        return {section:result.out_section,frame:result.out_frame};
+    }
     public function runtimeStatus():DspRuntimeStatus {
         ensureLive();
         var status = new NativeDspRuntimeStatus(); status.set_struct_size(NativeDspRuntimeStatus.size());
