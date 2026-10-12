@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"haxeon-layout-default-tests"},"entry":"LayoutDefaultsTests","sourceRoots":["."],"scopeSourceRoots":false,"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}

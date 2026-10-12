@@ -76,7 +76,8 @@ class LayoutTransaction {
 				throw "Layout transform origin must be normalized";
 			if (!validAxis(style.width) || !validAxis(style.height) || !finite(style.aspectRatio) ||
 				style.aspectRatio < 0.0)
-				throw "Layout sizing values are invalid";
+				throw "Layout sizing values are invalid: node=" + node.id + ", width=" + axisDescription(style.width)
+					+ ", height=" + axisDescription(style.height) + ", aspect=" + style.aspectRatio;
 			var determinant = style.transform.a * style.transform.d -
 				style.transform.b * style.transform.c;
 			var childAlignX:Int = style.childAlignX;
@@ -257,6 +258,11 @@ class LayoutTransaction {
 
 	static function finitePositive(value:Float):Bool
 		return finite(value) && value > 0.0;
+
+	static function axisDescription(axis:LayoutAxis):String {
+		if (axis == null) return "null";
+		return "[" + (axis.sizing:Int) + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
+	}
 
 	static function validAxis(axis:LayoutAxis):Bool {
 		var sizing:Int = axis == null ? -1 : cast axis.sizing;
