@@ -4,10 +4,12 @@
 | --- | --- | --- |
 | `platform` | `haxeon-platform` | `haxeon.platform.*` |
 | `audio` | `haxeon-audio` | `haxeon.audio.*` |
+| `animation` | `haxeon-animation` | `haxeon.animation.*` |
 | `gpu` | `haxeon-gpu` | `haxeon.gpu.*` |
 | `editor` | `haxeon-editor` | `haxeon.editor.*` |
 | `ui` | `haxeon-ui` | `haxeon.ui.*` |
 
+Animation is renderer-independent; its optional `animation/native` provider builds glTF/ozz support.
 Audio and GPU depend on platform. Headless audio applications can add the
 optional `audio/native` provider (`haxeon-audio-native`). UI/audio applications
 can share a native provider, as shown in `examples/audio-lab`. UI depends on platform, GPU, and editor. The editor

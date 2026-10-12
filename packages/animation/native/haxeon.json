@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-animation-native"
+  },
+  "sourceRoots": [
+    "."
+  ],
+  "native": {
+    "cmake": {
+      "source": ".",
+      "target": "animkit_core",
+      "library": "animkit_core",
+      "inputs": [
+        "CMakeLists.txt",
+        "include/animkit.h",
+        "src",
+        "vendor/cgltf/cgltf.h",
+        "vendor/stb/stb_image.h",
+        "vendor/ozz-animation"
+      ]
+    }
+  },
+  "target": "host"
+}

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-animation"
+  },
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "ffi": {
+    "interfaces": [
+      "native/bindings/animkit.hxi"
+    ]
+  },
+  "target": "host"
+}

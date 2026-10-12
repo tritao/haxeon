@@ -37,3 +37,12 @@
 [submodule "packages/ui/vendor/skribidi"]
 	path = packages/ui/vendor/skribidi
 	url = https://github.com/tritao/Skribidi.git
+[submodule "packages/animation/native/vendor/cgltf"]
+	path = packages/animation/native/vendor/cgltf
+	url = https://github.com/jkuhlmann/cgltf.git
+[submodule "packages/animation/native/vendor/ozz-animation"]
+	path = packages/animation/native/vendor/ozz-animation
+	url = https://github.com/guillaumeblanc/ozz-animation.git
+[submodule "packages/animation/native/vendor/stb"]
+	path = packages/animation/native/vendor/stb
+	url = https://github.com/nothings/stb.git

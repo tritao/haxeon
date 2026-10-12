@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-animation-tests"
+  },
+  "entry": "AnimationSmoke",
+  "sourceRoots": [
+    "."
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-animation": {
+      "path": ".."
+    },
+    "haxeon-animation-native": {
+      "path": "../native"
+    }
+  },
+  "target": "host",
+  "outputDir": "build"
+}
