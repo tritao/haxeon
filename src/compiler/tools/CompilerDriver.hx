@@ -60,6 +60,7 @@ class CompilerDriver {
 					target: wasmTarget,
 					debugNames: true,
 					importMemory: request.importMemory,
+					sharedMemory: request.sharedMemory == true,
 					memoryBase: request.memoryBase,
 					memoryContract: memoryContract,
 					wasmMemoryStats: request.wasmMemoryStats,

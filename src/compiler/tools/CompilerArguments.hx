@@ -7,7 +7,7 @@ import sys.io.File;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, live = false, importMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false,
+			dumpFunction = -1, live = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false,
 			wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null,
 			ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [], defines:Array<String> = [],
 			paths:Array<String> = [];
@@ -57,6 +57,8 @@ class CompilerArguments {
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
 			else if (argument == "--live")
 				live = true;
+			else if (argument == "--wasm-shared-memory")
+				sharedMemory = true;
 			else if (argument == "--wasm-import-memory")
 				importMemory = true;
 			else if (StringTools.startsWith(argument, "--wasm-memory-base="))
@@ -96,6 +98,8 @@ class CompilerArguments {
 			throw "Function exports require a Wasm32 or Wasm GC target";
 		if (memoryContract != null && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
 			throw "--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc";
+		if (sharedMemory && (!importMemory || memoryContract == null))
+			throw "--wasm-shared-memory requires imported memory and a bounded memory contract";
 		if (memoryContract != null && !importMemory)
 			throw "--wasm-memory-contract requires --wasm-import-memory";
 		if (memoryContract != null && memoryBase != 0)
@@ -109,6 +113,7 @@ class CompilerArguments {
 			entry: entry,
 			dumpFunction: dumpFunction,
 			importMemory: importMemory,
+			sharedMemory: sharedMemory,
 			memoryBase: memoryBase,
 			memoryContract: memoryContract,
 			wasmMemoryStats: wasmMemoryStats,

@@ -13,6 +13,7 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 # The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
 bash "$root_dir/scripts/build-wasm-runtime.sh" --check
 "$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
+bash "$root_dir/scripts/test-wasm-shared-memory.sh"
 bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
 bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
 haxeon_compile_async \

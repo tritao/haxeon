@@ -85,6 +85,8 @@ class WasmModule {
 
 	public var memoryMin:Null<Int>;
 	public var importMemory:Bool;
+	public var sharedMemory:Bool = false;
+	public var memoryMax:Null<Int>;
 	public var exceptionTagType:Null<Int>;
 	public var exportMemory:Bool;
 	public var exportTable:Bool;

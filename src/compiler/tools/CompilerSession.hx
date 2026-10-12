@@ -69,6 +69,7 @@ class CompilerSession {
 			identity = Json.stringify({
 				target: request.target,
 				importMemory: request.importMemory,
+				sharedMemory: request.sharedMemory == true,
 				entry: request.entry,
 				defines: request.defines,
 				roots: request.roots,

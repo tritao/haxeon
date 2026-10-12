@@ -6,6 +6,8 @@ import nativekit.ffi.NativeKitAudioTypes.NativeAudioDiagnostics;
 /** Callback timing observations, not hardware/backend XRUN counters. */
 class AudioDiagnostics {
   public final enabled:Bool;
+  /** False when this callback scope has no monotonic wall clock. */
+  public final timingAvailable:Bool;
   public final callbacks:Int64;
   public final renderedFrames:Int64;
   public final budgetOverruns:Int64;
@@ -28,5 +30,6 @@ class AudioDiagnostics {
     maxCallbackMs = value.get_max_callback_ms();
     maxGapMs = value.get_max_gap_ms();
     lastBudgetMs = value.get_last_budget_ms();
+    timingAvailable = lastBudgetMs > 0;
   }
 }

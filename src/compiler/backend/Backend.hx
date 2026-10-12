@@ -17,6 +17,7 @@ typedef BackendOptions = {
 	final target:BackendTarget;
 	final debugNames:Bool;
 	final ?importMemory:Bool;
+	final ?sharedMemory:Bool;
 	final ?memoryBase:Int;
 	final ?memoryContract:MemoryContract;
 	final ?wasmMemoryStats:Bool;

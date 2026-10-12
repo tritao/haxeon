@@ -161,8 +161,12 @@ class WasmEncoder {
 			writeString(body, "env");
 			writeString(body, "memory");
 			body.writeByte(2);
-			body.writeByte(0);
+			body.writeByte(module.sharedMemory ? 3 : 0);
 			writeU32(body, module.memoryMin == null ? 0 : module.memoryMin);
+			if (module.sharedMemory) {
+				if (module.memoryMax == null) throw "Shared memory requires a maximum";
+				writeU32(body, module.memoryMax);
+			}
 		}
 		return body.getBytes();
 	}

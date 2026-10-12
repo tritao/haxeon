@@ -14,6 +14,7 @@ typedef CompilerRequest = {
 	final entry:String;
 	final dumpFunction:Int;
 	final importMemory:Bool;
+	final ?sharedMemory:Bool;
 	final memoryBase:Int;
 	final memoryContract:Null<String>;
 	final wasmMemoryStats:Bool;

@@ -104,6 +104,13 @@ interface for host-owned memory. The JSON contract is validated at compile
 time and copied into the `haxeon.memory.contract` custom section. Hosts should
 compare that section with their own contract before calling the guest.
 
+For hosts using pthreads or AudioWorklets, add `--wasm-shared-memory`.
+This requires imported memory and a bounded memory contract. Both backends
+encode a shared import with an explicit maximum matching the contract size;
+the browser rejects incompatible sharing or maximum limits at link time.
+The Haxe guest still runs on one thread: this option permits shared native
+host memory, and does not make Haxe objects or its collector thread safe.
+
 Both targets emit `haxeon.patch` and `haxeon.patch.slots` custom sections with
 stable function identities, semantic signatures, and table slots.
 `WasmBackend.compilePatch` validates replacement artifacts against the

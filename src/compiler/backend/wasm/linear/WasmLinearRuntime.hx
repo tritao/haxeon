@@ -1814,7 +1814,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.emit(I32Load8U(0));
 					builder.i32Eqz();
-					builder.if_(function(builder) builder.emit(Br(1)));
+					builder.emit(BrIf(1));
 					builder.localGet(index);
 					builder.i32Const(1);
 					builder.i32Add();
