@@ -1031,6 +1031,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	extern fn nk_audio_dsp_group_play_transport(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, initial_section: u32, start_frame: u64) -> nk_result;
 	extern fn nk_audio_dsp_group_request_section(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, section_index: u32) -> nk_result;
 	/**
+	 * Seek every track together; paused preserves the section-local position.
+	 */
+	extern fn nk_audio_dsp_group_seek_transport(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, section_index: u32, position_frames: f64, paused: u32) -> nk_result;
+	/**
+	 * Pause/resume all tracks atomically, preserving note and section state.
+	 */
+	extern fn nk_audio_dsp_group_set_paused(tracks: ptr<const<nk_audio_dsp_transport_track>> @in_array("track_count"), track_count: u32, paused: u32) -> nk_result;
+	/**
 	 * Creates an instrument from the legacy flat options. Prefer patch_create().
 	 */
 	extern fn nk_audio_dsp_instrument_create(engine: nk_audio_dsp_engine, options: ptr<const<nk_audio_dsp_instrument_options>>, out_instrument: ptr<nk_audio_dsp_instrument> @out @owned) -> nk_result;

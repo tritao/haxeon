@@ -64,6 +64,15 @@ class DspTransport {
         AudioResult.check(NativeKitAudio.nk_audio_dsp_group_request_section(groupTracks(programs), section),
             "audio.dsp.transport.requestGroup");
     }
+    /** Atomically relocate all tracks, optionally holding their playhead. */
+    public static function seekGroup(programs:Array<DspTransport>, section:Int, frame:Float, paused:Bool):Void {
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_group_seek_transport(groupTracks(programs),
+            section, frame, paused ? 1 : 0), "audio.dsp.transport.seekGroup");
+    }
+    public static function setGroupPaused(programs:Array<DspTransport>, paused:Bool):Void {
+        AudioResult.check(NativeKitAudio.nk_audio_dsp_group_set_paused(groupTracks(programs),
+            paused ? 1 : 0), "audio.dsp.transport.setGroupPaused");
+    }
     public function dispose():Void {
         if (disposed) return;
         if (!engine.isDisposed()) AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_retire_transport(
