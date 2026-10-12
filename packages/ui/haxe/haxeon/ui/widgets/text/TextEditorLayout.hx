@@ -28,6 +28,8 @@ class TextEditorLayout {
 	public var width(default, null):Float;
 	/** Changes whenever edits or shaping constraints recompute paragraph geometry. */
 	public var geometryRevision(default, null):Int = 0;
+	/** Logical/visual row boundaries and vertical placement; unwrapped viewport widths do not change these. */
+	public var visualRowsRevision(default, null):Int = 0;
 	public final textStyle:TextStyle;
 	public final paragraphStyle:ParagraphStyle;
 	public var paragraphCount(get, never):Int;
@@ -42,6 +44,7 @@ class TextEditorLayout {
 	var paragraphs:Array<TextEditorParagraphRecord>;
 	var rangeGeometryCache:Array<TextEditorRangeGeometryCache>;
 	var offsets:TextDocument;
+	var documentRevision:Int = -1;
 	var paragraphLineCount:Int;
 	var contentWidth:Float;
 	var contentHeight:Float;
@@ -119,6 +122,19 @@ class TextEditorLayout {
 			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
 			paragraphStyle.direction != nextParagraphStyle.direction ||
 			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
+		// A viewport resize does not change chunk text or boundaries. Reflow the
+		// retained layouts directly instead of slicing and regrouping the document.
+		if (offsets == nextOffsets && documentRevision == nextOffsets.revision && !styleChanged) {
+			if (width == nextWidth) return;
+			for (record in paragraphs) {
+				record.layout.update(record.text, nextWidth, textStyle, paragraphStyle);
+				record.renderRanges = null;
+			}
+			width = nextWidth;
+			clearRangeGeometryCache();
+			recomputeMetrics(paragraphStyle.wrap != haxeon.ui.TextWrap.None);
+			return;
+		}
 		textStyle.font = nextTextStyle.font;
 		textStyle.fontSize = nextTextStyle.fontSize;
 		textStyle.letterSpacing = nextTextStyle.letterSpacing;
@@ -186,6 +202,7 @@ class TextEditorLayout {
 
 		width = nextWidth;
 		offsets = nextOffsets;
+		documentRevision = nextOffsets.revision;
 		paragraphLineCount = nextOffsets.paragraphCount();
 		clearRangeGeometryCache();
 		paragraphs = next;
@@ -287,6 +304,7 @@ class TextEditorLayout {
 			result.push(record);
 		}
 		offsets = nextOffsets;
+		documentRevision = nextOffsets.revision;
 		paragraphLineCount = nextOffsets.paragraphCount();
 		clearRangeGeometryCache();
 		paragraphs = result;
@@ -884,8 +902,9 @@ class TextEditorLayout {
 		disposed = true;
 	}
 
-	function recomputeMetrics():Void {
+	function recomputeMetrics(rowsChanged:Bool = true):Void {
 		geometryRevision++;
+		if (rowsChanged) visualRowsRevision++;
 		contentWidth = 0.0;
 		contentHeight = 0.0;
 		firstBaseline = 0.0;
