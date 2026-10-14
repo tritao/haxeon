@@ -266,32 +266,50 @@ static vbyte *realtime_file_read( vstring *path, int *length ) {
 	free(path_utf8);
 #endif
 	if( file == NULL ) hl_error("Could not open source file");
-	if( fseek(file, 0, SEEK_END) != 0 ) {
-		fclose(file);
-		hl_error("Could not seek source file");
+	/* The measured size is only a first capacity: /proc files and pipes report 0, so read to the end. */
+	long hint = 0;
+	if( fseek(file, 0, SEEK_END) == 0 ) {
+		hint = ftell(file);
+		if( hint < 0 || fseek(file, 0, SEEK_SET) != 0 ) hint = 0;
 	}
-	long byte_length = ftell(file);
-	if( byte_length > 0x7FFFFFFF ) {
-		fclose(file);
-		hl_error("Source file is too large");
-	}
-	if( byte_length < 0 || fseek(file, 0, SEEK_SET) != 0 ) {
-		fclose(file);
-		hl_error("Could not measure source file");
-	}
-	vbyte *data = (vbyte *)malloc((size_t)byte_length + 1);
+	size_t capacity = hint > 0 ? (size_t)hint + 1 : 4096, used = 0;
+	vbyte *data = (vbyte *)malloc(capacity);
 	if( data == NULL ) {
 		fclose(file);
 		hl_error("Could not allocate source buffer");
 	}
-	if( fread(data, 1, (size_t)byte_length, file) != (size_t)byte_length ) {
+	for(;;) {
+		if( used + 1 >= capacity ) {
+			/* A file of exactly the measured size ends here without growing the buffer. */
+			int next = fgetc(file);
+			if( next == EOF ) break;
+			if( capacity > 0x7FFFFFFF / 2 ) {
+				free(data);
+				fclose(file);
+				hl_error("Source file is too large");
+			}
+			vbyte *grown = (vbyte *)realloc(data, capacity * 2);
+			if( grown == NULL ) {
+				free(data);
+				fclose(file);
+				hl_error("Could not allocate source buffer");
+			}
+			data = grown;
+			capacity *= 2;
+			data[used++] = (vbyte)next;
+		}
+		size_t got = fread(data + used, 1, capacity - 1 - used, file);
+		used += got;
+		if( got == 0 ) break;
+	}
+	if( ferror(file) ) {
 		free(data);
 		fclose(file);
 		hl_error("Could not read source file");
 	}
 	fclose(file);
-	data[byte_length] = 0;
-	*length = (int)byte_length;
+	data[used] = 0;
+	*length = (int)used;
 	return data;
 }
 
