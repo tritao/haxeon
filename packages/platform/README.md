@@ -4,7 +4,7 @@ This package owns NativeKit's Haxeon platform services bindings and managed wrap
 
 Managed APIs now live in `haxeon.platform.*`. Generated HXI and projection maps live in `bindings/`; managed code lives in `src/`.
 
-The host platform package includes NativeKit's generic asynchronous HTTP interface. `NativeKitEvents` snapshots HTTP headers, progress, and completion events into managed values before releasing the native event; response bodies and headers therefore remain safe to retain. The native HTTP binding is host-only, with browser networking supplied by the browser host.
+The host platform package includes NativeKit's generic asynchronous HTTP interface. `NativeKitEvents` snapshots HTTP headers, progress, and completion events into managed values before releasing the native event; response bodies and headers therefore remain safe to retain. Host builds use `nativekit-net.hxi`; ABI32 builds use `nativekit-net-wasm.hxi` with NativeKit's browser fetch backend.
 
 ## Native dependency
 
@@ -19,3 +19,11 @@ Generator source labels retain their original paths to preserve reviewed HXI con
 ## License
 
 The extracted NativeKit bindings and wrappers retain their Apache License 2.0 license; see `LICENSE`.
+
+## Transport façade
+
+`haxeon.platform.NativeTransport` owns the managed transport façade formerly kept by RobotKit. Its TCP helpers retain
+byte-stream semantics. `websocket(host, port, path, timeout, secure)` opts into NativeKit's complete-message and UTF-8 text
+modes; `receiveMessage` returns null only when drained, preserves empty messages, and resizes for a complete message up to
+its 4 MiB receive budget. Observe connection/terminal transport events through the owner's `NativeKitEvents`, dispose
+subscriptions before closing handles, and keep one shared event pump per runtime.

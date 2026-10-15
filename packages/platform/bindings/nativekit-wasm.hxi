@@ -2879,6 +2879,14 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 * Use TLS for a WebSocket client connection (wss://).
 		 */
 		NK_TRANSPORT_SECURE = 4;
+		/**
+		 * WebSocket sends and receives preserve complete message boundaries.
+		 */
+		NK_TRANSPORT_MESSAGES = 8;
+		/**
+		 * Send WebSocket messages as UTF-8 text without embedded NUL; requires MESSAGES.
+		 */
+		NK_TRANSPORT_TEXT = 16;
 	}
 	enum nk_transport_kind : u32 {
 		/**
@@ -2894,7 +2902,8 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		NK_TRANSPORT_WEBSOCKET = 3;
 		/**
-		 * Reliable byte stream over a local operating-system socket.
+		 * Reliable byte stream over a local operating-system endpoint (Unix socket or Windows named
+		 * pipe).
 		 */
 		NK_TRANSPORT_LOCAL = 4;
 	}
@@ -4002,6 +4011,11 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * DATA reports a snapshot of available bytes and may be coalesced. Call receive until it
 	 * returns NK_TRANSPORT_ERROR_WOULD_BLOCK. Receive overflow closes the connection with a
 	 * failure; application bytes are never silently discarded.
+	 * In WebSocket message mode, one successful receive consumes exactly one complete
+	 * message. A buffer that is too small returns NK_ERROR_PAYLOAD_TOO_LARGE, reports
+	 * the required size in out_received and leaves the message queued. NK_OK with zero
+	 * bytes denotes an empty message; WOULD_BLOCK denotes an empty queue. Queues are
+	 * bounded by both receive_buffer_size bytes and 1024 messages.
 	 * The mutable counted buffer annotation borrows its capacity for the call and
 	 * copies received bytes back when managed and native memory differ (GC Wasm).
 	 */
@@ -4010,10 +4024,11 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * Copies bytes into the bounded asynchronous send queue. This call is thread-safe.
 	 * TCP, local, and WebSocket transports expose one reliable ordered byte stream; a send
 	 * does not define a receive boundary. UDP preserves datagram boundaries. WebSocket frame
-	 * boundaries are deliberately hidden. NK_ERROR_QUEUE_FULL means no bytes were accepted;
-	 * WRITABLE is emitted after a previously non-empty queue drains. In browsers the limit
-	 * includes bytes reported by WebSocket.bufferedAmount, but cannot bound buffering held
-	 * internally by the user agent.
+	 * boundaries are hidden unless NK_TRANSPORT_MESSAGES is set. In message mode a send
+	 * is one message (including an empty message), and TEXT selects UTF-8 text sends.
+	 * NK_ERROR_QUEUE_FULL means no bytes were accepted; WRITABLE is emitted after a previously
+	 * non-empty queue drains. In browsers the limit includes bytes reported by
+	 * WebSocket.bufferedAmount, but cannot bound buffering held internally by the user agent.
 	 */
 	extern fn nk_transport_send(transport: nk_transport, data: ptr<const<void>> @in_array("size"), size: u64) -> nk_result;
 	/**
@@ -6321,7 +6336,7 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		reserved0: u16 @offset(18);
 		/**
-		 * Unix socket path for NK_TRANSPORT_LOCAL, or WebSocket resource path.
+		 * Unix socket path or Windows named pipe name for LOCAL, or WebSocket resource path.
 		 */
 		path: nullable<utf8> @offset(20);
 		/**
