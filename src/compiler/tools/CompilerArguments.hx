@@ -7,10 +7,10 @@ import sys.io.File;
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, live = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null, wasmMemoryStats = false,
-			wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null, ffiLibrary:Null<String> = null,
-			ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [], defines:Array<String> = [],
-			paths:Array<String> = [];
+			dumpFunction = -1, live = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null,
+			wasmMemoryStats = false, wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null,
+			ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
+			defines:Array<String> = [], paths:Array<String> = [];
 		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {

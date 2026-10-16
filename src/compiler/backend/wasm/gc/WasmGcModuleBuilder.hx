@@ -78,8 +78,9 @@ class WasmGcModuleBuilder {
 						case Value:
 					}
 			}
-        for (native in program.natives)
-            if (usedNatives.exists(native.name) && native.symbol == "structGetUtf8") requiresLinearMemory = true;
+		for (native in program.natives)
+			if (usedNatives.exists(native.name) && native.symbol == "structGetUtf8")
+				requiresLinearMemory = true;
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
 				for (block in fn.blocks)
@@ -99,12 +100,12 @@ class WasmGcModuleBuilder {
 			gcRepresentation = new WasmGcRepresentation(gcContext);
 		plan.addTo(module);
 		module.importMemory = importMemory;
-        module.sharedMemory = options.sharedMemory == true;
-        if (module.sharedMemory) {
-            if (!importMemory || contract == null)
-                throw "Shared Wasm memory requires imported memory and a bounded contract";
-            module.memoryMax = WasmModuleSupport.memoryPages(contract.memorySize);
-        }
+		module.sharedMemory = options.sharedMemory == true;
+		if (module.sharedMemory) {
+			if (!importMemory || contract == null)
+				throw "Shared Wasm memory requires imported memory and a bounded contract";
+			module.memoryMax = WasmModuleSupport.memoryPages(contract.memorySize);
+		}
 		// Static data lives in an immutable GC array rather than linear memory, so a module
 		// needs linear memory only for C FFI scratch space or an imported memory contract.
 		var staticData = WasmModuleSupport.layoutStaticData(program, 8, reachable),

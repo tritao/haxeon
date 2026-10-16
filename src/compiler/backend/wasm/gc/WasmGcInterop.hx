@@ -74,13 +74,12 @@ class WasmGcInterop implements WasmInteropRepresentation {
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "structGetUtf8") {
-            if (output.type != Bytes || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
-                || arguments[2].type != Bool || argumentLocals.length != 3)
-                throw "Invalid Wasm GC HXI UTF-8 field getter signature";
-            var pointer = allocateLocal(I32);
-            return Handled(managedByteGetI32(argumentLocals[0], argumentLocals[1], pointer)
-                .concat(copyNativeCStringResult(pointer, outputLocal)));
-        }
+			if (output.type != Bytes || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32 || arguments[2].type != Bool
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC HXI UTF-8 field getter signature";
+			var pointer = allocateLocal(I32);
+			return Handled(managedByteGetI32(argumentLocals[0], argumentLocals[1], pointer).concat(copyNativeCStringResult(pointer, outputLocal)));
+		}
 		if (name == "structGetPointer") {
 			if (!isNativePointerType(output.type) || arguments.length != 3 || arguments[0].type != ManagedBytes || arguments[1].type != I32
 				|| arguments[2].type != Bool || argumentLocals.length != 3)

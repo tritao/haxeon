@@ -1707,14 +1707,15 @@ class BodyTyper {
 
 	/** A proven-null field has a null value in its declared storage type, not an ABI cast to TNull. */
 	function refinedFieldValue(field:TypedExpression, refined:Null<CompilerType>):TypedExpression {
-		if (refined == TNull) switch field.type {
-			case TNullable(_):
-				return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, field.span)),
-					field.type, field.span, field.stableFlowValue);
-			default:
-		}
-		return refined == null || sameType(field.type, refined) ? field
-			: new TypedExpression(TCast(field), refined, field.span, field.stableFlowValue);
+		if (refined == TNull)
+			switch field.type {
+				case TNullable(_):
+					return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, field.span)), field.type, field.span,
+						field.stableFlowValue);
+				default:
+			}
+		return refined == null
+			|| sameType(field.type, refined) ? field : new TypedExpression(TCast(field), refined, field.span, field.stableFlowValue);
 	}
 
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
