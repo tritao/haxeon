@@ -571,8 +571,9 @@ class Compiler {
 		return result;
 	}
 
-	public function update(path:String, source:String):ModuleState {
-		var name = ModulePath.fromFile(path);
+	/** An explicit module identity keeps a standalone file's directory out of its package. */
+	public function update(path:String, source:String, ?moduleName:String):ModuleState {
+		var name = moduleName == null ? ModulePath.fromFile(path) : moduleName;
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
 			if (current.source.path == path && current.source.text == source)

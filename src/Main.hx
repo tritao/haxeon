@@ -17,8 +17,8 @@ class Main {
 		// Modules the file refers to are found beside it, as with `-cp .` in Haxe.
 		var directory = Path.directory(sourcePath);
 		compiler.addSourceRoot(directory == "" ? "." : directory);
-		var module = ModulePath.fromFile(sourcePath);
-		compiler.update(sourcePath, File.getContent(sourcePath));
+		var module = ModulePath.fromFile(Path.withoutDirectory(sourcePath));
+		compiler.update(sourcePath, File.getContent(sourcePath), module);
 		var result = compiler.compile(module);
 		File.saveBytes(outputPath, HlWriter.encode(result.module));
 		Sys.println('compiled $sourcePath -> $outputPath');
