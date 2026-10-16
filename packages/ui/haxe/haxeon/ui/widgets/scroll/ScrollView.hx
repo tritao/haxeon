@@ -224,14 +224,15 @@ class ScrollView implements View {
 		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();
 		trackStyle.positioning = LayoutPositioning.Absolute;
-		trackStyle.zIndex = 100;
+		// Above ordinary content, below selection popups (z-index 10).
+		trackStyle.zIndex = 4;
 		trackStyle.radiusTopLeft = trackStyle.radiusTopRight = ScrollbarHitWidth * 0.5;
 		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
 		var track = new RenderNode(context.id(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
 		track.setStyleIdentity("scrollbar-track", key.value, key.value, null, ["scrollbar", name]);
 		var thumbStyle = new LayoutStyle();
 		thumbStyle.positioning = LayoutPositioning.Absolute;
-		thumbStyle.zIndex = 101;
+		thumbStyle.zIndex = 5;
 		var thumbId = context.id(name + "-scrollbar-thumb");
 		var thumb = new RenderNode(thumbId, LayoutVisualKind.Box, thumbStyle);
 		thumb.setStyleIdentity("scrollbar-thumb", key.value, key.value, null, ["scrollbar", name]);
