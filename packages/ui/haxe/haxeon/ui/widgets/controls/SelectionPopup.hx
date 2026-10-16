@@ -9,6 +9,10 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
 import haxeon.ui.Transform2D;
+import haxeon.ui.TextLayout;
+import haxeon.ui.TextWrap;
+import haxeon.ui.core.TextStyleOverride;
+import haxeon.ui.theme.TextRole;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
@@ -100,7 +104,7 @@ class SelectionPopup {
 		var height = triggerHeight > 0.0 ? triggerHeight : fallbackHeight;
 		var edge = Math.min(8.0, context.viewportWidth * 0.5);
 		var availableWidth = Math.max(1.0, context.viewportWidth - edge * 2.0);
-		var popupWidth = Math.min(Math.max(1.0, width), availableWidth);
+		var popupWidth = Math.min(Math.max(Math.max(1.0, width), contentWidth(context)), availableWidth);
 		var popupX = clamp(triggerX, edge, Math.max(edge,
 			context.viewportWidth - edge - popupWidth));
 		var rowHeight = 32.0;
@@ -224,6 +228,7 @@ class SelectionPopup {
 			var optionButton = new Button(option.label, optionStyle,
 				function() { onSelect(originalIndex); }, option.key);
 			optionButton.classes = ["selection-option"];
+			optionButton.ellipsizeLabel = true;
 			optionButton.variant = ButtonVariant.Navigation;
 			optionButton.enabled = isEnabled(originalIndex);
 			optionButton.selected = sameValue(option.value, selectedValue);
@@ -274,6 +279,23 @@ class SelectionPopup {
 				onClose();
 		});
 		return new SelectionPopupResult(dropdown, optionNodes, visibility.ensure);
+	}
+
+	/** Include the check gutter, row padding and popup padding in the natural width. */
+	function contentWidth(context:BuildContext):Float {
+		if (context.fonts == null || visibleIndices.length == 0)
+			return 0.0;
+		var resolved = context.resolveTextRole(TextRole.Button,
+			TextStyleOverride.paragraph(TextWrap.None));
+		var layout = TextLayout.createStyled(context.fonts, "", 100000.0,
+			resolved.textStyle, resolved.paragraphStyle);
+		var widest = 0.0;
+		for (index in visibleIndices) {
+			layout.setText(options[index].label);
+			widest = Math.max(widest, layout.measure().width);
+		}
+		layout.dispose();
+		return Math.ceil(widest) + 26.0 + 9.0 + 8.0;
 	}
 
 	function firstEnabledVisible():Int {
