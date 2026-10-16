@@ -194,10 +194,6 @@ class SelectionPopup {
 				scrollController.updateMetrics(geometry.width, geometry.height,
 					geometry.contentBounds.width, geometry.contentBounds.height);
 			});
-			dropdown.on(UiEventKind.Scroll, function(event) {
-				if (!event.defaultPrevented && scrollController.scrollBy(0.0, event.deltaY))
-					event.stopPropagation();
-			});
 			visibility.ensure = function(index:Int) {
 				if (scrollController == null || scrollController.viewportHeight <= 0.0)
 					return;
@@ -216,6 +212,14 @@ class SelectionPopup {
 				}
 			};
 		}
+		// A menu owns wheel input even at its limits or when all options fit.
+		// Otherwise its enclosing scroll view moves underneath the open popup.
+		dropdown.on(UiEventKind.Scroll, function(event) {
+			if (!event.defaultPrevented && scrollController != null)
+				scrollController.scrollBy(0.0, event.deltaY);
+			event.preventDefault();
+			event.stopPropagation();
+		});
 		for (position in 0...visibleIndices.length) {
 			var originalIndex = visibleIndices[position];
 			var option:SelectOption<Dynamic> = options[originalIndex];
