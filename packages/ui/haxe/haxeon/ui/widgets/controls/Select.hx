@@ -180,6 +180,7 @@ class Select<T> implements View {
 			triggerStyle.width = LayoutAxis.grow();
 			var trigger = new Button(selectedLabel, triggerStyle, toggleOpen, "trigger");
 			trigger.classes = ["select-trigger"];
+			trigger.ellipsizeLabel = true;
 			trigger.enabled = enabled && firstEnabled >= 0;
 			trigger.semanticRole = AccessibilityRole.ComboBox;
 			trigger.semanticActions = AccessibilityAction.Activate | AccessibilityAction.SetValue |

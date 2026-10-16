@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 import haxeon.ui.widgets.Icon;
+import haxeon.ui.widgets.text.MiddleEllipsisText;
 
 import haxeon.ui.Color;
 import haxeon.ui.core.Key;
@@ -34,6 +35,8 @@ class Button implements View {
 	public var accessibilityLabel:Null<String>;
 	/** Optional label presentation; the button retains its full semantic label. */
 	public var labelView:Null<View> = null;
+	/** Fit a single-line label within the button content area. */
+	public var ellipsizeLabel:Bool = false;
 	public final style:LayoutStyle;
 	/** Typed selector classes used by composite controls and application styles. */
 	public var classes:Array<String>;
@@ -140,6 +143,13 @@ class Button implements View {
 					letterSource != null && letterSource.layer != "framework"
 						? computed.get(StyleProperty.LetterSpacing) : null));
 				labelStyle = labelStyle.withTextColor(foreground);
+				if (ellipsizeLabel) {
+					var typography = labelStyle.textStyle, paragraph = labelStyle.paragraphStyle;
+					return new MiddleEllipsisText("fitted-label", label, false,
+						new TextStyleOverride(typography.font, typography.fontSize, typography.letterSpacing,
+							paragraph.wrap, paragraph.alignment, paragraph.lineHeight, paragraph.direction,
+							foreground, paragraph.tabWidth)).build(context);
+				}
 				text.applyTextStyle(labelStyle);
 				return text;
 			});
