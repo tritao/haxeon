@@ -143,7 +143,8 @@ class IrProgramAssembler {
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
 			references:Map<String, StaticReferences> = [];
 		var probes = [
-			for (index in 0...statements.length) initializerFunction("__init$probe" + index, [statements[index]], spans[index])
+			for (index in 0...statements.length)
+				initializerFunction("__init$probe" + index, [statements[index]], spans[index])
 		];
 		var execution = new IrInitializationCalls(program.concat(probes), objects);
 		function referencesOf(fn:IrFunction):StaticReferences {
