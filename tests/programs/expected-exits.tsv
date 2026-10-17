@@ -390,3 +390,5 @@ array-last-index-of	42
 gc-incremental	42
 json-utf8-parser	42
 switch-expression-loop-control	0
+known-null-field	42
+final-field-branch-flow	42
