@@ -9,6 +9,8 @@ class IrInitializationCalls {
 	final invoked:Map<String, Bool> = [];
 	final objects:Map<String, IrObject>;
 	final resolvedMethods:Map<String, Array<String>> = [];
+	final globals:Map<String, Array<String>> = [];
+	final returns:Map<String, Array<String>> = [];
 
 	public function new(program:Array<IrFunction>, ?objects:Array<IrObject>) {
 		this.objects = objects == null ? [] : [for (object in objects) object.name => object];
@@ -22,18 +24,86 @@ class IrInitializationCalls {
 				methods.set(method, []);
 			methods.get(method).push(fn.name);
 		}
+		var summaries:Array<IrFunction> = [];
+		for (fn in program) {
+			var relevant = switch fn.result {
+				case Function(_, _), Dyn: true;
+				case _: false;
+			};
+			if (!relevant)
+				for (block in fn.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case GlobalSet(_, _):
+								relevant = true;
+							case _:
+						}
+			if (relevant)
+				summaries.push(fn);
+		}
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (fn in summaries) {
+				var origins = closureOrigins(fn);
+				for (block in fn.blocks) {
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case GlobalSet(name, value) if (origins.exists(value.id)):
+								if (merge(globals, name, origins.get(value.id)))
+									changed = true;
+							case _:
+						}
+					if (block.terminator != null)
+						switch block.terminator.value {
+							case Return(value) if (origins.exists(value.id)):
+								if (merge(returns, fn.name, origins.get(value.id)))
+									changed = true;
+							case _:
+						}
+				}
+			}
+		}
 	}
 
-	public function calls(fn:IrFunction):Array<String> {
-		var result:Array<String> = [], closures:Map<Int, Array<String>> = [];
+	static function merge(target:Map<String, Array<String>>, key:String, values:Array<String>):Bool {
+		if (!target.exists(key))
+			target.set(key, []);
+		var changed = false;
+		for (value in values)
+			if (!target.get(key).contains(value)) {
+				target.get(key).push(value);
+				changed = true;
+			}
+		return changed;
+	}
+
+	function closureOrigins(fn:IrFunction):Map<Int, Array<String>> {
+		var origins:Map<Int, Array<String>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
 					case StaticClosure(out, callee), InstanceClosure(out, callee, _):
-						closures.set(out.id, [callee]);
+						origins.set(out.id, [callee]);
+					case GlobalGet(out, name) if (globals.exists(name)):
+						origins.set(out.id, globals.get(name).copy());
+					case Call(out, callee, _) if (returns.exists(callee)):
+						origins.set(out.id, returns.get(callee).copy());
+					case MethodCall(out, receiver, method, _):
+						var found:Array<String> = [];
+						for (callee in methodTargets(receiver, method))
+							if (returns.exists(callee))
+								found = found.concat(returns.get(callee));
+						if (found.length > 0)
+							origins.set(out.id, found);
 					case _:
 				}
-		propagate(fn, closures);
+		propagate(fn, origins);
+		return origins;
+	}
+
+	public function calls(fn:IrFunction):Array<String> {
+		var result:Array<String> = [], closures = closureOrigins(fn);
 		function addCallbacks(callee:String, arguments:Array<IrValue>, offset:Int):Void {
 			for (index in 0...arguments.length)
 				if (closures.exists(arguments[index].id) && invokesArgument(callee, index + offset, []))

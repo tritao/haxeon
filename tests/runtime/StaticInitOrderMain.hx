@@ -53,6 +53,10 @@ class StaticInitOrderMain {
 			"class A { public static final callback:()->Int = () -> B.value; } class B { public static final value:Int = A.callback == null ? 0 : 7; } function main():Int { var callback = A.callback; return callback(); }",
 			"a deferred callback passed through a recursive helper" =>
 			"class A { public static final value:Int = store(() -> B.value, 0) + 7; static function store(f:()->Int, depth:Int):Int return depth <= 0 ? 0 : store(f, depth - 1); } class B { public static final value:Int = A.value; } function main():Int return B.value;",
+			"a callback read from a static field and invoked at startup" =>
+			"class Seed { public static final value:Int = 0; } class A { public static final callback:()->Int = () -> B.value; public static final value:Int = invoke(); static function invoke():Int { var f = callback; return f(); } } class B { public static final value:Int = 7; } function main():Int return A.value;",
+			"a returned callback invoked at startup" =>
+			"class Seed { public static final value:Int = 0; } class A { public static final value:Int = factory()(); static function factory():()->Int return () -> B.value; } class B { public static final value:Int = 7; } function main():Int return A.value;",
 			"an immediately invoked closure" =>
 			"class Seed { public static final value:Int = 0; } class A { public static final value:Int = (() -> B.value)(); } class B { public static final value:Int = 7; } function main():Int return A.value;",
 			"an invoked callback argument" =>
@@ -119,7 +123,8 @@ class StaticInitOrderMain {
 		}
 		for (source in [
 			"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int return 0;",
-			"class A { public static final X:Int = X + 1; } function main():Int return 0;"
+			"class A { public static final X:Int = X + 1; } function main():Int return 0;",
+			"class A { static final callback:()->Int = () -> X; public static final X:Int = invoke(); static function invoke():Int { var f = callback; return f(); } } function main():Int return 0;"
 		]) {
 			compiler = new Compiler();
 			compiler.update("Main.hx", source);

@@ -142,7 +142,10 @@ class IrProgramAssembler {
 		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
 			references:Map<String, StaticReferences> = [];
-		var execution = new IrInitializationCalls(program, objects);
+		var probes = [
+			for (index in 0...statements.length) initializerFunction("__init$probe" + index, [statements[index]], spans[index])
+		];
+		var execution = new IrInitializationCalls(program.concat(probes), objects);
 		function referencesOf(fn:IrFunction):StaticReferences {
 			var known = references.get(fn.name);
 			if (known != null)
@@ -163,7 +166,7 @@ class IrProgramAssembler {
 			// Each probe must have its own cache identity: later fields read different globals.
 			var reads:Map<Int, Bool> = [],
 				visited:Map<String, Bool> = [],
-				pending = [initializerFunction("__init$probe" + index, [statements[index]], spans[index])];
+				pending = [probes[index]];
 			while (pending.length > 0) {
 				var fn = pending.pop(), found = referencesOf(fn);
 				for (name in found.globals)
