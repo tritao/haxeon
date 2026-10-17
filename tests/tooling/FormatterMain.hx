@@ -51,6 +51,60 @@ class FormatterMain {
 		if (reformattedLexical[lexicalIndex].kind != TokenKind.Eof)
 			throw "formatted source contained unexpected syntax tokens";
 
+		var numericSource = "function main():Int { var values = [1e-12, 2E+10, 3e4, 1.25E-6, 1_000.5_0e-1_2, 0xCA_FE]; var nested:Array<Array<Int>> = []; var x = (64>>2) + (1<<2); x>>=1; x>>>=1; x<<=2; return x>>>1; }\n";
+		for (width in [100, 20, 8]) {
+			var numericConfig = FormatConfigTools.defaults(2, true);
+			numericConfig.lineWidth = width;
+			var output = Formatter.format(numericSource, numericConfig);
+			for (literal in [
+				"1e-12",
+				"2E+10",
+				"3e4",
+				"1.25E-6",
+				"1_000.5_0e-1_2",
+				"0xCA_FE",
+				">>",
+				">>=",
+				">>>=",
+				"<<=",
+				">>>",
+				"<<"
+			])
+				if (output.indexOf(literal) < 0)
+					throw "formatter split literal or operator " + literal + ": " + output;
+			if (Formatter.format(output, numericConfig) != output)
+				throw "numeric/shift formatting was not stable";
+			var original = new Lexer(new SourceFile("before.hx", numericSource)).tokenize();
+			var after = new Lexer(new SourceFile("after.hx", output)).tokenize();
+			if (original.length != after.length)
+				throw "numeric formatting changed token count";
+			var scanned = new FormatScanner(new SourceFile("numeric.hx", numericSource)).scan();
+			var syntaxTokens = [
+				for (token in scanned)
+					if (switch token.kind {
+							case Syntax(_): true;
+							default: false;
+						}) token
+			];
+			if (syntaxTokens.length != original.length - 1)
+				throw "numeric scanner changed token count";
+			for (index in 0...syntaxTokens.length)
+				if (compiler.formatter.FormatToken.FormatTokenTools.syntaxKind(syntaxTokens[index]) != original[index].kind
+					|| syntaxTokens[index].text != original[index].text)
+					throw "numeric scanner differs from compiler lexer";
+			for (index in 0...original.length - 1)
+				if (((original[index].kind == TokenKind.Greater
+					&& (original[index + 1].kind == TokenKind.Greater || original[index + 1].kind == TokenKind.GreaterEqual))
+					|| (original[index].kind == TokenKind.Less
+						&& (original[index + 1].kind == TokenKind.Less || original[index + 1].kind == TokenKind.LessEqual)))
+					&& original[index].span.end == original[index + 1].span.start
+					&& after[index].span.end != after[index + 1].span.start)
+					throw "formatting broke operator adjacency";
+			for (index in 0...original.length)
+				if (original[index].kind != after[index].kind || original[index].text != after[index].text)
+					throw "numeric formatting changed token spelling";
+		}
+
 		var config = FormatConfigTools.defaults(2, true);
 		config.lineWidth = 60;
 		var wrappedSource = "function build(name:String,arguments:Array<String>,configuration:Configuration):BuildResult { return computeSomething(firstValue,transform(secondValue),thirdValue); }\n",

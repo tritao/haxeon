@@ -118,18 +118,26 @@ class FormatScanner {
 					&& position < source.length
 					&& (source.get(position) == "x".code || source.get(position) == "X".code)) {
 					position++;
-					while (position < source.length && isHexDigit(source.get(position)))
+					while (position < source.length && (isHexDigit(source.get(position)) || source.get(position) == "_".code))
 						position++;
 					push(result, FormatTokenKind.Syntax(TokenKind.Integer), start, position);
 					continue;
 				}
-				while (position < source.length && isDigit(source.get(position)))
+				while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
 					position++;
 				var numberKind = TokenKind.Integer;
 				if (position + 1 < source.length && source.get(position) == ".".code && isDigit(source.get(position + 1))) {
 					numberKind = TokenKind.Float;
 					position++;
-					while (position < source.length && isDigit(source.get(position)))
+					while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
+						position++;
+				}
+				if (position < source.length && (source.get(position) == "e".code || source.get(position) == "E".code)) {
+					numberKind = TokenKind.Float;
+					position++;
+					if (position < source.length && (source.get(position) == "+".code || source.get(position) == "-".code))
+						position++;
+					while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
 						position++;
 				}
 				push(result, FormatTokenKind.Syntax(numberKind), start, position);

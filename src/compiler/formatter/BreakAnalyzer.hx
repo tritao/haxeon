@@ -85,6 +85,13 @@ class BreakAnalyzer {
 					if (penalty == 0)
 						penalty = 10;
 				}
+			// The parser recognizes shifts and their assignments by source adjacency.
+			// Never put whitespace or a wrapping boundary inside these operators.
+			if (adjacentShiftParts(left, right)) {
+				spaces = 0;
+				canBreak = false;
+				mustBreak = false;
+			}
 			result.push({
 				spaces: spaces,
 				canBreak: canBreak,
@@ -143,11 +150,22 @@ class BreakAnalyzer {
 		return result;
 	}
 
+	static function adjacentShiftParts(left:FormatToken, right:FormatToken):Bool {
+		if (left.end != right.start)
+			return false;
+		var leftKind = FormatTokenTools.syntaxKind(left),
+			rightKind = FormatTokenTools.syntaxKind(right);
+		return (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
+			|| (leftKind == TokenKind.Greater && (rightKind == TokenKind.Greater || rightKind == TokenKind.GreaterEqual));
+	}
+
 	static function spacing(tokens:Array<FormatToken>, index:Int, left:Null<TokenKind>, right:Null<TokenKind>, syntax:SyntaxInfo):Int {
 		if (tokens[index + 1].kind == FormatTokenKind.LineComment
 			|| tokens[index + 1].kind == FormatTokenKind.DocComment
 			|| tokens[index + 1].kind == FormatTokenKind.BlockComment)
 			return 1;
+		if (adjacentShiftParts(tokens[index], tokens[index + 1]))
+			return 0;
 		if (left == null || right == null)
 			return 0;
 		if (right == TokenKind.Comma || right == TokenKind.Semicolon || right == TokenKind.Dot || right == TokenKind.RightParen
