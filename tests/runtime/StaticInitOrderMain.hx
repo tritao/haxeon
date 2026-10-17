@@ -1,5 +1,10 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.Frontend;
+import compiler.ir.hl.HlLower;
+import compiler.backend.wasm.WasmBackend;
+import compiler.backend.Backend.BackendTarget;
+import sys.io.File;
 import runtime.Runtime;
 
 class StaticInitOrderMain {
@@ -44,11 +49,23 @@ class StaticInitOrderMain {
 			"a static read behind a call" =>
 			"class A { public static final X:Int = B.get(); } class B { static final V:Int = 7; public static function get():Int return V; } " +
 			"function main():Int { return A.X; }",
+			"a stored callback is not an initializer dependency" =>
+			"class A { public static final callback:()->Int = () -> B.value; } class B { public static final value:Int = A.callback == null ? 0 : 7; } function main():Int { var callback = A.callback; return callback(); }",
+			"a deferred callback passed through a recursive helper" =>
+			"class A { public static final value:Int = store(() -> B.value, 0) + 7; static function store(f:()->Int, depth:Int):Int return depth <= 0 ? 0 : store(f, depth - 1); } class B { public static final value:Int = A.value; } function main():Int return B.value;",
+			"an immediately invoked closure" =>
+			"class Seed { public static final value:Int = 0; } class A { public static final value:Int = (() -> B.value)(); } class B { public static final value:Int = 7; } function main():Int return A.value;",
+			"an invoked callback argument" =>
+			"class Seed { public static final value:Int = 0; } class A { public static final value:Int = apply(() -> B.value); static function apply(f:()->Int):Int return forward(f); static function forward(f:()->Int):Int return f(); } class B { public static final value:Int = 7; } function main():Int return A.value;",
+			"a callback invoked through a constructor field" =>
+			"class Seed { public static final value:Int = 0; } class Holder { var callback:()->Int; public var value:Int; public function new(f:()->Int) { callback = f; var action = callback; value = action(); } } class A { public static final value:Holder = new Holder(() -> B.value); } class B { public static final value:Int = 7; } function main():Int return A.value.value;",
+			"unrelated methods with the same name are not dependencies" =>
+			"class A { public static final value:Int = new B().get(); } class B { public function new() {} public function get():Int return 7; } class Unrelated { public function new() {} public function get():Int return A.value; } function main():Int { new Unrelated(); return A.value; }",
+			"overriding methods can read static dependencies" =>
+			"class Seed { public static final value:Int = 0; } class A { public static final value:Int = read(new Child()); static function read(base:Base):Int return base.get(); } class Base { public function new() {} public function get():Int return 0; } class Child extends Base { public function new() { super(); } public override function get():Int return Provider.value; } class Provider { public static final value:Int = 7; } function main():Int return A.value;",
 			"a static read behind a method call" =>
 			"class A { public static final X:Int = new B().get(); } class B { public function new() {} public function get():Int return C.V; } " +
-			"class C { public static final V:Int = 7; } function main():Int { return A.X; }",
-			"a dependency cycle" =>
-			"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int { return 7; }"
+			"class C { public static final V:Int = 7; } function main():Int { return A.X; }"
 		];
 		for (description => source in forward) {
 			compiler = new Compiler();
@@ -59,6 +76,80 @@ class StaticInitOrderMain {
 				throw 'Static initializers ran before their dependency: $description';
 			Runtime.dispose(live);
 		}
+		// The stateless frontend uses the same assembler without the incremental function cache.
+		var fullIr = Frontend.compile('class Seed { public static final value:Int = 0; } class Consumer { public static final values:Array<String> = ["All"].concat([for (value in Provider.values) value]); } class Provider { public static final values:Array<String> = ["Welding"]; } function main():Int return Consumer.values.length;');
+		var full = runBytecode("out/static-init-full.hl", HlWriter.encode(HlLower.lower(fullIr)));
+		if (full.status != 2)
+			throw "Stateless frontend initialized a consumer before its provider: " + full.output;
+		// The first probe has no reads; later probes must not reuse its cached references.
+		compiler = new Compiler();
+		compiler.update("catalog/Category.hx", 'package catalog; enum abstract Category(String) { var Welding = "Welding"; }');
+		compiler.update("catalog/Catalog.hx",
+			'package catalog; import catalog.Category; import browser.Browser; class Catalog { public static function seed():Int return Browser.seed; public static final categories:Array<Category> = [Welding]; }');
+		compiler.update("browser/Browser.hx",
+			'package browser; import catalog.Catalog; class Browser { public static final seed = 1; public static final categories:Array<String> = ["All"].concat([for (category in Catalog.categories) (category:String)]); }');
+		compiler.update("Main.hx", 'import browser.Browser; function main():Int return Browser.categories.length;');
+		for (incremental in [false, true]) {
+			if (incremental)
+				compiler.update("catalog/Catalog.hx",
+					'package catalog; import catalog.Category; import browser.Browser; class Catalog { public static function seed():Int return Browser.seed; public static final categories:Array<Category> = [Welding, Welding]; }');
+			var result = compiler.compile("Main");
+			var writes:Array<String> = [];
+			for (fn in result.ir.functions)
+				if (StringTools.startsWith(fn.name, "__init$part"))
+					for (block in fn.blocks)
+						for (instruction in block.instructions)
+							switch instruction.value {
+								case GlobalSet(name, _):
+									writes.push(name);
+								case _:
+							}
+			if (writes.indexOf("catalog.Catalog.categories") < 0
+				|| writes.indexOf("browser.Browser.categories") < 0
+				|| writes.indexOf("catalog.Catalog.categories") > writes.indexOf("browser.Browser.categories"))
+				throw 'Cross-module comprehension initialized before its provider (incremental=$incremental): $writes';
+			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			if (Runtime.callInt(live, result.functionIds.get("main")) != (incremental ? 3 : 2))
+				throw "Cross-module comprehension produced the wrong categories";
+			Runtime.dispose(live);
+			for (target in [Wasm32, WasmGc]) {
+				var bytes = new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes;
+				File.saveBytes('out/static-init-$target-' + (incremental ? "incremental" : "clean") + ".wasm", bytes);
+			}
+		}
+		for (source in [
+			"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int return 0;",
+			"class A { public static final X:Int = X + 1; } function main():Int return 0;"
+		]) {
+			compiler = new Compiler();
+			compiler.update("Main.hx", source);
+			var rejected = false;
+			try
+				compiler.compile("Main")
+			catch (error:compiler.Diagnostic.CompileError) {
+				if (error.diagnostic.code != "E_STATIC_INIT_CYCLE" || error.diagnostic.message.indexOf("A.X ->") < 0)
+					throw error;
+				rejected = true;
+			}
+			if (!rejected)
+				throw "Static initializer cycle was accepted";
+		}
+		compiler = new Compiler();
+		compiler.update("Main.hx",
+			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
+		var nullResult = compiler.compile("Main");
+		var failed = runBytecode("out/static-init-null.hl", HlWriter.encode(nullResult.module));
+		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
+			throw "Null static dereference at startup did not report an error: " + failed.output;
 		Sys.println("PASS: static initializers respect dependency order");
+	}
+
+	static function runBytecode(path:String, bytes:haxe.io.Bytes):{status:Int, output:String} {
+		File.saveBytes(path, bytes);
+		var child = new sys.io.Process(".tools/hashlink/hl", [path]);
+		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
+			status = child.exitCode();
+		child.close();
+		return {status: status, output: output};
 	}
 }

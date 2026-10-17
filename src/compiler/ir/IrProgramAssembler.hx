@@ -99,8 +99,8 @@ class IrProgramAssembler {
 			}
 		if (statements.length == 0)
 			return [];
-		if (program != null && statements.length > 1) {
-			var order = initializationOrder(statements, spans, globals, program);
+		if (program != null) {
+			var order = initializationOrder(statements, spans, globals, program, objectsFrom(typed));
 			statements = [for (index in order) statements[index]];
 			spans = [for (index in order) spans[index]];
 		}
@@ -135,40 +135,24 @@ class IrProgramAssembler {
 	/**
 	 * Indices of `statements` in an order where each initializer follows the initializers of the static fields it
 	 * reads. The order is a stable depth-first topological sort, so independent fields keep their declaration
-	 * order; members of a cycle keep it too, since no order satisfies them all.
+	 * order. Cycles are diagnosed rather than executing an invalid order.
 	 */
 	static function initializationOrder(statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>, globals:Array<String>,
-			program:Array<IrFunction>):Array<Int> {
+			program:Array<IrFunction>, objects:Array<IrObject>):Array<Int> {
 		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
-			byMethod:Map<String, Array<String>> = [],
 			references:Map<String, StaticReferences> = [];
-		for (fn in program) {
-			var dot = fn.name.lastIndexOf(".");
-			if (dot < 0)
-				continue;
-			var method = fn.name.substr(dot + 1), named = byMethod.get(method);
-			if (named == null) {
-				named = [];
-				byMethod.set(method, named);
-			}
-			named.push(fn.name);
-		}
+		var execution = new IrInitializationCalls(program, objects);
 		function referencesOf(fn:IrFunction):StaticReferences {
 			var known = references.get(fn.name);
 			if (known != null)
 				return known;
-			var found:StaticReferences = {globals: [], calls: []};
+			var found:StaticReferences = {globals: [], calls: execution.calls(fn)};
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
 						case GlobalGet(_, name):
 							found.globals.push(name);
-						case Call(_, callee, _), StaticClosure(_, callee), InstanceClosure(_, callee, _):
-							found.calls.push(callee);
-						// A virtual call can reach any method of that name.
-						case MethodCall(_, _, method, _):
-							found.calls = found.calls.concat(byMethod.exists(method) ? byMethod.get(method) : []);
 						default:
 					}
 			references.set(fn.name, found);
@@ -176,13 +160,14 @@ class IrProgramAssembler {
 		}
 		var dependencies:Array<Array<Int>> = [];
 		for (index in 0...statements.length) {
+			// Each probe must have its own cache identity: later fields read different globals.
 			var reads:Map<Int, Bool> = [],
 				visited:Map<String, Bool> = [],
-				pending = [initializerFunction("__init$probe", [statements[index]], spans[index])];
+				pending = [initializerFunction("__init$probe" + index, [statements[index]], spans[index])];
 			while (pending.length > 0) {
 				var fn = pending.pop(), found = referencesOf(fn);
 				for (name in found.globals)
-					if (initializerIndex.exists(name) && initializerIndex.get(name) != index)
+					if (initializerIndex.exists(name))
 						reads.set(initializerIndex.get(name), true);
 				for (callee in found.calls)
 					if (!visited.exists(callee) && byName.exists(callee)) {
@@ -195,13 +180,22 @@ class IrProgramAssembler {
 			dependencies.push(sorted);
 		}
 		var state:Array<Int> = [for (_ in statements) 0],
-			order:Array<Int> = [];
+			order:Array<Int> = [],
+			path:Array<Int> = [];
 		function visit(index:Int):Void {
-			if (state[index] != 0)
+			if (state[index] == 1) {
+				var cycle = path.slice(path.indexOf(index));
+				cycle.push(index);
+				throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E_STATIC_INIT_CYCLE",
+					"Static initializer dependency cycle: " + [for (member in cycle) globals[member]].join(" -> "), spans[index]));
+			}
+			if (state[index] == 2)
 				return;
 			state[index] = 1;
+			path.push(index);
 			for (dependency in dependencies[index])
 				visit(dependency);
+			path.pop();
 			state[index] = 2;
 			order.push(index);
 		}
@@ -436,6 +430,7 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
+		allFunctions = IrStaticNullChecks.run(allFunctions, objects);
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
