@@ -111,6 +111,7 @@ class ScrollController implements haxeon.ui.animation.Animation {
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollView)
+	@:allow(haxeon.ui.widgets.collections.TreeView)
 	function updateMetrics(viewportWidth:Float, viewportHeight:Float,
 			contentWidth:Float, contentHeight:Float):Void {
 		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) ||

@@ -52,6 +52,8 @@ class TreeView implements View {
 	public var materializedLast(default, null):Int;
 	public var selectedKey(default, null):Null<String>;
 	public var onSelectionChanged:Null<String->Void>;
+	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
+	public var onStateReady:Null<TreeView->Void>;
 	public var onItemActivated:Null<String->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
 	public var onItemClicked:Null<String->Int->Void>;
@@ -144,8 +146,8 @@ class TreeView implements View {
 		itemIds = new Map();
 	}
 
-	/** Selects a visible node. Passing null clears selection without a callback. */
-	public function select(nextKey:Null<String>):Bool {
+	/** Selects a visible node. Null clears selection; notify=false synchronizes without a callback. */
+	public function select(nextKey:Null<String>, notify:Bool = true):Bool {
 		ensureTreeMetrics();
 		if (nextKey != null && (nextKey.length == 0 || !branchByKey.exists(nextKey)))
 			throw "TreeView selection key is not visible";
@@ -153,7 +155,7 @@ class TreeView implements View {
 			return false;
 		selectedKey = nextKey;
 		updateSelectedState(nextKey);
-		if (nextKey != null && onSelectionChanged != null)
+		if (notify && nextKey != null && onSelectionChanged != null)
 			onSelectionChanged(nextKey);
 		return true;
 	}
@@ -276,6 +278,21 @@ class TreeView implements View {
 		return controller.jumpTo(controller.offsetX, extentOffset(cast index));
 	}
 
+	/** Reveal a visible row with the smallest scroll change; leave an already visible row alone. */
+	public function scrollIntoView(nodeKey:String):Bool {
+		ensureTreeMetrics();
+		var index = indexOfKey(nodeKey);
+		if (index == null) throw "TreeView scroll key is not visible";
+		var start = extentOffset(cast index);
+		var end = start + (cachedUniform ? cachedEstimatedExtent : model.extentAt(nodeKey));
+		var height = controller.viewportHeight > 0 ? controller.viewportHeight : fallbackViewportHeight;
+		// Expansion can change content before ScrollView receives its next layout.
+		controller.updateMetrics(controller.viewportWidth, height, controller.contentWidth, requiredExtentIndex().totalExtent);
+		var offset = controller.offsetY;
+		var next = start < offset ? start : end > offset + height ? end - height : offset;
+		return controller.jumpTo(controller.offsetX, next);
+	}
+
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
@@ -306,6 +323,7 @@ class TreeView implements View {
 				selectedKey = null;
 				selection.update("");
 			}
+			if (onStateReady != null) onStateReady(this);
 			itemIds = new Map();
 
 			var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight :

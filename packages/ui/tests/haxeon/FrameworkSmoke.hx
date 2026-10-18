@@ -2426,6 +2426,19 @@ class FrameworkSmoke {
 			return 169;
 		if (!tree.scrollTo("root:0:child:2") || treeController.offsetY <= 0.0)
 			return 170;
+		// External controllers synchronize after retained state loads, without a feedback callback.
+		var treeStateReady = false;
+		tree.onStateReady = function(current) {
+			treeStateReady = true;
+			current.select("root:0:child:1", false);
+			current.scrollIntoView("root:0:child:1");
+		};
+		context.submit(tree, new LayoutFrame(256.0, 120.0));
+		if (!treeStateReady || tree.selectedKey != "root:0:child:1" || treeSelection != "root:0:child:2")
+			throw "TreeView state-ready synchronization must retain silent external selection";
+		if (tree.scrollIntoView("root:0:child:1"))
+			throw "TreeView must not scroll a row that is already fully visible";
+		tree.onStateReady = null;
 		if (!tree.setExpanded("root:0", false) || treeExpansionKey != "root:0" || treeExpansionValue)
 			return 171;
 		// Toggling immediately after a tree revision must find the visible row
