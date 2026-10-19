@@ -391,7 +391,8 @@ class ProjectWorkspace {
 						directory = Path.directory(directory);
 					}
 				}
-				for (root in value.sourceRoots)
+				// Discovery returns native separators; ownership compares normalized paths.
+				for (root in value.sourceRoots.map(normalize))
 					if (roots.indexOf(root) < 0) roots.push(root);
 				for (path in value.ffiInterfaces) interfaces.set(path, File.getContent(path));
 				for (path in value.ffiProjections) projections.set(path, File.getContent(path));
