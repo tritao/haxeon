@@ -79,7 +79,7 @@ For function breakpoints during debugging, set `"inline": false` in `haxeon.json
 compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
 the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
 
-On Linux and macOS, `run --watch` rebuilds after edits to resolved package
+On Linux, macOS and Windows, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the
 full project build. A failed build leaves the running app open. Runtime output

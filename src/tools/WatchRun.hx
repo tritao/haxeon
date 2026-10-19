@@ -11,8 +11,8 @@ import sys.io.Process;
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
 			rebuild:Bool->Null<ResolvedProject>):Int {
-		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
-			throw "haxeon run --watch currently requires Linux or macOS";
+		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
+			throw "haxeon run --watch currently requires Linux, macOS or Windows";
 		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log",
 			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry), logOffset = 0, result = 0;
 		try {
@@ -55,7 +55,7 @@ class WatchRun {
 					result = exited;
 					break;
 				}
-				process.kill();
+				kill(process);
 				process.exitCode();
 				process.close();
 				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry);
@@ -74,18 +74,31 @@ class WatchRun {
 
 	static function stop(process:Process):Void {
 		if (process.exitCode(false) == null)
-			process.kill();
+			kill(process);
 		process.exitCode();
 		process.close();
+	}
+
+	/** On Windows the app runs under cmd.exe, so the whole tree must be stopped. */
+	static function kill(process:Process):Void {
+		if (Sys.systemName() == "Windows") {
+			// Captured: taskkill reports every descendant, including ones already exiting.
+			var taskkill = new Process("taskkill", ["/T", "/F", "/PID", Std.string(process.getPid())]);
+			taskkill.exitCode();
+			taskkill.close();
+		} else
+			process.kill();
 	}
 
 	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String):Process {
 		var commandArguments = liveHost == null ? [runtime, output].concat(arguments) : [runtime, liveHost, output, entry, Json.stringify(arguments)];
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
+		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
+		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
-			var process = new Process("/bin/sh", ["-c", command]);
+			var process = Sys.systemName() == "Windows" ? new Process(windowsCommand) : new Process("/bin/sh", ["-c", command]);
 			Sys.setCwd(previous);
 			Sys.println('haxeon: running $output');
 			return process;
@@ -97,6 +110,9 @@ class WatchRun {
 
 	static function quote(value:String):String
 		return "'" + value.split("'").join("'\\''") + "'";
+
+	static function windowsQuote(value:String):String
+		return '"' + value.split('"').join('\\"') + '"';
 
 	static function printLog(path:String, offset:Int):Int {
 		if (!FileSystem.exists(path))
