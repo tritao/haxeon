@@ -168,9 +168,16 @@ class DocumentStore {
 		var path = uri.substr(7);
 		if (StringTools.startsWith(path, "localhost/"))
 			path = "/" + path.substr(10);
-		return StringTools.urlDecode(path);
+		path = StringTools.urlDecode(path);
+		// file:///C:/x carries a slash before the Windows drive letter.
+		return windows && ~/^\/[A-Za-z]:/.match(path) ? path.substr(1) : path;
 	}
 
-	static function pathUri(path:String):String
-		return StringTools.startsWith(path, "file://") ? path : "file://" + path;
+	static final windows:Bool = Sys.systemName() == "Windows";
+
+	static function pathUri(path:String):String {
+		if (StringTools.startsWith(path, "file://"))
+			return path;
+		return windows && ~/^[A-Za-z]:/.match(path) ? "file:///" + path : "file://" + path;
+	}
 }
