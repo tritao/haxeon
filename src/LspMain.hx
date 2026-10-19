@@ -6,6 +6,8 @@ import haxe.io.Eof;
 /** Standard Language Server Protocol entry point over stdio. */
 class LspMain {
 	static function main():Void {
+		if (Sys.systemName() == "Windows")
+			binaryStdio();
 		var protocol = new LspProtocol(),
 			input = Sys.stdin(),
 			output = Sys.stdout(),
@@ -39,4 +41,11 @@ class LspMain {
 		}
 		dispatcher.finish();
 	}
+
+	#if (hl && !haxeon)
+	@:hlNative("haxeon_runtime", "__sys_binary_stdio")
+	static function binaryStdio():Void {}
+	#else
+	static function binaryStdio():Void {}
+	#end
 }
