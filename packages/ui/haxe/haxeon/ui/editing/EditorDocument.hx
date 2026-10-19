@@ -12,7 +12,7 @@ class EditorDocument {
 			throw "Editor documents require a stable ID";
 		this.id = id;
 		this.history = history == null ? new EditHistory() : history;
-		savedStateToken = this.history.stateToken;
+		savedStateToken = this.history.persistentStateToken;
 		externallyDirty = false;
 	}
 
@@ -22,7 +22,7 @@ class EditorDocument {
 
 	public var isDirty(get, never):Bool;
 	inline function get_isDirty():Bool
-		return externallyDirty || history.stateToken != savedStateToken;
+		return externallyDirty || history.persistentStateToken != savedStateToken;
 
 	public var canUndo(get, never):Bool;
 	inline function get_canUndo():Bool
@@ -54,7 +54,7 @@ class EditorDocument {
 	/** Marks the current document state as persisted. */
 	public function markSaved():Void {
 		history.breakCoalescing();
-		savedStateToken = history.stateToken;
+		savedStateToken = history.persistentStateToken;
 		externallyDirty = false;
 	}
 

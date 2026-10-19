@@ -3,6 +3,10 @@ package haxeon.ui.editing;
 /** One reversible application mutation owned by EditHistory. */
 class EditOperation {
 	public final label:String;
+	/** Session operations remain undoable without changing the document savepoint. */
+	public final affectsPersistence:Bool;
+	@:allow(haxeon.ui.editing.EditHistory) var beforePersistentToken:Int;
+	@:allow(haxeon.ui.editing.EditHistory) var afterPersistentToken:Int;
 	public final coalesceKey:Null<String>;
 	/** Approximate bytes retained by this operation and its captured undo data. */
 	public var estimatedRetainedBytes(default, null):Int;
@@ -20,12 +24,13 @@ class EditOperation {
 
 	public function new(label:String, apply:Void->Void, undo:Void->Void,
 			?coalesceKey:String, ?merge:EditOperation->Bool, ?mergeData:Dynamic,
-			?estimatedRetainedBytes:Int = 256) {
+			?estimatedRetainedBytes:Int = 256, affectsPersistence:Bool = true) {
 		if (label == null || label.length == 0 || apply == null || undo == null)
 			throw "Edit operations require a label, apply action, and undo action";
 		if (coalesceKey != null && coalesceKey.length == 0)
 			throw "Edit coalescing keys cannot be empty";
 		this.label = label;
+		this.affectsPersistence = affectsPersistence;
 		this.applyAction = apply;
 		this.undoAction = undo;
 		this.coalesceKey = coalesceKey;

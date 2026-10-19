@@ -6,6 +6,8 @@ class EditHistory {
 	final redoStack:Array<EditOperation>;
 	var activeTransaction:Null<EditTransaction>;
 	var nextStateToken:Int;
+	var nextPersistentToken:Int = 1;
+	public var persistentStateToken(default, null):Int = 0;
 	var coalescingAllowed:Bool = true;
 	public final maxOperations:Int;
 	public final maxEstimatedBytes:Int;
@@ -102,6 +104,7 @@ class EditHistory {
 		undoStack.pop();
 		redoStack.push(operation);
 		stateToken = operation.beforeStateToken;
+		persistentStateToken = operation.beforePersistentToken;
 		revision++;
 		return true;
 	}
@@ -116,6 +119,7 @@ class EditHistory {
 		redoStack.pop();
 		undoStack.push(operation);
 		stateToken = operation.afterStateToken;
+		persistentStateToken = operation.afterPersistentToken;
 		revision++;
 		return true;
 	}
@@ -148,6 +152,8 @@ class EditHistory {
 			revision++;
 			return false;
 		}
+		var affectsPersistence = false;
+		for (operation in operations) if (operation.affectsPersistence) affectsPersistence = true;
 		var composite = new EditOperation(transaction.label,
 			function() {
 				for (operation in operations)
@@ -164,7 +170,7 @@ class EditHistory {
 				for (operation in next.transactionOperations)
 					operations.push(operation);
 				return true;
-			}, operations, estimatedBytes);
+			}, operations, estimatedBytes, affectsPersistence);
 		composite.transactionOperations = operations;
 		pushApplied(composite, composite.coalesceKey);
 		return true;
@@ -189,7 +195,7 @@ class EditHistory {
 	function pushApplied(operation:EditOperation, coalesceKey:Null<String>):Void {
 		if (coalescingAllowed && coalesceKey != null && undoStack.length > 0) {
 			var previous = undoStack[undoStack.length - 1];
-			if (previous.coalesceKey == coalesceKey) {
+			if (previous.coalesceKey == coalesceKey && previous.affectsPersistence == operation.affectsPersistence) {
 				var previousBytes = previous.estimatedRetainedBytes;
 				var transactionMergeOverBudget = maxEstimatedBytes > 0 &&
 					previous.transactionOperations != null && operation.transactionOperations != null &&
@@ -202,6 +208,8 @@ class EditHistory {
 					previous.setEstimatedRetainedBytes(mergedBytes);
 					estimatedRetainedBytes = saturatedAdd(estimatedRetainedBytes - previousBytes, mergedBytes);
 					previous.afterStateToken = nextStateToken++;
+					previous.afterPersistentToken = previous.affectsPersistence ? nextPersistentToken++ : persistentStateToken;
+					persistentStateToken = previous.afterPersistentToken;
 					stateToken = previous.afterStateToken;
 					clearRedoStack();
 					revision++;
@@ -211,9 +219,12 @@ class EditHistory {
 			}
 		}
 		coalescingAllowed = true;
+		operation.beforePersistentToken = persistentStateToken;
+		operation.afterPersistentToken = operation.affectsPersistence ? nextPersistentToken++ : persistentStateToken;
 		operation.beforeStateToken = stateToken;
 		operation.afterStateToken = nextStateToken++;
 		stateToken = operation.afterStateToken;
+		persistentStateToken = operation.afterPersistentToken;
 		undoStack.push(operation);
 		estimatedRetainedBytes = saturatedAdd(estimatedRetainedBytes, operation.estimatedRetainedBytes);
 		clearRedoStack();
