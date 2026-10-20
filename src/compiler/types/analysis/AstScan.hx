@@ -41,7 +41,7 @@ class AstScan {
 		switch expression {
 			case BlockExpression(statements, value, _):
 				return anyExpression(statements, test) || expressionMatches(value, test);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				return anyExpression(body, test);
 			default:
 		}

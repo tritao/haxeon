@@ -8,7 +8,7 @@ import haxe.io.BytesOutput;
 /** Strict deterministic persistence for the compiler's published runtime ABI. */
 class RuntimeAbiCodec {
 	static inline final MAGIC = "ABI";
-	static inline final VERSION = 1;
+	static inline final VERSION = 2;
 	static inline final MAX_ENTRIES = 0x100000;
 	static inline final MAX_STRING_BYTES = 0x1000000;
 
@@ -22,6 +22,9 @@ class RuntimeAbiCodec {
 		writeMap(output, descriptor.interfaces);
 		writeMap(output, descriptor.enums);
 		writeMap(output, descriptor.globals);
+		output.writeByte(descriptor.positional == null ? 0 : 1);
+		if (descriptor.positional != null)
+			writeMap(output, descriptor.positional);
 		return output.getBytes();
 	}
 
@@ -31,13 +34,15 @@ class RuntimeAbiCodec {
 		try {
 			if (input.readString(3) != MAGIC)
 				throw "Invalid runtime ABI state";
-			if (input.readByte() != VERSION)
+			var version = input.readByte();
+			if (version != 1 && version != VERSION)
 				throw "Unsupported runtime ABI state version";
 			var functions = readMap(input, bytes.length),
 				objects = readMap(input, bytes.length),
 				interfaces = readMap(input, bytes.length),
 				enums = readMap(input, bytes.length),
-				globals = readMap(input, bytes.length);
+				globals = readMap(input, bytes.length), // Version 1 predates positional fingerprints; the planner then treats every group as renumbered.
+				positional = version == 1 || input.readByte() == 0 ? null : readMap(input, bytes.length);
 			if (input.position != bytes.length)
 				throw "Trailing runtime ABI state data";
 			return {
@@ -45,7 +50,8 @@ class RuntimeAbiCodec {
 				objects: objects,
 				interfaces: interfaces,
 				enums: enums,
-				globals: globals
+				globals: globals,
+				positional: positional
 			};
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated runtime ABI state";

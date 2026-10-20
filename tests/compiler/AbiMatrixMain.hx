@@ -59,7 +59,37 @@ class AbiMatrixMain {
 			fixture("enum changed", abi(null, null, null, ["Result" => "Ok(I32);Error(Bytes)"]), abi(null, null, null, ["Result" => "Error(Bytes);Ok(I32)"]),
 				Reload(EnumChanged("Result"))),
 			fixture("static field type changed", abi(null, null, null, null, ["Editor.count" => "I32"]),
-				abi(null, null, null, null, ["Editor.count" => "F64"]), Reload(GlobalLayoutChanged("Editor.count")))
+				abi(null, null, null, null, ["Editor.count" => "F64"]), Reload(GlobalLayoutChanged("Editor.count"))),
+			fixture("lambda edited in place", abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "b"]),
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "c"]), Patch),
+			fixture("lambdas shifted by an insertion and a deletion",
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "b"]),
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "c", "$lambda:main:main#1" => "a"]),
+				Reload(GeneratedFunctionsRenumbered("$lambda:main:main"))),
+			fixture("lambda edited into a copy of its neighbour",
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "b"]),
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "a"]),
+				Reload(GeneratedFunctionsRenumbered("$lambda:main:main"))),
+			fixture("function adapters shifted by an insertion and a deletion", abi(null, null, null, null, null, [
+				"$function-adapter:Ui.register:0" => "a",
+				"$function-adapter:Ui.register:1" => "b"
+			]), abi(null, null, null, null, null,
+				[
+					"$function-adapter:Ui.register:0" => "c",
+					"$function-adapter:Ui.register:1" => "a"
+				]),
+				Reload(GeneratedFunctionsRenumbered("$function-adapter:Ui.register"))),
+			fixture("lambdas appended after the kept ones", abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]),
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "b"]), Patch),
+			fixture("lambda fingerprints unknown before the edit", {
+				functions: [],
+				objects: [],
+				interfaces: [],
+				enums: [],
+				globals: [],
+				positional: null
+			},
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]), Reload(GeneratedFunctionsRenumbered("$lambda:main:main")))
 		];
 		for (fixture in fixtures)
 			assertDecision(fixture);
@@ -118,7 +148,7 @@ class AbiMatrixMain {
 			sourceFixture("closure capture change",
 				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + offset; }; return f(38); }",
 				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + more; }; return f(39); }",
-				ReloadFor(ClosureLayoutChanged("$lambda-env:main:60"))),
+				ReloadFor(ClosureLayoutChanged("$lambda-env:main:main#0"))),
 			sourceFixture("constructor removal", "class Editor { public function new():Void {} } function main():Int { return 40; }",
 				"class Editor {} function main():Int { return 40; }", ReloadFor(FunctionRemoved("Editor.new"))),
 			sourceFixture("function declaration order",
@@ -171,13 +201,14 @@ class AbiMatrixMain {
 		};
 
 	static function abi(?functions:Map<String, String>, ?objects:Map<String, String>, ?interfaces:Map<String, String>, ?enums:Map<String, String>,
-			?globals:Map<String, String>):RuntimeAbiDescriptor
+			?globals:Map<String, String>, ?positional:Map<String, String>):RuntimeAbiDescriptor
 		return {
 			functions: functions == null ? [] : functions,
 			objects: objects == null ? [] : objects,
 			interfaces: interfaces == null ? [] : interfaces,
 			enums: enums == null ? [] : enums,
-			globals: globals == null ? [] : globals
+			globals: globals == null ? [] : globals,
+			positional: positional == null ? [] : positional
 		};
 
 	static function assertDecision(fixture:AbiFixture):Void {

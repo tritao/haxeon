@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main GeneratedFunctionRenumberingMain
+-hl out/generated-function-renumbering-test.hl

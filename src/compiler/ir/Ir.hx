@@ -223,6 +223,12 @@ class IrProgram {
 	public var staticFields:Array<IrStaticField> = [];
 	public var entryPoint:String;
 
+	/**
+	 * The code fingerprint (`IrFunctionStateCodec.codeFingerprint`) of every positionally named function (`PositionalName`), when
+	 * the build records them.
+	 */
+	public var positionalFingerprints:Map<String, String> = [];
+
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;
 }

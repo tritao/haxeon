@@ -315,7 +315,7 @@ class SemanticDependencyCollector {
 				scanCallExpression(offset, calls, aliases);
 			case PostfixIncrement(target, _, _):
 				scanCallExpression(target, calls, aliases);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				for (statement in body)
 					scanCalls(statement, calls, aliases);
 			default:

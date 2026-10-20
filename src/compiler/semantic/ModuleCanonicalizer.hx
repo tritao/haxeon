@@ -75,7 +75,7 @@ class ModuleCanonicalizer {
 			}
 			// A local function sees itself; any other initializer sees what was in scope before it.
 			var recursive = switch statement {
-				case VarDeclaration(_, _, Lambda(_, _, _), _): true;
+				case VarDeclaration(_, _, Lambda(_, _, _, _), _): true;
 				case _: false;
 			}
 			if (declared != null && recursive && scope.get(declared) != false) {
@@ -519,7 +519,7 @@ class ModuleCanonicalizer {
 			case Index(array, offset,
 				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
 			case PostfixIncrement(target, delta, s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
-			case Lambda(arguments, body, s):
+			case Lambda(arguments, body, identity, s):
 				Lambda([
 					for (argument in arguments)
 						{
@@ -531,7 +531,7 @@ class ModuleCanonicalizer {
 							defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 						}
 				],
-					canonicalBlock(body, module, entry, locals, aliases, [for (argument in arguments) argument.name]), s);
+					canonicalBlock(body, module, entry, locals, aliases, [for (argument in arguments) argument.name]), identity, s);
 		}
 
 	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:Map<String, Bool>,

@@ -55,8 +55,8 @@ class LambdaCollector {
 	public static function collectExpression(expression:AstExpression, functionName:String, module:String,
 			generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
-			case Lambda(_, body, span):
-				var lambdaName = LambdaName.of(functionName, span.start);
+			case Lambda(_, body, identity, _):
+				var lambdaName = LambdaName.of(functionName, identity);
 				var names:Map<String, Bool>;
 				if (generatedByModule.exists(module))
 					names = generatedByModule.get(module);

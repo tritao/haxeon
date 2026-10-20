@@ -54,7 +54,7 @@ class LexicalStorageAnalysis extends BindingWalker {
 
 	override function statement(value:AstStatement):Void {
 		var localFunction = switch value {
-			case VarDeclaration(name, _, Lambda(_, _, _), span): key(name, span);
+			case VarDeclaration(name, _, Lambda(_, _, _, _), span): key(name, span);
 			default: null;
 		};
 		if (localFunction != null)

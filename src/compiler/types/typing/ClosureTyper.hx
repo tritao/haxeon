@@ -65,8 +65,8 @@ class ClosureTyper {
 		this.alwaysReturns = alwaysReturns;
 	}
 
-	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
-			inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
+	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
 		if (session.lambdaCache.exists(lambdaKey))
 			return session.lambdaCache.get(lambdaKey);
@@ -167,7 +167,7 @@ class ClosureTyper {
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
-		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, span.start),
+		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, identity),
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
@@ -203,7 +203,7 @@ class ClosureTyper {
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = '$' + 'lambda-env:${session.currentContext.name}:${span.start}';
+			environment = '$' + 'lambda-env:${session.currentContext.name}:$identity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({

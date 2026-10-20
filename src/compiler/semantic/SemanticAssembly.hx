@@ -891,7 +891,7 @@ class SemanticAssembly {
 	}
 
 	/** A purity/no-return answer is recorded against the exact body that asked, which for a
-	 * closure is its own `$lambda:origin:offset` name. Only the top-level function is ever
+	 * closure is its own `$lambda:origin:identity` name. Only the top-level function is ever
 	 * independently retyped, so walk back through any lambda nesting to find it.
 	 */
 	static function purityDependencyOwner(name:String):String
