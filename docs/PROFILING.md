@@ -15,13 +15,65 @@ LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
 
 For host applications, `haxeon run --profile` automates that handshake: it builds
 the project, launches it with `--diagnostics-wait`, attaches `hlprof-live`, writes
-an HLPC capture (default `build/host/profile/profile-<timestamp>/profile.hlpc`), and prints
-a top-functions report after the process exits. Pass `--profile-output PATH` to
-choose the capture location, and runtime arguments after `--`:
+an HLPC capture (default `build/host/profile/profile-<timestamp>/profile.hlpc`),
+exports it as a native Perfetto trace (`profile.pftrace` next to the capture), and
+prints a top-functions report after the process exits. Open the `.pftrace` at
+https://ui.perfetto.dev. Pass `--profile-output PATH` to choose the capture
+location, and runtime arguments after `--`:
 
 ```sh
 haxeon run --profile --profile-output build/host/profile/editor.hlpc
 ```
+
+`--profile` also works with `--watch` and `--watch --live`. Each launch of the
+watched app gets its own capture directory under the profile root (or under
+`--profile-output`, which is then a directory), finished when that launch exits
+or is relaunched after an edit. Live patches stay inside one capture: the trace
+shows a `live.patch` (or `live.reload`) slice at the patch, a "module loaded" or
+"module revision" instant, and JIT frames named `[hashlink-jit m<module> r<revision>]`,
+so samples before and after a patch are attributed to the code that actually ran.
+In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag.
+
+### What a trace contains
+
+- Stack samples (`--rate`, default 1000 Hz from `haxeon run`) with Haxe frames
+  named `Class.method` with file and line.
+- Mixed-mode stacks on Windows x64: samples walk through native code with the
+  unwind data of each module and of the JIT, so a stack shows Haxe calling into
+  a native library and back into Haxe callbacks. A native frame belongs to its
+  module's mapping and is named by its function, with file and line when the
+  module has a PDB. Without a PDB it is named after the nearest export,
+  `module!export+0x...`, and an address outside every known module is named
+  `[unknown 0x...]`. Other platforms record Haxe frames and stop at the first
+  native frame.
+- Span slices from `haxeon.ProfileSpan`, on the thread that emitted them.
+- Counters: HashLink GC counters, plus app counters from
+  `haxeon.ProfileCounter.set(name, value)`.
+- Instants for module loads and live module revisions.
+
+The desktop UI host marks each pump step's event wait and dispatch with
+`ui.events`, which contains the `ui.frame` of any frame the events trigger.
+`ui.frame` contains `ui.prepare`, `ui.submit`, `ui.render` and `ui.frame.gc`.
+The exosuit editor also records the `ui.frame.allocated_bytes` counter. `ProfileSpan` and
+`ProfileCounter` skip their work when nothing is recording, so they can stay in
+shipped code.
+
+MSVC Release builds of HashLink and the Haxeon runtime write PDBs next to the
+binaries so the profiler and debuggers can name their functions.
+
+To check a trace without opening the UI, `scripts/check-pftrace.py` runs
+queries through Perfetto's `trace_processor_shell` (download it from the
+Perfetto releases):
+
+```sh
+python3 scripts/check-pftrace.py --tp trace_processor_shell \
+  --expect-process Main --expect-thread main --expect-slice ui.frame \
+  --expect-counter ui.frame.allocated_bytes --min-samples 1000 \
+  build/host/profile/profile-<timestamp>/profile.pftrace
+```
+
+On Windows x64, add `--expect-mixed` to require stacks that pass from Haxe
+through native code and back into Haxe; other platforms do not record them.
 
 Applications can mark a measured operation with `haxeon.ProfileSpan.begin(name)`
 and `haxeon.ProfileSpan.end(name)`. Markers use the same clock and thread IDs as
@@ -41,8 +93,12 @@ counts when capture ends before the final marker is drained. A span with few
 samples needs further investigation; sampling alone cannot prove whether its
 thread was descheduled or blocked.
 
-Profile captures include `capture.json` and a copy of the exact bytecode used
-by the run. A HashLink heap dump captured by the application can be placed in
+Profile captures include `capture.json` and a copy of the bytecode the run
+was launched with, taken before launch. A live run also keeps each build it
+patched or reloaded into, as `profile.r2.hl`, `profile.r3.hl` and so on, listed
+under `liveRevisions` in the manifest. A capture directory holds one capture:
+the trace and bytecode are named after the `.hlpc` file, and recording into a
+directory that holds a different capture is refused. A HashLink heap dump captured by the application can be placed in
 the same directory and added as the `heap` artifact in the manifest. Inspect
 it with `haxeon heap inspect --capture DIR`, or pass the bytecode and dump paths
 directly with `haxeon heap inspect BYTECODE DUMP`.
