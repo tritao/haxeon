@@ -239,6 +239,8 @@ class TestCatalog {
 				"the JIT keeps reading locals whose address is passed to a callee from memory"),
 			hxmlCase("runtime", "inline-patch", "tests/hxml/inline-patch-test.hxml", "inline-patch-test.hl", 0,
 				"a callee edit patches every function that inlined it"),
+			hxmlCase("runtime", "try-exit-patch", "tests/hxml/try-exit-patch-test.hxml", "try-exit-patch-test.hl", 0,
+				"a function that leaves a try body early is patchable"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),
 			hxmlCase("runtime", "jit-native-properties", "tests/hxml/jit-native-properties-test.hxml", "jit-native-properties-test.hl", 0,
 				"external native noreturn declarations and ordinary calls preserve live values"),

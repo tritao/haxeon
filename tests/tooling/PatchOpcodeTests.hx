@@ -235,6 +235,29 @@ class PatchOpcodeTests {
 			if (!rejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 				throw 'Invalid ${HaxeType.enumConstructor(op)} changed live state';
 		}
+		// Each path ends its trap, but the end-trap lies after the handler, outside the try region the JIT tracks in
+		// instruction order, where emitting it aborts the process.
+		var trapPastHandler:Array<HlInstruction> = [
+			Trap(0, "handler"),
+			Jump("after"),
+			Label("handler"),
+			Return(0),
+			Label("after"),
+			EndTrap(0),
+			Return(0)
+		];
+		code.functions = [new HlFunction(2, 0, [1], trapPastHandler)];
+		var trapBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),
+			trapRejected = false;
+		try {
+			Runtime.patchSet(loaded, new PatchSet(1, 2, trapBytes, [70000]));
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible)
+				throw error;
+			trapRejected = true;
+		}
+		if (!trapRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
+			throw "An end-trap outside its try region changed live state";
 		code.functions = [
 			new HlFunction(2, 0, [1], [LoadInt(0, 0), GlobalSet(0, 0), GlobalGet(0, 0), Return(0)])
 		];
