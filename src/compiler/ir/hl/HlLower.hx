@@ -152,23 +152,39 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy(),
-			dispatchArities:Map<String, Bool> = [];
+		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
 			if (arity > 16)
 				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
+			if ((isNativePointer(native.result) || isManagedPointerBytes(native) || isUtf8Result(native))
+				&& native.pointerOwnership == "unspecified")
+				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
+		}
+		for (native in discoverCDispatchNatives(program))
+			cDispatchNatives.push(native);
+		lowerProgramWithNatives(program, runtimeNatives);
+		return code;
+	}
+
+	/**
+	 * The runtime natives that ordinary C calls dispatch through, one per call shape, in first-use order. A module's layout
+	 * places them with the other natives, before every function, so functions a later build appends never move them.
+	 */
+	public static function discoverCDispatchNatives(program:IrProgram):Array<IrNative> {
+		var result:Array<IrNative> = [],
+			dispatchArities:Map<String, Bool> = [];
+		for (native in program.cNatives) {
+			var arity = native.arguments.length;
 			var pointerResult = isNativePointer(native.result),
 				bytesResult = isManagedPointerBytes(native),
 				aggregateResult = isAggregateResult(native),
 				utf8Result = isUtf8Result(native),
 				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult:$utf8Result';
-			if ((pointerResult || bytesResult || utf8Result) && native.pointerOwnership == "unspecified")
-				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
-				cDispatchNatives.push({
+				result.push({
 					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "haxeon_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
@@ -192,8 +208,7 @@ class HlLower {
 				});
 			}
 		}
-		lowerProgramWithNatives(program, runtimeNatives);
-		return code;
+		return result;
 	}
 
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>, ?selected:Array<String>):Array<IrNative> {

@@ -23,6 +23,9 @@ typedef HlAssemblerState = {
 	final symbols:haxe.io.Bytes;
 	final cache:haxe.io.Bytes;
 	@:optional final runtimeNatives:Array<IrNative>;
+
+	/** Names of the C dispatch natives, which follow the runtime natives in the layout. Absent in older baselines. */
+	@:optional final dispatchNatives:Array<String>;
 }
 
 /** Module plus identity and delta metadata produced by one assembly transaction. */
@@ -30,6 +33,10 @@ typedef HlAssemblyResult = {
 	final module:HlCode;
 	final changedFunctions:Array<Int>;
 	final changedSlots:Array<Int>;
+
+	/** Slots this build gives functions the published module does not have, in slot order, with their names. */
+	final addedFunctions:Array<{slot:Int, name:String}>;
+
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
 	final revision:Int;
@@ -64,6 +71,10 @@ class HlModuleAssembler {
 	var publishedTypes = 0;
 	var loweredFunctions:Map<String, HlFunction> = [];
 	var runtimeNatives:Array<IrNative> = [];
+
+	/** Null when a restored baseline does not record them, so the next build cannot trust their slots. */
+	var dispatchNatives:Null<Array<String>> = [];
+
 	final debugMetadata:HlDebugMetadataCache;
 
 	/** Literals are created once when the module loads; only for a module that is never patched. */
@@ -87,6 +98,7 @@ class HlModuleAssembler {
 		result.publishedTypes = publishedTypes;
 		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
 		result.runtimeNatives = runtimeNatives.copy();
+		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		return result;
 	}
 
@@ -100,7 +112,8 @@ class HlModuleAssembler {
 			publishedTypes: publishedTypes,
 			symbols: HlSymbolStateCodec.encode(symbols.exportState()),
 			cache: HlFunctionCacheStateCodec.encode(cache.exportState()),
-			runtimeNatives: runtimeNatives.copy()
+			runtimeNatives: runtimeNatives.copy(),
+			dispatchNatives: dispatchNatives == null ? null : dispatchNatives.copy()
 		};
 
 	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
@@ -112,6 +125,7 @@ class HlModuleAssembler {
 		else if (state.initialized)
 			// Import indices are part of the published layout; guessing can patch the wrong slots.
 			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
+		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
 		if (state.revision < 0
 			|| state.publishedInts < 0
 			|| state.publishedFloats < 0
@@ -147,8 +161,18 @@ class HlModuleAssembler {
 		publishedTypes = 0;
 	}
 
+	static function sameNames(previous:Null<Array<String>>, next:Array<String>):Bool {
+		if (previous == null || previous.length != next.length)
+			return false;
+		for (index in 0...next.length)
+			if (previous[index] != next[index])
+				return false;
+		return true;
+	}
+
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
-		var startedAt = Sys.time() * 1000.0;
+		var startedAt = Sys.time() * 1000.0,
+			publishedSlots = cache.slots.length;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -179,9 +203,21 @@ class HlModuleAssembler {
 			discardPublishedSymbols();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
 		}
+		// C dispatch natives sit with the runtime natives, before every function slot. When they change, every function slot
+		// moves, so publish a fresh module.
+		var nextDispatch = [for (native in HlLower.discoverCDispatchNatives(ordered)) native.name];
+		if (reuseLowered && !sameNames(dispatchNatives, nextDispatch)) {
+			reload = true;
+			reuseLowered = false;
+			discardPublishedSymbols();
+			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
+		}
+		dispatchNatives = nextDispatch;
 		var layout:Map<String, Int> = [], next = 0;
 		for (native in runtimeNatives)
 			layout.set(native.name, next++);
+		for (name in nextDispatch)
+			layout.set(name, next++);
 		for (name in cache.slots)
 			layout.set(name, next++);
 		if (reuseLowered)
@@ -206,6 +242,14 @@ class HlModuleAssembler {
 			}
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
+		var addedFunctions:Array<{slot:Int, name:String}> = [];
+		if (initialized && !reload)
+			for (index in publishedSlots...cache.slots.length) {
+				var name = cache.slots[index], slot = layout.get(name);
+				if (slot == null)
+					throw 'Added function $name has no slot';
+				addedFunctions.push({slot: slot, name: name});
+			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
 			runtimeNatives, debugMetadata, stringConstants),
 			module = lowered.code;
@@ -227,6 +271,7 @@ class HlModuleAssembler {
 			module: module,
 			changedFunctions: changed,
 			changedSlots: changedSlots,
+			addedFunctions: addedFunctions,
 			functionIndices: layout,
 			requiresReload: reload,
 			revision: revision,

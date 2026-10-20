@@ -20,6 +20,7 @@ typedef HlPatch = {
 	final strings:Array<String>;
 	final types:Array<HlTypeDef>;
 	final functions:Array<HlPatchFunction>;
+	final addedFunctions:Array<HlPatchAddedFunction>;
 	final debugFiles:Array<String>;
 	final sourceSnapshots:Array<{sourceHash:Int, content:haxe.io.Bytes}>;
 }
@@ -42,6 +43,14 @@ typedef HlPatchFunction = {
 		end:Int,
 		flags:Int
 	}>;
+}
+
+/** A function the patch adds to the running module, in the next free slot. */
+typedef HlPatchAddedFunction = {
+	final stableId:Int;
+	final functionIndex:Int;
+	final type:Int;
+	final name:String;
 }
 
 /** Decoded numeric HashLink opcode and its wire operands. */

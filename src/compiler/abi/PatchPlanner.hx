@@ -31,7 +31,11 @@ enum PatchDecision {
 
 /** Compares the exact ABI descriptors consumed by HL lowering. */
 class PatchPlanner {
-	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor):PatchDecision {
+	/**
+	 * `addsFunctions`: the running module can take functions a patch adds (HashLink live patching), so a new function is not a
+	 * reason to reload. Positionally named functions are still checked for renumbering, which an addition can cause.
+	 */
+	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false):PatchDecision {
 		if (previous == null)
 			return Patch;
 		var reasons:Array<AbiChange> = [];
@@ -54,9 +58,20 @@ class PatchPlanner {
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
 		for (group in renumberedGroups(previous.positional, next.positional))
 			reasons.push(GeneratedFunctionsRenumbered(group));
+		if (addsFunctions)
+			reasons = [
+				for (reason in reasons)
+					if (!isAddition(reason)) reason
+			];
 		reasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		return reasons.length == 0 ? Patch : ReloadDomain(reasons);
 	}
+
+	static function isAddition(reason:AbiChange):Bool
+		return switch reason {
+			case FunctionAdded(_): true;
+			default: false;
+		};
 
 	/** Whether producing the replacement module requires discarding backend tombstones and layout caches. */
 	public static function requiresFreshLayout(decision:PatchDecision):Bool

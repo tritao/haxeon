@@ -13,6 +13,9 @@ typedef AbiFixture = {
 	final previous:Null<RuntimeAbiDescriptor>;
 	final next:RuntimeAbiDescriptor;
 	final expected:ExpectedDecision;
+
+	/** Whether the running module takes added functions, as HashLink modules do. */
+	final addsFunctions:Bool;
 }
 
 enum ExpectedDecision {
@@ -89,7 +92,18 @@ class AbiMatrixMain {
 				globals: [],
 				positional: null
 			},
-				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]), Reload(GeneratedFunctionsRenumbered("$lambda:main:main")))
+				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]), Reload(GeneratedFunctionsRenumbered("$lambda:main:main"))),
+			fixture("function added to a module that takes added functions", empty, abi(["helper" => "()->I32"]), Patch, true),
+			fixture("lambda appended in a module that takes added functions",
+				abi(["$lambda:main:main#0" => "()->I32"], null, null, null, null, ["$lambda:main:main#0" => "a"]),
+				abi(["$lambda:main:main#0" => "()->I32", "$lambda:main:main#1" => "()->I32"], null, null, null, null,
+					["$lambda:main:main#0" => "a", "$lambda:main:main#1" => "b"]),
+				Patch, true),
+			fixture("lambda inserted before another in a module that takes added functions",
+				abi(["$lambda:main:main#0" => "()->I32"], null, null, null, null, ["$lambda:main:main#0" => "a"]),
+				abi(["$lambda:main:main#0" => "()->I32", "$lambda:main:main#1" => "()->I32"], null, null, null, null,
+					["$lambda:main:main#0" => "b", "$lambda:main:main#1" => "a"]),
+				Reload(GeneratedFunctionsRenumbered("$lambda:main:main")), true)
 		];
 		for (fixture in fixtures)
 			assertDecision(fixture);
@@ -98,8 +112,9 @@ class AbiMatrixMain {
 		var sourceFixtures:Array<SourceFixture> = [
 			sourceFixture("no-op", "function main():Int { return 40; }", "function main():Int { return 40; }", NoOp),
 			sourceFixture("body edit", "function main():Int { return 40; }", "function main():Int { return 42; }", BodyPatch),
+			// HashLink modules take added functions, so an addition patches.
 			sourceFixture("function addition", "function main():Int { return 40; }", "function helper():Int { return 2; } function main():Int { return 40; }",
-				ReloadFor(FunctionAdded("Main.helper"))),
+				BodyPatch),
 			sourceFixture("function removal", "function helper():Int { return 2; } function main():Int { return 40; }", "function main():Int { return 40; }",
 				ReloadFor(FunctionRemoved("Main.helper"))),
 			sourceFixture("function signature", "function helper(value:Int):Int { return value; } function main():Int { return 40; }",
@@ -192,12 +207,14 @@ class AbiMatrixMain {
 		}
 	}
 
-	static function fixture(name:String, previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, expected:ExpectedDecision):AbiFixture
+	static function fixture(name:String, previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, expected:ExpectedDecision,
+			addsFunctions:Bool = false):AbiFixture
 		return {
 			name: name,
 			previous: previous,
 			next: next,
-			expected: expected
+			expected: expected,
+			addsFunctions: addsFunctions
 		};
 
 	static function abi(?functions:Map<String, String>, ?objects:Map<String, String>, ?interfaces:Map<String, String>, ?enums:Map<String, String>,
@@ -212,7 +229,7 @@ class AbiMatrixMain {
 		};
 
 	static function assertDecision(fixture:AbiFixture):Void {
-		var actual = PatchPlanner.plan(fixture.previous, fixture.next);
+		var actual = PatchPlanner.plan(fixture.previous, fixture.next, fixture.addsFunctions);
 		switch [fixture.expected, actual] {
 			case [Patch, Patch]:
 			case [Reload(expected), ReloadDomain(reasons)] if (reasons.length == 1 && Type.enumEq(expected, reasons[0])):
