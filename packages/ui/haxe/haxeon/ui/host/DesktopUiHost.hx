@@ -244,6 +244,23 @@ class DesktopUiHost {
 			var borrowedSurface = NativeKitSurface.borrowNativeHandle(surface);
 			nativeSurface = borrowedSurface;
 
+			// The Win32 sizing loop blocks this pump for the whole drag. Every intermediate size is
+			// queued and replayed one per iteration afterwards, and a full queue drops the final one.
+			// Applying the live size makes the first replayed event final and the rest no-ops.
+			var windowsResize = Sys.systemName() == "Windows";
+			var resizeSurface = function(width:Int, height:Int):Void {
+				if (windowsResize) {
+					var size = NativeKit.nk_window_get_size(window);
+					if (size.status != Result.Ok) throw "Window size query failed: " + NativeKit.nk_last_error();
+					if (size.out_width == runtime.logicalWidth && size.out_height == runtime.logicalHeight) return;
+					width = size.out_width;
+					height = size.out_height;
+				}
+				if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
+					throw "Surface resize failed";
+				runtime.resize(width, height, runtime.framebufferWidth, runtime.framebufferHeight);
+				scheduleFrameWithReason("window-resize");
+			};
 			eventSubscription = pump.listen(function(value) {
 				var eventName = eventKind(value);
 				if (eventName == "TextInput" && lastInputDeliveredAt >= 0.0)
@@ -258,10 +275,9 @@ class DesktopUiHost {
 						hostContext.requestClose();
 						scheduleFrameWithReason("window-close");
 					case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
-						if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
-							throw "Surface resize failed";
-						runtime.resize(width, height, runtime.framebufferWidth, runtime.framebufferHeight);
-						scheduleFrameWithReason("window-resize");
+						resizeSurface(width, height);
+					case WindowFramebufferResize(source, _, _) if (windowsResize && source.rawValue() == window.rawValue()):
+						resizeSurface(0, 0);
 					case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
 						runtime.setScale(scale);
 						scheduleFrameWithReason("window-scale");
