@@ -32,6 +32,8 @@ or is relaunched after an edit. Live patches stay inside one capture: the trace
 shows a `live.patch` (or `live.reload`) slice at the patch, a "module loaded" or
 "module revision" instant, and JIT frames named `[hashlink-jit m<module> r<revision>]`,
 so samples before and after a patch are attributed to the code that actually ran.
+A live module calls each function through a small entry stub; a sample that
+stops in one shows as `<function> [entry]` in `[hashlink-jit-entries m<module>]`.
 In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag.
 
 ### What a trace contains
