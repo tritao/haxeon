@@ -248,6 +248,8 @@ class TestCatalog {
 				"generated-function-renumbering-test.hl", 0, "edits that renumber lambdas or function adapters never reroute stored closures"),
 			hxmlCase("runtime", "added-function-patch", "tests/hxml/added-function-patch-test.hxml", "added-function-patch-test.hl", 0,
 				"edits that add functions patch the running module"),
+			hxmlCase("runtime", "patch-unwind", "tests/hxml/patch-unwind-test.hxml", "patch-unwind-test.hl", 0,
+				"exception stacks walk through patched code and the frames below it"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),
 			hxmlCase("runtime", "jit-native-properties", "tests/hxml/jit-native-properties-test.hxml", "jit-native-properties-test.hl", 0,
 				"external native noreturn declarations and ordinary calls preserve live values"),
