@@ -90,11 +90,29 @@ class WatchRun {
 			process.kill();
 	}
 
+	/**
+		taskkill /F returns before the old app has closed its handles. While it still holds the
+		log, the new cmd.exe redirection fails and the relaunch exits at once.
+	**/
+	static function releaseLog(path:String):Void {
+		var deadline = Sys.time() + 10.0;
+		while (true) {
+			try {
+				File.saveContent(path, "");
+				return;
+			} catch (error:Dynamic) {
+				if (Sys.time() > deadline) throw error;
+				Sys.sleep(0.1);
+			}
+		}
+	}
+
 	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String):Process {
 		var commandArguments = liveHost == null ? [runtime, output].concat(arguments) : [runtime, liveHost, output, entry, Json.stringify(arguments)];
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
+		if (Sys.systemName() == "Windows") releaseLog(logPath);
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
