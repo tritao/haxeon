@@ -637,7 +637,12 @@ class HaxeonCli {
 							&& resolvedPackage.manifest.native.cmake != null))
 						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
+			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
+			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
+			// identity, and a live app can be patched instead of reloaded.
+			var buildPath = environmentCopy("PATH");
 			configureRuntimeLibraryPath(home, nativeDirectories);
+			var runPath = environmentCopy("PATH");
 			if (options.watch) {
 				var liveHost:Null<String> = null;
 				if (options.live) {
@@ -656,12 +661,19 @@ class HaxeonCli {
 						throw "Could not build the live development host";
 				}
 				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, function(compilerOnly) {
+					var windows = Sys.systemName() == "Windows" && buildPath != null;
+					if (windows)
+						Sys.putEnv("PATH", buildPath);
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
 						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
 							options.selfHosted, compilerOnly, options.live);
+						if (windows)
+							Sys.putEnv("PATH", runPath);
 						return status == 0 ? candidate : null;
 					} catch (error:Dynamic) {
+						if (windows)
+							Sys.putEnv("PATH", runPath);
 						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
 						return null;
 					}
@@ -1339,6 +1351,15 @@ class HaxeonCli {
 		if (existing != null && existing.length > 0)
 			directories.push(existing);
 		Sys.putEnv(variable, directories.join(Sys.systemName() == "Windows" ? ";" : ":"));
+	}
+
+	/**
+		A variable's value that stays valid after the variable is set again. On HashLink for Windows, Sys.getEnv returns a
+		String over the C runtime's own copy of the value, which Sys.putEnv frees.
+	**/
+	static function environmentCopy(name:String):Null<String> {
+		var value = Sys.getEnv(name);
+		return value == null ? null : haxe.io.Bytes.ofString(value).toString();
 	}
 
 	static function haxeonHome():String {
