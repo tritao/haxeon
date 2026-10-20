@@ -170,16 +170,17 @@ Native implementation changes do not invalidate independently compiled bytecode;
 Haxe sources, FFI interfaces/projections, compiler sources, and the standard
 library still do. Failed native builds still block the project build and launch.
 
-On Linux and macOS, host builds reuse a private compiler worker between CLI
-invocations. Small source edits retain semantic compiler state; changes to the
+On Linux, macOS and Windows, host builds reuse a private compiler worker between
+CLI invocations (on Windows, only the compiled CLI; `scripts/haxeon.cmd` interprets
+the CLI and compiles one-shot). Small source edits retain semantic compiler state; changes to the
 source manifest, roots, defines, or FFI configuration reset it. Compiler or
 standard-library changes select a fresh worker. Workers exit after
 `HAXEON_COMPILER_IDLE_SECONDS` (default 90) without a request. Every build root
-shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`, or
-`HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
+shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`,
+`%LOCALAPPDATA%\haxeon\compiler` on Windows, or `HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
 logs, so the resident limits below apply to the whole machine. Set
 `HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
-as a HashLink program compiled once per compiler version (Windows interprets it). Windows, explicit `--self-hosted` builds, and unavailable workers
+as a HashLink program compiled once per compiler version (Windows interprets it). Explicit `--self-hosted` builds and unavailable workers
 retain the one-shot path. The normal CLI's local fingerprint checks run before
 contacting a worker, so unchanged bytecode is still skipped entirely.
 

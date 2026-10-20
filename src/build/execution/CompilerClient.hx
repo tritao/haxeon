@@ -23,7 +23,10 @@ class CompilerClient {
 
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
 			fallback:Void->Int):Int {
-		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0" || (Sys.systemName() != "Linux" && Sys.systemName() != "Mac"))
+		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
+		// compiled CLI uses one there.
+		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0"
+			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
 			return fallback();
 		var connection:Null<Connection> = null;
 		try {
@@ -47,42 +50,47 @@ class CompilerClient {
 					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
 				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
-				var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
-					libraryPath = [
-						Path.join([home, "out"]),
-						Path.join([home, ".tools", "hashlink"]),
-						Sys.getEnv(libraryVariable)
-					].filter(value -> value != null && value.length > 0).join(":"),
-					launchArguments = [hashlink];
-				if (profilePort != null) {
-					launchArguments.push("--diagnostics");
-					launchArguments.push(profilePort);
+				if (Sys.systemName() == "Windows") {
+					if (startWindowsWorker(home, hashlink, workerArtifact, statePath, logPath, profilePort) != 0)
+						throw "Could not start compiler worker";
+				} else {
+					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+						libraryPath = [
+							Path.join([home, "out"]),
+							Path.join([home, ".tools", "hashlink"]),
+							Sys.getEnv(libraryVariable)
+						].filter(value -> value != null && value.length > 0).join(":"),
+						launchArguments = [hashlink];
+					if (profilePort != null) {
+						launchArguments.push("--diagnostics");
+						launchArguments.push(profilePort);
+					}
+					launchArguments.push(workerArtifact);
+					launchArguments.push(statePath);
+					var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
+					// Redirect all three streams so the worker cannot keep the caller's
+					// pipes open after the build exits.
+					var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
+						status = Sys.command("sh", ["-c",
+							"umask 077; cd "
+							+ SysTools.quoteUnixArg(home)
+							+ " && export "
+							+ libraryVariable
+							+ "="
+							+
+							SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
+								// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
+								// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
+							+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
+							+ detach
+							+ "nohup "
+							+ launch
+							+ " > "
+							+ SysTools.quoteUnixArg(logPath)
+							+ " 2>&1 < /dev/null &"]);
+					if (status != 0)
+						throw "Could not start compiler worker";
 				}
-				launchArguments.push(workerArtifact);
-				launchArguments.push(statePath);
-				var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
-				// Redirect all three streams so the worker cannot keep the caller's
-				// pipes open after the build exits.
-				var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
-					status = Sys.command("sh", ["-c",
-						"umask 077; cd "
-						+ SysTools.quoteUnixArg(home)
-						+ " && export "
-						+ libraryVariable
-						+ "="
-						+
-						SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-							// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-							// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-						+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
-						+ detach
-						+ "nohup "
-						+ launch
-						+ " > "
-						+ SysTools.quoteUnixArg(logPath)
-						+ " 2>&1 < /dev/null &"]);
-				if (status != 0)
-					throw "Could not start compiler worker";
 				var deadline = Sys.time() + 30;
 				while (connection == null && Sys.time() < deadline) {
 					Sys.sleep(0.05);
@@ -144,7 +152,9 @@ class CompilerClient {
 
 	/**
 	 * Compiles one compiler program once per compiler version; concurrent callers wait for the first to finish.
-	 * Each use refreshes its modification time, so stale-file cleanup only removes programs nobody runs.
+	 * On Linux and macOS each use refreshes its modification time, so stale-file cleanup only removes programs nobody
+	 * runs. Windows has no touch, so there an unused program is removed by age; the current version's program and any a
+	 * running worker uses are always kept.
 	 */
 	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String, mainClass:String):Void {
 		#if (target.threaded && !eval)
@@ -152,7 +162,8 @@ class CompilerClient {
 		#end
 		try {
 			if (FileSystem.exists(artifact)) {
-				Sys.command("touch", ["-c", artifact]);
+				if (Sys.systemName() != "Windows")
+					Sys.command("touch", ["-c", artifact]);
 			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
 				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
@@ -200,12 +211,48 @@ class CompilerClient {
 		return ProcessRunner.run(hashlink, [artifact].concat(arguments), home, environment);
 	}
 
+	/**
+		Windows has no setsid or nohup. `start /b` returns at once, and redirecting all three streams
+		keeps the worker from holding the build's pipes open.
+	**/
+	static function startWindowsWorker(home:String, hashlink:String, workerArtifact:String, statePath:String, logPath:String, profilePort:Null<String>):Int {
+		var quote = (value:String) -> '"' + value + '"';
+		var path = [
+			Path.join([home, "out"]),
+			Path.join([home, ".tools", "hashlink"]),
+			Sys.getEnv("PATH")
+		].filter(value -> value != null && value.length > 0).join(";");
+		var launch = [quote(hashlink + ".exe")];
+		if (profilePort != null) {
+			launch.push("--diagnostics");
+			launch.push(profilePort);
+		}
+		launch.push(quote(workerArtifact));
+		launch.push(quote(statePath));
+		var threshold = Sys.getEnv("HL_GC_MARK_THRESHOLD");
+		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
+			+ (threshold == null || threshold.length == 0 ? "0.4" : threshold)
+			+ '" && start "" /b '
+			+ launch.join(" ")
+			+ " > "
+			+ quote(logPath)
+			+ " 2>&1 < nul");
+	}
+
 	/** The session directory, created private to this user. */
 	static function preparedSessionDirectory():String {
 		var directory = sessionDirectory();
 		FileSystem.createDirectory(directory);
-		if (Sys.command("chmod", ["700", directory]) != 0)
-			throw "Could not make the compiler session directory private";
+		if (Sys.systemName() != "Windows") {
+			if (Sys.command("chmod", ["700", directory]) != 0)
+				throw "Could not make the compiler session directory private";
+		} else if (Sys.getEnv("HAXEON_COMPILER_SESSION_DIR") != null && Sys.getEnv("HAXEON_COMPILER_SESSION_DIR").length > 0) {
+			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
+			// this user's access, as chmod 700 does.
+			var user = Sys.getEnv("USERNAME");
+			if (user == null || Sys.command("icacls", [directory, "/inheritance:r", "/grant:r", user + ":(OI)(CI)F", "/q"]) != 0)
+				throw "Could not make the compiler session directory private";
+		}
 		return directory;
 	}
 
@@ -214,9 +261,12 @@ class CompilerClient {
 		var configured = Sys.getEnv("HAXEON_COMPILER_SESSION_DIR");
 		if (configured != null && configured.length > 0)
 			return configured;
+		var local = Sys.systemName() == "Windows" ? Sys.getEnv("LOCALAPPDATA") : null;
+		if (local != null && local.length > 0)
+			return Path.join([local, "haxeon", "compiler"]);
 		var cache = Sys.getEnv("XDG_CACHE_HOME");
 		if (cache == null || cache.length == 0)
-			cache = Path.join([Sys.getEnv("HOME"), ".cache"]);
+			cache = Path.join([Sys.getEnv(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"), ".cache"]);
 		return Path.join([cache, "haxeon", "compiler"]);
 	}
 

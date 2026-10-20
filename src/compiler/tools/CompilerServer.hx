@@ -15,6 +15,25 @@ import sys.net.Socket;
  * (default 90) without a request, since its heap stays at the high-water mark of its largest compile.
  */
 class CompilerServer {
+	/** 32 random bytes as hex; Windows has no /dev/urandom, so it uses the runtime's BCryptGenRandom. */
+	static function secureToken():String {
+		if (Sys.systemName() == "Windows")
+			return windowsSecureToken();
+		var random = File.read("/dev/urandom", true),
+			token = random.read(32).toHex();
+		random.close();
+		return token;
+	}
+
+	#if (hl && !haxeon)
+	@:hlNative("haxeon_runtime", "__host_secure_random_token")
+	static function windowsSecureToken():String
+		return null;
+	#else
+	static function windowsSecureToken():String
+		throw "A secure random token requires the Haxeon runtime";
+	#end
+
 	public static function main():Void {
 		var args = Sys.args();
 		if (args.length != 1)
@@ -23,9 +42,7 @@ class CompilerServer {
 	}
 
 	static function serve(statePath:String):Void {
-		var random = File.read("/dev/urandom", true),
-			token = random.read(32).toHex();
-		random.close();
+		var token = secureToken();
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
 		listener.listen(8);
