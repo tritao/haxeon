@@ -37,6 +37,8 @@ class BinaryControl implements View {
 	/** Names the control for assistive technology when its visible label is elsewhere, as in a property row. */
 	public var accessibilityLabel:Null<String> = null;
 	public var checked:Bool;
+	/** Checkbox aggregate state; activation clears it and toggles checked. */
+	public var indeterminate:Bool = false;
 	public var enabled:Bool;
 	public var onChange:Null<Bool->Void>;
 	final toggle:Bool;
@@ -80,7 +82,7 @@ class BinaryControl implements View {
 			node.enabled = enabled;
 			var semantics = new Semantics(toggle ? AccessibilityRole.Switch : AccessibilityRole.Checkbox,
 				accessibilityLabel == null ? label : accessibilityLabel,
-				checked ? "true" : "false");
+				indeterminate ? "mixed" : checked ? "true" : "false");
 			semantics.actions = toggle ? AccessibilityAction.Toggle : AccessibilityAction.Activate;
 			if (checked)
 				semantics.states |= AccessibilityState.Checked;
@@ -129,9 +131,10 @@ class BinaryControl implements View {
 			}
 			if (!toggle) {
 				indicator.onPaint(function(canvas, _) {
-					if (!checked)
+					if (!checked && !indeterminate)
 						return;
-					var mark = Color.rgba(1.0, 1.0, 1.0, 1.0);
+					var mark = checked ? Color.rgba(1.0, 1.0, 1.0, 1.0) : context.theme.tokens.textPrimary;
+					if(indeterminate){canvas.fillRect(new Rect(4,8,11,3),mark);return;}
 					canvas.withState(function(target) {
 						target.translate(5.5, 10.5);
 						target.rotate(0.7853981634);
@@ -142,7 +145,7 @@ class BinaryControl implements View {
 						target.rotate(-0.7853981634);
 						target.fillRect(new Rect(-5.5, -1.1, 11.0, 2.2), mark);
 					});
-				}, "checked:" + checked);
+				}, "checked:" + checked + ":mixed:" + indeterminate);
 			}
 			node.add(indicator);
 			var labelNode = new RenderNode(context.id("label"), LayoutVisualKind.Text);
@@ -161,6 +164,7 @@ class BinaryControl implements View {
 			var activate = function(event:UiEvent) {
 				if (!enabled)
 					return;
+				indeterminate = false;
 				checked = !checked;
 				semantics.value = checked ? "true" : "false";
 				if (checked)
