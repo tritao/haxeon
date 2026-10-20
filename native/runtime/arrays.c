@@ -165,11 +165,17 @@ static void realtime_array_retype(varray *array, hl_type *elementType) {
 	array->at = elementType;
 }
 
+/* A live module and its host each declare String. Natively created arrays use the type the
+   runtime registered first, so string element types match by shape, as hl_is_string_type does. */
+static bool realtime_array_same_element(hl_type *storage, hl_type *view) {
+	return hl_same_type(storage, view) || (hl_is_string_type(storage) && hl_is_string_type(view));
+}
+
 /* Concrete array views require exact storage; dynamic storage is retyped on the first view. */
 HL_PRIM varray *HL_NAME(__array_check_cast)( varray *array, hl_type *elementType ) {
 	if (elementType == NULL)
 		hl_error("Invalid array element type");
-	if (array == NULL || hl_same_type(array->at, elementType) || elementType->kind == HDYN)
+	if (array == NULL || realtime_array_same_element(array->at, elementType) || elementType->kind == HDYN)
 		return array;
 	if (array->at->kind == HDYN) {
 		realtime_array_retype(array, elementType);
@@ -186,8 +192,9 @@ static varray *realtime_array_copy(varray *array) {
 	return copy;
 }
 
+/* The result takes the left array's element type; the right one must match it, strings by shape. */
 static varray *realtime_array_concat(varray *left, varray *right) {
-	if (left->at != right->at)
+	if (!realtime_array_same_element(left->at, right->at))
 		hl_error("Array.concat element type mismatch");
 	varray *result = hl_alloc_array(left->at, left->size + right->size);
 	int stride = hl_type_size(left->at);
@@ -549,7 +556,7 @@ HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
 
 /* Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 HL_PRIM varray *HL_NAME(__array_concat_any)( varray *left, varray *right ) {
-	if (left->at == right->at)
+	if (realtime_array_same_element(left->at, right->at))
 		return realtime_array_concat(left, right);
 	varray *result = hl_alloc_array(&hlt_dyn, left->size + right->size);
 	vdynamic **values = hl_aptr(result, vdynamic *);

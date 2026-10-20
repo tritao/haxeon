@@ -127,6 +127,7 @@ class TestCatalog {
 		"BuildSystemMain",
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",
+		"LiveStringArrayMain",
 		"FieldInitializerEditMain",
 		"EqualityHelperEditMain",
 		"SharedEqualityHelperEditMain",
