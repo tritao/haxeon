@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import hl.Gc;
+import haxeon.ProfileSpan;
 
 import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
@@ -301,6 +302,8 @@ class DesktopUiHost {
 						runtime.setSurfaceReady(size.out_width > 0 && size.out_height > 0);
 						if (frameSubscription == null)
 							frameSubscription = borrowedSurface.onFrame(function(width, height) {
+								// Profiler spans left open by a throw are closed in the handler, so a capture stays balanced.
+								var frameSpanOpen = false, gcSpanOpen = false;
 								try {
 									framePending = false;
 									if (!active || !surfaceAvailable || !frameRequested) return;
@@ -326,10 +329,18 @@ class DesktopUiHost {
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
 									runtime.measureFrameTimings = options.captureDirectory != null;
+									frameSpanOpen = true;
+									ProfileSpan.begin("ui.frame");
 									frameGc.beginFrame();
 									var rendered = runtime.render(Sys.time(), repaintOnly);
 									var collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
+									gcSpanOpen = true;
+									ProfileSpan.begin("ui.frame.gc");
 									frameGc.endFrame();
+									gcSpanOpen = false;
+									ProfileSpan.end("ui.frame.gc");
+									frameSpanOpen = false;
+									ProfileSpan.end("ui.frame");
 									var collectionSeconds = options.captureDirectory == null ? 0.0 : Sys.time() - collectionStartedAt;
 									if (options.captureDirectory != null) callbackSeconds += Sys.time() - frameStartedAt;
 									if (!rendered) return;
@@ -431,6 +442,8 @@ class DesktopUiHost {
 									// Waiting until the next host tick can miss GTK's frame-clock deadline.
 									if (requestSuccessorDuringPaint) submitFrameRequest();
 								} catch (error:Dynamic) {
+									if (gcSpanOpen) ProfileSpan.end("ui.frame.gc");
+									if (frameSpanOpen) ProfileSpan.end("ui.frame");
 									frameGc.endFrame();
 									recordFailure("frame-callback", error);
 									runtime.fail("frame-callback", error);
@@ -474,6 +487,7 @@ class DesktopUiHost {
 			};
 			step = function() {
 				if (!active) return false;
+				var pollSpanOpen = false;
 				try {
 				var measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
 				var pollStarted = measureLoop ? Sys.time() : 0.0;
@@ -482,7 +496,13 @@ class DesktopUiHost {
 				// Native polling can render. Deliver already-due scripted input first,
 				// then catch deadlines that elapsed during a native callback.
 				var hadEvent = drainScriptedInput();
-				if (pump.poll()) hadEvent = true;
+				// Polling waits for native events and runs the callbacks they trigger, frames included.
+				pollSpanOpen = true;
+				ProfileSpan.begin("ui.events");
+				var polled = pump.poll();
+				pollSpanOpen = false;
+				ProfileSpan.end("ui.events");
+				if (polled) hadEvent = true;
 				if (drainScriptedInput()) hadEvent = true;
 				// Surface callbacks run directly in the backend pump, without a queued event.
 				var hadFrame = runtime.rendered != framesBeforePoll;
@@ -528,6 +548,7 @@ class DesktopUiHost {
 				}
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
+					if (pollSpanOpen) ProfileSpan.end("ui.events");
 					recordFailure("desktop-host", error);
 					session.fail("desktop-host", error);
 					Sys.println(options.title + ": " + Std.string(error));
