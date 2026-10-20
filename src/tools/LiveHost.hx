@@ -43,9 +43,9 @@ class LiveHost {
 							description = candidate;
 							revision = candidate.revision;
 							rejectedPublication = "";
-							Sys.println('haxeon: patched live module to revision $revision');
+							report('haxeon: patched live module to revision $revision');
 						} catch (error:Dynamic) {
-							Sys.println('haxeon: patch rejected; reloading module: ${Std.string(error)}');
+							report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
 							var replacement = reload(module, description, candidate, path, entry, arguments);
 							if (replacement == null)
 								rejectedPublication = publicationKey(candidate);
@@ -57,6 +57,7 @@ class LiveHost {
 							}
 						}
 					} else {
+						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var replacement = reload(module, description, candidate, path, entry, arguments);
 						if (replacement == null)
 							rejectedPublication = publicationKey(candidate);
@@ -88,14 +89,14 @@ class LiveHost {
 		try
 			state = Runtime.callString(current, functionId(previous, entry + ".saveState"))
 		catch (error:Dynamic) {
-			Sys.println('haxeon: could not save live state; keeping revision ${previous.revision}: ${Std.string(error)}');
+			report('haxeon: could not save live state; keeping revision ${previous.revision}: ${Std.string(error)}');
 			return null;
 		}
 		var replacement:LoadedModule;
 		try
 			replacement = Runtime.load(File.getBytes(path), File.getBytes(path + ".hli"))
 		catch (error:Dynamic) {
-			Sys.println('haxeon: could not load replacement; keeping revision ${previous.revision}: ${Std.string(error)}');
+			report('haxeon: could not load replacement; keeping revision ${previous.revision}: ${Std.string(error)}');
 			return null;
 		}
 		var oldClosed = false;
@@ -107,8 +108,8 @@ class LiveHost {
 			try
 				Runtime.dispose(current)
 			catch (error:Dynamic)
-				Sys.println('haxeon: previous module retirement is pending: ${Std.string(error)}');
-			Sys.println('haxeon: reloaded live module to revision ${next.revision}');
+				report('haxeon: previous module retirement is pending: ${Std.string(error)}');
+			report('haxeon: reloaded live module to revision ${next.revision}');
 			return replacement;
 		} catch (error:Dynamic) {
 			try
@@ -121,9 +122,23 @@ class LiveHost {
 				Runtime.callStringArg(current, functionId(previous, entry + ".start"), arguments);
 				Runtime.callStringArg(current, functionId(previous, entry + ".restoreState"), state);
 			}
-			Sys.println('haxeon: reload failed; restored revision ${previous.revision}: ${Std.string(error)}');
+			report('haxeon: reload failed; restored revision ${previous.revision}: ${Std.string(error)}');
 			return null;
 		}
+	}
+
+	static function reloadCause(current:LiveDescription, candidate:LiveDescription):String {
+		if (candidate.moduleIdentity != current.moduleIdentity)
+			return 'module identity changed from ${current.moduleIdentity} to ${candidate.moduleIdentity}';
+		if (candidate.requiresReload)
+			return 'the build requires a reload';
+		return 'the build carries no patch';
+	}
+
+	/** Flushes each message because the watcher redirects this process's output to a log file. */
+	static function report(message:String):Void {
+		Sys.println(message);
+		Sys.stdout().flush();
 	}
 
 	static function publicationKey(description:LiveDescription):String
