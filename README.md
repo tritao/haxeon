@@ -193,3 +193,10 @@ tracked in the [roadmap](ROADMAP.md).
 ## Platform, GPU, and UI libraries
 
 Optional native integration libraries live in [packages/](packages/README.md). NativeKit provides their C ABI; Haxeon owns the managed wrappers, FFI bindings, and integration tooling.
+
+## License
+
+Haxeon is licensed under the [Apache License 2.0](LICENSE); see also
+[NOTICE](NOTICE). Files taken from the Haxe standard library keep their MIT
+license ([stdlib/LICENSE](stdlib/LICENSE)), and vendored dependencies keep
+their own licenses.

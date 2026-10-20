@@ -1,0 +1,6 @@
+Haxeon
+Copyright 2026 Joao Matos and the Haxeon contributors
+
+The standard library under stdlib/ includes files from the Haxe standard
+library (MIT, see stdlib/LICENSE and stdlib/UPSTREAM.md). Vendored
+dependencies under vendor/ keep their own licenses.
