@@ -18,6 +18,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.AssignedDeclarations;
+import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.LexicalStorageAnalysis;
@@ -180,9 +181,9 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
 		for (binding in lambdaStorage.mutableCaptures.keys())
-			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + binding, MutableCapture);
+			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + BindingWalker.nameOf(binding), MutableCapture);
 		for (binding in lambdaStorage.exceptionCells.keys())
-			context.storage.request(binding, "$cell:" + lambdaName + ":" + binding, ExceptionEdge);
+			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding), ExceptionEdge);
 		for (i in 0...arguments.length)
 			bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope, lambdaArguments[i].type);
 		var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null

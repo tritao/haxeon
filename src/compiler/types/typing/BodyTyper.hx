@@ -16,6 +16,7 @@ import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.AssignedDeclarations;
+import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
@@ -267,10 +268,10 @@ class BodyTyper {
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
-			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, MutableCapture);
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding), MutableCapture);
 		}
 		for (binding in lexicalStorage.exceptionCells.keys()) {
-			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding), ExceptionEdge);
 		}
 		var scope = new Scope();
 		scope.setMapPrivacy(MapEscapeAnalysis.analyze(fn.arguments, fn.statements));
