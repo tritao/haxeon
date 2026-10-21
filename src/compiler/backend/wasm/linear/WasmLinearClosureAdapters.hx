@@ -6,6 +6,7 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmProgramIndex;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -113,6 +114,10 @@ class WasmLinearClosureAdapters {
 			sources = [for (key in sourceTypes.keys()) key];
 		targets.sort(Reflect.compare);
 		sources.sort(Reflect.compare);
+		if (Lambda.exists(program.functions, fn -> fn.name == WasmDynamicCalls.VARARGS_TARGET)) {
+			sources.push("varargs");
+			sourceTypes.set("varargs", WasmDynamicCalls.callbackType());
+		}
 		var pairs = [
 			for (target in targets)
 				{
@@ -120,12 +125,13 @@ class WasmLinearClosureAdapters {
 					sources: [
 						for (source in sources)
 							if (source != target
-								&& arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) source
+								&& (source == "varargs"
+									|| arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length)) source
 					]
 				}
 		];
 		// Key ids are fixed before the casts that compare against them are built, so collect every key the table can hold.
-		var keys:Map<String, Bool> = ["?" => true];
+		var keys:Map<String, Bool> = ["?" => true, "varargs" => true];
 		for (fn in program.functions)
 			keys.set(functionKey([for (argument in fn.arguments) argument.type], fn.result), true);
 		for (key in adapters.nativeKeys)
@@ -142,7 +148,8 @@ class WasmLinearClosureAdapters {
 		for (pair in pairs) {
 			var targetType = targetTypes.get(pair.target);
 			for (source in pair.sources)
-				program.functions.push(adapter(sourceTypes.get(source), source, targetType, pair.target));
+				program.functions.push(source == "varargs" ? WasmDynamicCalls.varargsAdapter(adapterName(source, pair.target),
+					targetType) : adapter(sourceTypes.get(source), source, targetType, pair.target));
 			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
 		}
 		return adapters;
@@ -179,7 +186,7 @@ class WasmLinearClosureAdapters {
 		// Null, a closure of this type, or a value the query does not know is returned unchanged.
 		when([-1, code(closureKey(targetType), false), code(instanceKey(targetType), true)], () -> builder.returnValue(closure));
 		for (source in sources)
-			when([code(source.key, false), code(instanceKey(source.type), true)],
+			when(source.key == "varargs" ? [code("varargs", true)] : [code(source.key, false), code(instanceKey(source.type), true)],
 				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(adapterName(source.key, closureKey(targetType)), closure, targetType))));
 		builder.returnValue(closure);
 		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, null, false, Keep);
@@ -217,6 +224,8 @@ class WasmLinearClosureAdapters {
 
 	/** Orders table slots by representation key, then name, so each key holds a contiguous slot range. */
 	public function slotOrder(name:String):String {
+		if (name == WasmDynamicCalls.VARARGS_TARGET)
+			return "varargs";
 		var fn = WasmProgramIndex.of(program).func(name);
 		var key = fn != null ? functionKey([for (argument in fn.arguments) argument.type], fn.result) : nativeKeys.get(name);
 		return key != null && keyIds.exists(key) ? key : "?";

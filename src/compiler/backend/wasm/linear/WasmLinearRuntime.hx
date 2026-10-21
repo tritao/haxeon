@@ -319,6 +319,38 @@ class WasmLinearRuntime {
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
+			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
+					LocalGet(0),
+					I32Eqz,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Const(1),
+					I32And,
+					If(null),
+					I32Const(1),
+					Return,
+					End,
+					LocalGet(0),
+					I32Load(0),
+					I32Const(WasmLayout.CLOSURE_TYPE_ID),
+					I32Eq,
+					Return
+				]));
+			case "__haxeon_varargs_call": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
+					LocalGet(0),
+					I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
+					LocalGet(1),
+					LocalGet(0),
+					I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+					CallIndirect(module.typeIndex({
+						parameters: [I32, I32],
+						results: [I32]
+					})),
+					Return
+				]));
 			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
 				"__math_ceil", "__math_floor", "__sys_args":
@@ -2884,210 +2916,31 @@ class WasmLinearRuntime {
 	}
 
 	/** String.indexOf, optionally from a start index: a negative start searches from 0, one past the end finds nothing. */
-	static function addStringIndexOf(module:WasmModule, name:String, fromStart = false):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
-			value = builder.parameter("value", 0),
-			needle = builder.parameter("needle", 1),
-			start = fromStart ? builder.parameter("start", 2) : null,
-			valueLength = builder.local("valueLength", I32),
-			needleLength = builder.local("needleLength", I32),
-			index = builder.local("index", I32),
-			inner = builder.local("inner", I32),
-			result = builder.local("result", I32);
-		builder.localGet(value);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(valueLength);
-		builder.localGet(needle);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(needleLength);
-		// An empty needle matches at the first candidate position, so the loop covers it too.
-		builder.i32Const(-1);
-		builder.localSet(result);
-		if (start == null)
-			builder.i32Const(0);
-		else {
-			builder.localGet(start);
-			builder.i32Const(0);
-			builder.emit(I32LtS);
-			builder.ifElse(builder -> builder.i32Const(0), builder -> builder.localGet(start), I32);
-		}
-		builder.localSet(index);
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
-				builder.localGet(index);
-				builder.localGet(needleLength);
-				builder.i32Add();
-				builder.localGet(valueLength);
-				builder.emit(I32LeS);
-				builder.i32Eqz();
-				builder.emit(BrIf(1));
-				builder.i32Const(0);
-				builder.localSet(inner);
-				builder.block(function(builder) {
-					builder.loop(function(builder) {
-						builder.localGet(inner);
-						builder.localGet(needleLength);
-						builder.emit(I32Eq);
-						builder.emit(BrIf(1));
-						builder.localGet(value);
-						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-						builder.i32Add();
-						builder.localGet(index);
-						builder.i32Add();
-						builder.localGet(inner);
-						builder.i32Add();
-						builder.emit(I32Load8U(0));
-						builder.localGet(needle);
-						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-						builder.i32Add();
-						builder.localGet(inner);
-						builder.i32Add();
-						builder.emit(I32Load8U(0));
-						builder.emit(I32Eq);
-						builder.i32Eqz();
-						builder.emit(BrIf(1));
-						builder.localGet(inner);
-						builder.i32Const(1);
-						builder.i32Add();
-						builder.localSet(inner);
-						builder.emit(Br(0));
-					});
-				});
-				builder.localGet(inner);
-				builder.localGet(needleLength);
-				builder.emit(I32Eq);
-				builder.if_(function(builder) {
-					builder.localGet(index);
-					builder.localSet(result);
-					builder.emit(Br(2));
-				});
-				builder.localGet(index);
-				builder.i32Const(1);
-				builder.i32Add();
-				builder.localSet(index);
-				builder.emit(Br(0));
-			});
-		});
-		builder.localGet(result);
-		builder.return_();
-		return module.addFunction(builder.finish());
-	}
+	static function addStringIndexOf(module:WasmModule, name:String, fromStart = false):Int
+		return addStringSearch(module, name, fromStart, false);
 
-	/** Mirrors the HashLink runtime: null operands give -1 and an empty needle matches at the clamped start. */
-	static function addStringLastIndexOf(module:WasmModule, name:String, fromStart = false):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
-			value = builder.parameter("value", 0),
-			needle = builder.parameter("needle", 1),
-			start = fromStart ? builder.parameter("start", 2) : null,
-			valueLength = builder.local("valueLength", I32),
-			needleLength = builder.local("needleLength", I32),
-			index = builder.local("index", I32),
-			inner = builder.local("inner", I32);
-		builder.localGet(value);
-		builder.i32Eqz();
-		builder.localGet(needle);
-		builder.i32Eqz();
-		builder.emit(I32Or);
-		if (start != null) {
-			builder.localGet(start);
-			builder.i32Const(0);
-			builder.emit(I32LtS);
-			builder.emit(I32Or);
-		}
-		builder.if_(function(builder) {
-			builder.i32Const(-1);
-			builder.return_();
-		});
-		builder.localGet(value);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(valueLength);
-		builder.localGet(needle);
-		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
-		builder.localSet(needleLength);
-		// The last candidate is the clamped start, or the final position the needle fits at.
-		builder.localGet(valueLength);
-		builder.localSet(index);
-		if (start != null) {
-			builder.localGet(start);
-			builder.localGet(valueLength);
-			builder.emit(I32LtS);
-			builder.if_(function(builder) {
-				builder.localGet(start);
-				builder.localSet(index);
-			});
-		}
-		builder.localGet(needleLength);
-		builder.i32Eqz();
-		builder.if_(function(builder) {
-			builder.localGet(index);
-			builder.return_();
-		});
-		builder.localGet(valueLength);
-		builder.localGet(needleLength);
-		builder.i32Sub();
-		builder.localGet(index);
-		builder.emit(I32LtS);
-		builder.if_(function(builder) {
-			builder.localGet(valueLength);
-			builder.localGet(needleLength);
-			builder.i32Sub();
-			builder.localSet(index);
-		});
-		builder.block(function(builder) {
-			builder.loop(function(builder) {
-				builder.localGet(index);
-				builder.i32Const(0);
-				builder.emit(I32LtS);
-				builder.emit(BrIf(1));
-				builder.i32Const(0);
-				builder.localSet(inner);
-				builder.block(function(builder) {
-					builder.loop(function(builder) {
-						builder.localGet(inner);
-						builder.localGet(needleLength);
-						builder.emit(I32Eq);
-						builder.emit(BrIf(1));
-						builder.localGet(value);
-						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-						builder.i32Add();
-						builder.localGet(index);
-						builder.i32Add();
-						builder.localGet(inner);
-						builder.i32Add();
-						builder.emit(I32Load8U(0));
-						builder.localGet(needle);
-						builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
-						builder.i32Add();
-						builder.localGet(inner);
-						builder.i32Add();
-						builder.emit(I32Load8U(0));
-						builder.emit(I32Eq);
-						builder.i32Eqz();
-						builder.emit(BrIf(1));
-						builder.localGet(inner);
-						builder.i32Const(1);
-						builder.i32Add();
-						builder.localSet(inner);
-						builder.emit(Br(0));
-					});
-				});
-				builder.localGet(inner);
-				builder.localGet(needleLength);
-				builder.emit(I32Eq);
-				builder.if_(function(builder) {
-					builder.localGet(index);
-					builder.return_();
-				});
-				builder.localGet(index);
-				builder.i32Const(1);
-				builder.i32Sub();
-				builder.localSet(index);
-				builder.emit(Br(0));
-			});
-		});
-		builder.i32Const(-1);
-		builder.return_();
-		return module.addFunction(builder.finish());
+	static function addStringLastIndexOf(module:WasmModule, name:String, fromStart = false):Int
+		return addStringSearch(module, name, fromStart, true);
+
+	static function addStringSearch(module:WasmModule, name:String, fromStart:Bool, reverse:Bool):Int {
+		var b = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
+			result = b.local("result", I32);
+		b.emitAll([
+			LocalGet(0),
+			I32Eqz,
+			LocalGet(1),
+			I32Eqz,
+			I32Or,
+			If(null),
+			I32Const(-1),
+			Return,
+			End
+		]);
+		b.emitAll(compiler.backend.wasm.WasmUtf16Strings.indexOf([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)], i -> stringByteAt(0, i),
+			[LocalGet(1), I32Load(WasmLayout.STRING_LENGTH_OFFSET)], i -> stringByteAt(1, i), () -> b.local("search-" + b.locals.length, I32),
+			fromStart ? 2 : null, reverse, result));
+		b.emitAll([LocalGet(result), Return]);
+		return module.addFunction(b.finish());
 	}
 
 	static function addStringSubstring(module:WasmModule, name:String, allocator:Int):Int {

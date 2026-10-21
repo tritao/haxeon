@@ -1,6 +1,6 @@
 package runtime;
 
-/** HashLink's varargs closure preserves omitted optional parameters on a reflected method. */
+/** A bound varargs closure preserves omitted optional parameters; Wasm lowers the same std intrinsic. */
 @:hlNative("std", "make_var_args")
 extern function makeStringMethod(callback:Array<Dynamic>->Dynamic):Dynamic;
 

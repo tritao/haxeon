@@ -4,6 +4,7 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
@@ -78,6 +79,9 @@ class WasmGcClosureAdapters {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
+							case InstanceClosure(output, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
+								adapters.types.set(-1, output.type);
+								created.set(-1, true);
 							case StaticClosure(output, _) | InstanceClosure(output, _, _):
 								note(output.type, created);
 							case SafeCast(output, _):
@@ -101,7 +105,10 @@ class WasmGcClosureAdapters {
 			functions.set(castName(target), module.addFunction(new WasmFunction(castName(target), {parameters: [closure], results: [closure]})));
 			for (source in adapters.adaptable(target)) {
 				var name = adapterName(source, target);
-				functions.set(name, module.addFunction(new WasmFunction(name, module.functionTypeAt(instanceType(module, plan, adapters.types.get(target))))));
+				functions.set(name,
+					source == -1 ? WasmModuleSupport.requiredFunctionIndex(functions,
+						WasmDynamicCalls.varargsAdapterName(adapters.types.get(target))) : module.addFunction(new WasmFunction(name,
+							module.functionTypeAt(instanceType(module, plan, adapters.types.get(target))))));
 			}
 		}
 		return adapters;
@@ -111,7 +118,7 @@ class WasmGcClosureAdapters {
 	function adaptable(target:Int):Array<Int>
 		return [
 			for (source in sources)
-				if (source != target && arity(source) == arity(target)) source
+				if (source != target && (source == -1 || arity(source) == arity(target))) source
 		];
 
 	function arity(key:Int):Int
@@ -124,7 +131,8 @@ class WasmGcClosureAdapters {
 		for (target in targets) {
 			defineCast(target, functions, tableSlots);
 			for (source in adaptable(target))
-				defineAdapter(source, target, functions, representation);
+				if (source != -1)
+					defineAdapter(source, target, functions, representation);
 		}
 
 	/** Returns the closure unchanged when it already has the target signature, else wraps it in an adapter. */
@@ -143,7 +151,7 @@ class WasmGcClosureAdapters {
 				End
 			];
 		for (source in adaptable(target)) {
-			var slot = tableSlots.get(adapterName(source, target));
+			var slot = tableSlots.get(source == -1 ? WasmDynamicCalls.varargsAdapterName(types.get(target)) : adapterName(source, target));
 			if (slot == null)
 				throw 'Wasm GC closure adapter ${adapterName(source, target)} has no table slot';
 			body = body.concat([

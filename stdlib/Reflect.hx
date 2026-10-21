@@ -191,12 +191,10 @@ class Reflect {
 	}
 
 	public static inline function field(object:Dynamic, field:String):Dynamic {
-		#if !wasm
 		if (Std.isOfType(object, String)) {
 			var text:String = object;
 			return runtime.StringMethods.field(text, field);
 		}
-		#end
 		return reflectField(object, field);
 	}
 

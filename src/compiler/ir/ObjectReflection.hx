@@ -2,7 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjectField>;}
+private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjectField>; final methods:Array<{name:String, functionName:String, type:IrType}>;}
 
 /**
  * Field reflection over compiled object layouts, for runtimes that cannot look up object fields by
@@ -28,7 +28,7 @@ class ObjectReflection {
 				continue;
 			}
 			if (layouts == null)
-				layouts = layoutsOf(objects == null ? [] : objects, reflectable == null ? [] : reflectable);
+				layouts = layoutsOf(objects == null ? [] : objects, reflectable == null ? [] : reflectable, functions);
 			// Copying allocates a value of the matching layout, so it keeps the per-layout dispatcher instead of joining the table.
 			if (tableDispatch && native.symbol != "__reflect_object_copy") {
 				remaining.push({
@@ -55,7 +55,8 @@ class ObjectReflection {
 	}
 
 	/** Reflectable layouts with inherited fields first, ordered so subclasses are tested before their bases. */
-	static function layoutsOf(objects:Array<IrObject>, reflectable:Array<String>):Array<ReflectedLayout> {
+	static function layoutsOf(objects:Array<IrObject>, reflectable:Array<String>, functions:Array<IrFunction>):Array<ReflectedLayout> {
+		var functionsByName = [for (fn in functions) fn.name => fn];
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			result:Array<{layout:ReflectedLayout, depth:Int}> = [];
 		for (name in reflectable) {
@@ -74,7 +75,17 @@ class ObjectReflection {
 			for (owner in chain)
 				for (field in owner.fields)
 					fields.push(field);
-			result.push({layout: {name: name, fields: fields}, depth: chain.length});
+			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
+			for (owner in chain)
+				for (method in owner.methods) {
+					var fn = functionsByName.get(method.functionName);
+					if (fn != null && fn.arguments.length > 0)
+						methods.set(method.name,
+							{name: method.name, functionName: method.functionName, type: Function([for (a in fn.arguments.slice(1)) a.type], fn.result)});
+				}
+			var names = [for (name in methods.keys()) name];
+			names.sort(Reflect.compare);
+			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)]}, depth: chain.length});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];
@@ -93,6 +104,13 @@ class ObjectReflection {
 
 	static function fieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
 		forEachField(builder, arguments[0], layout, field -> builder.returnValue(builder.toDyn(builder.fieldGet(typed, field.name, field.type))));
+		for (method in layout.methods) {
+			var matched = builder.createBlock(), next = builder.createBlock();
+			builder.branch(builder.call("__string_equal", [arguments[0], builder.constString(method.name)], Bool), matched, next);
+			builder.select(matched);
+			builder.returnValue(builder.toDyn(builder.instanceClosure(method.functionName, typed, method.type)));
+			builder.select(next);
+		}
 		builder.returnValue(builder.constNull(Dyn));
 	}
 

@@ -42,7 +42,7 @@ class WasmBackend implements Backend {
 
 	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
 		// Wasm has no use for the distinction between a nullable primitive and a dynamic value.
-		program = IrNullableErasure.run(program);
+		program = WasmDynamicCalls.run(IrNullableErasure.run(program));
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
 		if (target.referenceModel == Gc)
 			return WasmGcModuleBuilder.compile(program, options, patchChanged);

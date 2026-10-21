@@ -8,10 +8,25 @@ class DynamicStringPeer {
 		return value.length + 99;
 }
 
+class DynamicStringDerived extends DynamicStringPeer {
+	public function new() {
+		super();
+	}
+
+	public override function indexOf(value:String):Int
+		return value.length + 199;
+}
+
 function main():Int {
 	var peer:Dynamic = new DynamicStringPeer();
 	if (peer.bar(1) != 2 || peer.indexOf("ab") != 101)
 		return 1;
+	var derived:Dynamic = new DynamicStringDerived();
+	if (derived.bar(1) != 2 || derived.indexOf("ab") != 201)
+		return 24;
+	var callbackValue:Dynamic = (value:Float) -> value + 0.5;
+	if (callbackValue(1.5) != 2.0)
+		return 25;
 	var text:Dynamic = "ababc";
 	if (text.length != 5 || text.charAt(1) != "b" || text.indexOf("ab") != 0 || text.indexOf("ab", 1) != 2)
 		return 2;
@@ -36,6 +51,14 @@ function main():Int {
 		return 6;
 	if (text.charCodeAt(0) != 97 || text.charCodeAt(20) != null || text.charAt(20) != "")
 		return 7;
+	var missingArgument = false;
+	try {
+		text.charAt();
+	} catch (error:Dynamic) {
+		missingArgument = Std.string(error).indexOf("Missing argument") >= 0;
+	}
+	if (!missingArgument)
+		return 26;
 	var parts:Array<String> = text.split("b");
 	if (parts.length != 3 || parts[2] != "c")
 		return 8;
@@ -70,8 +93,26 @@ function main():Int {
 	if (empty.charAt(0) != "" || empty.charCodeAt(0) != null || empty.indexOf("") != 0)
 		return 15;
 	var unicode:Dynamic = "😀x";
-	if (unicode.length != 3 || unicode.charCodeAt(0) != 0xD83D || unicode.charAt(2) != "x" || unicode.indexOf("x") != 2)
+	if (unicode.length != 3)
 		return 16;
+	if (unicode.charCodeAt(0) != 0xD83D)
+		return 21;
+	if (unicode.charAt(2) != "x")
+		return 22;
+	if (unicode.indexOf("x") != 2)
+		return 23;
+	var unicodeSearch:Dynamic = "😀x😀";
+	if (unicodeSearch.indexOf("😀", 1) != 3 || unicodeSearch.lastIndexOf("😀", 2) != 0 || unicodeSearch.lastIndexOf("x") != 2)
+		return 27;
+	if (unicodeSearch.indexOf("", 1) != 1 || unicodeSearch.lastIndexOf("", 1) != 1)
+		return 28;
+	var high:String = unicodeSearch.charAt(0),
+		low:String = unicodeSearch.charAt(1);
+	if (unicodeSearch.indexOf(high) != 0 || unicodeSearch.indexOf(low) != 1 || unicodeSearch.lastIndexOf(low) != 4)
+		return 29;
+	var typedSearch = "😀x😀";
+	if (typedSearch.indexOf("x") != 2 || typedSearch.lastIndexOf("😀", 2) != 0)
+		return 30;
 	var absent:Dynamic = null;
 	caught = false;
 	try {

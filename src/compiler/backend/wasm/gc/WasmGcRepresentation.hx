@@ -7,6 +7,7 @@ import compiler.ir.Ir.IrObjectField;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModuleSupport;
+import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmRepresentation.WasmAggregateRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmCallRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContext;
@@ -1537,6 +1538,26 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			if (output.type != Bool || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != TypeRef || argumentLocals.length != 2)
 				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");
+		}
+		if (name == "__reflect_is_function")
+			return [
+				LocalGet(argumentLocals[0]),
+				RefTest({nullable: false, heap: Type(plan.closureTypeIndex)}),
+				LocalSet(outputLocal)
+			];
+		if (name == WasmDynamicCalls.VARARGS_CALL) {
+			var closure = allocateLocal(plan.valueType(WasmDynamicCalls.callbackType()));
+			var body:Array<WasmInstruction> = [
+				LocalGet(argumentLocals[0]),
+				RefCast({nullable: false, heap: Type(plan.closureTypeIndex)}),
+				LocalSet(closure)
+			];
+			var type = WasmDynamicCalls.callbackType();
+			return body.concat(switch callClosure(WasmGcClosureAdapters.signature(gc.module, plan, type),
+				WasmGcClosureAdapters.instanceType(gc.module, plan, type), [arguments[1]], closure, outputLocal, [argumentLocals[1]]) {
+				case Handled(code): code;
+				default: throw "Missing varargs call lowering";
+			});
 		}
 		if (name == "fun_compare") {
 			if (output.type != Bool || arguments.length != 2 || argumentLocals.length != 2 || arguments[0].type != Dyn || arguments[1].type != Dyn)
@@ -3947,7 +3968,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [
 			I32Const(tableSlot * 2),
 			LocalGet(receiverLocal),
-			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
+			I32Const(name == WasmDynamicCalls.VARARGS_TARGET ? -1 : WasmGcClosureAdapters.signature(gc.module, plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];
@@ -4959,240 +4980,27 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function stringIndexOf(valueLocal:Int, needleLocal:Int, startArgument:Null<Int>, destination:Int):Array<WasmInstruction> {
-		var valueLength = allocateLocal(I32),
-			needleLength = allocateLocal(I32),
-			start = startArgument == null ? allocateLocal(I32) : startArgument,
-			maxStart = allocateLocal(I32),
-			candidate = allocateLocal(I32),
-			index = allocateLocal(I32),
-			body:Array<WasmInstruction> = [];
-		if (startArgument == null)
-			body = body.concat([I32Const(0), LocalSet(start)]);
-		body = body.concat([
-			LocalGet(valueLocal),
-			RefIsNull,
-			If(null),
-			I32Const(0),
-			LocalSet(valueLength),
-			Else,
-			LocalGet(valueLocal),
-			StructGet(plan.bytesTypeIndex, 2),
-			LocalSet(valueLength),
-			End,
-			LocalGet(needleLocal),
-			RefIsNull,
-			If(null),
-			I32Const(0),
-			LocalSet(needleLength),
-			Else,
-			LocalGet(needleLocal),
-			StructGet(plan.bytesTypeIndex, 2),
-			LocalSet(needleLength),
-			End,
-			LocalGet(start),
-			I32Const(0),
-			I32LtS,
-			If(null),
-			I32Const(0),
-			LocalSet(start),
-			End,
-			I32Const(-1),
-			LocalSet(destination),
-			LocalGet(start),
-			LocalGet(valueLength),
-			I32LeS,
-			If(null),
-			LocalGet(needleLength),
-			I32Eqz,
-			If(null),
-			LocalGet(start),
-			LocalSet(destination),
-			Else,
-			LocalGet(valueLength),
-			LocalGet(needleLength),
-			I32Sub,
-			LocalSet(maxStart),
-			LocalGet(start),
-			LocalSet(candidate),
-			Block(null),
-			Loop(null),
-			LocalGet(maxStart),
-			LocalGet(candidate),
-			I32LtS,
-			BrIf(1),
-			I32Const(0),
-			LocalSet(index),
-			Block(null),
-			Loop(null),
-			LocalGet(needleLength),
-			LocalGet(index),
-			I32LeS,
-			BrIf(1),
-			LocalGet(valueLocal),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(valueLocal),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(candidate),
-			I32Add,
-			LocalGet(index),
-			I32Add,
-			ArrayGetUnsigned(plan.byteArrayTypeIndex),
-			LocalGet(needleLocal),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(needleLocal),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(index),
-			I32Add,
-			ArrayGetUnsigned(plan.byteArrayTypeIndex),
-			I32Eq,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(index),
-			I32Const(1),
-			I32Add,
-			LocalSet(index),
-			Br(0),
-			End,
-			End,
-			LocalGet(index),
-			LocalGet(needleLength),
-			I32Eq,
-			If(null),
-			LocalGet(candidate),
-			LocalSet(destination),
-			Br(2),
-			End,
-			LocalGet(candidate),
-			I32Const(1),
-			I32Add,
-			LocalSet(candidate),
-			Br(0),
-			End,
-			End,
-			End,
-			End
-		]);
-		return body;
-	}
+	function stringIndexOf(value:Int, needle:Int, start:Null<Int>, destination:Int):Array<WasmInstruction>
+		return stringSearch(value, needle, start, destination, false);
 
-	function stringLastIndexOf(valueLocal:Int, needleLocal:Int, startArgument:Null<Int>, destination:Int):Array<WasmInstruction> {
-		var valueLength = allocateLocal(I32),
-			needleLength = allocateLocal(I32),
-			start = startArgument == null ? allocateLocal(I32) : startArgument,
-			maxStart = allocateLocal(I32),
-			candidate = allocateLocal(I32),
-			index = allocateLocal(I32),
-			body:Array<WasmInstruction> = [
-				I32Const(-1),
-				LocalSet(destination),
-				LocalGet(valueLocal),
-				RefIsNull,
-				I32Eqz,
-				LocalGet(needleLocal),
-				RefIsNull,
-				I32Eqz,
-				I32And,
-				If(null),
-				LocalGet(valueLocal),
-				StructGet(plan.bytesTypeIndex, 2),
-				LocalSet(valueLength),
-				LocalGet(needleLocal),
-				StructGet(plan.bytesTypeIndex, 2),
-				LocalSet(needleLength)
-			];
-		if (startArgument == null)
-			body = body.concat([LocalGet(valueLength), LocalSet(start)]);
-		body = body.concat([LocalGet(start), I32Const(0), I32LtS, If(null)]);
-		body.push(Else);
-		body = body.concat([
-			LocalGet(valueLength),
-			LocalGet(start),
-			I32LtS,
-			If(null),
-			LocalGet(valueLength),
-			LocalSet(start),
-			End,
-			LocalGet(needleLength),
-			I32Eqz,
-			If(null),
-			LocalGet(start),
-			LocalSet(destination),
-			Else,
-			LocalGet(valueLength),
-			LocalGet(needleLength),
-			I32Sub,
-			LocalSet(maxStart),
-			LocalGet(maxStart),
-			LocalGet(start),
-			I32LtS,
-			If(null),
-			LocalGet(maxStart),
-			LocalSet(candidate),
-			Else,
-			LocalGet(start),
-			LocalSet(candidate),
-			End,
-			Block(null),
-			Loop(null),
-			LocalGet(candidate),
-			I32Const(0),
-			I32LtS,
-			BrIf(1),
-			I32Const(0),
-			LocalSet(index),
-			Block(null),
-			Loop(null),
-			LocalGet(needleLength),
-			LocalGet(index),
-			I32LeS,
-			BrIf(1),
-			LocalGet(valueLocal),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(valueLocal),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(candidate),
-			I32Add,
-			LocalGet(index),
-			I32Add,
-			ArrayGetUnsigned(plan.byteArrayTypeIndex),
-			LocalGet(needleLocal),
-			StructGet(plan.bytesTypeIndex, 0),
-			LocalGet(needleLocal),
-			StructGet(plan.bytesTypeIndex, 1),
-			LocalGet(index),
-			I32Add,
-			ArrayGetUnsigned(plan.byteArrayTypeIndex),
-			I32Eq,
-			I32Eqz,
-			BrIf(1),
-			LocalGet(index),
-			I32Const(1),
-			I32Add,
-			LocalSet(index),
-			Br(0),
-			End,
-			End,
-			LocalGet(index),
-			LocalGet(needleLength),
-			I32Eq,
-			If(null),
-			LocalGet(candidate),
-			LocalSet(destination),
-			Br(2),
-			End,
-			LocalGet(candidate),
+	function stringLastIndexOf(value:Int, needle:Int, start:Null<Int>, destination:Int):Array<WasmInstruction>
+		return stringSearch(value, needle, start, destination, true);
+
+	function stringSearch(value:Int, needle:Int, start:Null<Int>, destination:Int, reverse:Bool):Array<WasmInstruction> {
+		return [
 			I32Const(-1),
-			I32Add,
-			LocalSet(candidate),
-			Br(0),
-			End,
-			End,
-			End,
-			End,
-			End
-		]);
-		return body;
+			LocalSet(destination),
+			LocalGet(value),
+			RefIsNull,
+			I32Eqz,
+			LocalGet(needle),
+			RefIsNull,
+			I32Eqz,
+			I32And,
+			If(null)
+		].concat(compiler.backend.wasm.WasmUtf16Strings.indexOf(stringByteLength(value), i -> stringByteAt(value, i), stringByteLength(needle),
+			i -> stringByteAt(needle, i), () -> allocateLocal(I32), start, reverse, destination))
+			.concat([End]);
 	}
 
 	function stringSubstring(valueLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {

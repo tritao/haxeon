@@ -291,6 +291,239 @@ class WasmUtf16Strings {
 		return body;
 	}
 
+	/** Search in UTF-16 units, streaming the UTF-8 storage without allocating converted strings. */
+	public static function indexOf(valueLength:Array<WasmInstruction>, valueAt:Int->Array<WasmInstruction>, needleLength:Array<WasmInstruction>,
+			needleAt:Int->Array<WasmInstruction>, allocate:Void->Int, startArgument:Null<Int>, reverse:Bool, destination:Int):Array<WasmInstruction> {
+		var size = allocate(),
+			needleSize = allocate(),
+			start = allocate(),
+			limit = allocate(),
+			candidate = allocate(),
+			offset = allocate(),
+			half = allocate(),
+			leftOffset = allocate(),
+			leftHalf = allocate(),
+			rightOffset = allocate(),
+			rightHalf = allocate(),
+			inner = allocate(),
+			left = allocate(),
+			right = allocate();
+		var body = length(valueLength, valueAt, allocate, size).concat(length(needleLength, needleAt, allocate, needleSize));
+		body = body.concat([I32Const(-1), LocalSet(destination)]);
+		body = body.concat(startArgument == null ? (reverse ? [LocalGet(size)] : [I32Const(0)]) : [LocalGet(startArgument)]);
+		body = body.concat([LocalSet(start), Block(null), LocalGet(start), I32Const(0), I32LtS]);
+		if (reverse)
+			body = body.concat([BrIf(0)]);
+		else
+			body = body.concat([If(null), I32Const(0), LocalSet(start), End]);
+		body = body.concat([LocalGet(start), LocalGet(size), I32LeS, I32Eqz, If(null)]);
+		if (reverse)
+			body = body.concat([LocalGet(size), LocalSet(start)]);
+		else
+			body = body.concat([Br(1)]);
+		body = body.concat([
+			End,
+			LocalGet(needleSize),
+			I32Eqz,
+			If(null),
+			LocalGet(start),
+			LocalSet(destination),
+			Br(1),
+			End,
+			LocalGet(size),
+			LocalGet(needleSize),
+			I32Sub,
+			LocalSet(limit)
+		]);
+		if (reverse)
+			body = body.concat([
+				LocalGet(start),
+				LocalGet(limit),
+				I32LtS,
+				If(null),
+				LocalGet(start),
+				LocalSet(limit),
+				End,
+				I32Const(0)
+			]);
+		else
+			body.push(LocalGet(start));
+		body = body.concat([LocalSet(candidate)]);
+		body = body.concat(byteOffset(valueLength, valueAt, allocate, candidate, offset, half));
+		body = body.concat([
+			Loop(null),
+			LocalGet(candidate),
+			LocalGet(limit),
+			I32LeS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(offset),
+			LocalSet(leftOffset),
+			LocalGet(half),
+			LocalSet(leftHalf),
+			I32Const(0),
+			LocalSet(rightOffset),
+			I32Const(0),
+			LocalSet(rightHalf),
+			I32Const(0),
+			LocalSet(inner),
+			Block(null),
+			Loop(null),
+			LocalGet(inner),
+			LocalGet(needleSize),
+			I32Eq,
+			BrIf(1)
+		]);
+		body = body.concat(readUnit(valueAt, allocate, leftOffset, leftHalf, left));
+		body = body.concat(readUnit(needleAt, allocate, rightOffset, rightHalf, right));
+		body = body.concat([
+			LocalGet(left),
+			LocalGet(right),
+			I32Eq,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(inner),
+			I32Const(1),
+			I32Add,
+			LocalSet(inner),
+			Br(0),
+			End,
+			End,
+			LocalGet(inner),
+			LocalGet(needleSize),
+			I32Eq,
+			If(null),
+			LocalGet(candidate),
+			LocalSet(destination)
+		]);
+		if (!reverse)
+			body.push(Br(2));
+		body.push(End);
+		body = body.concat(readUnit(valueAt, allocate, offset, half, left));
+		return body.concat([LocalGet(candidate), I32Const(1), I32Add, LocalSet(candidate), Br(0), End, End]);
+	}
+
+	/** Consume one UTF-16 code unit; the low surrogate shares its scalar's byte offset. */
+	static function readUnit(byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, offset:Int, half:Int, destination:Int):Array<WasmInstruction> {
+		var scalar = allocate(),
+			width = allocate(),
+			next = allocate(),
+			index = allocate();
+		var body = byteAt(offset).concat([
+			LocalSet(scalar),
+			I32Const(1),
+			LocalSet(width),
+			LocalGet(scalar),
+			I32Const(0x80),
+			I32LtS,
+			I32Eqz,
+			If(null),
+			LocalGet(scalar),
+			I32Const(0xe0),
+			I32LtS,
+			If(null),
+			I32Const(2),
+			LocalSet(width),
+			LocalGet(scalar),
+			I32Const(31),
+			I32And,
+			LocalSet(scalar),
+			Else,
+			LocalGet(scalar),
+			I32Const(0xf0),
+			I32LtS,
+			If(null),
+			I32Const(3),
+			LocalSet(width),
+			LocalGet(scalar),
+			I32Const(15),
+			I32And,
+			LocalSet(scalar),
+			Else,
+			I32Const(4),
+			LocalSet(width),
+			LocalGet(scalar),
+			I32Const(7),
+			I32And,
+			LocalSet(scalar),
+			End,
+			End,
+			I32Const(1),
+			LocalSet(next),
+			Block(null),
+			Loop(null),
+			LocalGet(next),
+			LocalGet(width),
+			I32LtS,
+			I32Eqz,
+			BrIf(1),
+			LocalGet(offset),
+			LocalGet(next),
+			I32Add,
+			LocalSet(index),
+			LocalGet(scalar),
+			I32Const(6),
+			I32Shl
+		]);
+		body = body.concat(byteAt(index)).concat([
+			I32Const(63),
+			I32And,
+			I32Or,
+			LocalSet(scalar),
+			LocalGet(next),
+			I32Const(1),
+			I32Add,
+			LocalSet(next),
+			Br(0),
+			End,
+			End,
+			End,
+			LocalGet(scalar),
+			I32Const(0xffff),
+			I32LeS,
+			I32Eqz,
+			If(null),
+			LocalGet(half),
+			I32Eqz,
+			If(null),
+			LocalGet(scalar),
+			I32Const(0x10000),
+			I32Sub,
+			I32Const(10),
+			I32ShrU,
+			I32Const(0xd800),
+			I32Add,
+			LocalSet(destination),
+			I32Const(1),
+			LocalSet(half),
+			Else,
+			LocalGet(scalar),
+			I32Const(0x10000),
+			I32Sub,
+			I32Const(1023),
+			I32And,
+			I32Const(0xdc00),
+			I32Add,
+			LocalSet(destination),
+			I32Const(0),
+			LocalSet(half),
+			LocalGet(offset),
+			LocalGet(width),
+			I32Add,
+			LocalSet(offset),
+			End,
+			Else,
+			LocalGet(scalar),
+			LocalSet(destination),
+			LocalGet(offset),
+			LocalGet(width),
+			I32Add,
+			LocalSet(offset),
+			End
+		]);
+		return body;
+	}
+
 	public static function charCodeAt(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, index:Int,
 			destination:Int):Array<WasmInstruction> {
 		var size = allocate(),
