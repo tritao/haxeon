@@ -32,7 +32,7 @@ class ViewportLight {
  * The look of a 3D editor viewport, shared so that every view of a part reads the same: a light background
  * gradient, a workplane grid, and a studio rig of three lights that turns with the camera, with presets. A preset
  * is the whole lighting: lights, the room's sky and ground light, how strongly surfaces reflect the room, contact
- * obscurance, the roughness floor and the exposure.
+ * obscurance, the roughness floor and the exposure. Edge lines contrast with their surface (`edgeColor`).
  *
  * Colors are linear RGB triples and light directions are camera-space vectors, so this has no UI or renderer
  * dependency; each editor wraps them in its own color type and camera, and renderers outside the editor (the docs'
@@ -57,6 +57,25 @@ class ViewportLook {
 
 	public static function backgroundBottom():Array<Float>
 		return [0.847, 0.867, 0.882];
+
+	/** Edge lines on light surfaces: near black (display sRGB). */
+	public static function edgeOnLight():Array<Float>
+		return [0.035, 0.045, 0.055];
+
+	/** Edge lines on dark surfaces (black oxide, rubber, dark paint): a light grey, so their edges stay readable. */
+	public static function edgeOnDark():Array<Float>
+		return [0.60, 0.63, 0.68];
+
+	/** Surfaces whose base colour has a linear luminance below this get `edgeOnDark` edges. */
+	public static inline var EdgeContrastLuminance:Float = 0.04;
+
+	/** The edge colour for a surface of sRGB base colour `surface`. */
+	public static function edgeColor(surface:Array<Float>):Array<Float> {
+		function linear(value:Float):Float
+			return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+		var luminance = 0.2126 * linear(surface[0]) + 0.7152 * linear(surface[1]) + 0.0722 * linear(surface[2]);
+		return luminance < EdgeContrastLuminance ? edgeOnDark() : edgeOnLight();
+	}
 
 	/** Key, fill and rim, in that order. */
 	public final lights:Array<ViewportLight>;

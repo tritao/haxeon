@@ -49,6 +49,8 @@ class DocCheck {
    check(look.sky.length==3&&look.ground.length==3,"ambient colors are RGB");
    check(look.reflection>=0&&look.reflection<=1&&look.roughnessFloor>=0&&look.roughnessFloor<=1&&look.exposure>=0,"display parameters are in range");
   }
+  var onLight=haxeon.editor.ViewportLook.edgeColor([0.62,0.64,0.67]),onDark=haxeon.editor.ViewportLook.edgeColor([0.18,0.19,0.20]);
+  check(onLight[0]<0.1&&onDark[0]>0.5,"edges contrast with their surface");
   var rejected=false;
   try haxeon.editor.ViewportLook.preset(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic) rejected=true;
   check(rejected,"unknown viewport lighting preset is rejected");
