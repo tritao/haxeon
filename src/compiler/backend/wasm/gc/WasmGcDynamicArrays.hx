@@ -72,7 +72,8 @@ class WasmGcDynamicArrays {
 				return;
 			var helper = new WasmGcDynamicArrays(plan, program, representation, arguments.length, functions),
 				local = build(helper);
-			helper.body.push(LocalGet(local));
+			if (result != Void)
+				helper.body.push(LocalGet(local));
 			helper.body.push(Return);
 			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, result), helper.locals, helper.body)));
 		}
@@ -90,6 +91,16 @@ class WasmGcDynamicArrays {
 			helper.literal(" to "),
 			helper.typeName(1)
 		]));
+		// Retyping dynamic storage converts every element, so each element type gets its own function and
+		// __array_check_cast only dispatches to them; inline, its arms made one function too large to optimize.
+		for (native in operations)
+			if (native.name == "__array_check_cast")
+				for (element in plan.arrayElementTypes())
+					if (typeId(element) != typeId(Dyn))
+						shared(retypeName(element), native.arguments, helper -> {
+							helper.retypeTo(element, 0, 1);
+							-1;
+						}, Void);
 		for (native in operations)
 			functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
@@ -101,13 +112,40 @@ class WasmGcDynamicArrays {
 		elements = plan.arrayElementTypes();
 		throws = WasmModuleSupport.hasExceptions(program);
 		nextLocal = argumentCount;
-		representation = gcRepresentation.forFunction({allocateLocal: allocateLocal, exceptionTag: throws ? 0 : null, irFunction: null});
+		// The representation keeps some locals for the whole function (array references, the required
+		// length), so its locals never join the arms' shared pool.
+		representation = gcRepresentation.forFunction({allocateLocal: newLocal, exceptionTag: throws ? 0 : null, irFunction: null});
 	}
 
-	function allocateLocal(type:WasmValueType):Int {
+	/**
+	 * Locals given back by finished dispatch arms, by type. Only one arm of a dispatch runs per call and every
+	 * arm sets its own scratch locals before reading them, so sibling arms can share them. Without sharing, a helper
+	 * holds every arm's locals at once (tens of thousands in a large program), and optimizing engines spend
+	 * memory in proportion to locals times blocks: V8 needed 5.7 GB to compile one such helper.
+	 */
+	final freeLocals:Map<String, Array<Int>> = [];
+
+	/** Locals taken by the arms being emitted, innermost last; each arm returns its own when it ends. */
+	final armLocals:Array<Array<{key:String, local:Int}>> = [];
+
+	function newLocal(type:WasmValueType):Int {
 		locals.push({type: type});
 		return nextLocal++;
 	}
+
+	function allocateLocal(type:WasmValueType):Int {
+		var key = localKey(type), free = freeLocals.get(key);
+		var local = free != null && free.length > 0 ? free.pop() : newLocal(type);
+		if (armLocals.length > 0)
+			armLocals[armLocals.length - 1].push({key: key, local: local});
+		return local;
+	}
+
+	static function localKey(type:WasmValueType):String
+		return switch type {
+			case Ref(reference): (reference.nullable ? "ref null " : "ref ") + Std.string(reference.heap);
+			default: Std.string(type);
+		};
 
 	function emit(module:WasmModule, native:IrNative):Int {
 		var result = native.result == Void ? -1 : allocateLocal(plan.valueType(native.result));
@@ -192,21 +230,31 @@ class WasmGcDynamicArrays {
 		return local;
 	}
 
-	/** Branch on a runtime element type id: one arm per element type with planned storage. */
+	/**
+	 * Branch on a runtime element type id: one arm per element type with planned storage.
+	 *
+	 * The arms are siblings in one block, each leaving it when it ran, not an else-if chain: a chain nests as deep
+	 * as there are element types, and optimizing engines keep every local's state per open block, so a large
+	 * program's dispatch (thousands of types, tens of thousands of locals) exhausted V8's memory when compiled.
+	 */
 	function dispatch(typeLocal:Int, arm:IrType->Void, ?except:IrType):Void {
-		var opened = 0;
+		body.push(Block(null));
 		for (element in elements) {
 			if (except != null && typeId(element) == typeId(except))
 				continue;
 			push([LocalGet(typeLocal), I32Const(typeId(element)), I32Eq, If(null)]);
+			armLocals.push([]);
 			arm(element);
-			body.push(Else);
-			opened++;
+			for (taken in armLocals.pop()) {
+				var free = freeLocals.get(taken.key);
+				if (free == null)
+					freeLocals.set(taken.key, free = []);
+				free.push(taken.local);
+			}
+			push([Br(1), End]);
 		}
 		// Every array is created with one of the planned storage types.
-		body.push(Unreachable);
-		for (_ in 0...opened)
-			body.push(End);
+		push([Unreachable, End]);
 	}
 
 	/** Counted loop over `0 ... length`; `index` holds the position inside `each`. */
@@ -536,13 +584,26 @@ class WasmGcDynamicArrays {
 	 * Give dynamic storage its first concrete element type (`realtime_array_retype`). Every element
 	 * is validated before the array changes, then converted into new storage of the same capacity.
 	 */
-	function retype(array:Int, target:Int):Void {
+	function retype(array:Int, target:Int):Void
+		dispatch(target, function(element) push([
+			LocalGet(array),
+			LocalGet(target),
+			Call(WasmModuleSupport.requiredFunctionIndex(functions, retypeName(element)))
+		]), Dyn);
+
+	static function retypeName(element:IrType):String
+		return "__haxeon_array_retype_" + typeId(element);
+
+	/** Retype dynamic storage `array` to `element`, whose runtime type id `target` holds. */
+	function retypeTo(element:IrType, array:Int, target:Int):Void {
 		var length = allocateLocal(I32),
 			index = allocateLocal(I32),
 			valueLocal = allocateLocal(plan.valueType(Dyn)),
 			ok = allocateLocal(I32),
 			source = allocateLocal(storageReference(Dyn)),
-			dynamicStorage = plan.arrayStorageType(Dyn);
+			dynamicStorage = plan.arrayStorageType(Dyn),
+			storageType = plan.arrayStorageType(element),
+			converted = allocateLocal(storageReference(element));
 		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length)]));
 		push(loadStorage(array, Dyn).concat([LocalSet(source)]));
 		function eachValue(each:Void->Void):Void
@@ -555,41 +616,37 @@ class WasmGcDynamicArrays {
 				]);
 				each();
 			});
-		dispatch(target, function(element) {
-			var storageType = plan.arrayStorageType(element),
-				converted = allocateLocal(storageReference(element));
-			eachValue(function() {
-				accepts(element, valueLocal, ok);
-				push([LocalGet(ok), I32Eqz, If(null)]);
-				var indexText = allocateLocal(plan.valueType(Bytes)),
-					boxedIndex = allocateLocal(plan.valueType(Dyn));
-				push(handled(representation.toDynamic(value(I32), boxedIndex, index)));
-				lower("__std_string", value(Bytes), [value(Dyn)], indexText, [boxedIndex]);
-				raise(concatenate([
-					literal("Array element type mismatch: Dynamic -> "),
-					typeName(target),
-					literal(" (element "),
-					indexText,
-					literal(" is "),
-					valueTypeName(valueLocal),
-					literal(")")
-				]));
-				body.push(End);
-			});
-			push([LocalGet(source), ArrayLen, ArrayNewDefault(storageType), LocalSet(converted)]);
-			eachValue(function() {
-				var encoded = encode(element, valueLocal, target);
-				push([LocalGet(converted), LocalGet(index), LocalGet(encoded), ArraySet(storageType)]);
-			});
-			push([
-				LocalGet(array),
-				LocalGet(converted),
-				StructSet(wrapper(), WasmGcTypePlan.arrayDataFieldIndex()),
-				LocalGet(array),
-				LocalGet(target),
-				StructSet(wrapper(), WasmGcTypePlan.arrayElementTypeFieldIndex())
-			]);
-		}, Dyn);
+		eachValue(function() {
+			accepts(element, valueLocal, ok);
+			push([LocalGet(ok), I32Eqz, If(null)]);
+			var indexText = allocateLocal(plan.valueType(Bytes)),
+				boxedIndex = allocateLocal(plan.valueType(Dyn));
+			push(handled(representation.toDynamic(value(I32), boxedIndex, index)));
+			lower("__std_string", value(Bytes), [value(Dyn)], indexText, [boxedIndex]);
+			raise(concatenate([
+				literal("Array element type mismatch: Dynamic -> "),
+				typeName(target),
+				literal(" (element "),
+				indexText,
+				literal(" is "),
+				valueTypeName(valueLocal),
+				literal(")")
+			]));
+			body.push(End);
+		});
+		push([LocalGet(source), ArrayLen, ArrayNewDefault(storageType), LocalSet(converted)]);
+		eachValue(function() {
+			var encoded = encode(element, valueLocal, target);
+			push([LocalGet(converted), LocalGet(index), LocalGet(encoded), ArraySet(storageType)]);
+		});
+		push([
+			LocalGet(array),
+			LocalGet(converted),
+			StructSet(wrapper(), WasmGcTypePlan.arrayDataFieldIndex()),
+			LocalGet(array),
+			LocalGet(target),
+			StructSet(wrapper(), WasmGcTypePlan.arrayElementTypeFieldIndex())
+		]);
 	}
 
 	function checkIndex(array:Int, index:Int):Void {
