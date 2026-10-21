@@ -716,6 +716,20 @@ class LanguageServiceMain {
 		sys.FileSystem.deleteDirectory(discoveredRoot + "/workspace/lib");
 		sys.FileSystem.deleteDirectory(discoveredRoot + "/workspace");
 		sys.FileSystem.deleteDirectory(discoveredRoot);
+		// An open document is analysed as its own entry. Here it reaches host.Application only through the `extends`
+		// clause of the interface it imports, as exosuit's app reaches UiApplication through DesktopUiApplication.
+		var headerService = new LanguageService(),
+			headerBaseSource = "package host; interface Application { public function context():Int; }",
+			headerShellSource = "package app; import host.DesktopApplication; class Shell { public static function run(application:DesktopApplication):Int return application.context(); }";
+		headerService.update("host/Application.hx", headerBaseSource);
+		headerService.update("host/DesktopApplication.hx", "package host; interface DesktopApplication extends Application { public function state():Int; }");
+		headerService.update("app/Shell.hx", headerShellSource);
+		headerService.analyze("app.Shell");
+		var inheritedDefinition = headerService.definition("app/Shell.hx", headerShellSource.lastIndexOf("context") + 1);
+		if (inheritedDefinition == null
+			|| inheritedDefinition.path != "host/Application.hx"
+			|| inheritedDefinition.span.file.slice(inheritedDefinition.span.start, inheritedDefinition.span.end).indexOf("context") < 0)
+			throw "definition through an interface extending a same-package sibling did not reach the sibling";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

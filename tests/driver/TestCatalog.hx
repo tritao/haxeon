@@ -91,6 +91,7 @@ class TestCatalog {
 		"EnumConstructorTypeNameMain",
 		"ImportOutranksRootTypeMain",
 		"SamePackageOutranksRootTypeMain",
+		"DeclarationHeaderDependencyMain",
 		"ImportedSecondaryEnumMain",
 		"SamePackageEnumAbstractValueMain",
 		"ReturnPathMain",
