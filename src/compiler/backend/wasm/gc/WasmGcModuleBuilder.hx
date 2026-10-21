@@ -501,15 +501,16 @@ class WasmGcModuleBuilder {
 				"__bytes_get_string", "structCopy", "structCopyPointer", "structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice",
 				"structWithRoots", "structGetRoots", "structFromLinear", "structToLinear", "nativePointerFromAddress", "nativeCallbackFromIndex",
 				"nativeCallbackIndex", "__bytes_input_new", "__bytes_input_position", "__bytes_input_big_endian", "__bytes_input_set_big_endian",
-				"__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f64", "__bytes_input_read_string", "__bytes_input_read",
-				"__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte", "__bytes_output_write_i32",
-				"__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write", "__bytes_output_write_range", "__bytes_output_get_bytes",
-				"structGetPointer", "structGetUtf8", "native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length",
-				"__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full", "__string_starts_with",
-				"__string_ends_with", "__int64_parse", "__int64_to_string", "__int64_to_float", "__string_index_of", "__string_index_of_from",
-				"__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split",
-				"__string_substring", "__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time",
-				"sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free": true;
+				"__bytes_input_read_byte", "__bytes_input_read_i32", "__bytes_input_read_f32", "__bytes_input_read_f64", "__bytes_input_read_string",
+				"__bytes_input_read", "__bytes_output_new", "__bytes_output_big_endian", "__bytes_output_set_big_endian", "__bytes_output_write_byte",
+				"__bytes_output_write_i32", "__bytes_output_write_f32", "__bytes_output_write_f64", "__bytes_output_write_string", "__bytes_output_write",
+				"__bytes_output_write_range", "__bytes_output_get_bytes", "structGetPointer", "structGetUtf8", "native_pointer_close",
+				"native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length", "__string_char_at", "__string_char_code_at",
+				"__string_concat", "__string_equal", "__string_compare_full", "__string_starts_with", "__string_ends_with", "__int64_parse",
+				"__int64_to_string", "__int64_to_float", "__string_index_of", "__string_index_of_from", "__string_last_index_of",
+				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring",
+				"__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
+				"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free": true;
 			default: false;
 		};
 	}

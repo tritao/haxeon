@@ -2269,6 +2269,27 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				body = body.concat(combineInputBytes(byteLocals, endian, false, outputLocal));
 				body = body.concat(inputAdvanceConstant(argumentLocals[0], position, 4));
 				return body;
+			case "__bytes_input_read_f32":
+				if (output.type != F64
+					|| arguments.length != 1
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_input")
+					|| argumentLocals.length != 1)
+					throw "Invalid Wasm GC BytesInput.readFloat signature";
+				var bytes = allocateLocal(Ref({nullable: false, heap: Type(plan.managedBytesTypeIndex)})),
+					position = allocateLocal(I32),
+					endian = allocateLocal(I32),
+					bits = allocateLocal(I32),
+					byteLocals = [for (_ in 0...4) allocateLocal(I32)],
+					body:Array<WasmInstruction> = inputReadLocals(argumentLocals[0], bytes, position, endian);
+				for (index in 0...4) {
+					var byteIndex = allocateLocal(I32);
+					body = body.concat([LocalGet(position), I32Const(index), I32Add, LocalSet(byteIndex)]);
+					body = body.concat(managedByteGet(bytes, byteIndex, byteLocals[index]));
+				}
+				body = body.concat(combineInputBytes(byteLocals, endian, false, bits));
+				body = body.concat([LocalGet(bits), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)]);
+				body = body.concat(inputAdvanceConstant(argumentLocals[0], position, 4));
+				return body;
 			case "__bytes_input_read_f64":
 				if (output.type != F64
 					|| arguments.length != 1
@@ -2472,6 +2493,15 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					|| argumentLocals.length != 2)
 					throw "Invalid Wasm GC BytesOutput.writeInt32 signature";
 				return outputWriteI32(argumentLocals[0], argumentLocals[1]);
+			case "__bytes_output_write_f32":
+				if (output.type != Void
+					|| arguments.length != 2
+					|| !isNamedAbstract(arguments[0].type, "realtime_bytes_output")
+					|| arguments[1].type != F64
+					|| argumentLocals.length != 2)
+					throw "Invalid Wasm GC BytesOutput.writeFloat signature";
+				var bits = allocateLocal(I32);
+				return [LocalGet(argumentLocals[1]), F32DemoteF64, I32ReinterpretF32, LocalSet(bits)].concat(outputWriteI32(argumentLocals[0], bits));
 			case "__bytes_output_write_f64":
 				if (output.type != Void
 					|| arguments.length != 2

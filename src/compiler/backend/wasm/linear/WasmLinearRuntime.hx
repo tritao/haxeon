@@ -375,6 +375,7 @@ class WasmLinearRuntime {
 			case "__bytes_input_set_big_endian": addBytesStreamFieldStore(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
 			case "__bytes_input_read_byte": addBytesInputReadByte(module, native.name, bytesDataPointer);
 			case "__bytes_input_read_i32": addBytesInputReadI32(module, native.name, bytesDataPointer);
+			case "__bytes_input_read_f32": addBytesInputReadF32(module, native.name, bytesDataPointer);
 			case "__bytes_input_read_f64": addBytesInputReadF64(module, native.name, bytesDataPointer);
 			case "__bytes_input_read_string": addBytesInputReadString(module, native.name, allocator, bytesDataPointer);
 			case "__bytes_input_read": addBytesInputRead(module, native.name, allocator, bytesDataPointer);
@@ -383,6 +384,7 @@ class WasmLinearRuntime {
 			case "__bytes_output_set_big_endian": addBytesStreamFieldStore(module, native.name, WasmLayout.BYTES_STREAM_ENDIAN_OFFSET);
 			case "__bytes_output_write_byte": addBytesOutputWriteByte(module, native.name, outputReserve);
 			case "__bytes_output_write_i32": addBytesOutputWriteI32(module, native.name, outputReserve);
+			case "__bytes_output_write_f32": addBytesOutputWriteF32(module, native.name, outputReserve);
 			case "__bytes_output_write_f64": addBytesOutputWriteF64(module, native.name, outputReserve);
 			case "__bytes_output_write_string": addBytesOutputWriteString(module, native.name, outputReserve, bytesDataPointer);
 			case "__bytes_output_write": addBytesOutputWrite(module, native.name, outputReserve, bytesDataPointer);
@@ -780,6 +782,38 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
+	/** A 32-bit float: the int32 read, reinterpreted and widened to the double Haxe's Float holds. */
+	static function addBytesInputReadF32(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [F64]}),
+			input = builder.parameter("input", 0),
+			position = builder.local("position", I32),
+			bytes = builder.local("bytes", I32),
+			endian = builder.local("endian", I32),
+			bits = builder.local("bits", I32),
+			byteLocals = [for (_ in 0...4) builder.local("byte_" + _, I32)];
+		inputReadCheckConstant(builder, input, 4);
+		loadInputState(builder, input, position, bytes);
+		builder.localGet(input);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		for (index in 0...4)
+			emitInputByte(builder, bytes, position, index, bytesDataPointer, byteLocals[index]);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			emitCombineI32(builder, byteLocals, [24, 16, 8, 0]);
+			builder.localSet(bits);
+		}, function(builder) {
+			emitCombineI32(builder, byteLocals, [0, 8, 16, 24]);
+			builder.localSet(bits);
+		});
+		inputAdvanceConstant(builder, input, position, 4);
+		builder.localGet(bits);
+		builder.emit(F32ReinterpretI32);
+		builder.emit(F64PromoteF32);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
 	static function addBytesInputReadF64(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [F64]}),
 			input = builder.parameter("input", 0),
@@ -912,6 +946,35 @@ class WasmLinearRuntime {
 		}, function(builder) {
 			for (index in 0...4)
 				emitOutputByte(builder, data, output, value, index * 8, index);
+		});
+		outputAdvanceConstant(builder, output, 4);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/** A 32-bit float: rounded from the double, then written as its int32 bit pattern. */
+	static function addBytesOutputWriteF32(module:WasmModule, name:String, outputReserve:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, F64], results: []}),
+			output = builder.parameter("output", 0),
+			value = builder.parameter("value", 1),
+			data = builder.local("data", I32),
+			bits = builder.local("bits", I32),
+			endian = builder.local("endian", I32);
+		reserveOutputConstant(builder, output, 4, outputReserve, data);
+		builder.localGet(value);
+		builder.emit(F32DemoteF64);
+		builder.emit(I32ReinterpretF32);
+		builder.localSet(bits);
+		builder.localGet(output);
+		builder.emit(I32Load(WasmLayout.BYTES_STREAM_ENDIAN_OFFSET));
+		builder.localSet(endian);
+		builder.localGet(endian);
+		builder.ifElse(function(builder) {
+			for (index in 0...4)
+				emitOutputByte(builder, data, output, bits, (3 - index) * 8, index);
+		}, function(builder) {
+			for (index in 0...4)
+				emitOutputByte(builder, data, output, bits, index * 8, index);
 		});
 		outputAdvanceConstant(builder, output, 4);
 		builder.return_();

@@ -16,6 +16,10 @@ extern abstract BytesOutput(hl.Abstract<"realtime_bytes_output">) {
 	@:hlNative("haxeon_runtime", "__bytes_output_write_i32")
 	public function writeInt32(value:Int):Void;
 
+	/** Writes `value` rounded to a 32-bit IEEE float, in four bytes. */
+	@:hlNative("haxeon_runtime", "__bytes_output_write_f32")
+	public function writeFloat(value:Float):Void;
+
 	@:hlNative("haxeon_runtime", "__bytes_output_write_f64")
 	public function writeDouble(value:Float):Void;
 

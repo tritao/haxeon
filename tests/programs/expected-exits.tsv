@@ -13,6 +13,7 @@ messagepack-wire	42
 messagepack-malformed	42
 messagepack-interop	42
 bytes-stream-edge	42
+bytes-stream-float	42
 call-many	42
 function-call	42
 function-value	42

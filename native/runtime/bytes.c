@@ -372,6 +372,13 @@ HL_PRIM int HL_NAME(__bytes_input_read_i32)( realtime_bytes_input *input ) {
 	if( input->big_endian ) return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 	return data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
 }
+HL_PRIM double HL_NAME(__bytes_input_read_f32)( realtime_bytes_input *input ) {
+	union { float value; vbyte bytes[4]; } decoded;
+	if( input->position < 0 || input->position > input->length - 4 ) hl_error("Byte input is truncated");
+	for( int i = 0; i < 4; i++ ) decoded.bytes[i] = input->data[input->position + (input->big_endian ? 3 - i : i)];
+	input->position += 4;
+	return decoded.value;
+}
 HL_PRIM double HL_NAME(__bytes_input_read_f64)( realtime_bytes_input *input ) {
 	union { double value; vbyte bytes[8]; } decoded;
 	if( input->position < 0 || input->position > input->length - 8 ) hl_error("Byte input is truncated");
@@ -411,6 +418,13 @@ HL_PRIM void HL_NAME(__bytes_output_write_byte)( realtime_bytes_output *output, 
 HL_PRIM void HL_NAME(__bytes_output_write_i32)( realtime_bytes_output *output, int value ) {
 	realtime_bytes_output_reserve(output, 4);
 	for( int i = 0; i < 4; i++ ) output->data[output->length + i] = (vbyte)(value >> (output->big_endian ? 24 - i * 8 : i * 8));
+	output->length += 4;
+}
+HL_PRIM void HL_NAME(__bytes_output_write_f32)( realtime_bytes_output *output, double value ) {
+	union { float value; vbyte bytes[4]; } encoded;
+	encoded.value = (float)value;
+	realtime_bytes_output_reserve(output, 4);
+	for( int i = 0; i < 4; i++ ) output->data[output->length + i] = encoded.bytes[output->big_endian ? 3 - i : i];
 	output->length += 4;
 }
 HL_PRIM void HL_NAME(__bytes_output_write_f64)( realtime_bytes_output *output, double value ) {
