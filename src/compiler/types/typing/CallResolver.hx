@@ -722,6 +722,16 @@ class CallResolver {
 				case TFunction(parameters, result): {arguments: parameters, result: result};
 				default: null;
 			};
+		if (typedCallee.type == TDynamic) {
+			var typedArguments = [
+				for (argument in arguments)
+					coerce(typeExpression(argument, scope, TDynamic, false), TDynamic, "argument to dynamic function", "E1009")
+			];
+			for (captured in session.currentContext.storage.candidateSourceNames())
+				scope.invalidate(captured);
+			scope.invalidateAllExpressions();
+			return new TypedExpression(TClosureCall(typedCallee, typedArguments), TDynamic, span);
+		}
 		if (functionType == null)
 			fail("E1007", callableName == null ? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
 		var localParameters = callableName == null ? null : scope.localFunctionParameters(callableName);

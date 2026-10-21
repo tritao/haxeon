@@ -68,6 +68,7 @@ class PatchOpcodeTests {
 			{instruction: Return(0), opcode: 67, operands: [0]},
 			{instruction: Throw(0), opcode: 68, operands: [0]},
 			{instruction: Rethrow(0), opcode: 69, operands: [0]},
+			{instruction: NullCheck(0), opcode: 71, operands: [0]},
 			{instruction: Trap(0, "target"), opcode: 72, operands: [0, -2]},
 			{instruction: EndTrap(0), opcode: 73, operands: [0]},
 			{instruction: GetI8(0, 1, 2), opcode: 74, operands: [0, 1, 2]},

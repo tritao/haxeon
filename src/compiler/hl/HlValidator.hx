@@ -324,7 +324,7 @@ class HlValidator {
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);
-				case Throw(register), Rethrow(register):
+				case NullCheck(register), Throw(register), Rethrow(register):
 					requireRegister(fn, register);
 			}
 		}

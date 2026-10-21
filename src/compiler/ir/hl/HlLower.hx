@@ -211,6 +211,9 @@ class HlLower {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
+							case CallClosure(_, closure, _) if (closure.type == IrType.Dyn):
+								ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
+								ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32], IrType.Bytes);
 							case PointerOffset(_, _, _):
 								ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std", "bytes_offset");
 							case IteratorNew(_, _):
@@ -888,6 +891,17 @@ class HlLower {
 						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName),
 							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
+						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
+						if (closure.type == IrType.Dyn) {
+							var callable = temporaryRegister(IrType.Bool, registerTypes),
+								error = temporaryRegister(IrType.Bytes, registerTypes),
+								valid = "$callable:" + instructions.length;
+							instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"), requireRegister(closure, registers)));
+							instructions.push(HlInstruction.JumpTrue(callable, valid));
+							lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
+							instructions.push(HlInstruction.Throw(error));
+							instructions.push(HlInstruction.Label(valid));
+						}
 						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
 					case ToVirtual(output, value):

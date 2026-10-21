@@ -619,6 +619,8 @@ class HlWriter {
 					{opcode: HlOpcode.StaticClosure, operands: [destination, functionIndex]};
 				case InstanceClosure(destination, functionIndex, receiver):
 					{opcode: HlOpcode.InstanceClosure, operands: [destination, functionIndex, receiver]};
+				case NullCheck(register):
+					{opcode: HlOpcode.NullCheck, operands: [register]};
 				case CallClosure(destination, closure, arguments):
 					{opcode: HlOpcode.CallClosure, operands: [destination, closure, arguments.length].concat(arguments)};
 				case ToVirtual(destination, source):

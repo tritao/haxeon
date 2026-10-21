@@ -190,8 +190,15 @@ class Reflect {
 		#end
 	}
 
-	public static inline function field(object:Dynamic, field:String):Dynamic
+	public static inline function field(object:Dynamic, field:String):Dynamic {
+		#if !wasm
+		if (Std.isOfType(object, String)) {
+			var text:String = object;
+			return runtime.StringMethods.field(text, field);
+		}
+		#end
 		return reflectField(object, field);
+	}
 
 	public static inline function setField(object:Dynamic, field:String, value:Dynamic):Void
 		reflectSetField(object, field, value);
