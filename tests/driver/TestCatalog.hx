@@ -210,6 +210,8 @@ class TestCatalog {
 				"fields initialized with enum constructors or enum abstract values infer their type"),
 			hxmlCase("runtime", "enum-abstract-declared-type", "tests/hxml/enum-abstract-declared-type-test.hxml", "enum-abstract-declared-type-test.hl", 0,
 				"a declared enum abstract type decides which abstract a bare value name belongs to"),
+			hxmlCase("runtime", "loaded-array-cast", "tests/hxml/loaded-array-cast-test.hxml", "loaded-array-cast-test.hl", 0,
+				"native String arrays retain compatible storage across loaded modules"),
 			hxmlCase("runtime", "dynamic-string", "tests/hxml/dynamic-string-test.hxml", "dynamic-string-test.hl", 0,
 				"dynamic String methods retain their receiver and missing calls throw null-access errors"),
 			hxmlCase("runtime", "structural-iteration", "tests/hxml/structural-iteration-test.hxml", "structural-iteration-test.hl", 0,

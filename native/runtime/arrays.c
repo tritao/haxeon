@@ -165,11 +165,18 @@ static void realtime_array_retype(varray *array, hl_type *elementType) {
 	array->at = elementType;
 }
 
+/* String has one fixed runtime layout, but independently loaded modules have distinct
+   descriptors. Native String producers use the host descriptor (hl_string_type).
+   Keep nominal identity for every other object type; a subtype is not equal storage. */
+static bool realtime_array_same_storage(hl_type *left, hl_type *right) {
+	return hl_same_type(left, right) || (hl_is_string_type(left) && hl_is_string_type(right));
+}
+
 /* Concrete array views require exact storage; dynamic storage is retyped on the first view. */
 HL_PRIM varray *HL_NAME(__array_check_cast)( varray *array, hl_type *elementType ) {
 	if (elementType == NULL)
 		hl_error("Invalid array element type");
-	if (array == NULL || hl_same_type(array->at, elementType) || elementType->kind == HDYN)
+	if (array == NULL || realtime_array_same_storage(array->at, elementType) || elementType->kind == HDYN)
 		return array;
 	if (array->at->kind == HDYN) {
 		realtime_array_retype(array, elementType);
@@ -187,7 +194,7 @@ static varray *realtime_array_copy(varray *array) {
 }
 
 static varray *realtime_array_concat(varray *left, varray *right) {
-	if (left->at != right->at)
+	if (!realtime_array_same_storage(left->at, right->at))
 		hl_error("Array.concat element type mismatch");
 	varray *result = hl_alloc_array(left->at, left->size + right->size);
 	int stride = hl_type_size(left->at);
@@ -549,7 +556,7 @@ HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
 
 /* Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 HL_PRIM varray *HL_NAME(__array_concat_any)( varray *left, varray *right ) {
-	if (left->at == right->at)
+	if (realtime_array_same_storage(left->at, right->at))
 		return realtime_array_concat(left, right);
 	varray *result = hl_alloc_array(&hlt_dyn, left->size + right->size);
 	vdynamic **values = hl_aptr(result, vdynamic *);
