@@ -202,6 +202,8 @@ class TestCatalog {
 			hxmlCase("tooling", "repl", "tests/hxml/repl-test.hxml", "repl-test.hl", 0, "compiler-backed integer REPL expression executed"),
 			hxmlCase("tooling", "plugin", "tests/hxml/plugin-test.hxml", "plugin-test.hl", 0, "stateful plugin workload executed",
 				["{root}/out/plugin-runtime.hl"]),
+			hxmlCase("runtime", "nullable-enum-pattern", "tests/hxml/nullable-enum-pattern-test.hxml", "nullable-enum-pattern-test.hl", 0,
+				"nullable enum tuple and payload patterns fall through without dereferencing null"),
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml", "static-init-order-test.hl", 0,
 				"static initializers respect dependency order"),
 			hxmlCase("runtime", "string-escapes", "tests/hxml/string-escapes-test.hxml", "string-escapes-test.hl", 0,

@@ -94,6 +94,7 @@ nullable-array-guard	42
 native-abstract-null	42
 nullable-compound	42
 nullable-enum-switch	42
+nullable-enum-array-pattern	42
 object-array	42
 array-copy-concat	42
 array-slice-index	42

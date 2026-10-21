@@ -2222,6 +2222,13 @@ class IrGenerator {
 					var elementName = '$' + 'switch-array-pattern:$subjectName:$caseIndex:$index';
 					localTypes.set(elementName, elementType);
 					builder.store(elementName, elementValue);
+					// A constructor pattern does not match null, including inside a tuple/array.
+					if (isNullableEnumType(elementPattern.type)) {
+						var nonNullBlock = builder.createBlock();
+						builder.branch(builder.equal(elementValue, builder.constNull(elementType)), nextBlock, nonNullBlock);
+						builder.select(nonNullBlock);
+						elementValue = builder.load(elementName, elementType);
+					}
 					var matches = builder.equal(builder.enumIndex(elementValue), builder.constInt(elementPattern.constructorIndex));
 					if (elementPattern.predicates.length == 0)
 						builder.branch(matches, successBlock, nextBlock);
@@ -2280,20 +2287,34 @@ class IrGenerator {
 				field = elementGet(builder, field, builder.constInt(predicate.arrayIndex), lowerType(predicate.storageType));
 			field = abiBoundaryCast(builder, field, lowerType(predicate.type));
 			var nestedConstructorIndex = predicate.nestedConstructorIndex,
-				matches = if (nestedConstructorIndex != null) builder.equal(builder.enumIndex(field),
-					builder.constInt(nestedConstructorIndex)); else if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field),
-					builder.constInt(predicate.arrayLength)); else {
-					var predicateValue = predicate.value;
-					if (predicateValue == null)
-						throw "Equality payload predicate has no value";
-					var expected = lowerExpression(predicateValue, builder, localTypes);
-					if (isStringPatternType(predicate.type))
-						builder.call("__string_equal", [field, expected], Bool);
-					else if (isDirectEnumType(predicate.type))
-						builder.equal(builder.enumIndex(field), builder.enumIndex(expected));
-					else
-						builder.equal(field, expected);
-				} checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
+				patternValue = predicate.value;
+			// Nested payload constructors and enum constants need the same null rejection.
+			if (isNullableEnumType(predicate.type)
+				&& (nestedConstructorIndex != null || (patternValue != null && !isNullExpression(patternValue)))) {
+				var fieldName = '$' + 'enum-pattern-nonnull:${builder.currentBlock().id}:$index',
+					fieldType = field.type,
+					nonNullBlock = builder.createBlock();
+				localTypes.set(fieldName, fieldType);
+				builder.store(fieldName, field);
+				builder.branch(builder.equal(field, builder.constNull(fieldType)), nextBlock, nonNullBlock);
+				builder.select(nonNullBlock);
+				field = builder.load(fieldName, fieldType);
+			}
+			var matches = if (nestedConstructorIndex != null) builder.equal(builder.enumIndex(field),
+				builder.constInt(nestedConstructorIndex)); else if (predicate.arrayLength >= 0) builder.equal(builder.arraySize(field),
+				builder.constInt(predicate.arrayLength)); else {
+				var predicateValue = predicate.value;
+				if (predicateValue == null)
+					throw "Equality payload predicate has no value";
+				var expected = lowerExpression(predicateValue, builder, localTypes);
+				if (isStringPatternType(predicate.type))
+					builder.call("__string_equal", [field, expected], Bool);
+				else if (isEnumType(predicate.type) && !isNullExpression(predicateValue))
+					builder.equal(builder.enumIndex(field), builder.enumIndex(expected));
+				else
+					builder.equal(field, expected);
+			}
+			checkBlock = index + 1 == predicates.length ? matchBlock : builder.createBlock();
 			builder.branch(matches, checkBlock, nextBlock);
 		}
 	}
