@@ -17,6 +17,7 @@ import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
+import compiler.types.IterationProtocol;
 import compiler.types.analysis.Scope;
 import compiler.types.analysis.Scope.LocalFunction;
 import compiler.types.TypedAst.TypedCatch;
@@ -660,15 +661,16 @@ class StatementTyper {
 	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
 		var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false));
+		if (IterationProtocol.structuralIterator(typedIterable.type))
+			IterationProtocol.invalidateEffects(session, scope);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
 		if (forwardedArray != null)
 			typedIterable = session.representation.boundaryCast(typedIterable, forwardedArray);
 		// Haxe iterates any class instance or structure through its `iterator()` method.
-		switch typedIterable.type {
-			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):
-				typedIterable = unwrapNullable(typeExpression(MethodCall(iterable, "iterator", [], span), scope, null, false));
-			default:
-		}
+		if (valueName == null
+			&& IterationProtocol.structuralIterator(typedIterable.type)
+			&& IterationProtocol.method(session.declarations, typedIterable.type, "iterator") != null)
+			typedIterable = unwrapNullable(IterationProtocol.call(session, typedIterable, "iterator"));
 		// `for (index => element in array)` is a loop over the indices that binds each element.
 		if (valueName != null)
 			switch typedIterable.type {
@@ -700,8 +702,10 @@ class StatementTyper {
 					value;
 				} else key;
 			default:
-				fail("E1014", "For-in iterable must be an Array, Iterator, or Map", span);
-				TInt;
+				var item = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				if (item == null)
+					fail("E1014", "For-in requires an iterable or an iterator with hasNext():Bool and next()", span);
+				item;
 		};
 		var loopScope = new Scope(scope);
 		loopScope.define(name, element, span);
@@ -735,6 +739,16 @@ class StatementTyper {
 		var typedBody = typeStatements(body, loopScope, result);
 		context.loopDepth--;
 		var valueId:Null<String> = valueName == null ? null : loopScope.requireId(valueName);
+		if (IterationProtocol.structuralIterator(typedIterable.type)) {
+			var held = "$for-iterator:" + span.start;
+			var receiver = new TypedExpression(TLocal(held), typedIterable.type, span);
+			var hasNext = IterationProtocol.call(session, receiver, "hasNext");
+			var next = IterationProtocol.call(session, receiver, "next");
+			return TIf(new TypedExpression(TBoolLiteral(true), TBool, span), [
+				TVar(held, typedIterable, span),
+				TWhile(hasNext, [TVar(loopScope.requireId(name), next, span)].concat(typedBody), span)
+			], [], span);
+		}
 		return TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable, typedBody, span);
 	}
 

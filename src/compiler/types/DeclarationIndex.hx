@@ -292,10 +292,10 @@ class DeclarationIndex {
 					if (arguments.length != 1)
 						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
 					TArray(resolveInner(arguments[0], span, resolving, substitutions));
-				} else if (name == "Iterator") {
+				} else if (name == "Iterator" || name == "Iterable") {
 					if (arguments.length != 1)
-						fail('Type "Iterator" expects 1 type argument, got ${arguments.length}', span);
-					TIterator(resolveInner(arguments[0], span, resolving, substitutions));
+						fail('Type "$name" expects 1 type argument, got ${arguments.length}', span);
+					IterationProtocol.contract(name, resolveInner(arguments[0], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)

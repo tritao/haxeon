@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
+import compiler.types.IterationProtocol;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.analysis.Scope;
@@ -88,13 +89,67 @@ class GenericInstantiation {
 				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected, 'default argument ${index + 1} to "$baseName"',
 					"E1009"));
 		}
-		var semanticArguments = coerceArguments(arguments, semanticExpected, baseName),
-			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
+		// An iterable parameter is structural, but a generic body can keep its concrete
+		// collection representation. Include it in the specialization identity so
+		// arrays retain indexed loops and classes retain direct method dispatch.
+		var concrete:Array<CompilerType> = [],
+			specializedArguments = fn.arguments.copy();
+		var semanticArguments:Array<TypedExpression> = [];
+		var hasIterationParameter = false;
+		for (expected in semanticExpected)
+			if (IterationProtocol.name(expected) != null)
+				hasIterationParameter = true;
+		var mutableAliases:Map<String, Bool> = hasIterationParameter ? compiler.types.analysis.MutableIterationAliases.ofFunction(fn) : [];
+		for (index in 0...arguments.length) {
+			var argument = arguments[index],
+				expected = semanticExpected[index];
+			if (IterationProtocol.name(expected) != null
+				&& argument.type != TNull
+				&& argument.type != TNever
+				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name, fn.arguments[index].span))) {
+				if (!session.relations.isAssignable(argument.type, expected))
+					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
+				var hidden = "$iteration-argument:" + index,
+					parameter = fn.arguments[index];
+				substitutions.set(hidden, argument.type);
+				specializedArguments[index] = {
+					name: parameter.name,
+					type: NamedType(hidden),
+					optional: parameter.optional,
+					defaultValue: parameter.defaultValue,
+					span: parameter.span
+				};
+				concrete.push(argument.type);
+				semanticArguments.push(argument);
+			} else {
+				// Keep protocol positions in the key even when null or mutable storage
+				// requires erasure; otherwise two calls can specialize different slots
+				// under the same concrete-type list.
+				if (IterationProtocol.name(expected) != null)
+					concrete.push(expected);
+				semanticArguments.push(coerce(argument, expected, 'argument ${index + 1} to "$baseName"', "E1009"));
+			}
+		}
+		if (concrete.length > 0)
+			fn = {
+				name: fn.name,
+				isStatic: fn.isStatic,
+				isExtern: fn.isExtern,
+				isInline: fn.isInline,
+				metadata: fn.metadata,
+				typeParameters: fn.typeParameters,
+				typeConstraints: fn.typeConstraints,
+				arguments: specializedArguments,
+				result: fn.result,
+				statements: fn.statements,
+				span: fn.span
+			};
+		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
 			specializationPolicies = genericRepresentation.policies,
 			representationResult = genericCall.result.physical,
-			representationArguments = genericCall.typeArguments,
+			representationArguments = genericCall.typeArguments.concat(concrete),
 			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
 			result = genericCall.result.semantic,
 			typed = genericCall.arguments;
@@ -151,6 +206,11 @@ class GenericInstantiation {
 					default:
 				}
 			case AppliedType(name, patternArguments):
+				if ((name == "Iterable" || name == "Iterator") && patternArguments.length == 1) {
+					var element = IterationProtocol.element(session.declarations, actual, name == "Iterable");
+					if (element != null)
+						inferTypeParameters(patternArguments[0], element, parameters, substitutions, span);
+				}
 				var projected = session.declarations.inheritance.project(actual, name);
 				if (projected != null)
 					actual = projected;

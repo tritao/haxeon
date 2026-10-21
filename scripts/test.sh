@@ -130,6 +130,7 @@ run_wasm_stages() {
 	run_timed wasm-parity bash "$root_dir/scripts/test-wasm-gc-parity.sh"
 	if [[ -n ${WASMTIME:-} || -x "$root_dir/.tools/wasmtime-47.0.0/wasmtime" ]] || command -v wasmtime >/dev/null 2>&1; then
 		run_timed static-init-order-wasm bash "$root_dir/tests/integration/test-static-init-order-wasm.sh"
+		run_timed structural-iteration-wasm bash "$root_dir/tests/integration/test-structural-iteration-wasm.sh"
 		run_timed wasm-gc-wasmtime bash "$root_dir/scripts/test-wasm-gc-wasmtime.sh"
 	else
 		echo "Skipping Wasm GC wasmtime checks: Wasmtime 47.0.0 is not installed (set WASMTIME to its executable)"

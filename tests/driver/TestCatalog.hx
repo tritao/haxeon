@@ -210,6 +210,8 @@ class TestCatalog {
 				"fields initialized with enum constructors or enum abstract values infer their type"),
 			hxmlCase("runtime", "enum-abstract-declared-type", "tests/hxml/enum-abstract-declared-type-test.hxml", "enum-abstract-declared-type-test.hl", 0,
 				"a declared enum abstract type decides which abstract a bare value name belongs to"),
+			hxmlCase("runtime", "structural-iteration", "tests/hxml/structural-iteration-test.hxml", "structural-iteration-test.hl", 0,
+				"structural iterators, iterable parameters and collection-generic Lambda helpers"),
 			hxmlCase("runtime", "map-values", "tests/hxml/map-values-test.hxml", "map-values-test.hl", 0,
 				"string map value iteration preserves nested captures"),
 			hxmlCase("runtime", "instance-initializer", "tests/hxml/instance-initializer-test.hxml", "instance-initializer-test.hl", 0,

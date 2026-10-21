@@ -172,6 +172,7 @@ of a language that targets many platforms.
 |---|---|
 | Project CLI, manifests, dependencies, workspaces | [`docs/CLI.md`](docs/CLI.md) |
 | Supported Haxe subset, FFI, and native bindings | [`docs/LANGUAGE_SUPPORT.md`](docs/LANGUAGE_SUPPORT.md) |
+| Iterators, iterable parameters, and allocation behavior | [`docs/ITERATION.md`](docs/ITERATION.md) |
 | How patching works, reload rules, artifact builds | [`docs/LIVE_PATCHING.md`](docs/LIVE_PATCHING.md) |
 | Compiler pipeline, SSA IR, HLB/HLI/HLP formats | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Patch transactions in depth | [`docs/PATCH_TRANSACTIONS.md`](docs/PATCH_TRANSACTIONS.md) |

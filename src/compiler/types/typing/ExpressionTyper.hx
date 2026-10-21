@@ -33,6 +33,7 @@ import compiler.types.analysis.Scope;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedMapEntry;
 import compiler.types.TypedAst.TypedObjectField;
@@ -43,6 +44,7 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
+import compiler.types.IterationProtocol;
 import compiler.types.StructProperties;
 
 typedef ExpressionTypeCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
@@ -1203,15 +1205,16 @@ class ExpressionTyper {
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = unwrapNullable(typeExpressionCallback(iterable, scope, null, false));
+		if (IterationProtocol.structuralIterator(typedIterable.type))
+			IterationProtocol.invalidateEffects(session, scope);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
 		if (forwardedArray != null)
 			typedIterable = session.representation.boundaryCast(typedIterable, forwardedArray);
 		// Haxe iterates any class instance or structure through its `iterator()` method.
-		switch typedIterable.type {
-			case TInstance(NominalKind.Class, _, _), TAnonymous(_, _) if (valueName == null):
-				typedIterable = unwrapNullable(typeExpressionCallback(MethodCall(iterable, "iterator", [], span), scope, null, false));
-			default:
-		}
+		if (valueName == null
+			&& IterationProtocol.structuralIterator(typedIterable.type)
+			&& IterationProtocol.method(session.declarations, typedIterable.type, "iterator") != null)
+			typedIterable = unwrapNullable(IterationProtocol.call(session, typedIterable, "iterator"));
 		var originalIterable = typedIterable,
 			loopScope = new Scope(scope),
 			keyType:Null<CompilerType> = null,
@@ -1244,7 +1247,9 @@ class ExpressionTyper {
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 			default:
-				fail("E1014", "Array comprehension iterable must be an Array, Iterator, or Map", span);
+				keyType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				if (keyType == null)
+					fail("E1014", "Array comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (keyType == null)
 			throw "Array comprehension item type was not resolved";
@@ -1280,11 +1285,28 @@ class ExpressionTyper {
 			typedValue = typeExpressionCallback(value, valueScope, expectedElement, false),
 			flattenedElement = switch typedValue.expression {
 				case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
-				case _: null;
+				case _: switch value {
+						case ArrayComprehension(_, _, _, _, _, true, _): arrayElementType(typedValue.type, span);
+						case _: null;
+					}
 			},
 			elementType = expectedElement == null ? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
 		if (flattenedElement == null)
 			typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
+		if (IterationProtocol.structuralIterator(typedIterable.type)) {
+			var resultType = TArray(elementType),
+				resultName = "$comprehension-result:" + span.start;
+			var result = new TypedExpression(TLocal(resultName), resultType, span);
+			var append:TypedStatement = TExpression(new TypedExpression(TCollectionCall(result, "push", [typedValue]), TInt, span), span);
+			if (flattenedElement != null) {
+				var inner = "$comprehension-item:" + span.start;
+				append = TForIn(inner, null, typedValue, [
+					TExpression(new TypedExpression(TCollectionCall(result, "push", [new TypedExpression(TLocal(inner), elementType, span)]), TInt, span), span)
+				], span);
+			}
+			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, append, resultName,
+				new TypedExpression(TArrayLiteral([]), resultType, span), result, span);
+		}
 		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue, flattened),
 			TArray(elementType), span, false, map);
@@ -1292,8 +1314,14 @@ class ExpressionTyper {
 
 	public function typeMapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, key:AstExpression,
 			value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedIterable = typeExpressionCallback(iterable, scope, null, false),
-			originalIterable = typedIterable,
+		var typedIterable = unwrapNullable(typeExpressionCallback(iterable, scope, null, false));
+		if (IterationProtocol.structuralIterator(typedIterable.type))
+			IterationProtocol.invalidateEffects(session, scope);
+		if (valueName == null
+			&& IterationProtocol.structuralIterator(typedIterable.type)
+			&& IterationProtocol.method(session.declarations, typedIterable.type, "iterator") != null)
+			typedIterable = unwrapNullable(IterationProtocol.call(session, typedIterable, "iterator"));
+		var originalIterable = typedIterable,
 			loopScope = new Scope(scope),
 			itemType:Null<CompilerType> = null;
 		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span,
@@ -1324,7 +1352,9 @@ class ExpressionTyper {
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
 			default:
-				fail("E1014", "Map comprehension iterable must be an Array, Iterator, or Map", span);
+				itemType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				if (itemType == null)
+					fail("E1014", "Map comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (itemType == null)
 			throw "Map comprehension item type was not resolved";
@@ -1349,9 +1379,31 @@ class ExpressionTyper {
 		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
 		if (session.mapName(resultKey, resultValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		if (IterationProtocol.structuralIterator(typedIterable.type)) {
+			var resultType = TMap(resultKey, resultValue),
+				resultName = "$comprehension-result:" + span.start;
+			var result = new TypedExpression(TLocal(resultName), resultType, span);
+			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, TMapAssign(result, typedKey, typedValue, span),
+				resultName, new TypedExpression(TMapLiteral([]), resultType, span), result, span);
+		}
 		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 			TMap(resultKey, resultValue), span);
+	}
+
+	function structuralComprehension(iterable:TypedExpression, item:String, condition:Null<TypedExpression>, append:TypedStatement, resultName:String,
+			initial:TypedExpression, result:TypedExpression, span:SourceSpan):TypedExpression {
+		var held = "$comprehension-iterator:" + span.start;
+		var receiver = new TypedExpression(TLocal(held), iterable.type, span);
+		var body = [
+			TVar(item, IterationProtocol.call(session, receiver, "next"), span),
+			condition == null ? append : TIf(condition, [append], [], span)
+		];
+		return new TypedExpression(TBlockExpression([
+			TVar(resultName, initial, span),
+			TVar(held, iterable, span),
+			TWhile(IterationProtocol.call(session, receiver, "hasNext"), body, span)
+		], result), result.type, span);
 	}
 
 	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {

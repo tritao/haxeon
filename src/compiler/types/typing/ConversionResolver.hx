@@ -6,6 +6,7 @@ import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
+import compiler.types.IterationProtocol;
 import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
@@ -29,6 +30,11 @@ class ConversionResolver {
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if (value.type == TNever)
 			return neverAs(value, expected);
+		if (IterationProtocol.name(expected) != null && value.type != TNull && !TypeRelations.equals(value.type, expected)) {
+			if (!session.relations.isAssignable(value.type, expected))
+				fail(code, 'Type mismatch for $context: iteration requires compatible iterator(), hasNext():Bool and next() methods', value.span);
+			return iterationAdapter(value, expected);
+		}
 		switch expected {
 			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
 			case TNullable(element) if (value.type != TNull && value.type != TDynamic && !isNullable(value.type)):
@@ -63,6 +69,64 @@ class ConversionResolver {
 				fail(code, 'Type mismatch for $context', value.span);
 				value;
 		};
+	}
+
+	/** Reify an explicitly erased structural contract once at the boundary, never inside a loop. */
+	function iterationAdapter(value:TypedExpression, expected:CompilerType):TypedExpression {
+		var fields = switch expected {
+			case TAnonymous(_, fields): fields;
+			default: throw "Expected iteration contract";
+		};
+		var span = value.span, context = session.currentContext.name;
+		var id = session.functionAdapterCounts.exists(context) ? session.functionAdapterCounts.get(context) : 0;
+		session.functionAdapterCounts.set(context, id + 1);
+		var localName = "$iteration-source:" + context + ":" + id;
+		var local = new TypedExpression(TLocal(localName), value.type, span);
+		var output:Array<compiler.types.TypedAst.TypedObjectField> = [];
+		for (field in fields) {
+			var functionName = "$iteration-adapter:" + context + ":" + id + ":" + field.name;
+			var environment = functionName + ":env";
+			var captures:Array<TypedCapture> = [
+				{
+					field: "source",
+					bindingId: localName,
+					type: value.type,
+					storageType: value.type,
+					source: CaptureExpression(local)
+				}
+			];
+			var captured = new TypedExpression(TCaptured("source"), value.type, span, false, null, value.type);
+			var result = switch field.type {
+				case TFunction([], result): result;
+				default: throw "Expected protocol method";
+			};
+			var call = IterationProtocol.call(session, captured, field.name);
+			var converted = coerce(call, result, "iteration method result");
+			session.closureConversion.addEnvironment(environment, captures);
+			session.closureConversion.addFunction({
+				name: functionName,
+				origin: context,
+				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
+				owner: environment,
+				isStatic: false,
+				isConstructor: false,
+				arguments: [],
+				result: result,
+				statements: [TReturn(converted, span)],
+				cells: [],
+				cellCaptures: [],
+				span: span
+			});
+			output.push({name: field.name, value: new TypedExpression(TLambda(functionName, environment, captures), field.type, span)});
+		}
+		new AnonymousTypeRegistry(session).register(expected);
+		var name = switch expected {
+			case TAnonymous(name, _): name;
+			default: "";
+		};
+		return new TypedExpression(TBlockExpression([TVar(localName, ValueCopy.bind(session, value, value.type), span)],
+			new TypedExpression(TObjectLiteral(name, output, false), expected, span)),
+			expected, span);
 	}
 
 	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<String> {

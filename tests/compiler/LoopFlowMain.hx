@@ -64,6 +64,16 @@ class LoopFlowMain {
 			"var p = new Pair(); if (p.value != null) { for (i in 0...2) { var z:Int = p.value; p.count++; } } return 0;");
 		expectError("replacing an object on the path clears facts read through it",
 			"var o = new Outer(); var other = new Holder(); other.value = null; if (o.inner.value != null) { for (i in 0...2) { var z:Int = o.inner.value; o.inner = other; } } return 0;");
+		var cursor = "class Cursor { var h:Holder; public function new(h:Holder) this.h = h; public function hasNext():Bool { h.value = null; return false; } public function next():Int return 0; } ";
+		expectError("implicit hasNext/next calls clear field facts",
+			"var h = new Holder(); var cursor = new Cursor(h); if (h.value != null) { for (x in cursor) {} var z:Int = h.value; return z; } return 0;", cursor);
+		expectError("implicit iterator calls clear field facts",
+			"var h = new Holder(); var cursor = {iterator: function() { h.value = null; return new Cursor(h); }}; if (h.value != null) { for (x in cursor) {} var z:Int = h.value; return z; } return 0;",
+			cursor);
+		expectError("structural comprehensions clear field facts",
+			"var h = new Holder(); var cursor = new Cursor(h); if (h.value != null) { var xs = [for (x in cursor) h.value + 1]; } return 0;", cursor);
+		expectError("implicit callable fields clear captured local facts",
+			"var value:Null<Int> = 1; var cursor = {hasNext: function() { value = null; return false; }, next: function() return 0}; if (value != null) { for (x in cursor) {} var z:Int = value; return z; } return 0;");
 		Sys.println("PASS: loops and flow facts");
 	}
 
@@ -78,9 +88,9 @@ class LoopFlowMain {
 		}
 	}
 
-	static function expectError(label:String, body:String):Void {
+	static function expectError(label:String, body:String, extra:String = ""):Void {
 		try {
-			Frontend.compile(wrap(body));
+			Frontend.compile(extra + wrap(body));
 		} catch (error:CompileError) {
 			return;
 		}

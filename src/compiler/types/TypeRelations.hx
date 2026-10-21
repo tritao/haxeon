@@ -86,6 +86,10 @@ class TypeRelations {
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
 		if (actual == TNever)
 			return true;
+		if (IterationProtocol.name(expected) != null)
+			return actual == TNull
+				|| TypeRelations.equals(actual, expected)
+				|| IterationProtocol.conforms(declarations, this, actual, expected);
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
 		if (StructProperties.isConstraintType(expected))
