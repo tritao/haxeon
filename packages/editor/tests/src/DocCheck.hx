@@ -38,17 +38,23 @@ class DocCheck {
   check(!map.isGraphemeBoundary(2),"edited CR/LF grapheme");
  }
  static function viewportLook():Void {
-  for (direction in haxeon.editor.ViewportLook.lightDirections()) {
-   var length=Math.sqrt(direction[0]*direction[0]+direction[1]*direction[1]+direction[2]*direction[2]);
-   check(Math.abs(length-1)<0.000001,"viewport light directions are unit vectors");
-  }
   for (preset in 0...haxeon.editor.ViewportLook.PresetNames.length) {
-   check(haxeon.editor.ViewportLook.intensities(preset).length==3,"one intensity per viewport light");
-   check(haxeon.editor.ViewportLook.sky(preset).length==3&&haxeon.editor.ViewportLook.ground(preset).length==3,"ambient colors are RGB");
+   var look=haxeon.editor.ViewportLook.preset(preset);
+   check(look.lights.length==3,"key, fill and rim lights");
+   for (light in look.lights) {
+    var d=light.direction,length=Math.sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
+    check(Math.abs(length-1)<0.000001,"viewport light directions are unit vectors");
+    check(light.color.length==3&&light.intensity>=0&&light.radius>=0,"lights have an RGB tint, an intensity and a panel size");
+   }
+   check(look.sky.length==3&&look.ground.length==3,"ambient colors are RGB");
+   check(look.reflection>=0&&look.reflection<=1&&look.roughnessFloor>=0&&look.roughnessFloor<=1&&look.exposure>=0,"display parameters are in range");
   }
   var rejected=false;
-  try haxeon.editor.ViewportLook.sky(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic) rejected=true;
+  try haxeon.editor.ViewportLook.preset(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic) rejected=true;
   check(rejected,"unknown viewport lighting preset is rejected");
+  rejected=false;
+  try new haxeon.editor.ViewportLook.ViewportLight([0,0,0],1,[1,1,1],0) catch (_:Dynamic) rejected=true;
+  check(rejected,"a light needs a direction");
  }
  static function main():Void {
   viewportLook();

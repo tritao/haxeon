@@ -5,10 +5,14 @@ It has no UI, GPU, platform, or SceneKit dependency. UI widgets consume this
 model through `haxeon.ui`; the orbit camera lives in `nativekit.scene`.
 
 `ViewportLook` is the shared look of a 3D editor viewport: a light background
-gradient, the workplane grid step, the default multisample count, and a
-three-light studio rig in camera space with `studio`, `soft` and `contrast`
-presets. Values are plain RGB triples and vectors; editors wrap them in their
-own color and camera types, so every viewport built on Haxeon reads the same.
+gradient, the workplane grid step, the default multisample count, and the
+`studio`, `soft` and `contrast` lighting presets. A preset is the whole
+lighting: a three-light rig in camera space (each light a soft panel that metal
+reflects), the room's sky and ground light, reflection strength, contact
+obscurance, the roughness floor and the exposure. Values are plain RGB triples
+and vectors; editors wrap them in their own color and camera types, and other
+renderers (such as a documentation site's model viewer) can build the same
+environment from them, so every view of a part reads the same.
 
 `TextDocument` stores text in roughly 2 KiB UTF-8 segments. It prefers a nearby
 newline, but also splits long paragraphs at code-point boundaries. Each
