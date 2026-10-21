@@ -67,17 +67,23 @@ class WasmGcDynamicArrays {
 			return;
 		// Error messages name types by testing against every class or element type, so helpers share these
 		// functions; expanded in each arm of an element-type dispatch they grow with the square of the types.
-		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int):Void {
+		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int, result:IrType = Bytes):Void {
 			if (functions.exists(name))
 				return;
 			var helper = new WasmGcDynamicArrays(plan, program, representation, arguments.length, functions),
-				result = build(helper);
-			helper.body.push(LocalGet(result));
+				local = build(helper);
+			helper.body.push(LocalGet(local));
 			helper.body.push(Return);
-			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, Bytes), helper.locals, helper.body)));
+			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, result), helper.locals, helper.body)));
 		}
 		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
 		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
+		// Dynamic equality tests every enum's nullary constructors, so it too is shared, not expanded per element type.
+		shared(DYNAMIC_EQUAL, [Dyn, Dyn], helper -> {
+			var equal = helper.allocateLocal(I32);
+			helper.push(handled(helper.representation.dynamicEqual(equal, 0, 1)));
+			equal;
+		}, Bool);
 		shared(CAST_MESSAGE, [Dyn, I32], helper -> helper.concatenate([
 			helper.literal("Can't cast "),
 			helper.valueTypeName(0),
@@ -280,6 +286,7 @@ class WasmGcDynamicArrays {
 		};
 
 	static inline var TYPE_NAME = "__haxeon_array_type_name";
+	static inline var DYNAMIC_EQUAL = "__haxeon_array_dynamic_equal";
 	static inline var CAST_MESSAGE = "__haxeon_array_cast_message";
 
 	/** Name of the element type a runtime type id denotes, from the module's shared function. */
@@ -642,7 +649,12 @@ class WasmGcDynamicArrays {
 			push([Block(null)]);
 			forEach(index, length, function() {
 				var boxed = read(element, array, index);
-				push(handled(representation.dynamicEqual(equal, boxed, searched)));
+				push([
+					LocalGet(boxed),
+					LocalGet(searched),
+					Call(WasmModuleSupport.requiredFunctionIndex(functions, DYNAMIC_EQUAL)),
+					LocalSet(equal)
+				]);
 				push([LocalGet(equal), If(null), LocalGet(index), LocalSet(result), Br(3), End]);
 			});
 			body.push(End);
