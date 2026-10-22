@@ -39,7 +39,36 @@ class Parser {
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
 	public function new(tokens:Array<Token>) {
-		this.tokens = tokens;
+		this.tokens = typeDelimiterTokens(tokens);
+	}
+
+	/**
+	 * The lexer retains >= for tools. The grammar needs separate > and = tokens:
+	 * a type may end immediately before an initializer (Array<T>=[]). Expressions
+	 * rejoin adjacent tokens into >= and shift assignments, just as they do >>.
+	 * Normalize once into a parser-owned stream so speculative parsing can rewind
+	 * by position alone without mutating cached lexer tokens or their byte spans.
+	 */
+	static function typeDelimiterTokens(tokens:Array<Token>):Array<Token> {
+		var first = -1;
+		for (index in 0...tokens.length)
+			if (tokens[index].kind == TokenKind.GreaterEqual) {
+				first = index;
+				break;
+			}
+		if (first < 0)
+			return tokens;
+		var result = tokens.slice(0, first);
+		for (index in first...tokens.length) {
+			var token = tokens[index];
+			if (token.kind == TokenKind.GreaterEqual) {
+				var span = token.span;
+				result.push(new Token(TokenKind.Greater, ">", new SourceSpan(span.file, span.start, span.start + 1)));
+				result.push(new Token(TokenKind.Assign, "=", new SourceSpan(span.file, span.start + 1, span.end)));
+			} else
+				result.push(token);
+		}
+		return result;
 	}
 
 	public function parseProgram():AstProgram {
@@ -939,6 +968,8 @@ class Parser {
 			if (shiftKind > 0) {
 				advance();
 				advance();
+				if (shiftKind == 10 || shiftKind == 11)
+					advance();
 				if (shiftKind == 11)
 					advance();
 			}
@@ -1248,10 +1279,13 @@ class Parser {
 	function parseComparison():AstExpression {
 		var expression = parseBitOr();
 		// The `<` of `<<=` (and the `>` of `>>=`, `>>>=`) starts a compound assignment, not a comparison.
-		if ((check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.GreaterEqual)
-			|| check(TokenKind.EqualEqual) || check(TokenKind.NotEqual))
+		if ((check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater) || check(TokenKind.EqualEqual) || check(TokenKind.NotEqual))
 			&& shiftAssignmentKind() < 0) {
 			var operation = advance().kind;
+			if (operation == TokenKind.Greater && check(TokenKind.Assign) && previous().span.end == current().span.start) {
+				advance();
+				operation = TokenKind.GreaterEqual;
+			}
 			var right = parseBitOr();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = switch operation {
@@ -1287,11 +1321,13 @@ class Parser {
 	function shiftAssignmentKind():Int {
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.LessEqual && current().span.end == tokens[position + 1].span.start)
 			return 9;
-		if (check(TokenKind.Greater) && peekKind(1) == TokenKind.GreaterEqual && current().span.end == tokens[position + 1].span.start)
-			return 10;
 		if (isAdjacentPair(TokenKind.Greater)
-			&& peekKind(2) == TokenKind.GreaterEqual
+			&& peekKind(2) == TokenKind.Assign
 			&& tokens[position + 1].span.end == tokens[position + 2].span.start)
+			return 10;
+		if (isAdjacentTriple(TokenKind.Greater)
+			&& peekKind(3) == TokenKind.Assign
+			&& tokens[position + 2].span.end == tokens[position + 3].span.start)
 			return 11;
 		return -1;
 	}
