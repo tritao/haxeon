@@ -19,6 +19,17 @@ class AbstractConversionGraph {
 
 	public function new(declarations:DeclarationIndex, shouldValidate:Bool) {
 		this.declarations = declarations;
+
+		if (shouldValidate) {
+			validate();
+		}
+	}
+
+	public function validate():Void {
+		// Module-local indexes are incomplete until dependency discovery finishes.
+		fromEdges.resize(0);
+		toEdges.resize(0);
+		spans.clear();
 		for (name in declarations.abstracts.keys()) {
 			if (!declarations.abstracts.exists(name))
 				throw 'Abstract declaration "$name" disappeared during conversion indexing';
@@ -50,12 +61,6 @@ class AbstractConversionGraph {
 					}
 			}
 		}
-		if (shouldValidate) {
-			validate();
-		}
-	}
-
-	public function validate():Void {
 		validateDirection("from", fromEdges);
 		validateDirection("to", toEdges);
 	}

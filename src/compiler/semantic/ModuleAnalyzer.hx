@@ -235,7 +235,7 @@ class ModuleAnalyzer {
 			for (base in interfaceDecl.bases)
 				addModuleTypeDependency(base, state, dependencies);
 			for (method in interfaceDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
+				addFunctionTypeDependencies(method, state, dependencies, interfaceDecl.typeParameters);
 		}
 		for (classDecl in ast.classes) {
 			var base = classDecl.base;
@@ -252,7 +252,23 @@ class ModuleAnalyzer {
 			for (field in classDecl.fields)
 				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
 			for (method in classDecl.methods)
-				addFunctionTypeDependencies(method, state, dependencies);
+				addFunctionTypeDependencies(method, state, dependencies, classDecl.typeParameters);
+		}
+		// Extern abstracts can name sibling modules only in their signatures (BytesInput -> Bytes).
+		// Those references must participate in reachability just as class signatures do.
+		for (abstractDecl in ast.abstracts) {
+			addModuleTypeDependency(abstractDecl.underlying, state, dependencies, abstractDecl.typeParameters);
+			for (type in abstractDecl.fromTypes.concat(abstractDecl.toTypes))
+				addModuleTypeDependency(type, state, dependencies, abstractDecl.typeParameters);
+			for (constraint in abstractDecl.typeConstraints ?? [])
+				addModuleTypeDependency(constraint.type, state, dependencies, abstractDecl.typeParameters);
+			for (method in abstractDecl.methods)
+				addFunctionTypeDependencies(method, state, dependencies, abstractDecl.typeParameters);
+		}
+		for (abstractDecl in ast.enumAbstracts) {
+			addModuleTypeDependency(abstractDecl.underlying, state, dependencies);
+			for (type in abstractDecl.fromTypes.concat(abstractDecl.toTypes))
+				addModuleTypeDependency(type, state, dependencies);
 		}
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
@@ -364,38 +380,45 @@ class ModuleAnalyzer {
 		return new LookupParse(state.source, conditional.defines, tokens, program);
 	}
 
-	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>):Void {
+	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>, ?ownerParameters:Array<String>):Void {
+		var parameters = (ownerParameters == null ? [] : ownerParameters).concat(fn.typeParameters == null ? [] : fn.typeParameters);
 		for (argument in fn.arguments)
-			addModuleTypeDependency(argument.type, state, dependencies);
-		addModuleTypeDependency(fn.result, state, dependencies);
+			addModuleTypeDependency(argument.type, state, dependencies, parameters);
+		addModuleTypeDependency(fn.result, state, dependencies, parameters);
+		for (constraint in fn.typeConstraints ?? [])
+			addModuleTypeDependency(constraint.type, state, dependencies, parameters);
 	}
 
-	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>):Void
+	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>, ?parameters:Array<String>):Void
 		switch type {
 			case NamedType(name):
-				var ast = state.parsedAst(),
-					owner = sourceModuleForType(name, ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
+				if (parameters == null || parameters.indexOf(name) < 0) {
+					var ast = state.parsedAst(),
+						owner = sourceModuleForType(name, ast.packageName);
+					if (owner != null && owner != state.name)
+						dependencies.set(owner, true);
+				}
 			case AppliedType(name, arguments):
-				var ast = state.parsedAst(),
-					owner = sourceModuleForType(name, ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
+				if (parameters == null || parameters.indexOf(name) < 0) {
+					var ast = state.parsedAst(),
+						owner = sourceModuleForType(name, ast.packageName);
+					if (owner != null && owner != state.name)
+						dependencies.set(owner, true);
+				}
 				for (argument in arguments)
-					addModuleTypeDependency(argument, state, dependencies);
+					addModuleTypeDependency(argument, state, dependencies, parameters);
 			case ArrayType(element), NullableType(element):
-				addModuleTypeDependency(element, state, dependencies);
+				addModuleTypeDependency(element, state, dependencies, parameters);
 			case MapType(key, value):
-				addModuleTypeDependency(key, state, dependencies);
-				addModuleTypeDependency(value, state, dependencies);
+				addModuleTypeDependency(key, state, dependencies, parameters);
+				addModuleTypeDependency(value, state, dependencies, parameters);
 			case FunctionType(arguments, result):
 				for (argument in arguments)
-					addModuleTypeDependency(argument, state, dependencies);
-				addModuleTypeDependency(result, state, dependencies);
+					addModuleTypeDependency(argument, state, dependencies, parameters);
+				addModuleTypeDependency(result, state, dependencies, parameters);
 			case AnonymousType(fields):
 				for (field in fields)
-					addModuleTypeDependency(field.type, state, dependencies);
+					addModuleTypeDependency(field.type, state, dependencies, parameters);
 			default:
 		}
 
