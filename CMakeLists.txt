@@ -175,7 +175,7 @@ if(TARGET hlprof_penter)
   set_target_properties(hlprof_penter PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
 endif()
 
-add_custom_target(haxeon-native DEPENDS hl hlprof-live haxeon_runtime jit_native_properties)
+add_custom_target(haxeon-native DEPENDS hl hldump hlprof-live haxeon_runtime jit_native_properties)
 if(TARGET hlprof_penter)
   add_dependencies(haxeon-native hlprof_penter)
 endif()

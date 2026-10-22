@@ -692,6 +692,16 @@ class HlLower {
 				if (!keepsArrayBounds(instruction.value))
 					provenInRange.clear();
 				var output = instructionOutput(instruction.value);
+				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
+				// Emit an explicit check so the active handler works on every thread.
+				var receiver:Null<IrValue> = switch instruction.value {
+					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
+						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value),
+						EnumIndex(_, value), EnumField(_, value, _, _): value;
+					case _: null;
+				};
+				if (receiver != null)
+					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				switch instruction.value {
 					case Phi(_, _):
 					case ConstVoid(output):
