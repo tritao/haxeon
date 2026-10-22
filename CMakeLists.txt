@@ -159,4 +159,4 @@ if(UNIX)
   )
 endif()
 
-add_custom_target(haxeon-native DEPENDS hl hlprof-live haxeon_runtime jit_native_properties)
+add_custom_target(haxeon-native DEPENDS hl hldump hlprof-live haxeon_runtime jit_native_properties)

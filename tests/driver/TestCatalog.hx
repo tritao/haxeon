@@ -141,6 +141,7 @@ class TestCatalog {
 		"CompilerSessionMain"
 	];
 	static final runtimeMains = [
+		"WorkerNullAccessMain",
 		"RuntimeDomainMain",
 		"GcAllocationPathsMain",
 		"GcEmptyPagesMain",

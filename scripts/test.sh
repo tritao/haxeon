@@ -179,6 +179,8 @@ run_isolated_integration_group \
 	tests/integration/test-cxx-span.sh \
 	tests/integration/test-cxx-msvc-profile.sh
 run_timed profiler-disconnect-integration "$root_dir/tests/integration/test-profiler-disconnect.sh"
+run_timed hldump-integration python3 "$root_dir/tests/integration/test-hldump.py"
+run_timed fatal-stack-integration python3 "$root_dir/tests/integration/test-fatal-stack.py"
 run_timed stdout-buffering-integration python3 "$root_dir/tests/integration/test-stdout-buffering.py"
 run_timed process-output-capture-integration bash "$root_dir/tests/integration/test-process-output-capture.sh"
 
