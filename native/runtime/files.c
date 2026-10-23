@@ -1,7 +1,8 @@
 extern vbyte *hl_sys_get_cwd( void );
 extern void hl_sys_profile_span( int code, uchar *name );
 extern void hl_sys_profile_event( int code, vbyte *data, int dataLen );
-extern bool hl_sys_profile_recording( void );
+extern void hl_sys_profile_counter( uchar *name, double value );
+extern void hl_sys_profile_frame( int kind, int frame_set );
 extern vbyte *hl_sys_full_path( vbyte *path );
 extern vbyte *hl_sys_exe_path( void );
 extern bool hl_sys_exists( vbyte *path );
@@ -53,22 +54,13 @@ HL_PRIM void HL_NAME(__sys_profile_span)( int code, vstring *name ) {
 	hl_sys_profile_span(code,name == NULL ? NULL : name->bytes);
 }
 
-/* Counter payload: the value as a little-endian f64, then the UTF-8 name. */
 HL_PRIM void HL_NAME(__sys_profile_counter)( int code, vstring *name, double value ) {
-	const char *utf8;
-	size_t length;
-	unsigned char *payload;
-	unsigned long long bits;
-	if( !hl_sys_profile_recording() ) return;
-	utf8 = name == NULL ? "" : hl_to_utf8(name->bytes);
-	length = strlen(utf8);
-	payload = (unsigned char *)malloc(length + 8);
-	if( payload == NULL ) return;
-	memcpy(&bits,&value,sizeof(bits));
-	for( int i = 0; i < 8; i++ ) payload[i] = (unsigned char)(bits >> (i * 8));
-	memcpy(payload + 8,utf8,length);
-	hl_sys_profile_event(code,(vbyte *)payload,(int)(length + 8));
-	free(payload);
+	(void)code;
+	hl_sys_profile_counter(name == NULL ? NULL : name->bytes,value);
+}
+
+HL_PRIM void HL_NAME(__sys_profile_frame)( int kind, int frame_set ) {
+	hl_sys_profile_frame(kind,frame_set);
 }
 
 HL_PRIM vstring *HL_NAME(__sys_get_cwd)( void ) {

@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import hl.Gc;
+import haxeon.ProfileFrame;
 import haxeon.ProfileSpan;
 
 import haxeon.ui.FontCollection;
@@ -56,6 +57,8 @@ class DesktopUiHost {
 		var frameRequestCounts:Map<String, Int> = new Map();
 		var captureState = {startedAt: -1.0, readyFrames: 0};
 		var frameGc = FrameGcScheduler.fromEnvironment();
+		// A profiler frame runs from one rendered frame to the next, or until the host goes idle.
+		var profileFrameOpen = false;
 		var script = options.inputScriptPath == null ? null : new ScriptedInput(options.inputScriptPath);
 		var scriptedCount = 0;
 		var scriptedAt = -1.0;
@@ -329,6 +332,8 @@ class DesktopUiHost {
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
 									runtime.measureFrameTimings = options.captureDirectory != null;
+									ProfileFrame.mark();
+									profileFrameOpen = true;
 									frameSpanOpen = true;
 									ProfileSpan.begin("ui.frame");
 									frameGc.beginFrame();
@@ -530,7 +535,13 @@ class DesktopUiHost {
 					scheduleFrameWithReason("text-caret");
 				}
 				submitFrameRequest();
-				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) frameGc.idle();
+				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
+					frameGc.idle();
+					if (profileFrameOpen) {
+						ProfileFrame.idle();
+						profileFrameOpen = false;
+					}
+				}
 				if (active && !hadEvent && !hadFrame) {
 					var waitStarted = measureLoop ? Sys.time() : 0.0;
 					var callbackBeforeWait = callbackSeconds;
