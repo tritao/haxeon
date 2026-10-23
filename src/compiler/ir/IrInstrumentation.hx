@@ -77,7 +77,7 @@ class IrInstrumentationScope {
  * restored in its catch, which closes the slices of the calls a throw skipped. Throws leave no exit probe; the catch
  * that stops them (or the runtime, for one that reaches C) unwinds instead.
  *
- * Each backend lowers the probes: HashLink calls libhl natives (which the x86-64 JIT inlines), and wasm drops them.
+ * Each backend lowers the probes: HashLink calls libhl natives (the x86-64 JIT inlines their recording check), and wasm drops them.
  */
 class IrInstrumentation {
 	public static inline var Enter = "__prof_enter";

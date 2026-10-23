@@ -27,8 +27,10 @@ to UTF-8 on each call, and the client polled for 256 KiB at a time.
    in-application call tree.
 3. **Haxe probes come from a compiler pass** over the SSA IR, lowered by each
    backend, rather than from the JIT's prolog and epilog. Only a compiler pass
-   reaches every backend, and lowering to a JIT intrinsic keeps the cost of a
-   JIT-only approach.
+   reaches every backend. The probes are ordinary natives keyed by their return
+   address, so they need no per-function symbol table and work on any target;
+   the x64 JIT inlines only the recording check, which keeps a build that is not
+   recording close to an ordinary one.
 4. **Native probes come from `/Gh /GH`**, scoped per translation unit. Code we
    do not compile is seen only at the boundary: import-table hooks, the DXGI and
    D3D11 vtables, and Vulkan wrappers.
@@ -43,8 +45,9 @@ to UTF-8 on each call, and the client polled for 256 KiB at a time.
    another client of the same stream.
 8. **One tick clock** (TSC where invariant), calibrated by periodic clock pairs
    and converted only by readers.
-9. **Throws close slices with one `UNWIND` record** carrying the depth saved
-   when the trap was set.
+9. **Throws close slices with one `UNWIND` record.** Each thread counts its
+   open calls; a try saves the count and its catch restores it, recording how
+   many calls the throw skipped.
 
 ## Consequences
 

@@ -112,8 +112,10 @@ with an invariant TSC, through the C entry points:
 | enter/exit pair, recording, drained concurrently (1 or 4 threads) | 16 |
 | span begin/end, recording | 18.6 |
 
-The TSC reads are the floor; inlined probes save the call overhead. The
-consumer drains over 2 GB/s of records before compression.
+The TSC reads are the floor. Through the Haxe probes, `fib(32)` (7 million
+calls) runs at 1.51 ns per call uninstrumented, 1.98 instrumented and not
+recording, and 18.6 recording. The consumer drains over 2 GB/s of records
+before compression.
 
 ### Consumer
 
@@ -183,16 +185,25 @@ sampling interval's resolution.
 
 ### Haxe
 
-A compiler pass over the SSA IR adds an enter probe to every function that is
-not inlined and an exit probe before every return. A probe's key is its
-function's code address, as for native code; each live revision has its own
-code, and the symbol metadata keeps retired regions, so revisions stay apart. Each backend lowers the probes: HashLink x64 inlines them in the JIT as
-a TSC read and a buffer write, arm64 calls a native at first, and wasm calls an
-import whose recording is deferred.
+A compiler pass over the SSA IR (`IrInstrumentation`, run after inlining)
+adds an enter probe to every function that is not inlined and an exit probe
+before every return. The probes are libhl natives (`std.prof_call_enter`,
+`prof_call_exit`). An enter's key is the probe's return address, which lies in
+the calling function's code: the exporter names it from the symbol metadata
+like any native pc. Each live revision has its own code, and the metadata keeps
+retired regions, so revisions stay apart.
 
-When a throw lands in a catch, the handler writes one `UNWIND` record with the
-instrumentation depth saved when the trap was set, closing every slice the
-throw skipped.
+On HashLink x64 the JIT tests the recording flag inline and branches over the
+probe call, so an instrumented build that is not recording costs about 0.5 ns
+per call over an ordinary one. While recording, the native writes the record
+(about 16 ns per enter/exit pair, two TSC reads of it). arm64 calls the native
+unconditionally. wasm drops the probes until it records.
+
+Each thread keeps its instrumentation depth (enters minus exits). The pass
+saves the depth before every try (`prof_call_depth`) and passes it to
+`prof_call_unwind` at the start of the catch; the C trap macro does the same
+for traps set in C. When the depth is above the saved one, the runtime writes
+one `UNWIND` record closing the calls the throw skipped.
 
 ### Native code (Windows x64)
 
