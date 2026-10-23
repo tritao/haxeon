@@ -79,6 +79,16 @@ For function breakpoints during debugging, set `"inline": false` in `haxeon.json
 compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
 the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
 
+`run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
+capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
+`SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `sampling,alloc`.
+`instrument` is accepted but fails until instrumented builds exist. `--profile-output PATH` names the `.hlpc` file
+(with `--watch`, the directory that holds one capture per launch) and implies `--profile`.
+
+```sh
+./scripts/haxeon run --profile=sampling -- --verbose
+```
+
 On Linux, macOS and Windows, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the

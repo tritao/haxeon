@@ -53,6 +53,7 @@ private typedef BuildOptions = {
 	final jobs:Int;
 	final selfHosted:Bool;
 	final profile:Bool;
+	final profileSources:Array<String>;
 	final profileOutput:Null<String>;
 }
 
@@ -616,6 +617,8 @@ class HaxeonCli {
 		if (options.profile
 			&& (!launch || !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost()))))
 			throw 'Profiling is currently available for "haxeon run" host builds only';
+		if (options.profileSources.indexOf("instrument") >= 0)
+			throw 'Profiling source "instrument" is not available yet: instrumentation builds do not exist; use --profile=sampling,alloc';
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
@@ -665,7 +668,8 @@ class HaxeonCli {
 				var profiling:Null<WatchProfiling> = options.profile ? {
 					profiler: profilerTool(home),
 					root: options.profileOutput == null ? Path.join([Path.directory(output), "profile"]) : resolvePath(options.profileOutput, project.root),
-					processName: project.manifest.entry
+					processName: project.manifest.entry,
+					sources: options.profileSources
 				} : null;
 				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, profiling, function(compilerOnly) {
 					var windows = Sys.systemName() == "Windows" && buildPath != null;
@@ -689,7 +693,7 @@ class HaxeonCli {
 			if (options.profile) {
 				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([Path.directory(output), "profile"])) : resolvePath(options.profileOutput,
 					project.root);
-				return runProfiled(home, output, options.runtimeArguments, project.root, capture, project.manifest.entry);
+				return runProfiled(home, output, options.runtimeArguments, project.root, capture, project.manifest.entry, options.profileSources);
 			}
 			Sys.println('Launching $output');
 			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, new Map());
@@ -783,12 +787,13 @@ class HaxeonCli {
 		return profiler;
 	}
 
-	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String, processName:String):Int {
+	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String, processName:String,
+			sources:Array<String>):Int {
 		var runtime = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]),
 			profiler = profilerTool(home);
 		if (!FileSystem.exists(runtime))
 			throw 'HashLink is missing: $runtime (run scripts/bootstrap-tools.sh)';
-		var profile = new ProfileCapture(profiler, capture, processName), done = new sys.thread.Lock(), readers = 0;
+		var profile = new ProfileCapture(profiler, capture, processName, sources), done = new sys.thread.Lock(), readers = 0;
 		profile.keepBytecode(output);
 		var app = new sys.io.Process(runtime, profile.runtimeArguments().concat([output]).concat(runtimeArguments));
 		Sys.println('Profiling $output -> $capture (diagnostics port ${profile.port})');
@@ -955,7 +960,7 @@ class HaxeonCli {
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
 			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, jobs = 4,
-			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileOutput:Null<String> = null;
+			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -979,6 +984,10 @@ class HaxeonCli {
 				selfHosted = true;
 			else if (argument == "--profile")
 				profile = true;
+			else if (StringTools.startsWith(argument, "--profile=")) {
+				profileSources = ProfileCapture.parseSources(argument.substr("--profile=".length));
+				profile = true;
+			}
 			else if (argument == "--profile-output") {
 				if (index >= arguments.length)
 					throw 'Option "--profile-output" requires a value';
@@ -1046,6 +1055,7 @@ class HaxeonCli {
 			jobs: jobs,
 			selfHosted: selfHosted,
 			profile: profile,
+			profileSources: profileSources == null ? ProfileCapture.defaultSources() : profileSources,
 			profileOutput: profileOutput
 		};
 	}
@@ -1383,7 +1393,8 @@ class HaxeonCli {
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
-		Sys.println("       [--profile]                  Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace");
+		Sys.println("       [--profile[=SOURCES]]        Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace;");
+		Sys.println("                                    SOURCES is a comma list of instrument, sampling, alloc (default sampling,alloc)");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile); with --watch, the directory for");
 		Sys.println("                                    one capture per launch");
 		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");

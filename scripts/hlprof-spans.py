@@ -25,7 +25,8 @@ def analyze(trace):
             if not stacks[tid]:
                 raise ValueError(f"unmatched span end on thread {tid}: {event['name']}")
             start = stacks[tid].pop()
-            if start["name"] != event["name"]:
+            # v1 captures name a span's end; v2 ends close the innermost span unnamed.
+            if event.get("name") and start["name"] != event["name"]:
                 raise ValueError(f"mismatched span on thread {tid}: {start['name']} / {event['name']}")
             spans.append((start, event))
         elif category == "hl.diagnostics" and event.get("name") == "profile records dropped":
@@ -68,7 +69,7 @@ def main():
     parser.add_argument("--top", type=int, default=20)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    result = report(json.loads(args.trace.read_text()), args.min_ms, args.top)
+    result = report(json.loads(args.trace.read_text(encoding="utf-8")), args.min_ms, args.top)
     for span in result["slowSpans"]:
         leaves = ", ".join(f"{item['name']} ({item['samples']})" for item in span["topLeaves"][:4])
         print(f"{span['durationMs']:.1f}ms {span['name']} thread={span['threadId']} "
@@ -76,7 +77,7 @@ def main():
     print(f"spans={result['spanCount']} dropped={result['droppedRecords']} "
           f"incomplete={len(result['incompleteSpans'])}")
     if args.output:
-        args.output.write_text(json.dumps(result, indent=2) + "\n")
+        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

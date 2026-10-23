@@ -107,13 +107,17 @@ class ProfilerService {
 		var current = requireSession(),
 			rate = intOption(options, "sampleRate", 1000),
 			interval = intOption(options, "pollIntervalMs", 100),
-			allocationInterval = intOption(options, "allocationInterval", 0);
+			allocationInterval = intOption(options, "allocationInterval", 0),
+			sources = intOption(options, "sources", 0);
 		if (interval < 10)
 			throw "Profiler polling interval must be at least 10ms";
 		pollIntervalSeconds = interval / 1000.0;
 		if (allocationInterval < 0)
 			throw "Profiler allocation interval must not be negative";
-		current.start(rate, allocationInterval);
+		if (sources < 0 || sources > 7)
+			throw "Profiler sources must be a combination of instrument (1), sampling (2) and alloc (4)";
+		// Sources default to sampling, plus allocation sampling when an interval is set.
+		current.start(rate, allocationInterval, sources == 0 ? null : sources);
 		wake.release();
 		return snapshot(current.snapshot());
 	}
@@ -255,18 +259,18 @@ class ProfilerService {
 			sequence: ++notificationSequence,
 			state: Std.string(value.state),
 			samples: value.samples,
+			instrumentedCalls: value.instrumentedCalls,
 			unresolvedFrames: value.unresolvedFrames,
-			dropped: Int64.toStr(value.dropped),
-			pendingBytes: value.pendingBytes,
 			bufferCapacity: Int64.toStr(value.bufferCapacity),
 			bufferUsed: Int64.toStr(value.bufferUsed),
 			bufferUtilization: value.bufferUtilization,
 			requestedSampleRate: value.requestedSampleRate,
-			effectiveSampleRate: value.effectiveSampleRate,
 			metadataRefreshMs: value.metadataRefreshMs,
 			sampleRecords: Int64.toStr(value.sampleRecords),
 			generatedBytes: Int64.toStr(value.generatedBytes),
-			overheadMicrosPerSample: value.overheadMicrosPerSample,
+			sentBytes: Int64.toStr(value.sentBytes),
+			stalls: Int64.toStr(value.stalls),
+			malformedSegments: value.malformedSegments,
 			gcSamples: value.gcSamples,
 			threads: [
 				for (threadId => name in value.threads)
@@ -388,7 +392,8 @@ class ProfilerService {
 			file: value.file,
 			line: value.line,
 			selfSamples: value.selfSamples,
-			totalSamples: value.totalSamples
+			totalSamples: value.totalSamples,
+			calls: value.calls
 		};
 
 	static function stackValue(value:ProfileStack):Dynamic

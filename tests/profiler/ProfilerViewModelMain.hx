@@ -19,7 +19,7 @@ class ProfilerViewModelMain {
 		require(leaf.revisions.length == 2 && leaf.revisions[0] == 1 && leaf.revisions[1] == 2, "revision detail was lost");
 		require(leaf.file == "Work.hx" && leaf.line == 2, "latest revision source location was not retained");
 		require(second.delta.nodes.length == 2 && second.delta.nodes[1].totalSamples == 5, "incremental delta was incorrect");
-		require(second.state.health.effectiveSampleRate == 125
+		require(second.state.health.requestedSampleRate == 250
 			&& second.state.revisionMarkers.length == 1, "health or revision markers missing");
 
 		var reset = model.update(snapshot(0, []));
@@ -56,9 +56,7 @@ class ProfilerViewModelMain {
 			bufferCapacity: "8388608",
 			bufferUsed: "1024",
 			bufferUtilization: 0.01,
-			dropped: "0",
 			requestedSampleRate: 250,
-			effectiveSampleRate: 125,
 			metadataRefreshMs: 0.4,
 			metadataChanges: samples == 5 ? [
 				{

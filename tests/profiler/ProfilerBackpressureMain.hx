@@ -15,7 +15,7 @@ class ProfilerBackpressureMain {
 		var session = new ProfilerSession(new HldiClient("127.0.0.1", port, 15.0));
 		try {
 			session.start(250);
-			// Deliberately stop consuming long enough to put pressure on the runtime ring.
+			// Deliberately stop consuming long enough to put pressure on the runtime's buffer pool.
 			Sys.sleep(8.0);
 			for (_ in 0...24) {
 				session.poll(64 * 1024);
@@ -25,15 +25,13 @@ class ProfilerBackpressureMain {
 			require(snapshot.bufferCapacity > 0, "missing buffer capacity");
 			require(snapshot.bufferUsed >= 0 && snapshot.bufferUsed <= snapshot.bufferCapacity, "profiler buffer was not bounded");
 			require(snapshot.requestedSampleRate == 250, "requested sampling rate changed");
-			require(snapshot.effectiveSampleRate > 0 && snapshot.effectiveSampleRate < snapshot.requestedSampleRate,
-				"adaptive sampling did not reduce the effective rate");
 			var sawRevision2 = false;
 			for (revision in snapshot.metadataRevisions)
 				if (revision == 2)
 					sawRevision2 = true;
 			require(sawRevision2, "metadata did not follow hot reload under pressure");
 			require(snapshot.unresolvedFrames == 0, "slow transport produced unresolved frames");
-			Sys.println('PASS: bounded profiler pressure=${snapshot.bufferUtilization} rate=${snapshot.effectiveSampleRate}/${snapshot.requestedSampleRate} dropped=${snapshot.dropped}');
+			Sys.println('PASS: bounded profiler pressure=${snapshot.bufferUtilization} stalls=${snapshot.stalls} sampled=${snapshot.sampleRecords}');
 		} catch (error:Dynamic) {
 			session.close();
 			throw error;

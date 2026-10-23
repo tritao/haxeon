@@ -12,6 +12,7 @@ typedef WatchProfiling = {
 	final profiler:String;
 	final root:String;
 	final processName:String;
+	final sources:Array<String>;
 }
 
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
@@ -96,7 +97,7 @@ class WatchRun {
 	}
 
 	static function startProfile(profiling:Null<WatchProfiling>):Null<ProfileCapture>
-		return profiling == null ? null : new ProfileCapture(profiling.profiler, ProfileCapture.nextCapture(profiling.root), profiling.processName);
+		return profiling == null ? null : new ProfileCapture(profiling.profiler, ProfileCapture.nextCapture(profiling.root), profiling.processName, profiling.sources);
 
 	/** Called once the launch has exited: the recorder then finalizes its capture. */
 	static function finishProfile(profile:Null<ProfileCapture>):Void {

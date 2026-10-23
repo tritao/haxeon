@@ -38,13 +38,14 @@ def main():
     return count == 0 ? 1 : 0;
   }
 }
-''')
+''', encoding="utf-8")
         bytecode = root / "main.hl"
-        run(ROOT / "scripts/haxeon", "build", "--compiler-only", "--project",
+        run(ROOT / "scripts" / ("haxeon.cmd" if os.name == "nt" else "haxeon"), "build", "--compiler-only", "--project",
             root / "haxeon.json", "--output", bytecode)
         environment = os.environ.copy()
-        environment["LD_LIBRARY_PATH"] = os.pathsep.join(
-            [str(ROOT / "out"), str(HL.parent), environment.get("LD_LIBRARY_PATH", "")])
+        library_path = "PATH" if os.name == "nt" else "LD_LIBRARY_PATH"
+        environment[library_path] = os.pathsep.join(
+            [str(ROOT / "out"), str(HL.parent), environment.get(library_path, "")])
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
@@ -67,7 +68,7 @@ def main():
         report = root / "report.json"
         run(sys.executable, ROOT / "scripts/hlprof-spans.py", "--min-ms", "0",
             "--output", report, trace)
-        result = json.loads(report.read_text())
+        result = json.loads(report.read_text(encoding="utf-8"))
         assert result["spanCount"] == 1, result
         assert result["droppedRecords"] == 0, result
         assert not result["incompleteSpans"], result

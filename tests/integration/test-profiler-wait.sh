@@ -25,7 +25,7 @@ export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_L
 "$runtime" --diagnostics "$port" --diagnostics-wait "$target" >"$log" 2>&1 &
 pid=$!
 sleep 0.2
-if ! kill -0 "$pid" 2>/dev/null || rg -q '^started$' "$log"; then
+if ! kill -0 "$pid" 2>/dev/null || rg --crlf -q '^started$' "$log"; then
 	cat "$log" >&2
 	echo "profiler wait did not hold the target before attachment" >&2
 	exit 1
@@ -33,5 +33,5 @@ fi
 
 "$client" --connect-timeout 5 --rate 100 --duration 1 --output "$capture" "$port" >/dev/null
 wait "$pid"
-rg -q '^started$' "$log"
+rg --crlf -q '^started$' "$log"
 echo "PASS: diagnostics-wait holds startup until hlprof-live attaches"

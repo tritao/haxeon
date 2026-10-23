@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 CAPTURE.hlpc" >&2
+  echo "Usage: $0 CAPTURE.hlpc (recorded with sampling and alloc sources, e.g. by haxeon run --profile)" >&2
   exit 2
 fi
 

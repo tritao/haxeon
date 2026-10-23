@@ -51,8 +51,21 @@ if timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" -
 fi
 rg -q 'already holds another capture' "$scratch/other.log"
 
+# A source list selects what the recorder captures. Instrumentation builds do not exist yet, so that source is refused
+# before anything is built or launched.
+timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling   --profile-output "$scratch/sampling/profile.hlpc" > "$scratch/sampling.log" 2>&1 || {
+    cat "$scratch/sampling.log" >&2
+    exit 1
+  }
+test -s "$scratch/sampling/profile.hlpc" && test -s "$scratch/sampling/profile.pftrace"
+if timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling > "$scratch/instrument.log" 2>&1; then
+  echo "FAIL: the instrument source was accepted" >&2
+  exit 1
+fi
+rg -q 'instrument.*not available' "$scratch/instrument.log"
+
 # A process can exit after profiler configuration but before the first sample
-# chunk. That is still a complete, valid capture with cursor zero.
+# chunk. That is still a complete, valid capture with cursor zero (this hand-built capture is HLPC v1, which stays readable).
 python3 - "$scratch/empty.hlpc" <<'PY'
 import pathlib
 import struct

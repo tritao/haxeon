@@ -16,15 +16,17 @@ class ProfileCapture {
 
 	final profiler:String;
 	final processName:String;
+	final sources:Array<String>;
 	final directory:String;
 	final name:String;
 	final revisions:Array<String> = [];
 	var recorder:Null<Process>;
 
-	public function new(profiler:String, capture:String, processName:String) {
+	public function new(profiler:String, capture:String, processName:String, sources:Array<String>) {
 		this.profiler = profiler;
 		this.capture = capture;
 		this.processName = processName;
+		this.sources = sources;
 		directory = Path.directory(capture);
 		name = Path.withoutExtension(Path.withoutDirectory(capture));
 		port = allocatePort();
@@ -36,6 +38,22 @@ class ProfileCapture {
 			if (artifacts == null || Reflect.field(artifacts, "profile") != Path.withoutDirectory(capture))
 				throw 'Capture directory $directory already holds another capture; choose an empty directory';
 		}
+	}
+
+	public static function defaultSources():Array<String>
+		return ["sampling", "alloc"];
+
+	/** Parses a comma list of profiling sources: instrument, sampling, alloc. */
+	public static function parseSources(list:String):Array<String> {
+		var sources = [];
+		for (source in list.split(",")) {
+			source = StringTools.trim(source);
+			if (source != "instrument" && source != "sampling" && source != "alloc")
+				throw 'Unknown profiling source "$source" (expected instrument, sampling or alloc)';
+			if (sources.indexOf(source) < 0)
+				sources.push(source);
+		}
+		return sources;
 	}
 
 	/** A new capture directory under root, named by its start time. */
@@ -50,22 +68,12 @@ class ProfileCapture {
 	public function runtimeArguments():Array<String>
 		return ["--diagnostics", Std.string(port), "--diagnostics-wait"];
 
-	public function recorderArguments():Array<String>
-		return [
-			"--connect-timeout",
-			"15",
-			"--rate",
-			"1000",
-			"--alloc-interval",
-			"65536",
-			"--interval",
-			"2000",
-			"--top",
-			"40",
-			"--output",
-			capture,
-			Std.string(port)
-		];
+	public function recorderArguments():Array<String> {
+		var arguments = ["--connect-timeout", "15", "--sources", sources.join(","), "--rate", "1000"];
+		if (sources.indexOf("alloc") >= 0)
+			arguments = arguments.concat(["--alloc-interval", "65536"]);
+		return arguments.concat(["--interval", "2000", "--output", capture, Std.string(port)]);
+	}
 
 	/** Copies the bytecode the program is launched with into the capture. Call it before the launch, while the file is that build. */
 	public function keepBytecode(bytecode:String):Void
