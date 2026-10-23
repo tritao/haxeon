@@ -1736,12 +1736,16 @@ class LspProtocolMain {
 			base + "/app/src/generated",
 			base + "/lib",
 			base + "/lib/code",
-			base + "/lib/code/dep"
+			base + "/lib/code/dep",
+			base + "/lib/code/build"
 		])
 			sys.FileSystem.createDirectory(directory);
 		sys.io.File.saveContent(base + "/app/haxeon.json",
 			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"outputDir":"src/generated","scopeSourceRoots":false,"dependencies":{"helper":{"path":"../lib"}}}');
-		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"scopeSourceRoots":false}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json",
+			'{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"sources":["code/dep/Value.hx"],"scopeSourceRoots":false}');
+		// A package directory named build is source when the manifest names its output elsewhere, even beside listed sources.
+		sys.io.File.saveContent(base + "/lib/code/build/Digest.hx", "package build; class Digest {} ");
 		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx", "package dep; class Value { public static function answer():Int return 42; }");
 		sys.io.File.saveContent(base + "/app/src/build/BuildDiagnostic.hx", "package build; class BuildDiagnostic {} ");
 		sys.io.File.saveContent(base + "/app/src/generated/Artifact.hx", "invalid generated output");
@@ -1760,6 +1764,7 @@ class LspProtocolMain {
 			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
 			|| !protocol.project.hasDiskSource(base + "/lib/code/dep/Value.hx")
 			|| !protocol.project.hasDiskSource(base + "/app/src/build/BuildDiagnostic.hx")
+			|| !protocol.project.hasDiskSource(base + "/lib/code/build/Digest.hx")
 			|| protocol.project.hasDiskSource(base + "/app/src/generated/Artifact.hx"))
 			throw "haxeon.json source roots and local package dependencies were not discovered";
 		var broken = StringTools.replace(source, "var answer = Value.answer()", 'var answer:Int = "wrong"'),
