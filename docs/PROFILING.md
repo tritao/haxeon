@@ -58,6 +58,14 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 - **Samples.** Stack samples (`--rate`, default 1000 Hz) with Haxe frames named
   `Class.method` with file and line. A sample taken while the world was
   stopped for a GC also gets a "GC stop sample" instant.
+- **Call stacks over time.** Each thread has a "Call stacks" track under its
+  thread track that lays its samples out as nested slices: a function that
+  stays on the stack across consecutive samples is one slice, so a frame reads
+  as a flame graph over time below its `ui.frame` span. Boundaries are as
+  precise as the sampling interval, calls shorter than it appear only when a
+  sample lands in them, and a thread not sampled for three intervals ends its
+  slices. Perfetto's aggregate flame graph of a selected area still uses the
+  samples themselves.
 - **Mixed-mode stacks** on Windows x64: samples walk through native code with
   the unwind data of each module and of the JIT, so a stack shows Haxe calling
   into a native library and back into Haxe callbacks. A native frame belongs to

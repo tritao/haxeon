@@ -174,7 +174,10 @@ Version 1 captures (pull-based chunks) remain readable.
 merges the threads' records in time order. In Perfetto, instrumented calls and
 spans are nested slices on their thread's track (a flame graph over time),
 frames are slices on a "Frames" track, and samples, counters and GC
-statistics keep their existing tracks.
+statistics keep their existing tracks. Each thread's samples are also laid out
+as nested slices on a "Call stacks" track under the thread, so code the
+instrumentation does not cover still reads as a flame graph over time, at the
+sampling interval's resolution.
 
 ## Instrumentation
 
