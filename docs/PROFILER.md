@@ -207,11 +207,28 @@ one `UNWIND` record closing the calls the throw skipped.
 
 ### Native code (Windows x64)
 
-Modules we compile are built with `/Gh /GH`. The `_penter`/`_pexit` hooks are
-MASM stubs that save the volatile registers and write `ENTER`/`EXIT` records
-with the function's address as its key; the exporter names it from the
-module's PDB. Every module we compile has a PDB. The profiler's own code is
-never instrumented.
+Sources in the native scope are compiled with `/Gh /GH`, and every module of
+the flavor is linked with `/DEBUG`, so it has a PDB. For `native.cmake`
+projects, `cmake/haxeon-instrument.cmake` (passed as `CMAKE_PROJECT_INCLUDE`)
+adds the flags to each matching source once the project is read; for
+`native.sources`, the toolchain adds them per source.
+
+The `_penter`/`_pexit` hooks come from `hlprof_penter.lib`, a static library
+HashLink builds and every module of the flavor links. They are MASM: each tests
+the recording flag and returns, and only while a session records saves the
+volatile registers (the argument registers on entry, the return registers on
+exit) and calls libhl. The library finds libhl at run time rather than
+importing it, so tools a build runs, which never load libhl, run unchanged.
+
+An enter's key is the hook's return address, a pc inside the function.
+`hl_prof_enter_native` puts each key into a lock-free set the first time a
+session records it and queues it; the consumer names queued keys through
+DbgHelp, with the same symbol events as sampled native frames. Naming never
+runs inside the hooked call, which may hold locks DbgHelp takes. The exporter
+collects every symbol event before it decodes any call. The profiler's own
+code (libhl, the hooks) is never instrumented. A C++ exception that unwinds
+through instrumented frames skips their exit hooks; the next Haxe catch
+restores the depth.
 
 Calls from our modules into code we do not compile are hooked at the boundary:
 import-table hooks for blocking and system calls, vtable hooks for the DXGI
@@ -225,7 +242,7 @@ ordinary builds contain no probes. `haxeon.json` scopes it:
 
 ```json
 "instrument": {
-  "haxe": { "include": ["*"], "exclude": ["Math", "haxe.ds.*"], "skipSmallLeaves": false },
+  "haxe": { "include": ["*"], "exclude": ["Math", "haxe.ds.*"] },
   "native": { "include": ["**"], "exclude": ["vendor/harfbuzz/**"] },
   "boundary": { "imports": "blocking", "dxgi": true, "d3d11": true, "vulkan": true }
 }

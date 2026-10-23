@@ -10,9 +10,15 @@ cat > "$scratch/haxeon.json" <<'JSON'
 JSON
 cat > "$scratch/src/Main.hx" <<'HAXE'
 class Main {
+  static function measured(n:Int):Int {
+    var total = 0;
+    for (i in 0...n) total += i % 3;
+    return total;
+  }
+
   static function main():Void {
     haxeon.ProfileCounter.set("capture.test.counter", 7);
-    Sys.println("profile capture test");
+    Sys.println("profile capture test " + measured(1000));
   }
 }
 HAXE
@@ -30,10 +36,12 @@ import sys
 capture = pathlib.Path(sys.argv[1])
 manifest = json.loads((capture / "capture.json").read_text())
 assert manifest["kind"] == "haxeon.capture" and manifest["schemaVersion"] == 1
-assert (capture / manifest["artifacts"]["bytecode"]).read_bytes() == (capture.parent / "build/host/main.hl").read_bytes()
+# The default source is instrument, which runs the instrumented build.
+assert (capture / manifest["artifacts"]["bytecode"]).read_bytes() == (capture.parent / "build-instrument/host/main.hl").read_bytes()
 assert (capture / manifest["artifacts"]["profile"]).stat().st_size > 0
 trace = (capture / manifest["artifacts"]["perfetto"]).read_bytes()
 assert manifest["artifacts"]["perfetto"] == "profile.pftrace" and b"capture.test.counter" in trace
+assert b"Main.measured" in trace
 PY
 "$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.log"
 
@@ -51,18 +59,18 @@ if timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" -
 fi
 rg -q 'already holds another capture' "$scratch/other.log"
 
-# A source list selects what the recorder captures. Instrumentation builds do not exist yet, so that source is refused
-# before anything is built or launched.
+# A source list selects what the recorder captures; without instrument, the ordinary build runs.
 timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling   --profile-output "$scratch/sampling/profile.hlpc" > "$scratch/sampling.log" 2>&1 || {
     cat "$scratch/sampling.log" >&2
     exit 1
   }
 test -s "$scratch/sampling/profile.hlpc" && test -s "$scratch/sampling/profile.pftrace"
-if timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling > "$scratch/instrument.log" 2>&1; then
-  echo "FAIL: the instrument source was accepted" >&2
-  exit 1
-fi
-rg -q 'instrument.*not available' "$scratch/instrument.log"
+test -s "$scratch/build/host/main.hl"
+timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling   --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
+    cat "$scratch/mixed.log" >&2
+    exit 1
+  }
+rg -q -a 'Main.measured' "$scratch/mixed/profile.pftrace"
 
 # A process can exit after profiler configuration but before the first sample
 # chunk. That is still a complete, valid capture with cursor zero (this hand-built capture is HLPC v1, which stays readable).
@@ -79,4 +87,4 @@ pathlib.Path(sys.argv[1]).write_bytes(
 PY
 "$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/empty.hlpc" > "$scratch/empty-report.log"
 rg -q 'samples=0' "$scratch/empty-report.log"
-echo "PASS: profiled run exports a trace with counters, keeps one capture per directory, and empty capture reports cleanly"
+echo "PASS: profiled run exports a trace with counters and instrumented calls, keeps one capture per directory, and empty capture reports cleanly"

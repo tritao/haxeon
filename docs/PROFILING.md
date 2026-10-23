@@ -12,9 +12,9 @@ A session combines sources. `--profile` takes a comma-separated list:
 | --- | --- |
 | `sampling` | Stack samples at a fixed rate (`--rate`). |
 | `alloc` | Allocation samples, one per N allocations on each thread. |
-| `instrument` | Enter and exit of every instrumented function. Not available yet: it needs instrumented builds, which do not exist. |
+| `instrument` | Enter and exit of every instrumented function. Needs the instrumented build, which `haxeon run` makes (see Instrumentation). |
 
-Without a list, `haxeon run --profile` records `sampling,alloc`. `hlprof-live`
+Without a list, `haxeon run --profile` records `instrument`. `hlprof-live`
 records `sampling` unless told otherwise. Spans, counters, frame marks, GC
 statistics, thread names and module loads are always recorded while a session
 runs, whatever the sources.
@@ -84,8 +84,10 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   for the recorder to free a buffer. The profiler drops nothing, so a stall
   delays the program instead. Raise `--pool` if stalls appear.
 - **Instants** for module loads and live module revisions.
-- **Instrumented calls**, once `instrument` exists: a slice per call, nested
-  with the spans on the thread's track.
+- **Instrumented calls.** A slice per call with its exact enter and exit
+  times, nested with the spans on the thread's track, Haxe and native mixed.
+  On "Main thread frames" and the "Call stacks" tracks, instrumented calls
+  replace the stack built from samples.
 
 MSVC Release builds of HashLink and the Haxeon runtime write PDBs next to the
 binaries so the profiler and debuggers can name their functions.
@@ -122,6 +124,42 @@ python3 scripts/check-pftrace.py --tp trace_processor_shell \
 
 On Windows x64, add `--expect-mixed` to require stacks that pass from Haxe
 through native code and back into Haxe; other platforms do not record them.
+
+## Instrumentation
+
+With `instrument` among the sources, `haxeon run --profile` builds the
+instrumented flavor into its own directory (`build-instrument` beside `build`),
+so ordinary builds and their compiler worker are untouched. It probes:
+
+- **Haxe.** Every function that remains a call after inlining gets an enter
+  probe and an exit probe before each return. A throw closes the calls it
+  skips when a catch takes it. While nothing records, a probe costs about
+  0.5 ns on HashLink x64.
+- **Native code we compile** (Windows x64, MSVC). Every source of a package's
+  `native.sources` or `native.cmake` project is compiled with `/Gh /GH` and
+  every module gets a PDB, which names its functions. Code we do not compile,
+  such as system libraries, appears only through the calls into it.
+
+`haxeon.json` narrows what is probed:
+
+```json
+"instrument": {
+  "haxe": { "include": ["*"], "exclude": ["Math", "haxe.ds.*"] },
+  "native": { "include": ["**"], "exclude": ["vendor/harfbuzz/**"] }
+}
+```
+
+Haxe patterns match qualified function names; `*` matches any run of
+characters, and a pattern also covers every member of the class or package it
+names, so `Math` covers `Math.sin`. A closure is matched by the function that
+declares it. Native patterns match a source's path relative to its package (or
+to the top of its CMake project), or its absolute path, with forward slashes:
+`*` stays within one path component, `**` crosses components and `?` is one
+character. Excluding small, hot functions keeps captures smaller and their
+cost lower; an excluded function's time is counted in its caller.
+
+Live patches keep their probes: a patched function is instrumented like the
+build it patches, and its calls are named after the revision that ran.
 
 ## Spans and counters
 

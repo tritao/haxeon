@@ -18,7 +18,7 @@ class NativeSourcesProvider {
 		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources, resolvedPackage.includeDirs),
 			environment = context.environment,
 			layout = context.layout,
-			toolchain = new NativeToolchain(environment),
+			toolchain = new NativeToolchain(environment, context.compilerHome),
 			hashlinkIncludes = Path.join([context.compilerHome, "vendor", "hashlink", "src"]),
 			includeDirs = library.includeDirs.concat([hashlinkIncludes]),
 			actions:Array<ExecutionAction> = [],
@@ -57,7 +57,7 @@ class NativeSourcesProvider {
 					standard = artifact.details.get("standard");
 				objectPaths.set(artifact.id.key(), output);
 				actions.push(new ExecutionAction(id, dependencies, inputs, [output], 'Compile $language $source -> $output',
-					Process(toolchain.compileCommand(source), toolchain.compileArguments(source, output, includeDirs, standard), resolvedPackage.root,
+					Process(toolchain.compileCommand(source), toolchain.compileArguments(source, output, includeDirs, standard, resolvedPackage.root), resolvedPackage.root,
 						new Map())));
 				artifactActions.set(artifact.id.key(), [id]);
 			}
@@ -79,7 +79,11 @@ class NativeSourcesProvider {
 					id = new ActionId('${isStatic ? "native-archive" : "native-link"}:${artifact.id.key()}'),
 					command = isStatic ? toolchain.archiveCommand() : toolchain.sharedCommand(),
 					arguments = isStatic ? toolchain.archiveArguments(output, objects) : toolchain.sharedArguments(output, objects);
-				actions.push(new ExecutionAction(id, dependencies, objects, [output],
+				// An instrumented module links the hooks and writes a PDB, which the profiler names its functions from.
+				var instrumentedLink = !isStatic && toolchain.instrumenting(),
+					linkInputs = instrumentedLink ? objects.concat([toolchain.instrumentHooks()]) : objects,
+					linkOutputs = instrumentedLink ? [output, Path.withoutExtension(output) + ".pdb"] : [output];
+				actions.push(new ExecutionAction(id, dependencies, linkInputs, linkOutputs,
 					'${isStatic ? "Archive" : "Link shared library"} ${ffiName == null ? library.packageName : library.packageName + " FFI " + ffiName} -> $output',
 					Process(command, arguments, resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [id]);

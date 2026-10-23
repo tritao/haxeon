@@ -81,6 +81,11 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=" + outputDirectory);
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
+		var instrumenting = instrumentArguments(context);
+		for (argument in instrumenting)
+			configureArguments.push(argument);
+		if (instrumenting.length > 0)
+			cmakeInputs.push(Path.join([context.compilerHome, "cmake", "haxeon-instrument.cmake"]));
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
 				Process("cmake", configureArguments, runDirectory, compilerCache)),
@@ -141,6 +146,24 @@ class NativeCMakeProvider {
 				artifactActions.set(artifact.id.key(), [linkId]);
 			}
 		return {actions: actions, artifactActions: artifactActions};
+	}
+
+	/**
+	 * Configure arguments for the instrumented build flavor: `cmake/haxeon-instrument.cmake` compiles the sources in the
+	 * manifest's native scope with `/Gh /GH`, gives every module a PDB and links the hooks HashLink builds. Only MSVC x64
+	 * has native instrumentation; elsewhere the flavor builds native code as usual.
+	 */
+	static function instrumentArguments(context:LoweringContext):Array<String> {
+		var instrument = context.environment.instrument, target = context.environment.target;
+		if (instrument == null || target.os != TargetOs.Windows || target.abi != TargetAbi.Msvc || target.arch != build.Target.TargetArch.X64)
+			return [];
+		var home = context.compilerHome;
+		return [
+			"-DCMAKE_PROJECT_INCLUDE=" + Path.join([home, "cmake", "haxeon-instrument.cmake"]),
+			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", "hlprof_penter.lib"]),
+			"-DHAXEON_INSTRUMENT_INCLUDE=" + instrument.nativeInclude.join(";"),
+			"-DHAXEON_INSTRUMENT_EXCLUDE=" + instrument.nativeExclude.join(";")
+		];
 	}
 
 	/** Where a shared CMake tree leaves its runtime libraries, or null when the package has no CMake provider. */
