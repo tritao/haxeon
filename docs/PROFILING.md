@@ -58,10 +58,16 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 - **Samples.** Stack samples (`--rate`, default 1000 Hz) with Haxe frames named
   `Class.method` with file and line. A sample taken while the world was
   stopped for a GC also gets a "GC stop sample" instant.
-- **Call stacks over time.** Each thread has a "Call stacks" track under its
-  thread track that lays its samples out as nested slices: a function that
-  stays on the stack across consecutive samples is one slice, so a frame reads
-  as a flame graph over time below its `ui.frame` span. Boundaries are as
+- **Frames as flame graphs.** "Main thread frames", the first track of the
+  trace, shows the main thread one frame at a time: each frame (from one
+  `ProfileFrame.mark()` to the next) is a root slice named `Frame N`, and each
+  stretch between `ProfileFrame.idle()` and the next mark is an `Idle` root.
+  Under each root is that frame's call stack over time, Haxe and native mixed.
+  The stack is cut at every frame boundary, so no slice spans two frames.
+- **Call stacks over time.** Every other thread has a "Call stacks" track
+  under its thread track with the same layout, without frame roots. A
+  function that stays on the stack across consecutive samples is one slice.
+  Boundaries are as
   precise as the sampling interval, calls shorter than it appear only when a
   sample lands in them, and a thread not sampled for three intervals ends its
   slices. Perfetto's aggregate flame graph of a selected area still uses the
