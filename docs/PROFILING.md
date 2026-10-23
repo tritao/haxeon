@@ -161,6 +161,72 @@ cost lower; an excluded function's time is counted in its caller.
 Live patches keep their probes: a patched function is instrumented like the
 build it patches, and its calls are named after the revision that ran.
 
+### Boundary calls
+
+Calls from the process's own modules into code nobody compiles with
+instrumentation are recorded at the boundary (Windows x64), as slices named
+after the function called:
+
+- **Blocking and system calls**: waits and sleeps, file, pipe and network I/O,
+  message waits, process creation and the C runtime's file streams
+  (`kernel32!Sleep`, `ucrtbase!fread`, `ws2_32!recv`, ...).
+- **Direct3D 11 and DXGI**: draws, dispatches, copies, maps and flushes on the
+  immediate context (`ID3D11DeviceContext::Draw`), and `Present` on every swap
+  chain (`IDXGISwapChain::Present`).
+- **Vulkan**: queue submits and presents, image acquisition and the fence,
+  semaphore, queue and device waits.
+
+`haxeon.json` chooses them:
+
+```json
+"instrument": {
+  "boundary": { "imports": "blocking", "extra": ["kernel32.dll!SetEvent"], "dxgi": true, "d3d11": true, "vulkan": true }
+}
+```
+
+`imports` is `blocking` (the curated set) or `none`; `extra` adds functions as
+`module!function`. Only import-table calls are seen: a function the program
+looks up with `GetProcAddress` is not, except Vulkan's, whose lookups are
+hooked. Device and swap-chain hooks apply to objects created after the program
+starts.
+
+## Recording controls
+
+A capture of an instrumented run grows quickly, so `haxeon run` can record
+just part of a run:
+
+| Option | Meaning |
+| --- | --- |
+| `--profile-start=launch\|manual` | Record from launch (default), or open the session paused. |
+| `--profile-duration=SEC` | Stop after SEC seconds of recording; paused time does not count. |
+| `--profile-max-size=MIB` | Stop when the capture reaches MIB (default 4096; 0 for no limit). |
+| `--profile-window=START:END` | Export only that part of the capture to Perfetto, in seconds since the recorder connected; either side may be left out. The capture keeps everything. |
+
+Each option implies `--profile`. A paused session records nothing until the
+program starts it:
+
+```haxe
+haxeon.ProfileRecording.start();   // or pause(), toggle(), recording()
+```
+
+so a program can record from a hotkey, a menu command or the moment a problem
+appears. In the exosuit editor, the **Profiler: Toggle Recording** command
+does this. Calls that span a pause end at the pause in the trace, and frames
+end there too; the trace marks each pause and resume with an instant.
+
+Example exclude lists, for a smaller capture of an editor-sized program:
+
+```json
+"instrument": {
+  "haxe": { "exclude": ["Math", "Std", "StringTools", "haxe.ds", "haxe.io.Bytes", "haxe.Int64"] },
+  "native": { "exclude": ["**/harfbuzz/**", "**/sheenbidi/**", "**/libunibreak/**", "**/onig*/**", "**/libwebsockets/**"] }
+}
+```
+
+The first keeps the Haxe standard library's small, hot functions out; the
+second leaves the text-shaping, bidi, line-breaking, regex and websocket
+libraries to the boundary.
+
 ## Spans and counters
 
 Applications can mark a measured operation with `haxeon.ProfileSpan.begin(name)`
@@ -205,7 +271,9 @@ hlprof-live [--host HOST] [--sources LIST] [--rate HZ] [--alloc-interval N] \
 | `--alloc-interval N` | One allocation sample per N allocations on each thread. Setting it adds `alloc`. | 65536 with `alloc` |
 | `--pool MIB` | Size of the runtime's buffer pool. The pool is allocated once per process, so a later, larger value replaces it. | 64 |
 | `--interval MS` | Progress line period; 0 prints none. | 2000 |
-| `--duration SEC` | Stop after this long. | until Ctrl-C or the program ends |
+| `--duration SEC` | Stop after this long of recording (paused time does not count). | until Ctrl-C or the program ends |
+| `--max-size MIB` | Stop when the capture reaches MIB; data pushed before the runtime stops is dropped, so the capture ends at the limit. | no limit |
+| `--paused` | Open the session paused. At a console, Enter pauses and resumes recording; the program can too (`haxeon.ProfileRecording`). | records from the start |
 | `--connect-timeout SEC` | Keep retrying the connection this long. | one attempt |
 | `--output FILE` | Write the HLPC capture. Without it, nothing is saved. | none |
 

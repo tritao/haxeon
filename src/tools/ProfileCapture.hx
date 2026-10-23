@@ -6,6 +6,21 @@ import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
 
+/** How a profiled run records: when recording starts, when it stops, and what part of the capture is exported. */
+typedef ProfileControls = {
+	/** "launch" records from the program's start; "manual" opens the session paused until the program starts it. */
+	final start:String;
+
+	/** Seconds of recording after which the session stops; 0 for no limit. */
+	final durationSeconds:Int;
+
+	/** Capture size in MiB at which the session stops; 0 for no limit. */
+	final maxSizeMiB:Int;
+
+	/** The exported part of the capture, `START:END` in seconds since the recorder connected (either side optional). */
+	final window:Null<String>;
+}
+
 /**
 	One profiled run of a program: the program waits on a diagnostics port, `hlprof-live` records its samples, spans and
 	counters as an HLPC capture, and the finished capture is also exported as a Perfetto trace next to it.
@@ -40,7 +55,12 @@ class ProfileCapture {
 		}
 	}
 
-	/** Instrumentation: every call of the instrumented build, Haxe and native, as a slice. */
+	/** A capture stops at this size unless the run asks for another limit: larger traces are slow to load in Perfetto. */
+	public static inline final DEFAULT_MAX_SIZE_MIB = 4096;
+
+	/** The recording controls of this run's captures, set from the command line. */
+	public static var controls:ProfileControls = {start: "launch", durationSeconds: 0, maxSizeMiB: DEFAULT_MAX_SIZE_MIB, window: null};
+
 	/** HL_PROF_BOUNDARY for an instrumented run: which boundary hooks the runtime installs (see prof_boundary.c). */
 	public static function boundaryConfiguration(instrument:project.PackageManifest.InstrumentManifest):String {
 		var parts = ['imports=${instrument.boundaryImports}', 'dxgi=${instrument.dxgi ? 1 : 0}', 'd3d11=${instrument.d3d11 ? 1 : 0}',
@@ -50,6 +70,7 @@ class ProfileCapture {
 		return parts.join(";");
 	}
 
+	/** Instrumentation: every call of the instrumented build, Haxe and native, as a slice. */
 	public static function defaultSources():Array<String>
 		return ["instrument"];
 
@@ -64,6 +85,40 @@ class ProfileCapture {
 				sources.push(source);
 		}
 		return sources;
+	}
+
+	/** Parses `--profile-start`: "launch" or "manual". */
+	public static function parseStart(value:String):String {
+		if (value != "launch" && value != "manual")
+			throw 'Option "--profile-start" must be "launch" or "manual"';
+		return value;
+	}
+
+	/** Parses `--profile-window`: `START:END` in seconds, either side optional. */
+	public static function parseWindow(value:String):String {
+		windowArguments(value);
+		return value;
+	}
+
+	/** The exporter's arguments for a window, in milliseconds. */
+	static function windowArguments(window:Null<String>):Array<String> {
+		if (window == null)
+			return [];
+		var parts = window.split(":");
+		if (parts.length != 2)
+			throw 'Option "--profile-window" takes START:END in seconds';
+		var arguments = [];
+		for (index in 0...2) {
+			var text = StringTools.trim(parts[index]);
+			if (text == "")
+				continue;
+			var seconds = Std.parseFloat(text);
+			if (Math.isNaN(seconds) || seconds < 0)
+				throw 'Option "--profile-window" takes START:END in seconds, not "$window"';
+			arguments.push(index == 0 ? "--start-ms" : "--end-ms");
+			arguments.push(Std.string(Math.round(seconds * 1000)));
+		}
+		return arguments;
 	}
 
 	/** A new capture directory under root, named by its start time. */
@@ -82,6 +137,12 @@ class ProfileCapture {
 		var arguments = ["--connect-timeout", "15", "--sources", sources.join(","), "--rate", "1000"];
 		if (sources.indexOf("alloc") >= 0)
 			arguments = arguments.concat(["--alloc-interval", "65536"]);
+		if (controls.start == "manual")
+			arguments.push("--paused");
+		if (controls.durationSeconds > 0)
+			arguments = arguments.concat(["--duration", Std.string(controls.durationSeconds)]);
+		if (controls.maxSizeMiB > 0)
+			arguments = arguments.concat(["--max-size", Std.string(controls.maxSizeMiB)]);
 		return arguments.concat(["--interval", "2000", "--output", capture, Std.string(port)]);
 	}
 
@@ -149,16 +210,8 @@ class ProfileCapture {
 	/** Exports the finished capture for Perfetto and writes the capture manifest. Returns the trace, or null on failure. */
 	public function complete():Null<String> {
 		var trace = Path.join([directory, '$name.pftrace']);
-		var export = new Process(profiler, [
-			"export",
-			"--format",
-			"pftrace",
-			"--process-name",
-			processName,
-			"--output",
-			trace,
-			capture
-		]);
+		var export = new Process(profiler, ["export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
+			.concat(["--output", trace, capture]));
 		var errors = export.stderr.readAll().toString(),
 			status = export.exitCode();
 		export.close();

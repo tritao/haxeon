@@ -138,8 +138,10 @@ Requests on service 2 (profiler):
 | ---: | --- | --- |
 | 1 | status | none; the response is `active:u32, sources:u32, chunks:u32, chunksInUse:u32, dataFrames:u64, rawBytes:u64` |
 | 4 | metadata | none; the response is the metadata snapshot |
-| 16 | start | `sources:u32, sampleRate:u32, allocInterval:u32, poolMiB:u32` |
+| 16 | start | `sources:u32, sampleRate:u32, allocInterval:u32, poolMiB:u32`, optionally `flags:u32` (bit 0: start paused) |
 | 17 | stop | none |
+| 18 | pause | none |
+| 19 | resume | none |
 
 `start` releases a program held by `--diagnostics-wait`. After its response,
 the runtime pushes:
@@ -153,6 +155,7 @@ the runtime pushes:
 | 19 | threads | `count:u32`, then per thread `tid:u32, length:u32, UTF-8 name` |
 | 20 | end | `dataFrames:u64, rawBytes:u64`; the last frame of a session |
 | 21 | stats | `chunksInUse:u32, chunkCount:u32, stalls:u64, stallTicks:u64, rawBytes:u64, sentBytes:u64` |
+| 22 | recording | `recording:u32`, pushed when the client or the program pauses or resumes recording |
 
 `tickKind` is 1 for TSC, 2 for QPC, 3 for nanoseconds and 4 for `CNTVCT_EL0`.
 `stop`, or the program exiting, drains every buffer before `end` is pushed.
