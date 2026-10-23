@@ -91,13 +91,18 @@ class BuildEnvironment {
 	public final profile:BuildProfile;
 	public final toolchain:ToolchainInfo;
 
-	public function new(projectRoot:String, buildRoot:String, profile:BuildProfile = BuildProfile.Debug, ?target:Target, ?toolchain:ToolchainInfo) {
+	/** Set for the instrumented build flavor: what its native code is compiled to probe. */
+	public final instrument:Null<project.PackageManifest.InstrumentManifest>;
+
+	public function new(projectRoot:String, buildRoot:String, profile:BuildProfile = BuildProfile.Debug, ?target:Target, ?toolchain:ToolchainInfo,
+			?instrument:project.PackageManifest.InstrumentManifest) {
 		var canonicalRoot = FileSystem.fullPath(projectRoot);
 		this.projectRoot = Path.normalize(canonicalRoot);
 		this.buildRoot = Path.normalize(Path.isAbsolute(buildRoot) ? buildRoot : Path.join([canonicalRoot, buildRoot]));
 		this.target = target == null ? Target.detectHost() : target;
 		this.profile = profile;
 		this.toolchain = toolchain == null ? ToolchainInfo.detect(this.target) : toolchain;
+		this.instrument = instrument;
 	}
 
 	public static function fromCurrentDirectory(?buildDirectory:String = "out", profile:BuildProfile = BuildProfile.Debug):BuildEnvironment {

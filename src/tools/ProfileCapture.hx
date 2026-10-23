@@ -40,8 +40,9 @@ class ProfileCapture {
 		}
 	}
 
+	/** Instrumentation: every call of the instrumented build, Haxe and native, as a slice. */
 	public static function defaultSources():Array<String>
-		return ["sampling", "alloc"];
+		return ["instrument"];
 
 	/** Parses a comma list of profiling sources: instrument, sampling, alloc. */
 	public static function parseSources(list:String):Array<String> {

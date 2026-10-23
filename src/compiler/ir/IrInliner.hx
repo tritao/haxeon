@@ -42,6 +42,9 @@ class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
 
+	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
+	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
+
 	var lastFingerprint:Null<String> = null;
 	var lastFingerprintId = 0;
 	var objectTexts:Map<String, String> = [];
@@ -222,14 +225,24 @@ class IrInliner {
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
 	 */
-	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool):Array<String> {
+	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool, ?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
 		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [];
-		var published:Map<String, IrFunction> = [];
+		var published:Map<String, IrFunction> = [],
+			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		for (fn in program.functions) {
-			var result = inliner.inlinedVersion(fn.name),
-				previous = cache.published.get(fn.name);
+			var result = inliner.inlinedVersion(fn.name);
+			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
+			// without them.
+			if (instrument != null) {
+				var known = cache.instrumented.get(fn.name), key = instrument.key();
+				if (known == null || known.source != result || known.scope != key)
+					known = {source: result, scope: key, result: IrInstrumentation.apply(result, instrument)};
+				instrumented.set(fn.name, known);
+				result = known.result;
+			}
+			var previous = cache.published.get(fn.name);
 			if (previous != null && previous != result) {
 				// Generated functions (initializers, the entry) are rebuilt on every compile; only different bytes count.
 				if (sameBytes(previous, result))
@@ -240,11 +253,14 @@ class IrInliner {
 				changed.push(fn.name);
 			functions.push(result);
 			published.set(fn.name, result);
+			if (instrument != null)
+				instrumented.get(fn.name).result = result;
 		}
 		program.functions = functions;
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
+		cache.instrumented = instrumented;
 		return changed;
 	}
 

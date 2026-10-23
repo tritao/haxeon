@@ -504,6 +504,11 @@ class FrontendCompilation {
 					throw 'Native "${native.name}" is declared more than once';
 			irNatives.push(native);
 		}
+		var instrumentScope = context.instrumentScope();
+		if (instrumentScope != null)
+			for (native in compiler.ir.IrInstrumentation.natives())
+				if (![for (existing in irNatives) existing.name].contains(native.name))
+					irNatives.push(native);
 		var irCNatives = context.irCNatives();
 		for (native in IrProgramAssembler.cNativesFrom(typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
@@ -517,7 +522,7 @@ class FrontendCompilation {
 				ir.positionalFingerprints.set(fn.name, IrFunctionStateCodec.codeFingerprint(fn));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled()))
+		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope))
 			if (regenerated.indexOf(name) < 0)
 				regenerated.push(name);
 		regenerated.sort(Reflect.compare);

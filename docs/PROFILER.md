@@ -61,7 +61,7 @@ Each thread writes records to its own buffer. Records are little-endian,
 | ---: | --- | --- |
 | 0x01 | `ENTER` | function key (u64): the function's code address |
 | 0x02 | `EXIT` | none |
-| 0x03 | `UNWIND` | depth (u64): close every slice deeper than this |
+| 0x03 | `UNWIND` | count (u64): close this many of the innermost open calls |
 | 0x10 | `SPAN_BEGIN` | `units:u32, encoding:u32` (0 UTF-16, 1 UTF-8), then the name padded to 8 bytes |
 | 0x11 | `SPAN_END` | none |
 | 0x12 | `FRAME_MARK` | frame set (u64; 0 is the main frame set) |

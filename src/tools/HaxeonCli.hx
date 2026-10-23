@@ -617,16 +617,16 @@ class HaxeonCli {
 		if (options.profile
 			&& (!launch || !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost()))))
 			throw 'Profiling is currently available for "haxeon run" host builds only';
-		if (options.profileSources.indexOf("instrument") >= 0)
-			throw 'Profiling source "instrument" is not available yet: instrumentation builds do not exist; use --profile=sampling,alloc';
+		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
+		var instrument = options.profile && options.profileSources.indexOf("instrument") >= 0;
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
 		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
-			var output = options.output == null ? resolvePath(Path.join([project.manifest.outputDir, "host", "main.hl"]),
-				project.root) : resolvePath(options.output, project.root);
+			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
+			var output = options.output == null ? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly, options.live);
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -637,7 +637,7 @@ class HaxeonCli {
 					if (resolvedPackage.nativeSources.length > 0
 						|| (resolvedPackage.manifest.native != null
 							&& resolvedPackage.manifest.native.cmake != null))
-						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
+						Path.join([buildDirectory, "host", "native", resolvedPackage.name])
 			];
 			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
 			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
@@ -678,7 +678,7 @@ class HaxeonCli {
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
 						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-							options.selfHosted, compilerOnly, options.live);
+							options.selfHosted, compilerOnly, options.live, instrument);
 						if (windows)
 							Sys.putEnv("PATH", runPath);
 						return status == 0 ? candidate : null;
@@ -1394,7 +1394,8 @@ class HaxeonCli {
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
 		Sys.println("       [--profile[=SOURCES]]        Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace;");
-		Sys.println("                                    SOURCES is a comma list of instrument, sampling, alloc (default sampling,alloc)");
+		Sys.println("                                    SOURCES is a comma list of instrument, sampling, alloc (default instrument,");
+		Sys.println("                                    which runs the instrumented build from <outputDir>-instrument)");
 		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile); with --watch, the directory for");
 		Sys.println("                                    one capture per launch");
 		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");

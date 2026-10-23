@@ -12,13 +12,33 @@ import project.ResolvedProject;
 
 /** Project-facing structured build path shared by CLI build and run. */
 class HaxeonProjectBuild {
+	/**
+	 * The project's build directory. The instrumented flavor builds into its own (`build-instrument` beside `build`), so
+	 * its compiler worker, module and instrumented native libraries never mix with the ordinary build's.
+	 */
+	public static function outputDirectory(project:ResolvedProject, instrument:Bool):String
+		return Path.join([project.root, project.manifest.outputDir + (instrument ? "-instrument" : "")]);
+
+	/** The compiler defines that turn on the instrumented flavor's probes and scope them. */
+	public static function instrumentDefines(project:ResolvedProject):Array<String> {
+		var scope = project.manifest.instrument;
+		return [
+			"haxeon-instrument=1",
+			"haxeon-instrument-include=" + scope.haxeInclude.join(","),
+			"haxeon-instrument-exclude=" + scope.haxeExclude.join(",")
+		];
+	}
+
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int, planOnly:Bool, explain:Bool,
-			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false):Int {
+			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false, instrument:Bool = false):Int {
 		if (project.manifest.target != "host")
 			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
 		var timings = new BuildTimings();
 		timings.add("resolve", resolutionMs);
-		var environment = new BuildEnvironment(project.root, Path.join([project.root, project.manifest.outputDir]), BuildProfile.Release),
+		if (instrument)
+			defines = defines.concat(instrumentDefines(project));
+		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release, null, null,
+				instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live));
