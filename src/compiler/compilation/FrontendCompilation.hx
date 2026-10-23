@@ -4,7 +4,9 @@ import compiler.Diagnostic.CompileError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
+import compiler.abi.PositionalName;
 import compiler.ir.IrFunction;
+import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrInliner;
 import compiler.ir.IrProgramAssembler;
@@ -510,6 +512,9 @@ class FrontendCompilation {
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew));
+		for (fn in cached)
+			if (PositionalName.is(fn.name))
+				ir.positionalFingerprints.set(fn.name, IrFunctionStateCodec.codeFingerprint(fn));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
 		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled()))
@@ -653,8 +658,8 @@ class FrontendCompilation {
 
 	/**
 	 * The environment object of a lambda or function adapter exists for that function alone. When an edit renames the
-	 * function (a lambda is named by its source offset) or removes it, the old environment must go with it; anything else
-	 * kept in the cache is content-named and harmless to keep.
+	 * function (a lambda is named by its position among the lambdas of its body) or removes it, the old environment must go
+	 * with it; anything else kept in the cache is content-named and harmless to keep.
 	 */
 	static function isGeneratedObjectOfRetypedFunction(name:String, retyped:Map<String, Bool>):Bool {
 		for (prefix in ["$cell:", "$lambda-env:", "$function-adapter-env:"])

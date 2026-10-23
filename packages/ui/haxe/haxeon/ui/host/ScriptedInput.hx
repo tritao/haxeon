@@ -8,6 +8,8 @@ import nativekit.ffi.NativeKitTypes;
 
 /** Timed, window-local logical input through the normal managed event pump.
     Times are seconds after the first content-ready frame; coordinates are window logical pixels.
+    A key event presses and releases NativeKit key code `key` with `modifiers` held (NativeKit bits, default none); a
+    text event types `text` as one text input per code point, as a keyboard layout would.
     Delayed events retain their original deadlines, so overload remains measurable. */
 class ScriptedInput {
   final events:Array<Dynamic>;
@@ -36,6 +38,12 @@ class ScriptedInput {
         case "scroll":
           if (event.dx == null || event.dy == null || !Math.isFinite(event.dx) || !Math.isFinite(event.dy))
             throw "Scroll events require finite dx/dy";
+        case "key":
+          if (event.key == null || !Std.isOfType(event.key, Int)) throw "Key events require an integer key";
+          if (event.modifiers != null && !Std.isOfType(event.modifiers, Int)) throw "Key modifiers must be an integer";
+        case "text":
+          if (!Std.isOfType(event.text, String) || (event.text : String).length == 0)
+            throw "Text events require non-empty text";
         case "checkpoint":
           if (event.label == null) throw "Checkpoint requires a label";
         case _: throw "Unsupported scripted input kind: " + event.kind;
@@ -58,18 +66,39 @@ class ScriptedInput {
     scheduledAt = origin + event.at;
     if (event.kind == "checkpoint") { checkpoint(event.label); return true; }
     var source = new Handle(window.rawValue());
-    var value:NativeKitEventValue = switch (Std.string(event.kind)) {
-      case "move": PointerMove(source, event.x, event.y);
-      case "down", "up": PointerButton(source, cast 0,
-        event.kind == "down" ? InputAction.Press : InputAction.Release, cast 0, event.x, event.y);
-      case "scroll": PointerScroll(source, event.dx, event.dy);
+    var values:Array<NativeKitEventValue> = switch (Std.string(event.kind)) {
+      case "move": [PointerMove(source, event.x, event.y)];
+      case "down", "up": [PointerButton(source, cast 0,
+        event.kind == "down" ? InputAction.Press : InputAction.Release, cast 0, event.x, event.y)];
+      case "scroll": [PointerScroll(source, event.dx, event.dy)];
+      case "key":
+        var key:Int = event.key, modifiers:Int = event.modifiers == null ? 0 : event.modifiers;
+        [Key(source, cast key, 0, InputAction.Press, cast modifiers), Key(source, cast key, 0, InputAction.Release, cast modifiers)];
+      case "text": [for (codepoint in codepoints(event.text)) TextInput(source, codepoint)];
       case _: throw "Invalid scripted event";
     };
     before(scheduledAt);
     var started = Sys.time();
-    pump.dispatch(value);
+    for (value in values) pump.dispatch(value);
     after(Sys.time() - started);
     delivered++;
     return true;
+  }
+
+  static function codepoints(text:String):Array<Int> {
+    var result = [];
+    var i = 0;
+    while (i < text.length) {
+      var unit = StringTools.fastCodeAt(text, i++);
+      if (unit >= 0xD800 && unit < 0xDC00 && i < text.length) {
+        var low = StringTools.fastCodeAt(text, i);
+        if (low >= 0xDC00 && low < 0xE000) {
+          unit = 0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00);
+          i++;
+        }
+      }
+      result.push(unit);
+    }
+    return result;
   }
 }

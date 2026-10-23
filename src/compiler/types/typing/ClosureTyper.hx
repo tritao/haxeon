@@ -18,6 +18,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.AssignedDeclarations;
+import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.LexicalStorageAnalysis;
@@ -65,8 +66,8 @@ class ClosureTyper {
 		this.alwaysReturns = alwaysReturns;
 	}
 
-	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
-			inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
+	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
 		if (session.lambdaCache.exists(lambdaKey))
 			return session.lambdaCache.get(lambdaKey);
@@ -167,7 +168,7 @@ class ClosureTyper {
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
-		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, span.start),
+		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, identity),
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
@@ -180,9 +181,9 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
 		for (binding in lambdaStorage.mutableCaptures.keys())
-			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + binding, MutableCapture);
+			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + BindingWalker.nameOf(binding), MutableCapture);
 		for (binding in lambdaStorage.exceptionCells.keys())
-			context.storage.request(binding, "$cell:" + lambdaName + ":" + binding, ExceptionEdge);
+			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding), ExceptionEdge);
 		for (i in 0...arguments.length)
 			bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope, lambdaArguments[i].type);
 		var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
@@ -203,7 +204,7 @@ class ClosureTyper {
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = '$' + 'lambda-env:${session.currentContext.name}:${span.start}';
+			environment = '$' + 'lambda-env:${session.currentContext.name}:$identity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({

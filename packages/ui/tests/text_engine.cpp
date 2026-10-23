@@ -20,6 +20,39 @@
 using namespace nkui;
 
 int main() {
+    // Resizing must reuse width-independent shaping and keep bidi/aligned/wrapped
+    // geometry identical to a fresh layout at the new width.
+    {
+        auto fonts = std::make_shared<FontCollection>();
+        if (!fonts->add_font(NKUI_TEST_FONT_PATH)) return 260;
+        const auto resize_check = [&](const char *text, TextLayoutOptions options, bool reuse) {
+            TextEngine retained(fonts), fresh(fonts);
+            TextLayoutResult before, after, expected;
+            if (!retained.layout_utf8(text, 500, options, &before) ||
+                !retained.layout_utf8(text, 180, options, &after) ||
+                !fresh.layout_utf8(text, 180, options, &expected)) return false;
+            if ((before.id == after.id) != reuse || after.lines.size() != expected.lines.size()) return false;
+            const auto near = [](float a, float b) { return std::abs(a - b) < 0.01f; };
+            if (!near(after.bounds.x, expected.bounds.x) || !near(after.bounds.y, expected.bounds.y) ||
+                !near(after.bounds.width, expected.bounds.width) || !near(after.bounds.height, expected.bounds.height)) return false;
+            for (int offset : {0, 2, 5}) {
+                const auto actual = retained.caret({offset, 0}), wanted = fresh.caret({offset, 0});
+                if (!near(actual.x, wanted.x) || !near(actual.y, wanted.y)) return false;
+            }
+            return true;
+        };
+        TextLayoutOptions options;
+        options.wrap = TextWrapMode::None;
+        if (!resize_check("Latin caf\xC3\xA9 mixed \xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D text", options, true)) return 261;
+        if (!resize_check("\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D mixed Latin", options, false)) return 262;
+        options.alignment = TextAlignment::Center;
+        if (!resize_check("Centered source text", options, false)) return 263;
+        options.alignment = TextAlignment::End;
+        if (!resize_check("Right aligned source text", options, false)) return 264;
+        options.alignment = TextAlignment::Start;
+        options.wrap = TextWrapMode::WordCharacter;
+        if (!resize_check("Wrapped source text that must reflow when its available width changes", options, false)) return 265;
+    }
     // Code boundaries are opt-in and shared by selection and word commands.
     {
         TextEngine code;

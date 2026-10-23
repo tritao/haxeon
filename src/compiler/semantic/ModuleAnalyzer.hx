@@ -220,6 +220,12 @@ class ModuleAnalyzer {
 		state.dirty = false;
 	}
 
+	/**
+	 * Adds the modules owning every type a declaration names outside a body: supertypes (with their type arguments),
+	 * abstract underlying and conversion types, field types and signatures. A module reached only through one of these, such
+	 * as a same-package interface that another extends without an import, is otherwise never loaded, and resolving the
+	 * declaration fails with an unknown type whenever no other reachable module happens to name it.
+	 */
 	public function addTypeDependencies(state:ModuleState):Void {
 		var dependencies:Map<String, Bool> = [];
 		for (name in state.dependencies)
@@ -239,16 +245,10 @@ class ModuleAnalyzer {
 		}
 		for (classDecl in ast.classes) {
 			var base = classDecl.base;
-			if (base != null) {
-				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(base), ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			}
-			for (interfaceType in classDecl.interfaces) {
-				var owner = sourceModuleForType(ModuleCanonicalizer.astTypeName(interfaceType), ast.packageName);
-				if (owner != null && owner != state.name)
-					dependencies.set(owner, true);
-			}
+			if (base != null)
+				addModuleTypeDependency(base, state, dependencies);
+			for (interfaceType in classDecl.interfaces)
+				addModuleTypeDependency(interfaceType, state, dependencies);
 			for (field in classDecl.fields)
 				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
 			for (method in classDecl.methods)

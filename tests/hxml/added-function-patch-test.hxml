@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main AddedFunctionPatchMain
+-hl out/added-function-patch-test.hl

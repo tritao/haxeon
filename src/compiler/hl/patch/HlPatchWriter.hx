@@ -14,12 +14,17 @@ class HlPatchWriter {
 	static inline final FUNCTIONS = 2;
 	static inline final DEBUG = 3;
 	static inline final SOURCE_SNAPSHOTS = 4;
+	static inline final ADDED_FUNCTIONS = 5;
 
+	/**
+	 * `addedFunctions` are the changed slots the running module does not have yet, with their names; they must be the
+	 * slots after the module's last, in order.
+	 */
 	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
 			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0, ?extensionSections:Array<{
 			tag:Int,
 			bytes:HaxeBytes
-		}>):HaxeBytes {
+		}>, ?addedFunctions:Array<{slot:Int, name:String}>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -88,7 +93,9 @@ class HlPatchWriter {
 		}
 		var out = new BytesOutput();
 		var debug = encodeDebug(selected, stableIdsBySlot),
-			snapshots = encodeSourceSnapshots(code, selected);
+			snapshots = encodeSourceSnapshots(code, selected),
+			added = addedFunctions == null
+				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -97,19 +104,44 @@ class HlPatchWriter {
 		writeIndex(out, revision);
 		var extensions = extensionSections == null ? [] : extensionSections;
 		for (section in extensions)
-			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS)
+			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS || section.tag == ADDED_FUNCTIONS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
-		writeIndex(out, 2 + (debug == null ? 0 : 1) + (snapshots == null ? 0 : 1) + extensions.length);
+		writeIndex(out, 2 + (debug == null ? 0 : 1) + (snapshots == null ? 0 : 1) + (added == null ? 0 : 1) + extensions.length);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
 		if (debug != null)
 			writeSection(out, DEBUG, debug);
 		if (snapshots != null)
 			writeSection(out, SOURCE_SNAPSHOTS, snapshots);
+		if (added != null)
+			writeSection(out, ADDED_FUNCTIONS, added);
 		for (section in extensions)
 			writeSection(out, section.tag, section.bytes);
 		return out.getBytes();
 		}
+
+	static function encodeAddedFunctions(selected:Array<HlFunction>, added:Array<{slot:Int, name:String}>, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
+		var out = new BytesOutput();
+		out.bigEndian = false;
+		writeIndex(out, added.length);
+		for (entry in added) {
+			var found:Null<HlFunction> = null;
+			for (fn in selected)
+				if (fn.functionIndex == entry.slot)
+					found = fn;
+			if (found == null)
+				throw 'Added function slot ${entry.slot} has no body in the patch';
+			if (!stableIdsBySlot.exists(entry.slot))
+				throw 'Missing stable ID for added function slot ${entry.slot}';
+			var name = HaxeBytes.ofString(entry.name);
+			writeIndex(out, stableIdsBySlot.get(entry.slot));
+			writeIndex(out, entry.slot);
+			writeSignedIndex(out, found.type);
+			writeIndex(out, name.length);
+			out.write(name);
+		}
+		return out.getBytes();
+	}
 
 	static function encodeSourceSnapshots(code:HlCode, functions:Array<HlFunction>):Null<HaxeBytes> {
 		var referenced:Map<Int, Bool> = [];

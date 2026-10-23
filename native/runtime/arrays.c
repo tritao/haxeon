@@ -193,6 +193,7 @@ static varray *realtime_array_copy(varray *array) {
 	return copy;
 }
 
+/* The result takes the left array's element type; the right one must match it, strings by shape. */
 static varray *realtime_array_concat(varray *left, varray *right) {
 	if (!realtime_array_same_storage(left->at, right->at))
 		hl_error("Array.concat element type mismatch");

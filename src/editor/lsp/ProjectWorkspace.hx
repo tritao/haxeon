@@ -408,7 +408,8 @@ class ProjectWorkspace {
 						directory = Path.directory(directory);
 					}
 				}
-				for (root in value.sourceRoots)
+				// Discovery returns native separators; ownership compares normalized paths.
+				for (root in value.sourceRoots.map(normalize))
 					if (roots.indexOf(root) < 0)
 						roots.push(root);
 				for (path in value.ffiInterfaces)
@@ -552,8 +553,15 @@ class ProjectWorkspace {
 		return result;
 	}
 
-	static function uriPath(uri:String):String
-		return normalize(StringTools.startsWith(uri, "file://") ? StringTools.urlDecode(uri.substr(7)) : uri);
+	static function uriPath(uri:String):String {
+		if (!StringTools.startsWith(uri, "file://"))
+			return normalize(uri);
+		var path = StringTools.urlDecode(uri.substr(7));
+		// file:///C:/x carries a slash before the Windows drive letter.
+		if (Sys.systemName() == "Windows" && ~/^\/[A-Za-z]:/.match(path))
+			path = path.substr(1);
+		return normalize(path);
+	}
 
 	static function normalize(path:String):String
 		return StringTools.replace(FileSystem.absolutePath(path), "\\", "/");

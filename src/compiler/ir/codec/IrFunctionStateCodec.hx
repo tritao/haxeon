@@ -24,12 +24,23 @@ class IrFunctionStateCodec {
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
-	public static function encode(fn:IrFunction):Bytes {
+	public static function encode(fn:IrFunction):Bytes
+		return encodeFunction(fn, true);
+
+	/**
+	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
+	 * fingerprint run the same code, wherever their source sits and whatever they are called.
+	 */
+	public static function codeFingerprint(fn:IrFunction):String
+		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false)));
+
+	static function encodeFunction(fn:IrFunction, identified:Bool):Bytes {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
-		for (binding in fn.debugBindings)
-			collectValue(binding.value, values);
+		if (identified)
+			for (binding in fn.debugBindings)
+				collectValue(binding.value, values);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
 				collectInstruction(instruction.value, values);
@@ -37,21 +48,22 @@ class IrFunctionStateCodec {
 			if (terminator != null)
 				collectTerminator(terminator.value, values);
 		}
-		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value]),
+		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value], identified),
 			output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRF");
 		output.writeByte(VERSION);
 		writeBytes(output, valueBytes);
-		IrTypeCodec.writeString(output, fn.name);
+		IrTypeCodec.writeString(output, identified ? fn.name : "");
 		output.writeInt32(fn.arguments.length);
 		for (argument in fn.arguments)
 			IrValueTableCodec.writeReference(output, argument);
 		IrTypeCodec.writeType(output, fn.result, 0);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
-		output.writeInt32(fn.debugBindings.length);
-		for (binding in fn.debugBindings) {
+		var debugBindings = identified ? fn.debugBindings : [];
+		output.writeInt32(debugBindings.length);
+		for (binding in debugBindings) {
 			IrTypeCodec.writeString(output, binding.identity);
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
@@ -59,7 +71,9 @@ class IrFunctionStateCodec {
 			output.writeInt32(binding.scopeStart);
 			output.writeInt32(binding.scopeEnd);
 		}
-		if (fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
+		// A fingerprint describes whatever the compiler holds, including functions still being built; only persisted state must be
+		// complete.
+		if (identified && fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
 			throw "Invalid IR function block count";
 		var blocks:Map<Int, Bool> = [];
 		output.writeInt32(fn.blocks.length);
@@ -76,16 +90,22 @@ class IrFunctionStateCodec {
 			output.writeInt32(block.instructions.length);
 			for (instruction in block.instructions) {
 				writeBytes(output, IrInstructionCodec.encode(instruction.value));
-				writeProvenance(output, instruction.provenance);
+				if (identified)
+					writeProvenance(output, instruction.provenance);
 			}
 			var blockTerminator = block.terminator;
+			if (blockTerminator == null && !identified) {
+				output.writeInt32(-1);
+				continue;
+			}
 			if (blockTerminator == null)
 				throw "IR block has no terminator";
 			var terminator = new BytesOutput();
 			terminator.bigEndian = false;
 			IrTerminatorCodec.write(terminator, blockTerminator.value);
 			writeBytes(output, terminator.getBytes());
-			writeProvenance(output, blockTerminator.provenance);
+			if (identified)
+				writeProvenance(output, blockTerminator.provenance);
 		}
 		return output.getBytes();
 	}

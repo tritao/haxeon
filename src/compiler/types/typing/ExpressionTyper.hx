@@ -55,7 +55,7 @@ typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> Compi
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
 typedef LowerExpressionTypeCallback = AstType->CompilerType;
 typedef ExpressionVariableCallback = (String, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
-typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
+typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, String, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionMemberCallback = (AstExpression, String, SourceSpan, Scope) -> TypedExpression;
 typedef ExpressionBlockCallback = (Array<AstStatement>, AstExpression, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
 typedef ExpressionMethodCallCallback = (AstExpression, String, Array<AstExpression>, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
@@ -127,7 +127,7 @@ class ExpressionTyper {
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): dispatchRules.variable(name, span, scope, expectedType);
-			case Lambda(arguments, body, span): dispatchRules.lambda(arguments, body, span, scope, expectedType, inferDynamicLambdaResult);
+			case Lambda(arguments, body, identity, span): dispatchRules.lambda(arguments, body, identity, span, scope, expectedType, inferDynamicLambdaResult);
 			case Member(object, name, span): dispatchRules.member(object, name, span, scope);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span, expectedType);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span, expectedType);

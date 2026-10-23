@@ -222,7 +222,7 @@ class StatementTyper {
 					default:
 				}
 				switch lambda {
-					case Lambda(arguments, body, _):
+					case Lambda(arguments, body, _, _):
 						var self = LexicalStorageAnalysis.key(name, span),
 							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
 						if (!assignments.exists(self)) localFunction = {
@@ -238,7 +238,7 @@ class StatementTyper {
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
-						case Lambda(_, _, _):
+						case Lambda(_, _, _, _):
 							scope.define(name, declaredType, span, true, null, false, localFunction);
 							predeclared = true;
 							// A recursive local function reads itself through a cell bound before its closure exists.

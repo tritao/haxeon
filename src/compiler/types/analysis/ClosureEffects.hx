@@ -53,7 +53,7 @@ class ClosureEffects extends BindingWalker {
 
 	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
 		switch initializer {
-			case Lambda(_, _, _):
+			case Lambda(_, _, _, _):
 				lambdaDeclarations.set(declaration, true);
 			default:
 		}
@@ -105,7 +105,7 @@ class ClosureEffects extends BindingWalker {
 				unknown = true;
 			case ClosureCall(target, _, _):
 				switch target {
-					case Lambda(_, _, _):
+					case Lambda(_, _, _, _):
 					case Variable(name, span) if (name.indexOf(".") < 0): callee(name, resolve(name), span);
 					default: unknown = true;
 				}

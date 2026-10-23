@@ -17,6 +17,14 @@ HL_PRIM vstring *HL_NAME(__sys_system_name)( void ) {
 #endif
 }
 
+/* Byte-framed stdio protocols must bypass the Windows CRT newline translation. */
+HL_PRIM void HL_NAME(__sys_binary_stdio)( void ) {
+#if defined(_WIN32)
+	if( _setmode(_fileno(stdin),_O_BINARY) == -1 || _setmode(_fileno(stdout),_O_BINARY) == -1 )
+		hl_error("Could not switch standard streams to binary mode");
+#endif
+}
+
 HL_PRIM vstring *HL_NAME(__sys_get_env)( vstring *name ) {
 	char *owned;
 	vbyte *argument = realtime_platform_argument(name,&owned);

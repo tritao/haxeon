@@ -35,7 +35,13 @@ class Parser {
 	var tryBodyDepth:Int = 0;
 
 	var recovering:Bool = false;
-	var typedLambdaCount:Int = 0;
+
+	/** The declaration whose lambdas are being numbered (see `LambdaName`). */
+	var lambdaMember:String = "";
+
+	/** Lambdas seen so far in each body open at the cursor, outermost first: the declaration, then each enclosing lambda. */
+	var lambdaCounts:Array<Int> = [0];
+
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
 	public function new(tokens:Array<Token>) {
@@ -419,6 +425,38 @@ class Parser {
 		return name;
 	}
 
+	/** Numbers the lambdas of the declaration `name` from zero; returns the numbering to resume with `leaveLambdaMember`. */
+	function enterLambdaMember(name:String):{member:String, counts:Array<Int>} {
+		var outer = {member: lambdaMember, counts: lambdaCounts};
+		lambdaMember = name;
+		lambdaCounts = [0];
+		return outer;
+	}
+
+	function leaveLambdaMember(outer:{member:String, counts:Array<Int>}):Void {
+		lambdaMember = outer.member;
+		lambdaCounts = outer.counts;
+	}
+
+	/** Takes the identity of a lambda whose body is parsed next, in source order; `closeLambda` ends the body. */
+	function openLambda():String {
+		var last = lambdaCounts.length - 1,
+			identity = lambdaMember + "#" + lambdaCounts[last];
+		lambdaCounts[last]++;
+		lambdaCounts.push(0);
+		return identity;
+	}
+
+	inline function closeLambda():Void
+		lambdaCounts.pop();
+
+	/** A rewind point: parsing that is thrown away must not consume lambda numbers. */
+	inline function lambdaMark():Array<Int>
+		return lambdaCounts.copy();
+
+	inline function rewindLambdas(mark:Array<Int>):Void
+		lambdaCounts = mark.copy();
+
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isInline:Bool = false):AstFunction {
 		var start = consume(TokenKind.Function).span,
@@ -428,6 +466,21 @@ class Parser {
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false):AstFunction {
+		var outer = enterLambdaMember(name);
+		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
+		var parsed:AstFunction;
+		try {
+			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline);
+		} catch (error:CompileError) {
+			leaveLambdaMember(outer);
+			throw error;
+		}
+		leaveLambdaMember(outer);
+		return parsed;
+	}
+
+	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool, isExtern:Bool,
+			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -455,12 +508,13 @@ class Parser {
 		} else if (match(TokenKind.LeftBrace)) {
 			var bodyStart = position;
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-				var statementStart = position;
+				var statementStart = position, statementLambdas = lambdaMark();
 				try
 					appendStatements(statements, parseStatements())
 				catch (error:CompileError) {
 					if (!recovering)
 						throw error;
+					rewindLambdas(statementLambdas);
 					recordRecoveryDiagnostic(error.diagnostic);
 					statements.push(ErrorStatement(error.diagnostic.span));
 					synchronizeStatement(bodyStart, statementStart);
@@ -626,7 +680,16 @@ class Parser {
 						consume(TokenKind.RightParen);
 					}
 					var fieldType = match(TokenKind.Colon) ? parseType() : null,
-						initializer = match(TokenKind.Assign) ? parseExpression() : null;
+						outerMember = enterLambdaMember(fieldName);
+					var initializer:Null<AstExpression> = null;
+					try {
+						if (match(TokenKind.Assign))
+							initializer = parseExpression();
+					} catch (error:CompileError) {
+						leaveLambdaMember(outerMember);
+						throw error;
+					}
+					leaveLambdaMember(outerMember);
 					if (fieldType == null) {
 						if (initializer == null)
 							fail(current(), 'Field "$fieldName" requires a type or initializer');
@@ -833,7 +896,8 @@ class Parser {
 			advance();
 		if (match(TokenKind.Function)) {
 			var start = inlined ? tokens[position - 2].span : previous().span,
-				name = consume(TokenKind.Identifier).text;
+				name = consume(TokenKind.Identifier).text,
+				identity = openLambda();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
@@ -859,7 +923,8 @@ class Parser {
 					for (argument in arguments)
 						localParameterType(argument.type, argument.optional, argument.defaultValue)
 				], result);
-			return VarDeclaration(name, declared, Lambda(arguments, body, span), span);
+			closeLambda();
+			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span), span);
 		}
 		if (match(TokenKind.Break)) {
 			var start = previous().span;
@@ -953,7 +1018,9 @@ class Parser {
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
-			var saved = position, target = parseOr();
+			var saved = position,
+				savedLambdas = lambdaMark(),
+				target = parseOr();
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
 				var delta = previous().kind == TokenKind.Increment ? 1 : -1,
 					end = consume(TokenKind.Semicolon).span;
@@ -1014,6 +1081,7 @@ class Parser {
 				return Expression(BlockExpression(bindings, IntegerLiteral(0, span), span), span);
 			}
 			position = saved;
+			rewindLambdas(savedLambdas);
 		}
 		// A bare block in statement position is a nested scope. Its value, if it
 		// ends in one, would be discarded, so it parses once, as statements, and
@@ -1402,7 +1470,7 @@ class Parser {
 			return Cast(value, null, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Function)) {
-			var start = previous().span;
+			var start = previous().span, identity = openLambda();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
@@ -1424,19 +1492,22 @@ class Parser {
 				body = parseAnonymousFunctionBody(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
 				span = start.merge(end);
+			closeLambda();
 			if (result == null)
-				return Lambda(arguments, body, span);
+				return Lambda(arguments, body, identity, span);
 			// Lambda carries no result type; bind it through a typed local like a named local function.
-			var name = "$typedLambda" + typedLambdaCount++;
+			var name = "$typedLambda@" + identity;
 			return BlockExpression([
 				VarDeclaration(name, FunctionType([
 					for (argument in arguments)
 						localParameterType(argument.type, argument.optional, argument.defaultValue)
-				], result), Lambda(arguments, body, span), span)
+				], result), Lambda(arguments, body, identity, span), span)
 			], Variable(name, span), span);
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
-			var argument = advance(), start = argument.span;
+			var argument = advance(),
+				start = argument.span,
+				identity = openLambda();
 			advance();
 			var arguments:Array<AstArgument> = [
 				{
@@ -1447,7 +1518,8 @@ class Parser {
 					defaultValue: null
 				}
 			], body = parseArrowFunctionBody();
-			return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+			closeLambda();
+			return Lambda(arguments, body, identity, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 		}
 		if (match(TokenKind.If)) {
 			var start = previous().span;
@@ -1674,8 +1746,9 @@ class Parser {
 			}
 			consume(TokenKind.RightParen);
 			if (match(TokenKind.Arrow)) {
-				var body = parseArrowFunctionBody();
-				return Lambda(arguments, body, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+				var identity = openLambda(), body = parseArrowFunctionBody();
+				closeLambda();
+				return Lambda(arguments, body, identity, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 			}
 			position = saved;
 			advance();
@@ -1920,12 +1993,15 @@ class Parser {
 				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
-			var saved = position, candidate = tryParseExpression();
+			var saved = position,
+				savedLambdas = lambdaMark(),
+				candidate = tryParseExpression();
 			if (candidate != null && check(TokenKind.RightBrace)) {
 				var end = consume(TokenKind.RightBrace).span;
 				return BlockExpression(statements, candidate, start.merge(end));
 			}
 			position = saved;
+			rewindLambdas(savedLambdas);
 			appendStatements(statements, parseStatements());
 		}
 		var trailing = trailingBlockResult(statements);
@@ -2078,7 +2154,8 @@ class Parser {
 		} while (check(TokenKind.Catch));
 		var body = [
 			compiler.syntax.Ast.AstStatement.Try([Return(value, expressionSpan(value))], catches, start.merge(end))
-		], lambda = compiler.syntax.Ast.AstExpression.Lambda([], body, start.merge(end));
+		], lambda = compiler.syntax.Ast.AstExpression.Lambda([], body, openLambda(), start.merge(end));
+		closeLambda();
 		return parsePostfix(ClosureCall(lambda, [], start.merge(end)));
 	}
 
@@ -2117,17 +2194,21 @@ class Parser {
 				statements.push(Expression(result, expressionSpan(result)));
 				continue;
 			}
-			var saved = position, result = tryParseExpression();
+			var saved = position,
+				savedLambdas = lambdaMark(),
+				result = tryParseExpression();
 			if (result != null && match(TokenKind.Semicolon)) {
 				if (atSwitchBranchEnd())
 					return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
 				position = saved;
+				rewindLambdas(savedLambdas);
 				appendStatements(statements, parseStatements());
 				continue;
 			}
 			if (result != null && atSwitchBranchEnd())
 				return statements.length == 0 ? result : BlockExpression(statements, result, start.merge(expressionSpan(result)));
 			position = saved;
+			rewindLambdas(savedLambdas);
 			appendStatements(statements, parseStatements());
 		}
 	}
@@ -2149,11 +2230,12 @@ class Parser {
 		};
 
 	function tryParseExpression():Null<AstExpression> {
-		var saved = position;
+		var saved = position, savedLambdas = lambdaMark();
 		try {
 			return parseExpression();
 		} catch (_:CompileError) {
 			position = saved;
+			rewindLambdas(savedLambdas);
 			return null;
 		}
 	}
@@ -2539,7 +2621,7 @@ class Parser {
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
-				PostfixIncrement(_, _, span), Lambda(_, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
+				PostfixIncrement(_, _, span), Lambda(_, _, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
@@ -2667,7 +2749,7 @@ class Parser {
 	static function invalidEscape(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E0001", 'Invalid escape sequence: $message', span));
 
-	static function parseStringExpression(token:Token):AstExpression {
+	function parseStringExpression(token:Token):AstExpression {
 		var text = token.text;
 		if (text.charAt(0) != "'" || text.indexOf("$") < 0)
 			return StringLiteral(decodeString(text, token.span), token.span);
@@ -2746,15 +2828,18 @@ class Parser {
 		throw new CompileError(new Diagnostic("E0002", "Unterminated string interpolation", span));
 	}
 
-	static function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {
+	function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {
 		var interpolationFile = new compiler.Source.SourceFile(outer.file.path, source),
 			shifted:Array<Token> = [];
 		for (token in new Lexer(interpolationFile).tokenize())
 			shifted.push(new Token(token.kind, token.text,
 				new SourceSpan(outer.file, outer.start + offset + token.span.start, outer.start + offset + token.span.end)));
-		var parser = new Parser(shifted),
-			expression = parser.parseExpression();
+		var parser = new Parser(shifted);
+		parser.lambdaMember = lambdaMember;
+		parser.lambdaCounts = lambdaCounts;
+		var expression = parser.parseExpression();
 		parser.consume(TokenKind.Eof);
+		lambdaCounts = parser.lambdaCounts;
 		return expression;
 	}
 

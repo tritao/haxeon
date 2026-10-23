@@ -6,6 +6,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 #else
 #include <dlfcn.h>
 #endif

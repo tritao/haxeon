@@ -13,5 +13,10 @@ class ProfileSpan {
   }
 }
 
+#if wasm
+// Browser builds have no HashLink profiler to record spans.
+function nativeProfileSpan(code:Int, name:String):Void {}
+#else
 @:hlNative("haxeon_runtime", "__sys_profile_span")
 extern function nativeProfileSpan(code:Int, name:String):Void;
+#end

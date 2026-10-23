@@ -6,6 +6,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlOpcodeSchema;
 import compiler.hl.HlType;
+import compiler.hl.patch.HlPatch.HlPatchAddedFunction;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
 import compiler.hl.patch.HlPatch.HlPatchInstruction;
 
@@ -26,7 +27,7 @@ class HlPatchReader {
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
 				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [],
-				haveDebug = false, haveSnapshots = false;
+				haveDebug = false, haveSnapshots = false, haveAdded = false, addedFunctions:Array<HlPatchAddedFunction> = [];
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -123,6 +124,22 @@ class HlPatchReader {
 							seenHashes.set(sourceHash, true);
 							sourceSnapshots.push({sourceHash: sourceHash, content: content});
 						}
+					case 5:
+						if (haveAdded)
+							throw "Duplicate HLP added functions section";
+						haveAdded = true;
+						for (_ in 0...readUnsigned(input)) {
+							var added:HlPatchAddedFunction = {
+								stableId: readUnsigned(input),
+								functionIndex: readUnsigned(input),
+								type: readIndex(input),
+								name: input.readString(readUnsigned(input))
+							};
+							for (other in addedFunctions)
+								if (other.stableId == added.stableId || other.functionIndex == added.functionIndex)
+									throw "Duplicate HLP added function";
+							addedFunctions.push(added);
+						}
 					default:
 						input.position = end;
 				}
@@ -150,6 +167,7 @@ class HlPatchReader {
 				strings: strings,
 				types: types,
 				functions: functions,
+				addedFunctions: addedFunctions,
 				debugFiles: debugFiles,
 				sourceSnapshots: sourceSnapshots
 			};

@@ -1,5 +1,6 @@
 package tools;
 
+import tools.WatchRun.WatchProfiling;
 import haxe.Json;
 import haxe.io.Path;
 import build.HaxeonProjectBuild;
@@ -599,8 +600,6 @@ class HaxeonCli {
 			throw 'Option "--watch" is only valid with "haxeon run"';
 		if (options.live && !options.watch)
 			throw 'Option "--live" requires "haxeon run --watch"';
-		if (options.watch && options.profile)
-			throw 'Option "--watch" cannot be combined with "--profile"';
 		if (options.watch
 			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Option "--watch" currently requires a host project';
@@ -637,7 +636,12 @@ class HaxeonCli {
 							&& resolvedPackage.manifest.native.cmake != null))
 						Path.join([project.root, project.manifest.outputDir, "host", "native", resolvedPackage.name])
 			];
+			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
+			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
+			// identity, and a live app can be patched instead of reloaded.
+			var buildPath = environmentCopy("PATH");
 			configureRuntimeLibraryPath(home, nativeDirectories);
+			var runPath = environmentCopy("PATH");
 			if (options.watch) {
 				var liveHost:Null<String> = null;
 				if (options.live) {
@@ -655,21 +659,37 @@ class HaxeonCli {
 					], home, new Map()) != 0)
 						throw "Could not build the live development host";
 				}
-				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, function(compilerOnly) {
+				// Each launch is profiled into its own capture, from launch to exit or relaunch.
+				if (options.profileOutput != null && Path.extension(options.profileOutput) == "hlpc")
+					throw 'With --watch, --profile-output names the directory that holds one capture per launch, not an .hlpc file';
+				var profiling:Null<WatchProfiling> = options.profile ? {
+					profiler: profilerTool(home),
+					root: options.profileOutput == null ? Path.join([Path.directory(output), "profile"]) : resolvePath(options.profileOutput, project.root),
+					processName: project.manifest.entry
+				} : null;
+				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, profiling, function(compilerOnly) {
+					var windows = Sys.systemName() == "Windows" && buildPath != null;
+					if (windows)
+						Sys.putEnv("PATH", buildPath);
 					try {
 						var candidate = discoverProject(projectConfigPath, requestedTarget);
 						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
 							options.selfHosted, compilerOnly, options.live);
+						if (windows)
+							Sys.putEnv("PATH", runPath);
 						return status == 0 ? candidate : null;
 					} catch (error:Dynamic) {
+						if (windows)
+							Sys.putEnv("PATH", runPath);
 						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
 						return null;
 					}
 				});
 			}
 			if (options.profile) {
-				var capture = options.profileOutput == null ? defaultProfileCapture(output) : resolvePath(options.profileOutput, project.root);
-				return runProfiled(home, output, options.runtimeArguments, project.root, capture);
+				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([Path.directory(output), "profile"])) : resolvePath(options.profileOutput,
+					project.root);
+				return runProfiled(home, output, options.runtimeArguments, project.root, capture, project.manifest.entry);
 			}
 			Sys.println('Launching $output');
 			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, new Map());
@@ -740,27 +760,6 @@ class HaxeonCli {
 		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
 	}
 
-	static function defaultProfileCapture(output:String):String {
-		var directory = Path.join([Path.directory(output), "profile", 'profile-${Std.int(Date.now().getTime())}']);
-		ensureDirectory(directory);
-		return Path.join([directory, "profile.hlpc"]);
-	}
-
-	static function allocateDiagnosticsPort():Int {
-		for (_ in 0...20) {
-			var port = 20000 + Std.random(40000),
-				socket = new sys.net.Socket();
-			try {
-				socket.bind(new sys.net.Host("127.0.0.1"), port);
-				socket.close();
-				return port;
-			} catch (_:Dynamic) {
-				socket.close();
-			}
-		}
-		throw "Could not find a free diagnostics port for profiling";
-	}
-
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
 		sys.thread.Thread.create(function() {
 			try {
@@ -776,35 +775,24 @@ class HaxeonCli {
 		});
 	}
 
-	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String):Int {
-		var suffix = executableSuffix(),
-			runtime = Path.join([home, ".tools", "hashlink", "hl" + suffix]),
-			profiler = Path.join([home, ".tools", "hashlink", "hlprof-live" + suffix]);
-		if (!FileSystem.exists(runtime))
-			throw 'HashLink is missing: $runtime (run scripts/bootstrap-tools.sh)';
+	/** hlprof-live, which records and exports profiler captures. */
+	static function profilerTool(home:String):String {
+		var profiler = Path.join([home, ".tools", "hashlink", "hlprof-live" + executableSuffix()]);
 		if (!FileSystem.exists(profiler))
 			throw 'hlprof-live is missing: $profiler (rebuild the native runtime)';
-		ensureDirectory(Path.directory(capture));
-		var bytecodeName = Path.withoutExtension(Path.withoutDirectory(capture)) + ".hl";
-		File.copy(output, Path.join([Path.directory(capture), bytecodeName]));
-		var port = allocateDiagnosticsPort(), done = new sys.thread.Lock(), readers = 0,
-			app = new sys.io.Process(runtime, ["--diagnostics", Std.string(port), "--diagnostics-wait", output].concat(runtimeArguments));
-		Sys.println('Profiling $output -> $capture (diagnostics port $port)');
-		var profilerProcess = new sys.io.Process(profiler, [
-			"--connect-timeout",
-			"15",
-			"--rate",
-			"1000",
-			"--alloc-interval",
-			"65536",
-			"--interval",
-			"2000",
-			"--top",
-			"40",
-			"--output",
-			capture,
-			Std.string(port)
-		]);
+		return profiler;
+	}
+
+	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String, processName:String):Int {
+		var runtime = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]),
+			profiler = profilerTool(home);
+		if (!FileSystem.exists(runtime))
+			throw 'HashLink is missing: $runtime (run scripts/bootstrap-tools.sh)';
+		var profile = new ProfileCapture(profiler, capture, processName), done = new sys.thread.Lock(), readers = 0;
+		profile.keepBytecode(output);
+		var app = new sys.io.Process(runtime, profile.runtimeArguments().concat([output]).concat(runtimeArguments));
+		Sys.println('Profiling $output -> $capture (diagnostics port ${profile.port})');
+		var profilerProcess = new sys.io.Process(profiler, profile.recorderArguments());
 		// Start both processes before creating reader threads. Forking a second
 		// process from the eval runtime while those threads are active can stall.
 		pumpProcessOutput(app.stdout, Sys.stdout(), done);
@@ -825,14 +813,12 @@ class HaxeonCli {
 		Sys.stderr().flush();
 		if (profilerStatus != 0)
 			throw 'Profiler capture did not finalize cleanly (status $profilerStatus)';
-		File.saveContent(Path.join([Path.directory(capture), "capture.json"]), Json.stringify({
-			schemaVersion: 1,
-			kind: "haxeon.capture",
-			artifacts: {bytecode: bytecodeName, profile: Path.withoutDirectory(capture)}
-		}, null, "  ") + "\n");
+		var trace = profile.complete();
 		Sys.println('Capture: $capture');
+		if (trace != null)
+			Sys.println('Perfetto trace: $trace (open it at https://ui.perfetto.dev)');
 		ProcessRunner.run(profiler, ["report", "--top", "40", capture], projectDirectory, new Map());
-		return runtimeStatus;
+		return runtimeStatus == 0 && trace == null ? 1 : runtimeStatus;
 	}
 
 	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String, nativeRoot:String):Int {
@@ -1341,6 +1327,15 @@ class HaxeonCli {
 		Sys.putEnv(variable, directories.join(Sys.systemName() == "Windows" ? ";" : ":"));
 	}
 
+	/**
+		A variable's value that stays valid after the variable is set again. On HashLink for Windows, Sys.getEnv returns a
+		String over the C runtime's own copy of the value, which Sys.putEnv frees.
+	**/
+	static function environmentCopy(name:String):Null<String> {
+		var value = Sys.getEnv(name);
+		return value == null ? null : haxe.io.Bytes.ofString(value).toString();
+	}
+
 	static function haxeonHome():String {
 		var home = Sys.getEnv("HAXEON_HOME");
 		if (home == null || home.length == 0)
@@ -1388,8 +1383,9 @@ class HaxeonCli {
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
-		Sys.println("       [--profile]                  Launch under hl --diagnostics and capture with hlprof-live");
-		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile)");
+		Sys.println("       [--profile]                  Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace");
+		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile); with --watch, the directory for");
+		Sys.println("                                    one capture per launch");
 		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");
 		Sys.println("       [--jobs N] [--compilers N] [--no-test-cache] [--actions]");
 		Sys.println("                                    Merge the workspace's projects into one build graph;");

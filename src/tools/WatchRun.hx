@@ -7,14 +7,21 @@ import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
 
+/** Profiles every launch of a watched app into its own capture under root. */
+typedef WatchProfiling = {
+	final profiler:String;
+	final root:String;
+	final processName:String;
+}
+
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
-			rebuild:Bool->Null<ResolvedProject>):Int {
-		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
-			throw "haxeon run --watch currently requires Linux or macOS";
-		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log",
-			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry), logOffset = 0, result = 0;
+			profiling:Null<WatchProfiling>, rebuild:Bool->Null<ResolvedProject>):Int {
+		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
+			throw "haxeon run --watch currently requires Linux, macOS or Windows";
+		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile), logOffset = 0, result = 0;
 		try {
 			while (true) {
 				Sys.sleep(0.35);
@@ -22,6 +29,16 @@ class WatchRun {
 				var status = process.exitCode(false);
 				if (status != null) {
 					result = status;
+					break;
+				}
+				// The app waits on its diagnostics port until the recorder resumes it, so a recorder that failed would leave it held.
+				var recorderStatus = profile == null ? null : profile.recorderFailure();
+				if (recorderStatus != null) {
+					Sys.stderr()
+						.writeString('haxeon: the profiler stopped while the app was running (status $recorderStatus); stopping the app. See ${profile.recorderLog()}\n');
+					kill(process);
+					process.exitCode();
+					result = 1;
 					break;
 				}
 				var observed = snapshot(project);
@@ -46,6 +63,8 @@ class WatchRun {
 				}
 				project = updated;
 				if (liveHost != null && compilerOnly) {
+					if (profile != null)
+						profile.keepRevision(output);
 					baseline = snapshot(project);
 					continue;
 				}
@@ -55,39 +74,96 @@ class WatchRun {
 					result = exited;
 					break;
 				}
-				process.kill();
+				kill(process);
 				process.exitCode();
 				process.close();
-				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry);
+				finishProfile(profile);
+				profile = startProfile(profiling);
+				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
 				logOffset = 0;
 				baseline = snapshot(project);
 			}
 		} catch (error:Dynamic) {
 			stop(process);
+			finishProfile(profile);
 			printLog(logPath, logOffset);
 			throw error;
 		}
 		process.close();
+		finishProfile(profile);
 		printLog(logPath, logOffset);
 		return result;
 	}
 
+	static function startProfile(profiling:Null<WatchProfiling>):Null<ProfileCapture>
+		return profiling == null ? null : new ProfileCapture(profiling.profiler, ProfileCapture.nextCapture(profiling.root), profiling.processName);
+
+	/** Called once the launch has exited: the recorder then finalizes its capture. */
+	static function finishProfile(profile:Null<ProfileCapture>):Void {
+		if (profile == null)
+			return;
+		var trace = profile.finishRecorder();
+		if (trace != null)
+			Sys.println('haxeon: profile written to $trace (open it at https://ui.perfetto.dev)');
+	}
+
 	static function stop(process:Process):Void {
 		if (process.exitCode(false) == null)
-			process.kill();
+			kill(process);
 		process.exitCode();
 		process.close();
 	}
 
-	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String):Process {
-		var commandArguments = liveHost == null ? [runtime, output].concat(arguments) : [runtime, liveHost, output, entry, Json.stringify(arguments)];
+	/** On Windows the app runs under cmd.exe, so the whole tree must be stopped. */
+	static function kill(process:Process):Void {
+		if (Sys.systemName() == "Windows") {
+			// Captured: taskkill reports every descendant, including ones already exiting.
+			var taskkill = new Process("taskkill", ["/T", "/F", "/PID", Std.string(process.getPid())]);
+			taskkill.exitCode();
+			taskkill.close();
+		} else
+			process.kill();
+	}
+
+	/**
+		taskkill /F returns before the old app has closed its handles. While it still holds the
+		log, the new cmd.exe redirection fails and the relaunch exits at once.
+	**/
+	static function releaseLog(path:String):Void {
+		var deadline = Sys.time() + 10.0;
+		while (true) {
+			try {
+				File.saveContent(path, "");
+				return;
+			} catch (error:Dynamic) {
+				if (Sys.time() > deadline)
+					throw error;
+				Sys.sleep(0.1);
+			}
+		}
+	}
+
+	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String,
+			profile:Null<ProfileCapture>):Process {
+		var runtimeOptions = profile == null ? [] : profile.runtimeArguments();
+		var commandArguments = [runtime].concat(runtimeOptions)
+			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry, Json.stringify(arguments)]);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
+		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
+		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
+		if (Sys.systemName() == "Windows")
+			releaseLog(logPath);
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
-			var process = new Process("/bin/sh", ["-c", command]);
+			if (profile != null)
+				profile.keepBytecode(output);
+			var process = Sys.systemName() == "Windows" ? new Process(windowsCommand) : new Process("/bin/sh", ["-c", command]);
 			Sys.setCwd(previous);
-			Sys.println('haxeon: running $output');
+			// The app waits on its diagnostics port until the recorder attaches.
+			if (profile != null)
+				profile.startRecorder();
+			Sys.println('haxeon: running $output' + (profile == null ? "" : ' (profiling to ${profile.capture})'));
 			return process;
 		} catch (error:Dynamic) {
 			Sys.setCwd(previous);
@@ -97,6 +173,9 @@ class WatchRun {
 
 	static function quote(value:String):String
 		return "'" + value.split("'").join("'\\''") + "'";
+
+	static function windowsQuote(value:String):String
+		return '"' + value.split('"').join('\\"') + '"';
 
 	static function printLog(path:String, offset:Int):Int {
 		if (!FileSystem.exists(path))

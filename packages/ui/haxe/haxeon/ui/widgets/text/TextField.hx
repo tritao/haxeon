@@ -14,6 +14,7 @@ import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
+import nativekit.ffi.NativeKitTypes.TextEditAction;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
@@ -857,6 +858,10 @@ class TextField implements View {
 				if (!enabled || readOnly || event.data == null)
 					return;
 				var edit:NativeKitTextEdit = cast event.data;
+				// Windows sends Backspace/Delete as both a key event and a text-edit
+				// transaction. handleKey owns deletion; applying this transaction too
+				// would delete a second character, potentially at a stale native caret.
+				if (Sys.systemName() == "Windows" && edit.action == TextEditAction.Delete) return;
 				var previousRevision = editor.documentRevision();
 				if (editor.applyTextEdit(edit)) {
 					editor.resetCaretBlink(Sys.time());

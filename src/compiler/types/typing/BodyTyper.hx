@@ -16,6 +16,7 @@ import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
 import compiler.types.analysis.AssignedDeclarations;
+import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
@@ -120,8 +121,9 @@ class BodyTyper {
 			function(value, expected, context, code) return this.coerce(value, expected, context, code), switchRules, anonymousTypeRegistry,
 			function(type, span) return this.arrayElementType(type, span), function(type) return this.lowerType(type), {
 				variable: function(name, span, scope, expected) return this.typeVariableExpression(name, span, scope, expected),
-				lambda: function(arguments, body, span, scope, expected,
-						inferDynamicLambdaResult) return this.closureTyper.typeLambda(arguments, body, span, scope, expected, inferDynamicLambdaResult,
+				lambda: function(arguments, body, identity, span, scope, expected,
+						inferDynamicLambdaResult) return this.closureTyper.typeLambda(arguments, body, identity, span, scope, expected,
+						inferDynamicLambdaResult,
 						session.currentContext),
 				member: function(object, name, span, scope) return this.typeMember(object, name, span, scope),
 				block: function(statements, result, span, scope, expected) return this.typeBlockExpression(statements, result, span, scope, expected),
@@ -266,10 +268,10 @@ class BodyTyper {
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
-			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, MutableCapture);
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding), MutableCapture);
 		}
 		for (binding in lexicalStorage.exceptionCells.keys()) {
-			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + binding, ExceptionEdge);
+			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding), ExceptionEdge);
 		}
 		var scope = new Scope();
 		scope.setMapPrivacy(MapEscapeAnalysis.analyze(fn.arguments, fn.statements));
@@ -582,7 +584,7 @@ class BodyTyper {
 
 	static function containsLambda(expression:AstExpression):Bool {
 		switch expression {
-			case Lambda(_, _, _):
+			case Lambda(_, _, _, _):
 				return true;
 			default:
 		}
@@ -617,7 +619,7 @@ class BodyTyper {
 					declareSpeculative(scope, declaredName, declared == null || declared == InferredType ? speculativeValueType(initializer,
 						scope) : lowerType(declared), span);
 					switch initializer {
-						case Lambda(arguments, body, _):
+						case Lambda(arguments, body, _, _):
 							var inside = new Scope(scope);
 							for (argument in arguments)
 								if (argument.type != InferredType)

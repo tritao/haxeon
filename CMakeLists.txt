@@ -10,6 +10,17 @@ if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
     "MSVC runtime library used by Haxeon and HashLink")
 endif()
 
+# Write PDBs for Release and MinSizeRel MSVC builds (RelWithDebInfo already
+# does) so debuggers and the profiler can name native frames with their
+# functions and source lines. /Z7 keeps the debug info in each object, which
+# avoids a shared compiler PDB under parallel builds, and the explicit /OPT and
+# /INCREMENTAL flags keep the linked code identical to a build without /DEBUG.
+if(MSVC)
+  add_compile_options($<$<CONFIG:Release,MinSizeRel>:/Z7>)
+  add_link_options($<$<CONFIG:Release,MinSizeRel>:/DEBUG> $<$<CONFIG:Release,MinSizeRel>:/OPT:REF>
+    $<$<CONFIG:Release,MinSizeRel>:/OPT:ICF> $<$<CONFIG:Release,MinSizeRel>:/INCREMENTAL:NO>)
+endif()
+
 # HashLink already carries the platform-specific compiler, linker, and system
 # library knowledge. Keep it as a real CMake dependency instead of duplicating
 # that knowledge in Haxeon's launch scripts.

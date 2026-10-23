@@ -492,7 +492,7 @@ class CallResolver {
 
 	static function lambdaParametersAnnotated(expression:AstExpression):Bool
 		return switch LambdaSyntax.literal(expression) {
-			case Lambda(arguments, _, _):
+			case Lambda(arguments, _, _, _):
 				var annotated = true;
 				for (argument in arguments)
 					if (argument.type == InferredType)
@@ -504,7 +504,7 @@ class CallResolver {
 
 	static function isLambdaLiteral(expression:AstExpression):Bool
 		return switch LambdaSyntax.literal(expression) {
-			case Lambda(_, _, _): true;
+			case Lambda(_, _, _, _): true;
 			default: false;
 		};
 
@@ -714,7 +714,7 @@ class CallResolver {
 			invalidateAllExpressions:Bool = true, ?expectedType:CompilerType):TypedExpression {
 		// A `try` expression is an immediately called lambda; where its value is discarded, its branches may differ in type.
 		var discarded = expectedType == TVoid && arguments.length == 0 && switch callee {
-			case Lambda(lambdaArguments, _, _): lambdaArguments.length == 0;
+			case Lambda(lambdaArguments, _, _, _): lambdaArguments.length == 0;
 			default: false;
 		},
 			typedCallee = typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null, false),
@@ -771,7 +771,7 @@ class CallResolver {
 	 */
 	function calledClosureEffects(callee:AstExpression, callableName:Null<String>, scope:Scope):Null<ClosureEffects> {
 		switch callee {
-			case Lambda(arguments, body, _):
+			case Lambda(arguments, body, _, _):
 				return ClosureEffects.of(arguments, body, scope);
 			default:
 		}

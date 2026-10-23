@@ -38,6 +38,13 @@ class BindingWalker {
 	public static function key(name:String, span:SourceSpan):String
 		return name + "@" + span.start;
 
+	/**
+	 * The local a declaration key (`key`) names. Names a running module sees, such as cell classes, use it rather than the key:
+	 * the key's source offset moves whenever code above it changes.
+	 */
+	public static function nameOf(key:String):String
+		return key.substring(0, key.lastIndexOf("@"));
+
 	/** `map.field` style names refer to the local before the first dot. */
 	public static function rootOf(name:String):String {
 		var dot = name.indexOf(".");
@@ -122,7 +129,7 @@ class BindingWalker {
 		switch value {
 			case VarDeclaration(name, type, initializer, span):
 				switch initializer {
-					case Lambda(_, _, _):
+					case Lambda(_, _, _, _):
 						// A local function can call itself, so its name is visible in its own body.
 						declare(name, span, Local, type, initializer);
 						expression(initializer);
@@ -222,7 +229,7 @@ class BindingWalker {
 					default:
 				}
 				expression(target);
-			case Lambda(arguments, body, _):
+			case Lambda(arguments, body, _, _):
 				lambdaDepth++;
 				scoped(() -> walkFunction(arguments, body));
 				lambdaDepth--;

@@ -457,7 +457,7 @@ class SemanticIndex {
 					indexRecoveredExpression(argument);
 			case NewArray(_, length, _):
 				indexRecoveredExpression(length);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				indexRecoveredStatementUses(body);
 			case SwitchExpression(value, cases, fallback, _):
 				indexRecoveredExpression(value);

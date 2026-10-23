@@ -643,14 +643,21 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
     const uint64_t font_generation = state_->font_collection->generation();
     for (auto &entry : state_->layouts) {
         auto &cached = *entry.second;
+        // A left-aligned, unwrapped LTR paragraph has no width-dependent glyph
+        // positions. Keep its shaping when a splitter changes the containing
+        // viewport; centered, wrapped and resolved RTL layouts still reflow.
+        const bool width_independent = options.wrap == TextWrapMode::None &&
+            options.alignment == TextAlignment::Start && cached.layout &&
+            skb_layout_get_resolved_direction(cached.layout.get()) == SKB_DIRECTION_LTR;
         if (cached.font_generation == font_generation && cached.text == text &&
-            cached.width == width && cached.options.font_size == options.font_size &&
+            (cached.width == width || width_independent) && cached.options.font_size == options.font_size &&
             cached.options.letter_spacing == options.letter_spacing &&
             cached.options.line_height == options.line_height &&
             cached.options.tab_width == options.tab_width &&
             cached.options.family == options.family && cached.options.wrap == options.wrap &&
             cached.options.alignment == options.alignment &&
             cached.options.direction == options.direction) {
+            cached.width = width;
             cached.last_used = ++state_->layout_use_sequence;
             state_->active_layout_id = entry.first;
             if (result)

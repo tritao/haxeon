@@ -178,7 +178,7 @@ class DependencyScanner {
 			case NativeLayoutQuery(_, type, _, _):
 				scanType(type, dependencies, typeParameters);
 			case NewMap(_, _, _):
-			case Lambda(arguments, statements, _):
+			case Lambda(arguments, statements, _, _):
 				// Local functions and anonymous functions are lambdas; modules
 				// referenced only inside their bodies are dependencies too.
 				for (argument in arguments)
