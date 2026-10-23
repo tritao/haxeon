@@ -41,6 +41,15 @@ class ProfileCapture {
 	}
 
 	/** Instrumentation: every call of the instrumented build, Haxe and native, as a slice. */
+	/** HL_PROF_BOUNDARY for an instrumented run: which boundary hooks the runtime installs (see prof_boundary.c). */
+	public static function boundaryConfiguration(instrument:project.PackageManifest.InstrumentManifest):String {
+		var parts = ['imports=${instrument.boundaryImports}', 'dxgi=${instrument.dxgi ? 1 : 0}', 'd3d11=${instrument.d3d11 ? 1 : 0}',
+			'vulkan=${instrument.vulkan ? 1 : 0}'];
+		if (instrument.boundaryExtra.length > 0)
+			parts.push('extra=${instrument.boundaryExtra.join(",")}');
+		return parts.join(";");
+	}
+
 	public static function defaultSources():Array<String>
 		return ["instrument"];
 

@@ -619,6 +619,9 @@ class HaxeonCli {
 			throw 'Profiling is currently available for "haxeon run" host builds only';
 		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
 		var instrument = options.profile && options.profileSources.indexOf("instrument") >= 0;
+		// The runtime installs the boundary hooks this asks for; the launched app inherits it.
+		if (instrument)
+			Sys.putEnv("HL_PROF_BOUNDARY", ProfileCapture.boundaryConfiguration(project.manifest.instrument));
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
