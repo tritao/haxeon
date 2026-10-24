@@ -23,7 +23,8 @@ class Main {
 }
 HAXE
 
-timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
+# Every call is kept, so the trace shows the short ones this checks for.
+timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile --profile-min-call=0 \
   --profile-output "$scratch/capture/profile.hlpc" > "$scratch/run.log" 2>&1 || {
     cat "$scratch/run.log" >&2
     exit 1
@@ -66,7 +67,7 @@ timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --pr
   }
 test -s "$scratch/sampling/profile.hlpc" && test -s "$scratch/sampling/profile.pftrace"
 test -s "$scratch/build/host/main.hl"
-timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling   --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
+timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling --profile-min-call=0 --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
     cat "$scratch/mixed.log" >&2
     exit 1
   }

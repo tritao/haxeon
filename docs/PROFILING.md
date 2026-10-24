@@ -161,6 +161,30 @@ cost lower; an excluded function's time is counted in its caller.
 Live patches keep their probes: a patched function is instrumented like the
 build it patches, and its calls are named after the revision that ran.
 
+### Short calls
+
+Most calls an instrumented program makes are tiny: bounds checks, getters and
+allocator internals that finish in well under a microsecond. Recording each
+one costs more than the call itself and makes captures enormous (an editor
+frame can make 400,000 of them). So the recorder drops calls shorter than
+1 µs as they exit, unless a call inside them was kept. A dropped call's time
+stays in its caller's, and the capture counts dropped calls per function; the
+report after the run lists the most frequent:
+
+```
+dropped 10012 short calls to 2 functions; most often:
+         10000  Main.tiny
+```
+
+`--profile-min-call=US` sets the threshold for one run, and `haxeon.json` sets
+the project's:
+
+```json
+"instrument": { "minCallMicros": 1 }
+```
+
+`0` keeps every call. Fractions work (`0.5`).
+
 ### Boundary calls
 
 Calls from the process's own modules into code nobody compiles with
@@ -201,6 +225,7 @@ just part of a run:
 | `--profile-duration=SEC` | Stop after SEC seconds of recording; paused time does not count. |
 | `--profile-max-size=MIB` | Stop when the capture reaches MIB (default 4096; 0 for no limit). |
 | `--profile-window=START:END` | Export only that part of the capture to Perfetto, in seconds since the recorder connected; either side may be left out. The capture keeps everything. |
+| `--profile-min-call=US` | Drop calls shorter than US microseconds (default `instrument.minCallMicros`, else 1; 0 keeps every call). See [Short calls](#short-calls). |
 
 Each option implies `--profile`. A paused session records nothing until the
 program starts it:

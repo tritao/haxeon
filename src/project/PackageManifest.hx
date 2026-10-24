@@ -76,8 +76,14 @@ class InstrumentManifest {
 	public final d3d11:Bool;
 	public final vulkan:Bool;
 
+	/** Calls shorter than this many microseconds are dropped as they exit unless a call inside them is kept; 0 keeps every call. */
+	public final minCallMicros:Float;
+
+	public static inline final DEFAULT_MIN_CALL_MICROS = 1.0;
+
 	public function new(?haxeInclude:Array<String>, ?haxeExclude:Array<String>, ?nativeInclude:Array<String>, ?nativeExclude:Array<String>,
-			boundaryImports:String = "blocking", ?boundaryExtra:Array<String>, dxgi:Bool = true, d3d11:Bool = true, vulkan:Bool = true) {
+			boundaryImports:String = "blocking", ?boundaryExtra:Array<String>, dxgi:Bool = true, d3d11:Bool = true, vulkan:Bool = true,
+			minCallMicros:Float = DEFAULT_MIN_CALL_MICROS) {
 		this.haxeInclude = haxeInclude == null ? ["*"] : haxeInclude.copy();
 		this.haxeExclude = haxeExclude == null ? [] : haxeExclude.copy();
 		this.nativeInclude = nativeInclude == null ? ["**"] : nativeInclude.copy();
@@ -87,6 +93,7 @@ class InstrumentManifest {
 		this.dxgi = dxgi;
 		this.d3d11 = d3d11;
 		this.vulkan = vulkan;
+		this.minCallMicros = minCallMicros;
 	}
 }
 
@@ -287,10 +294,13 @@ class PackageManifest {
 			imports = optionalString(boundary, "imports", "blocking", context);
 		if (imports != "blocking" && imports != "none")
 			throw '$path "instrument.boundary.imports" must be "blocking" or "none"';
+		var minCall:Dynamic = Reflect.field(data, "minCallMicros");
+		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall : Float) < 0))
+			throw '$path "instrument.minCallMicros" must be a number of at least 0';
 		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]), stringArray(haxe, "exclude", context, []),
 			stringArray(native, "include", context, ["**"]), stringArray(native, "exclude", context, []), imports,
 			stringArray(boundary, "extra", context, []), optionalBool(boundary, "dxgi", true, context), optionalBool(boundary, "d3d11", true, context),
-			optionalBool(boundary, "vulkan", true, context));
+			optionalBool(boundary, "vulkan", true, context), minCall == null ? InstrumentManifest.DEFAULT_MIN_CALL_MICROS : (minCall : Float));
 	}
 
 	static function isObject(value:Dynamic):Bool

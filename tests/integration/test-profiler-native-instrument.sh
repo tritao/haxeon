@@ -98,7 +98,8 @@ class Main {
 }
 HAXE
 
-timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json" --profile \
+# Every call is kept: the native calls checked here take nanoseconds.
+timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json" --profile --profile-min-call=0 \
 	--profile-output "$scratch/capture/profile.hlpc" > "$scratch/run.log" 2>&1 || {
 	cat "$scratch/run.log" >&2
 	exit 1

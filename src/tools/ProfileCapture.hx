@@ -19,6 +19,9 @@ typedef ProfileControls = {
 
 	/** The exported part of the capture, `START:END` in seconds since the recorder connected (either side optional). */
 	final window:Null<String>;
+
+	/** Calls shorter than this many microseconds are dropped (0 keeps every call); null takes the project's `instrument.minCallMicros`. */
+	final minCallMicros:Null<Float>;
 }
 
 /**
@@ -59,7 +62,16 @@ class ProfileCapture {
 	public static inline final DEFAULT_MAX_SIZE_MIB = 4096;
 
 	/** The recording controls of this run's captures, set from the command line. */
-	public static var controls:ProfileControls = {start: "launch", durationSeconds: 0, maxSizeMiB: DEFAULT_MAX_SIZE_MIB, window: null};
+	public static var controls:ProfileControls = {
+		start: "launch",
+		durationSeconds: 0,
+		maxSizeMiB: DEFAULT_MAX_SIZE_MIB,
+		window: null,
+		minCallMicros: null
+	};
+
+	/** The run's minimum call duration in microseconds, resolved from the controls and the project. */
+	public static var minCallMicros:Float = project.PackageManifest.InstrumentManifest.DEFAULT_MIN_CALL_MICROS;
 
 	/** HL_PROF_BOUNDARY for an instrumented run: which boundary hooks the runtime installs (see prof_boundary.c). */
 	public static function boundaryConfiguration(instrument:project.PackageManifest.InstrumentManifest):String {
@@ -95,6 +107,14 @@ class ProfileCapture {
 	}
 
 	/** Parses `--profile-window`: `START:END` in seconds, either side optional. */
+	/** Parses `--profile-min-call`: microseconds, at least 0. */
+	public static function parseMinCall(value:String):Float {
+		var parsed = Std.parseFloat(StringTools.trim(value));
+		if (Math.isNaN(parsed) || parsed < 0 || parsed > 4000000)
+			throw 'Option "--profile-min-call" takes microseconds from 0 to 4000000';
+		return parsed;
+	}
+
 	public static function parseWindow(value:String):String {
 		windowArguments(value);
 		return value;
@@ -143,6 +163,8 @@ class ProfileCapture {
 			arguments = arguments.concat(["--duration", Std.string(controls.durationSeconds)]);
 		if (controls.maxSizeMiB > 0)
 			arguments = arguments.concat(["--max-size", Std.string(controls.maxSizeMiB)]);
+		if (sources.indexOf("instrument") >= 0 && minCallMicros > 0)
+			arguments = arguments.concat(["--min-call-us", Std.string(minCallMicros)]);
 		return arguments.concat(["--interval", "2000", "--output", capture, Std.string(port)]);
 	}
 
@@ -212,6 +234,9 @@ class ProfileCapture {
 		var trace = Path.join([directory, '$name.pftrace']);
 		var export = new Process(profiler, ["export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
 			.concat(["--output", trace, capture]));
+		// The export prints the dropped short calls, which the report after the run shows too; reading it keeps the pipe
+		// from filling.
+		export.stdout.readAll();
 		var errors = export.stderr.readAll().toString(),
 			status = export.exitCode();
 		export.close();

@@ -73,7 +73,9 @@ Each thread writes records to its own buffer. Records are little-endian,
 
 `EVENT` carries the existing profiler events (`profile_events.h`): thread
 names, GC statistics, native symbols and locations, allocation samples and
-module loads, with the payloads they always had.
+module loads, with the payloads they always had. It also carries
+`PROFILE_EVENT_DROPPED_CALLS`: the calls a thread dropped for being short
+since its last such event, as entries of `key:u64, count:u32, 0:u32`.
 
 A frame set's frames run from one `FRAME_MARK` to the next. `FRAME_IDLE` ends
 the current frame without starting another, so time a UI spends waiting for
@@ -97,6 +99,18 @@ input is not counted as a frame.
 - **Back-pressure.** When the pool is empty the producer waits for the
   consumer and then writes a `STALL` record covering the wait. Nothing is
   dropped: a missing exit would corrupt the timeline that follows it.
+- **Short calls.** With a minimum call duration (1 µs from `haxeon run`, 0
+  for none), the producer holds back the run of `ENTER` records at the end of
+  its buffer: its published position stays at the start of the run. An exit
+  whose `ENTER` is still the last record, and came less than the minimum ago,
+  takes that record back instead of writing an `EXIT`, and counts the call
+  for a `PROFILE_EVENT_DROPPED_CALLS` event. Any record that is kept
+  publishes the run. A dropped call therefore never reaches the consumer,
+  short calls nested in each other go together, and a short call that called
+  something long stays. Counts are written at each frame mark, when a
+  thread's table fills, at thread exit and when the session stops, which also
+  publishes every run still held. A pause in the middle of a held run keeps
+  it.
 
 The recording check is a load of one global flag.
 
@@ -138,7 +152,7 @@ Requests on service 2 (profiler):
 | ---: | --- | --- |
 | 1 | status | none; the response is `active:u32, sources:u32, chunks:u32, chunksInUse:u32, dataFrames:u64, rawBytes:u64` |
 | 4 | metadata | none; the response is the metadata snapshot |
-| 16 | start | `sources:u32, sampleRate:u32, allocInterval:u32, poolMiB:u32`, optionally `flags:u32` (bit 0: start paused) |
+| 16 | start | `sources:u32, sampleRate:u32, allocInterval:u32, poolMiB:u32`, optionally `flags:u32` (bit 0: start paused), then optionally `minCallNs:u32` (calls shorter than this are dropped; 0 or absent keeps every call) |
 | 17 | stop | none |
 | 18 | pause | none |
 | 19 | resume | none |
@@ -247,9 +261,13 @@ ordinary builds contain no probes. `haxeon.json` scopes it:
 "instrument": {
   "haxe": { "include": ["*"], "exclude": ["Math", "haxe.ds.*"] },
   "native": { "include": ["**"], "exclude": ["vendor/harfbuzz/**"] },
-  "boundary": { "imports": "blocking", "dxgi": true, "d3d11": true, "vulkan": true }
+  "boundary": { "imports": "blocking", "dxgi": true, "d3d11": true, "vulkan": true },
+  "minCallMicros": 1
 }
 ```
+
+`minCallMicros` is the session's minimum call duration (see Buffers); it is
+sent when the session starts, so changing it needs no rebuild.
 
 ## Milestones
 

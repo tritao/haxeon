@@ -621,6 +621,7 @@ class HaxeonCli {
 		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
 		var instrument = options.profile && options.profileSources.indexOf("instrument") >= 0;
 		ProfileCapture.controls = options.profileControls;
+		ProfileCapture.minCallMicros = options.profileControls.minCallMicros != null ? options.profileControls.minCallMicros : project.manifest.instrument.minCallMicros;
 		if (options.profile && options.profileControls.start == "manual")
 			Sys.println("haxeon: recording starts paused; the program starts it with haxeon.ProfileRecording.start() or toggle()");
 		// The runtime installs the boundary hooks this asks for; the launched app inherits it.
@@ -968,7 +969,8 @@ class HaxeonCli {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
 			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null,
-			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null;
+			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null,
+			profileMinCall:Null<Float> = null;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -1051,6 +1053,9 @@ class HaxeonCli {
 			} else if (StringTools.startsWith(argument, "--profile-window=")) {
 				profile = true;
 				profileWindow = ProfileCapture.parseWindow(argument.substr("--profile-window=".length));
+			} else if (StringTools.startsWith(argument, "--profile-min-call=")) {
+				profile = true;
+				profileMinCall = ProfileCapture.parseMinCall(argument.substr("--profile-min-call=".length));
 			}
 			else if (StringTools.startsWith(argument, "--profile-output=")) {
 				profileOutput = argument.substr("--profile-output=".length);
@@ -1081,7 +1086,8 @@ class HaxeonCli {
 				start: profileStart,
 				durationSeconds: profileDuration,
 				maxSizeMiB: profileMaxSize,
-				window: profileWindow
+				window: profileWindow,
+				minCallMicros: profileMinCall
 			},
 			profileOutput: profileOutput
 		};
@@ -1437,6 +1443,8 @@ class HaxeonCli {
 		Sys.println("       [--profile-duration=SEC]     Stop after SEC seconds of recording");
 		Sys.println("       [--profile-max-size=MIB]     Stop when the capture reaches MIB (default 4096; 0 for no limit)");
 		Sys.println("       [--profile-window=START:END] Export only that part of the capture, in seconds (either side optional)");
+		Sys.println("       [--profile-min-call=US]      Drop calls shorter than US microseconds unless a call inside them is kept");
+		Sys.println("                                    (default instrument.minCallMicros, else 1; 0 keeps every call)");
 		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");
 		Sys.println("       [--jobs N] [--compilers N] [--no-test-cache] [--actions]");
 		Sys.println("                                    Merge the workspace's projects into one build graph;");
