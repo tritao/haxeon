@@ -41,6 +41,8 @@ typedef ResolveCallReceiverCallback = (String, SourceSpan, Scope) -> Null<TypedE
 typedef TypeCallMemberWithFlowCallback = (TypedExpression, String, SourceSpan, Scope) -> TypedExpression;
 
 typedef EnumConstructorInfo = {
+	?aliasType:CompilerType,
+	?aliasName:String,
 	enumName:String,
 	index:Int,
 	params:Array<AstEnumParameter>,
@@ -956,7 +958,7 @@ class CallResolver {
 			scope:Scope):TypedExpression {
 		var expected = [
 			for (parameter in enumCase.params)
-				enumParameterType(enumCase.typeParameters, parameter, expectedType)
+				enumParameterType(enumCase.typeParameters, parameter, enumCase.aliasType ?? expectedType)
 		], required = requiredEnumParameters(enumCase.params);
 		if (arguments.length < required || arguments.length > expected.length)
 			fail("E1008", 'Enum constructor "$name" expects $required to ${expected.length} arguments, got ${arguments.length}', span);
@@ -970,24 +972,28 @@ class CallResolver {
 		for (index in 0...typedArguments.length)
 			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
 				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index]));
-		var resultType:CompilerType = TInstance(NominalKind.Enum, enumCase.enumName, []);
-		if (expectedType != null && enumName(expectedType) == enumCase.enumName)
+		var resultType:CompilerType = enumCase.aliasType ?? TInstance(NominalKind.Enum, enumCase.enumName, []);
+		if (enumCase.aliasType == null && expectedType != null && enumName(expectedType) == enumCase.enumName)
 			resultType = expectedType;
-		return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span);
+		return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span, false, null, null, enumCase.aliasName);
 	}
 
-	function enumCaseInfo(name:String):Null<EnumConstructorInfo> {
+	public function enumCaseInfo(name:String):Null<EnumConstructorInfo> {
 		var separator = name.lastIndexOf(".");
 		if (separator < 0)
 			return null;
-		var enumName = name.substring(0, separator),
+		var qualifier = name.substring(0, separator),
+			qualifiedType = session.declarations.enumQualifierType(qualifier),
+			enumName = enumName(qualifiedType),
 			caseName = name.substring(separator + 1);
-		if (!session.enumDecls.exists(enumName))
+		if (enumName == null || !session.enumDecls.exists(enumName))
 			return null;
 		var declaration = requiredMapValue(session.enumDecls, enumName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
 				return {
+					aliasType: qualifier == enumName ? null : qualifiedType,
+					aliasName: qualifier == enumName ? null : qualifier,
 					enumName: enumName,
 					index: index,
 					params: declaration.cases[index].params,

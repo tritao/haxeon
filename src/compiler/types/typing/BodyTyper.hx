@@ -15,6 +15,7 @@ import compiler.types.Type.AnonymousField;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
+import compiler.types.typing.CallResolver.EnumConstructorInfo;
 import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
@@ -1055,7 +1056,7 @@ class BodyTyper {
 					return null;
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
 				{
-					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span),
+					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span, false, null, null, info.aliasName),
 					enumName: info.enumName,
 					index: info.index,
 					bindings: [],
@@ -1246,7 +1247,7 @@ class BodyTyper {
 					}
 				}
 				{
-					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span),
+					value: new TypedExpression(TEnumLiteral(info.enumName, info.index), instanceType, span, false, null, null, info.aliasName),
 					enumName: info.enumName,
 					index: info.index,
 					bindings: bindings,
@@ -1581,8 +1582,13 @@ class BodyTyper {
 							if (value.name == enumCaseName)
 								return typeExpression(value.value, new Scope(), lowerType(enumAbstract.underlying));
 					}
-					if (session.enumDecls.exists(enumName)) {
-						var enumDecl = session.enumDecls.get(enumName);
+					var qualifiedEnum = session.declarations.enumQualifierType(enumName),
+						resolvedEnumName = BodyTyper.enumName(qualifiedEnum),
+						qualifierName = enumName,
+						isEnumAlias = resolvedEnumName != null && resolvedEnumName != enumName;
+					if (resolvedEnumName != null) {
+						enumName = resolvedEnumName;
+						var enumDecl = requiredMapValue(session.enumDecls, enumName);
 						var index = -1;
 						for (i in 0...enumDecl.cases.length)
 							if (enumDecl.cases[i].name == enumCaseName)
@@ -1591,9 +1597,9 @@ class BodyTyper {
 							fail("E1005", 'Unknown enum case "$name"', span);
 						if (enumDecl.cases[index].params.length > 0)
 							fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-						var literalType:CompilerType = TInstance(NominalKind.Enum, enumName, []);
+						var literalType:CompilerType = isEnumAlias ? qualifiedEnum : TInstance(NominalKind.Enum, enumName, []);
 						var expectedEnumName = BodyTyper.enumName(expectedType);
-						if (expectedEnumName == enumName) {
+						if (!isEnumAlias && expectedEnumName == enumName) {
 							var resolvedExpected = expectedType;
 							if (resolvedExpected != null)
 								switch resolvedExpected {
@@ -1607,7 +1613,7 @@ class BodyTyper {
 									default:
 								}
 						}
-						return new TypedExpression(TEnumLiteral(enumName, index), literalType, span);
+						return new TypedExpression(TEnumLiteral(enumName, index), literalType, span, false, null, null, isEnumAlias ? qualifierName : null);
 					}
 					var classEnd = parts.length - 1;
 					while (classEnd > 0) {
@@ -2054,29 +2060,8 @@ class BodyTyper {
 		return callResolver.findMethod(className, name);
 	}
 
-	function enumCaseInfo(name:String):Null<{
-		enumName:String,
-		index:Int,
-		params:Array<compiler.syntax.Ast.AstEnumParameter>,
-		typeParameters:Array<String>
-	}> {
-		var parent = parentPath(name);
-		if (parent == null)
-			return null;
-		var enumName = parent, caseName = lastPathSegment(name);
-		if (!session.enumDecls.exists(enumName))
-			return null;
-		var declaration = requiredMapValue(session.enumDecls, enumName);
-		for (index in 0...declaration.cases.length)
-			if (declaration.cases[index].name == caseName)
-				return {
-					enumName: enumName,
-					index: index,
-					params: declaration.cases[index].params,
-					typeParameters: declaration.typeParameters
-				};
-		return null;
-	}
+	function enumCaseInfo(name:String):Null<EnumConstructorInfo>
+		return callResolver.enumCaseInfo(name);
 
 	function enumParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);

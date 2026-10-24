@@ -846,6 +846,7 @@ class SemanticIndex {
 				case TSwitch(value, cases, fallback, _, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
 					for (item in cases) {
+						indexExpression(fn, item.value, resolve, resolveEnumCase);
 						bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.span);
 						indexStatements(fn, item.statements, resolve, resolveEnumCase);
 					}

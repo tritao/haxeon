@@ -159,6 +159,20 @@ class DeclarationIndex {
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
 		return resolveInner(type, span == null ? fallbackSpan : span, [], substitutions == null ? [] : substitutions);
 
+	/** Resolve a constructor qualifier through typedefs, preserving bound enum arguments. */
+	public function enumQualifierType(name:String):Null<CompilerType> {
+		if (enums.exists(name))
+			return TInstance(NominalKind.Enum, name, []);
+		var alias = aliases.get(name);
+		if (alias == null)
+			return null;
+		var resolved = resolve(NamedType(name), alias.span);
+		return switch resolved {
+			case TInstance(Enum, _, _): resolved;
+			case _: null;
+		};
+	}
+
 	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
 		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums, enumAbstracts);
 
