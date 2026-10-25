@@ -113,6 +113,20 @@ input is not counted as a frame.
   consumer takes (native symbol names, a retiring thread's last counts), must
   not wait for it (`hl_prof_no_wait`): with the pool empty those records are
   lost, counted in the `stats` frame's `lostRecords`, and the recorder warns.
+  A collection holding the GC lock, and its mark threads, must not wait
+  either. Such
+  sections record no calls, instrumented or hooked, so no call loses half of
+  its pair.
+
+  Known issue: a program that keeps the pool empty for seconds can hang.
+  A stress test hung twice in four runs: four threads allocating constantly
+  while making calls of under a microsecond, a 1 MiB pool, every call kept
+  and `instrument` alone. Recording stopped making progress and the program
+  never finished. The likely cause is a producer waiting for a chunk that
+  the GC does not count as blocking: a collection then waits for it while
+  the consumer that would free the chunk waits for the collection. Not yet
+  confirmed with thread stacks. Captures with the default pool, or that drop
+  short calls, have not hit it.
 - **Short calls.** With a minimum call duration (1 µs from `haxeon run`, 0
   for none), the producer holds back the run of `ENTER` records at the end of
   its buffer: its published position stays at the start of the run. An exit
