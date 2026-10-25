@@ -295,8 +295,8 @@ class PackageManifest {
 		if (imports != "blocking" && imports != "none")
 			throw '$path "instrument.boundary.imports" must be "blocking" or "none"';
 		var minCall:Dynamic = Reflect.field(data, "minCallMicros");
-		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall : Float) < 0))
-			throw '$path "instrument.minCallMicros" must be a number of at least 0';
+		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall : Float) < 0 || (minCall : Float) > 4000000))
+			throw '$path "instrument.minCallMicros" must be a number from 0 to 4000000';
 		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]), stringArray(haxe, "exclude", context, []),
 			stringArray(native, "include", context, ["**"]), stringArray(native, "exclude", context, []), imports,
 			stringArray(boundary, "extra", context, []), optionalBool(boundary, "dxgi", true, context), optionalBool(boundary, "d3d11", true, context),
