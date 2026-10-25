@@ -87,6 +87,8 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
+		for (name => entry in instrumented)
+			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
 		for (name => text in objectTexts)
