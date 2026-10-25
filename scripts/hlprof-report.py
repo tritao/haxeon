@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Self and inclusive time by function from a Perfetto export written by `hlprof-live export --format perfetto`.
 
-The plain `hlprof-live report` counts every sample, including threads that are only waiting, so half of a short
-capture can be one parked worker. This report drops idle samples and can keep only the samples taken while a chosen
-function is on the stack (`--within`), which is how a capture is narrowed to the frames of a workload without having
-to line profiler time up with application time.
+Like `hlprof-live report`, this drops idle samples: those the sampler flagged as waiting in a system call, or, in
+captures without the flag, those whose leaf is a known blocking Haxe call. It can also keep only the samples taken while
+a chosen function is on the stack (`--within`), which is how a capture is narrowed to the frames of a workload without
+having to line profiler time up with application time.
 
   hlprof-report.py editor.perfetto.json --within tests.HeadlessEditorProfile.submit --top 25
 """
@@ -14,7 +14,7 @@ import json
 import re
 import sys
 
-# Leaf functions that mean the thread was blocked, not working.
+# Leaf functions that mean the thread was blocked, for captures whose samples carry no `waiting` flag.
 IDLE_LEAVES = ("sys.thread.Condition.wait", "sys.thread.Lock.wait", "sys.thread.Semaphore.acquire",
                "Sys.sleep", "sys.thread.Thread.readMessage", "sys.net.Socket.select")
 GENERIC = re.compile(r"^\$generic:(?P<origin>[^\[]+)\[[^\]]*\]<(?P<arguments>.*)>$")
@@ -64,7 +64,8 @@ def main() -> int:
     for event in load(arguments.perfetto):
         total += 1
         stack = event["args"]["stack"].split(";")
-        if not arguments.keep_idle and stack[-1] in IDLE_LEAVES:
+        waiting = event["args"].get("waiting")
+        if not arguments.keep_idle and (waiting if waiting is not None else stack[-1] in IDLE_LEAVES):
             idle += 1
             continue
         if arguments.within and not any(wanted in frame for frame in stack for wanted in arguments.within):

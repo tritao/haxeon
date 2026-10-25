@@ -373,15 +373,23 @@ use the records it has. If `HL_DIAGNOSTICS_TOKEN` is set in the program's
 environment, set it in the recorder's too.
 
 `--top`, `--lines` and `--raw-leaf` are not accepted while recording; they
-belong to `report`. The `report` and `export` subcommands are unchanged, and
-read both HLPC v1 and v2 captures:
+belong to `report`. The `report` and `export` subcommands read both HLPC v1
+and v2 captures:
 
 ```sh
-hlprof-live report [--top N] [--lines] [--start-ms N] [--end-ms N] CAPTURE
-hlprof-live export --format folded [--lines] [--start-ms N] [--end-ms N] CAPTURE
-hlprof-live export --format perfetto [--lines] [--start-ms N] [--end-ms N] --output FILE CAPTURE
-hlprof-live export --format pftrace [--process-name NAME] [--start-ms N] [--end-ms N] --output FILE CAPTURE
+hlprof-live report [--top N] [--lines] [--all|--waiting] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live export --format folded [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live export --format perfetto [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
+hlprof-live export --format pftrace [--process-name NAME] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
 ```
+
+`report` ranks Haxe and native functions together (native ones marked
+`[native]`), each by its own samples: a function's self time is the samples
+whose leaf it is, so time a Haxe call spends in native code shows under that
+code. It ranks only the samples of running threads, and its first line counts
+how many were running and how many waiting in a system call; `--all` ranks
+both, `--waiting` only the waiting ones. Exports keep every sample unless
+given `--cpu` or `--waiting`.
 
 `--start-ms` and `--end-ms` select the part of the capture received in that
 window, in milliseconds since the recorder started. `pftrace` is the native

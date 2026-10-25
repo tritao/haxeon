@@ -57,8 +57,20 @@ __attribute__((noinline)) void mixed_outer( vclosure *callback ) {
 HL_PRIM void HL_NAME(through)( vclosure *callback ) { mixed_outer(callback); mixed_sink++; }
 HL_PRIM int HL_NAME(spin)( double seconds ) { return mixed_spin_leaf(seconds) + 1; }
 
+/* Sleeps in the kernel, in slices so a sample interrupting one only shortens that slice. */
+__attribute__((noinline)) void mixed_wait_leaf( double seconds ) {
+	double end = mixed_now() + seconds;
+	while( mixed_now() < end ) {
+		struct timespec slice = {0, 20000000};
+		nanosleep(&slice, NULL);
+	}
+}
+
+HL_PRIM void HL_NAME(wait)( double seconds ) { mixed_wait_leaf(seconds); }
+
 DEFINE_PRIM_WITH_NAME(_VOID, through, _FUN(_VOID, _NO_ARG), mixed_through);
 DEFINE_PRIM_WITH_NAME(_I32, spin, _F64, mixed_spin);
+DEFINE_PRIM_WITH_NAME(_VOID, wait, _F64, mixed_wait);
 C
 cat > "$scratch/mixed/src/mixed/Mixed.hx" <<'HAXE'
 package mixed;
@@ -68,6 +80,9 @@ extern function through(callback:Void->Void):Void;
 
 @:hlNative("mixed", "mixed_spin")
 extern function spin(seconds:Float):Int;
+
+@:hlNative("mixed", "mixed_wait")
+extern function wait(seconds:Float):Void;
 HAXE
 
 cat > "$scratch/app/haxeon.json" <<'JSON'
@@ -90,6 +105,8 @@ class Main {
 	static function main():Void {
 		mixed.Mixed.through(spinInHaxe);
 		total += mixed.Mixed.spin(0.4);
+		// Native code that only sleeps: its samples are waiting in a system call, not running.
+		mixed.Mixed.wait(0.4);
 		Sys.println("mixed stack test " + (total != 0));
 	}
 }
@@ -146,4 +163,25 @@ assert callback >= in_callback * 0.9, report + "\n" + "\n".join(";".join(f) for 
 assert native >= in_native * 0.9, report
 print(report)
 PY
-echo "PASS: samples hold the native frames between Haxe frames, in order"
+# The sampler flags samples taken in a system call: the sleeping thread's are waiting, the spinning ones are not.
+"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
+python3 - "$scratch/trace.json" <<'PY'
+import json, sys
+events = json.load(open(sys.argv[1]))
+events = events["traceEvents"] if isinstance(events, dict) else events
+samples = [e for e in events if e.get("cat") == "hl.sample"]
+def flagged(word):
+    chosen = [e for e in samples if word in e["args"]["stack"]]
+    return chosen, sum(1 for e in chosen if e["args"].get("waiting"))
+sleeping, sleeping_waiting = flagged("mixed_wait_leaf")
+spinning, spinning_waiting = flagged("mixed_spin_leaf")
+counts = f"native wait {sleeping_waiting}/{len(sleeping)} waiting, native spin {spinning_waiting}/{len(spinning)} waiting"
+assert len(sleeping) > 10 and sleeping_waiting >= len(sleeping) * 0.9, counts
+assert spinning_waiting <= len(spinning) * 0.1, counts
+print(counts)
+PY
+# The report ranks the native leaf where the time went, and counts what was waiting apart.
+"$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.txt"
+grep -Eq '^samples=[0-9]+ on_cpu=[1-9][0-9]* waiting=[1-9]' "$scratch/report.txt"
+grep -q '\[native\] mixed_spin_leaf' "$scratch/report.txt"
+echo "PASS: samples hold the native frames between Haxe frames, in order, and tell running from waiting"

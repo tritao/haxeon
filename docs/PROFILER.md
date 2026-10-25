@@ -68,7 +68,7 @@ Each thread writes records to its own buffer. Records are little-endian,
 | 0x13 | `FRAME_IDLE` | frame set (u64) |
 | 0x20 | `EVENT` | `id:u32, length:u32`, then the payload padded to 8 bytes |
 | 0x21 | `COUNTER` | value (f64 bits), `units:u32, encoding:u32`, then the name padded to 8 bytes |
-| 0x22 | `SAMPLE` | `tid:u32, frames:u16, flags:u8, 0:u8`, then `frames` u64 pcs, leaf first |
+| 0x22 | `SAMPLE` | `tid:u32, frames:u16, flags:u8, 0:u8`, then `frames` u64 pcs, leaf first. Flags: bit 0, taken while the GC stopped the world; bit 1, the thread was waiting in a system call (Linux) |
 | 0x30 | `STALL` | end ticks (u64): the producer waited for a free chunk |
 
 `EVENT` carries the existing profiler events (`profile_events.h`): thread
@@ -421,20 +421,35 @@ leaf first.
 - **Haxeon builds native packages with frame pointers** on Linux and macOS:
   `-fno-omit-frame-pointer`, plus `-mno-omit-leaf-frame-pointer` on x86-64,
   for `native.sources`, and `cmake/haxeon-frame-pointers.cmake` (included
-  by `cmake/haxeon-native.cmake`) for `native.cmake` packages. They cost
-  about 1%.
+  by `cmake/haxeon-native.cmake`) for `native.cmake` packages. Haxeon's own
+  runtime and native tools use the same file. They cost about 1%.
+- **libffi** comes from the `haxeon/main` branch of `tritao/libffi`, whose
+  `ffi_call_unix64` keeps a standard frame record; upstream's points the
+  frame pointer at a frame of its own, which broke the chain at every call
+  through FFI.
+- **Waiting or running.** A signal that interrupts a system call leaves the
+  saved instruction pointer on the system call instruction (when the call is
+  restarted) or just after it, so the sampler reads it from the stopped
+  thread's registers and flags the sample as waiting. `hlprof-live report`
+  ranks running samples unless given `--all`; exports keep every sample, mark
+  the waiting ones (`"waiting": true` in Perfetto JSON), and take `--cpu` or
+  `--waiting` to keep one kind.
 - **Naming.** An exported function is named by `dladdr` while recording. One
   that is not exported is recorded by its image and offset, and the exporter
   names it from the image's ELF symbol table (`tools/elf_symbols.c`) when the
   image is readable on the exporting machine and not stripped; otherwise it
-  stays `libfoo.so+0x...`. C++ names are not demangled yet.
+  stays `libfoo.so+0x...`. A stripped image is named from its detached
+  debug file (`/usr/lib/debug/.build-id/`, as `libc6-dbg` installs), found by
+  its build ID, and C++ names are demangled with the C++ runtime's
+  `__cxa_demangle` when it can be loaded.
 - **Launcher frames.** Every sample's root-most frames in HashLink's launcher
   and runtime (`hl`, `libhl`: `main`, `hl_dyn_call`, a thread's entry) are
   left out of exports, on every platform. A native thread's own frames stay.
 
 `tests/integration/test-profiler-mixed-stack.sh` checks that a sample taken
 in Haxe code called back from native code holds the native frames between
-the Haxe ones, in order.
+the Haxe ones, in order, that samples in a native sleep are flagged waiting
+and those in a native spin are not, and that `report` ranks the native leaf.
 
 ### Build flavor and scope
 

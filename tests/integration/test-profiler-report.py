@@ -35,10 +35,17 @@ def main():
         raise SystemExit(f"--within did not narrow the samples: {framed}")
     if framed["self"].get("C.m<D>") != 2 or framed["inclusive"].get("frame") != 8:
         raise SystemExit(f"names or counts are wrong: {framed}")
+    # The sampler's waiting flag decides when present, whatever the leaf.
+    flagged = [sample("main;frame;poll") for _ in range(4)] + [sample("main;frame;work") for _ in range(3)]
+    for index, event in enumerate(flagged):
+        event["args"]["waiting"] = index < 2
+    by_flag = report(flagged)
+    if by_flag["idle"] != 2 or by_flag["kept"] != 5:
+        raise SystemExit(f"the waiting flag did not decide idleness: {by_flag}")
     kept_idle = report(events, "--keep-idle")
     if kept_idle["idle"] != 0 or kept_idle["kept"] != 21:
         raise SystemExit(f"--keep-idle still dropped samples: {kept_idle}")
-    print("PASS: profile report filters idle and out-of-window samples and shortens names")
+    print("PASS: profile report filters idle (by the waiting flag, or blocking leaves) and out-of-window samples and shortens names")
 
 
 if __name__ == "__main__":
