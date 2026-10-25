@@ -2628,19 +2628,21 @@ class Parser {
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}
 
+	/** The text of a quoted literal, with escapes decoded. Runs between escapes are copied whole: appending one character at a time made a long literal quadratic. */
 	static function decodeString(text:String, span:SourceSpan):String {
-		var out = "", i = 1;
-		while (i < text.length - 1) {
-			var c = text.charAt(i++);
-			if (c != "\\") {
-				out += c;
-				continue;
-			}
-			var escape = readEscape(text, i, text.length - 1, span);
-			out += escape.value;
-			i = escape.next;
+		var end = text.length - 1, escapeAt = text.indexOf("\\", 1);
+		if (escapeAt < 0 || escapeAt >= end)
+			return text.substring(1, end);
+		var out = new StringBuf(), start = 1;
+		while (escapeAt >= 0 && escapeAt < end) {
+			out.addSub(text, start, escapeAt - start);
+			var escape = readEscape(text, escapeAt + 1, end, span);
+			out.add(escape.value);
+			start = escape.next;
+			escapeAt = text.indexOf("\\", start);
 		}
-		return out;
+		out.addSub(text, start, end - start);
+		return out.toString();
 	}
 
 	/**
@@ -2754,32 +2756,35 @@ class Parser {
 		var text = token.text;
 		if (text.charAt(0) != "'" || text.indexOf("$") < 0)
 			return StringLiteral(decodeString(text, token.span), token.span);
-		var parts:Array<AstExpression> = [], literal = "", index = 1, end = text.length - 1;
+		var parts:Array<AstExpression> = [], literal = new StringBuf(), index = 1, end = text.length - 1;
 		while (index < end) {
 			var character = text.charAt(index);
 			if (character == "\\") {
 				var escape = readEscape(text, index + 1, end, token.span);
-				literal += escape.value;
+				literal.add(escape.value);
 				index = escape.next;
 				continue;
 			}
 			if (character != "$") {
-				literal += character;
-				index++;
+				var next = index + 1;
+				while (next < end && text.charCodeAt(next) != "\\".code && text.charCodeAt(next) != "$".code)
+					next++;
+				literal.addSub(text, index, next - index);
+				index = next;
 				continue;
 			}
 			if (index + 1 < end && text.charAt(index + 1) == "$") {
-				literal += "$";
+				literal.add("$");
 				index += 2;
 				continue;
 			}
 			if (index + 1 >= end || text.charAt(index + 1) != "{" && !isInterpolationIdentifierStart(text.charCodeAt(index + 1))) {
-				literal += "$";
+				literal.add("$");
 				index++;
 				continue;
 			}
-			appendStringLiteral(parts, literal, token.span);
-			literal = "";
+			appendStringLiteral(parts, literal.toString(), token.span);
+			literal = new StringBuf();
 			var expressionStart = index + 1, expressionEnd = expressionStart;
 			if (expressionStart < end && text.charAt(expressionStart) == "{") {
 				expressionStart++;
@@ -2794,7 +2799,7 @@ class Parser {
 				haxe.io.Bytes.ofString(text.substring(0, expressionStart)).length);
 			parts.push(Call("Std.string", [expression], expressionSpan(expression)));
 		}
-		appendStringLiteral(parts, literal, token.span);
+		appendStringLiteral(parts, literal.toString(), token.span);
 		var result = parts[0];
 		for (partIndex in 1...parts.length)
 			result = Add(result, parts[partIndex], expressionSpan(result).merge(expressionSpan(parts[partIndex])));
