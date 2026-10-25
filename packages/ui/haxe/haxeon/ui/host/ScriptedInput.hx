@@ -55,15 +55,21 @@ class ScriptedInput {
 
   /** Null means no deadline is armed. Overdue input must not put the host to sleep. */
   public function secondsUntilNext(now:Float):Null<Float> {
-    return origin < 0 || complete ? null : Math.max(0.0, origin + events[index].at - now);
+    return origin < 0 || complete ? null : Math.max(0.0, deadline(index) - now);
+  }
+
+  /** Typed so the scheduling arithmetic is not Dynamic. The script's times were validated as finite when it loaded. */
+  function deadline(position:Int):Float {
+    var at:Float = events[position].at;
+    return origin + at;
   }
 
   /** Dispatch one due event; the host drains overdue input before requesting the next frame. */
   public function tick(now:Float, pump:NativeKitEvents, window:WindowHandle,
       checkpoint:String->Void, before:Float->Void, after:Float->Void):Bool {
-    if (origin < 0 || complete || now < origin + events[index].at) return false;
+    if (origin < 0 || complete || now < deadline(index)) return false;
+    scheduledAt = deadline(index);
     var event = events[index++];
-    scheduledAt = origin + event.at;
     if (event.kind == "checkpoint") { checkpoint(event.label); return true; }
     var source = new Handle(window.rawValue());
     var values:Array<NativeKitEventValue> = switch (Std.string(event.kind)) {
