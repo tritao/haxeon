@@ -100,8 +100,12 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   its module's mapping and is named by its function, with file and line when
   the module has a PDB. Without a PDB it is named after the nearest export,
   `module!export+0x...`, and an address outside every known module is named
-  `[unknown 0x...]`. Other platforms record Haxe frames and stop at the first
-  native frame.
+  `[unknown 0x...]`. On Linux and macOS x86-64, samples follow the
+  frame-pointer chain, which Haxeon keeps in the native packages it builds. A
+  function is named from its library's symbol table, or by library and offset
+  (`libfoo.so+0x...`) when the library is stripped, and a stretch of code
+  built without frame pointers shows as one `[unwind gap]` frame. macOS arm64 still stops at the
+  first native frame.
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
   for the recorder to free a buffer. The profiler drops nothing the program
   records, so a stall delays the program instead. Raise `--pool` if stalls

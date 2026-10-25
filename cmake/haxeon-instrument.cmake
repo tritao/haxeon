@@ -1,5 +1,5 @@
-# Natively instrumented builds (MSVC x64). Haxeon passes this file as CMAKE_PROJECT_INCLUDE when it configures a
-# package's CMake project for the instrumented build flavor, with:
+# Natively instrumented builds (MSVC x64). haxeon-native.cmake includes this file when Haxeon configures a package's
+# CMake project for the instrumented build flavor, with:
 #
 #   HAXEON_INSTRUMENT_HOOKS    the hook library (hlprof_penter.lib) that defines _penter and _pexit
 #   HAXEON_INSTRUMENT_INCLUDE  glob patterns of the sources to instrument

@@ -308,8 +308,9 @@ so each one has a PDB:
 - `native.sources`: `NativeToolchain` adds the flags per source when it
   compiles, and links the hooks library and `/DEBUG /OPT:REF /OPT:ICF
   /INCREMENTAL:NO` into each module.
-- `native.cmake`: Haxeon configures the project with
-  `CMAKE_PROJECT_INCLUDE=cmake/haxeon-instrument.cmake` and passes the hooks
+- `native.cmake`: Haxeon configures every project with
+  `CMAKE_PROJECT_INCLUDE=cmake/haxeon-native.cmake`, which includes
+  `cmake/haxeon-instrument.cmake` for this flavor, and passes the hooks
   library and the include and exclude patterns as cache variables. The file
   compiles everything with `/Z7`, adds the link options and the hooks
   library, and, once the whole project is read (`cmake_language(DEFER)`),
@@ -398,6 +399,42 @@ Limits:
   hooks are installed.
 - A hooked function may take at most four register arguments and twelve
   stack arguments, which covers every function in the curated sets.
+
+### Native frames in samples
+
+A sample holds every frame of the stopped thread's stack, Haxe and native,
+leaf first.
+
+- **Windows x64** walks the stack with the images' unwind data.
+- **Linux and macOS x86-64** follow the frame-pointer chain from the registers the
+  thread stopped with, then resume it before deciding which frames to keep. A
+  return address into JIT code is kept. A native one is kept if it lies in an
+  executable segment of a loaded image (on macOS, if `dladdr` names it); other
+  values the chain led through are dropped. Classifying after resuming
+  matters: the check takes the loader lock, which the stopped thread could
+  hold.
+- **Where the chain breaks**, in code built without frame pointers, the walk
+  resumes at the next JIT frame record above it. The skipped frames become one
+  `[unwind gap]` frame, so the stack never shows a guessed caller. Current
+  distributions build their libraries with frame pointers (Ubuntu 24.04,
+  Fedora 38); the dynamic loader and some vendor drivers do not.
+- **Haxeon builds native packages with frame pointers** on Linux and macOS:
+  `-fno-omit-frame-pointer`, plus `-mno-omit-leaf-frame-pointer` on x86-64,
+  for `native.sources`, and `cmake/haxeon-frame-pointers.cmake` (included
+  by `cmake/haxeon-native.cmake`) for `native.cmake` packages. They cost
+  about 1%.
+- **Naming.** An exported function is named by `dladdr` while recording. One
+  that is not exported is recorded by its image and offset, and the exporter
+  names it from the image's ELF symbol table (`tools/elf_symbols.c`) when the
+  image is readable on the exporting machine and not stripped; otherwise it
+  stays `libfoo.so+0x...`. C++ names are not demangled yet.
+- **Launcher frames.** Every sample's root-most frames in HashLink's launcher
+  and runtime (`hl`, `libhl`: `main`, `hl_dyn_call`, a thread's entry) are
+  left out of exports, on every platform. A native thread's own frames stay.
+
+`tests/integration/test-profiler-mixed-stack.sh` checks that a sample taken
+in Haxe code called back from native code holds the native frames between
+the Haxe ones, in order.
 
 ### Build flavor and scope
 

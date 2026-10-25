@@ -500,31 +500,20 @@ The hooks above give instrumented and boundary calls. Windows also has the
 following, which Linux and macOS lack today (read from the runtime, October
 2026):
 
-- **Mixed-mode samples.** Windows walks a sampled stack with unwind data
-  through JIT code, the native code it calls and the JIT callbacks that code
-  makes (`unwind_stack_copy` in `profile.c`). On Linux and macOS the sampler
-  stops the thread with `SIGPROF`, follows the frame-pointer chain from the
-  signal context, keeps only managed return addresses
-  (`hl_module_capture_stack_from_frame`), and adds the leaf pc when it is JIT
-  code or a named native function. Native frames between the leaf and the
-  JIT are lost. On macOS arm64, `get_thread_frameptr` returns NULL, so the
-  walk falls back to scanning the stack for managed return addresses.
-  - **Plan.**
-    - Compile the instrumented flavor with `-fno-omit-frame-pointer
-      -mno-omit-leaf-frame-pointer`.
-    - Read `__ss.__fp` (`x29`) on macOS arm64.
-    - Keep every frame of the frame-pointer chain, not only the managed ones,
-      and name the native ones like instrumented pcs (see Symbolization).
-    - System libraries built without frame pointers break the chain. Most
-      current distributions (Fedora 38+, Ubuntu 24.04+) and every macOS arm64
-      library keep them. Where they do not, the walk can resume at the next
-      JIT frame found by scanning, as today.
-    - DWARF unwinding in the signal handler (libunwind) is the heavier
-      fallback, and is **(unverified)** as async-signal-safe enough to use
-      there.
-  - **Check.** The HashLink JIT on x86-64 and aarch64 must keep a
-    frame-pointer chain through JIT frames and through its native-call
-    trampolines **(unverified for aarch64)**.
+- **Mixed-mode samples.** Built for Linux and macOS: see "Native frames in
+  samples" in `PROFILER.md`. The sampler keeps every frame of the
+  frame-pointer chain, marks a broken chain with an `[unwind gap]` frame, and
+  Haxeon builds native packages with frame pointers. Still open:
+  - On macOS arm64, `get_thread_frameptr` returns NULL, so the walk falls
+    back to scanning the stack for managed return addresses. Read
+    `__ss.__fp` (`x29`) there.
+  - Functions that are not exported are named from the image's ELF symbol
+    table at export time. Inlined frames, file and line need DWARF (see
+    Symbolization), C++ names are not demangled, and macOS images (Mach-O)
+    are not read.
+  - The HashLink JIT on aarch64 must keep a frame-pointer chain through JIT
+    frames and its native-call trampolines **(unverified)**. Only Linux
+    x86-64 has run `test-profiler-mixed-stack.sh`.
 - **Probe cost on arm64.** On x86-64 the JIT tests `hl_prof_on` inline and
   branches over the probe call (`jit_emit.c`), so a probe costs about 0.5 ns
   while nothing records. The aarch64 JIT (`jit_aarch64_emit.c`) has no such
