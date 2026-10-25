@@ -93,8 +93,13 @@ HashLink's object/prototype metadata, field-name cache, GUID map, native-library
 table, TLS storage, or deque storage. Object/prototype metadata is reached only
 through the module type arena. Field names and GUID entries copy process-owned
 data. Native libraries intentionally remain process-loaded. TLS and deque roots
-may retain managed module values, which the explicit GC allocation-owner ledger
-counts without inferring ownership from `hl_type *`.
+may retain managed module values, which the GC counts by the pages they live in:
+each patchable module registers as an allocation owner and its objects are
+allocated into pages that hold nothing else, so ownership is a property of the
+page and is never inferred from `hl_type *`. A module's live count is the number
+of marked blocks in its pages after a full collection. Sixteen owners have pages
+of their own at once and further ones share one set, which can only over-count
+and so delays their retirement; retiring a module releases its pages and slot.
 
 All host-mediated execution of module code, including calls through retained
 closures, holds the runtime-module mutex. Acquiring that mutex for retirement is
