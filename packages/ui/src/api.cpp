@@ -242,6 +242,8 @@ struct RendererSlot {
     std::size_t registered_custom_effects = 0;
     nkui::UiGpuStats retired_gpu{};
     nkui_renderer_stats stats{};
+    /* Set by nkui_renderer_set_gpu_frame_timing, and handed to each backend renderer the slot gets. */
+    bool gpu_frame_timing = false;
     uint16_t generation = 1;
 };
 
@@ -3381,6 +3383,57 @@ extern "C" nkui_result nkui_renderer_get_stats(nkui_renderer renderer,
         out_stats->raster_cache_bytes = ui_stats.raster_cache_bytes;
         out_stats->text_layout_cache_hits = ui_stats.text_layout_cache_hits;
         out_stats->text_layout_cache_misses = ui_stats.text_layout_cache_misses;
+    }
+    return NKUI_OK;
+}
+
+/* Hands the slot's frame-timing choice to its current backend renderer, which a surface or device loss may have
+   replaced since it was set. Callers hold the renderer locks. */
+static void apply_gpu_frame_timing(RendererSlot &slot) {
+    if (!slot.renderer)
+        return;
+    const nkgpu_renderer gpu = slot.renderer->gpuRenderer();
+    if (gpu.id)
+        nkgpu_set_frame_timing(gpu, slot.gpu_frame_timing ? 1u : 0u);
+}
+
+extern "C" nkui_result nkui_renderer_set_gpu_frame_timing(nkui_renderer renderer, uint8_t enabled) {
+    if (enabled > 1)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(renderers_mutex);
+    std::unique_lock<std::shared_mutex> execution_lock;
+    if (nk::core::render_executor_physical())
+        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
+    auto *slot = resolve(renderer);
+    if (!slot)
+        return NKUI_ERROR_INVALID_HANDLE;
+    slot->gpu_frame_timing = enabled != 0;
+    apply_gpu_frame_timing(*slot);
+    return NKUI_OK;
+}
+
+extern "C" nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
+                                                        uint64_t *out_nanoseconds,
+                                                        uint64_t *out_timed_frames) {
+    if (!out_nanoseconds || !out_timed_frames)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(renderers_mutex);
+    std::unique_lock<std::shared_mutex> execution_lock;
+    if (nk::core::render_executor_physical())
+        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
+    auto *slot = resolve(renderer);
+    if (!slot)
+        return NKUI_ERROR_INVALID_HANDLE;
+    *out_nanoseconds = 0;
+    *out_timed_frames = 0;
+    apply_gpu_frame_timing(*slot);
+    if (!slot->renderer || !slot->renderer->gpuRenderer().id)
+        return NKUI_OK;
+    nkgpu_frame_timing timing{};
+    timing.struct_size = sizeof(timing);
+    if (nkgpu_get_frame_timing(slot->renderer->gpuRenderer(), &timing) == NKGPU_OK) {
+        *out_nanoseconds = timing.last_frame_nanoseconds;
+        *out_timed_frames = timing.timed_frames;
     }
     return NKUI_OK;
 }

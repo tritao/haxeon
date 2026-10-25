@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import haxeon.ProfileCounter;
+import haxeon.ProfileRecording;
 import haxeon.ProfileSpan;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.UiResult.UiError;
@@ -172,6 +173,14 @@ class UiHostRuntime {
 			lastPaintSeconds = lastContextRenderSeconds;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
 			ProfileCounter.set("ui.frame.allocated_bytes", lastFrameAllocatedBytes);
+			// GPU time per frame, measured only while a capture records: it costs a GPU query, and a flush on OpenGL.
+			var recording = ProfileRecording.recording();
+			var timedRenderer = renderer;
+			if (timedRenderer != null) {
+				timedRenderer.setGpuFrameTiming(recording);
+				if (recording && timedRenderer.pollGpuFrameTime())
+					ProfileCounter.set("ui.frame.gpu_ns", timedRenderer.gpuFrameNanoseconds);
+			}
 			lastRenderResourceError = null;
 			rendered++;
 			callbackDepth--;

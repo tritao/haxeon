@@ -67,6 +67,35 @@ class Renderer {
 			stats.get_raster_cache_entries(), stats.get_raster_cache_bytes());
 	}
 
+	var gpuFrameTiming = false;
+
+	/** Measures the GPU time of the renderer's frames while enabled. Off by default; cheap to call each frame. */
+	public function setGpuFrameTiming(enabled:Bool):Void {
+		if (enabled == gpuFrameTiming)
+			return;
+		ensureLive();
+		UiResult.check(NativeKitUI.nkui_renderer_set_gpu_frame_timing(value, enabled ? 1 : 0), "renderer.setGpuFrameTiming");
+		gpuFrameTiming = enabled;
+	}
+
+	/** GPU time of the newest measured frame in nanoseconds, as of the last pollGpuFrameTime. */
+	public var gpuFrameNanoseconds(default, null):Float = 0;
+
+	var gpuTimedFrames:haxe.Int64 = 0;
+
+	/** Reads the newest GPU frame time while timing is enabled; true when a result arrived since the last poll. A result
+		belongs to a frame a few frames back. */
+	public function pollGpuFrameTime():Bool {
+		ensureLive();
+		var result = NativeKitUI.nkui_renderer_get_gpu_frame_time(value);
+		UiResult.check(result.status, "renderer.pollGpuFrameTime");
+		if (result.out_timed_frames == gpuTimedFrames)
+			return false;
+		gpuTimedFrames = result.out_timed_frames;
+		gpuFrameNanoseconds = haxe.Int64.toFloat(result.out_nanoseconds);
+		return true;
+	}
+
 	/** Releases the renderer and its backend resources. Repeated disposal is safe. */
 	public function dispose():Void {
 		if (disposed)

@@ -1148,6 +1148,17 @@ NKUI_API nkui_result nkui_renderer_register_custom_effect(
 /** Destroys a renderer and releases its backend caches. */
 NKUI_API nkui_result nkui_renderer_destroy(nkui_renderer renderer);
 
+/** Measures the GPU time of the renderer's frames while enabled (nkgpu_set_frame_timing). Off by default. */
+NKUI_API nkui_result nkui_renderer_set_gpu_frame_timing(nkui_renderer renderer, uint8_t enabled);
+
+/** Writes the GPU time of the newest measured frame and the number of frames measured by the current backend
+ * renderer, both 0 before the first result. A result arrives a few frames after its frame. A recreated backend
+ * renderer counts from 0 again, so a change in the count, not only a rise, means a new result.
+ */
+NKUI_API nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
+                                                      uint64_t *out_nanoseconds NKUI_OUT,
+                                                      uint64_t *out_timed_frames NKUI_OUT);
+
 /** Returns preparation and geometry-cache counters for a renderer. */
 NKUI_API nkui_result nkui_renderer_get_stats(nkui_renderer renderer,
                                              nkui_renderer_stats *out_stats NKUI_OUT);
