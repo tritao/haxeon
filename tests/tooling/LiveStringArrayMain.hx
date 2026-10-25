@@ -38,7 +38,14 @@ class LiveStringArrayMain {
 			"--output=" + output,
 			main
 		]), _ -> {}, new CompilerSession());
-		expect(Sys.command(".tools/haxe/haxe", ["-cp", "src", "-main", "tools.LiveHost", "-dce", "full", "-hl", host]) == 0, "the live host must build");
+		var hostSources = [for (name in FileSystem.readDirectory("src/runtime")) if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name];
+		CompilerDriver.compile(CompilerArguments.parse([
+			"--target=hl",
+			"--entry=tools.LiveHost",
+			"--root=src",
+			"--output=" + host,
+			"src/tools/LiveHost.hx"
+		].concat(hostSources)), _ -> {}, new CompilerSession());
 		var status = Sys.command(".tools/hashlink/hl", [host, output, "Main", "[]"]);
 		expect(status == 0, 'string arrays from the host and the app must concatenate under the live host; it exited with $status');
 
