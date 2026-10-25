@@ -6,6 +6,10 @@ import build.BuildEnvironment.ToolchainInfo;
 import build.BuildIntent;
 import build.BuildPlan;
 import build.BuildPlanner;
+import build.BuildSession;
+import build.execution.CompilerClient;
+import build.execution.ContentDigestCache;
+import tools.WatchRun;
 import build.Target;
 import build.TargetLayout;
 import build.NativeArtifactDemand.NativeArtifactDemand;
@@ -62,6 +66,10 @@ class BuildSystemMain {
 		testExecutorSharesJobServerTokens();
 		#end
 		testFingerprintsAndSkipping();
+		testPersistentDigestCache();
+		testSharedDigestsAcrossExecutions();
+		testWorkerVersionMemo();
+		testWatchChangeClassification();
 		testArtifactCache();
 		testDelegatedNativeInvalidation();
 		testCMakeLibraryOutputs();
@@ -524,6 +532,131 @@ class BuildSystemMain {
 			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
 		removeTree(root);
+	}
+
+	static function testPersistentDigestCache():Void {
+		var root = temporaryDirectory("persistent-digests"),
+			source = Path.join([root, "input.txt"]);
+		File.saveContent(source, "first contents
+");
+		var cache = new ContentDigestCache(true), now = Sys.time();
+		cache.clock = () -> now;
+		var first = cache.file(source);
+		expect(first == Sha256.make(File.getBytes(source)).toHex() && cache.hashes == 1, "a persistent cache hashes a file once");
+		// Just written, so its timestamps are within the margin of the hash: the entry is racily clean and must not be trusted.
+		File.saveContent(source, "other contents
+");
+		var second = cache.file(source);
+		expect(second == Sha256.make(File.getBytes(source)).toHex() && second != first,
+			"a same-size rewrite within the timestamp resolution must not return the stale digest");
+		expect(cache.hashes == 2, "a racily clean entry is hashed again");
+		// A clock far enough ahead makes the file old relative to the hash, so the entry is trusted from then on.
+		now += 60.0;
+		var third = cache.file(source);
+		expect(third == second && cache.hashes == 3, "the lookup after the margin hashes once more and settles");
+		expect(cache.file(source) == second && cache.file(source) == second && cache.hashes == 3, "a settled entry is served without reading the file");
+		File.saveContent(source, "a longer replacement
+");
+		expect(cache.file(source) == Sha256.make(File.getBytes(source)).toHex()
+			&& cache.hashes == 4, "a changed size invalidates a settled entry");
+		// One cache per execution keeps its old behaviour: it trusts the signature without a margin.
+		var local = new ContentDigestCache();
+		local.file(source);
+		local.file(source);
+		expect(local.hashes == 1, "a per-execution cache serves a freshly written file from memory");
+		removeTree(root);
+	}
+
+	static function testSharedDigestsAcrossExecutions():Void {
+		var root = temporaryDirectory("shared-digests"),
+			buildRoot = Path.join([root, "build"]),
+			source = Path.join([root, "input.txt"]),
+			output = Path.join([root, "output.txt"]);
+		File.saveContent(source, "version one
+");
+		var environment = new BuildEnvironment(root, buildRoot), runs = 0,
+			action = new ExecutionAction(new ActionId("shared-digests"), [], [source], [output], "write output",
+				Compiler("compiler", [], root, new Map(), () -> {
+					runs++;
+					File.saveContent(output, "built
+");
+					return 0;
+				}));
+		var session = new BuildSession();
+		var executor = () -> new Executor(environment, 1, _ -> {}, session.digests);
+		expect(executor().execute(new ExecutionPlan([action])).exitCode == 0 && runs == 1, "the first execution runs the action");
+		var again = executor().execute(new ExecutionPlan([action]));
+		expect(again.actions[0].skipped && runs == 1, "an unchanged input is skipped on a shared cache");
+		expect(ActionFingerprint.compute(action, buildRoot, environment.target.toString(), [],
+			session.digests) == ActionFingerprint.compute(action, buildRoot, environment.target.toString(), []),
+			"a shared cache yields the fingerprint a fresh one does");
+		File.saveContent(source, "version two
+");
+		var edited = executor().execute(new ExecutionPlan([action]));
+		expect(edited.exitCode == 0 && !edited.actions[0].skipped && runs == 2, "an edited input reruns the action through a shared cache");
+		File.saveContent(source, "version 333
+");
+		File.saveContent(source, "version 444
+");
+		expect(!executor().execute(new ExecutionPlan([action])).actions[0].skipped && runs == 3,
+			"a same-size edit right after a build still reruns the action");
+		removeTree(root);
+	}
+
+	static function testWorkerVersionMemo():Void {
+		var session = new BuildSession(), computed = 0, compute = () -> "version-" + (++computed);
+		expect(session.workerVersion("identity-a", compute) == "version-1"
+			&& session.workerVersion("identity-a", compute) == "version-1"
+			&& computed == 1,
+			"a worker version is computed once per identity");
+		expect(session.workerVersion("identity-b", compute) == "version-2"
+			&& session.workerVersionsComputed == 2, "a different identity gets its own version");
+		var root = temporaryDirectory("worker-memo"),
+			source = Path.join([root, "compiler"]),
+			home = Path.join([root, "home"]);
+		FileSystem.createDirectory(home);
+		FileSystem.createDirectory(source);
+		File.saveContent(Path.join([source, "A.hx"]), "class A {}
+");
+		var one = CompilerClient.workerVersion("haxe", source, home, root, null, session),
+			baseline = session.workerVersionsComputed;
+		File.saveContent(Path.join([source, "A.hx"]), "class A { var x:Int; }
+");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, null, session) == one
+			&& session.workerVersionsComputed == baseline,
+			"a watch session keeps the worker it chose after the compiler sources change");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, null) != one, "without a session the version follows the sources");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one, "a profile port selects a different worker");
+		removeTree(root);
+	}
+
+	static function testWatchChangeClassification():Void {
+		var before = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];
+		var edited = ["src/A.hx" => "2:11", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];
+		var change = WatchRun.classify(before, edited);
+		expect(change.compilerOnly && !change.structural, "editing a Haxe file's contents keeps the resolved project");
+		var added = [
+			"src/A.hx" => "1:10",
+			"src/B.hx" => "1:20",
+			"src/C.hx" => "2:5",
+			"haxeon.json" => "1:30"
+		];
+		change = WatchRun.classify(before, added);
+		expect(change.compilerOnly && change.structural, "a new Haxe file changes the project's sources");
+		var removed = ["src/A.hx" => "1:10", "haxeon.json" => "1:30"];
+		change = WatchRun.classify(before, removed);
+		expect(change.compilerOnly && change.structural, "a deleted Haxe file changes the project's sources");
+		var manifest = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "2:31"];
+		change = WatchRun.classify(before, manifest);
+		expect(!change.compilerOnly && change.structural, "a manifest edit forces a new resolution");
+		var native = [
+			"src/A.hx" => "1:10",
+			"src/B.hx" => "1:20",
+			"haxeon.json" => "1:30",
+			"native/x.c" => "1:1"
+		];
+		change = WatchRun.classify(before, native);
+		expect(!change.compilerOnly && change.structural, "a new native file forces a new resolution");
 	}
 
 	static function testDelegatedNativeInvalidation():Void {

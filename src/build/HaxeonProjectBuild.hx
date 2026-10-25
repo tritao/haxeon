@@ -30,7 +30,8 @@ class HaxeonProjectBuild {
 	}
 
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int, planOnly:Bool, explain:Bool,
-			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false, instrument:Bool = false):Int {
+			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false, instrument:Bool = false,
+			?session:BuildSession):Int {
 		if (project.manifest.target != "host")
 			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
 		var timings = new BuildTimings();
@@ -41,7 +42,7 @@ class HaxeonProjectBuild {
 			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
-			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live));
+			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session));
 		if (compilerOnly)
 			execution = compilerExecution(execution);
 		timings.addElapsed("plan and lower", lowerStarted);
@@ -56,7 +57,7 @@ class HaxeonProjectBuild {
 				Sys.print(timings.toString());
 			return 0;
 		}
-		var result = ExecutionBackendFactory.create(environment, jobs).execute(execution);
+		var result = ExecutionBackendFactory.create(environment, jobs, null, session).execute(execution);
 		timings.add("execute", result.elapsedMs);
 		if (explain)
 			Sys.print(plan.toExplainString());

@@ -102,7 +102,8 @@ class CompilerProvider {
 				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
 				() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
 					runtimeLibraryEnvironment(context.compilerHome),
-					() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)));
+					() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)),
+				context.session);
 		};
 		return new ExecutionAction(actionId, dependencies, inputs, [
 			output,

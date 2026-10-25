@@ -1,8 +1,10 @@
 package tools;
 
+import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
 import haxe.Json;
 import haxe.io.Path;
+import build.BuildSession;
 import build.HaxeonProjectBuild;
 import build.HaxeonNativePackageBuild;
 import build.Target;
@@ -637,8 +639,11 @@ class HaxeonCli {
 			// one, say) writes none; without a stamp the host reads the description every tick.
 			if (options.live && FileSystem.exists(output + ".live.stamp"))
 				FileSystem.deleteFile(output + ".live.stamp");
+			// A watching process keeps file hashes and its compiler worker choice between builds, starting with this one so the first
+			// edit is already warm.
+			var session = options.watch ? new BuildSession() : null;
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument);
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
@@ -664,7 +669,7 @@ class HaxeonCli {
 					if (swapPath)
 						Sys.putEnv("PATH", buildPath);
 					try
-						liveHost = buildLiveHost(home, options.jobs, instrument)
+						liveHost = buildLiveHost(home, options.jobs, instrument, session)
 					catch (error:Dynamic) {
 						if (swapPath)
 							Sys.putEnv("PATH", runPath);
@@ -682,24 +687,37 @@ class HaxeonCli {
 					processName: project.manifest.entry,
 					sources: options.profileSources
 				} : null;
-				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, profiling, function(compilerOnly) {
-					var windows = Sys.systemName() == "Windows" && buildPath != null;
-					if (windows)
-						Sys.putEnv("PATH", buildPath);
-					try {
-						var candidate = discoverProject(projectConfigPath, requestedTarget);
-						var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-							options.selfHosted, compilerOnly, options.live, instrument);
+				// The resolved project is reused while edits only change Haxe file contents. The lockfile is not watched, so its stamp
+				// is checked here.
+				var cachedProject = project,
+					cachedLock = lockfileStamp(projectConfigPath);
+				return WatchRun.run(project, hashlink, output, options.runtimeArguments, liveHost, project.manifest.entry, profiling,
+					function(change:WatchChange) {
+						var windows = Sys.systemName() == "Windows" && buildPath != null;
 						if (windows)
-							Sys.putEnv("PATH", runPath);
-						return status == 0 ? candidate : null;
-					} catch (error:Dynamic) {
-						if (windows)
-							Sys.putEnv("PATH", runPath);
-						Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
-						return null;
-					}
-				});
+							Sys.putEnv("PATH", buildPath);
+						try {
+							// A project resolved again is kept even if its build fails: the next, content-only edit must not fall back to the
+							// project from before the structural change.
+							var lock = lockfileStamp(projectConfigPath);
+							if (change.structural || lock != cachedLock) {
+								cachedLock = null; // resolve again next time if this throws
+								cachedProject = discoverProject(projectConfigPath, requestedTarget);
+								cachedLock = lock;
+							}
+							var candidate = cachedProject;
+							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
+								options.selfHosted, change.compilerOnly, options.live, instrument, session);
+							if (windows)
+								Sys.putEnv("PATH", runPath);
+							return status == 0 ? candidate : null;
+						} catch (error:Dynamic) {
+							if (windows)
+								Sys.putEnv("PATH", runPath);
+							Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
+							return null;
+						}
+					});
 			}
 			if (options.profile) {
 				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([Path.directory(output), "profile"])) : resolvePath(options.profileOutput,
@@ -795,7 +813,7 @@ class HaxeonCli {
 	 * Builds the live development host with Haxeon, as a project of its own under `out/live-host`. Under `--profile` it is
 	 * the instrumented flavor, so a capture shows the host's polling and patching beside the app's calls.
 	 */
-	static function buildLiveHost(home:String, jobs:Int, instrument:Bool):String {
+	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession):String {
 		var root = Path.join([home, "out", "live-host"]),
 			manifestPath = Path.join([root, "haxeon.json"]);
 		FileSystem.createDirectory(root);
@@ -812,7 +830,7 @@ class HaxeonCli {
 			File.saveContent(manifestPath, manifest);
 		var project = discoverProject(manifestPath),
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
-		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false, instrument) != 0)
+		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false, instrument, session) != 0)
 			throw "Could not build the live development host";
 		return output;
 	}
@@ -1228,6 +1246,15 @@ class HaxeonCli {
 
 	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool, ?target:Target):ResolvedProject {
 		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile, locked, target);
+	}
+
+	/** Identifies the lockfile's current state without reading it. */
+	static function lockfileStamp(manifestPath:String):String {
+		var path = lockfilePath(manifestPath);
+		if (!FileSystem.exists(path))
+			return "absent";
+		var stat = FileSystem.stat(path);
+		return '${stat.mtime.getTime()}:${stat.size}';
 	}
 
 	static function lockfilePath(manifestPath:String):String

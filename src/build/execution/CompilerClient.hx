@@ -21,8 +21,27 @@ class CompilerClient {
 		return (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore=" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
 			+ (Sys.getEnv("HAXEON_STRENGTH") == "0" ? "off" : "on");
 
+	/**
+	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
+	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one.
+	 */
+	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String, profilePort:Null<String>,
+			?session:build.BuildSession):String {
+		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption() + (profilePort == null ? "" : ":profile:" +
+			profilePort)), [],
+			[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map()));
+		if (session == null)
+			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
+		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
+		return session.workerVersion(memoKey, () -> {
+			var version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), [], session.digests);
+			Sys.println('haxeon: compiler worker version $version (kept for this watch session)');
+			return version;
+		});
+	}
+
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
-			fallback:Void->Int):Int {
+			fallback:Void->Int, ?session:build.BuildSession):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
 		// compiled CLI uses one there.
 		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0"
@@ -38,10 +57,7 @@ class CompilerClient {
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
 			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
-			var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption()
-				+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
-				[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
-				version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
+			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session),
 				key = version + "-" + Sha256.encode(projectRoot + "\n" + buildRoot).substr(0, 16),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
