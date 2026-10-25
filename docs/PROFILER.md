@@ -434,6 +434,12 @@ leaf first.
   ranks running samples unless given `--all`; exports keep every sample, mark
   the waiting ones (`"waiting": true` in Perfetto JSON), and take `--cpu` or
   `--waiting` to keep one kind.
+- **Interrupted waits.** Each sample interrupts whatever system call the
+  thread is in. HashLink's own waits carry on through it: `Sys.sleep` sleeps
+  for the time that remained and semaphore waits retry, so a profiled
+  program's sleeps and waits last as long as unprofiled ones. Native code
+  that sleeps with `nanosleep(&t, NULL)` or treats `EINTR` as done still
+  returns early under sampling.
 - **Naming.** An exported function is named by `dladdr` while recording. One
   that is not exported is recorded by its image and offset, and the exporter
   names it from the image's ELF symbol table (`tools/elf_symbols.c`) when the
@@ -449,7 +455,9 @@ leaf first.
 `tests/integration/test-profiler-mixed-stack.sh` checks that a sample taken
 in Haxe code called back from native code holds the native frames between
 the Haxe ones, in order, that samples in a native sleep are flagged waiting
-and those in a native spin are not, and that `report` ranks the native leaf.
+and those in a native spin are not, that `report` ranks the native leaf, and
+that a Haxe thread's `Sys.sleep(1.0)` lasts its full second and is sampled
+throughout.
 
 ### Build flavor and scope
 
