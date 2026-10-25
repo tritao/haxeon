@@ -332,6 +332,38 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** Without wrapping, a width change leaves left-aligned groups as they are and moves right-to-left ones. An editor
+		resized to each width matches a layout made at that width directly, which never takes the width-change path. */
+	static function unwrappedWidthChangesMatchFreshLayout(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...200)
+			value.add(line == 0 ? "שלום עולם " + line + "\n" : "unwrapped line " + line + "\n");
+		var editor = new TextEditorState(fonts, value.toString(), null, new ParagraphStyle(haxeon.ui.TextWrap.None));
+		// A group that starts with right-to-left text takes that direction, so its start alignment is the right edge.
+		var probes = [2, new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(120).start + 3];
+		for (width in [600.0, 900.0, 640.0]) {
+			editor.updateLayout(width);
+			var expected = new haxeon.ui.widgets.text.TextEditorLayout(fonts, editor.text, width, editor.textStyle, new ParagraphStyle(haxeon.ui.TextWrap.None));
+			var actual = editor.layout.visualRows(), fresh = expected.visualRows();
+			if (actual.length != fresh.length)
+				throw "unwrapped rows at width " + width + " differ from a fresh layout";
+			for (index in 0...actual.length)
+				if (actual[index].start != fresh[index].start || actual[index].end != fresh[index].end ||
+					Math.abs(actual[index].top - fresh[index].top) > 0.001)
+					throw "unwrapped row " + index + " at width " + width + " differs from a fresh layout";
+			if (Math.abs(editor.layout.measure().width - expected.measure().width) > 0.001)
+				throw "unwrapped content width at " + width + " differs from a fresh layout";
+			for (offset in probes) {
+				var a = editor.layout.caret(new TextPosition(offset, 0)), b = expected.caret(new TextPosition(offset, 0));
+				if (Math.abs(a.x - b.x) > 0.001 || Math.abs(a.y - b.y) > 0.001)
+					throw "caret at " + offset + " for width " + width + " is at " + a.x + ", a fresh layout's at " + b.x;
+			}
+			expected.dispose();
+		}
+		editor.dispose();
+		return true;
+	}
+
 	static function newlineChunksValid(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...220)
@@ -719,7 +751,9 @@ class FrameworkSmoke {
 			return 310;
 		if (!externalEditsRelayoutCorrectly(fonts))
 			return 311;
-		Sys.println("PASS: external document edits relayout to match a fresh layout");
+		if (!unwrappedWidthChangesMatchFreshLayout(fonts))
+			return 312;
+		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout");
 		if (!foregroundRangesValid(fonts))
 			return 308;
 		if (!decorationRangesValid(fonts))

@@ -127,6 +127,7 @@ class TextEditorLayout {
 		if (offsets == nextOffsets && documentRevision == nextOffsets.revision && !styleChanged) {
 			if (width == nextWidth) return;
 			for (record in paragraphs) {
+				if (fitsWidth(record, nextWidth)) continue;
 				record.layout.update(record.text, nextWidth, textStyle, paragraphStyle);
 				record.renderRanges = null;
 				record.rows = null;
@@ -165,14 +166,14 @@ class TextEditorLayout {
 			var record:TextEditorParagraphRecord = null;
 			if (previousRecord != null && !containsRecord(used, previousRecord) &&
 				previousRecord.text == paragraphText &&
-				previousRecord.layout.width == nextWidth && !styleChanged) {
+				fitsWidth(previousRecord, nextWidth) && !styleChanged) {
 				record = previousRecord;
 			} else if (!styleChanged) {
 				var matching = reusable.get(paragraphText);
 				if (matching != null)
 					while (matching.length > 0 && record == null) {
 						var candidate:TextEditorParagraphRecord = matching.pop();
-						if (candidate != null && candidate.layout.width == nextWidth &&
+						if (candidate != null && fitsWidth(candidate, nextWidth) &&
 							!containsRecord(used, candidate))
 							record = candidate;
 					}
@@ -181,7 +182,7 @@ class TextEditorLayout {
 				record = previousRecord;
 			if (record != null) {
 				var textChanged = record.text != paragraphText;
-				if (textChanged || record.layout.width != nextWidth || styleChanged) {
+				if (textChanged || !fitsWidth(record, nextWidth) || styleChanged) {
 					record.layout.update(paragraphText, nextWidth, textStyle, paragraphStyle);
 					record.renderRanges = null;
 					record.rows = null;
@@ -289,6 +290,12 @@ class TextEditorLayout {
 				record.rows = null;
 				record.text = chunkText;
 			}
+			// A group laid out at an older width while that could not matter must match the editor's once it can.
+			if (!fitsWidth(record, width)) {
+				record.layout.update(record.text, width, textStyle, paragraphStyle);
+				record.renderRanges = null;
+				record.rows = null;
+			}
 			used.push(record);
 			record.start = chunkStart;
 			record.end = chunkEnd;
@@ -370,6 +377,21 @@ class TextEditorLayout {
 		return rows;
 	}
 
+	/** Whether a paragraph group's layout is right for `nextWidth`. A layout depends on width only through wrapping or
+		through alignment against its right edge (centered, end, or start in right-to-left text); otherwise a width
+		change leaves it as it is, and a document laid out once is not shaped again as its widest line grows. */
+	function fitsWidth(record:TextEditorParagraphRecord, nextWidth:Float):Bool {
+		if (record.layout.width == nextWidth)
+			return true;
+		if (paragraphStyle.wrap != haxeon.ui.TextWrap.None || paragraphStyle.alignment != haxeon.ui.TextAlignment.Start)
+			return false;
+		return switch paragraphStyle.direction {
+			case haxeon.ui.TextDirection.Ltr: true;
+			case haxeon.ui.TextDirection.Rtl: false;
+			case _: !record.hasRightToLeftText();
+		};
+	}
+
 	/** Logical paragraph containing a vertical position in the shaped document. */
 	public function paragraphIndexAtY(y:Float):Int {
 		ensureLive();
@@ -430,9 +452,9 @@ class TextEditorLayout {
 			var visibleTop = Math.max(0, minY - record.y);
 			var visibleBottom = Math.min(record.height, maxY - record.y);
 			var a = record.layout.hitTest(0, visibleTop).offset;
-			var b = record.layout.hitTest(record.layout.width, visibleTop).offset;
+			var b = record.layout.hitTest(width, visibleTop).offset;
 			var c = record.layout.hitTest(0, Math.max(visibleTop, visibleBottom - 0.01)).offset;
-			var d = record.layout.hitTest(record.layout.width, Math.max(visibleTop, visibleBottom - 0.01)).offset;
+			var d = record.layout.hitTest(width, Math.max(visibleTop, visibleBottom - 0.01)).offset;
 			var first = Math.max(0, Math.min(Math.min(a, b), Math.min(c, d)) - 2);
 			var last = Math.min(record.end - record.start, Math.max(Math.max(a, b), Math.max(c, d)) + 2);
 			for (token in record.whitespaceTokens()) {
@@ -777,9 +799,9 @@ class TextEditorLayout {
 				var sampleTop = Math.min(visibleBottom, visibleTop + 1.0);
 				var sampleBottom = Math.max(visibleTop, visibleBottom - 1.0);
 				var topLeft = record.layout.hitTest(0.0, sampleTop).offset;
-				var topRight = record.layout.hitTest(record.layout.width, sampleTop).offset;
+				var topRight = record.layout.hitTest(width, sampleTop).offset;
 				var bottomLeft = record.layout.hitTest(0.0, sampleBottom).offset;
-				var bottomRight = record.layout.hitTest(record.layout.width, sampleBottom).offset;
+				var bottomRight = record.layout.hitTest(width, sampleBottom).offset;
 				var visibleStart = clamp(Std.int(Math.min(Math.min(topLeft, topRight),
 					Math.min(bottomLeft, bottomRight))), 0, record.end - record.start);
 				var visibleEnd = clamp(Std.int(Math.max(Math.max(topLeft, topRight),
@@ -1026,6 +1048,28 @@ class TextEditorParagraphRecord {
 	public final layout:TextLayout;
 	var whitespaceText:Null<String>;
 	var whitespace:Array<{start:Int, end:Int, kind:Int}> = [];
+	var directionText:Null<String>;
+	var rightToLeft = false;
+
+	/** Whether the text holds a right-to-left character or mark, which can make a paragraph's base direction
+		right-to-left. A superset of the strong right-to-left ranges, so it never misses one. */
+	public function hasRightToLeftText():Bool {
+		if (directionText == text) return rightToLeft;
+		directionText = text;
+		rightToLeft = false;
+		for (unit in 0...text.length) {
+			var code = text.charCodeAt(unit);
+			// Hebrew to NKo and Arabic extensions, presentation forms, the RLM/RLE/RLO/RLI marks, and the high
+			// surrogates of the supplementary right-to-left blocks (U+10800-U+10FFF, U+1E800-U+1EFFF).
+			if ((code >= 0x0590 && code <= 0x08ff) || (code >= 0xfb1d && code <= 0xfdff) || (code >= 0xfe70 && code <= 0xfeff) ||
+				code == 0x200f || code == 0x202b || code == 0x202e || code == 0x2067 || (code >= 0xd802 && code <= 0xd803) ||
+				(code >= 0xd83a && code <= 0xd83b)) {
+				rightToLeft = true;
+				break;
+			}
+		}
+		return rightToLeft;
+	}
 
 	public function whitespaceTokens():Array<{start:Int, end:Int, kind:Int}> {
 		if (whitespaceText == text) return whitespace;
