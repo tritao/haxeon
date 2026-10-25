@@ -54,8 +54,7 @@ HL_PRIM void HL_NAME(__sys_profile_span)( int code, vstring *name ) {
 	hl_sys_profile_span(code,name == NULL ? NULL : name->bytes);
 }
 
-HL_PRIM void HL_NAME(__sys_profile_counter)( int code, vstring *name, double value ) {
-	(void)code;
+HL_PRIM void HL_NAME(__sys_profile_counter)( vstring *name, double value ) {
 	hl_sys_profile_counter(name == NULL ? NULL : name->bytes,value);
 }
 
