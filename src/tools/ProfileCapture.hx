@@ -188,14 +188,34 @@ class ProfileCapture {
 	}
 
 	/** Starts the recorder with its console output in recorder.log, for callers that do not show it. */
-	public function startRecorder():Void {
-		var log = recorderLog();
-		var arguments = [profiler].concat(recorderArguments());
-		recorder = Sys.systemName() == "Windows" ? new Process(arguments.map(windowsQuote)
+	public function startRecorder():Void
+		recorder = startLogged([profiler].concat(recorderArguments()), recorderLog());
+
+	/** Starts arguments with their console output in log, so no pipe can fill and stall them. */
+	static function startLogged(arguments:Array<String>, log:String):Process
+		return Sys.systemName() == "Windows" ? new Process(arguments.map(windowsQuote)
 			.join(" ") + " > " + windowsQuote(log) + " 2>&1") : new Process("/bin/sh", [
 				"-c",
 				"exec " + arguments.map(shellQuote).join(" ") + " > " + shellQuote(log) + " 2>&1"
 			]);
+
+	/** Waits up to seconds for process to exit, then stops it; returns its exit status, or null when it was stopped. */
+	static function waitOrStop(process:Process, seconds:Float):Null<Int> {
+		var deadline = Sys.time() + seconds, status:Null<Int> = null;
+		while ((status = process.exitCode(false)) == null && Sys.time() < deadline)
+			Sys.sleep(0.05);
+		if (status == null) {
+			// On Windows the process runs under cmd.exe, so the whole tree must be stopped.
+			if (Sys.systemName() == "Windows") {
+				var taskkill = new Process("taskkill", ["/T", "/F", "/PID", Std.string(process.getPid())]);
+				taskkill.exitCode();
+				taskkill.close();
+			} else
+				process.kill();
+			process.exitCode();
+		}
+		process.close();
+		return status;
 	}
 
 	public function recorderLog():String
@@ -216,20 +236,7 @@ class ProfileCapture {
 		if (recorder == null)
 			return null;
 		this.recorder = null;
-		var deadline = Sys.time() + 15.0, status:Null<Int> = null;
-		while ((status = recorder.exitCode(false)) == null && Sys.time() < deadline)
-			Sys.sleep(0.05);
-		if (status == null) {
-			// On Windows the recorder runs under cmd.exe, so the whole tree must be stopped.
-			if (Sys.systemName() == "Windows") {
-				var taskkill = new Process("taskkill", ["/T", "/F", "/PID", Std.string(recorder.getPid())]);
-				taskkill.exitCode();
-				taskkill.close();
-			} else
-				recorder.kill();
-			status = recorder.exitCode();
-		}
-		recorder.close();
+		var status = waitOrStop(recorder, 15.0);
 		if (status != 0) {
 			Sys.stderr().writeString('haxeon: profiler capture did not finalize cleanly (status $status); see ${recorderLog()}\n');
 			return null;
@@ -237,17 +244,15 @@ class ProfileCapture {
 		return complete();
 	}
 
+	/** An export taking longer than this is stopped: a 4 GiB capture exports in a few minutes. */
+	static inline final EXPORT_SECONDS = 20 * 60;
+
 	/** Exports the finished capture for Perfetto and writes the capture manifest. Returns the trace, or null on failure. */
 	public function complete():Null<String> {
-		var trace = Path.join([directory, '$name.pftrace']);
-		var export = new Process(profiler, ["export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
-			.concat(["--output", trace, capture]));
-		// The export prints the dropped short calls, which the report after the run shows too; reading it keeps the pipe
-		// from filling.
-		export.stdout.readAll();
-		var errors = export.stderr.readAll().toString(),
-			status = export.exitCode();
-		export.close();
+		var trace = Path.join([directory, '$name.pftrace']), log = Path.join([directory, "export.log"]);
+		var status = waitOrStop(startLogged([profiler, "export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
+			.concat(["--output", trace, capture]), log), EXPORT_SECONDS);
+		var errors = status == null ? 'stopped after ${EXPORT_SECONDS} s' : FileSystem.exists(log) ? File.getContent(log) : "";
 		var artifacts:Dynamic = {bytecode: '$name.hl', profile: Path.withoutDirectory(capture)};
 		if (revisions.length > 0)
 			artifacts.liveRevisions = revisions;
