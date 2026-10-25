@@ -100,8 +100,12 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   its module's mapping and is named by its function, with file and line when
   the module has a PDB. Without a PDB it is named after the nearest export,
   `module!export+0x...`, and an address outside every known module is named
-  `[unknown 0x...]`. Other platforms record Haxe frames and stop at the first
-  native frame.
+  `[unknown 0x...]`. On Linux and macOS x86-64, samples follow the
+  frame-pointer chain, which Haxeon keeps in the native packages it builds. A
+  function is named from its library's symbol table, or by library and offset
+  (`libfoo.so+0x...`) when the library is stripped, and a stretch of code
+  built without frame pointers shows as one `[unwind gap]` frame. macOS arm64 still stops at the
+  first native frame.
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
   for the recorder to free a buffer. The profiler drops nothing the program
   records, so a stall delays the program instead. Raise `--pool` if stalls
@@ -369,15 +373,23 @@ use the records it has. If `HL_DIAGNOSTICS_TOKEN` is set in the program's
 environment, set it in the recorder's too.
 
 `--top`, `--lines` and `--raw-leaf` are not accepted while recording; they
-belong to `report`. The `report` and `export` subcommands are unchanged, and
-read both HLPC v1 and v2 captures:
+belong to `report`. The `report` and `export` subcommands read both HLPC v1
+and v2 captures:
 
 ```sh
-hlprof-live report [--top N] [--lines] [--start-ms N] [--end-ms N] CAPTURE
-hlprof-live export --format folded [--lines] [--start-ms N] [--end-ms N] CAPTURE
-hlprof-live export --format perfetto [--lines] [--start-ms N] [--end-ms N] --output FILE CAPTURE
-hlprof-live export --format pftrace [--process-name NAME] [--start-ms N] [--end-ms N] --output FILE CAPTURE
+hlprof-live report [--top N] [--lines] [--all|--waiting] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live export --format folded [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live export --format perfetto [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
+hlprof-live export --format pftrace [--process-name NAME] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
 ```
+
+`report` ranks Haxe and native functions together (native ones marked
+`[native]`), each by its own samples: a function's self time is the samples
+whose leaf it is, so time a Haxe call spends in native code shows under that
+code. It ranks only the samples of running threads, and its first line counts
+how many were running and how many waiting in a system call; `--all` ranks
+both, `--waiting` only the waiting ones. Exports keep every sample unless
+given `--cpu` or `--waiting`.
 
 `--start-ms` and `--end-ms` select the part of the capture received in that
 window, in milliseconds since the recorder started. `pftrace` is the native

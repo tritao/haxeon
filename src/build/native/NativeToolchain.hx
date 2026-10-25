@@ -110,6 +110,10 @@ class NativeToolchain {
 				arguments = ["-c", source, "-o", output];
 				if (environment.target.os != TargetOs.Windows)
 					arguments.push("-fPIC");
+				// The sampling profiler walks native stacks along frame pointers (see cmake/haxeon-frame-pointers.cmake).
+				arguments.push("-fno-omit-frame-pointer");
+				if (environment.target.arch == build.Target.TargetArch.X64)
+					arguments.push("-mno-omit-leaf-frame-pointer");
 				if (isCxxSource(source) && standard != null)
 					arguments.unshift("-std=" + standard);
 				arguments = environment.toolchain.compileFlags.concat(arguments);

@@ -68,7 +68,7 @@ Each thread writes records to its own buffer. Records are little-endian,
 | 0x13 | `FRAME_IDLE` | frame set (u64) |
 | 0x20 | `EVENT` | `id:u32, length:u32`, then the payload padded to 8 bytes |
 | 0x21 | `COUNTER` | value (f64 bits), `units:u32, encoding:u32`, then the name padded to 8 bytes |
-| 0x22 | `SAMPLE` | `tid:u32, frames:u16, flags:u8, 0:u8`, then `frames` u64 pcs, leaf first |
+| 0x22 | `SAMPLE` | `tid:u32, frames:u16, flags:u8, 0:u8`, then `frames` u64 pcs, leaf first. Flags: bit 0, taken while the GC stopped the world; bit 1, the thread was waiting in a system call (Linux) |
 | 0x30 | `STALL` | end ticks (u64): the producer waited for a free chunk |
 
 `EVENT` carries the existing profiler events (`profile_events.h`): thread
@@ -308,8 +308,9 @@ so each one has a PDB:
 - `native.sources`: `NativeToolchain` adds the flags per source when it
   compiles, and links the hooks library and `/DEBUG /OPT:REF /OPT:ICF
   /INCREMENTAL:NO` into each module.
-- `native.cmake`: Haxeon configures the project with
-  `CMAKE_PROJECT_INCLUDE=cmake/haxeon-instrument.cmake` and passes the hooks
+- `native.cmake`: Haxeon configures every project with
+  `CMAKE_PROJECT_INCLUDE=cmake/haxeon-native.cmake`, which includes
+  `cmake/haxeon-instrument.cmake` for this flavor, and passes the hooks
   library and the include and exclude patterns as cache variables. The file
   compiles everything with `/Z7`, adds the link options and the hooks
   library, and, once the whole project is read (`cmake_language(DEFER)`),
@@ -398,6 +399,57 @@ Limits:
   hooks are installed.
 - A hooked function may take at most four register arguments and twelve
   stack arguments, which covers every function in the curated sets.
+
+### Native frames in samples
+
+A sample holds every frame of the stopped thread's stack, Haxe and native,
+leaf first.
+
+- **Windows x64** walks the stack with the images' unwind data.
+- **Linux and macOS x86-64** follow the frame-pointer chain from the registers the
+  thread stopped with, then resume it before deciding which frames to keep. A
+  return address into JIT code is kept. A native one is kept if it lies in an
+  executable segment of a loaded image (on macOS, if `dladdr` names it); other
+  values the chain led through are dropped. Classifying after resuming
+  matters: the check takes the loader lock, which the stopped thread could
+  hold.
+- **Where the chain breaks**, in code built without frame pointers, the walk
+  resumes at the next JIT frame record above it. The skipped frames become one
+  `[unwind gap]` frame, so the stack never shows a guessed caller. Current
+  distributions build their libraries with frame pointers (Ubuntu 24.04,
+  Fedora 38); the dynamic loader and some vendor drivers do not.
+- **Haxeon builds native packages with frame pointers** on Linux and macOS:
+  `-fno-omit-frame-pointer`, plus `-mno-omit-leaf-frame-pointer` on x86-64,
+  for `native.sources`, and `cmake/haxeon-frame-pointers.cmake` (included
+  by `cmake/haxeon-native.cmake`) for `native.cmake` packages. Haxeon's own
+  runtime and native tools use the same file. They cost about 1%.
+- **libffi** comes from the `haxeon/main` branch of `tritao/libffi`, whose
+  `ffi_call_unix64` keeps a standard frame record; upstream's points the
+  frame pointer at a frame of its own, which broke the chain at every call
+  through FFI.
+- **Waiting or running.** A signal that interrupts a system call leaves the
+  saved instruction pointer on the system call instruction (when the call is
+  restarted) or just after it, so the sampler reads it from the stopped
+  thread's registers and flags the sample as waiting. `hlprof-live report`
+  ranks running samples unless given `--all`; exports keep every sample, mark
+  the waiting ones (`"waiting": true` in Perfetto JSON), and take `--cpu` or
+  `--waiting` to keep one kind.
+- **Naming.** An exported function is named by `dladdr` while recording. One
+  that is not exported is recorded by its image and offset, and the exporter
+  names it from the image's ELF symbol table (`tools/elf_symbols.c`) when the
+  image is readable on the exporting machine and not stripped; otherwise it
+  stays `libfoo.so+0x...`. A stripped image is named from its detached
+  debug file (`/usr/lib/debug/.build-id/`, as `libc6-dbg` installs), found by
+  its build ID, and C++ names are demangled with the C++ runtime's
+  `__cxa_demangle` when it can be loaded.
+- **Launcher frames.** Every sample's root-most frames in HashLink's launcher
+  and runtime (`hl`, `libhl`: `main`, `hl_dyn_call`, a thread's entry) are
+  left out of exports, on every platform. A native thread's own frames stay.
+
+`tests/integration/test-profiler-mixed-stack.sh` checks that a sample taken
+in Haxe code called back from native code holds the native frames between
+the Haxe ones, in order, that samples in a native sleep are flagged waiting
+and those in a native spin are not, and that `report` ranks the native leaf.
 
 ### Build flavor and scope
 

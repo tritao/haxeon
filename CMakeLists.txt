@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.24)
 
 project(haxeon_native LANGUAGES C CXX)
 
+# The sampling profiler walks native stacks along frame pointers; the runtime and the other native targets keep them,
+# as the native packages Haxeon builds do.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/haxeon-frame-pointers.cmake")
+
 # Keep the CRT choice explicit for every MSVC-compatible compiler. This makes
 # the Release and Debug presets use the matching dynamic CRT (/MD and /MDd)
 # instead of inheriting an undocumented toolchain default.

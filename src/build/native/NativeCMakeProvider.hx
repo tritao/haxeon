@@ -81,6 +81,10 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=" + outputDirectory);
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
+		// haxeon-native.cmake keeps frame pointers off Windows, for the sampling profiler, and instruments when asked.
+		configureArguments.push("-DCMAKE_PROJECT_INCLUDE=" + Path.join([context.compilerHome, "cmake", "haxeon-native.cmake"]));
+		for (file in ["haxeon-native.cmake", "haxeon-frame-pointers.cmake"])
+			cmakeInputs.push(Path.join([context.compilerHome, "cmake", file]));
 		var instrumenting = instrumentArguments(context);
 		for (argument in instrumenting)
 			configureArguments.push(argument);
@@ -163,7 +167,6 @@ class NativeCMakeProvider {
 			return [];
 		var home = context.compilerHome;
 		return [
-			"-DCMAKE_PROJECT_INCLUDE=" + Path.join([home, "cmake", "haxeon-instrument.cmake"]),
 			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", "hlprof_penter.lib"]),
 			"-DHAXEON_INSTRUMENT_INCLUDE=" + instrument.nativeInclude.join(";"),
 			"-DHAXEON_INSTRUMENT_EXCLUDE=" + instrument.nativeExclude.join(";")

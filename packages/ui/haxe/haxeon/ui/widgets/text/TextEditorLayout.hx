@@ -127,8 +127,10 @@ class TextEditorLayout {
 		if (offsets == nextOffsets && documentRevision == nextOffsets.revision && !styleChanged) {
 			if (width == nextWidth) return;
 			for (record in paragraphs) {
+				if (fitsWidth(record, nextWidth)) continue;
 				record.layout.update(record.text, nextWidth, textStyle, paragraphStyle);
 				record.renderRanges = null;
+				record.rows = null;
 			}
 			width = nextWidth;
 			clearRangeGeometryCache();
@@ -164,14 +166,14 @@ class TextEditorLayout {
 			var record:TextEditorParagraphRecord = null;
 			if (previousRecord != null && !containsRecord(used, previousRecord) &&
 				previousRecord.text == paragraphText &&
-				previousRecord.layout.width == nextWidth && !styleChanged) {
+				fitsWidth(previousRecord, nextWidth) && !styleChanged) {
 				record = previousRecord;
 			} else if (!styleChanged) {
 				var matching = reusable.get(paragraphText);
 				if (matching != null)
 					while (matching.length > 0 && record == null) {
 						var candidate:TextEditorParagraphRecord = matching.pop();
-						if (candidate != null && candidate.layout.width == nextWidth &&
+						if (candidate != null && fitsWidth(candidate, nextWidth) &&
 							!containsRecord(used, candidate))
 							record = candidate;
 					}
@@ -180,9 +182,10 @@ class TextEditorLayout {
 				record = previousRecord;
 			if (record != null) {
 				var textChanged = record.text != paragraphText;
-				if (textChanged || record.layout.width != nextWidth || styleChanged) {
+				if (textChanged || !fitsWidth(record, nextWidth) || styleChanged) {
 					record.layout.update(paragraphText, nextWidth, textStyle, paragraphStyle);
 					record.renderRanges = null;
+					record.rows = null;
 					record.text = paragraphText;
 				}
 			} else {
@@ -284,7 +287,14 @@ class TextEditorLayout {
 				record.layout.edit(prefix, record.end - record.start - suffix,
 					nextOffsets.sliceCodepoints(chunkStart + prefix, chunkEnd - suffix), chunkText);
 				record.renderRanges = null;
+				record.rows = null;
 				record.text = chunkText;
+			}
+			// A group laid out at an older width while that could not matter must match the editor's once it can.
+			if (!fitsWidth(record, width)) {
+				record.layout.update(record.text, width, textStyle, paragraphStyle);
+				record.renderRanges = null;
+				record.rows = null;
 			}
 			used.push(record);
 			record.start = chunkStart;
@@ -322,27 +332,64 @@ class TextEditorLayout {
 	}
 
 	/** Resolved visual rows, including wrapped continuations and the final empty row.
-	 * Offsets are absolute codepoints; vertical bounds are in document coordinates.
+	 * Offsets are absolute codepoints and contiguous; vertical bounds are in document coordinates.
 	 */
 	public function visualRows():Array<{start:Int, end:Int, top:Float, bottom:Float}> {
 		ensureLive();
 		var rows:Array<{start:Int, end:Int, top:Float, bottom:Float}> = [];
 		for (record in paragraphs) {
-			for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
-				var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
-				var range = record.layout.lineRangeAt(hit.offset);
-				rows.push({start: record.start + range.start, end: record.start + range.end,
-					top: record.y + rect.y, bottom: record.y + rect.y + rect.height});
+			// Each paragraph's rows are measured once per layout of it, so an edit re-measures only what it touched.
+			var local = record.rows;
+			if (local == null) {
+				local = measureRows(record);
+				record.rows = local;
 			}
-			var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
-			var top = record.y + last.y + Math.min(last.ascender, last.descender);
-			var bottom = record.y + last.y + Math.max(last.ascender, last.descender);
+			for (index in 0...local.length - 1) {
+				var row = local[index];
+				rows.push({start: record.start + row.start, end: record.start + row.end,
+					top: record.y + row.top, bottom: record.y + row.bottom});
+			}
+			// The empty row after the paragraph's last character, unless that character's row already reaches it.
+			var caret = local[local.length - 1];
+			var top = record.y + caret.top;
 			if (rows.length == 0 || top >= rows[rows.length - 1].bottom - 0.01)
-				rows.push({start: record.end, end: record.end, top: top, bottom: bottom});
+				rows.push({start: record.end, end: record.end, top: top, bottom: record.y + caret.bottom});
 		}
+		// Rows are contiguous: each ends where the next begins. A line's range stops before the newline that ends a
+		// layout's text but not one inside it, so without this a row's end would depend on how paragraphs are grouped.
 		for (index in 0...rows.length - 1)
-			rows[index].end = Std.int(Math.min(rows[index].end, rows[index + 1].start));
+			rows[index].end = rows[index + 1].start;
 		return rows;
+	}
+
+	/** A paragraph's visual rows relative to its own start and top, followed by the row of a caret after its end. */
+	static function measureRows(record:TextEditorParagraphRecord):Array<TextEditorParagraphRow> {
+		var rows:Array<TextEditorParagraphRow> = [];
+		for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
+			var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
+			var range = record.layout.lineRangeAt(hit.offset);
+			rows.push(new TextEditorParagraphRow(range.start, range.end, rect.y, rect.y + rect.height));
+		}
+		var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
+		var length = record.end - record.start;
+		rows.push(new TextEditorParagraphRow(length, length, last.y + Math.min(last.ascender, last.descender),
+			last.y + Math.max(last.ascender, last.descender)));
+		return rows;
+	}
+
+	/** Whether a paragraph group's layout is right for `nextWidth`. A layout depends on width only through wrapping or
+		through alignment against its right edge (centered, end, or start in right-to-left text); otherwise a width
+		change leaves it as it is, and a document laid out once is not shaped again as its widest line grows. */
+	function fitsWidth(record:TextEditorParagraphRecord, nextWidth:Float):Bool {
+		if (record.layout.width == nextWidth)
+			return true;
+		if (paragraphStyle.wrap != haxeon.ui.TextWrap.None || paragraphStyle.alignment != haxeon.ui.TextAlignment.Start)
+			return false;
+		return switch paragraphStyle.direction {
+			case haxeon.ui.TextDirection.Ltr: true;
+			case haxeon.ui.TextDirection.Rtl: false;
+			case _: !record.hasRightToLeftText();
+		};
 	}
 
 	/** Logical paragraph containing a vertical position in the shaped document. */
@@ -405,9 +452,9 @@ class TextEditorLayout {
 			var visibleTop = Math.max(0, minY - record.y);
 			var visibleBottom = Math.min(record.height, maxY - record.y);
 			var a = record.layout.hitTest(0, visibleTop).offset;
-			var b = record.layout.hitTest(record.layout.width, visibleTop).offset;
+			var b = record.layout.hitTest(width, visibleTop).offset;
 			var c = record.layout.hitTest(0, Math.max(visibleTop, visibleBottom - 0.01)).offset;
-			var d = record.layout.hitTest(record.layout.width, Math.max(visibleTop, visibleBottom - 0.01)).offset;
+			var d = record.layout.hitTest(width, Math.max(visibleTop, visibleBottom - 0.01)).offset;
 			var first = Math.max(0, Math.min(Math.min(a, b), Math.min(c, d)) - 2);
 			var last = Math.min(record.end - record.start, Math.max(Math.max(a, b), Math.max(c, d)) + 2);
 			for (token in record.whitespaceTokens()) {
@@ -752,9 +799,9 @@ class TextEditorLayout {
 				var sampleTop = Math.min(visibleBottom, visibleTop + 1.0);
 				var sampleBottom = Math.max(visibleTop, visibleBottom - 1.0);
 				var topLeft = record.layout.hitTest(0.0, sampleTop).offset;
-				var topRight = record.layout.hitTest(record.layout.width, sampleTop).offset;
+				var topRight = record.layout.hitTest(width, sampleTop).offset;
 				var bottomLeft = record.layout.hitTest(0.0, sampleBottom).offset;
-				var bottomRight = record.layout.hitTest(record.layout.width, sampleBottom).offset;
+				var bottomRight = record.layout.hitTest(width, sampleBottom).offset;
 				var visibleStart = clamp(Std.int(Math.min(Math.min(topLeft, topRight),
 					Math.min(bottomLeft, bottomRight))), 0, record.end - record.start);
 				var visibleEnd = clamp(Std.int(Math.max(Math.max(topLeft, topRight),
@@ -996,9 +1043,33 @@ class TextEditorParagraphRecord {
 	public var height:Float;
 	public var renderColor:Null<Color>;
 	public var renderRanges:Null<Array<TextColorRange>>;
+	/** Visual rows of this paragraph's current layout (see TextEditorLayout.measureRows); null until measured. */
+	public var rows:Null<Array<TextEditorParagraphRow>>;
 	public final layout:TextLayout;
 	var whitespaceText:Null<String>;
 	var whitespace:Array<{start:Int, end:Int, kind:Int}> = [];
+	var directionText:Null<String>;
+	var rightToLeft = false;
+
+	/** Whether the text holds a right-to-left character or mark, which can make a paragraph's base direction
+		right-to-left. A superset of the strong right-to-left ranges, so it never misses one. */
+	public function hasRightToLeftText():Bool {
+		if (directionText == text) return rightToLeft;
+		directionText = text;
+		rightToLeft = false;
+		for (unit in 0...text.length) {
+			var code = text.charCodeAt(unit);
+			// Hebrew to NKo and Arabic extensions, presentation forms, the RLM/RLE/RLO/RLI marks, and the high
+			// surrogates of the supplementary right-to-left blocks (U+10800-U+10FFF, U+1E800-U+1EFFF).
+			if ((code >= 0x0590 && code <= 0x08ff) || (code >= 0xfb1d && code <= 0xfdff) || (code >= 0xfe70 && code <= 0xfeff) ||
+				code == 0x200f || code == 0x202b || code == 0x202e || code == 0x2067 || (code >= 0xd802 && code <= 0xd803) ||
+				(code >= 0xd83a && code <= 0xd83b)) {
+				rightToLeft = true;
+				break;
+			}
+		}
+		return rightToLeft;
+	}
 
 	public function whitespaceTokens():Array<{start:Int, end:Int, kind:Int}> {
 		if (whitespaceText == text) return whitespace;
@@ -1029,6 +1100,7 @@ class TextEditorParagraphRecord {
 		height = 0.0;
 		renderColor = null;
 		renderRanges = null;
+		rows = null;
 	}
 }
 
@@ -1051,5 +1123,20 @@ class TextEditorRangeGeometryCache {
 		this.minY = minY;
 		this.maxY = maxY;
 		this.rectangles = rectangles;
+	}
+}
+
+/** One visual row of a paragraph, in offsets and vertical bounds relative to the paragraph. */
+class TextEditorParagraphRow {
+	public final start:Int;
+	public final end:Int;
+	public final top:Float;
+	public final bottom:Float;
+
+	public function new(start:Int, end:Int, top:Float, bottom:Float) {
+		this.start = start;
+		this.end = end;
+		this.top = top;
+		this.bottom = bottom;
 	}
 }

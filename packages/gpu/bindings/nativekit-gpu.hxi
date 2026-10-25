@@ -1124,9 +1124,8 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	extern fn nkgpu_sampler_destroy(renderer: nkgpu_renderer, sampler: nkgpu_sampler) -> nkgpu_result;
 	/**
 	 * Measures the GPU time of each frame the renderer begins, window and batch
-	 * frames alike, while enabled. Off by default. On OpenGL a frame interval
-	 * cannot nest, so explicit timestamps inside a timed frame fail; leave timing
-	 * off when using them. Unsupported backends accept the call and time nothing.
+	 * frames alike, while enabled. Off by default. Explicit timestamps work inside
+	 * a timed frame. Unsupported backends accept the call and time nothing.
 	 */
 	extern fn nkgpu_set_frame_timing(renderer: nkgpu_renderer, enabled: u32) -> nkgpu_result;
 	/**

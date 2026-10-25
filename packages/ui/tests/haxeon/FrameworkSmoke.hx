@@ -277,6 +277,106 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** An editor whose document is edited by its owner, as an edit-intent handler does, relays out only the edit and
+		ends where a fresh layout of the same text would; rows stay right across edits, syncs and width changes. */
+	static function externalEditsRelayoutCorrectly(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...300)
+			value.add("é🙂 external " + line + (line % 7 == 0 ? " with a longer line that wraps at narrow widths" : "") + "\n");
+		var document = new haxeon.editor.TextDocument(value.toString());
+		var editor = new TextEditorState(fonts, "", null, null, document);
+		editor.updateLayout(240.0);
+		function sameAsFresh(width:Float, label:String):Void {
+			var expected = new TextEditorState(fonts, editor.text);
+			expected.updateLayout(width);
+			var actual = editor.layout.visualRows(), fresh = expected.layout.visualRows();
+			if (actual.length != fresh.length)
+				throw label + ": " + actual.length + " rows, a fresh layout has " + fresh.length;
+			for (index in 0...actual.length) {
+				var a = actual[index], b = fresh[index];
+				if (a.start != b.start || a.end != b.end || Math.abs(a.top - b.top) > 0.001 || Math.abs(a.bottom - b.bottom) > 0.001)
+					throw label + ": row " + index + " is " + a.start + "-" + a.end + " at " + a.top + "-" + a.bottom + ", a fresh layout's is " +
+						b.start + "-" + b.end + " at " + b.top + "-" + b.bottom;
+			}
+			expected.dispose();
+		}
+		sameAsFresh(240.0, "initial");
+		var revision = document.revision;
+		// One edit per sync: applied to the paragraphs it touched.
+		var edits:Array<{start:Int, end:Int, text:String}> = [
+			{start: 0, end: 0, text: "\n"},
+			{start: document.paragraphRangeAtIndex(40).start, end: document.paragraphRangeAtIndex(44).start, text: "joined é🙂 "},
+			{start: document.paragraphRangeAtIndex(120).start + 3, end: document.paragraphRangeAtIndex(120).start + 3, text: "typed"},
+			{start: document.paragraphRangeAtIndex(200).end, end: document.paragraphRangeAtIndex(201).start, text: ""}
+		];
+		for (edit in edits) {
+			document.replace(edit.start, edit.end, edit.text);
+			if (document.editSince(revision) == null)
+				throw "a single replacement was not recorded";
+			revision = document.revision;
+			if (!editor.syncDocument(document))
+				throw "an external edit was not synced";
+			sameAsFresh(240.0, "after external edit " + edits.indexOf(edit));
+		}
+		// Two edits before one sync: nothing to apply incrementally, so it lays the document out again.
+		document.replace(0, 1, "");
+		document.replace(document.codepointCount, document.codepointCount, "tail");
+		if (document.editSince(revision) != null)
+			throw "two replacements were reported as one";
+		editor.syncDocument(document);
+		sameAsFresh(240.0, "after two edits");
+		// A width change reflows every paragraph, so cached rows are measured again.
+		editor.updateLayout(520.0);
+		sameAsFresh(520.0, "after a width change");
+		// The editor's value compares by revision: unchanged without being assembled, changed after an edit.
+		var before = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		before.setValueSource(editor, editor.documentLength());
+		var same = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		same.setValueSource(editor, editor.documentLength());
+		if (!before.sameValue(same))
+			throw "an unchanged editor value compared unequal";
+		document.replace(0, 0, "x");
+		editor.syncDocument(document);
+		var after = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		after.setValueSource(editor, editor.documentLength());
+		if (before.sameValue(after) || after.value != editor.text)
+			throw "an edited editor value compared equal";
+		editor.dispose();
+		return true;
+	}
+
+	/** Without wrapping, a width change leaves left-aligned groups as they are and moves right-to-left ones. An editor
+		resized to each width matches a layout made at that width directly, which never takes the width-change path. */
+	static function unwrappedWidthChangesMatchFreshLayout(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...200)
+			value.add(line == 0 ? "שלום עולם " + line + "\n" : "unwrapped line " + line + "\n");
+		var editor = new TextEditorState(fonts, value.toString(), null, new ParagraphStyle(haxeon.ui.TextWrap.None));
+		// A group that starts with right-to-left text takes that direction, so its start alignment is the right edge.
+		var probes = [2, new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(120).start + 3];
+		for (width in [600.0, 900.0, 640.0]) {
+			editor.updateLayout(width);
+			var expected = new haxeon.ui.widgets.text.TextEditorLayout(fonts, editor.text, width, editor.textStyle, new ParagraphStyle(haxeon.ui.TextWrap.None));
+			var actual = editor.layout.visualRows(), fresh = expected.visualRows();
+			if (actual.length != fresh.length)
+				throw "unwrapped rows at width " + width + " differ from a fresh layout";
+			for (index in 0...actual.length)
+				if (actual[index].start != fresh[index].start || actual[index].end != fresh[index].end ||
+					Math.abs(actual[index].top - fresh[index].top) > 0.001)
+					throw "unwrapped row " + index + " at width " + width + " differs from a fresh layout";
+			if (Math.abs(editor.layout.measure().width - expected.measure().width) > 0.001)
+				throw "unwrapped content width at " + width + " differs from a fresh layout";
+			for (offset in probes) {
+				var a = editor.layout.caret(new TextPosition(offset, 0)), b = expected.caret(new TextPosition(offset, 0));
+				if (Math.abs(a.x - b.x) > 0.001 || Math.abs(a.y - b.y) > 0.001)
+					throw "caret at " + offset + " for width " + width + " is at " + a.x + ", a fresh layout's at " + b.x;
+			}
+			expected.dispose();
+		}
+		editor.dispose();
+		return true;
+	}
+
 	static function newlineChunksValid(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...220)
@@ -662,6 +762,11 @@ class FrameworkSmoke {
 		Sys.println("PASS: logical affinity range tags, reversed endpoints and chunked cache");
 		if (!newlineChunksValid(fonts))
 			return 310;
+		if (!externalEditsRelayoutCorrectly(fonts))
+			return 311;
+		if (!unwrappedWidthChangesMatchFreshLayout(fonts))
+			return 312;
+		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout, and editor values compare by revision");
 		if (!foregroundRangesValid(fonts))
 			return 308;
 		if (!decorationRangesValid(fonts))
