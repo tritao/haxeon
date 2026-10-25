@@ -247,6 +247,7 @@ class TextEditorState {
 			return false;
 		history.clear(); lastHistoryEdit = null;
 		cancelPointerClick();
+		var sameDocument = offsets == document;
 		if (offsets != document) {
 			offsets = document;
 			var caret = offsets.codepointCount;
@@ -257,7 +258,10 @@ class TextEditorState {
 				clamp(selectionEnd, 0, offsets.codepointCount));
 			clearComposition();
 		}
-		layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
+		if (sameDocument)
+			relayoutDocument(Math.max(1.0, lastLayoutWidth));
+		else
+			layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
 		renderMeasurement.invalidate();
 		lastLayoutRevision = offsets.revision;
 		clampScrollOffset();
@@ -268,12 +272,23 @@ class TextEditorState {
 		ensureLive();
 		var nextWidth = Math.max(1.0, width);
 		if (nextWidth != lastLayoutWidth || offsets.revision != lastLayoutRevision) {
-			layout.updateDocument(offsets, nextWidth, textStyle, paragraphStyle);
+			relayoutDocument(nextWidth);
 			renderMeasurement.invalidate();
 			lastLayoutWidth = nextWidth;
 			lastLayoutRevision = offsets.revision;
 		}
 		clampScrollOffset();
+	}
+
+	/** Brings the layout of the current document up to its revision at `width`. One edit since the last layout, at the
+		same width, is applied to the paragraphs it touched; anything else lays the document out again. A caller that
+		edits the document itself (an edit-intent handler) then costs what the edit touched, not the document's size. */
+	function relayoutDocument(width:Float):Void {
+		var edit = width == lastLayoutWidth ? offsets.editSince(lastLayoutRevision) : null;
+		if (edit != null)
+			layout.setTextAfterEdit(offsets, edit.start, edit.oldEnd, edit.start, edit.newEnd, edit.previousCodepointCount);
+		else
+			layout.updateDocument(offsets, width, textStyle, paragraphStyle);
 	}
 
 	/** Updates inherited typography without replacing the retained editor state. */

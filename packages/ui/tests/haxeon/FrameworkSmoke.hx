@@ -277,6 +277,61 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** An editor whose document is edited by its owner, as an edit-intent handler does, relays out only the edit and
+		ends where a fresh layout of the same text would; rows stay right across edits, syncs and width changes. */
+	static function externalEditsRelayoutCorrectly(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...300)
+			value.add("é🙂 external " + line + (line % 7 == 0 ? " with a longer line that wraps at narrow widths" : "") + "\n");
+		var document = new haxeon.editor.TextDocument(value.toString());
+		var editor = new TextEditorState(fonts, "", null, null, document);
+		editor.updateLayout(240.0);
+		function sameAsFresh(width:Float, label:String):Void {
+			var expected = new TextEditorState(fonts, editor.text);
+			expected.updateLayout(width);
+			var actual = editor.layout.visualRows(), fresh = expected.layout.visualRows();
+			if (actual.length != fresh.length)
+				throw label + ": " + actual.length + " rows, a fresh layout has " + fresh.length;
+			for (index in 0...actual.length) {
+				var a = actual[index], b = fresh[index];
+				if (a.start != b.start || a.end != b.end || Math.abs(a.top - b.top) > 0.001 || Math.abs(a.bottom - b.bottom) > 0.001)
+					throw label + ": row " + index + " is " + a.start + "-" + a.end + " at " + a.top + "-" + a.bottom + ", a fresh layout's is " +
+						b.start + "-" + b.end + " at " + b.top + "-" + b.bottom;
+			}
+			expected.dispose();
+		}
+		sameAsFresh(240.0, "initial");
+		var revision = document.revision;
+		// One edit per sync: applied to the paragraphs it touched.
+		var edits:Array<{start:Int, end:Int, text:String}> = [
+			{start: 0, end: 0, text: "\n"},
+			{start: document.paragraphRangeAtIndex(40).start, end: document.paragraphRangeAtIndex(44).start, text: "joined é🙂 "},
+			{start: document.paragraphRangeAtIndex(120).start + 3, end: document.paragraphRangeAtIndex(120).start + 3, text: "typed"},
+			{start: document.paragraphRangeAtIndex(200).end, end: document.paragraphRangeAtIndex(201).start, text: ""}
+		];
+		for (edit in edits) {
+			document.replace(edit.start, edit.end, edit.text);
+			if (document.editSince(revision) == null)
+				throw "a single replacement was not recorded";
+			revision = document.revision;
+			if (!editor.syncDocument(document))
+				throw "an external edit was not synced";
+			sameAsFresh(240.0, "after external edit " + edits.indexOf(edit));
+		}
+		// Two edits before one sync: nothing to apply incrementally, so it lays the document out again.
+		document.replace(0, 1, "");
+		document.replace(document.codepointCount, document.codepointCount, "tail");
+		if (document.editSince(revision) != null)
+			throw "two replacements were reported as one";
+		editor.syncDocument(document);
+		sameAsFresh(240.0, "after two edits");
+		// A width change reflows every paragraph, so cached rows are measured again.
+		editor.updateLayout(520.0);
+		sameAsFresh(520.0, "after a width change");
+		editor.dispose();
+		return true;
+	}
+
 	static function newlineChunksValid(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...220)
@@ -662,6 +717,9 @@ class FrameworkSmoke {
 		Sys.println("PASS: logical affinity range tags, reversed endpoints and chunked cache");
 		if (!newlineChunksValid(fonts))
 			return 310;
+		if (!externalEditsRelayoutCorrectly(fonts))
+			return 311;
+		Sys.println("PASS: external document edits relayout to match a fresh layout");
 		if (!foregroundRangesValid(fonts))
 			return 308;
 		if (!decorationRangesValid(fonts))
