@@ -585,21 +585,21 @@ HL_PRIM void HL_NAME(__array_resize_any)( varray *array, int length ) {
 
 HL_PRIM vstring *HL_NAME(__array_join_bytes)( varray *array, vstring *separator ) {
 	vstring **values = hl_aptr(array,vstring*);
-	int separator_length = realtime_string_length(separator);
+	int separator_length = realtime_text_length(separator);
 	int length = separator_length * (array->size > 0 ? array->size - 1 : 0);
 	for( int i = 0; i < array->size; i++ )
-		length += realtime_string_length(values[i]);
+		length += realtime_text_length(values[i]);
 	uchar *output;
 	vstring *result = realtime_string_alloc(length,&output);
 	int offset = 0;
 	for( int i = 0; i < array->size; i++ ) {
 		if( i > 0 && separator_length > 0 ) {
-			memcpy(output + offset, separator->bytes, separator_length * sizeof(uchar));
+			memcpy(output + offset, realtime_text_data(separator), separator_length * sizeof(uchar));
 			offset += separator_length;
 		}
-		int value_length = realtime_string_length(values[i]);
+		int value_length = realtime_text_length(values[i]);
 		if( value_length > 0 ) {
-			memcpy(output + offset, values[i]->bytes, value_length * sizeof(uchar));
+			memcpy(output + offset, realtime_text_data(values[i]), value_length * sizeof(uchar));
 			offset += value_length;
 		}
 	}

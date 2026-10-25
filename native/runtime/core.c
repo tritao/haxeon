@@ -8,6 +8,17 @@ static inline const uchar *realtime_string_data( vstring *value ) {
 	return value == NULL ? NULL : value->bytes;
 }
 
+/* A String's text as `+` and join write it: Haxe writes a null String as "null". */
+static const uchar realtime_null_text[] = { 'n', 'u', 'l', 'l', 0 };
+
+static inline int realtime_text_length( vstring *value ) {
+	return value == NULL ? 4 : value->length;
+}
+
+static inline const uchar *realtime_text_data( vstring *value ) {
+	return value == NULL ? realtime_null_text : value->bytes;
+}
+
 static inline bool realtime_is_string( vdynamic *value ) {
 	return value != NULL && hl_is_string_type(value->t);
 }

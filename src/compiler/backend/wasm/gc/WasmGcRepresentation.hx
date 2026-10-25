@@ -4766,7 +4766,25 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return concatStrings(argumentLocals[0], argumentLocals[1], destination);
 	}
 
-	function concatStrings(leftLocal:Int, rightLocal:Int, destination:Int):Array<WasmInstruction> {
+	/** Concatenates two strings; a null operand is written as "null", as Haxe does. The operand locals are left as they are. */
+	function concatStrings(leftOperand:Int, rightOperand:Int, destination:Int):Array<WasmInstruction> {
+		var leftLocal = allocateLocal(Ref({nullable: true, heap: Type(plan.bytesTypeIndex)})),
+			rightLocal = allocateLocal(Ref({nullable: true, heap: Type(plan.bytesTypeIndex)})),
+			operands:Array<WasmInstruction> = [];
+		for (pair in [
+			{operand: leftOperand, local: leftLocal},
+			{operand: rightOperand, local: rightLocal}
+		]) {
+			operands = operands.concat([
+				LocalGet(pair.operand),
+				LocalSet(pair.local),
+				LocalGet(pair.local),
+				RefIsNull,
+				If(null)
+			]);
+			operands = operands.concat(stringLiteral("null", pair.local));
+			operands.push(End);
+		}
 		var leftLength = allocateLocal(I32),
 			rightLength = allocateLocal(I32),
 			totalLength = allocateLocal(I32),
@@ -4809,7 +4827,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructNew(plan.bytesTypeIndex),
 				LocalSet(destination)
 			];
-		return body;
+		return operands.concat(body);
 	}
 
 	function stringSplit(sourceLocal:Int, separatorLocal:Int, destination:Int):Array<WasmInstruction> {
@@ -5217,6 +5235,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body.push(LocalSet(countLocal));
 	}
 
+	/** Array<String>.join; concatStrings writes null elements and a null separator as "null", as Haxe does. */
 	function arrayJoinBytes(arrayLocal:Int, separatorLocal:Int, destination:Int):Array<WasmInstruction> {
 		var wrapperType = plan.arrayType(Bytes),
 			storageType = plan.arrayStorageType(Bytes),
@@ -5240,12 +5259,6 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(accumulator),
 				LocalGet(separatorLocal),
 				LocalSet(separator),
-				LocalGet(separator),
-				RefIsNull,
-				If(null),
-				LocalGet(empty),
-				LocalSet(separator),
-				End,
 				LocalGet(arrayLocal),
 				StructGet(wrapperType, WasmGcTypePlan.arrayLengthFieldIndex()),
 				LocalSet(length),
@@ -5269,13 +5282,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			RefCast({nullable: false, heap: Type(storageType)}),
 			LocalGet(index),
 			ArrayGet(storageType),
-			LocalSet(element),
-			LocalGet(element),
-			RefIsNull,
-			If(null),
-			LocalGet(empty),
-			LocalSet(element),
-			End
+			LocalSet(element)
 		]);
 		body = body.concat(concatStrings(accumulator, element, accumulator));
 		body = body.concat([

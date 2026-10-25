@@ -1855,7 +1855,7 @@ class ExpressionTyper {
 			left = coerce(left, right.type, "arithmetic operand", "E1009");
 		if (right.type == TNever && isNumeric(left.type))
 			right = coerce(right, left.type, "arithmetic operand", "E1009");
-		if (add && (isStringConvertible(left.type) || isStringConvertible(right.type))) {
+		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
 			left = stringify(left);
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
@@ -2103,9 +2103,22 @@ class ExpressionTyper {
 			default: false;
 		};
 
+	/** A `+` with an operand of this type concatenates: a String, or a nullable one. */
+	function isStringOperand(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): isStringConvertible(inner);
+			default: isStringConvertible(type);
+		};
+
 	function stringify(value:TypedExpression):TypedExpression {
 		if (isStringConvertible(value.type))
 			return coerce(value, TString, "string concatenation", "E1010");
+		// A Null<String> is the same reference as a String, and concatenation itself writes null as "null".
+		switch value.type {
+			case TNullable(inner) if (sameType(inner, TString)):
+				return new TypedExpression(TCast(value), TString, value.span);
+			default:
+		}
 		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
 			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");

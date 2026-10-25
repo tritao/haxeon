@@ -282,7 +282,7 @@ class WasmLinearDynamicArrays {
 	function stringConcat():Int {
 		var existing = context.functions.get("__string_concat");
 		return existing != null ? existing : helper("__haxeon_array_string_concat",
-			name -> WasmLinearRuntime.addStringConcat(module, name, context.allocatorFunction));
+			name -> WasmLinearRuntime.addStringConcat(module, name, context.allocatorFunction, string("null")));
 	}
 
 	function dynamicEqual():Int {
