@@ -348,6 +348,8 @@ class ProfilerSession {
 		} catch (error:Dynamic) {
 			lastError = Std.string(error);
 			state = Failed;
+			// A session that never started ends its capture, so the next start can record one.
+			stopCapture();
 			throw error;
 		}
 	}
@@ -526,12 +528,12 @@ class ProfilerSession {
 			var data = HldiFrames.data(frame.payload);
 			records = HldiFrames.records(clock, data.threadId, data.records);
 			generatedBytes = Int64.add(generatedBytes, Int64.ofInt(data.rawLength));
+			for (record in records)
+				consume(record);
 		} catch (_:Dynamic) {
 			malformedSegments++;
 			return 0;
 		}
-		for (record in records)
-			consume(record);
 		return records.length;
 	}
 
@@ -590,7 +592,8 @@ class ProfilerSession {
 					pc = Int64.toStr(input.u64()),
 					base = input.u64();
 				var moduleLength = input.u32(), symbolLength = input.u32();
-				if (moduleLength + symbolLength == input.remaining()) {
+				// Lengths are unsigned on the wire: one past 2^31 reads negative here.
+				if (moduleLength >= 0 && symbolLength >= 0 && moduleLength <= input.remaining() && symbolLength == input.remaining() - moduleLength) {
 					var module = input.take(moduleLength).toString(),
 						name = input.take(symbolLength).toString();
 					nativeSymbols.set(pc, {name: name, module: module, base: base});

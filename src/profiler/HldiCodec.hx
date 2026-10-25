@@ -256,6 +256,8 @@ class HldiFrames {
 		return new HldiStats(inUse, count, input.u64(), input.u64(), input.u64(), input.u64());
 	}
 
+	static inline final MAX_DATA_LENGTH = 256 << 20;
+
 	/** A data frame's thread and records, decompressed when the frame says so. */
 	public static function data(payload:Bytes):HldiDataFrame {
 		var input = new HldiReader(payload),
@@ -263,7 +265,8 @@ class HldiFrames {
 			flags = input.u32(),
 			rawLength = input.u32();
 		input.u32();
-		if (rawLength < 0)
+		// The runtime pushes one chunk's records at a time; a larger length is malformed, not an allocation to make.
+		if (rawLength < 0 || rawLength > MAX_DATA_LENGTH)
 			throw 'Invalid HLDI data frame length $rawLength';
 		var records;
 		if (flags & DATA_COMPRESSED != 0)
