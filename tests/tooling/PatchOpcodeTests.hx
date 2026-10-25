@@ -236,6 +236,24 @@ class PatchOpcodeTests {
 			if (!rejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 				throw 'Invalid ${HaxeType.enumConstructor(op)} changed live state';
 		}
+		// A patch cannot describe a struct's layout or a method's signature, so appending either type must be rejected:
+		// staged, a struct would have no object data, which the next patch's type hash dereferences.
+		for (kind in [HashLinkType.Struct, HashLinkType.Method]) {
+			code.types.push(Simple(kind));
+			code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
+			var typeBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),
+				typeRejected = false;
+			code.types.pop();
+			try {
+				Runtime.patchSet(loaded, new PatchSet(1, 2, typeBytes, [70000]));
+			} catch (error:RuntimeError) {
+				if (error.status != RuntimeStatus.Incompatible)
+					throw error;
+				typeRejected = true;
+			}
+			if (!typeRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
+				throw 'An appended type of kind $kind changed live state';
+		}
 		// Each path ends its trap, but the end-trap lies after the handler, outside the try region the JIT tracks in
 		// instruction order, where emitting it aborts the process.
 		var trapPastHandler:Array<HlInstruction> = [
