@@ -129,6 +129,7 @@ class TextEditorLayout {
 			for (record in paragraphs) {
 				record.layout.update(record.text, nextWidth, textStyle, paragraphStyle);
 				record.renderRanges = null;
+				record.rows = null;
 			}
 			width = nextWidth;
 			clearRangeGeometryCache();
@@ -183,6 +184,7 @@ class TextEditorLayout {
 				if (textChanged || record.layout.width != nextWidth || styleChanged) {
 					record.layout.update(paragraphText, nextWidth, textStyle, paragraphStyle);
 					record.renderRanges = null;
+					record.rows = null;
 					record.text = paragraphText;
 				}
 			} else {
@@ -284,6 +286,7 @@ class TextEditorLayout {
 				record.layout.edit(prefix, record.end - record.start - suffix,
 					nextOffsets.sliceCodepoints(chunkStart + prefix, chunkEnd - suffix), chunkText);
 				record.renderRanges = null;
+				record.rows = null;
 				record.text = chunkText;
 			}
 			used.push(record);
@@ -322,26 +325,48 @@ class TextEditorLayout {
 	}
 
 	/** Resolved visual rows, including wrapped continuations and the final empty row.
-	 * Offsets are absolute codepoints; vertical bounds are in document coordinates.
+	 * Offsets are absolute codepoints and contiguous; vertical bounds are in document coordinates.
 	 */
 	public function visualRows():Array<{start:Int, end:Int, top:Float, bottom:Float}> {
 		ensureLive();
 		var rows:Array<{start:Int, end:Int, top:Float, bottom:Float}> = [];
 		for (record in paragraphs) {
-			for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
-				var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
-				var range = record.layout.lineRangeAt(hit.offset);
-				rows.push({start: record.start + range.start, end: record.start + range.end,
-					top: record.y + rect.y, bottom: record.y + rect.y + rect.height});
+			// Each paragraph's rows are measured once per layout of it, so an edit re-measures only what it touched.
+			var local = record.rows;
+			if (local == null) {
+				local = measureRows(record);
+				record.rows = local;
 			}
-			var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
-			var top = record.y + last.y + Math.min(last.ascender, last.descender);
-			var bottom = record.y + last.y + Math.max(last.ascender, last.descender);
+			for (index in 0...local.length - 1) {
+				var row = local[index];
+				rows.push({start: record.start + row.start, end: record.start + row.end,
+					top: record.y + row.top, bottom: record.y + row.bottom});
+			}
+			// The empty row after the paragraph's last character, unless that character's row already reaches it.
+			var caret = local[local.length - 1];
+			var top = record.y + caret.top;
 			if (rows.length == 0 || top >= rows[rows.length - 1].bottom - 0.01)
-				rows.push({start: record.end, end: record.end, top: top, bottom: bottom});
+				rows.push({start: record.end, end: record.end, top: top, bottom: record.y + caret.bottom});
 		}
+		// Rows are contiguous: each ends where the next begins. A line's range stops before the newline that ends a
+		// layout's text but not one inside it, so without this a row's end would depend on how paragraphs are grouped.
 		for (index in 0...rows.length - 1)
-			rows[index].end = Std.int(Math.min(rows[index].end, rows[index + 1].start));
+			rows[index].end = rows[index + 1].start;
+		return rows;
+	}
+
+	/** A paragraph's visual rows relative to its own start and top, followed by the row of a caret after its end. */
+	static function measureRows(record:TextEditorParagraphRecord):Array<TextEditorParagraphRow> {
+		var rows:Array<TextEditorParagraphRow> = [];
+		for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
+			var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
+			var range = record.layout.lineRangeAt(hit.offset);
+			rows.push(new TextEditorParagraphRow(range.start, range.end, rect.y, rect.y + rect.height));
+		}
+		var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
+		var length = record.end - record.start;
+		rows.push(new TextEditorParagraphRow(length, length, last.y + Math.min(last.ascender, last.descender),
+			last.y + Math.max(last.ascender, last.descender)));
 		return rows;
 	}
 
@@ -996,6 +1021,8 @@ class TextEditorParagraphRecord {
 	public var height:Float;
 	public var renderColor:Null<Color>;
 	public var renderRanges:Null<Array<TextColorRange>>;
+	/** Visual rows of this paragraph's current layout (see TextEditorLayout.measureRows); null until measured. */
+	public var rows:Null<Array<TextEditorParagraphRow>>;
 	public final layout:TextLayout;
 	var whitespaceText:Null<String>;
 	var whitespace:Array<{start:Int, end:Int, kind:Int}> = [];
@@ -1029,6 +1056,7 @@ class TextEditorParagraphRecord {
 		height = 0.0;
 		renderColor = null;
 		renderRanges = null;
+		rows = null;
 	}
 }
 
@@ -1051,5 +1079,20 @@ class TextEditorRangeGeometryCache {
 		this.minY = minY;
 		this.maxY = maxY;
 		this.rectangles = rectangles;
+	}
+}
+
+/** One visual row of a paragraph, in offsets and vertical bounds relative to the paragraph. */
+class TextEditorParagraphRow {
+	public final start:Int;
+	public final end:Int;
+	public final top:Float;
+	public final bottom:Float;
+
+	public function new(start:Int, end:Int, top:Float, bottom:Float) {
+		this.start = start;
+		this.end = end;
+		this.top = top;
+		this.bottom = bottom;
 	}
 }
