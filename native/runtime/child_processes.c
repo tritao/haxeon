@@ -126,7 +126,8 @@ static void realtime_child_cleanup(void *value) {
 static DWORD WINAPI realtime_child_writer(void *value) {
 	realtime_child_process *p = value;
 	unsigned char buffer[16384];
-	SetThreadDescription(GetCurrentThread(), L"haxeon.child.stdin");
+	/* Through HashLink, so a profiling session records the name even if the writer exits before its next thread list. */
+	hl_thread_set_name(hl_thread_current(), "haxeon.child.stdin");
 	for (;;) {
 		EnterCriticalSection(&p->write_mutex);
 		size_t amount = p->write_length < sizeof(buffer) ? p->write_length : sizeof(buffer);
