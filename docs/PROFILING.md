@@ -231,8 +231,9 @@ instrumentation are recorded at the boundary (Windows x64), as slices named
 after the function called:
 
 - **Blocking and system calls**: waits and sleeps, file, pipe and network I/O,
-  message waits, process creation and the C runtime's file streams
-  (`kernel32!Sleep`, `ucrtbase!fread`, `ws2_32!recv`, ...).
+  message waits, process creation, the C runtime's file streams and the C++
+  standard library's waits (`kernel32!Sleep`, `ucrtbase!fread`,
+  `ws2_32!recv`, `msvcp140!_Cnd_wait`, ...).
 - **Direct3D 11 and DXGI**: draws, dispatches, copies, maps and flushes on the
   immediate context (`ID3D11DeviceContext::Draw`), and `Present` on every swap
   chain (`IDXGISwapChain::Present`).

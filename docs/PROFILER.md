@@ -121,7 +121,9 @@ input is not counted as a frame.
   for a `PROFILE_EVENT_DROPPED_CALLS` event. Any record that is kept
   publishes the run. A dropped call therefore never reaches the consumer,
   short calls nested in each other go together, and a short call that called
-  something long stays. Counts are written at each frame mark, when a
+  something long stays. A boundary call (a hooked call that may block, such
+  as a wait) is never held or dropped: its `ENTER` publishes the run before
+  it, so a thread blocked there shows its open calls while it waits. Counts are written at each frame mark, when a
   thread's table fills, at thread exit and when the session stops, which also
   publishes every run still held. A pause in the middle of a held run keeps
   it.
