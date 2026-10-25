@@ -267,7 +267,7 @@ class IrInliner {
 		return changed;
 	}
 
-	/** Whether both encode to the same bytes; a function that cannot be encoded (an unterminated dead block) counts as different. */
+	/** Whether both encode to the same bytes; a function that cannot be encoded counts as different. */
 	static function sameBytes(a:IrFunction, b:IrFunction):Bool {
 		try {
 			return IrFunctionStateCodec.encode(a).compare(IrFunctionStateCodec.encode(b)) == 0;

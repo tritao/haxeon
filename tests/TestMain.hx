@@ -882,6 +882,24 @@ class TestMain {
 			decodedFunctions.push(decodedFunction);
 		}
 		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
+		// A try whose every path returns or throws leaves its continuation block unreachable and open. It must encode, or the
+		// live compiler's comparison fails and the function counts as changed on every edit.
+		var guardedProgram = Frontend.compile("function read(value:Int):Int { try { return value; } catch (error:Dynamic) { throw error; } } function main():Int { return read(42); }"),
+			openBlocks = 0;
+		for (fn in guardedProgram.functions) {
+			var open = [for (block in fn.blocks) if (block.terminator == null) block.id];
+			if (open.length == 0)
+				continue;
+			openBlocks += open.length;
+			var encodedFunction = IrFunctionStateCodec.encode(fn),
+				decodedFunction = IrFunctionStateCodec.decode(encodedFunction);
+			if ([for (block in decodedFunction.blocks) if (block.terminator == null) block.id].join(",") != open.join(",")
+				|| encodedFunction.compare(IrFunctionStateCodec.encode(decodedFunction)) != 0)
+				throw "IR function state with an open block did not round trip";
+		}
+		if (openBlocks == 0)
+			throw "A try that always exits no longer leaves an open block; this test needs another source of one";
+		Sys.println("PASS: IR function state round trips unreachable open blocks");
 		var provenanceProgram = Frontend.compileFile(new SourceFile("debug-lines.hx", "function main():Int {\n  var value = 41;\n  return value + 1;\n}")),
 			provenanceLines:Map<Int, Bool> = [];
 		for (fn in provenanceProgram.functions)

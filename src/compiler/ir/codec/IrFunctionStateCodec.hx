@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 11;
+	static inline final VERSION = 12;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -93,13 +93,13 @@ class IrFunctionStateCodec {
 				if (identified)
 					writeProvenance(output, instruction.provenance);
 			}
+			// An unreachable block may stay open, as the continuation of a try whose every path returns or throws; the verifiers
+			// check only reachable blocks. Rejecting it here made every such function compare as changed on each live edit.
 			var blockTerminator = block.terminator;
-			if (blockTerminator == null && !identified) {
+			if (blockTerminator == null) {
 				output.writeInt32(-1);
 				continue;
 			}
-			if (blockTerminator == null)
-				throw "IR block has no terminator";
 			var terminator = new BytesOutput();
 			terminator.bigEndian = false;
 			IrTerminatorCodec.write(terminator, blockTerminator.value);
@@ -175,7 +175,10 @@ class IrFunctionStateCodec {
 						provenance = version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache");
 					block.instructions.push(new Located(instruction, provenance));
 				}
-				var terminatorBytes = readBytes(input, bytes.length),
+				var terminatorLength = input.readInt32();
+				if (terminatorLength == -1 && version >= 12)
+					continue;
+				var terminatorBytes = readSized(input, bytes.length, terminatorLength),
 					terminatorInput = new BytesInput(terminatorBytes);
 				terminatorInput.bigEndian = false;
 				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
@@ -330,8 +333,10 @@ class IrFunctionStateCodec {
 		output.write(bytes);
 	}
 
-	static function readBytes(input:BytesInput, totalLength:Int):Bytes {
-		var length = input.readInt32();
+	static function readBytes(input:BytesInput, totalLength:Int):Bytes
+		return readSized(input, totalLength, input.readInt32());
+
+	static function readSized(input:BytesInput, totalLength:Int, length:Int):Bytes {
 		if (length < 0 || length > 0x10000000 || length > totalLength - input.position)
 			throw "Invalid IR function section length";
 		return input.read(length);
