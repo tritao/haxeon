@@ -125,6 +125,7 @@ class TestCatalog {
 		"StructSyntaxMain",
 		"StructPropertiesMain",
 		"NativeMemoryMain",
+		"ModuleSourceLoaderCacheMain",
 	];
 
 	static final toolingMains = [
