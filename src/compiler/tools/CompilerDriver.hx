@@ -140,10 +140,14 @@ class CompilerDriver {
 		return result;
 	}
 
+	/** Empty unless typing found modules the graph lacked; the restart then redid the whole frontend. */
+	static function frontendRestarts(reasons:Array<String>):String
+		return reasons.length == 0 ? "" : " (restarted: " + reasons.join("; ") + ")";
+
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
-			+ " frontend=" + milliseconds(metrics.frontendMs) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
+			+ " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
 			+ milliseconds(metrics.graphParseMs) + " dependencies=" + milliseconds(metrics.graphDependencyMs) + " initialization="
 			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + " (alias-setup="
 			+ milliseconds(metrics.semanticAliasMs) + " canonicalization=" + milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse="

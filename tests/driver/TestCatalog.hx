@@ -35,6 +35,7 @@ class TestCatalog {
 		"AbstractTypeDependencyMain",
 		"TestMain",
 		"AuditVerifierMain",
+		"FrontendRestartMain",
 		"InlinerMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",

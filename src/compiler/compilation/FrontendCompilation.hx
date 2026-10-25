@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.Diagnostic.CompileError;
+import compiler.runtime.PlatformAbi;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -45,6 +46,7 @@ typedef FrontendResult = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
+	final frontendRestarts:Array<String>;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -466,6 +468,7 @@ class FrontendCompilation {
 				graphParseMs: graphParseMs,
 				graphDependencyMs: graphDependencyMs,
 				graphInitializationMs: graphInitializationMs,
+				frontendRestarts: context.frontendRestarts,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
@@ -546,6 +549,7 @@ class FrontendCompilation {
 			graphParseMs: graphParseMs,
 			graphDependencyMs: graphDependencyMs,
 			graphInitializationMs: graphInitializationMs,
+			frontendRestarts: context.frontendRestarts,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
@@ -790,6 +794,9 @@ class FrontendCompilation {
 		for (dependency in dependencies) {
 			if (names.indexOf(dependency.target) >= 0)
 				continue;
+			// Only targets without native dynamic objects (Wasm) call the stdlib's class; elsewhere the dependency is unused.
+			if (dependency.target == PlatformAbi.DYNAMIC_OBJECT_CLASS && !context.isWasmTarget())
+				continue;
 			var target = context.loadSourceModuleDependency(dependency.target);
 			if (target == null)
 				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
@@ -805,6 +812,7 @@ class FrontendCompilation {
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
 			var state = context.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
+				context.frontendRestarts.push('${dependency.functionName} needs $target');
 				state.dependencies.push(target);
 				state.dependencies.sort(Reflect.compare);
 				changed = true;

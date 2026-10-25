@@ -35,6 +35,9 @@ class CompilationContext {
 	public final moduleId:Bytes;
 	public final genericSpecializations:GenericSpecializationRegistry;
 
+	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
+	public final frontendRestarts:Array<String> = [];
+
 	public var assembler(get, set):HlModuleAssembler;
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;

@@ -127,6 +127,7 @@ typedef CompileMetrics = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
+	final frontendRestarts:Array<String>;
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
 	final semanticCanonicalizationMs:Float;
@@ -732,6 +733,7 @@ class Compiler {
 					graphParseMs: 0.0,
 					graphDependencyMs: 0.0,
 					graphInitializationMs: 0.0,
+					frontendRestarts: [],
 					semanticAssemblyMs: 0.0,
 					semanticAliasMs: 0.0,
 					semanticCanonicalizationMs: 0.0,
