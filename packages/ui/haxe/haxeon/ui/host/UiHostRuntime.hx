@@ -173,7 +173,7 @@ class UiHostRuntime {
 			lastPaintSeconds = lastContextRenderSeconds;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
 			ProfileCounter.set("ui.frame.allocated_bytes", lastFrameAllocatedBytes);
-			// GPU time per frame, measured only while a capture records: it costs a GPU query, and a flush on OpenGL.
+			// GPU time per frame, measured only while a capture records: it costs a GPU query per frame.
 			var recording = ProfileRecording.recording();
 			var timedRenderer = renderer;
 			if (timedRenderer != null) {
