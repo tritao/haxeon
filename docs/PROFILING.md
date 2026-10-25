@@ -25,7 +25,9 @@ runs, whatever the sources.
 `--diagnostics-wait`, attaches `hlprof-live`, writes an HLPC capture (default
 `build/host/profile/profile-<timestamp>/profile.hlpc`), exports it as a native
 Perfetto trace (`profile.pftrace` next to the capture), and prints a
-top-functions report after the process exits. Open the `.pftrace` at
+top-functions report after the process exits. The export writes its output to
+`export.log` in the capture directory and is stopped after 20 minutes, so a
+stuck export cannot hold the run. Open the `.pftrace` at
 https://ui.perfetto.dev. Pass `--profile-output PATH` to choose the capture
 location, and runtime arguments after `--`:
 
@@ -103,8 +105,10 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
   for the recorder to free a buffer. The profiler drops nothing the program
   records, so a stall delays the program instead. Raise `--pool` if stalls
-  appear. (The runtime's own profiler threads never wait: if their records
-  find no buffer, the recorder warns that records were lost.)
+  appear, and see [Known issues](#known-issues) for a program that keeps the
+  pool full. (The runtime's own threads that must not wait, such as the
+  consumer and a collection holding the GC lock, record no calls; if their
+  other records find no buffer, the recorder warns that records were lost.)
 - **Instants** for module loads and live module revisions.
 - **Instrumented calls.** A slice per call with its exact enter and exit
   times, Haxe and native mixed, on "Main thread frames" for the main thread
@@ -148,7 +152,11 @@ The recorder takes a thread's name from the runtime (a Haxe thread's name is
 recorded the moment it is set, so it holds even if the thread exits soon
 after) or else from the system, which it reads every half second while
 recording. A thread that has no name by the end is named after its entry
-function.
+function, when the session began before the program and recorded the thread's
+first call (see [What a trace contains](#what-a-trace-contains)); otherwise it
+keeps its tid. A Windows thread description longer than 127 bytes is cut at a
+whole character, and on macOS a thread that names itself also gets the system
+name.
 
 To check a trace without opening the UI, `scripts/check-pftrace.py` runs
 queries through Perfetto's `trace_processor_shell` (download it from the
@@ -172,7 +180,8 @@ so ordinary builds and their compiler worker are untouched. It probes:
 
 - **Haxe.** Every function that remains a call after inlining gets an enter
   probe and an exit probe before each return. A throw closes the calls it
-  skips when a catch takes it. While nothing records, a probe costs about
+  skips when a catch takes it, also when the function that catches is left
+  out of the scope. While nothing records, a probe costs about
   0.5 ns on HashLink x64.
 - **Native code we compile** (Windows x64, MSVC). Every source of a package's
   `native.sources` or `native.cmake` project is compiled with `/Gh /GH` and
@@ -207,8 +216,10 @@ allocator internals that finish in well under a microsecond. Recording each
 one costs more than the call itself and makes captures enormous (an editor
 frame can make 400,000 of them). So the recorder drops calls shorter than
 1 µs as they exit, unless a call inside them was kept. A dropped call's time
-stays in its caller's, and the capture counts dropped calls per function; the
-report after the run lists the most frequent:
+stays in its caller's, and the capture counts dropped calls per function. The
+trace's "Short calls dropped per frame" counter holds each main-thread frame's
+total, set where the frame starts; the report after the run lists the most
+frequent functions:
 
 ```
 dropped 10012 short calls to 2 functions; most often:
@@ -264,7 +275,7 @@ just part of a run:
 | `--profile-start=launch\|manual` | Record from launch (default), or open the session paused. |
 | `--profile-duration=SEC` | Stop after SEC seconds of recording; paused time does not count. |
 | `--profile-max-size=MIB` | Stop when the capture reaches MIB (default 4096; 0 for no limit). |
-| `--profile-window=START:END` | Export only that part of the capture to Perfetto, in seconds since the recorder connected; either side may be left out. The capture keeps everything. |
+| `--profile-window=START:END` | Export only that part of the capture to Perfetto, in seconds since the recorder connected; either side may be left out. The capture keeps everything. Frames keep their numbers from the whole capture; the `Startup` slice and names taken from entry functions need a window that starts at 0. |
 | `--profile-min-call=US` | Drop calls shorter than US microseconds (default `instrument.minCallMicros`, else 1; 0 keeps every call). See [Short calls](#short-calls). |
 
 Each option implies `--profile`. A paused session records nothing until the
@@ -277,7 +288,10 @@ haxeon.ProfileRecording.start();   // or pause(), toggle(), recording()
 so a program can record from a hotkey, a menu command or the moment a problem
 appears. In the exosuit editor, the **Profiler: Toggle Recording** command
 does this. Calls that span a pause end at the pause in the trace, and frames
-end there too; the trace marks each pause and resume with an instant.
+end there too; the trace marks each pause and resume with an instant. If the
+editor fails to start a recording, it stops the runtime's session, closes the
+capture as partial and tries again at the next toggle; a malformed frame from
+the runtime is counted and skipped rather than ending the session.
 
 Example exclude lists, for a smaller capture of an editor-sized program:
 
@@ -364,7 +378,10 @@ hlprof-live export --format pftrace [--process-name NAME] [--start-ms N] [--end-
 
 `--start-ms` and `--end-ms` select the part of the capture received in that
 window, in milliseconds since the recorder started. `pftrace` is the native
-Perfetto trace; `perfetto` is Chrome trace JSON.
+Perfetto trace; `perfetto` is Chrome trace JSON, which has samples, spans,
+calls, counters and instants but no frame tracks or `Startup` layout. The
+exporter checks every size it reads, so a damaged capture fails with an error
+instead of crashing it, and it caps a record at 256 MiB.
 
 ## Raw two-terminal workflow
 
@@ -401,6 +418,27 @@ out/cmake/windows-msvc/hashlink/bin/hlprof-bench.exe [ITERATIONS]
 The program loads `libhl.dll`, so put `.tools/hashlink` on `PATH` first. Results
 are nanoseconds per operation; `PROFILER.md` lists the reference figures. The
 last line reports the consumer's drain rate and any stalls.
+
+## Known issues
+
+- **A pool kept full can hang the program.** A stress test hung in two of
+  four runs: four threads allocating constantly while making calls of under a
+  microsecond each, with `--pool 1`, every call kept (no `--min-call-us`) and
+  `instrument` alone. Recording stops making progress and the program never
+  finishes; `hlprof-live` keeps printing `0.0 MiB/s`. The likely cause is a
+  thread waiting for a buffer that the GC does not count as blocked, so a
+  collection waits for it while the consumer that would free the buffer
+  waits for the collection; it is not yet confirmed. The same test passes
+  with short calls dropped or with `sampling` and `alloc` added, and no
+  capture with the default 64 MiB pool has hit it. If a run stops making
+  progress, raise `--pool` or keep `--profile-min-call` above 0. See
+  `PROFILER.md` (Buffers) for the design.
+- **Export memory grows with the call rate.** The exporter holds about two
+  seconds of records to put them in order, so a capture of an instrumented
+  run that keeps every call needs memory in proportion. Drop short calls or
+  export a window.
+- **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
+  (see [Spans and counters](#spans-and-counters)).
 
 ## Captures and heap dumps
 
