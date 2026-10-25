@@ -186,7 +186,9 @@ so ordinary builds and their compiler worker are untouched. It probes:
 - **Native code we compile** (Windows x64, MSVC). Every source of a package's
   `native.sources` or `native.cmake` project is compiled with `/Gh /GH` and
   every module gets a PDB, which names its functions. Code we do not compile,
-  such as system libraries, appears only through the calls into it.
+  such as system libraries, appears only through the calls into it. Linux
+  and macOS do not instrument native code yet; `PROFILER-POSIX.md` is the
+  design.
 
 `haxeon.json` narrows what is probed:
 
@@ -437,6 +439,11 @@ last line reports the consumer's drain rate and any stalls.
   seconds of records to put them in order, so a capture of an instrumented
   run that keeps every call needs memory in proportion. Drop short calls or
   export a window.
+- **A forked child keeps recording.** The runtime has no `fork` handler, so a
+  child that keeps running instrumented code after `fork`, without `exec`,
+  records with no consumer and hangs once its pool fills.
+- **Native instrumentation, boundary calls and mixed-mode samples are Windows
+  x64 only.** See `PROFILER-POSIX.md` for the Linux and macOS design.
 - **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
   (see [Spans and counters](#spans-and-counters)).
 

@@ -291,7 +291,8 @@ Native code is instrumented in two ways. Code we compile gets compiler hooks
 on every function. Calls from it into code we do not compile, such as the
 system and graphics libraries, are hooked at the boundary at run time. Other
 platforms have neither yet: the instrumented flavor builds their native code
-as usual, and only Haxe calls are probed.
+as usual, and only Haxe calls are probed. `PROFILER-POSIX.md` is the design
+for Linux and macOS, and lists what else they need for parity.
 
 **Compiler hooks.** MSVC's `/Gh` and `/GH` make the compiler call `_penter`
 at the start of every function and `_pexit` at its end. The instrumented
