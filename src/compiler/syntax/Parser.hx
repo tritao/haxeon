@@ -2526,7 +2526,8 @@ class Parser {
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
-		if (isBracedExpression(expression) || (tryBodyDepth > 0 && check(TokenKind.Catch)))
+		// As in Haxe, an expression whose last token closes a brace needs no semicolon: `var x = try f() catch (e:Dynamic) { 0; }`.
+		if (isBracedExpression(expression) || previous().kind == TokenKind.RightBrace || (tryBodyDepth > 0 && check(TokenKind.Catch)))
 			return expressionSpan(expression);
 		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
 		if (check(TokenKind.Else))

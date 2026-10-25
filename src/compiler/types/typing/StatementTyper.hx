@@ -282,6 +282,9 @@ class StatementTyper {
 					// never produce a value: a throw statement, which leaves the function's
 					// result to its other returns (or Void) instead of inferring Never.
 					output.push(TThrow(thrown, span));
+				} else if (expected == null && value.type == TNever) {
+					// Likewise a call that never returns, such as the body of `try fail() catch (e:String) 40`.
+					output.push(TExpression(value, span));
 				} else if (expected != null && expected == TVoid && context.contextualVoidLambda) {
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
