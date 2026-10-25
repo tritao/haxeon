@@ -38,6 +38,7 @@ class LiveStringArrayMain {
 			"--output=" + output,
 			main
 		]), _ -> {}, new CompilerSession());
+		expect(FileSystem.exists(output + ".live.stamp"), "a live build must stamp its publication for the host to poll");
 		var hostSources = [for (name in FileSystem.readDirectory("src/runtime")) if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name];
 		CompilerDriver.compile(CompilerArguments.parse([
 			"--target=hl",

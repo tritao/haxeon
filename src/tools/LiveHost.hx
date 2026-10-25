@@ -25,6 +25,7 @@ class LiveHost {
 		if (args.length != 3)
 			throw "Usage: LiveHost <module.hl> <entry> <arguments-json>";
 		var path = args[0], entry = args[1], arguments = args[2];
+		var stamp = readStamp(path);
 		var description = readDescription(path);
 		var module = Runtime.load(File.getBytes(path), File.getBytes(path + ".hli"));
 		var revision = description.revision;
@@ -34,7 +35,10 @@ class LiveHost {
 			var running = true;
 			while (running) {
 				running = Runtime.callInt(module, functionId(description, entry + ".tick")) != 0;
-				var candidate = tryDescription(path);
+				var published = readStamp(path);
+				var candidate = published == null || published != stamp ? tryDescription(path) : null;
+				if (candidate != null)
+					stamp = published;
 				if (candidate != null
 					&& (candidate.revision != revision || candidate.moduleIdentity != description.moduleIdentity)
 					&& publicationKey(candidate) != rejectedPublication) {
@@ -161,6 +165,14 @@ class LiveHost {
 
 	static function publicationKey(description:LiveDescription):String
 		return description.moduleIdentity + ":" + description.revision;
+
+	/** The publication key the compiler stamps beside the description; null when a compiler that writes no stamp built it. */
+	static function readStamp(path:String):Null<String> {
+		try
+			return File.getContent(path + ".live.stamp")
+		catch (_:Dynamic)
+			return null;
+	}
 
 	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
 	static function readDescription(path:String):LiveDescription {

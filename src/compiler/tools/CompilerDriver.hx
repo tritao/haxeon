@@ -106,6 +106,10 @@ class CompilerDriver {
 				identities: identities
 			}));
 			FileSystem.rename(temporary, manifest);
+			// The live host reads this small stamp every tick, and the description only when the stamp changes.
+			var stamp = request.output + ".live.stamp";
+			File.saveContent(stamp + ".tmp", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+			FileSystem.rename(stamp + ".tmp", stamp);
 			compiler.acknowledgePublication(result.revision);
 		}
 		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));

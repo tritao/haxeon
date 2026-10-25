@@ -135,6 +135,8 @@ class CompilerServer {
 				".hlp",
 				".live.json",
 				".live.json.tmp",
+				".live.stamp",
+				".live.stamp.tmp",
 				".build-id",
 				".descriptors",
 				".descriptors.json"
