@@ -15,10 +15,19 @@ typedef WatchProfiling = {
 	final sources:Array<String>;
 }
 
+/** What a settled batch of edits touched, which decides how much of the build can be reused. */
+typedef WatchChange = {
+	/** Only Haxe sources changed, so the native packages need no rebuild. */
+	final compilerOnly:Bool;
+
+	/** The set of watched files changed, or one that is not Haxe: the resolved project may differ and must be resolved again. */
+	final structural:Bool;
+}
+
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
-			profiling:Null<WatchProfiling>, rebuild:Bool->Null<ResolvedProject>):Int {
+			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw "haxeon run --watch currently requires Linux, macOS or Windows";
 		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
@@ -54,9 +63,10 @@ class WatchRun {
 						break;
 					baseline = observed;
 				}
-				var compilerOnly = haxeOnly(previous, baseline);
+				var change = classify(previous, baseline),
+					compilerOnly = change.compilerOnly;
 				Sys.println("haxeon: source changed; rebuilding" + (compilerOnly ? " Haxe code" : " project"));
-				var updated = rebuild(compilerOnly);
+				var updated = rebuild(change);
 				if (updated == null) {
 					Sys.stderr().writeString("haxeon: build failed; keeping the current app open\n");
 					baseline = snapshot(project);
@@ -247,6 +257,20 @@ class WatchRun {
 			if (!a.exists(path))
 				return false;
 		return true;
+	}
+
+	/** Resolution reads manifests and the files under the source roots, so editing a Haxe file's contents cannot change its result. */
+	public static function classify(before:Map<String, String>, after:Map<String, String>):WatchChange {
+		var compilerOnly = haxeOnly(before, after), structural = !compilerOnly;
+		if (!structural) {
+			for (path in before.keys())
+				if (!after.exists(path))
+					structural = true;
+			for (path in after.keys())
+				if (!before.exists(path))
+					structural = true;
+		}
+		return {compilerOnly: compilerOnly, structural: structural};
 	}
 
 	static function haxeOnly(before:Map<String, String>, after:Map<String, String>):Bool {
