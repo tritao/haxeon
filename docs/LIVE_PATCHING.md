@@ -35,6 +35,11 @@ cold one, with no dead functions or constants. Frontend caches (parsing, typing,
 way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
 
 - `haxeon run --watch --live` builds with `--live` for you.
+- **A watch session keeps its compiler.** The worker whose session holds the patch history is chosen once, at
+  the first build (`haxeon: compiler worker version <hash> (kept for this watch session)`), and every rebuild
+  uses it. Edits to Haxeon's own compiler sources do not reach a running session, and nothing warns about
+  it: **restart the session after changing the compiler.** A new worker could not patch the running module
+  anyway, since it has none of the session's history.
 - The compiler CLI accepts `--live` for `--target=hl`; the `Compiler` API keeps history by default
   (`Compiler.livePatching`), and `CompilerDriver` sets it from the request.
 - The `<output>.hli` and `<output>.live.json` sidecars describe the session (module identity, revision), not

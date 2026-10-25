@@ -115,6 +115,14 @@ The output path must be separate from any ordinary app build output.
   --output build/host/live.hl -- --verbose
 ```
 
+> **Warning: a watch session keeps the compiler it started with.** `run --watch` picks its compiler worker
+> once, at the first build, and logs it as `haxeon: compiler worker version <hash> (kept for this watch
+> session)`. Later rebuilds reuse that worker even if Haxeon's own compiler sources (`src/`, `stdlib/`)
+> change, and nothing reports it. **After changing the compiler, restart the watch session** before you judge
+> whether the change worked. This is deliberate: a live app can only be patched by the worker that holds its
+> patch history, and not re-checking the compiler sources saves about 0.3 s per rebuild. See
+> [LIVE_PATCHING.md](LIVE_PATCHING.md#artifact-builds-and-live-sessions).
+
 Host builds resolve local path dependencies declared by package name. A
 dependency can provide Haxe sources and optional C sources; C sources are
 compiled into the HashLink native library requested by the build:
