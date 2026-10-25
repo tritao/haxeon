@@ -118,15 +118,12 @@ input is not counted as a frame.
   sections record no calls, instrumented or hooked, so no call loses half of
   its pair.
 
-  Known issue: a program that keeps the pool empty for seconds can hang.
-  A stress test hung twice in four runs: four threads allocating constantly
-  while making calls of under a microsecond, a 1 MiB pool, every call kept
-  and `instrument` alone. Recording stopped making progress and the program
-  never finished. The likely cause is a producer waiting for a chunk that
-  the GC does not count as blocking: a collection then waits for it while
-  the consumer that would free the chunk waits for the collection. Not yet
-  confirmed with thread stacks. Captures with the default pool, or that drop
-  short calls, have not hit it.
+  A stalled thread blocks for the GC while it waits (`hl_blocking`): it
+  touches only the pool until it has a chunk, and the consumer may be waiting
+  for a collection before it can free one, so a collection must not wait for
+  the stalled thread. `tests/integration/test-profiler-pool-stall.sh` keeps a
+  1 MiB pool empty from four allocating threads; before this, it hung in about
+  two runs of five.
 - **Short calls.** With a minimum call duration (1 µs from `haxeon run`, 0
   for none), the producer holds back the run of `ENTER` records at the end of
   its buffer: its published position stays at the start of the run. An exit

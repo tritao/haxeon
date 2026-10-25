@@ -105,10 +105,11 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
   for the recorder to free a buffer. The profiler drops nothing the program
   records, so a stall delays the program instead. Raise `--pool` if stalls
-  appear, and see [Known issues](#known-issues) for a program that keeps the
-  pool full. (The runtime's own threads that must not wait, such as the
-  consumer and a collection holding the GC lock, record no calls; if their
-  other records find no buffer, the recorder warns that records were lost.)
+  appear. A stalled thread counts as blocked for the GC, so a program that
+  keeps the pool full runs slower but finishes. (The runtime's own threads
+  that must not wait, such as the consumer and a collection holding the GC
+  lock, record no calls; if their other records find no buffer, the recorder
+  warns that records were lost.)
 - **Instants** for module loads and live module revisions.
 - **Instrumented calls.** A slice per call with its exact enter and exit
   times, Haxe and native mixed, on "Main thread frames" for the main thread
@@ -423,18 +424,6 @@ last line reports the consumer's drain rate and any stalls.
 
 ## Known issues
 
-- **A pool kept full can hang the program.** A stress test hung in two of
-  four runs: four threads allocating constantly while making calls of under a
-  microsecond each, with `--pool 1`, every call kept (no `--min-call-us`) and
-  `instrument` alone. Recording stops making progress and the program never
-  finishes; `hlprof-live` keeps printing `0.0 MiB/s`. The likely cause is a
-  thread waiting for a buffer that the GC does not count as blocked, so a
-  collection waits for it while the consumer that would free the buffer
-  waits for the collection; it is not yet confirmed. The same test passes
-  with short calls dropped or with `sampling` and `alloc` added, and no
-  capture with the default 64 MiB pool has hit it. If a run stops making
-  progress, raise `--pool` or keep `--profile-min-call` above 0. See
-  `PROFILER.md` (Buffers) for the design.
 - **Export memory grows with the call rate.** The exporter holds about two
   seconds of records to put them in order, so a capture of an instrumented
   run that keeps every call needs memory in proportion. Drop short calls or

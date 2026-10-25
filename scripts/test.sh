@@ -185,6 +185,7 @@ run_timed profiler-min-call-integration "$root_dir/tests/integration/test-profil
 run_timed profiler-excluded-catch-integration "$root_dir/tests/integration/test-profiler-excluded-catch.sh"
 run_timed profiler-recording-integration "$root_dir/tests/integration/test-profiler-recording.sh"
 run_timed profiler-wait-integration "$root_dir/tests/integration/test-profiler-wait.sh"
+run_timed profiler-pool-stall-integration "$root_dir/tests/integration/test-profiler-pool-stall.sh"
 run_timed profiler-reconnect-integration "$root_dir/tests/integration/test-profiler-reconnect.sh"
 run_timed profiler-perfetto-integration "$root_dir/tests/integration/test-profiler-perfetto.sh"
 run_timed profiler-native-instrument-integration "$root_dir/tests/integration/test-profiler-native-instrument.sh"
