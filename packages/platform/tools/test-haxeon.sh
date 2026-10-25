@@ -88,6 +88,8 @@ fi
         --ffi-projection="$platform_dir/bindings/nativekit-vulkan.hxmap" \
         "$platform_dir/tests/Smoke.hx" \
         "$platform_dir/tests/NativeKitHttpEventTests.hx" \
+        "$platform_dir/tests/NativeKitFileWatchTests.hx" \
+        "$platform_dir/src/haxeon/platform/NativeKitFileWatch.hx" \
         "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
         "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
         "$platform_dir/src/haxeon/platform/NativeKitHttpEvents.hx" \
