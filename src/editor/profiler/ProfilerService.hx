@@ -210,7 +210,10 @@ class ProfilerService {
 		if (workerStarted)
 			return;
 		workerStarted = true;
-		Thread.create(run);
+		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.profiler");
+			run();
+		});
 	}
 
 	function requireSession():ProfilerSession {

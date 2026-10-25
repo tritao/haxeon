@@ -42,8 +42,14 @@ class LspDispatcher {
 		debounceSeconds = debounceMs / 1000.0;
 		protocol.enableDeferredDiagnostics();
 		protocol.enableProfilerNotifications(emit);
-		Thread.create(run);
-		Thread.create(runDebounce);
+		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.lsp.dispatch");
+			run();
+		});
+		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.lsp.debounce");
+			runDebounce();
+		});
 	}
 
 	/** Enqueue one message. Returns true when it is an exit notification. */

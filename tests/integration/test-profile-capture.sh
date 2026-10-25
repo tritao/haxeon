@@ -18,6 +18,12 @@ class Main {
 
   static function main():Void {
     haxeon.ProfileCounter.set("capture.test.counter", 7);
+    var done = new sys.thread.Lock();
+    haxeon.Threads.create("capture.worker", function() {
+      measured(1000);
+      done.release();
+    });
+    done.wait();
     Sys.println("profile capture test " + measured(1000));
   }
 }
@@ -45,6 +51,8 @@ assert manifest["artifacts"]["perfetto"] == "profile.pftrace" and b"capture.test
 assert b"Main.measured" in trace
 # The session starts before the entry point, so it shows the runtime's startup under a Startup frame.
 assert b"Startup" in trace and b"Load bytecode" in trace and b"Compile and link the module" in trace
+# A thread named where it starts keeps that name, though it exits before the session's next thread list.
+assert b"capture.worker" in trace
 PY
 "$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.log"
 

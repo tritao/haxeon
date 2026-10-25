@@ -147,7 +147,9 @@ def main():
                        % sql_str(args.expect_process))
             check(n > 0, "process %r not found" % args.expect_process)
         for name in args.expect_thread:
-            n = scalar(tp, trace, "select count(*) from thread where name = %s" % sql_str(name))
+            # The main thread is "main (thread N)": the trace gives it the process id so Perfetto lists it first.
+            n = scalar(tp, trace, "select count(*) from thread where name = %s or name glob %s"
+                       % (sql_str(name), sql_str(name + " (thread *)")))
             check(n > 0, "thread %r not found" % name)
         for name in args.expect_slice:
             n = scalar(tp, trace, "select count(*) from slice where name = %s" % sql_str(name))

@@ -203,7 +203,12 @@ statistics keep their existing tracks. "Frames" and "Main thread frames" are
 tracks under the main thread, which the trace lists first by giving it the
 process id as its tid. The startup phases and the program's code before the
 first frame mark go under a `Startup` frame (Perfetto only). A
-thread without a runtime name takes its entry function's, and a C++
+thread's name comes from the runtime (`hl_thread_set_name`, which also writes a
+`PROFILE_EVENT_THREAD_NAME` record on a recording thread that names itself),
+or from the system name of a recorded thread, which the session's thread list
+includes (`GetThreadDescription`, `/proc/self/task/<tid>/comm`). The export
+merges every thread list of the session, so a thread that exited keeps its
+name. A thread with no name at all takes its entry function's, and a C++
 thread-start wrapper around the entry function is left out of its stack. Each thread's samples are also laid out
 as nested slices on a "Call stacks" track under the thread, so code the
 instrumentation does not cover still reads as a flame graph over time, at the

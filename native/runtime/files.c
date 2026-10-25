@@ -63,6 +63,10 @@ HL_PRIM void HL_NAME(__sys_profile_frame)( int kind, int frame_set ) {
 	hl_sys_profile_frame(kind,frame_set);
 }
 
+HL_PRIM void HL_NAME(__sys_thread_set_name)( vstring *name ) {
+	hl_thread_set_name(hl_thread_current(),name == NULL ? "" : realtime_string_utf8(name));
+}
+
 HL_PRIM vstring *HL_NAME(__sys_get_cwd)( void ) {
 	return realtime_string_from_platform(hl_sys_get_cwd());
 }

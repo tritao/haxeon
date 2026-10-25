@@ -774,6 +774,7 @@ class HaxeonCli {
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
 		sys.thread.Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.cli.pump");
 			try {
 				var bytes = haxe.io.Bytes.alloc(8192),
 					count = input.readBytes(bytes, 0, bytes.length);

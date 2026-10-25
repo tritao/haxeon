@@ -142,6 +142,7 @@ class CompilerServer {
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.compile");
 			try
 				result = CompilerDriver.compile(cast staged, message -> {
 					cancellation.check();

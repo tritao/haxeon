@@ -508,6 +508,7 @@ DEFINE_PRIM(_STRING,__file_write_atomic,_STRING _ABSTRACT(realtime_bytes) _BOOL)
 DEFINE_PRIM(_VOID,__sys_profile_span,_I32 _STRING);
 DEFINE_PRIM(_VOID,__sys_profile_counter,_I32 _STRING _F64);
 DEFINE_PRIM(_VOID,__sys_profile_frame,_I32 _I32);
+DEFINE_PRIM(_VOID,__sys_thread_set_name,_STRING);
 DEFINE_PRIM(_STRING,__sys_get_cwd,_NO_ARG);
 DEFINE_PRIM(_STRING,__sys_full_path,_STRING);
 DEFINE_PRIM(_STRING,__sys_exe_path,_NO_ARG);

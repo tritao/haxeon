@@ -219,6 +219,7 @@ class Executor implements ExecutionBackend {
 				var currentAction = action,
 					dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				Thread.create(function() {
+					runtime.ThreadName.setCurrent("haxeon.build.action");
 					// Always report and release: an exception escaping this thread would leave the
 					// scheduler waiting on the lock forever.
 					var server = jobServer,

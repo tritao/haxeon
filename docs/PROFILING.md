@@ -78,9 +78,10 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   stretch between `ProfileFrame.idle()` and the next mark is an `Idle` root.
   Under each root is that frame's call stack over time, Haxe and native mixed.
   The stack is cut at every frame boundary, so no slice spans two frames.
-- **Call stacks over time.** Every other thread has a "Call stacks" track
-  under its thread track with the same layout, without frame roots. A thread
-  the program did not name is named after its entry function
+- **Call stacks over time.** Every other thread has a call-stack track,
+  named after the thread, under its thread track with the same layout,
+  without frame roots. Threads show by name (see Thread names below); a
+  thread nothing named is named after its entry function
   (`WorkerPool::worker_loop`), and the C++ runtime's thread-start wrapper
   (`std::thread::_Invoke<...>`) is left out, so the entry function is the
   track's root. A
@@ -128,6 +129,23 @@ The desktop UI host also marks each pump step's event wait and dispatch with
 The exosuit editor also records the `ui.frame.allocated_bytes` counter.
 `ProfileSpan` and `ProfileCounter` skip their work when nothing is recording,
 so they can stay in shipped code.
+
+### Thread names
+
+A trace shows each thread by name, so every thread a program starts should
+have one that says what it does. Start Haxe threads with
+`haxeon.Threads.create(name, call)` (or call `haxeon.Threads.nameCurrent(name)`
+first thing in the thread), and name native threads with the system call
+(`SetThreadDescription`, `pthread_setname_np`); NativeKit names its own
+(`nk.render`, `nk.task.N`, `nk.worker.N`, `nk.local <pipe>`, `nk.pty.N.read`,
+`nk.net.request`, ...). Debuggers and crash dumps show the same names. Linux
+keeps a name's first 15 bytes, so put what tells threads apart first.
+
+The recorder takes a thread's name from the runtime (a Haxe thread's name is
+recorded the moment it is set, so it holds even if the thread exits soon
+after) or else from the system, which it reads every half second while
+recording. A thread that has no name by the end is named after its entry
+function.
 
 To check a trace without opening the UI, `scripts/check-pftrace.py` runs
 queries through Perfetto's `trace_processor_shell` (download it from the
