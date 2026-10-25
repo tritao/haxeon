@@ -168,6 +168,8 @@ DEFINE_PRIM(_I32,patch,_ABSTRACT(realtime_module) _BYTES _I32);
 DEFINE_PRIM(_I32,allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,patch_jit_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_BYTES,jit_location,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,entry_state,_ABSTRACT(realtime_module) _I32);
+DEFINE_PRIM(_I32,calls_directly,_ABSTRACT(realtime_module) _I32 _I32);
 DEFINE_PRIM(_I32,debug_region_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,retired_allocation_count,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,type_count,_ABSTRACT(realtime_module));

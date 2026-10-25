@@ -49,6 +49,12 @@ private class RuntimeNative {
 	public static function jit_location(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
 		return null;
 
+	public static function entry_state(module:hl.Abstract<"realtime_module">, index:Int):Int
+		return -1;
+
+	public static function calls_directly(module:hl.Abstract<"realtime_module">, caller:Int, callee:Int):Int
+		return -1;
+
 	public static function debug_region_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -166,6 +172,17 @@ class Runtime {
 		var bytes = module.access(function(handle) return RuntimeNative.jit_location(handle, stableIndex));
 		return bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 	}
+
+	/**
+	 * How a function's original entry was redirected by patches: 0 untouched, 1 by the 12-byte writer, 2 by the atomic jump,
+	 * -1 when the module has no original entry for it. A test hook.
+	 */
+	@:noCompletion public static function entryState(module:LoadedModule, stableIndex:Int):Int
+		return module.access(function(handle) return RuntimeNative.entry_state(handle, stableIndex));
+
+	/** Whether the base code of `caller` calls the original entry of `callee` directly (1), not (0) or is unknown (-1). A test hook. */
+	@:noCompletion public static function callsDirectly(module:LoadedModule, caller:Int, callee:Int):Int
+		return module.access(function(handle) return RuntimeNative.calls_directly(handle, caller, callee));
 
 	public static function debugRegionCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.debug_region_count);
