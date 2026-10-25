@@ -23,8 +23,17 @@ class LiveLoweringReuseMain {
 		File.saveContent(edited, "class Edited { public static function value():Int { return Lib.twice(3); } }");
 		File.saveContent(other, "class Other { public static function value():Int { return Lib.twice(5); } }");
 		File.saveContent(main, "class Main { public static function main():Int { return Edited.value() + Other.value(); } }");
-		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--live", "--output=" + output, main, lib, edited, other],
-			session = new CompilerSession();
+		var args = [
+			"--target=hl",
+			"--entry=Main",
+			"--root=" + root,
+			"--live",
+			"--output=" + output,
+			main,
+			lib,
+			edited,
+			other
+		], session = new CompilerSession();
 		function compile()
 			return CompilerDriver.compile(CompilerArguments.parse(args), _ -> {}, session);
 		var initial = compile();

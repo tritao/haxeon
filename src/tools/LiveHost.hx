@@ -177,14 +177,20 @@ class LiveHost {
 	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
 	static function readDescription(path:String):LiveDescription {
 		var value:Dynamic = Json.parse(File.getContent(path + ".live.json"));
-		var changed:Array<Dynamic> = value.changedFunctions, identities:Array<Dynamic> = value.identities;
+		var changed:Array<Dynamic> = value.changedFunctions,
+			identities:Array<Dynamic> = value.identities;
 		return {
 			revision: value.revision,
 			moduleIdentity: value.moduleIdentity,
 			requiresReload: value.requiresReload,
 			patchAvailable: value.patchAvailable,
 			changedFunctions: [for (id in changed) (id : Int)],
-			identities: [for (item in identities) ({name: item.name, id: item.id} : LiveFunction)]
+			identities: [
+				for (item in identities)
+					({
+						name:item.name, id:item.id
+					} : LiveFunction)
+			]
 		};
 	}
 
