@@ -48,24 +48,42 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 
 - **Frames.** A "Frames" track with one slice per frame, named `Frame N`, from
   the `haxeon.ProfileFrame` marks (see below). A trace without marks has no
-  such track.
+  such track. When recording starts with the program (`--diagnostics-wait`,
+  which `haxeon run --profile` uses), a `Startup` slice covers everything
+  before the first frame.
+- **Startup.** A session that starts before the program's entry point also
+  records the runtime's own startup, from `main` on: initializing the
+  runtime, loading the bytecode, compiling and linking the module (the JIT
+  and the native libraries it loads), starting diagnostics and waiting for
+  the profiler. The phases are slices on the main thread under `Startup`,
+  followed by the program's entry point, so the Perfetto trace starts at
+  HashLink's `main` rather than at the entry point.
+- **Thread order.** The main thread comes first, shown as `main (thread N)`
+  (Perfetto puts a process's main thread first only when its tid is the
+  process id, so the trace gives it that tid and keeps the real one in the
+  name). The other threads follow by tid.
 - **Spans.** Slices from `haxeon.ProfileSpan`, nested on the thread that
   emitted them.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark
-  time and allocation rate), app counters from
+  time and allocation rate), "Short calls dropped per frame" when short calls
+  are dropped (see below), app counters from
   `haxeon.ProfileCounter.set(name, value)`, and, with `alloc`, an estimate of
   the bytes allocated.
 - **Samples.** Stack samples (`--rate`, default 1000 Hz) with Haxe frames named
   `Class.method` with file and line. A sample taken while the world was
   stopped for a GC also gets a "GC stop sample" instant.
-- **Frames as flame graphs.** "Main thread frames", the first track of the
-  trace, shows the main thread one frame at a time: each frame (from one
+- **Frames as flame graphs.** "Main thread frames", under the main thread
+  with "Frames", shows the main thread one frame at a time: each frame (from one
   `ProfileFrame.mark()` to the next) is a root slice named `Frame N`, and each
   stretch between `ProfileFrame.idle()` and the next mark is an `Idle` root.
   Under each root is that frame's call stack over time, Haxe and native mixed.
   The stack is cut at every frame boundary, so no slice spans two frames.
 - **Call stacks over time.** Every other thread has a "Call stacks" track
-  under its thread track with the same layout, without frame roots. A
+  under its thread track with the same layout, without frame roots. A thread
+  the program did not name is named after its entry function
+  (`WorkerPool::worker_loop`), and the C++ runtime's thread-start wrapper
+  (`std::thread::_Invoke<...>`) is left out, so the entry function is the
+  track's root. A
   function that stays on the stack across consecutive samples is one slice.
   Boundaries are as
   precise as the sampling interval, calls shorter than it appear only when a

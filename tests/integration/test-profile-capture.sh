@@ -43,6 +43,8 @@ assert (capture / manifest["artifacts"]["profile"]).stat().st_size > 0
 trace = (capture / manifest["artifacts"]["perfetto"]).read_bytes()
 assert manifest["artifacts"]["perfetto"] == "profile.pftrace" and b"capture.test.counter" in trace
 assert b"Main.measured" in trace
+# The session starts before the entry point, so it shows the runtime's startup under a Startup frame.
+assert b"Startup" in trace and b"Load bytecode" in trace and b"Compile and link the module" in trace
 PY
 "$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.log"
 

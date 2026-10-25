@@ -75,7 +75,13 @@ Each thread writes records to its own buffer. Records are little-endian,
 names, GC statistics, native symbols and locations, allocation samples and
 module loads, with the payloads they always had. It also carries
 `PROFILE_EVENT_DROPPED_CALLS`: the calls a thread dropped for being short
-since its last such event, as entries of `key:u64, count:u32, 0:u32`.
+since its last such event, as entries of `key:u64, count:u32, 0:u32`, and
+`PROFILE_EVENT_STARTUP`: the runtime's startup phases before the program's
+entry point, as `thread:u32, count:u32`, then per phase `begin:u64, end:u64`
+(ticks), `length:u32, 0:u32` and the name padded to 8 bytes. `main` marks the
+phases with `hl_prof_startup_phase` when diagnostics are on; the first session
+started before the entry point writes them once and puts its base tick at the
+first phase, so the session's ticks start with the process.
 
 A frame set's frames run from one `FRAME_MARK` to the next. `FRAME_IDLE` ends
 the current frame without starting another, so time a UI spends waiting for
@@ -193,7 +199,12 @@ Version 1 captures (pull-based chunks) remain readable.
 merges the threads' records in time order. In Perfetto, instrumented calls and
 spans are nested slices on their thread's track (a flame graph over time),
 frames are slices on a "Frames" track, and samples, counters and GC
-statistics keep their existing tracks. Each thread's samples are also laid out
+statistics keep their existing tracks. "Frames" and "Main thread frames" are
+tracks under the main thread, which the trace lists first by giving it the
+process id as its tid. The startup phases and the program's code before the
+first frame mark go under a `Startup` frame (Perfetto only). A
+thread without a runtime name takes its entry function's, and a C++
+thread-start wrapper around the entry function is left out of its stack. Each thread's samples are also laid out
 as nested slices on a "Call stacks" track under the thread, so code the
 instrumentation does not cover still reads as a flame graph over time, at the
 sampling interval's resolution.
