@@ -51,8 +51,9 @@ class ContentDigestCache {
 		mutex.acquire();
 		#end
 		try {
-			var stat = FileSystem.stat(path), // The path is the identity (Windows reports inode 0). A relative one is resolved against the current directory,
-			// which a long-lived process may change; absolute paths, the common case, skip that syscall.
+			// The path is the identity (Windows reports inode 0). A relative one is resolved against the current directory, which a
+			// long-lived process may change; absolute paths, the common case, skip that syscall.
+			var stat = FileSystem.stat(path),
 				key = Path.isAbsolute(path) ? path : FileSystem.fullPath(path),
 				signature = stat.dev + ":" + stat.ino + ":" + stat.size + ":" + stat.mtime.getTime() + ":" + stat.ctime.getTime(),
 				entry = entries.get(key);

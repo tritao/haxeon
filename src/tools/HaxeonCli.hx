@@ -697,18 +697,20 @@ class HaxeonCli {
 						if (windows)
 							Sys.putEnv("PATH", buildPath);
 						try {
+							// A project resolved again is kept even if its build fails: the next, content-only edit must not fall back to the
+							// project from before the structural change.
 							var lock = lockfileStamp(projectConfigPath);
-							var candidate = change.structural
-								|| lock != cachedLock ? discoverProject(projectConfigPath, requestedTarget) : cachedProject;
+							if (change.structural || lock != cachedLock) {
+								cachedLock = null; // resolve again next time if this throws
+								cachedProject = discoverProject(projectConfigPath, requestedTarget);
+								cachedLock = lock;
+							}
+							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
 								options.selfHosted, change.compilerOnly, options.live, instrument, session);
 							if (windows)
 								Sys.putEnv("PATH", runPath);
-							if (status != 0)
-								return null;
-							cachedProject = candidate;
-							cachedLock = lock;
-							return candidate;
+							return status == 0 ? candidate : null;
 						} catch (error:Dynamic) {
 							if (windows)
 								Sys.putEnv("PATH", runPath);
