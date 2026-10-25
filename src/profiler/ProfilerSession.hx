@@ -329,10 +329,12 @@ class ProfilerSession {
 		clock.offsetSeconds = latestTime;
 		metadataReceived = false;
 		endSeen = false;
+		var started = false;
 		try {
 			if (capturePath != null && capture == null)
 				capture = new HlpcCapture(capturePath, client.hello.processId, sampleRate, this.sources);
 			updateStatus(client.start(this.sources, sampleRate, allocationInterval));
+			started = true;
 			state = Running;
 			lastError = null;
 			var deadline = Timer.stamp() + 10.0;
@@ -348,8 +350,17 @@ class ProfilerSession {
 		} catch (error:Dynamic) {
 			lastError = Std.string(error);
 			state = Failed;
-			// A session that never started ends its capture, so the next start can record one.
-			stopCapture();
+			// The runtime's session is stopped, and the capture file closed incomplete; the capture stays requested, so the
+			// next start records it again. Neither hides the error.
+			try {
+				if (started)
+					client.stop();
+			} catch (_:Dynamic) {}
+			try {
+				if (capture != null)
+					capture.close(false);
+			} catch (_:Dynamic) {}
+			capture = null;
 			throw error;
 		}
 	}
@@ -528,12 +539,12 @@ class ProfilerSession {
 			var data = HldiFrames.data(frame.payload);
 			records = HldiFrames.records(clock, data.threadId, data.records);
 			generatedBytes = Int64.add(generatedBytes, Int64.ofInt(data.rawLength));
-			for (record in records)
-				consume(record);
 		} catch (_:Dynamic) {
 			malformedSegments++;
 			return 0;
 		}
+		for (record in records)
+			consume(record);
 		return records.length;
 	}
 
