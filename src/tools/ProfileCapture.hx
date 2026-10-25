@@ -75,8 +75,12 @@ class ProfileCapture {
 
 	/** HL_PROF_BOUNDARY for an instrumented run: which boundary hooks the runtime installs (see prof_boundary.c). */
 	public static function boundaryConfiguration(instrument:project.PackageManifest.InstrumentManifest):String {
-		var parts = ['imports=${instrument.boundaryImports}', 'dxgi=${instrument.dxgi ? 1 : 0}', 'd3d11=${instrument.d3d11 ? 1 : 0}',
-			'vulkan=${instrument.vulkan ? 1 : 0}'];
+		var parts = [
+			'imports=${instrument.boundaryImports}',
+			'dxgi=${instrument.dxgi ? 1 : 0}',
+			'd3d11=${instrument.d3d11 ? 1 : 0}',
+			'vulkan=${instrument.vulkan ? 1 : 0}'
+		];
 		if (instrument.boundaryExtra.length > 0)
 			parts.push('extra=${instrument.boundaryExtra.join(",")}');
 		return parts.join(";");
@@ -249,9 +253,12 @@ class ProfileCapture {
 
 	/** Exports the finished capture for Perfetto and writes the capture manifest. Returns the trace, or null on failure. */
 	public function complete():Null<String> {
-		var trace = Path.join([directory, '$name.pftrace']), log = Path.join([directory, "export.log"]);
+		var trace = Path.join([directory, '$name.pftrace']),
+			log = Path.join([directory, "export.log"]);
 		var status = waitOrStop(startLogged([profiler, "export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
-			.concat(["--output", trace, capture]), log), EXPORT_SECONDS);
+			.concat(["--output", trace, capture]),
+			log),
+			EXPORT_SECONDS);
 		var errors = status == null ? 'stopped after ${EXPORT_SECONDS} s' : FileSystem.exists(log) ? File.getContent(log) : "";
 		var artifacts:Dynamic = {bytecode: '$name.hl', profile: Path.withoutDirectory(capture)};
 		if (revisions.length > 0)

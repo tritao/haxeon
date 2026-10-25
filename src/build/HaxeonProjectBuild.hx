@@ -38,7 +38,7 @@ class HaxeonProjectBuild {
 		if (instrument)
 			defines = defines.concat(instrumentDefines(project));
 		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release, null, null,
-				instrument ? project.manifest.instrument : null),
+			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live));

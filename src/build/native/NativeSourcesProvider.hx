@@ -57,8 +57,8 @@ class NativeSourcesProvider {
 					standard = artifact.details.get("standard");
 				objectPaths.set(artifact.id.key(), output);
 				actions.push(new ExecutionAction(id, dependencies, inputs, [output], 'Compile $language $source -> $output',
-					Process(toolchain.compileCommand(source), toolchain.compileArguments(source, output, includeDirs, standard, resolvedPackage.root), resolvedPackage.root,
-						new Map())));
+					Process(toolchain.compileCommand(source), toolchain.compileArguments(source, output, includeDirs, standard, resolvedPackage.root),
+						resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [id]);
 			}
 		for (artifact in artifacts)

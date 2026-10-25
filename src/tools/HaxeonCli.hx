@@ -644,8 +644,7 @@ class HaxeonCli {
 				for (resolvedPackage in project.packages.packages)
 					if (resolvedPackage.nativeSources.length > 0
 						|| (resolvedPackage.manifest.native != null
-							&& resolvedPackage.manifest.native.cmake != null))
-						Path.join([buildDirectory, "host", "native", resolvedPackage.name])
+							&& resolvedPackage.manifest.native.cmake != null)) Path.join([buildDirectory, "host", "native", resolvedPackage.name])
 			];
 			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
 			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
@@ -998,8 +997,7 @@ class HaxeonCli {
 			else if (StringTools.startsWith(argument, "--profile=")) {
 				profileSources = ProfileCapture.parseSources(argument.substr("--profile=".length));
 				profile = true;
-			}
-			else if (argument == "--profile-output") {
+			} else if (argument == "--profile-output") {
 				if (index >= arguments.length)
 					throw 'Option "--profile-output" requires a value';
 				profileOutput = arguments[index++];
@@ -1057,8 +1055,7 @@ class HaxeonCli {
 			} else if (StringTools.startsWith(argument, "--profile-min-call=")) {
 				profile = true;
 				profileMinCall = ProfileCapture.parseMinCall(argument.substr("--profile-min-call=".length));
-			}
-			else if (StringTools.startsWith(argument, "--profile-output=")) {
+			} else if (StringTools.startsWith(argument, "--profile-output=")) {
 				profileOutput = argument.substr("--profile-output=".length);
 				profile = true;
 			} else

@@ -28,6 +28,7 @@ class ProfileAggregate {
 	public final line:Null<Int>;
 	public var selfSamples = 0;
 	public var totalSamples = 0;
+
 	/** Instrumented calls (functions only; lines have none). */
 	public var calls = 0;
 
@@ -549,7 +550,9 @@ class ProfilerSession {
 	}
 
 	function applyMetadata(payload:Bytes):Void {
-		var previous = metadata, started = Timer.stamp(), next = profiler.HldiCodec.metadata(payload);
+		var previous = metadata,
+			started = Timer.stamp(),
+			next = profiler.HldiCodec.metadata(payload);
 		metadataRefreshMs = (Timer.stamp() - started) * 1000;
 		if (previous != null)
 			for (moduleId => revision in next.revisions) {
@@ -604,7 +607,10 @@ class ProfilerSession {
 					base = input.u64();
 				var moduleLength = input.u32(), symbolLength = input.u32();
 				// Lengths are unsigned on the wire: one past 2^31 reads negative here.
-				if (moduleLength >= 0 && symbolLength >= 0 && moduleLength <= input.remaining() && symbolLength == input.remaining() - moduleLength) {
+				if (moduleLength >= 0
+					&& symbolLength >= 0
+					&& moduleLength <= input.remaining()
+					&& symbolLength == input.remaining() - moduleLength) {
 					var module = input.take(moduleLength).toString(),
 						name = input.take(symbolLength).toString();
 					nativeSymbols.set(pc, {name: name, module: module, base: base});
@@ -750,7 +756,10 @@ class ProfilerSession {
 
 	static function sorted(values:Map<String, ProfileAggregate>):Array<ProfileAggregate> {
 		var result = [for (value in values) value];
-		result.sort((left, right) -> left.selfSamples != right.selfSamples ? right.selfSamples - left.selfSamples : left.totalSamples != right.totalSamples ? right.totalSamples - left.totalSamples : right.calls - left.calls);
+		result.sort((left, right) -> left.selfSamples != right.selfSamples ? right.selfSamples
+			- left.selfSamples : left.totalSamples != right.totalSamples ? right.totalSamples
+				- left.totalSamples : right.calls
+				- left.calls);
 		return result;
 	}
 }

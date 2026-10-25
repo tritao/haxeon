@@ -154,8 +154,12 @@ class NativeCMakeProvider {
 	 * has native instrumentation; elsewhere the flavor builds native code as usual.
 	 */
 	static function instrumentArguments(context:LoweringContext):Array<String> {
-		var instrument = context.environment.instrument, target = context.environment.target;
-		if (instrument == null || target.os != TargetOs.Windows || target.abi != TargetAbi.Msvc || target.arch != build.Target.TargetArch.X64)
+		var instrument = context.environment.instrument,
+			target = context.environment.target;
+		if (instrument == null
+			|| target.os != TargetOs.Windows
+			|| target.abi != TargetAbi.Msvc
+			|| target.arch != build.Target.TargetArch.X64)
 			return [];
 		var home = context.compilerHome;
 		return [

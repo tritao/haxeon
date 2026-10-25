@@ -165,7 +165,13 @@ class HldiClient {
 		}
 	}
 
-	function readFrame():{service:Int, type:Int, flags:Int, requestId:Int, payload:Bytes} {
+	function readFrame():{
+		service:Int,
+		type:Int,
+		flags:Int,
+		requestId:Int,
+		payload:Bytes
+	} {
 		var reply = new HldiReader(readExact(16)),
 			service = reply.u8(),
 			type = reply.u8(),

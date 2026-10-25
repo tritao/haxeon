@@ -118,8 +118,8 @@ class CompilationContext {
 			return null;
 		if (option != "1")
 			throw "haxeon-instrument must be 0 or 1";
-		return new compiler.ir.IrInstrumentation.IrInstrumentationScope(
-			compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-include")),
+		return
+			new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-include")),
 			compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-exclude")));
 	}
 

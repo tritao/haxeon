@@ -141,6 +141,7 @@ class HldiClock {
 	var originNanos:Int64 = Int64.ofInt(0);
 
 	public var nominalHz:Float = 0;
+
 	/** Added to every result, so a later session's timestamps can continue an earlier one's. */
 	public var offsetSeconds:Float = 0;
 
@@ -221,6 +222,7 @@ class HldiFrames {
 
 	/** HldiRecord kinds this decoder produces. */
 	public static inline final KIND_SAMPLE = 1;
+
 	public static inline final KIND_EVENT = 2;
 	public static inline final KIND_ENTER = 3;
 
@@ -281,7 +283,9 @@ class HldiFrames {
 
 	/** Samples, events and instrumented-call entries from one thread's records; the other kinds are validated and skipped. */
 	public static function records(clock:HldiClock, threadId:Int, bytes:Bytes):Array<HldiRecord> {
-		var input = new HldiReader(bytes), result:Array<HldiRecord> = [], empty = Bytes.alloc(0);
+		var input = new HldiReader(bytes),
+			result:Array<HldiRecord> = [],
+			empty = Bytes.alloc(0);
 		while (input.remaining() > 0) {
 			var low = input.u32(),
 				high = input.u32(),
@@ -297,7 +301,9 @@ class HldiFrames {
 					var units = input.u32(), encoding = input.u32();
 					input.skip(padded(units * (encoding == 1 ? 1 : 2)));
 				case RECORD_EVENT:
-					var id = input.u32(), length = input.u32(), payload = input.take(length);
+					var id = input.u32(),
+						length = input.u32(),
+						payload = input.take(length);
 					input.skip(padded(length) - length);
 					result.push(new HldiRecord(KIND_EVENT, 0, time, threadId, id, [], payload));
 				case RECORD_COUNTER:
@@ -305,7 +311,9 @@ class HldiFrames {
 					var units = input.u32(), encoding = input.u32();
 					input.skip(padded(units * (encoding == 1 ? 1 : 2)));
 				case RECORD_SAMPLE:
-					var sampleThread = input.u32(), frames = input.u16(), flags = input.u8();
+					var sampleThread = input.u32(),
+						frames = input.u16(),
+						flags = input.u8();
 					input.u8();
 					result.push(new HldiRecord(KIND_SAMPLE, flags, time, sampleThread, frames, [for (_ in 0...frames) input.u64()], empty));
 				default:

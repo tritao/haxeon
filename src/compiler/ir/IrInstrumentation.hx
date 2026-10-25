@@ -26,7 +26,10 @@ class IrInstrumentationScope {
 	public static function patterns(value:Null<String>):Array<String> {
 		if (value == null)
 			return [];
-		return [for (pattern in value.split(",")) if (StringTools.trim(pattern) != "") StringTools.trim(pattern)];
+		return [
+			for (pattern in value.split(","))
+				if (StringTools.trim(pattern) != "") StringTools.trim(pattern)
+		];
 	}
 
 	public function key():String
@@ -88,10 +91,34 @@ class IrInstrumentation {
 
 	public static function natives():Array<IrNative>
 		return [
-			{name: Enter, library: "std", symbol: "prof_call_enter", arguments: [], result: Void},
-			{name: Exit, library: "std", symbol: "prof_call_exit", arguments: [], result: Void},
-			{name: Depth, library: "std", symbol: "prof_call_depth", arguments: [], result: I32},
-			{name: Unwind, library: "std", symbol: "prof_call_unwind", arguments: [I32], result: Void}
+			{
+				name: Enter,
+				library: "std",
+				symbol: "prof_call_enter",
+				arguments: [],
+				result: Void
+			},
+			{
+				name: Exit,
+				library: "std",
+				symbol: "prof_call_exit",
+				arguments: [],
+				result: Void
+			},
+			{
+				name: Depth,
+				library: "std",
+				symbol: "prof_call_depth",
+				arguments: [],
+				result: I32
+			},
+			{
+				name: Unwind,
+				library: "std",
+				symbol: "prof_call_unwind",
+				arguments: [I32],
+				result: Void
+			}
 		];
 
 	public static function isProbe(name:String):Bool

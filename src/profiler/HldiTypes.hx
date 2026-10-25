@@ -80,6 +80,7 @@ class HldiDataFrame {
 	public final threadId:Int;
 	public final flags:Int;
 	public final rawLength:Int;
+
 	/** The thread's records, decompressed. */
 	public final records:Bytes;
 

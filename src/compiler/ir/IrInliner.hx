@@ -238,7 +238,8 @@ class IrInliner {
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
 			if (instrument != null) {
-				var known = cache.instrumented.get(fn.name), key = instrument.key();
+				var known = cache.instrumented.get(fn.name),
+					key = instrument.key();
 				if (known == null || known.source != result || known.scope != key)
 					known = {source: result, scope: key, result: IrInstrumentation.apply(result, instrument)};
 				instrumented.set(fn.name, known);

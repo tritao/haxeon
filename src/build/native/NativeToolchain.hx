@@ -21,7 +21,10 @@ class NativeToolchain {
 	 */
 	public function instrumenting():Bool {
 		var target = environment.target;
-		return environment.instrument != null && compilerHome != null && target.os == TargetOs.Windows && target.abi == TargetAbi.Msvc
+		return environment.instrument != null
+			&& compilerHome != null
+			&& target.os == TargetOs.Windows
+			&& target.abi == TargetAbi.Msvc
 			&& target.arch == build.Target.TargetArch.X64;
 	}
 
@@ -133,7 +136,8 @@ class NativeToolchain {
 			case TargetOs.Windows:
 				environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/LD", "/Fe:" + output].concat(objects)
 				.concat(inputs)
-				.concat(instrumenting() ? [instrumentHooks(), "/link", "/DEBUG", "/OPT:REF", "/OPT:ICF", "/INCREMENTAL:NO"] : []) : ["-shared", "-o", output].concat(objects).concat(inputs);
+				.concat(instrumenting() ? [instrumentHooks(), "/link", "/DEBUG", "/OPT:REF", "/OPT:ICF", "/INCREMENTAL:NO"] : []) : ["-shared", "-o", output].concat(objects)
+				.concat(inputs);
 			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects).concat(inputs);
 			case _: ["-shared", "-o", output].concat(objects).concat(inputs);
 		};
