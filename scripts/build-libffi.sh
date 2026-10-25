@@ -53,6 +53,8 @@ fi
 	autoreconf -f -v -i
 )
 
+# A rebuild starts clean: a build tree configured for other sources keeps their paths in its dependencies.
+rm -rf "$build_dir"
 mkdir -p "$build_dir" "$install_dir"
 cd "$build_dir"
 

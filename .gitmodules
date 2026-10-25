@@ -11,7 +11,8 @@
 	url = https://github.com/haxe-utest/utest.git
 [submodule "vendor/libffi"]
 	path = vendor/libffi
-	url = https://github.com/libffi/libffi.git
+	url = https://github.com/tritao/libffi.git
+	branch = haxeon/main
 [submodule "vendor/nativekit"]
 	path = vendor/nativekit
 	url = https://github.com/tritao/nativekit.git
