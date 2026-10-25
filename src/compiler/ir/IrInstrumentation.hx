@@ -75,7 +75,8 @@ class IrInstrumentationScope {
  * Adds profiler probes to a function after inlining, so only functions that remain calls are probed: an enter probe at
  * entry, an exit probe before every return, and, around every try, the instrumentation depth saved before the try and
  * restored in its catch, which closes the slices of the calls a throw skipped. Throws leave no exit probe; the catch
- * that stops them (or the runtime, for one that reaches C) unwinds instead.
+ * that stops them (or the runtime, for one that reaches C) unwinds instead. A function the scope leaves out still saves
+ * and restores the depth around its tries, since a throw it catches may have skipped probed calls.
  *
  * Each backend lowers the probes: HashLink calls libhl natives (the x86-64 JIT inlines their recording check), and wasm drops them.
  */
@@ -138,9 +139,12 @@ class IrInstrumentation {
 		return program;
 	}
 
-	/** The function with probes, or the function itself when the scope leaves it out. */
+	/** The function with probes, or the function itself when the scope leaves it out and it has no try. */
 	public static function apply(fn:IrFunction, scope:IrInstrumentationScope):IrFunction {
-		if (!scope.covers(fn.name) || fn.blocks.length == 0)
+		if (fn.blocks.length == 0)
+			return fn;
+		var covered = scope.covers(fn.name);
+		if (!covered && !hasTry(fn))
 			return fn;
 		var nextValue = 0;
 		for (argument in fn.arguments)
@@ -190,17 +194,27 @@ class IrInstrumentation {
 						break;
 					case _:
 				}
-			if (block.terminator != null)
+			if (covered && block.terminator != null)
 				switch block.terminator.value {
 					case Return(_):
 						block.instructions.push(op(Call(value(Void), Exit, [])));
 					case _:
 				}
 		}
-		var entry = blocks[0], firstOrdinary = 0;
-		while (firstOrdinary < entry.instructions.length && entry.instructions[firstOrdinary].value.match(Phi(_, _)))
-			firstOrdinary++;
-		entry.instructions.insert(firstOrdinary, op(Call(value(Void), Enter, [])));
+		if (covered) {
+			var entry = blocks[0], firstOrdinary = 0;
+			while (firstOrdinary < entry.instructions.length && entry.instructions[firstOrdinary].value.match(Phi(_, _)))
+				firstOrdinary++;
+			entry.instructions.insert(firstOrdinary, op(Call(value(Void), Enter, [])));
+		}
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+	}
+
+	static function hasTry(fn:IrFunction):Bool {
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				if (located.value.match(BeginTry(_, _)))
+					return true;
+		return false;
 	}
 }
