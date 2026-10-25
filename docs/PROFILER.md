@@ -242,6 +242,23 @@ still reads as a flame graph over time, at the sampling interval's resolution.
 The startup phases are laid out on the main thread's track without hiding its
 samples.
 
+The export reads the capture twice. Pass 1 collects what pass 2 needs before
+it writes anything: the recording pauses, the frames marked before an export
+window (so a windowed export keeps the capture's frame numbers), the frame
+thread, and each frame's dropped short calls, which pass 2 writes as one
+"Short calls dropped per frame" value where the frame starts (the runtime
+writes a frame's counts after its boundary, possibly later than the reorder
+window). Pass 2 decodes each data frame and holds records in a 2-second
+window to put the threads' records in time order, so its memory grows with
+the record rate. An export window leaves out the `Startup` frame and naming
+threads after entry functions, which need the capture's start. Every size
+read from a capture is computed in 64 bits and checked against the data
+before use; a record or decompressed frame larger than 256 MiB, the most the
+runtime pushes, is malformed, and the table of open stacks holds 65536
+threads. The Chrome JSON form has no frame tracks, startup layout or
+call-stack tracks: the export-only events behind them are skipped, and
+recording pauses are named instants.
+
 ## Instrumentation
 
 ### Haxe
@@ -264,37 +281,117 @@ Each thread keeps its instrumentation depth (enters minus exits). The pass
 saves the depth before every try (`prof_call_depth`) and passes it to
 `prof_call_unwind` at the start of the catch; the C trap macro does the same
 for traps set in C. When the depth is above the saved one, the runtime writes
-one `UNWIND` record closing the calls the throw skipped.
+one `UNWIND` record closing the calls the throw skipped. A function the scope
+leaves out gets no probes but still saves and unwinds the depth around its
+tries, so a catch there closes the probed calls its throw skipped.
 
 ### Native code (Windows x64)
 
-Sources in the native scope are compiled with `/Gh /GH`, and every module of
-the flavor is linked with `/DEBUG`, so it has a PDB. For `native.cmake`
-projects, `cmake/haxeon-instrument.cmake` (passed as `CMAKE_PROJECT_INCLUDE`)
-adds the flags to each matching source once the project is read; for
-`native.sources`, the toolchain adds them per source.
+Native code is instrumented in two ways. Code we compile gets compiler hooks
+on every function. Calls from it into code we do not compile, such as the
+system and graphics libraries, are hooked at the boundary at run time. Other
+platforms have neither yet: the instrumented flavor builds their native code
+as usual, and only Haxe calls are probed.
 
-The `_penter`/`_pexit` hooks come from `hlprof_penter.lib`, a static library
-HashLink builds and every module of the flavor links. They are MASM: each tests
-the recording flag and returns, and only while a session records saves the
-volatile registers (the argument registers on entry, the return registers on
-exit) and calls libhl. The library finds libhl at run time rather than
-importing it, so tools a build runs, which never load libhl, run unchanged.
+**Compiler hooks.** MSVC's `/Gh` and `/GH` make the compiler call `_penter`
+at the start of every function and `_pexit` at its end. The instrumented
+flavor adds both flags to every source in the native scope
+(`instrument.native` in `haxeon.json`) and links every module with `/DEBUG`,
+so each one has a PDB:
+
+- `native.sources`: `NativeToolchain` adds the flags per source when it
+  compiles, and links the hooks library and `/DEBUG /OPT:REF /OPT:ICF
+  /INCREMENTAL:NO` into each module.
+- `native.cmake`: Haxeon configures the project with
+  `CMAKE_PROJECT_INCLUDE=cmake/haxeon-instrument.cmake` and passes the hooks
+  library and the include and exclude patterns as cache variables. The file
+  compiles everything with `/Z7`, adds the link options and the hooks
+  library, and, once the whole project is read (`cmake_language(DEFER)`),
+  walks every target in every directory and adds `/Gh /GH` to each C or C++
+  source that matches the patterns. Imported targets and generator
+  expressions are skipped.
+
+`_penter` and `_pexit` come from `hlprof_penter.lib`, a static library
+HashLink builds (`prof_penter_x64.asm`, `prof_penter.c`). They are MASM and
+run before the function's prolog or epilog, so they keep every register the
+function still needs. While nothing records, each one is a load of a flag
+pointer, a test and a return. While a session records, it saves the volatile
+registers (rax, rcx, rdx, r8 to r11, xmm0 to xmm5) in an aligned frame and
+calls into C with its return address. The library uses no C runtime, so it
+links into modules built with either CRT. It does not import libhl: tools a
+build runs link it but never load libhl, so until libhl is loaded the flag
+pointer points at a nonzero placeholder, and the hooks look for `libhl.dll`
+(`GetModuleHandle`, `GetProcAddress` of `hl_prof_on`, `hl_prof_enter_native`
+and `hl_prof_exit`) at most once a millisecond until they find it.
 
 An enter's key is the hook's return address, a pc inside the function.
 `hl_prof_enter_native` puts each key into a lock-free set the first time a
 session records it and queues it; the consumer names queued keys through
 DbgHelp, with the same symbol events as sampled native frames. Naming never
 runs inside the hooked call, which may hold locks DbgHelp takes. The exporter
-collects every symbol event before it decodes any call. The profiler's own
-code (libhl, the hooks) is never instrumented. A C++ exception that unwinds
-through instrumented frames skips their exit hooks; the next Haxe catch
-restores the depth.
+collects every symbol event before it decodes any call. Native calls are
+held back and dropped when short like Haxe calls (see Buffers). The
+profiler's own code (libhl, the hooks) is never instrumented. A C++
+exception that unwinds through instrumented frames skips their exit hooks;
+the next Haxe catch restores the depth.
 
-Calls from our modules into code we do not compile are hooked at the boundary:
-import-table hooks for blocking and system calls, vtable hooks for the DXGI
-swap chain and D3D11 device context, and wrappers for Vulkan submit, present
-and fence waits.
+**Boundary hooks** (`prof_boundary.c`, `prof_boundary_x64.asm`). Haxeon sets
+`HL_PROF_BOUNDARY` when it runs an instrumented build, from
+`instrument.boundary`:
+`imports=blocking|none;extra=a.dll!F,b.dll!G;dxgi=1;d3d11=1;vulkan=1`. The
+runtime installs the hooks at startup when the variable is set, and not
+otherwise.
+
+- **Import tables.** The hooks patch the import address tables of the
+  process's own modules, meaning every module not under the Windows
+  directory. An entry is matched by the address it holds, not by name, which
+  catches a function imported by name or ordinal, through an API set or
+  forwarded from another module. A `kernel32` function is also looked up in
+  `kernelbase`, which API-set imports bind to. The table is made writable
+  for the store with `VirtualProtect`. The curated `blocking` set is waits,
+  sleeps, file, pipe and socket I/O, message waits, process creation, the C
+  runtime's file streams and the C++ standard library's waits in `msvcp140`
+  (`_Cnd_wait`, `_Cnd_timedwait`, `_Thrd_join`, `_Thrd_sleep`);
+  `PROFILING.md` lists examples.
+- **Module loads.** `LoadLibraryA/W` and `LoadLibraryExA/W` are hooked the
+  same way. After each successful load the hooks resolve targets in modules
+  loaded since and patch every own module's imports again, under one lock.
+- **Direct3D 11 and DXGI.** `D3D11CreateDevice` and
+  `D3D11CreateDeviceAndSwapChain` are hooked. On a new device, the
+  immediate context's vtable entries for draws, dispatches, copies, maps and
+  flushes are replaced, and so are the swap-chain creation methods of the
+  device's DXGI factory, so each new swap chain gets its `Present` (and
+  `Present1`) entry replaced. A class shares one vtable, so patching it
+  covers every object of the class.
+- **Vulkan.** `vkGetInstanceProcAddr` and `vkGetDeviceProcAddr` are wrapped,
+  so the queue submits, presents, image acquisition and fence, semaphore,
+  queue and device waits they hand out are hooked stubs. Calls the program
+  imports from `vulkan-1.dll` directly are patched in its import table.
+
+Every hooked function gets a 32-byte stub in an executable block (up to 1024
+hooks). The stub loads its descriptor and jumps to `hl_prof_boundary_thunk`.
+The thunk saves the four register arguments (integer and floating point),
+records an `ENTER` with the stub's address as the key, copies up to twelve
+stack arguments into its own frame, calls the real function, records an
+`EXIT` and returns the real result. The consumer names a key from its
+descriptor (`kernel32!Sleep`, `IDXGISwapChain::Present`). A boundary `ENTER`
+is never held back and publishes the thread's held run, so a thread blocked
+in the call shows its open calls while it waits. The thunk does not record a
+call made while the thread is already inside a boundary call (the recorder
+waiting for the consumer through a hooked wait, say), nor a call on a thread
+that must not wait for the recorder (see Buffers), nor any call on the
+diagnostics and sampling threads. The stub table has its own lock, never held
+across a loader call: a Vulkan lookup, which may run under the loader lock,
+takes only that one. A stub's name is copied once, when the stub is made.
+
+Limits:
+
+- Only import-table calls are seen. A function the program looks up with
+  `GetProcAddress` is not, except Vulkan's.
+- Device and swap-chain hooks apply only to objects created after the
+  hooks are installed.
+- A hooked function may take at most four register arguments and twelve
+  stack arguments, which covers every function in the curated sets.
 
 ### Build flavor and scope
 
