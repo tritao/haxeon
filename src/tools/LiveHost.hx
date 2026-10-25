@@ -100,7 +100,7 @@ class LiveHost {
 		var replacement = try reloadModule(current, previous, next, path, entry, arguments) catch (error:Dynamic) {
 			ProfileSpan.end("live.reload");
 			throw error;
-		};
+		}
 		ProfileSpan.end("live.reload");
 		return replacement;
 	}
