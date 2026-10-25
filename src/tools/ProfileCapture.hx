@@ -106,18 +106,24 @@ class ProfileCapture {
 		return value;
 	}
 
-	/** Parses `--profile-window`: `START:END` in seconds, either side optional. */
 	/** Parses `--profile-min-call`: microseconds, at least 0. */
 	public static function parseMinCall(value:String):Float {
-		var parsed = Std.parseFloat(StringTools.trim(value));
-		if (Math.isNaN(parsed) || parsed < 0 || parsed > 4000000)
-			throw 'Option "--profile-min-call" takes microseconds from 0 to 4000000';
+		var parsed = number(value);
+		if (parsed == null || parsed > 4000000)
+			throw 'Option "--profile-min-call" takes microseconds from 0 to 4000000, not "$value"';
 		return parsed;
 	}
 
+	/** Parses `--profile-window`: `START:END` in seconds, either side optional. */
 	public static function parseWindow(value:String):String {
 		windowArguments(value);
 		return value;
+	}
+
+	/** A plain non-negative decimal number, all of value (so "1ms" is refused, not read as 1); null otherwise. */
+	static function number(value:String):Null<Float> {
+		var text = StringTools.trim(value);
+		return ~/^([0-9]+(\.[0-9]*)?|\.[0-9]+)$/.match(text) ? Std.parseFloat(text) : null;
 	}
 
 	/** The exporter's arguments for a window, in milliseconds. */
@@ -127,17 +133,19 @@ class ProfileCapture {
 		var parts = window.split(":");
 		if (parts.length != 2)
 			throw 'Option "--profile-window" takes START:END in seconds';
-		var arguments = [];
+		var arguments = [], bounds:Array<Null<Float>> = [null, null];
 		for (index in 0...2) {
-			var text = StringTools.trim(parts[index]);
-			if (text == "")
+			if (StringTools.trim(parts[index]) == "")
 				continue;
-			var seconds = Std.parseFloat(text);
-			if (Math.isNaN(seconds) || seconds < 0)
+			var seconds = number(parts[index]);
+			if (seconds == null)
 				throw 'Option "--profile-window" takes START:END in seconds, not "$window"';
+			bounds[index] = seconds;
 			arguments.push(index == 0 ? "--start-ms" : "--end-ms");
 			arguments.push(Std.string(Math.round(seconds * 1000)));
 		}
+		if (bounds[0] != null && bounds[1] != null && bounds[0] >= bounds[1])
+			throw 'Option "--profile-window" needs START before END, not "$window"';
 		return arguments;
 	}
 
