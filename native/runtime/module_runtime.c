@@ -114,6 +114,14 @@ HL_PRIM vbyte *HL_NAME(jit_location)( hl_runtime_module *runtime, int stable_id 
 	return bytes;
 }
 
+HL_PRIM int HL_NAME(entry_state)( hl_runtime_module *runtime, int stable_id ) {
+	return hl_runtime_module_entry_state(runtime,stable_id);
+}
+
+HL_PRIM int HL_NAME(calls_directly)( hl_runtime_module *runtime, int caller_id, int callee_id ) {
+	return hl_runtime_module_calls_directly(runtime,caller_id,callee_id);
+}
+
 HL_PRIM int HL_NAME(debug_region_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_debug_region_count(runtime);
 }

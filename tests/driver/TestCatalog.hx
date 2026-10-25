@@ -273,6 +273,8 @@ class TestCatalog {
 				"generated-function-renumbering-test.hl", 0, "edits that renumber lambdas or function adapters never reroute stored closures"),
 			hxmlCase("runtime", "added-function-patch", "tests/hxml/added-function-patch-test.hxml", "added-function-patch-test.hl", 0,
 				"edits that add functions patch the running module"),
+			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
+				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "patch-unwind", "tests/hxml/patch-unwind-test.hxml", "patch-unwind-test.hl", 0,
 				"exception stacks walk through patched code and the frames below it"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),
