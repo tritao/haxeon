@@ -1,17 +1,47 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "Usage: $0 CAPTURE.hlpc (recorded with sampling and alloc sources, e.g. by haxeon run --profile)" >&2
+# Checks CAPTURE.hlpc when given one (recorded with the sampling and alloc sources); otherwise records its own.
+if [[ $# -gt 1 ]]; then
+  echo "Usage: $0 [CAPTURE.hlpc]" >&2
   exit 2
 fi
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 profiler_tool="${HLPROF_LIVE:-$root/.tools/hashlink/hlprof-live}"
-output_file="$(mktemp /tmp/haxeon-perfetto-XXXXXX.json)"
-trap 'rm -f "$output_file"' EXIT
+scratch=$(mktemp -d /tmp/haxeon-perfetto-XXXXXX)
+output_file="$scratch/trace.json"
+trap 'rm -rf "$scratch"' EXIT
 
-"$profiler_tool" export --format perfetto --output "$output_file" "$1"
+capture=${1:-}
+if [[ -z $capture ]]; then
+  mkdir -p "$scratch/src"
+  cat > "$scratch/haxeon.json" <<'JSON'
+{"version":1,"package":{"name":"profiler-perfetto-test"},"entry":"Main","sourceRoots":["src"],"target":"host","outputDir":"build"}
+JSON
+  cat > "$scratch/src/Main.hx" <<'HAXE'
+class Main {
+  static function main():Void {
+    var kept = [];
+    var start = Sys.time();
+    // Long enough for several samples, with allocations the GC counter and alloc sites see.
+    while (Sys.time() - start < 0.5) {
+      var chunk = [for (i in 0...256) Std.string(i)];
+      if (kept.length < 64) kept.push(chunk);
+    }
+    Sys.println("perfetto test " + kept.length);
+  }
+}
+HAXE
+  capture="$scratch/capture/profile.hlpc"
+  timeout 60s "$root/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling,alloc \
+    --profile-output "$capture" > "$scratch/run.log" 2>&1 || {
+      cat "$scratch/run.log" >&2
+      exit 1
+    }
+fi
+
+"$profiler_tool" export --format perfetto --output "$output_file" "$capture"
 jq -e '
   (.traceEvents | length > 0) and
   any(.traceEvents[]; .ph == "C" and .name == "HashLink GC" and (.args.allocation_bytes_per_second != null)) and

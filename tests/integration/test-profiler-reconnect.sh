@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 port=${1:-24019}
 token=reconnect-test-token
-runtime="$root/vendor/hashlink/hl"
+runtime="$root/.tools/hashlink/hl"
 target="$root/out/profiler-restart-target.hl"
 client="$root/out/profiler-reconnect-test.hl"
 export LD_LIBRARY_PATH="$root/out:$root/vendor/hashlink:$root/.tools/hashlink"
