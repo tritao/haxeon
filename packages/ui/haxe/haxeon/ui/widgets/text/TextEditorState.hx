@@ -6,6 +6,7 @@ import haxeon.ui.TextLayout.TextRangeRect;
 
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 import haxeon.ui.FontCollection;
+import haxeon.ui.semantics.SemanticsValueSource;
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.editing.EditOperation;
 import haxeon.ui.Color;
@@ -22,7 +23,7 @@ import haxeon.editor.TextDocument;
 import haxeon.editor.TextOffsetMap;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
-class TextEditorState {
+class TextEditorState implements SemanticsValueSource {
 	static inline var caretBlinkHalfPeriod:Float = 0.5;
 	// Real width arrives during measurement. Avoid a one-pixel provisional
 	// layout that creates a visual line per character across large documents.
@@ -57,6 +58,10 @@ class TextEditorState {
 	public final paragraphStyle:ParagraphStyle;
 	/** Cached conversions between document code points, UTF-8 bytes and UTF-16 units. */
 	var offsets:TextDocument;
+	/** The document and its revision that `semanticsRevision` last counted. */
+	var semanticsDocument:Null<TextDocument>;
+	var semanticsDocumentRevision:Int;
+	var semanticsRevision:Int;
 	/** Measurement-only provider for widgets that place painting in separate layers. */
 	public final renderMeasurement:LayoutMeasuredContent;
 	var renderColor:Color;
@@ -198,6 +203,9 @@ class TextEditorState {
 		desiredVerticalX = 0.0;
 		hasDesiredVerticalX = false;
 		caretBlinkResetTime = 0.0;
+		semanticsDocument = null;
+		semanticsDocumentRevision = -1;
+		semanticsRevision = 0;
 		disposed = false;
 	}
 
@@ -1106,6 +1114,19 @@ class TextEditorState {
 
 	function get_text():String
 		return offsets.text;
+
+	public function semanticsValue():String
+		return offsets.text;
+
+	/** Advances when the text changes, including when the editor switches to another document. */
+	public function semanticsValueRevision():Int {
+		if (offsets != semanticsDocument || offsets.revision != semanticsDocumentRevision) {
+			semanticsDocument = offsets;
+			semanticsDocumentRevision = offsets.revision;
+			semanticsRevision++;
+		}
+		return semanticsRevision;
+	}
 
 	static function copyTextStyle(value:TextStyle):TextStyle
 		return new TextStyle(value.fontSize, value.font, value.letterSpacing);

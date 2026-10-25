@@ -8,7 +8,9 @@ class Semantics {
 	public var label:Null<String>;
 	public var value(get, set):Null<String>;
 	var storedValue:Null<String>;
-	var valueProvider:Null<Void->String>;
+	/** Where a deferred value is read from, and the source's revision when it was set. */
+	var valueSource:Null<SemanticsValueSource>;
+	var valueRevision:Int;
 	public var states:Int;
 	public var actions:Int;
 	public var numericValue:Float;
@@ -37,7 +39,8 @@ class Semantics {
 		this.role = role;
 		this.label = label;
 		storedValue = value;
-		valueProvider = null;
+		valueSource = null;
+		valueRevision = 0;
 		states = 0;
 		actions = 0;
 		numericValue = 0.0;
@@ -61,7 +64,7 @@ class Semantics {
 
 	function set_value(next:Null<String>):Null<String> {
 		storedValue = next;
-		valueProvider = null;
+		valueSource = null;
 		documentLength = Utf8Text.length(next);
 		return next;
 	}
@@ -71,22 +74,33 @@ class Semantics {
 		if (length < 0)
 			throw "Document length cannot be negative";
 		storedValue = next;
-		valueProvider = null;
+		valueSource = null;
 		documentLength = length;
 	}
 
 	/** Defers assembling an editable document until a consumer reads its value. */
-	public function setValueProvider(provider:Void->String, length:Int):Void {
+	public function setValueSource(source:SemanticsValueSource, length:Int):Void {
 		if (length < 0)
 			throw "Document length cannot be negative";
 		storedValue = null;
-		valueProvider = provider;
+		valueSource = source;
+		valueRevision = source.semanticsValueRevision();
 		documentLength = length;
 	}
 
+	/** Whether this value equals `other`'s. Two values from the same source are compared by revision without reading
+		either: a deferred value reads its source as it is now, so reading one set at an older revision would compare the
+		current value with itself. */
+	public function sameValue(other:Semantics):Bool {
+		if (valueSource != null && valueSource == other.valueSource)
+			return valueRevision == other.valueRevision;
+		return value == other.value;
+	}
+
 	function get_value():Null<String> {
-		if (storedValue == null && valueProvider != null)
-			storedValue = valueProvider();
+		var source = valueSource;
+		if (storedValue == null && source != null)
+			storedValue = source.semanticsValue();
 		return storedValue;
 	}
 }

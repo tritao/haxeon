@@ -686,7 +686,7 @@ class RenderNode {
 			return true;
 		if (left == null || right == null)
 			return false;
-		return left.role == right.role && left.label == right.label && left.value == right.value &&
+		return left.role == right.role && left.label == right.label && left.sameValue(right) &&
 			left.states == right.states && left.actions == right.actions &&
 			left.numericValue == right.numericValue && left.numericMinimum == right.numericMinimum &&
 			left.numericMaximum == right.numericMaximum && left.textStart == right.textStart &&

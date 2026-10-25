@@ -328,6 +328,19 @@ class FrameworkSmoke {
 		// A width change reflows every paragraph, so cached rows are measured again.
 		editor.updateLayout(520.0);
 		sameAsFresh(520.0, "after a width change");
+		// The editor's value compares by revision: unchanged without being assembled, changed after an edit.
+		var before = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		before.setValueSource(editor, editor.documentLength());
+		var same = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		same.setValueSource(editor, editor.documentLength());
+		if (!before.sameValue(same))
+			throw "an unchanged editor value compared unequal";
+		document.replace(0, 0, "x");
+		editor.syncDocument(document);
+		var after = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		after.setValueSource(editor, editor.documentLength());
+		if (before.sameValue(after) || after.value != editor.text)
+			throw "an edited editor value compared equal";
 		editor.dispose();
 		return true;
 	}
@@ -753,7 +766,7 @@ class FrameworkSmoke {
 			return 311;
 		if (!unwrappedWidthChangesMatchFreshLayout(fonts))
 			return 312;
-		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout");
+		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout, and editor values compare by revision");
 		if (!foregroundRangesValid(fonts))
 			return 308;
 		if (!decorationRangesValid(fonts))

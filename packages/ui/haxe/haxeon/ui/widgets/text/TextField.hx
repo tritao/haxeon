@@ -233,7 +233,7 @@ class TextField implements View {
 			node.enabled = enabled;
 			var semantics = new Semantics(semanticRole,
 				label == null ? key : label, null, editor.documentLength());
-			semantics.setValueProvider(function() return editor.text, editor.documentLength());
+			semantics.setValueSource(editor, editor.documentLength());
 			semantics.actions = readOnly ? semanticActions & ~AccessibilityAction.SetValue : semanticActions;
 			if (readOnly)
 				semantics.states |= AccessibilityState.ReadOnly;
@@ -407,7 +407,7 @@ class TextField implements View {
 				} else editor.preserveViewport();
 				if (document == null || onChange != null)
 					value = editor.layoutText();
-				semantics.setValueProvider(function() return editor.text, editor.documentLength());
+				semantics.setValueSource(editor, editor.documentLength());
 				semantics.selectionStart = editor.selectionStart;
 				semantics.selectionEnd = editor.selectionEnd;
 				refresh();
