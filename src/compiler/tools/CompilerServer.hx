@@ -135,6 +135,8 @@ class CompilerServer {
 				".hlp",
 				".live.json",
 				".live.json.tmp",
+				".live.stamp",
+				".live.stamp.tmp",
 				".build-id",
 				".descriptors",
 				".descriptors.json"
@@ -193,7 +195,7 @@ class CompilerServer {
 		}
 		for (output in outputs) {
 			if (FileSystem.exists(output.temporary))
-				FileSystem.rename(output.temporary, output.destination);
+				CompilerDriver.replaceFile(output.temporary, output.destination);
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}

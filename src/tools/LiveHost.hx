@@ -1,6 +1,7 @@
 package tools;
 
 import haxe.Json;
+import haxeon.ProfileSpan;
 import runtime.LoadedModule;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -19,14 +20,12 @@ private typedef LiveDescription = {
 
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
-	static inline final SPAN_BEGIN = 0x484C1001;
-	static inline final SPAN_END = 0x484C1002;
-
 	static function main():Void {
 		var args = Sys.args();
 		if (args.length != 3)
 			throw "Usage: LiveHost <module.hl> <entry> <arguments-json>";
 		var path = args[0], entry = args[1], arguments = args[2];
+		var stamp = readStamp(path);
 		var description = readDescription(path);
 		var module = Runtime.load(File.getBytes(path), File.getBytes(path + ".hli"));
 		var revision = description.revision;
@@ -36,24 +35,27 @@ class LiveHost {
 			var running = true;
 			while (running) {
 				running = Runtime.callInt(module, functionId(description, entry + ".tick")) != 0;
-				var candidate = tryDescription(path);
+				var published = readStamp(path);
+				var candidate = published == null || published != stamp ? tryDescription(path) : null;
+				if (candidate != null)
+					stamp = published;
 				if (candidate != null
 					&& (candidate.revision != revision || candidate.moduleIdentity != description.moduleIdentity)
 					&& publicationKey(candidate) != rejectedPublication) {
 					if (candidate.moduleIdentity == description.moduleIdentity && candidate.patchAvailable && !candidate.requiresReload) {
 						var patching = true;
-						span(SPAN_BEGIN, "live.patch");
+						ProfileSpan.begin("live.patch");
 						try {
 							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, File.getBytes(path + ".hlp"), candidate.changedFunctions));
 							patching = false;
-							span(SPAN_END, "live.patch");
+							ProfileSpan.end("live.patch");
 							description = candidate;
 							revision = candidate.revision;
 							rejectedPublication = "";
 							report('haxeon: patched live module to revision $revision');
 						} catch (error:Dynamic) {
 							if (patching)
-								span(SPAN_END, "live.patch");
+								ProfileSpan.end("live.patch");
 							report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
 							var replacement = reload(module, description, candidate, path, entry, arguments);
 							if (replacement == null)
@@ -94,12 +96,12 @@ class LiveHost {
 
 	static function reload(current:LoadedModule, previous:LiveDescription, next:LiveDescription, path:String, entry:String,
 			arguments:String):Null<LoadedModule> {
-		span(SPAN_BEGIN, "live.reload");
+		ProfileSpan.begin("live.reload");
 		var replacement = try reloadModule(current, previous, next, path, entry, arguments) catch (error:Dynamic) {
-			span(SPAN_END, "live.reload");
+			ProfileSpan.end("live.reload");
 			throw error;
-		}
-		span(SPAN_END, "live.reload");
+		};
+		ProfileSpan.end("live.reload");
 		return replacement;
 	}
 
@@ -155,10 +157,6 @@ class LiveHost {
 		return 'the build carries no patch';
 	}
 
-	/** Marks a live host step in a profiler capture; span names are UTF-8, as haxeon.ProfileSpan sends them. */
-	static function span(code:Int, name:String):Void
-		hl.Profile.eventBytes(code, haxe.io.Bytes.ofString(name));
-
 	/** Flushes each message because the watcher redirects this process's output to a log file. */
 	static function report(message:String):Void {
 		Sys.println(message);
@@ -168,8 +166,27 @@ class LiveHost {
 	static function publicationKey(description:LiveDescription):String
 		return description.moduleIdentity + ":" + description.revision;
 
-	static function readDescription(path:String):LiveDescription
-		return Json.parse(File.getContent(path + ".live.json"));
+	/** The publication key the compiler stamps beside the description; null when a compiler that writes no stamp built it. */
+	static function readStamp(path:String):Null<String> {
+		try
+			return File.getContent(path + ".live.stamp")
+		catch (_:Dynamic)
+			return null;
+	}
+
+	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
+	static function readDescription(path:String):LiveDescription {
+		var value:Dynamic = Json.parse(File.getContent(path + ".live.json"));
+		var changed:Array<Dynamic> = value.changedFunctions, identities:Array<Dynamic> = value.identities;
+		return {
+			revision: value.revision,
+			moduleIdentity: value.moduleIdentity,
+			requiresReload: value.requiresReload,
+			patchAvailable: value.patchAvailable,
+			changedFunctions: [for (id in changed) (id : Int)],
+			identities: [for (item in identities) ({name: item.name, id: item.id} : LiveFunction)]
+		};
+	}
 
 	static function tryDescription(path:String):Null<LiveDescription> {
 		try

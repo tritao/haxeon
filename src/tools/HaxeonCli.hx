@@ -633,6 +633,10 @@ class HaxeonCli {
 		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			var output = options.output == null ? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
+			// A stamp left by an earlier compiler would pin the live host to that revision if this compiler (a bootstrap
+			// one, say) writes none; without a stamp the host reads the description every tick.
+			if (options.live && FileSystem.exists(output + ".live.stamp"))
+				FileSystem.deleteFile(output + ".live.stamp");
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument);
 			if (buildStatus != 0 || !launch)
@@ -655,19 +659,19 @@ class HaxeonCli {
 			if (options.watch) {
 				var liveHost:Null<String> = null;
 				if (options.live) {
-					liveHost = Path.join([home, "out", "haxeon-live-host.hl"]);
-					var haxe = Path.join([home, ".tools", "haxe", "haxe" + executableSuffix()]);
-					if (ProcessRunner.run(haxe, [
-						"-cp",
-						Path.join([home, "src"]),
-						"-main",
-						"tools.LiveHost",
-						"-dce",
-						"full",
-						"-hl",
-						liveHost
-					], home, new Map()) != 0)
-						throw "Could not build the live development host";
+					// Under the build PATH, like the rebuilds below, so the host build reaches the same compiler worker.
+					var swapPath = buildPath != null && runPath != null;
+					if (swapPath)
+						Sys.putEnv("PATH", buildPath);
+					try
+						liveHost = buildLiveHost(home, options.jobs, instrument)
+					catch (error:Dynamic) {
+						if (swapPath)
+							Sys.putEnv("PATH", runPath);
+						throw error;
+					}
+					if (swapPath)
+						Sys.putEnv("PATH", runPath);
 				}
 				// Each launch is profiled into its own capture, from launch to exit or relaunch.
 				if (options.profileOutput != null && Path.extension(options.profileOutput) == "hlpc")
@@ -785,6 +789,32 @@ class HaxeonCli {
 			} catch (_:Dynamic) {}
 			done.release();
 		});
+	}
+
+	/**
+	 * Builds the live development host with Haxeon, as a project of its own under `out/live-host`. Under `--profile` it is
+	 * the instrumented flavor, so a capture shows the host's polling and patching beside the app's calls.
+	 */
+	static function buildLiveHost(home:String, jobs:Int, instrument:Bool):String {
+		var root = Path.join([home, "out", "live-host"]),
+			manifestPath = Path.join([root, "haxeon.json"]);
+		FileSystem.createDirectory(root);
+		var manifest = Json.stringify({
+			version: 1,
+			"package": {name: "haxeon-live-host"},
+			entry: "tools.LiveHost",
+			sourceRoots: [Path.join([home, "src"])],
+			scopeSourceRoots: false,
+			target: "host",
+			outputDir: "build"
+		}, null, "  ");
+		if (!FileSystem.exists(manifestPath) || File.getContent(manifestPath) != manifest)
+			File.saveContent(manifestPath, manifest);
+		var project = discoverProject(manifestPath),
+			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
+		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false, instrument) != 0)
+			throw "Could not build the live development host";
+		return output;
 	}
 
 	/** hlprof-live, which records and exports profiler captures. */

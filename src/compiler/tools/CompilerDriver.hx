@@ -105,7 +105,11 @@ class CompilerDriver {
 				changedFunctions: result.changedFunctions,
 				identities: identities
 			}));
-			FileSystem.rename(temporary, manifest);
+			replaceFile(temporary, manifest);
+			// The live host reads this small stamp every tick, and the description only when the stamp changes.
+			var stamp = request.output + ".live.stamp";
+			File.saveContent(stamp + ".tmp", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+			replaceFile(stamp + ".tmp", stamp);
 			compiler.acknowledgePublication(result.revision);
 		}
 		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
@@ -175,6 +179,24 @@ class CompilerDriver {
 	}
 
 	/** Defines supplied by the command-line target before user source is analyzed. */
+	/**
+	 * Renames over an existing file. On Windows a rename fails while another process has the destination open, as the
+	 * live host briefly has the stamp every tick, so this retries for up to half a second before giving up.
+	 */
+	public static function replaceFile(from:String, to:String):Void {
+		var attempt = 0;
+		while (true) {
+			try {
+				FileSystem.rename(from, to);
+				return;
+			} catch (error:Dynamic) {
+				if (++attempt >= 50)
+					throw error;
+				Sys.sleep(0.01);
+			}
+		}
+	}
+
 	public static function targetDefines(target:String):Array<String> {
 		var result = ["haxeon", "target=" + target];
 		switch target {
