@@ -102,6 +102,14 @@ input is not counted as a frame.
 - **Publishing.** After each record the producer stores its write position with
   release semantics. When a chunk fills, the producer records the chunk's final
   size and its successor, then publishes the position in the new chunk.
+- **Stopping.** A stop publishes what each thread holds back, which writes to
+  the thread's state, so it must first know that no record is in flight. A
+  writer marks itself (`writing`) before it checks that recording is on; the
+  stop turns recording off, makes every thread pass a barrier
+  (`FlushProcessWriteBuffers` on Windows, `membarrier` on Linux), then waits
+  for the marks to clear. A writer thus either sees recording off or is waited
+  for, and the mark costs a plain store with no fence. Where no such barrier
+  exists (macOS, or Linux before 4.14), each writer fences instead.
 - **Draining.** The consumer reads each thread's position with acquire
   semantics. A position inside the chunk it is reading means "read up to here";
   a position elsewhere means the chunk is finished, so it reads to the final
