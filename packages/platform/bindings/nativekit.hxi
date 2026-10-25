@@ -973,6 +973,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 */
 		NK_EVENT_FILE_WATCH_OVERFLOW = 411;
 		/**
+		 * A directory added to a file watcher is watched, with everything under it for a recursive add. The payload is
+		 * an nk_file_changed_event whose path is the added directory. Changes before this may not have been reported.
+		 */
+		NK_EVENT_FILE_WATCH_READY = 412;
+		/**
 		 * A notification was delivered by the platform.
 		 */
 		NK_EVENT_NOTIFICATION_DELIVERED = 500;
@@ -3176,7 +3181,9 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 */
 	extern fn nk_executor_is_current(executor: nk_executor) -> nk_bool;
 	/**
-	 * Adds an absolute UTF-8 native filesystem directory to a watcher.
+	 * Adds an absolute UTF-8 native filesystem directory to a watcher, with everything under it when `recursive`.
+	 * Returns once the directory itself is watched. A recursive add may register the directories under it afterwards,
+	 * off the calling thread: NK_EVENT_FILE_WATCH_READY names the directory once all of it is watched.
 	 */
 	extern fn nk_file_watch_add_directory(watch: nk_file_watch, path: utf8, recursive: nk_bool) -> nk_result;
 	/**
@@ -3187,6 +3194,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * Stops the backend and destroys a watcher.
 	 */
 	extern fn nk_file_watch_destroy(watch: nk_file_watch) -> nk_result;
+	/**
+	 * Leaves an absolute UTF-8 native filesystem directory, and everything under it, out of a watcher's recursive
+	 * registrations, including directories created there later. Directories already watched there stop being watched.
+	 */
+	extern fn nk_file_watch_exclude_directory(watch: nk_file_watch, path: utf8) -> nk_result;
 	/**
 	 * Removes a previously added absolute UTF-8 native filesystem directory.
 	 */
