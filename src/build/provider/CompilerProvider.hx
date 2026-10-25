@@ -109,7 +109,6 @@ class CompilerProvider {
 			output + ".functions",
 			output + ".hli",
 			output + ".live.json",
-			output + ".live.stamp",
 			output + ".build-id",
 			output + ".descriptors",
 			output + ".descriptors.json"

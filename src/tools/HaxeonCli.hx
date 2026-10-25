@@ -633,6 +633,10 @@ class HaxeonCli {
 		if (targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())) {
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			var output = options.output == null ? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
+			// A stamp left by an earlier compiler would pin the live host to that revision if this compiler (a bootstrap
+			// one, say) writes none; without a stamp the host reads the description every tick.
+			if (options.live && FileSystem.exists(output + ".live.stamp"))
+				FileSystem.deleteFile(output + ".live.stamp");
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument);
 			if (buildStatus != 0 || !launch)
@@ -656,7 +660,19 @@ class HaxeonCli {
 			if (options.watch) {
 				var liveHost:Null<String> = null;
 				if (options.live) {
-					liveHost = buildLiveHost(home, options.jobs, instrument);
+					// Under the build PATH, like the rebuilds below, so the host build reaches the same compiler worker.
+					var swapPath = buildPath != null && runPath != null;
+					if (swapPath)
+						Sys.putEnv("PATH", buildPath);
+					try
+						liveHost = buildLiveHost(home, options.jobs, instrument)
+					catch (error:Dynamic) {
+						if (swapPath)
+							Sys.putEnv("PATH", runPath);
+						throw error;
+					}
+					if (swapPath)
+						Sys.putEnv("PATH", runPath);
 				}
 				// Each launch is profiled into its own capture, from launch to exit or relaunch.
 				if (options.profileOutput != null && Path.extension(options.profileOutput) == "hlpc")

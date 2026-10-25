@@ -38,7 +38,9 @@ class LiveStringArrayMain {
 			"--output=" + output,
 			main
 		]), _ -> {}, new CompilerSession());
-		expect(FileSystem.exists(output + ".live.stamp"), "a live build must stamp its publication for the host to poll");
+		var description:Dynamic = haxe.Json.parse(File.getContent(output + ".live.json"));
+		expect(File.getContent(output + ".live.stamp") == description.moduleIdentity + ":" + description.revision,
+			"a live build must stamp its publication key for the host to poll");
 		var hostSources = [for (name in FileSystem.readDirectory("src/runtime")) if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name];
 		CompilerDriver.compile(CompilerArguments.parse([
 			"--target=hl",
@@ -47,6 +49,7 @@ class LiveStringArrayMain {
 			"--output=" + host,
 			"src/tools/LiveHost.hx"
 		].concat(hostSources)), _ -> {}, new CompilerSession());
+		expect(FileSystem.exists(host), "the live host must build");
 		var status = Sys.command(".tools/hashlink/hl", [host, output, "Main", "[]"]);
 		expect(status == 0, 'string arrays from the host and the app must concatenate under the live host; it exited with $status');
 

@@ -195,7 +195,7 @@ class CompilerServer {
 		}
 		for (output in outputs) {
 			if (FileSystem.exists(output.temporary))
-				FileSystem.rename(output.temporary, output.destination);
+				CompilerDriver.replaceFile(output.temporary, output.destination);
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}
