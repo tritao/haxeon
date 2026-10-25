@@ -12,6 +12,12 @@ class ModuleSourceLoader {
 	// Names no root holds a module for. Import resolution asks for the same missing names (a declaration path, then each
 	// parent) many times, each a file probe in every root. A copy starts empty, so each compile request probes again.
 	final missing:Map<String, Bool> = [];
+	// Directory listings, read once per loader: the case-exact lookup would otherwise list a directory for every path
+	// segment of every probe. Null marks a path that is not a readable directory. Like `missing`, a copy starts empty.
+	final listings:Map<String, Null<DirectoryListing>> = [];
+
+	/** How many directories this loader has listed, for tests. */
+	public var listingReads(default, null):Int = 0;
 
 	public function new() {}
 
@@ -37,6 +43,7 @@ class ModuleSourceLoader {
 				return;
 		roots.push({path: path, packagePrefix: packagePrefix});
 		missing.clear();
+		listings.clear();
 	}
 
 	public function load(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
@@ -104,9 +111,10 @@ class ModuleSourceLoader {
 					continue;
 				directory = resolved;
 			}
-			if (!FileSystem.exists(directory) || !FileSystem.isDirectory(directory))
+			var listing = listing(directory);
+			if (listing == null)
 				continue;
-			for (entry in FileSystem.readDirectory(directory)) {
+			for (entry in listing.order) {
 				if (!StringTools.endsWith(entry, ".hx") || entry == "import.hx")
 					continue;
 				var basename = entry.substring(0, entry.length - 3);
@@ -168,30 +176,42 @@ class ModuleSourceLoader {
 		return end < 0 ? "" : StringTools.trim(text.substring(after, end));
 	}
 
+	/** The entries of a directory, listed at most once per loader; null when it is missing, not a directory or unreadable. */
+	function listing(directory:String):Null<DirectoryListing> {
+		if (listings.exists(directory))
+			return listings.get(directory);
+		var result:Null<DirectoryListing> = null;
+		if (FileSystem.exists(directory) && FileSystem.isDirectory(directory)) {
+			listingReads++;
+			try {
+				var order = FileSystem.readDirectory(directory);
+				var names:Map<String, Bool> = [];
+				for (entry in order)
+					names.set(entry, true);
+				result = {order: order, names: names};
+			} catch (_:Dynamic) {}
+		}
+		listings.set(directory, result);
+		return result;
+	}
+
 	/** Resolve a module path without allowing case-insensitive filesystem aliases. */
-	static function exactPath(root:String, relative:String):Null<String> {
+	function exactPath(root:String, relative:String):Null<String> {
 		if (caseSensitiveFileSystem) {
 			var direct = root + "/" + relative;
 			return FileSystem.exists(direct) ? direct : null;
 		}
 		var current = root;
 		for (segment in relative.split("/")) {
-			if (!FileSystem.exists(current) || !FileSystem.isDirectory(current))
+			var entries = listing(current);
+			if (entries == null || !entries.names.exists(segment))
 				return null;
-			var match:Null<String> = null;
-			for (entry in FileSystem.readDirectory(current))
-				if (entry == segment) {
-					match = entry;
-					break;
-				}
-			if (match == null)
-				return null;
-			current += "/" + match;
+			current += "/" + segment;
 		}
 		return current;
 	}
 
-	static function exactDirectory(root:String, relative:String):Null<String> {
+	function exactDirectory(root:String, relative:String):Null<String> {
 		if (relative.length == 0)
 			return root;
 		if (caseSensitiveFileSystem) {
@@ -200,19 +220,12 @@ class ModuleSourceLoader {
 		}
 		var current = root;
 		for (segment in relative.split("/")) {
-			if (!FileSystem.exists(current) || !FileSystem.isDirectory(current))
+			var entries = listing(current);
+			if (entries == null || !entries.names.exists(segment))
 				return null;
-			var match:Null<String> = null;
-			for (entry in FileSystem.readDirectory(current))
-				if (entry == segment && FileSystem.isDirectory(current + "/" + entry)) {
-					match = entry;
-					break;
-				}
-			if (match == null)
-				return null;
-			current += "/" + match;
+			current += "/" + segment;
 		}
-		return current;
+		return listing(current) == null ? null : current;
 	}
 
 	public function copy():ModuleSourceLoader {
@@ -228,4 +241,10 @@ class ModuleSourceLoader {
 			result = result.substring(0, result.length - 1);
 		return result;
 	}
+}
+
+/** A directory's entries in readDirectory order, with a name set for case-exact membership tests. */
+private typedef DirectoryListing = {
+	final order:Array<String>;
+	final names:Map<String, Bool>;
 }
