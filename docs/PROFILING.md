@@ -81,7 +81,8 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
 - **Call stacks over time.** Every other thread has a call-stack track,
   named after the thread, under its thread track with the same layout,
   without frame roots. Threads show by name (see Thread names below); a
-  thread nothing named is named after its entry function
+  thread nothing named, in a session that began before the program (as
+  `run --profile` does), is named after its entry function
   (`WorkerPool::worker_loop`), and the C++ runtime's thread-start wrapper
   (`std::thread::_Invoke<...>`) is left out, so the entry function is the
   track's root. A
@@ -100,13 +101,15 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   `[unknown 0x...]`. Other platforms record Haxe frames and stop at the first
   native frame.
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
-  for the recorder to free a buffer. The profiler drops nothing, so a stall
-  delays the program instead. Raise `--pool` if stalls appear.
+  for the recorder to free a buffer. The profiler drops nothing the program
+  records, so a stall delays the program instead. Raise `--pool` if stalls
+  appear. (The runtime's own profiler threads never wait: if their records
+  find no buffer, the recorder warns that records were lost.)
 - **Instants** for module loads and live module revisions.
 - **Instrumented calls.** A slice per call with its exact enter and exit
-  times, nested with the spans on the thread's track, Haxe and native mixed.
-  On "Main thread frames" and the "Call stacks" tracks, instrumented calls
-  replace the stack built from samples.
+  times, Haxe and native mixed, on "Main thread frames" for the main thread
+  and on the call-stack track of every other thread, where they replace the
+  stack built from samples.
 
 MSVC Release builds of HashLink and the Haxeon runtime write PDBs next to the
 binaries so the profiler and debuggers can name their functions.
@@ -320,8 +323,8 @@ captures. It records, against a program started with `hl --diagnostics PORT`:
 
 ```sh
 hlprof-live [--host HOST] [--sources LIST] [--rate HZ] [--alloc-interval N] \
-  [--pool MIB] [--interval MS] [--duration SEC] [--connect-timeout SEC] \
-  [--output FILE] PORT
+  [--pool MIB] [--interval MS] [--duration SEC] [--max-size MIB] [--paused] \
+  [--min-call-us US] [--connect-timeout SEC] [--output FILE] PORT
 ```
 
 | Flag | Meaning | Default |
@@ -335,6 +338,7 @@ hlprof-live [--host HOST] [--sources LIST] [--rate HZ] [--alloc-interval N] \
 | `--duration SEC` | Stop after this long of recording (paused time does not count). | until Ctrl-C or the program ends |
 | `--max-size MIB` | Stop when the capture reaches MIB; data pushed before the runtime stops is dropped, so the capture ends at the limit. | no limit |
 | `--paused` | Open the session paused. At a console, Enter pauses and resumes recording; the program can too (`haxeon.ProfileRecording`). | records from the start |
+| `--min-call-us US` | Drop instrumented calls shorter than US microseconds (up to 4000000). See [Short calls](#short-calls). | keeps every call |
 | `--connect-timeout SEC` | Keep retrying the connection this long. | one attempt |
 | `--output FILE` | Write the HLPC capture. Without it, nothing is saved. | none |
 

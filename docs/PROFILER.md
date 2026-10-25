@@ -94,7 +94,11 @@ input is not counted as a frame.
   list is a lock-free stack indexed by chunk number with a tag against ABA.
 - **Thread state.** Each thread has a state, created on its first record, that
   holds its current chunk and write position. Creating and retiring states
-  takes the registry lock; recording never does.
+  takes the registry lock; recording never does. A thread retires its state
+  when it exits: through `hl_unregister_thread`, or, for a native thread the
+  runtime does not know, through a fiber-local (Windows) or pthread-key
+  destructor. Its last records are drained before the state is freed, also
+  while recording is paused and after a stop until the final drain.
 - **Publishing.** After each record the producer stores its write position with
   release semantics. When a chunk fills, the producer records the chunk's final
   size and its successor, then publishes the position in the new chunk.
@@ -103,8 +107,12 @@ input is not counted as a frame.
   a position elsewhere means the chunk is finished, so it reads to the final
   size and moves to the successor. Drained chunks return to the pool.
 - **Back-pressure.** When the pool is empty the producer waits for the
-  consumer and then writes a `STALL` record covering the wait. Nothing is
-  dropped: a missing exit would corrupt the timeline that follows it.
+  consumer and then writes a `STALL` record covering the wait. Program
+  threads never drop records: a missing exit would corrupt the timeline that
+  follows it. The consumer thread itself, and writes made holding a lock the
+  consumer takes (native symbol names, a retiring thread's last counts), must
+  not wait for it (`hl_prof_no_wait`): with the pool empty those records are
+  lost, counted in the `stats` frame's `lostRecords`, and the recorder warns.
 - **Short calls.** With a minimum call duration (1 µs from `haxeon run`, 0
   for none), the producer holds back the run of `ENTER` records at the end of
   its buffer: its published position stays at the start of the run. An exit
@@ -174,7 +182,7 @@ the runtime pushes:
 | 18 | clock | `ticks:u64, monotonicNs:u64, unixNs:u64` |
 | 19 | threads | `count:u32`, then per thread `tid:u32, length:u32, UTF-8 name` |
 | 20 | end | `dataFrames:u64, rawBytes:u64`; the last frame of a session |
-| 21 | stats | `chunksInUse:u32, chunkCount:u32, stalls:u64, stallTicks:u64, rawBytes:u64, sentBytes:u64` |
+| 21 | stats | `chunksInUse:u32, chunkCount:u32, stalls:u64, stallTicks:u64, rawBytes:u64, sentBytes:u64`, then `lostRecords:u64` |
 | 22 | recording | `recording:u32`, pushed when the client or the program pauses or resumes recording |
 
 `tickKind` is 1 for TSC, 2 for QPC, 3 for nanoseconds and 4 for `CNTVCT_EL0`.
@@ -196,9 +204,9 @@ Version 1 captures (pull-based chunks) remain readable.
 
 `hlprof-live export` decodes a capture into Perfetto (`pftrace`), Chrome JSON
 (`perfetto`) or folded stacks. It reads metadata and clock pairs first, then
-merges the threads' records in time order. In Perfetto, instrumented calls and
-spans are nested slices on their thread's track (a flame graph over time),
-frames are slices on a "Frames" track, and samples, counters and GC
+merges the threads' records in time order. In Perfetto, spans are nested slices
+on their thread's track, instrumented calls are nested slices on the thread's
+call-stack track (a flame graph over time), frames are slices on a "Frames" track, and samples, counters and GC
 statistics keep their existing tracks. "Frames" and "Main thread frames" are
 tracks under the main thread, which the trace lists first by giving it the
 process id as its tid. The startup phases and the program's code before the
@@ -208,11 +216,15 @@ thread's name comes from the runtime (`hl_thread_set_name`, which also writes a
 or from the system name of a recorded thread, which the session's thread list
 includes (`GetThreadDescription`, `/proc/self/task/<tid>/comm`). The export
 merges every thread list of the session, so a thread that exited keeps its
-name. A thread with no name at all takes its entry function's, and a C++
-thread-start wrapper around the entry function is left out of its stack. Each thread's samples are also laid out
-as nested slices on a "Call stacks" track under the thread, so code the
-instrumentation does not cover still reads as a flame graph over time, at the
-sampling interval's resolution.
+name. A thread with no name at all takes its entry function's when the
+session began before the program (it recorded the runtime's startup) and no
+pause came before the thread's first record, so that first call is the entry
+function; a C++ thread-start wrapper around the entry function is left out of
+its stack. A thread that instrumentation does not cover has its samples laid
+out as nested slices on its call-stack track, named after the thread, so it
+still reads as a flame graph over time, at the sampling interval's resolution.
+The startup phases are laid out on the main thread's track without hiding its
+samples.
 
 ## Instrumentation
 

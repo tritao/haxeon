@@ -81,9 +81,11 @@ the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or
 
 `run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
 capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
-`SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `sampling,alloc`.
-`instrument` is accepted but fails until instrumented builds exist. `--profile-output PATH` names the `.hlpc` file
-(with `--watch`, the directory that holds one capture per launch) and implies `--profile`.
+`SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `instrument`, which
+runs the instrumented build. `--profile-output PATH` names the `.hlpc` file (with `--watch`, the directory that holds one
+capture per launch) and implies `--profile`. `--profile-start`, `--profile-duration`, `--profile-max-size`,
+`--profile-window` and `--profile-min-call` control what is recorded and exported; [PROFILING.md](PROFILING.md) lists
+them.
 
 ```sh
 ./scripts/haxeon run --profile=sampling -- --verbose
