@@ -80,19 +80,13 @@ class HlLower {
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
 		else {
-			var selected:Map<String, Bool> = [],
-				regeneratedNames:Map<String, Bool> = [],
-				regeneratedSources:Map<String, Bool> = [];
+			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
+			// hash included, so its cached lowering is still exact; re-lowering every function that touched a changed file
+			// redid most of the program on each edit and produced the same bytes.
+			var selected:Map<String, Bool> = [];
 			for (name in regenerated)
-				regeneratedNames.set(name, true);
-			for (fn in program.functions)
-				if (regeneratedNames.exists(fn.name))
-					collectSourcePaths(fn, regeneratedSources);
-			for (fn in program.functions)
-				if (regeneratedNames.exists(fn.name) || touchesSourcePath(fn, regeneratedSources))
-					selected.set(fn.name, true);
+				selected.set(name, true);
 			IrVerifier.verifyFunctions(program, selected);
-			affected = [for (name in selected.keys()) name];
 		}
 		var verifiedAt = Sys.time() * 1000.0, allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache), code = {
@@ -447,33 +441,6 @@ class HlLower {
 		if (debugCache != null)
 			debugCache.rememberIdentity(fn, identity);
 		return identity;
-	}
-
-	static function collectSourcePaths(fn:IrFunction, target:Map<String, Bool>):Void {
-		for (block in fn.blocks) {
-			for (instruction in block.instructions) {
-				var location = instruction.provenance.location;
-				if (location != null)
-					target.set(location.path, true);
-			}
-			var terminator = block.terminator;
-			if (terminator != null && terminator.provenance.location != null)
-				target.set(terminator.provenance.location.path, true);
-		}
-	}
-
-	static function touchesSourcePath(fn:IrFunction, paths:Map<String, Bool>):Bool {
-		for (block in fn.blocks) {
-			for (instruction in block.instructions) {
-				var location = instruction.provenance.location;
-				if (location != null && paths.exists(location.path))
-					return true;
-			}
-			var terminator = block.terminator;
-			if (terminator != null && terminator.provenance.location != null && paths.exists(terminator.provenance.location.path))
-				return true;
-		}
-		return false;
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
