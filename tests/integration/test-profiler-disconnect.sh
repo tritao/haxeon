@@ -68,7 +68,8 @@ if [[ -s "$temp_dir/report.err" ]]; then
 	echo "profiler capture was not finalized cleanly" >&2
 	exit 1
 fi
-if ! "$client" report "$temp_dir/capture.hlpc" | rg -q 'samples=[1-9]'; then
+# The report written above: piped into rg -q under pipefail, the report could fail with SIGPIPE.
+if ! rg -q 'samples=[1-9]' "$temp_dir/report.log"; then
 	echo "profiler capture holds no samples" >&2
 	exit 1
 fi

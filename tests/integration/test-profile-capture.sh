@@ -76,7 +76,7 @@ timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --pr
     exit 1
   }
 test -s "$scratch/sampling/profile.hlpc" && test -s "$scratch/sampling/profile.pftrace"
-test -s "$scratch/build/host/main.hl"
+cmp -s "$scratch/sampling/profile.hl" "$scratch/build/host/main.hl"
 timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling --profile-min-call=0 --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
     cat "$scratch/mixed.log" >&2
     exit 1
