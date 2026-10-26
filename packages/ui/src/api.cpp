@@ -248,6 +248,9 @@ struct RendererSlot {
     nkui_renderer_stats stats{};
     /* Set by nkui_renderer_set_gpu_frame_timing, and handed to each backend renderer the slot gets. */
     bool gpu_frame_timing = false;
+    /* The newest GPU frame time, published by the render thread after each frame so a poll never waits for one. */
+    uint64_t gpu_last_frame_ns = 0;
+    uint64_t gpu_timed_frames = 0;
     uint16_t generation = 1;
 };
 
@@ -279,6 +282,31 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     void *measure_user_data = nullptr;
     bool fonts_configured = false;
     bool submitted = false;
+    /* Counts the layout results this session has published; a render plan built from one snapshot stays valid until it
+       changes. */
+    uint64_t render_epoch = 1;
+
+    /* What a sealed frame read from a mutable resource when it was built: the resource and its state then. */
+    struct PlanDependency {
+        nkui_resource handle{};
+        std::array<uint64_t, 6> state{};
+    };
+    /* The last sealed frame, kept so a frame whose inputs did not change submits it again instead of compiling the
+       snapshot and publishing its glyphs a second time. */
+    struct ReusablePlan {
+        bool valid = false;
+        /* Set once two builds in a row saw the same inputs, so one-frame promotions such as row textures have settled. */
+        bool settled = false;
+        uint64_t key = 0;
+        std::shared_ptr<const nkui::SealedRenderPlan> plan;
+        std::vector<nkui::TextEngine *> text_engines;
+        std::vector<std::shared_ptr<nkui::TextEngine>> text_engine_owners;
+        std::vector<PlanDependency> dependencies;
+        uint64_t render_plan_commands = 0;
+        uint64_t custom_paint_bytes = 0;
+        uint64_t session_atlas_key = 0;
+        uint64_t session_layout_generation = 0;
+    } reusable_plan;
 };
 
 thread_local LayoutSessionState *active_measure_session = nullptr;
@@ -595,6 +623,8 @@ void execute_render_submission(RenderSubmission &submission) {
         nk_graphics_unbind_frame_target(&submission.frame_target);
     nkui::UiRenderer *renderer_impl = nullptr;
     bool new_backend = false;
+    nkgpu_frame_timing gpu_timing{};
+    bool have_gpu_timing = false;
     if (bound) {
         std::shared_lock<std::shared_mutex> renderer_execution_lock(renderer_execution_mutex,
                                                                     std::defer_lock);
@@ -653,11 +683,23 @@ void execute_render_submission(RenderSubmission &submission) {
                                  renderer_impl->lastError(), nkgpu_last_error());
             }
         }
+        if (renderer_impl && success && renderer_impl->gpuRenderer().id) {
+            gpu_timing.struct_size = sizeof(gpu_timing);
+            have_gpu_timing =
+                nkgpu_get_frame_timing(renderer_impl->gpuRenderer(), &gpu_timing) == NKGPU_OK;
+        }
         /* Stats are protected by renderers_mutex.  Do not reacquire it while
            the shared execution lock is held: nkui_renderer_get_stats takes
            those locks in the opposite order. */
         if (renderer_execution_lock.owns_lock())
             renderer_execution_lock.unlock();
+    }
+    if (have_gpu_timing) {
+        std::lock_guard lock(renderers_mutex);
+        if (auto *slot = resolve(submission.renderer)) {
+            slot->gpu_last_frame_ns = gpu_timing.last_frame_nanoseconds;
+            slot->gpu_timed_frames = gpu_timing.timed_frames;
+        }
     }
 
     /* GL/EGL retains a thread-local context through submit so sealed-plan
@@ -2069,6 +2111,7 @@ extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_sessi
         if (!state->engine->valid())
             return NKUI_ERROR_OUT_OF_MEMORY;
         state->compiler.set_font_collection(shared_fonts);
+        ++state->render_epoch;
         configure_layout_measure_callback(*state);
         state->fonts_configured = true;
     }
@@ -2396,6 +2439,7 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     state->snapshot = std::move(snapshot);
     state->submitted = true;
+    ++state->render_epoch;
     std::lock_guard<std::mutex> lists_lock(lists_mutex);
     for (auto it = state->custom_paints.begin(); it != state->custom_paints.end();) {
         const auto *item = state->snapshot.find(it->first);
@@ -3452,14 +3496,18 @@ extern "C" nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
     if (!out_nanoseconds || !out_timed_frames)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(renderers_mutex);
-    std::unique_lock<std::shared_mutex> execution_lock;
-    if (nk::core::render_executor_physical())
-        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
     auto *slot = resolve(renderer);
     if (!slot)
         return NKUI_ERROR_INVALID_HANDLE;
     *out_nanoseconds = 0;
     *out_timed_frames = 0;
+    if (nk::core::render_executor_physical()) {
+        /* The render thread owns the backend and holds the execution lock while it draws; waiting for that lock would
+           make every poll wait for the frame in flight. It publishes the newest result after each frame instead. */
+        *out_nanoseconds = slot->gpu_last_frame_ns;
+        *out_timed_frames = slot->gpu_timed_frames;
+        return NKUI_OK;
+    }
     apply_gpu_frame_timing(*slot);
     if (!slot->renderer || !slot->renderer->gpuRenderer().id)
         return NKUI_OK;
@@ -4012,6 +4060,40 @@ extern "C" nkui_result nkui_renderer_render_frame_overlay(nkui_renderer renderer
     return renderer_render_frame_impl(renderer, list, surface, frame_info, true);
 }
 
+namespace {
+
+uint64_t mix_render_key(uint64_t hash, uint64_t value) {
+    return hash ^ (value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2));
+}
+
+uint64_t float_key(float value) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+/* The state of a mutable resource that a built frame depends on, compared again before the frame is submitted twice. */
+std::array<uint64_t, 6> plan_dependency_state(const ResourceSlot &slot) {
+    std::array<uint64_t, 6> state{};
+    if (slot.kind == nkui::ResourceKind::TextLayout && slot.text) {
+        state[0] = slot.text_content_revision;
+        state[1] = slot.text->layout_generation();
+        state[2] = slot.text->font_collection_generation();
+        state[3] = slot.text->atlas_generation_key();
+        state[4] = reinterpret_cast<uintptr_t>(slot.text.get());
+    } else if (slot.kind == nkui::ResourceKind::RenderTarget) {
+        state[0] = slot.graphics_image.id;
+        if (slot.surface) {
+            const nk_graphics_image published = slot.surface->retained_image();
+            state[1] = published.id;
+            state[2] = static_cast<uint64_t>(slot.surface->generation());
+        }
+    }
+    return state;
+}
+
+} // namespace
+
 extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                         nkui_layout_session session,
                                                         nk_surface surface,
@@ -4167,6 +4249,85 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             if (policy >= NKUI_LAYOUT_CACHE_AUTO)
                 raster_paint_nodes.insert(node_id);
     }
+    const auto enqueue_sealed = [&](std::shared_ptr<const nkui::SealedRenderPlan> sealed_plan,
+                                    std::vector<nkui::TextEngine *> engines,
+                                    std::vector<std::shared_ptr<nkui::TextEngine>> owners) {
+        auto *submission = new RenderSubmission{renderer,
+                                                surface,
+                                                frame,
+                                                frame_target,
+                                                std::move(sealed_plan),
+                                                std::move(engines),
+                                                std::move(owners),
+                                                session_state->shared_from_this()};
+        submission->acquired_at_ns = frame_acquired_at_ns;
+        submission->build_time_ns = elapsed_ns(build_started_at_ns, nk_time_now_ns());
+        renderer_lock.unlock();
+        lists_lock.unlock();
+        resources_lock.unlock();
+        sessions_lock.unlock();
+        cpu_lock.unlock();
+        if (!enqueue_render_submission(submission))
+            return NKUI_ERROR_RENDERING;
+        frame_guard.handed_off = true;
+        return NKUI_OK;
+    };
+    /* A frame whose layout, display lists, text and targets are exactly those of the last one renders the same plan.
+       Compiling it again and publishing every visible row's glyphs again only reproduces it. */
+    uint64_t reuse_key = 0;
+    if (threaded) {
+        reuse_key = mix_render_key(session_state->render_epoch, compile_target.value);
+        reuse_key = mix_render_key(reuse_key, has_backdrop ? 1u : 0u);
+        reuse_key = mix_render_key(reuse_key, load_existing ? 1u : 0u);
+        reuse_key = mix_render_key(reuse_key, float_key(frame_info->pixel_scale));
+        reuse_key = mix_render_key(reuse_key, float_key(frame_info->logical_width));
+        reuse_key = mix_render_key(reuse_key, float_key(frame_info->logical_height));
+        reuse_key = mix_render_key(reuse_key, static_cast<uint64_t>(frame_info->framebuffer_width));
+        reuse_key = mix_render_key(reuse_key, static_cast<uint64_t>(frame_info->framebuffer_height));
+        /* Unordered maps iterate in no fixed order, so each entry is mixed on its own and the results are summed. */
+        uint64_t entries = 0;
+        for (const auto &[node_id, list_handle] : session_state->custom_paints) {
+            const auto *list_slot = resolve(list_handle);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+        }
+        reuse_key = mix_render_key(reuse_key, entries);
+        entries = 0;
+        for (const auto &[node_id, list_handle] : session_state->custom_paint_composites) {
+            const auto *list_slot = resolve(list_handle);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+        }
+        reuse_key = mix_render_key(reuse_key, entries);
+        entries = 0;
+        for (const auto &[node_id, policy] : session_state->cache_policies)
+            entries += mix_render_key(node_id, static_cast<uint64_t>(policy));
+        reuse_key = mix_render_key(reuse_key, entries);
+        const auto &previous = session_state->reusable_plan;
+        bool current = previous.valid && previous.settled && previous.key == reuse_key;
+        for (const auto &dependency : previous.dependencies) {
+            if (!current)
+                break;
+            const auto *dependency_slot =
+                resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+            if (!dependency_slot)
+                dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+            current = dependency_slot && plan_dependency_state(*dependency_slot) == dependency.state;
+        }
+        const auto *layout_text_engine = session_state->engine->text_engine();
+        if (current && layout_text_engine) {
+            /* The session's own glyphs live in an atlas that another publication could have repacked. */
+            current = previous.session_atlas_key == layout_text_engine->atlas_generation_key() &&
+                      previous.session_layout_generation == layout_text_engine->layout_generation();
+        }
+        if (current) {
+            accumulate_render_plan_stats(renderer_slot->stats, previous.plan->plan());
+            renderer_slot->stats.render_plan_commands += previous.render_plan_commands;
+            renderer_slot->stats.custom_paint_bytes += previous.custom_paint_bytes;
+            return enqueue_sealed(previous.plan, previous.text_engines, previous.text_engine_owners);
+        }
+    }
+    const uint64_t commands_before = renderer_slot->stats.render_plan_commands;
+    const uint64_t custom_bytes_before = renderer_slot->stats.custom_paint_bytes;
+    std::vector<LayoutSessionState::PlanDependency> plan_dependencies;
     nkui::LayoutRenderCompileError compile_error{};
     if (!session_state->compiler.compile(
             session_state->snapshot, compile_target, frame_info->pixel_scale, session_state->frame,
@@ -4411,6 +4572,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                      : "too many prepared resources in one frame";
                     break;
                 }
+                plan_dependencies.push_back({nkui_resource{command.resource.value},
+                                             plan_dependency_state(*layout)});
                 const auto scale = nkui::text_raster_scale_for_transform(command.transform.data());
                 if (!scale.key) {
                     valid = false;
@@ -4601,6 +4764,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                         invalid_reason = "a composited render target was destroyed";
                         break;
                     }
+                    plan_dependencies.push_back({nkui_resource{command.resource.value},
+                                                 plan_dependency_state(*surface_slot)});
                     if (surface_slot->graphics_image.id) {
                         frame_stage = "composite target: bind graphics image";
                         valid = frame_resources.bind_graphics_image(command.resource,
@@ -4674,6 +4839,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         }
     }
     auto *session_text_engine = session_state->frame.text_engine();
+    session_state->reusable_plan.valid = false;
     if (!sealable && threaded)
         return NKUI_ERROR_RENDERING;
     if (!threaded) {
@@ -4698,25 +4864,37 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         if (threaded) {
             if (session_text_engine)
                 text_engines.push_back(session_text_engine);
-            auto *submission = new RenderSubmission{renderer,
-                                                    surface,
-                                                    frame,
-                                                    frame_target,
-                                                    std::move(sealed),
-                                                    std::move(text_engines),
-                                                    std::move(text_engine_owners),
-                                                    session_state->shared_from_this()};
-            submission->acquired_at_ns = frame_acquired_at_ns;
-            submission->build_time_ns = elapsed_ns(build_started_at_ns, nk_time_now_ns());
-            renderer_lock.unlock();
-            lists_lock.unlock();
-            resources_lock.unlock();
-            sessions_lock.unlock();
-            cpu_lock.unlock();
-            if (!enqueue_render_submission(submission))
-                return NKUI_ERROR_RENDERING;
-            frame_guard.handed_off = true;
-            return NKUI_OK;
+            auto &reusable = session_state->reusable_plan;
+            /* Glyphs published for this frame move the atlas keys, so the states are taken once it is built. */
+            for (auto &dependency : plan_dependencies) {
+                const auto *dependency_slot =
+                    resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+                if (!dependency_slot)
+                    dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+                if (dependency_slot)
+                    dependency.state = plan_dependency_state(*dependency_slot);
+            }
+            const bool same_inputs =
+                reusable.key == reuse_key && reusable.dependencies.size() == plan_dependencies.size() &&
+                std::equal(reusable.dependencies.begin(), reusable.dependencies.end(),
+                           plan_dependencies.begin(),
+                           [](const auto &left, const auto &right) {
+                               return left.handle.id == right.handle.id && left.state == right.state;
+                           }) &&
+                reusable.session_atlas_key ==
+                    (session_text_engine ? session_text_engine->atlas_generation_key() : 0);
+            reusable.settled = reusable.plan != nullptr && same_inputs;
+            reusable.valid = true;
+            reusable.key = reuse_key;
+            reusable.plan = sealed;
+            reusable.text_engines = text_engines;
+            reusable.text_engine_owners = text_engine_owners;
+            reusable.dependencies = std::move(plan_dependencies);
+            reusable.render_plan_commands = renderer_slot->stats.render_plan_commands - commands_before;
+            reusable.custom_paint_bytes = renderer_slot->stats.custom_paint_bytes - custom_bytes_before;
+            reusable.session_atlas_key = session_text_engine ? session_text_engine->atlas_generation_key() : 0;
+            reusable.session_layout_generation = session_text_engine ? session_text_engine->layout_generation() : 0;
+            return enqueue_sealed(std::move(sealed), std::move(text_engines), std::move(text_engine_owners));
         }
         nkui::RenderExecutionError execution_error{};
         const bool sealed_executed = nkui::execute_render_plan(*renderer_slot->renderer, *sealed,
