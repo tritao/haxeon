@@ -5472,12 +5472,24 @@ class FrameworkSmoke {
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-in");
 		visibility.reveal(); clock.advance(0.15);
 		scrollbarCheck(visibility.opacity == 1, "repeated activity preserves fade progress");
+		scrollbarCheck(!clock.needsFrame && Math.abs(clock.waitSeconds() - 0.5) < 0.001, "idle delay waits for a deadline instead of frames");
+		clock.advance(0.01);
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.49) < 0.001, "idle delay counts down");
+		visibility.reveal();
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.5) < 0.001, "activity restarts the idle delay");
 		clock.advance(0.49);
 		scrollbarCheck(visibility.opacity == 1, "idle delay follows completed fade-in");
+		scrollbarCheck(!clock.needsFrame && clock.waitSeconds() > 0.0 && clock.waitSeconds() < 0.011, "idle delay ends at its deadline");
 		clock.advance(0.11);
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-out");
 		clock.advance(0.11);
 		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "idle animation stops");
+		visibility.reveal(); clock.advance(0.3);
+		scrollbarCheck(!clock.needsFrame, "idle delay after a fade-in needs no frames");
+		clock.advance(0.5);
+		scrollbarCheck(clock.needsFrame && clock.waitSeconds() < 0.0, "fade-out needs frames");
+		clock.advance(0.2);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "a late wake still fades out");
 
 		visibility.setViewportHovered(true); clock.advance(0.15);
 		visibility.setAvailable(true);

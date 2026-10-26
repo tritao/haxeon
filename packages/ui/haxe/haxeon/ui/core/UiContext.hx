@@ -916,7 +916,11 @@ class UiContext {
 
 	public var needsAnimationFrame(get, never):Bool;
 	inline function get_needsAnimationFrame():Bool
-		return animations.activeCount > 0;
+		return animations.needsFrame;
+
+	/** Seconds until animations that are only waiting next need a frame, or -1 for none. */
+	public function animationWaitSeconds():Float
+		return animations.waitSeconds();
 
 	/** Reports pending work categories without changing the current full-submit behavior. */
 	public var dirtyFlags(get, never):Int;
