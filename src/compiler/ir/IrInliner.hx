@@ -93,6 +93,8 @@ class IrInlineCache {
 			result.published.set(name, fn);
 		for (name => entry in instrumented)
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
+		result.staticChecks.copies = staticChecks.copies;
+		result.staticChecks.helpers = staticChecks.helpers;
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
 		for (name => text in objectTexts)
