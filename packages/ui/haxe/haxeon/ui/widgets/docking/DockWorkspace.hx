@@ -241,7 +241,7 @@ class DockWorkspace implements View {
 			available = 1000.0;
 		var minimum = horizontal ? MinimumHorizontalExtent : 120.0;
 		var divider = DividerExtent;
-		var maximum = available - minimum - divider;
+		var maximum = available - minimum;
 		if (maximum < minimum)
 			maximum = minimum;
 		var options = new SplitViewOptions();
@@ -251,11 +251,11 @@ class DockWorkspace implements View {
 		options.minimumExtent = minimum;
 		options.maximumExtent = maximum;
 		options.dividerExtent = divider;
-		options.dividerVisualExtent = 3.0;
+		options.dividerHairline = true;
 		options.onResize = function(next) {
 			model.setSplitRatio(path, next / available);
 		};
-		var remaining = Math.max(0.0, available - options.extent - divider);
+		var remaining = Math.max(0.0, available - options.extent);
 		var firstWidth = horizontal ? options.extent : availableWidth;
 		var firstHeight = horizontal ? availableHeight : options.extent;
 		var secondWidth = horizontal ? remaining : availableWidth;

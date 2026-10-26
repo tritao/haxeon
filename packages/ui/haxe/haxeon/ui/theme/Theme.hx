@@ -363,13 +363,13 @@ class Theme {
 			StyleValue.sliderThumbColor(disabledText)
 		]);
 		styles.rule(StyleSelector.widget("split-divider"),
-			[StyleValue.background(tokens.selectionBorder)]);
-		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Hovered),
-			[StyleValue.background(tokens.controlSelected)]);
-		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Pressed),
-			[StyleValue.background(tokens.buttonPressed)]);
+			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue, 0.14))]);
 		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Focused),
-			[StyleValue.background(tokens.buttonFocused)]);
+			[StyleValue.background(tokens.accent)]);
+		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Hovered),
+			[StyleValue.background(tokens.accentHover)]);
+		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Pressed),
+			[StyleValue.background(tokens.accentPressed)]);
 		styles.rule(StyleSelector.widget("progress-bar"), [
 			StyleValue.progressTrackColor(tokens.progressTrack),
 			StyleValue.progressFillColor(tokens.progressFill)

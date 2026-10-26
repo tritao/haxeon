@@ -152,6 +152,7 @@ class UiHostRuntime {
 			frame.deltaSeconds = frameState.nextDelta(timeSeconds);
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
+			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
 			ProfileSpan.begin(openPhase = "ui.submit");
 			application.submit(frame);
 			ProfileSpan.end(openPhase);
