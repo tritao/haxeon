@@ -266,6 +266,8 @@ class BodyTyper {
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		for (binding in lexicalStorage.closureWrites.keys())
+			context.storage.closureWrites.set(binding, true);
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {

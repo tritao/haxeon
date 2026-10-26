@@ -16,6 +16,9 @@ class BindingStoragePlan {
 	public final types:Map<String, CompilerType> = [];
 	public final kinds:Map<String, CellStorageKind> = [];
 
+	/** Declarations a closure can write, distinct from cells needed only for parent writes or exception edges. */
+	public final closureWrites:Map<String, Bool> = [];
+
 	/** Cells named so far under each prefix. */
 	final prefixCounts:Map<String, Int> = [];
 

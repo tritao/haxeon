@@ -207,9 +207,7 @@ class IterationProtocol {
 
 	/** Implicit user calls have the same conservative effects as an unknown closure call. */
 	public static function invalidateEffects(session:TypingSession, scope:compiler.types.analysis.Scope):Void {
-		for (captured in session.currentContext.storage.candidateSourceNames())
-			scope.invalidate(captured);
-		scope.invalidateAllExpressions();
+		session.invalidateUnknownCall(scope);
 	}
 
 	public static function structuralIterator(type:CompilerType):Bool
