@@ -2,7 +2,7 @@
 # Mixed-mode samples (Linux and macOS): a sample taken in native code, or in Haxe code that native code called back,
 # holds the native frames between the Haxe ones, in order. The sampler follows the frame-pointer chain, which Haxeon
 # keeps in the native packages it builds. A function that is not exported is named from the image's symbol table, and
-# the frames of HashLink's launcher above the program are left out.
+# the frames of HashLink's launcher above the program are left out. Sampling a sleeping thread does not wake it early.
 set -euo pipefail
 
 case "$(uname -s)" in
@@ -103,10 +103,19 @@ class Main {
 	}
 
 	static function main():Void {
+		// A Haxe thread asleep while main works: each sample interrupts its sleep, which must still last its full time.
+		var start = Sys.time(), slept = new sys.thread.Lock(), sleptFor = 0.0;
+		sys.thread.Thread.create(() -> {
+			Sys.sleep(1.0);
+			sleptFor = Sys.time() - start;
+			slept.release();
+		});
 		mixed.Mixed.through(spinInHaxe);
 		total += mixed.Mixed.spin(0.4);
 		// Native code that only sleeps: its samples are waiting in a system call, not running.
 		mixed.Mixed.wait(0.4);
+		slept.wait();
+		Sys.println("slept for " + Math.round(sleptFor * 1000) + " ms");
 		Sys.println("mixed stack test " + (total != 0));
 	}
 }
@@ -118,6 +127,11 @@ timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json"
 	exit 1
 }
 grep -q "mixed stack test true" "$scratch/run.log"
+slept=$(sed -n 's/^slept for \([0-9]*\) ms$/\1/p' "$scratch/run.log")
+if [[ -z "$slept" || "$slept" -lt 990 ]]; then
+	echo "FAIL: Sys.sleep(1.0) under sampling returned after ${slept:-?} ms" >&2
+	exit 1
+fi
 "$repo_dir/.tools/hashlink/hlprof-live" export --format folded "$scratch/capture/profile.hlpc" > "$scratch/folded.txt"
 python3 - "$scratch/folded.txt" <<'PY'
 import re
@@ -175,8 +189,12 @@ def flagged(word):
     return chosen, sum(1 for e in chosen if e["args"].get("waiting"))
 sleeping, sleeping_waiting = flagged("mixed_wait_leaf")
 spinning, spinning_waiting = flagged("mixed_spin_leaf")
-counts = f"native wait {sleeping_waiting}/{len(sleeping)} waiting, native spin {spinning_waiting}/{len(spinning)} waiting"
+haxe_sleeping, haxe_sleeping_waiting = flagged("hl_sys_sleep")
+counts = (f"native wait {sleeping_waiting}/{len(sleeping)} waiting, native spin {spinning_waiting}/{len(spinning)} waiting, "
+          f"Sys.sleep {haxe_sleeping_waiting}/{len(haxe_sleeping)} waiting")
 assert len(sleeping) > 10 and sleeping_waiting >= len(sleeping) * 0.9, counts
+# The sleeping thread is sampled for the whole second, not once before the first sample wakes it.
+assert len(haxe_sleeping) > 100 and haxe_sleeping_waiting >= len(haxe_sleeping) * 0.9, counts
 assert spinning_waiting <= len(spinning) * 0.1, counts
 print(counts)
 PY
