@@ -139,17 +139,35 @@ class CompilerServer {
 				".live.stamp.tmp",
 				".build-id",
 				".descriptors",
-				".descriptors.json"
+				".descriptors.json",
+				".live.full"
 			] : [""]))
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
+		var promoted:Map<String, Bool> = [];
+		var output = request.output;
+		// A live patch is published mid-request, ahead of the module: the destination marker goes first so no host reloads
+		// the previous module against the new description, and the patch, description and stamp follow in the host's order.
+		var publishEarly = function() {
+			if (output == null)
+				return;
+			if (FileSystem.exists(output + ".live.full"))
+				FileSystem.deleteFile(output + ".live.full");
+			for (suffix in [".hlp", ".live.json", ".live.stamp"]) {
+				var temporary = output + stagingSuffix + suffix;
+				if (FileSystem.exists(temporary)) {
+					CompilerDriver.replaceFile(temporary, output + suffix);
+					promoted.set(suffix, true);
+				}
+			}
+		};
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.compile");
 			try
 				result = CompilerDriver.compile(cast staged, message -> {
 					cancellation.check();
 					send(client, {message: message});
-				}, session, cancellation)
+				}, session, cancellation, publishEarly)
 			catch (error:Dynamic)
 				failure = error;
 			done.release();
@@ -193,7 +211,13 @@ class CompilerServer {
 			}
 			throw failure;
 		}
+		var markerDestination = request.output + ".live.full";
+		if (request.output != null && FileSystem.exists(markerDestination))
+			FileSystem.deleteFile(markerDestination);
 		for (output in outputs) {
+			if (request.output != null && StringTools.startsWith(output.destination, request.output)
+				&& promoted.exists(output.destination.substr(request.output.length)))
+				continue;
 			if (FileSystem.exists(output.temporary))
 				CompilerDriver.replaceFile(output.temporary, output.destination);
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))

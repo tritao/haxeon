@@ -27,7 +27,13 @@ class LiveHost {
 		var path = args[0], entry = args[1], arguments = args[2];
 		var stamp = readStamp(path);
 		var description = readDescription(path);
-		var module = Runtime.load(File.getBytes(path), File.getBytes(path + ".hli"));
+		// The compiler publishes a patch before the full module, so the description can lead the module files.
+		var loadedBytes = loadFullModule(path, description);
+		while (loadedBytes == null) {
+			description = readDescription(path);
+			loadedBytes = loadFullModule(path, description);
+		}
+		var module = Runtime.load(loadedBytes.module, loadedBytes.identity);
 		var revision = description.revision;
 		var rejectedPublication = "";
 		try {
@@ -115,9 +121,12 @@ class LiveHost {
 			return null;
 		}
 		var replacement:LoadedModule;
-		try
-			replacement = Runtime.load(File.getBytes(path), File.getBytes(path + ".hli"))
-		catch (error:Dynamic) {
+		try {
+			var bytes = loadFullModule(path, next);
+			if (bytes == null)
+				throw "the full module of revision " + next.revision + " was not published";
+			replacement = Runtime.load(bytes.module, bytes.identity);
+		} catch (error:Dynamic) {
 			report('haxeon: could not load replacement; keeping revision ${previous.revision}: ${Std.string(error)}');
 			return null;
 		}
@@ -161,6 +170,37 @@ class LiveHost {
 	static function report(message:String):Void {
 		Sys.println(message);
 		Sys.stdout().flush();
+	}
+
+	/**
+	 * Reads the full module and its identity once the compiler's `.live.full` marker says they belong to `target`, and
+	 * checks the marker again after reading. Null when they never did (a newer build is landing, or none was written).
+	 * A compiler that writes no marker is waited on briefly and then trusted.
+	 */
+	static function loadFullModule(path:String, target:LiveDescription):Null<{module:haxe.io.Bytes, identity:haxe.io.Bytes}> {
+		var wanted = publicationKey(target), deadline = Sys.time() + 15.0;
+		while (true) {
+			var marker = readMarker(path);
+			if (marker == wanted) {
+				var bytes = {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
+				if (readMarker(path) == wanted)
+					return bytes;
+			}
+			if (Sys.time() > deadline) {
+				// No marker at all is a compiler that writes none: trust the files rather than wait forever.
+				if (marker == null)
+					return {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
+				return null;
+			}
+			Sys.sleep(0.02);
+		}
+	}
+
+	static function readMarker(path:String):Null<String> {
+		try
+			return File.getContent(path + ".live.full")
+		catch (_:Dynamic)
+			return null;
 	}
 
 	static function publicationKey(description:LiveDescription):String
