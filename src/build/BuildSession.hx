@@ -25,6 +25,12 @@ class BuildSession {
 	/** Whether this session's builds have sent the live compile to a compiler. */
 	public var liveCompiled = false;
 
+	/**
+	 * The compiler workers this session's builds used (by state file), each with the time its next keepalive ping is due.
+	 * While the session runs it pings them, so they do not idle out however long the user pauses.
+	 */
+	public final workerPings:Map<String, Float> = [];
+
 	public function new(?digests:ContentDigestCache) {
 		this.digests = digests == null ? new ContentDigestCache(true) : digests;
 	}
@@ -42,6 +48,10 @@ class BuildSession {
 			warmup();
 		}
 	}
+
+	/** Keeps the workers this session uses resident; the watch loop calls it on every wake, and it pings only when one is due. */
+	public function keepWorkersAlive():Void
+		build.execution.CompilerClient.keepWorkersAlive(this);
 
 	public function workerVersion(identity:String, compute:Void->String):String {
 		var version = workerVersions.get(identity);
