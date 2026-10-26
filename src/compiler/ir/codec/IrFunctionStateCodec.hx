@@ -28,8 +28,10 @@ class IrFunctionStateCodec {
 		return encodeFunction(fn, true);
 
 	/**
-	 * Encodes everything `encode` does except the content hash of each source file. That hash covers the whole file, so
-	 * an edit anywhere changes it for every function of the file; the positions beside it already say where code sits.
+	 * Encodes everything `encode` does except the content hash of each source file and the byte offsets of each location.
+	 * The hash covers the whole file and the offsets move with any edit before the function, so an edit anywhere would make
+	 * every later function of the file look different. Line and column numbers stay in: a function whose lines moved differs.
+	 * One that keeps its previous form keeps its hash and offsets too, which still describe the source snapshot it carries.
 	 */
 	public static function encodeForComparison(fn:IrFunction):Bytes
 		return encodeFunction(fn, true, false);
@@ -207,8 +209,8 @@ class IrFunctionStateCodec {
 		output.writeByte(location == null ? 0 : 1);
 		if (location != null) {
 			IrTypeCodec.writeString(output, location.path);
-			output.writeInt32(location.start);
-			output.writeInt32(location.end);
+			output.writeInt32(hashed ? location.start : 0);
+			output.writeInt32(hashed ? location.end : 0);
 			output.writeInt32(location.line);
 			output.writeInt32(location.column);
 			output.writeInt32(location.endLine);

@@ -134,6 +134,18 @@ class InlinerMain {
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
 		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
 		expect(shifted.indexOf("stay") >= 0, "a function whose positions shifted is reported as changed so its line information is refreshed");
+		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
+		var linesFor = (comment:String) -> comment + "
+function stay(x:Int):Int return x + 1;
+function main():Int return stay(1);
+";
+		var lineCache = new IrInlineCache();
+		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache);
+		var offsetEdit = IrInliner.run(Frontend.compile(linesFor("// a longer comment")), lineCache);
+		expect(offsetEdit.indexOf("stay") < 0, "a function whose lines and columns held is unchanged when only byte offsets moved");
+		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
+// b")), lineCache);
+		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
 		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.
 		var hierarchy = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
 			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "

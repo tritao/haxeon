@@ -268,9 +268,9 @@ class IrInliner {
 	}
 
 	/**
-	 * Whether both encode to the same bytes, ignoring the whole-file content hash so an edit elsewhere in the file does not
-	 * make the function look changed; a function that cannot be encoded counts as different. Any shift of its own
-	 * positions still counts, so the published function keeps the line information its lowered form carries.
+	 * Whether both encode to the same bytes, ignoring the whole-file content hash and byte offsets so an edit elsewhere in
+	 * the file does not make the function look changed; a function that cannot be encoded counts as different. A change of
+	 * its own lines or columns still counts, so line information in stack traces stays right.
 	 */
 	static function sameBytes(a:IrFunction, b:IrFunction):Bool {
 		try {
