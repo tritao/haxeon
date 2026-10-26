@@ -439,6 +439,13 @@ if(NK_BUILD_TESTS)
             endif()
         endforeach()
     endif()
+    # Windows finds DLLs on PATH, and NativeKit's DLLs build into their own directory; without it a test does not
+    # fail, it waits on a "nativekit.dll was not found" dialog.
+    if(WIN32 AND NK_BUILD_SHARED AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
+        get_property(nkui_tests DIRECTORY PROPERTY TESTS)
+        set_tests_properties(${nkui_tests} PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:NativeKit::nativekit>;PATH=path_list_prepend:$<TARGET_FILE_DIR:NativeKit::gpu>")
+    endif()
 endif()
 
 if(NK_BUILD_EXAMPLES)
