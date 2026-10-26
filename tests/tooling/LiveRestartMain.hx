@@ -33,14 +33,20 @@ class LiveRestartMain {
 		var original = new CompilerSession(), first = build(original, 1);
 		// The same edit made in a session that kept its history, which the restarted session must match.
 		var warm = build(original, 2);
-		build(original, 1);
+		var reverted = build(original, 1);
 		first = build(original, 1);
+		expect(first.revision == reverted.revision, "a build that changes nothing must keep the published revision");
 		// The compile server records the history once it is idle, and a new one resumes it.
 		expect(original.recordLiveState(), "an idle session must record the published module's history");
 		var restarted = new CompilerSession();
+		// A live run warms its new worker with the unchanged program; that must not make the running app reload.
+		var warmup = build(restarted, 1);
+		expect(warmup.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
+		expect(warmup.requiresReload == false && (warmup.revision == first.revision || warmup.patchAvailable == true),
+			"warming a restarted session must not force a reload");
 		var edit = build(restarted, 2);
 		expect(edit.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
-		expect(edit.revision == first.revision + 1, "a restarted session must continue the published revisions");
+		expect(edit.revision == warmup.revision + 1, "a restarted session must continue the published revisions");
 		expect(edit.patchAvailable == true && edit.requiresReload == false, "the first edit after a restart must patch, not reload");
 		expect(Std.string(edit.changedFunctions) == Std.string(warm.changedFunctions), "the first edit after a restart must patch what a warm session patches: "
 			+ Std.string(edit.changedFunctions) + " against " + Std.string(warm.changedFunctions));
