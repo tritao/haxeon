@@ -51,6 +51,8 @@ class UiContext {
 	public var commandContext(default, null):CommandContext;
 	public var root(default, null):Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
+	var windowFocused:Bool = true;
+	var focusBeforeWindowBlur:Null<WidgetId> = null;
 	/** Called when an active animation needs another host frame. */
 	public var onAnimationFrameRequested:Null<Void->Void>;
 	/** Modifier observation independent of keyboard focus (for pointer affordances). */
@@ -708,6 +710,7 @@ class UiContext {
 
 	public function clearFocus():Void {
 		ensureLive();
+		focusBeforeWindowBlur = null;
 		var previous = focus.focusedId;
 		focus.focus(null);
 		dispatchFocusChange(previous, null);
@@ -761,6 +764,8 @@ class UiContext {
 	/** Clears transient pointer state and reports loss of platform window focus. */
 	public function windowFocusLost():Void {
 		ensureLive();
+		if (windowFocused) focusBeforeWindowBlur = focus.focusedId;
+		windowFocused = false;
 		events.cancelPointers();
 		updateCursor();
 		gestures.cancelAll();
@@ -769,6 +774,18 @@ class UiContext {
 			events.focusEvent(previous, UiEventKind.FocusLost);
 		focus.focus(null);
 		dispatchFocusChange(previous, null);
+	}
+
+	/** Restore keyboard ownership after activation, subject to current focus eligibility. */
+	public function windowFocusGained():Void {
+		ensureLive();
+		if (windowFocused) return;
+		windowFocused = true;
+		var restore = focusBeforeWindowBlur;
+		focusBeforeWindowBlur = null;
+		// A background change may have selected another widget or opened a modal.
+		// focusWidget also rejects removed, hidden, disabled and trapped-out nodes.
+		if (focus.focusedId == null && restore != null) focusWidget(restore);
 	}
 
 	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,
@@ -975,6 +992,7 @@ class UiContext {
 		if (disposed)
 			return;
 		pendingFocus = null;
+		focusBeforeWindowBlur = null;
 		session.clearCustomPaints();
 		for (nodeId in customCanvases.keys()) {
 			var canvas = customCanvases.get(nodeId);

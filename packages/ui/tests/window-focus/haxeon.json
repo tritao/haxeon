@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"ui-window-focus-tests"},"entry":"WindowFocusTests","sourceRoots":["."],"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}
