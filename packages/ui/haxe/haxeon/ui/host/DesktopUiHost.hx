@@ -766,14 +766,19 @@ class DesktopUiHost {
 		};
 	}
 
-	/** Background I/O (sockets and pipes, tasks, HTTP) is for the code that started it, not the window: a redraw for
-		each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests a
-		frame when its state changes. */
+	/** Background I/O (transports, terminals, tasks, HTTP) is for the code that started it, not the window: a redraw
+		for each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests
+		a frame when its state changes. Other raw events (menus, file watches, application lifecycle) still redraw. */
 	static function isBackgroundIo(value:NativeKitEventValue):Bool {
 		return switch (value) {
-			case Raw(_, _, _, _, _, _, _) | TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _)
-				| TaskCancelled(_, _, _) | HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _)
-				| HttpProgressEvent(_, _, _, _, _, _) | HttpComplete(_, _, _, _): true;
+			case Raw(kind, _, _, _, _, _, _):
+				kind == EventKind.TransportConnected || kind == EventKind.TransportAccepted
+					|| kind == EventKind.TransportData || kind == EventKind.TransportWritable
+					|| kind == EventKind.TransportClosed || kind == EventKind.TransportFailed
+					|| kind == EventKind.PtyReadable || kind == EventKind.PtyExited;
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _)
+				| HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _)
+				| HttpComplete(_, _, _, _): true;
 			case _: false;
 		};
 	}
