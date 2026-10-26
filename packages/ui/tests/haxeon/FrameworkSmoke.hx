@@ -277,6 +277,64 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** Unwrapped, a large document shapes only the groups something needs, and the rest are placed exactly where shaping
+		them puts them: the layout matches one with every group shaped, wherever its shaped groups are. A group shaped
+		above the scroll anchor reports how far it moved the content there. */
+	static function unwrappedLayoutShapesOnlyWhatIsNeeded(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...20000)
+			value.add(line % 500 == 250 ? "é🙂 emoji line " + line + "\n" : "plain unwrapped line " + line + "\n");
+		var style = new ParagraphStyle(haxeon.ui.TextWrap.None);
+		var editor = new TextEditorState(fonts, value.toString(), null, style);
+		editor.updateLayout(600.0);
+		var counts = editor.layout.shapedGroups();
+		if (counts.total < 100 || counts.shaped > 2)
+			throw "opening an unwrapped document shaped " + counts.shaped + " of " + counts.total + " groups";
+		var full = new haxeon.ui.widgets.text.TextEditorLayout(fonts, editor.text, 600.0, editor.textStyle, style);
+		full.selectionRects(new TextPosition(0, 0), new TextPosition(Utf8Text.length(editor.text), 0));
+		if (full.shapedGroups().shaped != full.shapedGroups().total)
+			throw "the reference layout did not shape every group";
+		function sameAsFull(label:String):Void {
+			var actual = editor.layout.visualRows(), expected = full.visualRows();
+			if (actual.length != expected.length)
+				throw label + ": " + actual.length + " rows, a fully shaped layout has " + expected.length;
+			for (index in 0...actual.length) {
+				var a = actual[index], b = expected[index];
+				if (a.start != b.start || a.end != b.end || Math.abs(a.top - b.top) > 0.001 || Math.abs(a.bottom - b.bottom) > 0.001)
+					throw label + ": row " + index + " is " + a.start + "-" + a.end + " at " + a.top + ", fully shaped " + b.start + "-" + b.end + " at " + b.top;
+			}
+			if (Math.abs(editor.layout.measure().height - full.measure().height) > 0.001)
+				throw label + ": content height " + editor.layout.measure().height + ", fully shaped " + full.measure().height;
+		}
+		sameAsFull("as opened");
+		// The end of the document: its caret is where the fully shaped layout has it, and only its group was shaped.
+		var end = Utf8Text.length(editor.text);
+		var a = editor.layout.caret(new TextPosition(end, 0)), b = full.caret(new TextPosition(end, 0));
+		if (Math.abs(a.y - b.y) > 0.001)
+			throw "the caret at the end is at " + a.y + ", fully shaped at " + b.y;
+		if (editor.layout.shapedGroups().shaped > 3)
+			throw "reaching the end shaped " + editor.layout.shapedGroups().shaped + " groups";
+		// Groups holding emoji, shaped below and above a scroll anchor in the middle.
+		var middle = editor.layout.measure().height / 2;
+		editor.layout.scrollAnchorY = middle;
+		editor.layout.takeScrollShift();
+		var before = editor.layout.measure().height;
+		var above = 0.0;
+		for (line in [250, 9750, 19750]) {
+			var paragraph = new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(line).start;
+			var top = editor.layout.caret(new TextPosition(paragraph, 0)).y;
+			if (line < 10000) above = top;
+		}
+		var shift = editor.layout.takeScrollShift();
+		var moved = editor.layout.measure().height - before;
+		if (Math.abs(shift) > Math.abs(moved) + 0.001)
+			throw "shaping moved content above the anchor by " + shift + " but the document by only " + moved;
+		sameAsFull("after shaping groups across it");
+		full.dispose();
+		editor.dispose();
+		return true;
+	}
+
 	/** An editor whose document is edited by its owner, as an edit-intent handler does, relays out only the edit and
 		ends where a fresh layout of the same text would; rows stay right across edits, syncs and width changes. */
 	static function externalEditsRelayoutCorrectly(fonts:FontCollection):Bool {
@@ -364,13 +422,14 @@ class FrameworkSmoke {
 				if (actual[index].start != fresh[index].start || actual[index].end != fresh[index].end ||
 					Math.abs(actual[index].top - fresh[index].top) > 0.001)
 					throw "unwrapped row " + index + " at width " + width + " differs from a fresh layout";
-			if (Math.abs(editor.layout.measure().width - expected.measure().width) > 0.001)
-				throw "unwrapped content width at " + width + " differs from a fresh layout";
 			for (offset in probes) {
 				var a = editor.layout.caret(new TextPosition(offset, 0)), b = expected.caret(new TextPosition(offset, 0));
 				if (Math.abs(a.x - b.x) > 0.001 || Math.abs(a.y - b.y) > 0.001)
 					throw "caret at " + offset + " for width " + width + " is at " + a.x + ", a fresh layout's at " + b.x;
 			}
+			// Unwrapped content is as wide as the groups shaped so far; the probes have shaped the same ones in both.
+			if (Math.abs(editor.layout.measure().width - expected.measure().width) > 0.001)
+				throw "unwrapped content width at " + width + " differs from a fresh layout";
 			expected.dispose();
 		}
 		editor.dispose();
@@ -762,6 +821,8 @@ class FrameworkSmoke {
 		Sys.println("PASS: logical affinity range tags, reversed endpoints and chunked cache");
 		if (!newlineChunksValid(fonts))
 			return 310;
+		if (!unwrappedLayoutShapesOnlyWhatIsNeeded(fonts))
+			throw "unwrapped layout shaped more than it needed or placed unshaped groups wrongly";
 		if (!externalEditsRelayoutCorrectly(fonts))
 			return 311;
 		if (!unwrappedWidthChangesMatchFreshLayout(fonts))

@@ -285,7 +285,10 @@ class TextEditorState implements SemanticsValueSource {
 			lastLayoutWidth = nextWidth;
 			lastLayoutRevision = offsets.revision;
 		}
+		// Groups shaped above the viewport since the last frame moved what it shows; follow them, then anchor there.
+		scrollOffsetY += layout.takeScrollShift();
 		clampScrollOffset();
+		layout.scrollAnchorY = scrollOffsetY;
 	}
 
 	/** Brings the layout of the current document up to its revision at `width`. One edit since the last layout, at the

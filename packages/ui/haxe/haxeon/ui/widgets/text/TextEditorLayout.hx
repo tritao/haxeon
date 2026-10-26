@@ -18,7 +18,15 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.TextColorRange;
 import haxeon.editor.TextDocument;
 
-/** Retained layouts for bounded groups of paragraphs in one editor document. */
+/**
+	Retained layouts for bounded groups of paragraphs in one editor document.
+
+	Unwrapped, a group is shaped the first time something needs its geometry (painting it, hit-testing or measuring
+	it), not when the document is set, so opening a large document shapes only what is shown. Until then each of its
+	paragraphs is one row of the first group's row height, which is exact for text of one line height. When a group
+	is shaped and differs, the groups after it move, and a change above `scrollAnchorY` is reported through
+	`takeScrollShift` so a view keeps its content in place. Wrapped text is shaped whole, since its rows depend on it.
+**/
 class TextEditorLayout {
 	static inline var paragraphsPerLayout:Int = 64;
 	static inline var maximumParagraphsPerLayout:Int = 128;
@@ -48,6 +56,13 @@ class TextEditorLayout {
 	var paragraphLineCount:Int;
 	var contentWidth:Float;
 	var contentHeight:Float;
+	/** The height of one row, estimated from the first group, for groups not yet shaped. */
+	var estimatedRowHeight:Float = 0.0;
+	/** True while recomputeMetrics places every group, so shaping one does not move the others meanwhile. */
+	var placing:Bool = false;
+	/** Where a view's content starts (its scroll offset); shaped groups above it move it by takeScrollShift. */
+	public var scrollAnchorY:Float = 0.0;
+	var scrollShift:Float = 0.0;
 	var firstBaseline:Float;
 	var hasBaseline:Bool;
 	var disposed:Bool;
@@ -86,6 +101,9 @@ class TextEditorLayout {
 
 	static function chunkCount(offsetMap:TextDocument):Int
 		return Std.int((offsetMap.paragraphCount() + paragraphsPerLayout - 1) / paragraphsPerLayout);
+
+	static function chunkParagraphCount(offsetMap:TextDocument, index:Int):Int
+		return Std.int(Math.min(offsetMap.paragraphCount(), (index + 1) * paragraphsPerLayout)) - index * paragraphsPerLayout;
 
 	static function chunkRangeAt(offsetMap:TextDocument, index:Int):TextRange {
 		var firstParagraph = index * paragraphsPerLayout;
@@ -128,7 +146,7 @@ class TextEditorLayout {
 			if (width == nextWidth) return;
 			for (record in paragraphs) {
 				if (fitsWidth(record, nextWidth)) continue;
-				record.layout.update(record.text, nextWidth, textStyle, paragraphStyle);
+				record.setText(record.text, nextWidth, textStyle, paragraphStyle);
 				record.renderRanges = null;
 				record.rows = null;
 			}
@@ -183,25 +201,24 @@ class TextEditorLayout {
 			if (record != null) {
 				var textChanged = record.text != paragraphText;
 				if (textChanged || !fitsWidth(record, nextWidth) || styleChanged) {
-					record.layout.update(paragraphText, nextWidth, textStyle, paragraphStyle);
+					record.setText(paragraphText, nextWidth, textStyle, paragraphStyle);
 					record.renderRanges = null;
 					record.rows = null;
-					record.text = paragraphText;
 				}
 			} else {
-				record = new TextEditorParagraphRecord(paragraphText,
-					TextLayout.create(fonts, paragraphText, nextWidth, textStyle, paragraphStyle));
+				record = new TextEditorParagraphRecord(paragraphText, shape, shaped);
 			}
 			used.push(record);
 			record.start = range.start;
 			record.end = range.end;
+			record.paragraphCount = chunkParagraphCount(nextOffsets, index);
 			record.y = 0.0;
 			record.height = 0.0;
 			next.push(record);
 		}
 		for (record in previous)
 			if (!containsRecord(used, record))
-				record.layout.dispose();
+				record.dispose();
 
 		width = nextWidth;
 		offsets = nextOffsets;
@@ -270,8 +287,7 @@ class TextEditorLayout {
 					}
 				}
 			if (record == null)
-				record = new TextEditorParagraphRecord(chunkText,
-					TextLayout.create(fonts, chunkText, width, textStyle, paragraphStyle));
+				record = new TextEditorParagraphRecord(chunkText, shape, shaped);
 			else if (record.text != chunkText) {
 				// Keep only source-mapped prefix/suffix portions. Repartitioned
 				// boundaries may change both ends of a chunk, so the middle
@@ -284,28 +300,28 @@ class TextEditorLayout {
 						chunkEnd - Math.max(newEnd, chunkStart))) : 0;
 				suffix = clamp(suffix, 0, Std.int(Math.min(record.end - record.start - prefix,
 					chunkEnd - chunkStart - prefix)));
-				record.layout.edit(prefix, record.end - record.start - suffix,
+				record.editText(prefix, record.end - record.start - suffix,
 					nextOffsets.sliceCodepoints(chunkStart + prefix, chunkEnd - suffix), chunkText);
 				record.renderRanges = null;
 				record.rows = null;
-				record.text = chunkText;
 			}
 			// A group laid out at an older width while that could not matter must match the editor's once it can.
 			if (!fitsWidth(record, width)) {
-				record.layout.update(record.text, width, textStyle, paragraphStyle);
+				record.setText(record.text, width, textStyle, paragraphStyle);
 				record.renderRanges = null;
 				record.rows = null;
 			}
 			used.push(record);
 			record.start = chunkStart;
 			record.end = chunkEnd;
+			record.paragraphCount = paragraphEnd - paragraph + 1;
 			result.push(record);
 			paragraph = paragraphEnd + 1;
 		}
 		for (index in first...(last + 1)) {
 			var record = previous[index];
 			if (!containsRecord(used, record))
-				record.layout.dispose();
+				record.dispose();
 		}
 		for (index in last + 1...previous.length) {
 			var record = previous[index];
@@ -339,10 +355,15 @@ class TextEditorLayout {
 		var rows:Array<{start:Int, end:Int, top:Float, bottom:Float}> = [];
 		for (record in paragraphs) {
 			// Each paragraph's rows are measured once per layout of it, so an edit re-measures only what it touched.
-			var local = record.rows;
-			if (local == null) {
-				local = measureRows(record);
+			// Estimated rows are kept like measured ones, until the group is shaped or the row height they used changes.
+			var cached = record.rows;
+			var local:Array<TextEditorParagraphRow>;
+			if (cached != null && (record.laidOut || record.rowsHeight == estimatedRowHeight))
+				local = cached;
+			else {
+				local = record.laidOut ? measureRows(record) : estimatedRows(record);
 				record.rows = local;
+				record.rowsHeight = estimatedRowHeight;
 			}
 			for (index in 0...local.length - 1) {
 				var row = local[index];
@@ -359,6 +380,21 @@ class TextEditorLayout {
 		// layout's text but not one inside it, so without this a row's end would depend on how paragraphs are grouped.
 		for (index in 0...rows.length - 1)
 			rows[index].end = rows[index + 1].start;
+		return rows;
+	}
+
+	/** The rows a group not yet shaped is estimated to have: one per paragraph, the caret after its end on the last. */
+	function estimatedRows(record:TextEditorParagraphRecord):Array<TextEditorParagraphRow> {
+		var rows:Array<TextEditorParagraphRow> = [];
+		var first = offsets.paragraphIndexAtOffset(record.start);
+		for (index in 0...record.paragraphCount) {
+			var range = offsets.paragraphRangeAtIndex(first + index);
+			rows.push(new TextEditorParagraphRow(range.start - record.start, range.end - record.start,
+				index * estimatedRowHeight, (index + 1) * estimatedRowHeight));
+		}
+		var last = rows[rows.length - 1];
+		var length = record.end - record.start;
+		rows.push(new TextEditorParagraphRow(length, length, last.top, last.bottom));
 		return rows;
 	}
 
@@ -381,7 +417,7 @@ class TextEditorLayout {
 		through alignment against its right edge (centered, end, or start in right-to-left text); otherwise a width
 		change leaves it as it is, and a document laid out once is not shaped again as its widest line grows. */
 	function fitsWidth(record:TextEditorParagraphRecord, nextWidth:Float):Bool {
-		if (record.layout.width == nextWidth)
+		if (!record.laidOut || record.layout.width == nextWidth)
 			return true;
 		if (paragraphStyle.wrap != haxeon.ui.TextWrap.None || paragraphStyle.alignment != haxeon.ui.TextAlignment.Start)
 			return false;
@@ -943,7 +979,7 @@ class TextEditorLayout {
 		if (disposed)
 			return;
 		for (record in paragraphs)
-			record.layout.dispose();
+			record.dispose();
 		clearRangeGeometryCache();
 		paragraphs = [];
 		disposed = true;
@@ -956,22 +992,80 @@ class TextEditorLayout {
 		contentHeight = 0.0;
 		firstBaseline = 0.0;
 		hasBaseline = false;
+		placing = true;
+		// The first group is always shaped: it gives the baseline and the row height the others are estimated with.
+		estimatedRowHeight = 0.0;
+		if (paragraphs.length > 0) {
+			var first = paragraphs[0];
+			measureRecord(first);
+			var rows = first.rows == null ? (first.rows = measureRows(first)) : first.rows;
+			estimatedRowHeight = Math.max(1.0, first.height / Math.max(1, rows.length - 1));
+		}
+		var estimate = paragraphStyle.wrap == haxeon.ui.TextWrap.None;
 		for (record in paragraphs) {
 			record.y = contentHeight;
-			var metrics = record.layout.measure();
-			var lineHeight = paragraphStyle.lineHeight == null ? 0.0 : paragraphStyle.lineHeight;
-			if (lineHeight <= 0.0) {
-				var caret = record.layout.caret(new TextPosition(0, 0));
-				lineHeight = Math.abs(caret.descender - caret.ascender);
-			}
-			record.height = Math.max(metrics.height, Math.max(1.0, lineHeight));
-			contentWidth = Math.max(contentWidth, metrics.width);
-			if (!hasBaseline) {
+			if (record.laidOut || !estimate) measureRecord(record);
+			else record.height = estimatedHeight(record);
+			if (!hasBaseline && record.laidOut) {
 				firstBaseline = record.y + record.layout.caret(new TextPosition(0, 0)).y;
 				hasBaseline = Math.isFinite(firstBaseline) && firstBaseline >= 0.0;
 			}
 			contentHeight += record.height;
 		}
+		placing = false;
+	}
+
+	function estimatedHeight(record:TextEditorParagraphRecord):Float
+		return Math.max(1.0, record.paragraphCount * estimatedRowHeight);
+
+	/** Sets a shaped group's height from its layout, and widens the content to it. */
+	function measureRecord(record:TextEditorParagraphRecord):Void {
+		var metrics = record.layout.measure();
+		var lineHeight = paragraphStyle.lineHeight == null ? 0.0 : paragraphStyle.lineHeight;
+		if (lineHeight <= 0.0) {
+			var caret = record.layout.caret(new TextPosition(0, 0));
+			lineHeight = Math.abs(caret.descender - caret.ascender);
+		}
+		record.height = Math.max(metrics.height, Math.max(1.0, lineHeight));
+		contentWidth = Math.max(contentWidth, metrics.width);
+	}
+
+	/** Shapes a group when its geometry is first needed. */
+	function shape(record:TextEditorParagraphRecord):TextLayout
+		return TextLayout.create(fonts, record.text, width, textStyle, paragraphStyle);
+
+	/** After a group is shaped outside recomputeMetrics: its real height replaces the estimate, moving the groups after it. */
+	function shaped(record:TextEditorParagraphRecord):Void {
+		if (placing) return;
+		var previousHeight = record.height, previousWidth = contentWidth;
+		measureRecord(record);
+		var delta = record.height - previousHeight;
+		if (delta == 0.0) {
+			if (contentWidth != previousWidth) geometryRevision++;
+			return;
+		}
+		var index = paragraphIndexAtOffsetIn(paragraphs, record.start, offsets.codepointCount);
+		while (index < paragraphs.length && paragraphs[index] != record) index++;
+		for (next in index + 1...paragraphs.length) paragraphs[next].y += delta;
+		contentHeight += delta;
+		if (record.y + previousHeight <= scrollAnchorY) scrollShift += delta;
+		geometryRevision++;
+		visualRowsRevision++;
+		clearRangeGeometryCache();
+	}
+
+	/** Paragraph groups shaped so far, and all of them: an unwrapped document shapes only what was needed. */
+	public function shapedGroups():{shaped:Int, total:Int} {
+		var shaped = 0;
+		for (record in paragraphs) if (record.laidOut) shaped++;
+		return {shaped: shaped, total: paragraphs.length};
+	}
+
+	/** How far content above `scrollAnchorY` moved since the last call, as groups there were shaped. */
+	public function takeScrollShift():Float {
+		var shift = scrollShift;
+		scrollShift = 0.0;
+		return shift;
 	}
 
 	function paragraphAtY(y:Float):TextEditorParagraphRecord {
@@ -1045,7 +1139,15 @@ class TextEditorParagraphRecord {
 	public var renderRanges:Null<Array<TextColorRange>>;
 	/** Visual rows of this paragraph's current layout (see TextEditorLayout.measureRows); null until measured. */
 	public var rows:Null<Array<TextEditorParagraphRow>>;
-	public final layout:TextLayout;
+	/** Paragraphs in the group, which estimate its height until it is shaped. */
+	public var paragraphCount:Int = 1;
+	/** The row height estimated rows were made with. */
+	public var rowsHeight:Float = 0.0;
+	/** The group's shaped layout, made when first needed. */
+	public var layout(get, never):TextLayout;
+	public var laidOut(get, never):Bool;
+	var value:Null<TextLayout> = null;
+	final shapeText:TextEditorParagraphRecord->TextLayout;
 	var whitespaceText:Null<String>;
 	var whitespace:Array<{start:Int, end:Int, kind:Int}> = [];
 	var directionText:Null<String>;
@@ -1091,9 +1193,43 @@ class TextEditorParagraphRecord {
 	}
 
 
-	public function new(text:String, layout:TextLayout) {
+	function get_laidOut():Bool
+		return value != null;
+
+	function get_layout():TextLayout {
+		if (value == null) {
+			value = shapeText(this);
+			// Rows estimated before it was shaped give way to measured ones.
+			rows = null;
+			onShaped(this);
+		}
+		return value;
+	}
+
+	/** Replaces the text, reshaping now only if the group is already shaped. */
+	public function setText(next:String, width:Float, textStyle:TextStyle, paragraphStyle:ParagraphStyle):Void {
+		text = next;
+		if (value != null) value.update(next, width, textStyle, paragraphStyle);
+	}
+
+	/** Replaces `start...end` of the text with `replacement`, reshaping only that if the group is shaped. */
+	public function editText(start:Int, end:Int, replacement:String, next:String):Void {
+		text = next;
+		if (value != null) value.edit(start, end, replacement, next);
+	}
+
+	public function dispose():Void {
+		if (value != null) value.dispose();
+		value = null;
+	}
+
+	final onShaped:TextEditorParagraphRecord->Void;
+
+	public function new(text:String, shapeText:TextEditorParagraphRecord->TextLayout,
+			?onShaped:TextEditorParagraphRecord->Void) {
 		this.text = text;
-		this.layout = layout;
+		this.shapeText = shapeText;
+		this.onShaped = onShaped == null ? function(_) {} : onShaped;
 		start = 0;
 		end = 0;
 		y = 0.0;
