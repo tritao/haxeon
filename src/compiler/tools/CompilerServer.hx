@@ -191,8 +191,9 @@ class CompilerServer {
 			try
 				result = CompilerDriver.compile(cast staged, message -> {
 					cancellation.check();
-					if (client != null)
-						send(client, {message: message});
+					var requester = client;
+					if (requester != null)
+						send(requester, {message: message});
 				}, session, cancellation, publishEarly)
 			catch (error:Dynamic)
 				failure = error;
