@@ -121,6 +121,19 @@ class InlinerMain {
 		expect(allocations(programFunction(elisionProgram, "escapeCaller")) == 1, "a callee that stores its parameter must get a copy");
 		// Both arguments are copies: one is written by the callee, and the other could alias what the callee stores into.
 		expect(allocations(programFunction(elisionProgram, "storeCaller")) == 2, "a callee that stores elsewhere could alias the source, so it gets a copy");
+		// An edit elsewhere in the file changes its content hash but not a function's own code or positions, so the function is
+		// not reported as changed; one whose positions shift or whose code changes still is.
+		var editBase = "function stay(x:Int):Int return x + 1; function edit(x:Int):Int return x + 2; function main():Int return stay(1) + edit(1);";
+		var editCache = new IrInlineCache();
+		IrInliner.run(Frontend.compile(editBase), editCache);
+		var tailEdit = IrInliner.run(Frontend.compile(editBase + " function extra():Int return 5;"), editCache);
+		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0, "an edit after a function leaves it unchanged");
+		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
+		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
+		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
+		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
+		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
+		expect(shifted.indexOf("stay") >= 0, "a function whose positions shifted is reported as changed so its line information is refreshed");
 		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.
 		var hierarchy = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
 			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "
