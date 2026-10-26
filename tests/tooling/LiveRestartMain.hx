@@ -29,14 +29,18 @@ class LiveRestartMain {
 				session);
 			return haxe.Json.parse(File.getContent(output + ".live.json"));
 		}
-		var first = build(new CompilerSession(), 1);
+		var original = new CompilerSession(), first = build(original, 1);
+		// The same edit made in a session that kept its history, which the restarted session must match.
+		var warm = build(original, 2);
+		build(original, 1);
+		first = build(original, 1);
 		var restarted = new CompilerSession();
 		var edit = build(restarted, 2);
 		expect(edit.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
 		expect(edit.revision == first.revision + 1, "a restarted session must continue the published revisions");
 		expect(edit.patchAvailable == true && edit.requiresReload == false, "the first edit after a restart must patch, not reload");
-		expect(edit.changedFunctions.length >= 1 && edit.changedFunctions.length <= 2, "the first edit after a restart must patch only what changed: "
-			+ Std.string(edit.changedFunctions));
+		expect(Std.string(edit.changedFunctions) == Std.string(warm.changedFunctions), "the first edit after a restart must patch what a warm session patches: "
+			+ Std.string(edit.changedFunctions) + " against " + Std.string(warm.changedFunctions));
 		var next = build(restarted, 3);
 		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true && next.requiresReload == false,
 			"edits after the first must keep patching");
