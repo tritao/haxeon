@@ -646,6 +646,9 @@ class HaxeonCli {
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
+			// Under the build's PATH, which chooses the worker the rebuilds will reach.
+			if (options.live && session != null)
+				session.warmLiveCompiler();
 			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
 			if (!FileSystem.exists(hashlink))
 				throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
