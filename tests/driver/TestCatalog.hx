@@ -31,6 +31,7 @@ typedef ExecutableCase = {
 
 class TestCatalog {
 	static final compilerMains = [
+		"MixedArrayLiteralMain",
 		"EnumTypedefConstructorMain",
 		"AbstractTypeDependencyMain",
 		"TestMain",

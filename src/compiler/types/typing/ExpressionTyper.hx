@@ -1131,23 +1131,25 @@ class ExpressionTyper {
 		var expectedMap = mapExpectation(expectedType);
 		if (values.length == 0 && expectedMap != null)
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
-		var expectedElement = arrayElementExpectation(expectedType);
+		var expectedElement = isDynamicExpectation(expectedType) ? TDynamic : arrayElementExpectation(expectedType);
 		if (values.length == 0 && expectedElement == null)
 			fail("E1003", "Empty array literal requires an expected element type", span);
 		var typedValues:Array<TypedExpression> = [],
 			elementType = expectedElement;
 		for (value in values) {
-			var typedValue = typeExpressionCallback(value, scope, elementType, false),
-				resolvedElement:CompilerType;
-			if (elementType == null) {
-				resolvedElement = typedValue.type;
-				elementType = resolvedElement;
-			} else
-				resolvedElement = elementType;
-			typedValues.push(coerce(typedValue, resolvedElement, "array element", "E1003"));
+			var typedValue = typeExpressionCallback(value, scope, elementType == TNull ? null : elementType, false);
+			if (expectedElement == null) {
+				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType, typedValue.type);
+				if (joined == null)
+					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
+				elementType = joined;
+			}
+			typedValues.push(typedValue);
 		}
 		if (elementType == null)
 			throw "Array element type was not resolved";
+		// Decide storage before coercing any element: a later Float or nullable value can widen it.
+		typedValues = [for (value in typedValues) coerce(value, elementType, "array element", "E1003")];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
 
