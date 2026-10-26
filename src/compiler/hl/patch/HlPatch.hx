@@ -11,16 +11,22 @@ typedef HlPatch = {
 	final baseFloats:Int;
 	final baseStrings:Int;
 	final baseTypes:Int;
+
+	/** Globals the running module has; the patch's `globals` follow them. Zero when the patch adds none. */
+	final baseGlobals:Int;
+
 	final intPrefixHash:Int;
 	final floatPrefixHash:Int;
 	final stringPrefixHash:Int;
 	final typePrefixHash:Int;
+	final globalPrefixHash:Int;
 	final ints:Array<Int>;
 	final floats:Array<Float>;
 	final strings:Array<String>;
 	final types:Array<HlTypeDef>;
 	final functions:Array<HlPatchFunction>;
 	final addedFunctions:Array<HlPatchAddedFunction>;
+	final globals:Array<HlPatchGlobal>;
 	final debugFiles:Array<String>;
 	final sourceSnapshots:Array<{sourceHash:Int, content:haxe.io.Bytes}>;
 }
@@ -51,6 +57,12 @@ typedef HlPatchAddedFunction = {
 	final functionIndex:Int;
 	final type:Int;
 	final name:String;
+}
+
+/** A global the patch adds, with the constant it holds: the fields of its object, as indices into the module's tables. */
+typedef HlPatchGlobal = {
+	final type:Int;
+	final fields:Array<Int>;
 }
 
 /** Decoded numeric HashLink opcode and its wire operands. */

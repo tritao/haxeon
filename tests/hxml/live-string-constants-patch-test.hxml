@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main LiveStringConstantsPatchMain
+-hl out/live-string-constants-patch-test.hl

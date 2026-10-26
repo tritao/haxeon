@@ -277,6 +277,8 @@ class TestCatalog {
 				"edits that add functions patch the running module"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
+			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,
+				"live literals are constants and patches add the ones they introduce"),
 			hxmlCase("runtime", "patch-unwind", "tests/hxml/patch-unwind-test.hxml", "patch-unwind-test.hl", 0,
 				"exception stacks walk through patched code and the frames below it"),
 			mainCase("compiler", "modules", "ModuleMain", "modules.hl", 42, "incrementally rebuilt multi-module program executed"),

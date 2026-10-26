@@ -4,8 +4,8 @@ import compiler.types.Type.CompilerType;
 import sys.io.File;
 
 /**
- * A literal is a String object created once when the module loads, not a new one at each evaluation, in a build nothing
- * will patch. A live module keeps the per-evaluation path, because a patch cannot add the global a literal would need.
+ * A literal is a String object created once when the module loads, not a new one at each evaluation. A live module holds
+ * its literals the same way (a patch adds the global of a literal it introduces; LiveStringConstantsPatchMain runs that).
  */
 class StringConstantsMain {
 	static final source = 'function main():Int { var phase = "target"; var total = 0; var before = allocated(); '
@@ -27,8 +27,9 @@ class StringConstantsMain {
 		live.livePatching = true;
 		live.registerNative("allocated", "std", "gc_total_allocated", [], CompilerType.TFloat);
 		live.update("Main.hx", source);
-		if (live.compile("Main").module.constants.length != 0)
-			throw "A live module must not hold literal constants: a patch cannot add globals";
+		var liveResult = live.compile("Main");
+		if (liveResult.module.constants.length != fixedResult.module.constants.length)
+			throw 'A live module should hold the same ${fixedResult.module.constants.length} literal constants, got ${liveResult.module.constants.length}';
 		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.module));
 	}
 }
