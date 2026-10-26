@@ -64,6 +64,11 @@ class RenderNode {
 	public var styleTags:Array<String>;
 	/** Optional command scope contributed by this node and its focused subtree. */
 	public var commandScope:Null<String>;
+	/** Focused input widgets may route selected commands before consuming their keys.
+	 * The predicate receives the winning command ID, after scope and binding resolution.
+	 * Other keys still reach the widget; modal focus traps suppress this routing.
+	 */
+	public var commandShortcutFilter:Null<String->Bool> = null;
 	public var computedStyle:Null<ComputedStyle>;
 	public var tabIndex:Int;
 	/** Cursor intent used while this node is hovered or holds pointer capture. */

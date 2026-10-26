@@ -229,9 +229,12 @@ class CommandRegistry {
 	 * Dispatches through focused-node scopes before the registry's active scopes.
 	 * The supplied path is ordered from root to focused node; the deepest scope
 	 * therefore wins without mutating the registry's persistent scope stack.
+	 * An optional filter can leave the winning enabled command's keys to an input
+	 * widget. A filtered command never exposes a lower-priority binding.
 	 */
 	public function dispatchContextInScopes(key:Int, modifiers:Int,
-			context:Null<CommandContext>, pathScopes:Null<Array<String>>, repeated:Bool = false):CommandResult {
+			context:Null<CommandContext>, pathScopes:Null<Array<String>>, repeated:Bool = false,
+			?shortcutFilter:String->Bool):CommandResult {
 		var normalized = Shortcut.normalizeModifiers(modifiers);
 		var actual = context == null ? new CommandContext() : context;
 		var scopes:Array<String> = [];
@@ -272,6 +275,7 @@ class CommandRegistry {
 						notifyInvocation(id, disabled);
 						break;
 					}
+					if (shortcutFilter != null && !shortcutFilter(id)) return CommandResult.notHandled();
 					if (repeated && !command.repeatable) return CommandResult.executed(false);
 					var result = command.executeContext(actual);
 					notifyInvocation(id, result);

@@ -275,6 +275,18 @@ class EventDispatcher {
 		}
 		var event = new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, key,
 			modifiers, null, null, scancode);
+		var inModal = false;
+		for (entry in path)
+			if (entry.focusTrap)
+				inModal = true;
+		var commandTried = false;
+		var commandShortcutFilter = node.commandShortcutFilter;
+		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
+			commandShortcutFilter != null) {
+			commandTried = true;
+			if (routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat, commandShortcutFilter))
+				return;
+		}
 		dispatchPath(path, event);
 		if (event.pointerCancelRequested)
 			cancelCapturedPointerFor(node.id);
@@ -287,11 +299,7 @@ class EventDispatcher {
 		}
 		// A modal focus trap owns keyboard input, including keys its focused child
 		// does not handle. Do not let those keys invoke commands behind the modal.
-		var inModal = false;
-		for (entry in path)
-			if (entry.focusTrap)
-				inModal = true;
-		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
+		if (!commandTried && !inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
 			routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat)) {
 			event.preventDefault();
 			return;
@@ -323,7 +331,8 @@ class EventDispatcher {
 		return true;
 	}
 
-	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false):Bool {
+	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false,
+			?shortcutFilter:String->Bool):Bool {
 		if (commandRegistry == null)
 			return false;
 		var scopes:Array<String> = [];
@@ -331,7 +340,7 @@ class EventDispatcher {
 			if (entry.commandScope != null)
 				scopes.push(entry.commandScope);
 		lastCommandResult = commandRegistry.dispatchContextInScopes(key, modifiers,
-			commandContext, scopes, repeated);
+			commandContext, scopes, repeated, shortcutFilter);
 		if (onCommandResult != null)
 			onCommandResult(lastCommandResult);
 		return lastCommandResult.succeeded;
