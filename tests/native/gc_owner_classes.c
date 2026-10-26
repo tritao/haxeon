@@ -120,12 +120,30 @@ int main(void) {
 	for(int owner=0;owner<OWNERS;owner++)
 		if(!check(live(&owners[owner]) == 0,"nothing is left once everything is unreferenced")) goto done;
 
-	/* An owner with live blocks keeps its class when released, and they stay valid and counted. */
+	/* An owner released while some of its blocks live no longer counts them: it may be gone, and an owner made at its
+	   address must not inherit them. The blocks stay valid, and the class goes to a new owner once they are dead. */
 	hold(1,PER_OWNER,16);
+	for(int i=0;i<PER_OWNER;i++) memset(slots[1][i],0x5a,16);
 	hl_gc_owner_release(&owners[1]);
-	if(!check(live(&owners[1]) == PER_OWNER,"release does not touch live blocks")) goto done;
+	if(!check(live(&owners[1]) == 0,"a released owner counts nothing, even with blocks alive")) goto done;
+	hl_gc_major();
+	{
+		int intact = 1;
+		for(int i=0;i<PER_OWNER;i++)
+			for(int b=0;b<16;b++)
+				if( ((unsigned char*)slots[1][i])[b] != 0x5a ) intact = 0;
+		if(!check(intact,"release does not touch live blocks")) goto done;
+	}
 	let_go(1,PER_OWNER);
-	if(!check(live(&owners[1]) == 0,"and they can still be dropped")) goto done;
+	hl_gc_major();
+	// Blocks in the shared class, so an owner that fell into it instead of the class given back would count them.
+	hold(OWNERS-1,2,16);
+	hl_gc_owner_register(&owners[1]);
+	if(!check(live(&owners[1]) == 0,"an owner registered at a released one's address inherits none of its blocks")) goto done;
+	hold(1,3,16);
+	if(!check(live(&owners[1]) == 3,"and counts its own exactly in the class it was given back")) goto done;
+	let_go(1,3);
+	let_go(OWNERS-1,2);
 
 	for(int owner=0;owner<OWNERS;owner++) hl_gc_owner_release(&owners[owner]);
 	/* Everything was handed back, so new owners have classes of their own again and are counted exactly. */
