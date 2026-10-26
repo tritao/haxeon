@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.Compiler;
+import compiler.Compiler.FfiConfiguration;
 import compiler.Compiler.FfiInterfaceSource;
 import compiler.Compiler.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
@@ -13,6 +14,7 @@ import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token.TokenKind;
 import haxe.Json;
+import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -116,18 +118,24 @@ class CompilerSession {
 		// `report` is caller code, so nothing proved about the field survives a call to it; a local does.
 		var existing = compiler;
 		if (existing == null) {
-			compiler = new Compiler();
-			compiler.enablePublicationTracking();
-			CompilerIntrinsics.register(compiler);
+			var resumed = request.live ? resumeLiveModule(request, identity, interfaces, projections, report) : null;
+			var created = resumed == null ? new Compiler() : resumed;
+			compiler = created;
+			if (resumed == null) {
+				compiler.enablePublicationTracking();
+				CompilerIntrinsics.register(compiler);
+			}
 			var defines = request.defines.concat(CompilerDriver.targetDefines(request.target));
 			compiler.configure("cli:" + request.target + ":" + defines.join("|"), "cli:" + request.target, defines);
-			for (source in projections) {
-				report("loading FFI projection " + source.path);
-				compiler.addFfiProjection(source.path, source.text);
-			}
-			for (source in HxiInterfaceOrder.dependenciesFirst(interfaces)) {
-				report("loading FFI interface " + source.path);
-				compiler.addFfiInterface(source.path, source.text);
+			if (resumed == null) {
+				for (source in projections) {
+					report("loading FFI projection " + source.path);
+					compiler.addFfiProjection(source.path, source.text);
+				}
+				for (source in HxiInterfaceOrder.dependenciesFirst(interfaces)) {
+					report("loading FFI interface " + source.path);
+					compiler.addFfiInterface(source.path, source.text);
+				}
 			}
 			compiler.addSourceRoot("stdlib");
 			for (root in request.roots)
@@ -156,6 +164,61 @@ class CompilerSession {
 			sourceTexts.set(path, read(path));
 		return compiler;
 	}
+
+	/**
+	 * Records the history a live revision was assembled from beside the module it published (`<output>.live.state`), keyed
+	 * by that publication's marker, this session's configuration and the compiler program. A later session, such as the
+	 * compile server started after the editor restarts, resumes it and patches the module the app is running instead of
+	 * assembling a new module whose identity forces a reload.
+	 */
+	public function saveLiveState(compiler:Compiler, output:String, marker:String):Void {
+		var current = configuration;
+		if (current == null)
+			return;
+		var key = Bytes.ofString(liveStateKey(marker, current) + "\n"),
+			state = compiler.exportIdentityState(),
+			bytes = Bytes.alloc(key.length + state.length);
+		bytes.blit(0, key, 0, key.length);
+		bytes.blit(key.length, state, 0, state.length);
+		File.saveBytes(output + ".live.state.tmp", bytes);
+		CompilerDriver.replaceFile(output + ".live.state.tmp", output + ".live.state");
+	}
+
+	/**
+	 * The compiler that published the module now at the request's output, when its recorded history is for exactly that
+	 * module (the whole module is on disk, its `.live.full` marker names the recorded revision) under this configuration
+	 * and compiler. Anything else (no history, a stale or partial module, another compiler) starts a new module.
+	 */
+	function resumeLiveModule(request:CompilerRequest, identity:String, interfaces:Array<FfiInterfaceSource>, projections:Array<FfiProjectionSource>,
+			report:String->Void):Null<Compiler> {
+		var published = request.publishedOutput == null ? request.output : request.publishedOutput;
+		if (published == null || !FileSystem.exists(published + ".live.full") || !FileSystem.exists(published + ".live.state"))
+			return null;
+		try {
+			var key = liveStateKey(File.getContent(published + ".live.full"), identity),
+				bytes = File.getBytes(published + ".live.state"),
+				separator = -1;
+			for (index in 0...bytes.length)
+				if (bytes.get(index) == "\n".code) {
+					separator = index;
+					break;
+				}
+			if (separator < 0 || bytes.getString(0, separator) != key) {
+				report("live history does not match the published module; starting a new module");
+				return null;
+			}
+			var resumed = new Compiler(bytes.sub(separator + 1, bytes.length - separator - 1), CompilerIntrinsics.configuration(),
+				new FfiConfiguration(interfaces, projections));
+			report("resuming the published live module " + File.getContent(published + ".live.full"));
+			return resumed;
+		} catch (error:Dynamic) {
+			report("live history could not be resumed (" + Std.string(error) + "); starting a new module");
+			return null;
+		}
+	}
+
+	static function liveStateKey(marker:String, configuration:String):String
+		return marker + " " + build.execution.ContentDigest.makeHex(Bytes.ofString(configuration + "\n" + Path.withoutDirectory(Sys.programPath())));
 
 	function read(path:String):String {
 		return File.getContent(path);

@@ -142,10 +142,13 @@ class CompilerServer {
 				".build-id",
 				".descriptors",
 				".descriptors.json",
-				".live.full"
+				".live.full",
+				".live.state"
 			] : [""]))
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
+		if (request.output != null)
+			Reflect.setField(staged, "publishedOutput", request.output);
 		var promoted:Map<String, Bool> = [];
 		var output = request.output;
 		// A live patch is published mid-request, ahead of the module: the destination marker goes first so no host reloads
