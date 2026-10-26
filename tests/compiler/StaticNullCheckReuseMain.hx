@@ -33,7 +33,12 @@ class StaticNullCheckReuseMain {
 	}
 
 	static function program(offset:Int):Array<IrFunction>
-		return [caller("__init", ["readA", "readB"]), reader("readA", "S.a", offset), reader("readB", "S.b", 2), reader("unreached", "S.a", 3)];
+		return [
+			caller("__init", ["readA", "readB"]),
+			reader("readA", "S.a", offset),
+			reader("readB", "S.b", 2),
+			reader("unreached", "S.a", 3)
+		];
 
 	static function bytes(fn:IrFunction):String
 		return IrFunctionStateCodec.encode(fn).toHex();

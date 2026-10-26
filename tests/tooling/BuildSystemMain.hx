@@ -640,9 +640,10 @@ class BuildSystemMain {
 		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}',
 			["src/Main.hx", "src/deep/er/B.hx", "src/notes.txt", "src/folder.hx/C.hx"]);
 		ensureDirectory(Path.join([root, "src", "empty"]));
-		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
-			files = WatchRun.snapshot(project),
-			names = [for (path in files.keys()) path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)];
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])), files = WatchRun.snapshot(project), names = [
+			for (path in files.keys())
+				path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)
+		];
 		names.sort(Reflect.compare);
 		expect(names.join(",") == "haxeon.json,src/Main.hx,src/deep/er/B.hx,src/folder.hx/C.hx",
 			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));

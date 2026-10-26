@@ -38,6 +38,7 @@ typedef FrontendResult = {
 
 	/** Functions whose code is unchanged but whose positions moved in their file: lowered again, not patched. */
 	final relocated:Array<String>;
+
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
 	final semanticAliasMs:Float;
@@ -538,7 +539,10 @@ class FrontendCompilation {
 		var changedIr:Map<String, Bool> = [for (name in inlinerChanged) name => true],
 			retypedNow:Map<String, Bool> = [for (name in retyped) name => true],
 			present:Map<String, Bool> = [for (fn in ir.functions) fn.name => true];
-		regenerated = [for (name in regenerated) if (!present.exists(name) || changedIr.exists(name) || retypedNow.exists(name)) name];
+		regenerated = [
+			for (name in regenerated)
+				if (!present.exists(name) || changedIr.exists(name) || retypedNow.exists(name)) name
+		];
 		var listed:Map<String, Bool> = [for (name in regenerated) name => true];
 		for (name in inlinerChanged)
 			if (!listed.exists(name)) {

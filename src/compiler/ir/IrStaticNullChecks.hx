@@ -102,18 +102,18 @@ class IrStaticNullChecks {
 							if (knownHelper != null)
 								helpers.set(name, knownHelper);
 							else {
-							var builder = new IrBuilder(),
-								value = builder.argument("value", Dyn),
-								missing = builder.createBlock(),
-								present = builder.createBlock();
-							builder.branch(builder.equal(value, builder.constNull(Dyn)), missing, present);
-							builder.select(missing);
-							builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
-							builder.select(present);
-							builder.returnValue(builder.constVoid());
-							var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks);
-							helpers.set(name, created);
-							store.helpers.set(helperName, created);
+								var builder = new IrBuilder(),
+									value = builder.argument("value", Dyn),
+									missing = builder.createBlock(),
+									present = builder.createBlock();
+								builder.branch(builder.equal(value, builder.constNull(Dyn)), missing, present);
+								builder.select(missing);
+								builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
+								builder.select(present);
+								builder.returnValue(builder.constVoid());
+								var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks);
+								helpers.set(name, created);
+								store.helpers.set(helperName, created);
 							}
 						}
 						used.set(name, true);

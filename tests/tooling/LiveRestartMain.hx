@@ -19,15 +19,25 @@ class LiveRestartMain {
 			File.saveContent(main,
 				"class Main {\n"
 				+ "  @:keep public static function start(arguments:String):Void {}\n"
-				+ "  @:keep public static function tick():Int return " + value + ";\n"
-				+ "  @:keep public static function scale():Float return 0.25 * " + value + ";\n"
+				+ "  @:keep public static function tick():Int return "
+				+ value
+				+ ";\n"
+				+ "  @:keep public static function scale():Float return 0.25 * "
+				+ value
+				+ ";\n"
 				+ "  @:keep public static function close():Int return 0;\n"
 				+ "  @:keep public static function saveState():String return \"\";\n"
 				+ "  @:keep public static function restoreState(state:String):Void {}\n"
 				+ "  public static function main():Void {}\n"
 				+ "}\n");
-			CompilerDriver.compile(CompilerArguments.parse(["--target=hl", "--entry=Main", "--root=" + root, "--live", "--output=" + output, main]), _ -> {},
-				session);
+			CompilerDriver.compile(CompilerArguments.parse([
+				"--target=hl",
+				"--entry=Main",
+				"--root=" + root,
+				"--live",
+				"--output=" + output,
+				main
+			]), _ -> {}, session);
 			return haxe.Json.parse(File.getContent(output + ".live.json"));
 		}
 		var original = new CompilerSession(), first = build(original, 1);
@@ -48,16 +58,22 @@ class LiveRestartMain {
 		expect(edit.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
 		expect(edit.revision == warmup.revision + 1, "a restarted session must continue the published revisions");
 		expect(edit.patchAvailable == true && edit.requiresReload == false, "the first edit after a restart must patch, not reload");
-		expect(Std.string(edit.changedFunctions) == Std.string(warm.changedFunctions), "the first edit after a restart must patch what a warm session patches: "
-			+ Std.string(edit.changedFunctions) + " against " + Std.string(warm.changedFunctions));
+		expect(Std.string(edit.changedFunctions) == Std.string(warm.changedFunctions),
+			"the first edit after a restart must patch what a warm session patches: "
+			+ Std.string(edit.changedFunctions)
+			+ " against "
+			+ Std.string(warm.changedFunctions));
 		var next = build(restarted, 3);
 		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true && next.requiresReload == false,
 			"edits after the first must keep patching");
 		expect(restarted.recordLiveState(), "the resumed session must record its own publications");
 		// History a resumed session recorded (its constant pools included) resumes again.
 		var again = build(new CompilerSession(), 4);
-		expect(again.moduleIdentity == first.moduleIdentity && again.revision == next.revision + 1 && again.patchAvailable == true
-			&& again.requiresReload == false, "history recorded by a resumed session must resume again");
+		expect(again.moduleIdentity == first.moduleIdentity
+			&& again.revision == next.revision + 1
+			&& again.patchAvailable == true
+			&& again.requiresReload == false,
+			"history recorded by a resumed session must resume again");
 		next = again;
 		// A module the history does not describe (here, one whose marker names another revision) starts a new module.
 		File.saveContent(output + ".live.full", next.moduleIdentity + ":" + Std.string(next.revision + 7));

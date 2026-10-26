@@ -23,7 +23,8 @@ import compiler.types.NativeTypeDescriptorCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken, ?published:() -> Void):CompileResult {
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken,
+			?published:() -> Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress;
@@ -160,8 +161,14 @@ class CompilerDriver {
 				File.getContent(request.output + ".live.full"));
 		var artifactsWrittenAt = Sys.time() * 1000.0;
 		var allocationAfterWrite = AllocationMeter.sample();
-		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
-			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt)
+		report("driver phases (ms): prepare="
+			+ milliseconds(preparedAt - requestStartedAt)
+			+ " compile="
+			+ milliseconds(compiledAt - preparedAt)
+			+ " encode="
+			+ milliseconds(backendDoneAt - backendStartedAt)
+			+ " write="
+			+ milliseconds(artifactsWrittenAt - backendDoneAt)
 			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
 		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));

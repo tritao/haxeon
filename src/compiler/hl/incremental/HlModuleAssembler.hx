@@ -274,8 +274,7 @@ class HlModuleAssembler {
 				addedFunctions.push({slot: slot, name: name});
 			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
-			relocated == null ? regenerated : regenerated.concat(relocated),
-			runtimeNatives, debugMetadata),
+			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
 		// A running module can take new String constants but no other global, so a build that adds any other publishes a

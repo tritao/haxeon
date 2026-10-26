@@ -120,15 +120,15 @@ class CompilerServer {
 						Sys.println("background compile failed: " + Std.string(error));
 					else
 						try {
-						var message = Std.string(error);
-						if (Std.isOfType(error, CompileError)) {
-							var failure:CompileError = cast error,
-								diagnostic = failure.diagnostic;
-							message = diagnostic.format();
-						}
-						send(client, {message: message});
-						send(client, {status: 1});
-					} catch (_:Dynamic) {}
+							var message = Std.string(error);
+							if (Std.isOfType(error, CompileError)) {
+								var failure:CompileError = cast error,
+									diagnostic = failure.diagnostic;
+								message = diagnostic.format();
+							}
+							send(client, {message: message});
+							send(client, {status: 1});
+						} catch (_:Dynamic) {}
 				}
 				if (!answered)
 					client.close();
@@ -256,7 +256,8 @@ class CompilerServer {
 		if (request.output != null && FileSystem.exists(markerDestination))
 			FileSystem.deleteFile(markerDestination);
 		for (output in outputs) {
-			if (request.output != null && StringTools.startsWith(output.destination, request.output)
+			if (request.output != null
+				&& StringTools.startsWith(output.destination, request.output)
 				&& promoted.exists(output.destination.substr(request.output.length)))
 				continue;
 			if (FileSystem.exists(output.temporary))

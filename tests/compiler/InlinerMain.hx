@@ -133,7 +133,8 @@ class InlinerMain {
 		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
 		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
-		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
+		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3")
+			+ " function extra():Int return 5;"), editCache);
 		expect(shifted.indexOf("stay") >= 0, "a function whose positions shifted is reported as changed so its line information is refreshed");
 		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
 		var linesFor = (comment:String) -> comment + "
@@ -159,8 +160,10 @@ function main():Int return stay(1);
 		// for a new function object or a different set of C natives.
 		var printProgram = Frontend.compile("function first(x:Int):Int return x * 3 + 1; function second(x:Int):Int return x * 5 - 2; "
 			+ "function main():Int return first(1) + second(2);"),
-			first = programFunction(printProgram, "first"), second = programFunction(printProgram, "second"),
-			printCache = new IrInlineCache(), firstPrint = IrFunctionStateCodec.codeFingerprint(first);
+			first = programFunction(printProgram, "first"),
+			second = programFunction(printProgram, "second"),
+			printCache = new IrInlineCache(),
+			firstPrint = IrFunctionStateCodec.codeFingerprint(first);
 		expect(printCache.positionalFingerprint(first, "") == firstPrint, "a remembered fingerprint is the function's fingerprint");
 		printCache.finishPositionalFingerprints();
 		var warmCache = printCache.copy(), block = first.blocks[0];
@@ -247,7 +250,8 @@ function main():Int return stay(1);
 		expect(names.indexOf("fib") < 0 && names.indexOf("loops") < 0, "functions that did not inline the callee are not reported");
 		// The published encodings are reused: the edited callee reaches the inlined caller, and a repeat reports nothing.
 		var editedMain = programFunction(program, "main");
-		expect(editedMain != inlinedMain && !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
+		expect(editedMain != inlinedMain
+			&& !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
 			"the inlined caller carries the edited callee");
 		program.functions = hybrid;
 		expect(IrInliner.run(program, cache).length == 0, "a repeated compile of the edit reports no changed functions");

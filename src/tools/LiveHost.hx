@@ -31,7 +31,8 @@ class LiveHost {
 		var description = readDescription(path);
 		// The compiler publishes a patch before the full module, so the description can lead the module files.
 		// Nothing is on screen yet, so waiting here is cheap; a compiler that writes no marker is trusted after a second.
-		var waitingSince = Sys.time(), loadedBytes = readFullModule(path, description, false);
+		var waitingSince = Sys.time(),
+			loadedBytes = readFullModule(path, description, false);
 		while (loadedBytes == null) {
 			Sys.sleep(0.02);
 			description = readDescription(path);
@@ -60,7 +61,8 @@ class LiveHost {
 						var patching = true;
 						ProfileSpan.begin("live.patch");
 						try {
-							var patchBytes = File.getBytes(path + ".hlp"), readAt = Sys.time();
+							var patchBytes = File.getBytes(path + ".hlp"),
+								readAt = Sys.time();
 							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions));
 							patching = false;
 							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');

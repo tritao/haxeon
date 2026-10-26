@@ -156,7 +156,8 @@ class WatchRun {
 
 	/** Package roots are watched recursively; watched files outside every root (native sources elsewhere) by their directory. */
 	static function openWatcher(project:ResolvedProject, files:Map<String, String>):Null<DirectoryWatcher> {
-		var directories:Array<{path:String, recursive:Bool}> = [], roots:Array<String> = [];
+		var directories:Array<{path:String, recursive:Bool}> = [],
+			roots:Array<String> = [];
 		for (item in project.packages.packages) {
 			var root = normalize(item.root), covered = false;
 			for (other in roots)

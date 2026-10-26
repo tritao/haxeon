@@ -179,7 +179,9 @@ class CompilerSession {
 	 * seconds, so the server calls this between requests rather than on an edit's path. True when it wrote the history.
 	 */
 	public function recordLiveState():Bool {
-		var publication = unrecordedPublication, current = configuration, active = compiler;
+		var publication = unrecordedPublication,
+			current = configuration,
+			active = compiler;
 		unrecordedPublication = null;
 		if (publication == null || current == null || active == null)
 			return false;
@@ -211,9 +213,7 @@ class CompilerSession {
 		if (published == null || !FileSystem.exists(published + ".live.full") || !FileSystem.exists(published + ".live.state"))
 			return null;
 		try {
-			var key = liveStateKey(File.getContent(published + ".live.full"), identity),
-				bytes = File.getBytes(published + ".live.state"),
-				separator = -1;
+			var key = liveStateKey(File.getContent(published + ".live.full"), identity), bytes = File.getBytes(published + ".live.state"), separator = -1;
 			for (index in 0...bytes.length)
 				if (bytes.get(index) == "\n".code) {
 					separator = index;

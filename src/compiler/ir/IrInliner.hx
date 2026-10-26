@@ -49,6 +49,7 @@ class IrInlineCache {
 	 * re-inlined function with the published one then encodes only the new one, and a published function is encoded once.
 	 */
 	public var publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [];
+
 	/** The static-null-check copies of the program's functions, so they keep their identity between compiles. */
 	public final staticChecks:IrStaticCheckCache = new IrStaticCheckCache();
 
