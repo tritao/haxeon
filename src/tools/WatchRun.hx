@@ -66,9 +66,11 @@ class WatchRun {
 				baseline = observed;
 				while (true) {
 					// With notifications a save is complete once none has arrived for a moment; otherwise wait out a polling interval.
-					if (watcher != null)
-						while (watcher.wait(COALESCE_SECONDS)) {}
-					else
+					if (watcher != null) {
+						// Bounded, so a tree that never goes quiet (an app logging under the root) still compiles.
+						var quiet = Sys.time() + MAX_COALESCE_SECONDS;
+						while (watcher.wait(COALESCE_SECONDS) && Sys.time() < quiet) {}
+					} else
 						Sys.sleep(0.5);
 					observed = snapshot(project);
 					if (same(baseline, observed))
@@ -128,6 +130,8 @@ class WatchRun {
 
 	/** A save counts as finished once no notification has arrived for this long. */
 	static inline final COALESCE_SECONDS = 0.03;
+
+	static inline final MAX_COALESCE_SECONDS = 0.5;
 
 	static inline final NOTIFIED_IDLE_SECONDS = 0.1;
 
