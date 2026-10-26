@@ -92,8 +92,10 @@ The in-process runtime contract covers:
 - synchronized access to the global module list.
 
 Host-mediated calls are serialized with retirement. Retained Haxe values keep the
-native handle borrowed, and the native GC ledger covers module-produced managed
-values. A blocked attempt stays in a Haxe-owned retirement backlog and is retried
+native handle borrowed, and the module's allocation-owner pages cover
+module-produced managed values: they hold every block the module allocated, so
+any marked block in them keeps the module from retiring (see
+`METADATA_OWNERSHIP.md`). A blocked attempt stays in a Haxe-owned retirement backlog and is retried
 at later runtime safe points or by `Runtime.retryRetirements()`. This contract
 requires plugins to deactivate and unregister callbacks before disposal; native
 code that retains an unregistered raw JIT address, or a module that starts an
