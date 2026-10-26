@@ -1490,9 +1490,12 @@ class FrameworkSmoke {
 		keyboardEditor.placeCaret(0, false);
 		for (_ in 0...12)
 			context.key(UiEventKind.KeyDown, UiKey.Down);
+		// Moving the caret requests a reveal, which the next frame's layout carries out.
+		context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
 		if (keyboardEditor.scrollOffsetY <= 0.0)
 			return 217;
 		context.key(UiEventKind.KeyDown, UiKey.Home, UiModifier.Control);
+		context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
 		if (keyboardEditor.selectionFocus != 0 || keyboardEditor.scrollOffsetY != 0.0)
 			return 218;
 		var clickField = new TextField("single-double-click", "first last", null,
