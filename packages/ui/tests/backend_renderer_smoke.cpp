@@ -580,6 +580,13 @@ bool check_plan_reuse(nk_window window, nk_surface surface) {
                    "an identical layout submit keeps the render plan"))
             return false;
 
+        // Submitting the same commands again is not a change either.
+        before = latest;
+        if (!set_commands(0.0f) || !render(1.0f) ||
+            !check(latest.render_plan_compiles == before.render_plan_compiles,
+                   "identical display list commands keep the render plan"))
+            return false;
+
         const auto settle = [&](float scale) {
             for (int repeat = 0; repeat < 3; ++repeat)
                 if (!render(scale)) return false;

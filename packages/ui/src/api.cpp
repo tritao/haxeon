@@ -89,6 +89,8 @@ struct DisplayListSlot {
     uint32_t custom_refs = 0;
     uint16_t generation = 1;
     uint64_t revision = 1;
+    /** Hash of the commands last submitted, so resubmitting identical commands is not seen as a change. */
+    uint64_t content_hash = 0;
 };
 
 struct FontEntry {
@@ -1897,6 +1899,7 @@ extern "C" nkui_result nkui_display_list_reset(nkui_display_list list) {
         return NKUI_ERROR_INVALID_HANDLE;
     release_display_resources(*slot);
     slot->list->reset();
+    slot->content_hash = 0;
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -1929,6 +1932,19 @@ extern "C" nkui_result nkui_display_list_submit(nkui_display_list list, const ui
     }
     release_display_resources(*slot);
     slot->resources = std::move(retained);
+    {
+        uint64_t hash = UINT64_C(1469598103934665603) ^ command_bytes;
+        size_t offset = 0;
+        for (; offset + sizeof(uint64_t) <= command_bytes; offset += sizeof(uint64_t)) {
+            uint64_t word = 0;
+            std::memcpy(&word, commands + offset, sizeof(word));
+            hash = (hash ^ word) * UINT64_C(1099511628211);
+            hash ^= hash >> 29;
+        }
+        for (; offset < command_bytes; ++offset)
+            hash = (hash ^ commands[offset]) * UINT64_C(1099511628211);
+        slot->content_hash = hash;
+    }
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -4367,13 +4383,13 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         uint64_t entries = 0;
         for (const auto &[node_id, list_handle] : session_state->custom_paints) {
             const auto *list_slot = resolve(list_handle);
-            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
         }
         reuse_lists_key = mix_render_key(reuse_lists_key, entries);
         entries = 0;
         for (const auto &[node_id, list_handle] : session_state->custom_paint_composites) {
             const auto *list_slot = resolve(list_handle);
-            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
         }
         reuse_lists_key = mix_render_key(reuse_lists_key, entries);
         entries = 0;
