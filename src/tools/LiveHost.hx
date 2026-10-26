@@ -5,6 +5,7 @@ import haxeon.ProfileSpan;
 import runtime.LoadedModule;
 import runtime.PatchSet;
 import runtime.Runtime;
+import sys.FileSystem;
 import sys.io.File;
 
 private typedef LiveFunction = {final name:String; final id:Int;}
@@ -251,7 +252,7 @@ class LiveHost {
 	/** The small summary the compiler writes beside the full description, so a patch does not parse the whole function list. */
 	static function tryDescription(path:String):Null<LiveDescription> {
 		try
-			return readDescription(path, ".live.patch.json")
+			return readDescription(path, FileSystem.exists(path + ".live.patch.json") ? ".live.patch.json" : ".live.json")
 		catch (_:Dynamic)
 			return null;
 	}
