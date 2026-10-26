@@ -1796,6 +1796,10 @@ class ExpressionTyper {
 			return left;
 		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
 			return TFloat;
+		// Dynamic holds any value, so joining with it is Dynamic. Assignability alone would pick the other side, since
+		// Dynamic converts to anything implicitly, and the Dynamic values would then need a cast that can fail.
+		if (left == TDynamic || right == TDynamic)
+			return TDynamic;
 		switch left {
 			case TNull:
 				return right == TVoid ? null : (isNullable(right) ? right : TNullable(right));

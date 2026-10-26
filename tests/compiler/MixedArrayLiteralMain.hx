@@ -23,6 +23,14 @@ class MixedArrayLiteralMain {
 		'var d:Dynamic=[]; var a:Array<Dynamic>=d; return a.length==0 ? 42 : 1;'
 	];
 
+	/** A Dynamic element makes the array (or conditional) Dynamic, rather than requiring the Dynamic value to be the
+		other type. Host only: the Wasm backends cannot yet box an anonymous object as Dynamic. */
+	static final hostCases = [
+		'var d:Dynamic=new Base(); var a=[d,{begin:"b",name:"c"}]; return a.length==2 && a[0]==d && a[1]!=null ? 42 : 1;',
+		'var d:Dynamic=new Base(); var a=[{begin:"b",name:"c"},d]; return a.length==2 && a[1]==d && a[0]!=null ? 42 : 1;',
+		'var d:Dynamic=new Base(); var pick=d==null; var v=pick ? d : {begin:"b",name:"c"}; var w=pick ? {begin:"b",name:"c"} : d; return v!=d && w==d ? 42 : 1;'
+	];
+
 	static function compiler():Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
@@ -47,6 +55,12 @@ class MixedArrayLiteralMain {
 			}
 		}
 		File.saveContent("out/mixed-array-count.txt", Std.string(cases.length));
+		for (index in 0...hostCases.length)
+			for (c in [warm, compiler()]) {
+				c.update("Main.hx", source(hostCases[index]));
+				if (GeneratedProgramRunner.exitCode(c.compile("Main")) != 42)
+					throw 'Dynamic join case $index failed';
+			}
 		for (body in [
 			'var a=[1,"x"];',
 			'var a=["x",1];',
