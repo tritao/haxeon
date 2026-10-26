@@ -12,7 +12,7 @@ class IrStaticNullChecks {
 	 */
 	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache):Array<IrFunction> {
 		var helpers:Map<String, IrFunction> = [];
-		var nextCopies:Map<String, {source:IrFunction, result:IrFunction}> = [];
+		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 		var knownCopies = cache == null ? null : cache.copies;
 		var result:Array<IrFunction> = [];
 		var byName = [for (fn in functions) fn.name => fn],
@@ -35,6 +35,8 @@ class IrStaticNullChecks {
 			var known = knownCopies == null ? null : knownCopies.get(fn.name);
 			if (known != null && known.source == fn) {
 				nextCopies.set(fn.name, known);
+				for (name in known.statics)
+					helpers.set(name, cache.helpers.get("__static$nonnull$" + name));
 				result.push(known.result);
 				continue;
 			}
@@ -82,7 +84,7 @@ class IrStaticNullChecks {
 						}
 					}
 			}
-			var blocks:Array<IrBlock> = [];
+			var blocks:Array<IrBlock> = [], used:Map<String, Bool> = [];
 			for (block in fn.blocks) {
 				var copy = new IrBlock(block.id);
 				copy.terminator = block.terminator;
@@ -115,6 +117,7 @@ class IrStaticNullChecks {
 								cache.helpers.set(helperName, created);
 							}
 						}
+						used.set(name, true);
 						var boxed = new IrValue(nextId++, "staticReceiver", Dyn),
 							unused = new IrValue(nextId++, "staticCheck", Void);
 						copy.instructions.push(new Located(ToDyn(boxed, receiver), instruction.provenance));
@@ -126,7 +129,7 @@ class IrStaticNullChecks {
 			}
 			// Cached functions belong to the frontend; never instrument them in place.
 			var copied = new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
-			nextCopies.set(fn.name, {source: fn, result: copied});
+			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
 			result.push(copied);
 		}
 		if (cache != null)
@@ -141,7 +144,7 @@ class IrStaticNullChecks {
 
 /** What `IrStaticNullChecks` produced last time: each reachable function's instrumented copy, and the shared helpers. */
 class IrStaticCheckCache {
-	public var copies:Map<String, {source:IrFunction, result:IrFunction}> = [];
+	public var copies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 	public var helpers:Map<String, IrFunction> = [];
 
 	public function new() {}
