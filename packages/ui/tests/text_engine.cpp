@@ -1225,8 +1225,7 @@ int main() {
         TextLayoutOptions wide_options;
         wide_options.font_size = 16.0f;
         wide_options.wrap = TextWrapMode::None;
-        const std::string wide_text = std::string(20000, 'a') + "
-short";
+        const std::string wide_text = std::string(20000, 'a') + "\nshort";
         TextLayoutResult wide_layout;
         if (!wide.layout_utf8(wide_text.c_str(), 400.0f, wide_options, &wide_layout) ||
             wide_layout.lines.size() != 2)
@@ -1250,7 +1249,7 @@ short";
         // A nearby window in the same chunks reuses the snapshot.
         if (wide.published_glyphs_for_line(wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha, {}, {},
                                            GlyphPreparation::Rasterize,
-                                           GlyphWindow{4100.0f, 4900.0f}) != windowed)
+                                           GlyphWindow{3500.0f, 4500.0f}) != windowed)
             return 233;
         const auto short_whole = wide.published_glyphs_for_line(wide_layout.id, 1, 0, 0, 1, GlyphMode::Alpha);
         const auto short_windowed = wide.published_glyphs_for_line(
@@ -1264,9 +1263,7 @@ short";
         TextLayoutOptions retained_options;
         retained_options.font_size = 16.0f;
         TextLayoutResult retained_layout;
-        if (!retained.layout_utf8("one
-two
-three", 400.0f, retained_options, &retained_layout))
+        if (!retained.layout_utf8("one\ntwo\nthree", 400.0f, retained_options, &retained_layout))
             return 235;
         const void *first_address = retained.published_glyphs_for_line(
             retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get();
