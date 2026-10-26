@@ -25,11 +25,13 @@ class CompilerSession {
 	var configuration:Null<String>;
 	var writerCache = new HlWriterCache();
 	var sourceTexts:Map<String, String> = [];
+	var unrecordedPublication:Null<{output:String, marker:String}>;
 
 	public function new() {}
 
 	public function reset():Void {
 		compiler = null;
+		unrecordedPublication = null;
 		configuration = null;
 		writerCache = new HlWriterCache();
 		sourceTexts = [];
@@ -165,24 +167,38 @@ class CompilerSession {
 		return compiler;
 	}
 
+	/** Notes a live publication whose history `recordLiveState` writes once the session is idle. */
+	public function recordLivePublication(output:String, marker:String):Void
+		unrecordedPublication = {output: output, marker: marker};
+
 	/**
-	 * Records the history a live revision was assembled from beside the module it published (`<output>.live.state`), keyed
-	 * by that publication's marker, this session's configuration and the compiler program. A later session, such as the
-	 * compile server started after the editor restarts, resumes it and patches the module the app is running instead of
-	 * assembling a new module whose identity forces a reload.
+	 * Records the history the last live revision was assembled from beside the module it published (`<output>.live.state`),
+	 * keyed by that publication's `.live.full` marker, this session's configuration and the compiler program. A later
+	 * session, such as the compile server started after the editor restarts, resumes it and patches the module the app is
+	 * running instead of assembling a new module whose identity forces a reload. Encoding the history of an app takes
+	 * seconds, so the server calls this between requests rather than on an edit's path. True when it wrote the history.
 	 */
-	public function saveLiveState(compiler:Compiler, output:String, marker:String):Void {
-		var current = configuration;
-		if (current == null)
-			return;
-		var key = Bytes.ofString(liveStateKey(marker, current) + "\n"),
-			state = compiler.exportIdentityState(),
+	public function recordLiveState():Bool {
+		var publication = unrecordedPublication, current = configuration, active = compiler;
+		unrecordedPublication = null;
+		if (publication == null || current == null || active == null)
+			return false;
+		var output = publication.output;
+		// A module published since (by another compiler) is not the one this history describes.
+		if (!FileSystem.exists(output + ".live.full") || File.getContent(output + ".live.full") != publication.marker)
+			return false;
+		var key = Bytes.ofString(liveStateKey(publication.marker, current) + "\n"),
+			state = active.exportIdentityState(),
 			bytes = Bytes.alloc(key.length + state.length);
 		bytes.blit(0, key, 0, key.length);
 		bytes.blit(key.length, state, 0, state.length);
 		File.saveBytes(output + ".live.state.tmp", bytes);
 		CompilerDriver.replaceFile(output + ".live.state.tmp", output + ".live.state");
+		return true;
 	}
+
+	public function hasUnrecordedLiveState():Bool
+		return unrecordedPublication != null;
 
 	/**
 	 * The compiler that published the module now at the request's output, when its recorded history is for exactly that

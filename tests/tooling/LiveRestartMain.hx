@@ -34,6 +34,8 @@ class LiveRestartMain {
 		var warm = build(original, 2);
 		build(original, 1);
 		first = build(original, 1);
+		// The compile server records the history once it is idle, and a new one resumes it.
+		expect(original.recordLiveState(), "an idle session must record the published module's history");
 		var restarted = new CompilerSession();
 		var edit = build(restarted, 2);
 		expect(edit.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
@@ -44,6 +46,7 @@ class LiveRestartMain {
 		var next = build(restarted, 3);
 		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true && next.requiresReload == false,
 			"edits after the first must keep patching");
+		expect(restarted.recordLiveState(), "the resumed session must record its own publications");
 		// A module the history does not describe (here, one whose marker names another revision) starts a new module.
 		File.saveContent(output + ".live.full", next.moduleIdentity + ":" + Std.string(next.revision + 7));
 		var stale = build(new CompilerSession(), 4);

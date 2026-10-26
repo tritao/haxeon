@@ -153,19 +153,16 @@ class CompilerDriver {
 		// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
 		if (!isWasm)
 			File.saveContent(request.output + ".live.full", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
-		// The history this revision was assembled from, so a session that starts after this one patches the module it published.
-		var stateMs = -1.0;
-		if (!isWasm && request.live && session != null) {
-			var stateStartedAt = Sys.time() * 1000.0;
-			session.saveLiveState(compiler, request.output, File.getContent(request.output + ".live.full"));
-			stateMs = Sys.time() * 1000.0 - stateStartedAt;
-		}
+		// The history this revision was assembled from is recorded beside it once the session is idle, so a session that
+		// starts after this one patches the module it published.
+		if (!isWasm && request.live && session != null)
+			session.recordLivePublication(request.publishedOutput == null ? request.output : request.publishedOutput,
+				File.getContent(request.output + ".live.full"));
 		var artifactsWrittenAt = Sys.time() * 1000.0;
 		var allocationAfterWrite = AllocationMeter.sample();
 		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
 			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt)
-			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : ""))
-			+ (stateMs < 0 ? "" : " live-state=" + milliseconds(stateMs)));
+			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
 		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 		report(allocationReport("driver allocation phases:", [
