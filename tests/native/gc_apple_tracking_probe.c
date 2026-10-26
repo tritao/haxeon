@@ -24,7 +24,8 @@ typedef struct gc_pheader {
  struct gc_pheader *next_page, *software_dirty_next;
 } gc_pheader;
 static bool gc_scan_profile_enabled = true;
-static gc_pheader *gc_pages[1], *page_map[16];
+#define GC_PAGE_SLOTS 1
+static gc_pheader *gc_pages[GC_PAGE_SLOTS], *page_map[16];
 static gc_pheader **level1 = page_map;
 #define GC_GET_LEVEL1(ptr) level1
 #define gc_hash(ptr) ((uintptr_t)(ptr))

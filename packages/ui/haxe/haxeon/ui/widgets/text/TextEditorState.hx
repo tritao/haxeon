@@ -432,21 +432,33 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	/** Returns surrounding text while keeping selection and composition in the window. */
+	/**
+		The text around the caret for platform text input: up to `maxBefore` and `maxAfter` code points either side of the
+		selection's focus, widened to hold a composition. The window does not grow with the selection, so a large one is
+		reported clamped into it; a selection within the bounds is reported whole.
+	**/
 	public function surroundingText(maxBefore:Int, maxAfter:Int):TextInputWindow {
 		ensureLive();
-		var first = selectionStart;
-		var last = selectionEnd;
+		var first = selectionFocus;
+		var last = selectionFocus;
 		if (compositionStart >= 0 && compositionEnd >= compositionStart) {
 			first = Std.int(Math.min(first, compositionStart));
 			last = Std.int(Math.max(last, compositionEnd));
 		}
 		var start = Std.int(Math.max(0, first - Std.int(Math.max(0, maxBefore))));
 		var end = Std.int(Math.min(offsets.codepointCount, last + Std.int(Math.max(0, maxAfter))));
-		if (surroundingWindow != null && surroundingDocument == offsets && surroundingRevision == offsets.revision &&
-			surroundingWindow.start == start && surroundingWindow.end == end) return surroundingWindow;
+		var reportedStart = Std.int(Math.max(start, Math.min(end, selectionStart)));
+		var reportedEnd = Std.int(Math.max(start, Math.min(end, selectionEnd)));
+		var cached = surroundingWindow;
+		if (cached != null && surroundingDocument == offsets && surroundingRevision == offsets.revision &&
+			cached.start == start && cached.end == end) {
+			if (cached.selectionStart == reportedStart && cached.selectionEnd == reportedEnd) return cached;
+			surroundingWindow = new TextInputWindow(cached.text, start, end, reportedStart, reportedEnd);
+			return surroundingWindow;
+		}
 		surroundingDocument = offsets;
 		surroundingRevision = offsets.revision;
-		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end);
+		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end, reportedStart, reportedEnd);
 		return surroundingWindow;
 	}
 

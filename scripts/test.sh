@@ -190,6 +190,7 @@ run_timed profiler-reconnect-integration "$root_dir/tests/integration/test-profi
 run_timed profiler-perfetto-integration "$root_dir/tests/integration/test-profiler-perfetto.sh"
 run_timed profiler-native-instrument-integration "$root_dir/tests/integration/test-profiler-native-instrument.sh"
 run_timed profiler-mixed-stack-integration "$root_dir/tests/integration/test-profiler-mixed-stack.sh"
+run_timed process-pipes-integration "$root_dir/tests/integration/test-process-pipes.sh"
 run_timed profiler-span-ids-integration python3 "$root_dir/tests/integration/test-profiler-span-ids.py"
 run_timed profiler-report-integration python3 "$root_dir/tests/integration/test-profiler-report.py"
 run_timed profiler-spans-integration python3 "$root_dir/tests/integration/test-profiler-spans.py"

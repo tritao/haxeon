@@ -396,11 +396,22 @@ class BuildContext {
 	public function currentRoot(root:RenderNode):RenderNode
 		return RenderNode.latest(root);
 
-	public function withScope<T>(key:Key, build:Void->T):T {
-		if (key == null || build == null)
-			throw "A scoped build requires a key and callback";
+	public function withScope<T>(key:Key, build:Void->T):T
+		return withScopeUnder(scope, key, build);
+
+	/** The scope widgets built now are keyed under; withScopeUnder keys a deeper subtree by it. */
+	public function currentScope():KeyScope
+		return scope;
+
+	/**
+		Builds under `base`'s child `key` rather than the current scope's, so a subtree placed anywhere below `base`
+		keeps one identity, and its state, wherever it moves. Keys must be unique among the subtrees built under `base`.
+	**/
+	public function withScopeUnder<T>(base:KeyScope, key:Key, build:Void->T):T {
+		if (base == null || key == null || build == null)
+			throw "A scoped build requires a scope, a key and a callback";
 		var previous = scope;
-		scope = scope.child(key);
+		scope = base.child(key);
 		try {
 			var result = build();
 			scope = previous;
