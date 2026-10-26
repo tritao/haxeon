@@ -99,7 +99,7 @@ class CompilerDriver {
 				requiresReload: result.requiresReload,
 				patchAvailable: result.patchBytes != null,
 				changedFunctions: result.changedFunctions,
-				identities: []
+				identities: ([] : Array<Dynamic>)
 			}));
 			replaceFile(summary + ".tmp", summary);
 			var manifest = request.output + ".live.json";
