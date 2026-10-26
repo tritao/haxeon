@@ -155,6 +155,24 @@ function main():Int return stay(1);
 		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
 // b")), lineCache);
 		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
+		// A lambda's code fingerprint is remembered by its IR function, also in the copy a compile runs on, and taken again
+		// for a new function object or a different set of C natives.
+		var printProgram = Frontend.compile("function first(x:Int):Int return x * 3 + 1; function second(x:Int):Int return x * 5 - 2; "
+			+ "function main():Int return first(1) + second(2);"),
+			first = programFunction(printProgram, "first"), second = programFunction(printProgram, "second"),
+			printCache = new IrInlineCache(), firstPrint = IrFunctionStateCodec.codeFingerprint(first);
+		expect(printCache.positionalFingerprint(first, "") == firstPrint, "a remembered fingerprint is the function's fingerprint");
+		printCache.finishPositionalFingerprints();
+		var warmCache = printCache.copy(), block = first.blocks[0];
+		// Changing the function in place (which compiles never do) shows whether the fingerprint was recomputed.
+		block.instructions.reverse();
+		expect(IrFunctionStateCodec.codeFingerprint(first) != firstPrint, "reordered instructions change the fingerprint");
+		expect(warmCache.positionalFingerprint(first, "") == firstPrint, "the compile's copy of the cache remembers the fingerprint");
+		expect(warmCache.positionalFingerprint(first, "native") != firstPrint, "a different set of C natives takes the fingerprint again");
+		block.instructions.reverse();
+		var renamed = new IrFunction(first.name, second.arguments, second.result, second.blocks, second.debugBindings);
+		expect(warmCache.positionalFingerprint(renamed, "native") == IrFunctionStateCodec.codeFingerprint(second),
+			"a new function under the same name gets its own fingerprint");
 		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.
 		var hierarchy = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
 			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "
