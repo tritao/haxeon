@@ -12,7 +12,9 @@ import sys.net.Socket;
 
 /**
  * Private loopback worker for one project's build session. Exits after `HAXEON_COMPILER_IDLE_SECONDS`
- * (default 90) without a request, since its heap stays at the high-water mark of its largest compile.
+ * (default 90) without a request, since its heap stays at the high-water mark of its largest compile. A watch session
+ * keeps its worker by sending keepalive pings (see `CompilerClient.keepWorkersAlive`), so a long pause in a live session
+ * does not cost the next edit a cold compile, and a session that ends or dies stops pinging and frees the worker.
  */
 class CompilerServer {
 	/** 32 random bytes as hex; Windows has no /dev/urandom, so it uses the runtime's BCryptGenRandom. */
@@ -46,12 +48,18 @@ class CompilerServer {
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
 		listener.listen(8);
-		var descriptor = Json.stringify({port: listener.host().port, token: token, pid: processId()});
+		var idleSeconds = idleTimeout();
+		// `idleSeconds` also tells clients how often to ping, and that this worker understands pings.
+		var descriptor = Json.stringify({
+			port: listener.host().port,
+			token: token,
+			pid: processId(),
+			idleSeconds: idleSeconds
+		});
 		File.saveContent(statePath + "." + token + ".tmp", descriptor);
 		FileSystem.rename(statePath + "." + token + ".tmp", statePath);
 		try {
 			var running = true;
-			var idleSeconds = idleTimeout();
 			var idleDeadline = Sys.time() + idleSeconds;
 			while (running) {
 				// A live publication's history is recorded once no request has followed it for a moment, off the edit's path.
@@ -75,6 +83,11 @@ class CompilerServer {
 						throw "Invalid compiler session token";
 					if (request.shutdown == true) {
 						running = false;
+					} else if (request.ping == true) {
+						// A watch session is still running; the request only counts as activity. The pinger does not wait for
+						// an answer, so none is sent.
+						answered = true;
+						client.close();
 					} else if (request.background == true) {
 						// The requester only warms the session (a live run that starts from a module it built before), so it is
 						// answered at once and the compile runs to completion with nobody waiting; later requests queue behind it.

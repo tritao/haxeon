@@ -27,7 +27,7 @@ typedef WatchChange = {
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
-			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>):Int {
+			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, ?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw "haxeon run --watch currently requires Linux, macOS or Windows";
 		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
@@ -40,6 +40,9 @@ class WatchRun {
 				if (watcher == null)
 					Sys.sleep(POLL_SECONDS);
 				logOffset = printLog(logPath, logOffset);
+				// The compiler worker would otherwise exit during a long pause, and the next edit would compile cold.
+				if (session != null)
+					session.keepWorkersAlive();
 				var status = process.exitCode(false);
 				if (status != null) {
 					result = status;

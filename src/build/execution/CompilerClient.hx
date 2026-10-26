@@ -117,6 +117,8 @@ class CompilerClient {
 			}
 			retireWorkers(directory, version, key);
 			markUsed(statePath);
+			if (session != null && !session.workerPings.exists(statePath))
+				session.workerPings.set(statePath, Sys.time());
 			var socket = connection.socket;
 			socket.setTimeout(600);
 			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {token: connection.token, arguments: arguments, background: true} : {
@@ -144,6 +146,58 @@ class CompilerClient {
 			Sys.println("Compiler session unavailable; using one-shot compilation: " + Std.string(error));
 			return fallback();
 		}
+	}
+
+	/**
+	 * Pings each worker a session uses once a third of its idle timeout has passed, so a watch session keeps its warm worker
+	 * for as long as it runs. A ping is a request that does nothing, sent without waiting for an answer: a worker busy
+	 * compiling reads it from its accept queue later, and an inherited copy of a socket cannot keep a worker alive the way an
+	 * open connection would, so once the session ends or dies its workers exit within their idle timeout. A worker that is
+	 * gone is forgotten; the next build starts a new one and registers it again.
+	 */
+	public static function keepWorkersAlive(session:build.BuildSession):Void {
+		var now = Sys.time();
+		for (statePath in [for (path in session.workerPings.keys()) path]) {
+			var due = session.workerPings.get(statePath);
+			if (due != null && due > now)
+				continue;
+			var interval = pingWorker(statePath);
+			if (interval == null)
+				session.workerPings.remove(statePath);
+			else
+				session.workerPings.set(statePath, now + interval);
+		}
+	}
+
+	/** Pings one worker; the seconds until the next ping is due, or null when no worker that understands pings answers. */
+	static function pingWorker(statePath:String):Null<Float> {
+		var idleSeconds = 0.0;
+		try {
+			var state:Dynamic = Json.parse(File.getContent(statePath));
+			if (Std.isOfType(state.idleSeconds, Float))
+				idleSeconds = state.idleSeconds;
+		} catch (_:Dynamic) {}
+		// A worker from before pings would take one for a compile request.
+		if (idleSeconds <= 0)
+			return null;
+		var connection = connect(statePath);
+		if (connection == null)
+			return null;
+		try {
+			var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, ping: true}));
+			connection.socket.output.writeInt32(request.length);
+			connection.socket.output.write(request);
+			connection.socket.output.flush();
+			connection.socket.close();
+		} catch (_:Dynamic) {
+			try
+				connection.socket.close()
+			catch (_:Dynamic) {}
+			return null;
+		}
+		// The worker this session uses stays the most recently used, so retirement takes others first.
+		markUsed(statePath);
+		return Math.max(0.25, idleSeconds / 3);
 	}
 
 	static function connect(statePath:String):Null<Connection> {

@@ -720,7 +720,7 @@ class HaxeonCli {
 							Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
 							return null;
 						}
-					});
+					}, session);
 			}
 			if (options.profile) {
 				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([Path.directory(output), "profile"])) : resolvePath(options.profileOutput,
