@@ -26,6 +26,7 @@ class CompilerSession {
 	var writerCache = new HlWriterCache();
 	var sourceTexts:Map<String, String> = [];
 	var unrecordedPublication:Null<{output:String, marker:String}>;
+	var requestSources:Map<String, String> = [];
 
 	public function new() {}
 
@@ -65,6 +66,8 @@ class CompilerSession {
 		};
 
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
+		// Every consumer of a source in this request sees the same bytes, including shape checks.
+		requestSources = [];
 		var host = hostInterfaces(request.target),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
@@ -72,6 +75,7 @@ class CompilerSession {
 			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {path: path, text: read(path)}],
 			identity = Json.stringify({
 				target: request.target,
+				live: request.live,
 				importMemory: request.importMemory,
 				sharedMemory: request.sharedMemory == true,
 				entry: request.entry,
@@ -88,7 +92,7 @@ class CompilerSession {
 			for (path in request.paths) {
 				var before = sourceTexts.get(path);
 				var after = readChanged(path);
-				if (before != null && after != before && hasStructuralDeclaration(before, after)) {
+				if (before != null && after != before && hasStructuralDeclaration(path, before, after)) {
 					reset();
 					break;
 				}
@@ -108,7 +112,7 @@ class CompilerSession {
 				}
 				if (Path.isAbsolute(path)) {
 					var changed = readChanged(path);
-					if (changed != state.source.text && hasStructuralDeclaration(state.source.text, changed)) {
+					if (changed != state.source.text && hasStructuralDeclaration(path, state.source.text, changed)) {
 						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
 						// Rebuild that semantic graph until transitive shape invalidation is complete.
 						reset();
@@ -237,21 +241,31 @@ class CompilerSession {
 		return marker + " " + build.execution.ContentDigest.makeHex(Bytes.ofString(configuration + "\n" + Path.withoutDirectory(Sys.programPath())));
 
 	function read(path:String):String {
-		return File.getContent(path);
+		var key = FileSystem.fullPath(path);
+		var cached = requestSources.get(key);
+		if (cached != null)
+			return cached;
+		// Compare bytes twice: timestamp resolution cannot detect rapid same-size edits reliably.
+		var text = File.getContent(key);
+		for (_ in 0...3) {
+			var confirmed = File.getContent(key);
+			if (text == confirmed) {
+				requestSources.set(key, text);
+				return text;
+			}
+			text = confirmed;
+		}
+		throw 'Source changed while being read: $path';
 	}
 
-	function readChanged(path:String):Null<String> {
-		// Metadata timestamps can have coarse resolution and miss same-size edits.
-		// Compare actual source text so persistent compiler sessions always invalidate
-		// from the bytes they compile, independent of filesystem timestamp behavior.
-		return File.getContent(path);
-	}
+	function readChanged(path:String):Null<String>
+		return read(path);
 
-	static function hasStructuralDeclaration(before:String, after:String):Bool
-		return structuralDeclarations(before) != structuralDeclarations(after);
+	static function hasStructuralDeclaration(path:String, before:String, after:String):Bool
+		return structuralDeclarations(path, before) != structuralDeclarations(path, after);
 
-	static function structuralDeclarations(source:String):String {
-		var tokens = new Lexer(new SourceFile("<session-shapes>", source)).tokenize();
+	static function structuralDeclarations(path:String, source:String):String {
+		var tokens = new Lexer(new SourceFile(path, source)).tokenize();
 		var result:Array<String> = [];
 		var depth = 0, capturing = false, bodyDepth = 0;
 		for (token in tokens) {

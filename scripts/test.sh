@@ -132,6 +132,7 @@ run_wasm_stages() {
 		run_timed static-init-order-wasm bash "$root_dir/tests/integration/test-static-init-order-wasm.sh"
 		run_timed structural-iteration-wasm bash "$root_dir/tests/integration/test-structural-iteration-wasm.sh"
 		run_timed dynamic-string-wasm bash "$root_dir/tests/integration/test-dynamic-string-wasm.sh"
+		run_timed compiler-gaps-wasm bash "$root_dir/tests/integration/test-compiler-gaps-wasm.sh"
 		run_timed null-reassignment-wasm bash "$root_dir/tests/integration/test-null-reassignment-wasm.sh"
 		run_timed mixed-array-wasm bash "$root_dir/tests/integration/test-mixed-array-wasm.sh"
 		run_timed enum-typedef-wasm bash "$root_dir/tests/integration/test-enum-typedef-wasm.sh"

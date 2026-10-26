@@ -41,8 +41,51 @@ class CompilerSessionMain {
 			expect(File.getContent(fresh + ".functions").indexOf("\tMain.main\n") >= 0, "fresh bytecode must publish its function map");
 		}
 		var initial = compile();
+		var initialManifest = File.getContent(output + ".live.json"),
+			initialStamp = File.getContent(output + ".live.stamp");
 		var unchanged = compile();
 		expect(unchanged.retyped.length == 0, "unchanged compilation reuses semantic state");
+		expect(unchanged.unchanged && unchanged.revision == initial.revision, "unchanged live compilation must not advance the runtime revision");
+		expect(File.getContent(output + ".live.json") == initialManifest && File.getContent(output + ".live.stamp") == initialStamp,
+			"an unchanged build must preserve the last runtime publication");
+		var modified = false;
+		var snapshotBuild = CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])), message -> {
+			if (message == "reusing compiler session" && !modified) {
+				modified = true;
+				File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
+			}
+		}, session);
+		expect(modified && snapshotBuild.unchanged, "shape checks and compilation must use one source snapshot despite a mid-request write");
+		var afterSnapshotWrite = compile();
+		expect(!afterSnapshotWrite.unchanged
+			&& afterSnapshotWrite.baseRevision == initial.revision, "the next request must see the mid-request write");
+		compareFresh(8);
+		var pendingPatch = File.getBytes(output + ".hlp"),
+			patchManifest = File.getContent(output + ".live.json");
+		expect(compile().unchanged
+			&& File.getBytes(output + ".hlp").compare(pendingPatch) == 0
+			&& File.getContent(output + ".live.json") == patchManifest,
+			"an unchanged build must not delete a patch a live host has yet to consume");
+		File.saveContent(value, 'class Value { public static function get():Int { return "unterminated; } }');
+		var invalidSnapshot = false;
+		try
+			compile()
+		catch (error:compiler.Diagnostic.CompileError) {
+			invalidSnapshot = true;
+			expect(error.diagnostic.span.file.path == value, "shape-lexer diagnostics must name the real source, not <session-shapes>");
+		}
+		expect(invalidSnapshot, "a malformed source snapshot must be reported");
+		File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
+		expect(compile().unchanged, "a failed source read must not poison the next request");
+		File.saveContent(value, "class Value { public static function get():Int { return 6; } }");
+		var writeFailed = false;
+		try
+			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + root + "/missing/result.hl"])), _ -> {}, session)
+		catch (_:Dynamic)
+			writeFailed = true;
+		expect(writeFailed, "artifact-write errors must be reported");
+		compile();
+
 		File.saveContent(value, "class Value { public static function get():Int { return 9; } }");
 		var edited = compile();
 		expect(edited.retyped.length > 0, "a source edit must retype affected modules");

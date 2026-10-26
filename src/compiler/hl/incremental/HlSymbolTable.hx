@@ -264,6 +264,18 @@ class HlSymbolTable {
 	public static inline final STRING_BYTES_FIELD = 0;
 	public static inline final STRING_LENGTH_FIELD = 1;
 
+	/** Compiler-only references used to access runtime headers with pointer-size-aware HashLink instructions. */
+	public function internReference(type:IrType):Int {
+		var key = "ref:" + typeKey(type);
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
+		ensureWritable();
+		var parameter = internType(type), index = types.length;
+		types.push(HlTypeDef.Parameterized(HlType.Ref, parameter));
+		typeIndices.set(key, index);
+		return index;
+	}
+
 	public function internType(type:IrType):Int {
 		var key = typeKey(type);
 		if (typeIndices.exists(key))

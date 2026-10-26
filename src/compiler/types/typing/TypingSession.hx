@@ -47,6 +47,10 @@ class TypingSession {
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
 	public final lambdaCache:Map<String, TypedExpression> = [];
+
+	/** Structural conversion helpers already emitted for each origin and target shape. */
+	public final dynamicStructureConversions:Map<String, Bool> = [];
+
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	public final genericSpecializations:GenericSpecializationRegistry;

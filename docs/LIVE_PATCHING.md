@@ -46,3 +46,23 @@ way, and HL assembly is about a tenth of a compile, so nothing meaningful is los
   the artifact, and still differ between sessions.
 - `<output>.live.stamp` holds the publication key (`identity:revision`) and is published after `.live.json`. The live
   host reads it every tick and parses the description only when it changes; without a stamp it parses every tick.
+
+
+## Unchanged publication
+
+With publication tracking enabled, a live build whose assembled runtime state is unchanged returns
+`CompileResult.unchanged = true`, retains its revision, and leaves no publication pending. The host must not
+acknowledge or reject that result; either call reports that no publication is pending. Changed results still
+require acknowledgement after publication, or rejection when staging fails. Enabling tracking after an
+untracked build still requires an initial publication, even when its source has not changed.
+
+`CompileResult.baseRevision` and the live manifest's `baseRevision` identify the baseline a patch expects.
+The live host checks this against its running revision before invoking the patcher; skipped revisions and
+legacy manifests without a base revision require a reload. An unchanged CLI build preserves the previous
+patch, manifest, and stamp, so a host that has not polled yet can still consume that publication. For changed
+builds, the CLI writes the publication stamp after the other artifacts and rolls compiler state back if staging
+fails. Switching between artifact and live modes starts a new compiler session.
+
+Each compiler request reads a source into one shared snapshot, including structural-change checks. Consecutive
+reads must agree before the snapshot is cached, and a failed request cannot retain that cache for the next one.
+Shape-lexer errors name the actual source file.

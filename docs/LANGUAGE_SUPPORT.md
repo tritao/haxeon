@@ -19,9 +19,20 @@ The current subset includes:
 
 String addition, equality, `.length`, `indexOf`, and `substring` use the
 compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
-`concat`, `slice`, `indexOf`, `push`, and `pop`. Capacity-aware array growth
+`concat`, `slice`, `indexOf`, `exists`, `push`, and `pop`. Capacity-aware array growth
 preserves object identity so aliases and fields continue to observe the same
-array.
+array. `exists(predicate)` short-circuits at the first match and evaluates its receiver and predicate once.
+
+Converting `Dynamic` to an anonymous structure checks required fields and field types, then copies them into
+compiler-owned record storage. Nested records and record fields containing arrays of records are copied recursively. Direct array casts
+remain checked storage views and preserve their identity. Optional missing
+fields remain null, and malformed fields raise a Haxe exception identifying the field. Recursive structural
+copy targets are rejected with E1016; convert their recursive fields explicitly. Typed recursive structures
+remain supported. These conversions, dynamic object literals, and field reflection are tested on HashLink,
+Wasm32, and Wasm GC.
+
+On HashLink, an in-capacity typed array push and in-range `Bytes.get`/`set` use inline instructions. Growth and
+byte-access errors use the existing runtime functions. Reference pushes retain the managed write barrier.
 
 HashLink strings use HashLink's standard `String` object layout: zero
 terminated UTF-16 data plus its length in code units, so `.length` and

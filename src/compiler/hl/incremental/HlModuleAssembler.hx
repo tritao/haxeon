@@ -35,6 +35,8 @@ typedef HlAssemblerState = {
 /** Module plus identity and delta metadata produced by one assembly transaction. */
 typedef HlAssemblyResult = {
 	final module:HlCode;
+	final unchanged:Bool;
+	final baseRevision:Int;
 	final changedFunctions:Array<Int>;
 	final changedSlots:Array<Int>;
 
@@ -294,6 +296,7 @@ class HlModuleAssembler {
 		publishedStrings = module.strings.length;
 		publishedTypes = module.types.length;
 		publishedGlobals = module.globals.length;
+		var baseRevision = revision;
 		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
@@ -304,6 +307,8 @@ class HlModuleAssembler {
 		initialized = true;
 		return {
 			module: module,
+			unchanged: unchanged,
+			baseRevision: baseRevision,
 			changedFunctions: changed,
 			changedSlots: changedSlots,
 			addedFunctions: addedFunctions,

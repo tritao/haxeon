@@ -1560,6 +1560,43 @@ class CallResolver {
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
+		if (name == "exists") {
+			if (arguments.length != 1)
+				fail("E1008", "Array.exists expects one predicate", span);
+			var predicateType = CompilerType.TFunction([element], TBool);
+			var predicate = coerce(typeExpressionValue(arguments[0], scope, predicateType), predicateType, "array predicate", "E1002");
+			invalidateClosureWrites(arguments[0], null, scope);
+			scope.invalidateAllExpressions();
+			var context = session.currentContext.name;
+			var previous = session.functionAdapterCounts.get(context),
+				id = previous == null ? 0 : previous;
+			session.functionAdapterCounts.set(context, id + 1);
+			var prefix = "$array-exists:" + context + ":" + id;
+			var arrayName = prefix + ":array",
+				predicateName = prefix + ":predicate",
+				indexName = prefix + ":index",
+				resultName = prefix + ":result";
+			var array = new TypedExpression(TLocal(arrayName), receiver.type, span);
+			var index = new TypedExpression(TLocal(indexName), TInt, span);
+			var call = new TypedExpression(TClosureCall(new TypedExpression(TLocal(predicateName), predicateType, span),
+				[new TypedExpression(TIndex(array, index), element, span)]),
+				TBool, span);
+			var statements:Array<compiler.types.TypedAst.TypedStatement> = [
+				TVar(arrayName, receiver, span),
+				TVar(predicateName, predicate, span),
+				TVar(indexName, new TypedExpression(TIntLiteral(0), TInt, span), span),
+				TVar(resultName, new TypedExpression(TBoolLiteral(false), TBool, span), span),
+				TWhile(new TypedExpression(TLess(index, new TypedExpression(TArrayLength(array), TInt, span)), TBool, span), [
+					TIf(call, [
+						TAssign(resultName, new TypedExpression(TBoolLiteral(true), TBool, span), span),
+						TBreak(span)
+					], [], span),
+					TIncrement(indexName, 1, span)
+				], span)
+			];
+			return new TypedExpression(TBlockExpression(statements, new TypedExpression(TLocal(resultName), TBool, span)), TBool, span);
+		}
+
 		if (name == "iterator") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.iterator expects no arguments", span);

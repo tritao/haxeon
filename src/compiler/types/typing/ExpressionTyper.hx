@@ -1117,7 +1117,7 @@ class ExpressionTyper {
 		if (isDynamic)
 			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
-		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), resolvedResult, span);
+		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), isDynamic ? TDynamic : resolvedResult, span);
 	}
 
 	static function isDynamicExpectation(type:Null<CompilerType>):Bool
@@ -1141,7 +1141,7 @@ class ExpressionTyper {
 			expectedElement = TDynamic;
 		}
 		var typedValues:Array<TypedExpression> = [],
-			elementType = expectedElement;
+			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;
 		for (value in values) {
 			var typedValue = typeExpressionCallback(value, scope, elementType == TNull || dynamicContext ? null : elementType, false);
 			if (expectedElement == null) {
@@ -1150,7 +1150,8 @@ class ExpressionTyper {
 					joined = TDynamic;
 				if (joined == null)
 					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
-				elementType = joined;
+				// Dynamic permits mixed storage, but homogeneous arrays keep their exact element contract.
+				elementType = joined == null ? TDynamic : joined;
 			}
 			typedValues.push(typedValue);
 		}

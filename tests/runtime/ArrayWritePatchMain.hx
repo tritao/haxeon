@@ -1,5 +1,6 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -25,6 +26,26 @@ class ArrayWritePatchMain {
 		if (Runtime.callInt(live, mainId) != 23)
 			throw "The patched function kept its old body";
 		Runtime.dispose(live);
-		Sys.println("PASS: a function that writes an array element is patchable");
+		// The runtime fast paths also introduce Ref/Unref/Setref/RefOffset instructions and Ref types in patches.
+		var fastCompiler = new Compiler();
+		CompilerIntrinsics.register(fastCompiler);
+		fastCompiler.addSourceRoot("stdlib");
+		var fastProgram = (value:Int) ->
+			'import haxe.io.Bytes; function main():Int {var a=[0,0,0];a.resize(0);var b=Bytes.alloc(1);a.push($value);b.set(0,a[0]);return b.get(0);}';
+		fastCompiler.update("Main.hx", fastProgram(9));
+		var initialFast = fastCompiler.compile("Main");
+		var fastLive = Runtime.load(HlWriter.encode(initialFast.module), initialFast.runtimeIdentity);
+		var fastMain = initialFast.functionIds.get("main");
+		if (Runtime.callInt(fastLive, fastMain) != 9)
+			throw "Initial inline runtime operations failed";
+		fastCompiler.update("Main.hx", fastProgram(42));
+		var editedFast = fastCompiler.compile("Main");
+		if (editedFast.requiresReload || editedFast.patchBytes == null)
+			throw "Inline runtime operations did not produce a patch";
+		Runtime.patchSet(fastLive, new PatchSet(initialFast.revision, editedFast.revision, editedFast.patchBytes, editedFast.changedFunctions));
+		if (Runtime.callInt(fastLive, fastMain) != 42)
+			throw "Patched inline runtime operations failed";
+		Runtime.dispose(fastLive);
+		Sys.println("PASS: array writes and inline array/byte operations are patchable");
 	}
 }

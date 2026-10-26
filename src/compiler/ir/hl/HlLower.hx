@@ -787,14 +787,16 @@ class HlLower {
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
 					case Call(output, functionName, arguments):
-						var destination = defineRegister(output, registers, registerTypes);
-						var functionIndex = requireFunction(functionName);
-						var args = [for (argument in arguments) requireRegister(argument, registers)];
-						switch args.length {
-							case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
-							case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
+						if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers, registerTypes)) {
+							var destination = defineRegister(output, registers, registerTypes);
+							var functionIndex = requireFunction(functionName);
+							var args = [for (argument in arguments) requireRegister(argument, registers)];
+							switch args.length {
+								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
+								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
+								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+								default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
+							}
 						}
 					case IteratorNew(output, array):
 						var destination = defineRegister(output, registers, registerTypes),
@@ -1323,6 +1325,83 @@ class HlLower {
 		var data = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.RefData(data, arrayRegister));
 		instructions.push(access(data, offset));
+	}
+
+	/**
+	 * Address a runtime header as pointer slots followed by Int slots. RefOffset scales by the referred type,
+	 * so this follows both 32- and 64-bit HashLink layouts without embedding the compiler host's pointer size.
+	 * The source object stays rooted; no interior reference is retained across a fast-path call.
+	 */
+	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType, instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
+		var pointers = temporaryRegisterType(symbols.internReference(IrType.RawPtr), registerTypes);
+		var offset = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(pointers, object));
+		instructions.push(HlInstruction.LoadInt(offset, internInt(pointerSlots)));
+		instructions.push(HlInstruction.RefOffset(pointers, pointers, offset));
+		var field = temporaryRegisterType(symbols.internReference(type), registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(field, pointers));
+		if (intSlots != 0) {
+			instructions.push(HlInstruction.LoadInt(offset, internInt(intSlots)));
+			instructions.push(HlInstruction.RefOffset(field, field, offset));
+		}
+		return field;
+	}
+
+	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
+	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			registerTypes:Array<Int>):Bool {
+		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64" || name == "__array_push_bool"
+			|| name == "__array_push_bytes" || name == "__array_push_ref";
+		var get = name == "__bytes_get", set = name == "__bytes_set";
+		if (!push && !get && !set)
+			return false;
+		var destination = defineRegister(output, registers, registerTypes);
+		var args = [for (argument in arguments) requireRegister(argument, registers)];
+		var id = rawArrayAccesses++,
+			fast = "__runtime_fast_" + id,
+			slow = "__runtime_slow_" + id,
+			done = "__runtime_done_" + id;
+		var size = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.JumpNull(args[0], slow));
+		if (push) {
+			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
+			var capacityRef = runtimeFieldReference(args[0], 2, 1, IrType.I32, instructions, registerTypes);
+			var capacity = temporaryRegister(IrType.I32, registerTypes);
+			var one = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.Unref(size, sizeRef));
+			instructions.push(HlInstruction.Unref(capacity, capacityRef));
+			instructions.push(HlInstruction.JumpUnsignedLess(size, capacity, fast));
+			instructions.push(HlInstruction.Jump(slow));
+			instructions.push(HlInstruction.Label(fast));
+			instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+			instructions.push(HlInstruction.Add(destination, size, one));
+			instructions.push(HlInstruction.Setref(sizeRef, destination));
+			// OSetref performs the managed store/write barrier without OSetArray's native bounds helper.
+			var data = temporaryRegister(IrType.RawPtr, registerTypes);
+			var slot = temporaryRegisterType(symbols.internReference(arguments[1].type), registerTypes);
+			instructions.push(HlInstruction.RefData(data, args[0]));
+			instructions.push(HlInstruction.UnsafeCast(slot, data));
+			instructions.push(HlInstruction.RefOffset(slot, slot, size));
+			instructions.push(HlInstruction.Setref(slot, args[1]));
+		} else {
+			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
+			instructions.push(HlInstruction.Unref(size, sizeRef));
+			instructions.push(HlInstruction.JumpUnsignedLess(args[1], size, fast));
+			instructions.push(HlInstruction.Jump(slow));
+			instructions.push(HlInstruction.Label(fast));
+			var dataRef = runtimeFieldReference(args[0], 1, 0, IrType.RawPtr, instructions, registerTypes);
+			var data = temporaryRegister(IrType.RawPtr, registerTypes);
+			instructions.push(HlInstruction.Unref(data, dataRef));
+			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1], args[2]));
+		}
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(slow));
+		if (args.length == 2)
+			instructions.push(HlInstruction.Call2(destination, requireFunction(name), args[0], args[1]));
+		else
+			instructions.push(HlInstruction.CallN(destination, requireFunction(name), args));
+		instructions.push(HlInstruction.Label(done));
+		return true;
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {

@@ -31,6 +31,8 @@ typedef ExecutableCase = {
 
 class TestCatalog {
 	static final compilerMains = [
+		"CompilerGapsMain",
+		"RuntimeFastPathsMain",
 		"NullReassignmentMain",
 		"MixedArrayLiteralMain",
 		"EnumTypedefConstructorMain",

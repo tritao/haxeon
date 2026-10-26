@@ -22,6 +22,24 @@ class PatchOpcodeTests {
 		run();
 
 	public static function run():Void {
+		function publication(base:Int, revision:Int):tools.LivePublication.LiveDescription
+			return {
+				revision: revision,
+				baseRevision: base,
+				moduleIdentity: "module",
+				requiresReload: false,
+				patchAvailable: true,
+				changedFunctions: [],
+				identities: []
+			};
+		var current = publication(3, 4);
+		if (!tools.LivePublication.canPatch(current, publication(4, 5)))
+			throw "A matching publication base was rejected";
+		if (tools.LivePublication.canPatch(current, publication(5, 6)))
+			throw "A skipped runtime revision was allowed to patch";
+		if (tools.LivePublication.canPatch(current, publication(-1, 5)))
+			throw "An unversioned legacy publication was allowed to patch";
+
 		var fixtures:Array<{instruction:HlInstruction, opcode:Int, operands:Array<Int>}> = [
 			{instruction: Move(0, 1), opcode: 0, operands: [0, 1]},
 			{instruction: LoadInt(0, 128), opcode: 1, operands: [0, 128]},
@@ -63,6 +81,10 @@ class PatchOpcodeTests {
 			{instruction: ToSFloat(0, 1), opcode: 60, operands: [0, 1]},
 			{instruction: ToInt(0, 1), opcode: 62, operands: [0, 1]},
 			{instruction: SafeCast(0, 1), opcode: 63, operands: [0, 1]},
+			{instruction: UnsafeCast(0, 1), opcode: 64, operands: [0, 1]},
+			{instruction: Unref(0, 1), opcode: 88, operands: [0, 1]},
+			{instruction: Setref(0, 1), opcode: 89, operands: [0, 1]},
+			{instruction: RefOffset(0, 1, 2), opcode: 97, operands: [0, 1, 2]},
 			{instruction: ToVirtual(0, 1), opcode: 65, operands: [0, 1]},
 			{instruction: Label("other"), opcode: 66, operands: []},
 			{instruction: Return(0), opcode: 67, operands: [0]},

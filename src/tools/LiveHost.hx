@@ -7,18 +7,10 @@ import runtime.PatchSet;
 import runtime.Runtime;
 import sys.FileSystem;
 import sys.io.File;
+import tools.LivePublication.LiveDescription;
+import tools.LivePublication.LiveFunction;
 
-private typedef LiveFunction = {final name:String; final id:Int;}
 private typedef FullModule = {final module:haxe.io.Bytes; final identity:haxe.io.Bytes;}
-
-private typedef LiveDescription = {
-	final revision:Int;
-	final moduleIdentity:String;
-	final requiresReload:Bool;
-	final patchAvailable:Bool;
-	final changedFunctions:Array<Int>;
-	final identities:Array<LiveFunction>;
-}
 
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
@@ -57,7 +49,7 @@ class LiveHost {
 				if (candidate != null
 					&& (candidate.revision != revision || candidate.moduleIdentity != description.moduleIdentity)
 					&& publicationKey(candidate) != rejectedPublication) {
-					if (candidate.moduleIdentity == description.moduleIdentity && candidate.patchAvailable && !candidate.requiresReload) {
+					if (LivePublication.canPatch(description, candidate)) {
 						var patching = true;
 						ProfileSpan.begin("live.patch");
 						try {
@@ -70,6 +62,7 @@ class LiveHost {
 							// Function ids are stable across patches, so the summary stands in for the 1 MB full description.
 							description = {
 								revision: candidate.revision,
+								baseRevision: candidate.baseRevision,
 								moduleIdentity: candidate.moduleIdentity,
 								requiresReload: candidate.requiresReload,
 								patchAvailable: candidate.patchAvailable,
@@ -192,6 +185,8 @@ class LiveHost {
 	static function reloadCause(current:LiveDescription, candidate:LiveDescription):String {
 		if (candidate.moduleIdentity != current.moduleIdentity)
 			return 'module identity changed from ${current.moduleIdentity} to ${candidate.moduleIdentity}';
+		if (candidate.baseRevision != current.revision)
+			return 'patch base revision ${candidate.baseRevision} does not match runtime revision ${current.revision}';
 		if (candidate.requiresReload)
 			return 'the build requires a reload';
 		return 'the build carries no patch';
@@ -239,13 +234,14 @@ class LiveHost {
 			return null;
 	}
 
-	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
+	/** Built field by field, and validated before the host attempts a patch: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
 	static function readDescription(path:String, file:String = ".live.json"):LiveDescription {
 		var value:Dynamic = Json.parse(File.getContent(path + file));
 		var changed:Array<Dynamic> = value.changedFunctions,
 			identities:Array<Dynamic> = value.identities;
 		return {
 			revision: value.revision,
+			baseRevision: value.baseRevision == null ? -1 : value.baseRevision,
 			moduleIdentity: value.moduleIdentity,
 			requiresReload: value.requiresReload,
 			patchAvailable: value.patchAvailable,

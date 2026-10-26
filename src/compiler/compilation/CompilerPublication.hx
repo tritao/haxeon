@@ -107,6 +107,17 @@ class CompilerPublication {
 			case Pending(candidate): throw 'Publication revision ${candidate.revision} is still pending';
 		};
 
+	/** A no-op build needs no host action and must not create an acknowledgement opportunity. */
+	public function unchanged(revision:Int):Void
+		switch state {
+			case Untracked:
+			case Ready(baseline):
+				if (revision != baseline.revision)
+					throw 'Unchanged publication revision mismatch: expected ${baseline.revision}, got $revision';
+			case Pending(candidate):
+				throw 'Publication revision ${candidate.revision} is still pending';
+		}
+
 	public function acknowledge(revision:Int):Void {
 		var candidate = requirePending(revision);
 		state = Ready({revision: revision, abi: candidate.abi, backendAvailable: true});
