@@ -135,6 +135,9 @@ frames = counts[("B", "nk.frame")]
 moves = counts[("i", "input move")]
 keys = counts[("i", "input key")]
 ages = [e["args"]["ns"] for e in events if e.get("name") == "Input age"]
+polled_moves = counts[("i", "input polled move")]
+polled_keys = counts[("i", "input polled key")]
+polled_ages = [e["args"]["ns"] for e in events if e.get("name") == "Input polled age"]
 
 assert waits > 0, f"no nk.wait spans: {counts}"
 assert drawn > 0, "the probe drew no frames"
@@ -142,7 +145,14 @@ assert frames == drawn, f"{frames} nk.frame spans for {drawn} drawn frames"
 assert moves > 0, f"no input move events: {counts}"
 assert keys > 0, f"no input key events: {counts}"
 assert ages and all(0 <= age < 5_000_000_000 for age in ages), f"implausible input ages: {ages[:5]}"
+assert polled_moves > 0 and polled_keys > 0, f"the host's polls of inputs were not recorded: {counts}"
+assert polled_ages and all(0 <= age < 5_000_000_000 for age in polled_ages), f"implausible polled ages: {polled_ages[:5]}"
+# An input is polled after NativeKit's handler had it, so it is older by then: none is younger than the youngest the handler
+# saw. (Medians would not do: the polls see fewer inputs, as the queue merges moves, and the two differ by far less than
+# the spread.)
+assert min(polled_ages) >= min(ages), (min(polled_ages), min(ages))
 position = next(e for e in events if e.get("name") == "input move")["args"]
 assert position["a"] >= 0 and position["b"] >= 0, position
-print(f"PASS: NativeKit's sink recorded {waits} waits, {frames} frames, {moves} moves and {keys} keys with input ages")
+print(f"PASS: NativeKit's sink recorded {waits} waits, {frames} frames, {moves} moves and {keys} keys with input ages, and "
+      f"{polled_moves} polled moves and {polled_keys} polled keys")
 PY

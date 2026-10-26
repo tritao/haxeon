@@ -70,7 +70,10 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   each wait for events and `nk.frame` slices for each on-demand frame, an
   `input move`, `input button` or `input key` instant each time the UI thread
   takes an OS input off its queue (with its screen position or key), and an
-  "Input age" counter: how long that input waited after the OS stamped it.
+  "Input age" counter: how long that input waited after the OS stamped it. Each
+  has a later `input polled move`, `button` or `key` when the application takes
+  the event from NativeKit's queue, with an "Input polled age" counter: the age
+  by then, of the oldest input when moves were merged.
   The stamp has 1 ms resolution on GTK and the system tick's (about 16 ms) on
   Windows.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark
