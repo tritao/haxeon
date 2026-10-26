@@ -99,6 +99,8 @@ int main(void) {
 		if(!check(hl_gc_owner_live_count(&owner) >= 0,"count while threads allocate")) goto done;
 		hl_thread_yield();
 	}
+	/* A thread that has finished its work is still registered, and its stack scanned, until it unregisters. */
+	while(hl_gc_threads_info()->count > 1) hl_thread_yield();
 	scrub_stack();
 	{
 		int counted = hl_gc_owner_live_count(&owner);
