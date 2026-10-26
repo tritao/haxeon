@@ -28,6 +28,7 @@
 #include "runtime/core.c"
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
+#include "runtime/dir_watch.c"
 #include "runtime/arrays.c"
 #include "runtime/iterators.c"
 #include "runtime/maps.c"
