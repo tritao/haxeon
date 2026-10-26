@@ -9,6 +9,7 @@ import build.BuildPlanner;
 import build.BuildSession;
 import build.execution.CompilerClient;
 import build.execution.ContentDigestCache;
+import tools.DirectoryWatcher;
 import tools.WatchRun;
 import build.Target;
 import build.TargetLayout;
@@ -70,6 +71,7 @@ class BuildSystemMain {
 		testSharedDigestsAcrossExecutions();
 		testWorkerVersionMemo();
 		testWatchChangeClassification();
+		testDirectoryWatcher();
 		testArtifactCache();
 		testDelegatedNativeInvalidation();
 		testCMakeLibraryOutputs();
@@ -657,6 +659,34 @@ class BuildSystemMain {
 		];
 		change = WatchRun.classify(before, native);
 		expect(!change.compilerOnly && change.structural, "a new native file forces a new resolution");
+	}
+
+	/** A save wakes the watch loop within tens of milliseconds, including editors that save by rename or replace. */
+	static function testDirectoryWatcher():Void {
+		var root = temporaryDirectory("directory-watcher");
+		FileSystem.createDirectory(Path.join([root, "src"]));
+		var target = Path.join([root, "src", "A.hx"]);
+		File.saveContent(target, "one");
+		var watcher = DirectoryWatcher.create([{path: root, recursive: true}]);
+		if (watcher == null) {
+			removeTree(root);
+			return;
+		}
+		expect(!watcher.wait(0.05), "an idle tree reports no change");
+		var start = Sys.time();
+		File.saveContent(target, "two");
+		expect(watcher.wait(2.0), "a save is reported");
+		expect(Sys.time() - start < 0.25, "a save is reported within tens of milliseconds, not a polling interval");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(target + ".tmp", "three");
+		FileSystem.deleteFile(target);
+		FileSystem.rename(target + ".tmp", target);
+		expect(watcher.wait(2.0), "a save by rename is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "src", "B.hx"]), "new");
+		expect(watcher.wait(2.0), "a new file is reported");
+		watcher.close();
+		removeTree(root);
 	}
 
 	static function testDelegatedNativeInvalidation():Void {
