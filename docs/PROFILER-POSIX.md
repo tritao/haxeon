@@ -65,8 +65,7 @@ Read from the worktree.
     man page only says unmatched lookups give NULL.)**
   - There is no libbacktrace, libdw, DWARF or atos path. `hlprof-live.c` names
     native keys only from these events.
-- **Missing pieces.** `vendor/hashlink/src` has no `pthread_atfork` handling.
-  macOS `MAP_JIT` / `pthread_jit_write_protect_np` handling already exists in
+- **Missing pieces.** macOS `MAP_JIT` / `pthread_jit_write_protect_np` handling already exists in
   `gc.c` for the JIT.
 
 ## Linux
@@ -243,9 +242,8 @@ and any object not under `/usr/`, `/lib`, `/lib64`, `/snap/`, excluding
 - **futex.** `syscall` gets a dedicated C wrapper that records only when
   `n == SYS_futex` (or `SYS_futex_waitv`) and forwards six `long`s.
 - **`fork`, `vfork`, `exec*`.** Do not hook them. A forked child inherits
-  `hl_prof_on` without a consumer thread. libhl needs a
-  `pthread_atfork` child handler that clears it whether or not hooks exist.
-  This is a pre-existing gap.
+  `hl_prof_on` without a consumer thread; libhl's `pthread_atfork` child handler
+  (`prof_fork_child` in `prof.c`) clears it whether or not hooks exist.
 - **C++, libstdc++.**
   - Exported waits: `_ZNSt18condition_variable4waitERSt11unique_lockISt5mutexE`,
     `_ZNSt6thread4joinEv`, `_ZNSt11this_thread11__sleep_for…`.
@@ -483,8 +481,8 @@ Boundary calls.
 - **Missing exits.** Exceptions, cancellation and `longjmp` through
   instrumented C/C++ leave exits missing (Clang), as on Windows. Haxe catches
   repair the depth.
-- **Fork.** A forked child keeps `hl_prof_on` set with no consumer and may
-  hang. This is pre-existing; add an atfork handler.
+- **Fork.** Handled: libhl's `pthread_atfork` child handler stops recording in
+  the child.
 - **Calls the GOT never sees.** Calls made through `dlsym` pointers, other than
   Vulkan's, and statically linked libc functions bypass GOT hooks, as
   `GetProcAddress` does on Windows.
@@ -509,8 +507,8 @@ following, which Linux and macOS lack today (read from the runtime, October
     `__ss.__fp` (`x29`) there.
   - Functions that are not exported are named from the image's ELF symbol
     table at export time. Inlined frames, file and line need DWARF (see
-    Symbolization), C++ names are not demangled, and macOS images (Mach-O)
-    are not read.
+    Symbolization), and macOS images (Mach-O) are not read. C++ names are
+    demangled (`demangle_cpp` in `elf_symbols.c`).
   - The HashLink JIT on aarch64 must keep a frame-pointer chain through JIT
     frames and its native-call trampolines **(unverified)**. Only Linux
     x86-64 has run `test-profiler-mixed-stack.sh`.
@@ -536,10 +534,10 @@ following, which Linux and macOS lack today (read from the runtime, October
   dynamic loader's system libraries (the directory of `libc.so.6` from
   `dladdr`, the dyld shared cache with `_dyld_shared_cache_contains_path`) in
   addition to fixed prefixes.
-- **Fork.** libhl has no `pthread_atfork` handler on any platform. A child
-  that keeps running instrumented code after `fork` without `exec` keeps
-  recording with no consumer thread, and waits forever once its pool fills.
-  Clear `hl_prof_on` and the session in the child.
+- **Fork.** Done on Linux and macOS: libhl's `pthread_atfork` child handler
+  clears `hl_prof_on` and the session in the child, which would otherwise keep
+  recording with no consumer thread and wait forever once its pool fills.
+  `tests/integration/test-profiler-fork.sh` covers it.
 - **Tests.** `tests/integration/test-profiler-native-instrument.sh` runs on
   Windows only. Each platform needs it, plus a boundary-call test and a
   mixed-mode sampling test.
@@ -606,7 +604,9 @@ Each step is small, and each has its own test.
     `hl_thread_set_name` call.
 14. **Fork.** Fork a child that keeps running instrumented code while a
     session records. **Test:** the child neither records nor hangs, and the
-    parent's capture is unaffected.
+    parent's capture is unaffected. Done for Haxe records
+    (`tests/integration/test-profiler-fork.sh`); repeat it with instrumented
+    native code once the hooks exist.
 15. **Parity run.** Run the exosuit editor's driven capture on Linux and
     macOS. **Test:** the checks used on Windows (no unnamed threads, no
     incomplete slices, native slices nested under Haxe frames, boundary

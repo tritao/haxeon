@@ -112,7 +112,7 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   function is named from its library's symbol table, or by library and offset
   (`libfoo.so+0x...`) when the library is stripped, and a stretch of code
   built without frame pointers shows as one `[unwind gap]` frame. macOS arm64 still stops at the
-  first native frame.
+  first native frame. C++ names are demangled.
 - **Profiler stalls.** A "profiler stall" slice on a thread that had to wait
   for the recorder to free a buffer. The profiler drops nothing the program
   records, so a stall delays the program instead. Raise `--pool` if stalls
@@ -182,7 +182,9 @@ python3 scripts/check-pftrace.py --tp trace_processor_shell \
 ```
 
 On Windows x64, add `--expect-mixed` to require stacks that pass from Haxe
-through native code and back into Haxe; other platforms do not record them.
+through native code and back into Haxe. The check matches `.dll` and `.exe`
+mappings, so it does not apply to Linux; `tests/integration/test-profiler-mixed-stack.sh`
+covers the Linux x86-64 stacks.
 
 ## Instrumentation
 
@@ -447,11 +449,12 @@ last line reports the consumer's drain rate and any stalls.
   seconds of records to put them in order, so a capture of an instrumented
   run that keeps every call needs memory in proportion. Drop short calls or
   export a window.
-- **A forked child keeps recording.** The runtime has no `fork` handler, so a
-  child that keeps running instrumented code after `fork`, without `exec`,
-  records with no consumer and hangs once its pool fills.
-- **Native instrumentation, boundary calls and mixed-mode samples are Windows
-  x64 only.** See `PROFILER-POSIX.md` for the Linux and macOS design.
+- **A forked child does not record.** The consumer does not exist in the child,
+  so a `fork` handler stops recording there and forgets the session; the
+  parent's capture is unaffected. A child can start a session of its own.
+- **Native instrumentation and boundary calls are Windows x64 only.** Mixed-mode
+  samples also work on Linux x86-64 (see "What a trace contains"). See
+  `PROFILER-POSIX.md` for the Linux and macOS instrumentation design.
 - **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
   (see [Spans and counters](#spans-and-counters)).
 
