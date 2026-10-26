@@ -77,8 +77,8 @@ class IrFunctionStateCodec {
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
 			IrTypeCodec.writeString(output, binding.path);
-			output.writeInt32(binding.scopeStart);
-			output.writeInt32(binding.scopeEnd);
+			output.writeInt32(hashed ? binding.scopeStart : 0);
+			output.writeInt32(hashed ? binding.scopeEnd : 0);
 		}
 		// A fingerprint describes whatever the compiler holds, including functions still being built; only persisted state must be
 		// complete.
