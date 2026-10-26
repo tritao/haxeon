@@ -261,13 +261,17 @@ the project's:
 ### Boundary calls
 
 Calls from the process's own modules into code nobody compiles with
-instrumentation are recorded at the boundary (Windows x64), as slices named
-after the function called:
+instrumentation are recorded at the boundary (Windows x64 and Linux x86-64), as
+slices named after the function called. On Linux only the first item below
+exists: the blocking and system calls.
 
 - **Blocking and system calls**: waits and sleeps, file, pipe and network I/O,
   message waits, process creation, the C runtime's file streams and the C++
   standard library's waits (`kernel32!Sleep`, `ucrtbase!fread`,
-  `ws2_32!recv`, `msvcp140!_Cnd_wait`, ...).
+  `ws2_32!recv`, `msvcp140!_Cnd_wait`, ...). On Linux they are libc's
+  thread, sleep, poll, file, socket, process and stream calls (`libc!nanosleep`,
+  `libc!fopen`, `libc!poll`, `libc!pthread_cond_wait`, ...), named after the
+  library defining them.
 - **Direct3D 11 and DXGI**: draws, dispatches, copies, maps and flushes on the
   immediate context (`ID3D11DeviceContext::Draw`), and `Present` on every swap
   chain (`IDXGISwapChain::Present`).
@@ -284,9 +288,17 @@ after the function called:
 
 `imports` is `blocking` (the curated set) or `none`; `extra` adds functions as
 `module!function`. Only import-table calls are seen: a function the program
-looks up with `GetProcAddress` is not, except Vulkan's, whose lookups are
-hooked. Device and swap-chain hooks apply to objects created after the program
-starts.
+looks up with `GetProcAddress` (`dlsym` on Linux) is not, except Vulkan's on
+Windows, whose lookups are hooked. Device and swap-chain hooks apply to objects
+created after the program starts.
+
+On Linux the hooks rewrite the GOT slots of the program and of every object not
+under `/usr`, `/lib` or `/snap`, by the name of the function a slot binds, and
+again after each `dlopen`. Calls made inside the system libraries are not seen
+(a call libc makes to its own `read` is not a slice), and the module in an
+`extra` entry only names the slice: the function is matched by name. The
+thunk copies up to twelve stack arguments, so a function taking a larger
+structure by value on the stack is not supported.
 
 ## Recording controls
 
@@ -459,12 +471,12 @@ last line reports the consumer's drain rate and any stalls.
 - **A forked child does not record.** The consumer does not exist in the child,
   so a `fork` handler stops recording there and forgets the session; the
   parent's capture is unaffected. A child can start a session of its own.
-- **Boundary calls are Windows x64 only, and native instrumentation is Windows
-  x64 and Linux.** On Linux, calls into code we do not compile are not
-  recorded at the boundary yet, and a GCC build probes inlined functions
-  (see Instrumentation). Mixed-mode samples also work on Linux x86-64 (see
-  "What a trace contains"). See `PROFILER-POSIX.md` for the macOS design and
-  the rest of the Linux plan.
+- **Boundary calls and native instrumentation are Windows x64 and Linux x86-64.**
+  Linux has no Vulkan boundary hooks, no `syscall(SYS_futex)` hook and no
+  libstdc++ wait hooks yet, and a GCC build probes inlined functions (see
+  Instrumentation). Mixed-mode samples also work on Linux x86-64 (see "What a
+  trace contains"). See `PROFILER-POSIX.md` for the macOS design and the rest of
+  the Linux plan.
 - **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
   (see [Spans and counters](#spans-and-counters)).
 

@@ -51,7 +51,11 @@ Read from the worktree.
   `c|cc|cpp|cxx|c++`, not `m`/`mm`. macOS and Linux arm64 are not enabled:
   macOS needs its own hooks and linking, and arm64 is untested.
 - **Boundary hooks.** `prof_boundary.c` compiles to stubs (`hl_prof_boundary_install`
-  and friends) everywhere except `HL_WIN && HL_64 && _MSC_VER`.
+  and friends) everywhere except `HL_WIN && HL_64 && _MSC_VER`. **Linux x86-64
+  now has them in `prof_boundary_linux.c`**, with the stubs and thunk in
+  `prof_boundary_x64_sysv.c`: the GOT patching, static stubs and CFI thunk
+  below, for the curated blocking set and `extra=`. Vulkan, `syscall(SYS_futex)`,
+  libstdc++'s exported waits, arm64 and macOS are open.
 - **Recorder.** `hl_prof_enter_native(key)` puts the key in the lock-free
   native-key set and queues it, then calls `write_enter(key,false)`, which is
   eligible for short-call dropping. `hl_prof_enter_blocking` keeps the record
@@ -543,9 +547,10 @@ following, which Linux and macOS lack today (read from the runtime, October
   clears `hl_prof_on` and the session in the child, which would otherwise keep
   recording with no consumer thread and wait forever once its pool fills.
   `tests/integration/test-profiler-fork.sh` covers it.
-- **Tests.** `tests/integration/test-profiler-native-instrument.sh` runs on
-  Windows only. Each platform needs it, plus a boundary-call test and a
-  mixed-mode sampling test.
+- **Tests.** `tests/integration/test-profiler-native-instrument.sh` and
+  `test-profiler-boundary.sh` run on Windows and Linux (the boundary one on
+  Linux x86-64 only), and `test-profiler-mixed-stack.sh` on Linux and macOS.
+  macOS needs each of them.
 
 ## Prototype plan
 
@@ -576,7 +581,13 @@ x86-64 with GCC 13 and Clang 18 (`tests/integration/test-profiler-native-instrum
 4. **Module records and offline naming.** **Test:** a `static` function and an
    inlined frame are named from `llvm-symbolizer`, a build-id mismatch is
    reported, and with no symbolizer the export falls back to `dladdr` names.
-5. **ELF GOT patcher.** Use a small `.so` calling `nanosleep` and
+5. **ELF GOT patcher. Done on Linux x86-64: a program's PLT calls into its own
+   shared objects, and `libc!` calls from a Haxe run, are slices, with default
+   and `-z now` binding; the thunk passes ten integer and ten double arguments,
+   a mixed and a variadic call, and structs returned in memory, `rax:rdx` and
+   `xmm0:xmm1` (`test-profiler-boundary-thunk.sh`), and
+   `test-profiler-boundary.sh` checks the slices of a profiled run. Not yet
+   covered: arm64 and `-fno-plt`. A library `dlopen`ed after install is patched.** Use a small `.so` calling `nanosleep` and
    `pthread_cond_wait`, linked with `-z now` and with lazy binding, `-fno-plt`
    and default, on x86-64 and arm64. **Tests:**
    - Slices are named `libc!nanosleep`.
@@ -589,7 +600,9 @@ x86-64 with GCC 13 and Clang 18 (`tests/integration/test-profiler-native-instrum
    - `mprotect` on `__DATA_CONST` succeeds.
    - Indirect-symbol names exist for `__got`.
    - Value matching works when they do not.
-7. **Thunk unwinding.** **Tests:**
+7. **Thunk unwinding. Done on Linux x86-64: a C++ exception through a hooked
+   function and `pthread_cancel` of a thread in a hooked `usleep` both unwind
+   (the exception test terminates without the CFI).** **Tests:**
    - A C++ exception thrown through a hooked `extra=` function is caught
      correctly by the caller.
    - `pthread_cancel` of a thread in a hooked `pthread_cond_wait` completes.
