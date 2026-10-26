@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import haxe.io.Bytes;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance;
@@ -41,6 +42,12 @@ class InlineMemo {
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
+
+	/**
+	 * The encoding of a published function, kept with the function it belongs to (null when it cannot be encoded). Comparing a
+	 * re-inlined function with the published one then encodes only the new one, and a published function is encoded once.
+	 */
+	public var publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [];
 
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
@@ -87,6 +94,8 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
+		for (name => entry in publishedBytes)
+			result.publishedBytes.set(name, entry);
 		for (name => entry in instrumented)
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.lastFingerprint = lastFingerprint;
@@ -232,6 +241,7 @@ class IrInliner {
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
+			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		for (fn in program.functions) {
 			var result = inliner.inlinedVersion(fn.name);
@@ -248,10 +258,17 @@ class IrInliner {
 			var previous = cache.published.get(fn.name);
 			if (previous != null && previous != result) {
 				// Generated functions (initializers, the entry) are rebuilt on every compile; only different bytes count.
-				if (sameBytes(previous, result))
+				var previousEntry = cache.publishedBytes.get(fn.name);
+				if (previousEntry == null || previousEntry.fn != previous)
+					previousEntry = {fn: previous, bytes: encodeOrNull(previous)};
+				var resultBytes = previousEntry.bytes == null ? null : encodeOrNull(result);
+				if (resultBytes != null && previousEntry.bytes.compare(resultBytes) == 0)
 					result = previous;
-				else
+				else {
 					changed.push(fn.name);
+					previousEntry = {fn: result, bytes: resultBytes};
+				}
+				publishedBytes.set(fn.name, previousEntry);
 			} else if (previous == null)
 				changed.push(fn.name);
 			functions.push(result);
@@ -263,16 +280,21 @@ class IrInliner {
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
+		// Only functions that were compared have bytes; an entry for a function that is gone or unchanged-but-uncompared stays out.
+		for (name => entry in cache.publishedBytes)
+			if (!publishedBytes.exists(name) && published.get(name) == entry.fn)
+				publishedBytes.set(name, entry);
+		cache.publishedBytes = publishedBytes;
 		cache.instrumented = instrumented;
 		return changed;
 	}
 
-	/** Whether both encode to the same bytes; a function that cannot be encoded counts as different. */
-	static function sameBytes(a:IrFunction, b:IrFunction):Bool {
+	/** A function's encoding; null when it cannot be encoded, which makes it count as different from anything. */
+	static function encodeOrNull(fn:IrFunction):Null<Bytes> {
 		try {
-			return IrFunctionStateCodec.encode(a).compare(IrFunctionStateCodec.encode(b)) == 0;
+			return IrFunctionStateCodec.encode(fn);
 		} catch (_:Dynamic) {
-			return false;
+			return null;
 		}
 	}
 
