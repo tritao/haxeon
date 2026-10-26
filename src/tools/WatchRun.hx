@@ -55,6 +55,9 @@ class WatchRun {
 					result = 1;
 					break;
 				}
+				// Scan once the save has finished, not halfway through it and then again.
+				if (notified)
+					coalesce(watcher);
 				var observed = snapshot(project);
 				if (same(baseline, observed)) {
 					// Writes that are not edits (the app's log, build output) also notify; do not scan again for them at once.
@@ -65,11 +68,12 @@ class WatchRun {
 				var previous = baseline;
 				baseline = observed;
 				while (true) {
-					// With notifications a save is complete once none has arrived for a moment; otherwise wait out a polling interval.
+					// With notifications the scan saw a finished save unless one arrived while it ran; otherwise wait out a polling
+					// interval and compare again.
 					if (watcher != null) {
-						// Bounded, so a tree that never goes quiet (an app logging under the root) still compiles.
-						var quiet = Sys.time() + MAX_COALESCE_SECONDS;
-						while (watcher.wait(COALESCE_SECONDS) && Sys.time() < quiet) {}
+						if (!watcher.wait(0))
+							break;
+						coalesce(watcher);
 					} else
 						Sys.sleep(0.5);
 					observed = snapshot(project);
@@ -134,6 +138,12 @@ class WatchRun {
 	static inline final MAX_COALESCE_SECONDS = 0.5;
 
 	static inline final NOTIFIED_IDLE_SECONDS = 0.1;
+
+	/** Returns once no notification has arrived for a moment. Bounded, so a tree that never goes quiet (an app logging under the root) still compiles. */
+	static function coalesce(watcher:DirectoryWatcher):Void {
+		var quiet = Sys.time() + MAX_COALESCE_SECONDS;
+		while (watcher.wait(COALESCE_SECONDS) && Sys.time() < quiet) {}
+	}
 
 	static function reopenWatcher(old:Null<DirectoryWatcher>, project:ResolvedProject):Null<DirectoryWatcher> {
 		if (old != null)
@@ -283,46 +293,69 @@ class WatchRun {
 		return size;
 	}
 
+	/**
+		Each watched file's modification time and size. One stat per file: the same scan with `exists` and `isDirectory`
+		before each stat made four calls per file and took ~105 ms for the editor's 1,224 files, twice per save.
+	**/
 	static function snapshot(project:ResolvedProject):Map<String, String> {
-		var files:Map<String, Bool> = [];
-		for (item in project.packages.packages) {
-			files.set(Path.join([item.root, "haxeon.json"]), true);
-			for (root in item.sourceRoots)
-				collect(root, files);
-			for (path in item.ffiInterfaces)
-				files.set(path, true);
-			for (path in item.ffiProjections)
-				files.set(path, true);
-			for (path in item.nativeSources)
-				files.set(path, true);
-			for (path in item.nativeCMakeInputs)
-				files.set(path, true);
-		}
 		var result:Map<String, String> = [];
-		for (path in files.keys())
-			if (FileSystem.exists(path) && !FileSystem.isDirectory(path)) {
-				var stat = FileSystem.stat(path);
-				result.set(path, '${stat.mtime.getTime()}:${stat.size}');
-			}
+		for (item in project.packages.packages) {
+			record(Path.join([item.root, "haxeon.json"]), result);
+			for (root in item.sourceRoots)
+				collect(root, result);
+			for (path in item.ffiInterfaces)
+				record(path, result);
+			for (path in item.ffiProjections)
+				record(path, result);
+			for (path in item.nativeSources)
+				record(path, result);
+			for (path in item.nativeCMakeInputs)
+				record(path, result);
+		}
 		return result;
 	}
 
-	static function collect(root:String, files:Map<String, Bool>):Void {
-		if (!FileSystem.exists(root))
+	/** Records `path` if it is a file; a missing path or a directory is left out. */
+	static function record(path:String, result:Map<String, String>):Void {
+		var stat = statOrNull(path);
+		if (stat != null && !isDirectory(stat))
+			result.set(path, signature(stat));
+	}
+
+	static function collect(root:String, result:Map<String, String>):Void {
+		var stat = statOrNull(root);
+		if (stat == null)
 			return;
-		if (!FileSystem.isDirectory(root)) {
+		if (!isDirectory(stat)) {
 			if (Path.extension(root) == "hx")
-				files.set(root, true);
+				result.set(root, signature(stat));
 			return;
 		}
 		for (name in FileSystem.readDirectory(root)) {
-			var path = Path.join([root, name]);
-			if (FileSystem.isDirectory(path))
-				collect(path, files);
+			var path = Path.join([root, name]), entry = statOrNull(path);
+			if (entry == null)
+				continue;
+			if (isDirectory(entry))
+				collect(path, result);
 			else if (Path.extension(path) == "hx")
-				files.set(path, true);
+				result.set(path, signature(entry));
 		}
 	}
+
+	/** Null for a path that does not exist (or vanished since its directory was listed). */
+	static function statOrNull(path:String):Null<sys.FileStat> {
+		try {
+			return FileSystem.stat(path);
+		} catch (_:Dynamic) {
+			return null;
+		}
+	}
+
+	static inline function isDirectory(stat:sys.FileStat):Bool
+		return (stat.mode & 0xF000) == 0x4000;
+
+	static inline function signature(stat:sys.FileStat):String
+		return '${stat.mtime.getTime()}:${stat.size}';
 
 	static function same(a:Map<String, String>, b:Map<String, String>):Bool {
 		for (path in a.keys())
