@@ -51,6 +51,10 @@ class HlSymbolTable {
 	var objectMethodIndices:Map<String, Map<String, Int>> = [];
 	var interfaceMethodIndices:Map<String, Map<String, Int>> = [];
 	var pendingTypes:Map<String, Bool> = [];
+
+	/** The literal globals in index order, so a build reads only these and a patch only the ones past the published globals. */
+	var stringConstants:Array<{global:Int, value:String}> = [];
+
 	var shared = false;
 
 	public function new() {}
@@ -69,6 +73,7 @@ class HlSymbolTable {
 			result.globals.push(globals[index]);
 		copyMap(typeIndices, result.typeIndices);
 		copyMap(globalIndices, result.globalIndices);
+		result.stringConstants = stringConstants.copy();
 		copyMap(objectIndices, result.objectIndices);
 		copyNestedMap(objectMethodIndices, result.objectMethodIndices);
 		copyNestedMap(interfaceMethodIndices, result.interfaceMethodIndices);
@@ -87,6 +92,7 @@ class HlSymbolTable {
 		result.floatIndices = floatIndices;
 		result.typeIndices = typeIndices;
 		result.globalIndices = globalIndices;
+		result.stringConstants = stringConstants;
 		result.objectIndices = objectIndices;
 		result.objectMethodIndices = objectMethodIndices;
 		result.interfaceMethodIndices = interfaceMethodIndices;
@@ -109,6 +115,7 @@ class HlSymbolTable {
 		floatIndices = [for (key => value in floatIndices) key => value];
 		typeIndices = [for (key => value in typeIndices) key => value];
 		globalIndices = [for (key => value in globalIndices) key => value];
+		stringConstants = stringConstants.copy();
 		objectIndices = [for (key => value in objectIndices) key => value];
 		var objectMethods:Map<String, Map<String, Int>> = [],
 			interfaceMethods:Map<String, Map<String, Int>> = [];
@@ -165,6 +172,7 @@ class HlSymbolTable {
 			result.globals.push(global);
 		loadMap(state.typeIndices, result.typeIndices, "type");
 		loadMap(state.globalIndices, result.globalIndices, "global");
+		result.stringConstants = result.collectStringConstants();
 		loadMap(state.objectIndices, result.objectIndices, "object");
 		loadNestedMap(state.objectMethodIndices, result.objectMethodIndices, "object method");
 		loadNestedMap(state.interfaceMethodIndices, result.interfaceMethodIndices, "interface method");
@@ -548,6 +556,8 @@ class HlSymbolTable {
 		var index = globals.length;
 		globals.push(internType(type));
 		globalIndices.set(name, index);
+		if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
+			stringConstants.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
 		return index;
 	}
 
@@ -558,7 +568,10 @@ class HlSymbolTable {
 		return internGlobal(STRING_CONSTANT_PREFIX + value, IrType.Bytes);
 
 	/** The literal globals, in index order, with the literal each one holds. */
-	public function stringConstantGlobals():Array<{global:Int, value:String}> {
+	public function stringConstantGlobals():Array<{global:Int, value:String}>
+		return stringConstants;
+
+	function collectStringConstants():Array<{global:Int, value:String}> {
 		var result:Array<{global:Int, value:String}> = [];
 		for (name => index in globalIndices)
 			if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))

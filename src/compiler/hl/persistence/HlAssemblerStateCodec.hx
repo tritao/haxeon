@@ -14,13 +14,15 @@ class HlAssemblerStateCodec {
 		var state = assembler.exportState(), output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HAS");
-		output.writeByte(3);
+		output.writeByte(4);
 		output.writeByte(state.initialized ? 1 : 0);
 		output.writeInt32(state.revision);
 		output.writeInt32(state.publishedInts);
 		output.writeInt32(state.publishedFloats);
 		output.writeInt32(state.publishedStrings);
 		output.writeInt32(state.publishedTypes);
+		// Version 4 records the globals published, which literal globals made a patch-visible symbol table.
+		output.writeInt32(state.publishedGlobals);
 		writeSection(output, state.symbols);
 		writeSection(output, state.cache);
 		writeNatives(output, state.runtimeNatives);
@@ -42,7 +44,7 @@ class HlAssemblerStateCodec {
 			if (input.readString(3) != "HAS")
 				throw "Invalid HashLink assembler state";
 			var version = input.readByte();
-			if (version != 1 && version != 2 && version != 3)
+			if (version != 1 && version != 2 && version != 3 && version != 4)
 				throw "Unsupported HashLink assembler state version";
 			var initialized = input.readByte();
 			if (initialized != 0 && initialized != 1)
@@ -54,6 +56,7 @@ class HlAssemblerStateCodec {
 				publishedFloats: input.readInt32(),
 				publishedStrings: input.readInt32(),
 				publishedTypes: input.readInt32(),
+				publishedGlobals: version >= 4 ? input.readInt32() : null,
 				symbols: readSection(input, bytes.length),
 				cache: readSection(input, bytes.length),
 				runtimeNatives: version >= 2 ? readNatives(input, bytes.length) : null,
