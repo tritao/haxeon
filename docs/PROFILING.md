@@ -66,6 +66,13 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   name). The other threads follow by tid.
 - **Spans.** Slices from `haxeon.ProfileSpan`, nested on the thread that
   emitted them.
+- **NativeKit.** In apps that start `NativeKitRuntime`, `nk.wait` slices for
+  each wait for events and `nk.frame` slices for each on-demand frame, an
+  `input move`, `input button` or `input key` instant each time the UI thread
+  takes an OS input off its queue (with its screen position or key), and an
+  "Input age" counter: how long that input waited after the OS stamped it.
+  The stamp has 1 ms resolution on GTK and the system tick's (about 16 ms) on
+  Windows.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark
   time and allocation rate), "Short calls dropped per frame" when short calls
   are dropped (see below), app counters from

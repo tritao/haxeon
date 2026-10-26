@@ -86,7 +86,7 @@ set_target_properties(hlprof-live PROPERTIES
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
 add_library(haxeon_runtime SHARED native/runtime.c)
-target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
+target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src vendor/nativekit/include)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   # MSVC gates its C11 <stdatomic.h> implementation behind this opt-in.

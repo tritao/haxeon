@@ -43,6 +43,7 @@
 #include "runtime/child_processes.c"
 #include "runtime/host_state.c"
 #include "runtime/native_call.c"
+#include "runtime/native_trace.c"
 #include "runtime/memory.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"

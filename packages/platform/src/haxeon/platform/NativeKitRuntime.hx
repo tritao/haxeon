@@ -22,6 +22,8 @@ class NativeKitRuntime {
 			configured.set_api_version(NativeKit.nk_api_version());
 		}
 		NativeKit.nk_init_checked(configured);
+		// NativeKit's waits, frames and input dequeues then appear in profiler captures.
+		haxeon.ProfileNativeTrace.install("nativekit");
 		return new NativeKitRuntime();
 	}
 

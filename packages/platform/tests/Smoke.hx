@@ -38,6 +38,9 @@ class Smoke {
 		initOptions.set_api_version(NativeKitConstants.NK_API_VERSION);
 		initOptions.set_event_queue_capacity(32);
 		var runtime = NativeKitRuntime.start(initOptions);
+		// start() installed the profiler's trace sink; installing again finds the same loaded library.
+		if (!haxeon.ProfileNativeTrace.install("nativekit"))
+			return 28;
 		if (runtime.isDisposed())
 			return 2;
 		// Counted inputs project their count from the managed array or buffer.
