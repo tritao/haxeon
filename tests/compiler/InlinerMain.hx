@@ -4,6 +4,7 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
 import compiler.ir.IrInliner.InlineMemo;
 import compiler.ir.IrInliner.IrInlineCache;
+import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrVerifier;
 
 class InlinerMain {
@@ -193,6 +194,13 @@ class InlinerMain {
 		expect(names.indexOf("twice") >= 0, "the edited callee is reported as changed");
 		expect(names.indexOf("main") >= 0, "a caller that inlined the edited callee is reported as changed");
 		expect(names.indexOf("fib") < 0 && names.indexOf("loops") < 0, "functions that did not inline the callee are not reported");
+		// The published encodings are reused: the edited callee reaches the inlined caller, and a repeat reports nothing.
+		var editedMain = programFunction(program, "main");
+		expect(editedMain != inlinedMain && !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
+			"the inlined caller carries the edited callee");
+		program.functions = hybrid;
+		expect(IrInliner.run(program, cache).length == 0, "a repeated compile of the edit reports no changed functions");
+		expect(programFunction(program, "main") == editedMain, "the caller keeps the identity of the edited inlined form");
 		// A rolled-back candidate must not disturb the published cache.
 		var branch = cache.copy();
 		program.functions = originals.copy();
