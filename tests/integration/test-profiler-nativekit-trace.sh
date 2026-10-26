@@ -105,6 +105,8 @@ profiler=\$!
 sleep 1.2
 for i in \$(seq 1 40); do xdotool mousemove \$((50 + i * 5)) \$((60 + i * 3)); sleep 0.02; done
 xdotool key a key b
+window=\$(xdotool search --name "trace probe" | head -n1)
+for size in "520 360" "640 420" "460 300"; do xdotool windowsize \$window \$size; sleep 0.1; done
 wait \$app; status=\$?
 wait \$profiler
 exit \$status
@@ -135,6 +137,7 @@ frames = counts[("B", "nk.frame")]
 moves = counts[("i", "input move")]
 keys = counts[("i", "input key")]
 ages = [e["args"]["ns"] for e in events if e.get("name") == "Input age"]
+resizes = [e["args"] for e in events if e.get("name") == "resize polled window"]
 polled_moves = counts[("i", "input polled move")]
 polled_keys = counts[("i", "input polled key")]
 polled_ages = [e["args"]["ns"] for e in events if e.get("name") == "Input polled age"]
@@ -151,8 +154,10 @@ assert polled_ages and all(0 <= age < 5_000_000_000 for age in polled_ages), f"i
 # saw. (Medians would not do: the polls see fewer inputs, as the queue merges moves, and the two differ by far less than
 # the spread.)
 assert min(polled_ages) >= min(ages), (min(polled_ages), min(ages))
+assert resizes and all(size["a"] > 0 and size["b"] > 0 for size in resizes), f"the host's polls of resizes were not recorded: {counts}"
+assert any(size["a"] != resizes[0]["a"] or size["b"] != resizes[0]["b"] for size in resizes), resizes
 position = next(e for e in events if e.get("name") == "input move")["args"]
 assert position["a"] >= 0 and position["b"] >= 0, position
 print(f"PASS: NativeKit's sink recorded {waits} waits, {frames} frames, {moves} moves and {keys} keys with input ages, and "
-      f"{polled_moves} polled moves and {polled_keys} polled keys")
+      f"{polled_moves} polled moves, {polled_keys} polled keys and {len(resizes)} polled resizes")
 PY

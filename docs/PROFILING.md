@@ -73,7 +73,9 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   "Input age" counter: how long that input waited after the OS stamped it. Each
   has a later `input polled move`, `button` or `key` when the application takes
   the event from NativeKit's queue, with an "Input polled age" counter: the age
-  by then, of the oldest input when moves were merged.
+  by then, of the oldest input when moves were merged. A `resize polled window` or
+  `resize polled surface` instant (new width and height as arguments) marks each
+  resize the application took from the queue.
   The stamp has 1 ms resolution on GTK and the system tick's (about 16 ms) on
   Windows.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark

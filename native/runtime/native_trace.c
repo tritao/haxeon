@@ -31,6 +31,8 @@ static void NK_CALL native_trace_event( void *user_data, nk_trace_event_kind kin
 	case NK_TRACE_EVENT_POLLED_MOVE: input = PROFILE_INPUT_POLLED_MOVE; break;
 	case NK_TRACE_EVENT_POLLED_BUTTON: input = PROFILE_INPUT_POLLED_BUTTON; break;
 	case NK_TRACE_EVENT_POLLED_KEY: input = PROFILE_INPUT_POLLED_KEY; break;
+	case NK_TRACE_EVENT_POLLED_WINDOW_RESIZE: input = PROFILE_INPUT_POLLED_WINDOW_RESIZE; break;
+	case NK_TRACE_EVENT_POLLED_SURFACE_RESIZE: input = PROFILE_INPUT_POLLED_SURFACE_RESIZE; break;
 	default: return;
 	}
 	/* The OS stamp is on NativeKit's clock, which may not be the profiler's, so the age is taken on NativeKit's. */
