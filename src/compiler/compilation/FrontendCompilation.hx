@@ -525,9 +525,20 @@ class FrontendCompilation {
 				ir.positionalFingerprints.set(fn.name, IrFunctionStateCodec.codeFingerprint(fn));
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope))
-			if (regenerated.indexOf(name) < 0)
+		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
+		// Regenerating a function's IR does not change it when the typed function is the same: a semantic invalidation
+		// regenerates every function of a module whose declarations moved. Only functions whose final IR differs from the
+		// published one, or that were typed again, need lowering and patching; the rest keep their lowered form.
+		var changedIr:Map<String, Bool> = [for (name in inlinerChanged) name => true],
+			retypedNow:Map<String, Bool> = [for (name in retyped) name => true],
+			present:Map<String, Bool> = [for (fn in ir.functions) fn.name => true];
+		regenerated = [for (name in regenerated) if (!present.exists(name) || changedIr.exists(name) || retypedNow.exists(name)) name];
+		var listed:Map<String, Bool> = [for (name in regenerated) name => true];
+		for (name in inlinerChanged)
+			if (!listed.exists(name)) {
+				listed.set(name, true);
 				regenerated.push(name);
+			}
 		regenerated.sort(Reflect.compare);
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));

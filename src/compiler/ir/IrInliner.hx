@@ -294,10 +294,14 @@ class IrInliner {
 		return changed;
 	}
 
-	/** A function's encoding; null when it cannot be encoded, which makes it count as different from anything. */
+	/**
+	 * A function's encoding for comparison, which leaves out the whole-file content hash and byte offsets so an edit elsewhere
+	 * in the file does not make it look changed; its own lines and columns still count, so line information in stack traces
+	 * stays right. Null when it cannot be encoded, which makes it count as different from anything.
+	 */
 	static function encodeOrNull(fn:IrFunction):Null<Bytes> {
 		try {
-			return IrFunctionStateCodec.encode(fn);
+			return IrFunctionStateCodec.encodeForComparison(fn);
 		} catch (_:Dynamic) {
 			return null;
 		}

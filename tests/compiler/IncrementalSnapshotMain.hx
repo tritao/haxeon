@@ -24,7 +24,8 @@ class IncrementalSnapshotMain {
 			if (regenerated.indexOf(untouched) >= 0)
 				throw '$untouched is in a module whose source did not change and was regenerated: $regenerated';
 
-		// The same edit with an index to maintain refreshes the whole module snapshot, as before.
+		// The same edit with an index to maintain refreshes the whole module snapshot, which regenerates the IR of every function
+		// of the module. A function whose regenerated IR equals the published one is not reported, so it is not lowered or patched.
 		var indexed = new Compiler();
 		indexed.update("Util.hx", "function one():Int { return 1; } function two():Int { return one() + 1; } function unused():Int { return 9; }");
 		indexed.update("Main.hx",
@@ -33,8 +34,10 @@ class IncrementalSnapshotMain {
 		indexed.update("Util.hx",
 			"function one():Int { return 10; } function two(extra:Int = 0):Int { return one() + 1 + extra; } function unused():Int { return 9; }");
 		var indexedResult = indexed.compile("Main");
-		if (indexedResult.regenerated.indexOf("Main.helper") < 0)
-			throw 'An indexed compile should refresh the whole snapshot of a module with an invalid function: ${indexedResult.regenerated}';
+		if (indexedResult.regenerated.indexOf("main") < 0 || indexedResult.regenerated.indexOf("Util.two") < 0)
+			throw 'An indexed compile should still report the edited function and its caller: ${indexedResult.regenerated}';
+		if (indexedResult.regenerated.indexOf("Main.helper") >= 0)
+			throw 'A function whose regenerated IR is unchanged should not be reported: ${indexedResult.regenerated}';
 		Sys.println("PASS: unindexed incremental builds skip snapshot refreshes of unchanged modules");
 	}
 }
