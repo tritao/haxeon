@@ -32,9 +32,13 @@ class WatchRun {
 			throw "haxeon run --watch currently requires Linux, macOS or Windows";
 		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
 			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile), logOffset = 0, result = 0;
+		var watcher = openWatcher(project, baseline);
 		try {
 			while (true) {
-				Sys.sleep(0.35);
+				// A notification wakes the loop at once; the timeout is the poll that backs it up, covering anything not watched.
+				var notified = watcher != null && watcher.wait(POLL_SECONDS);
+				if (watcher == null)
+					Sys.sleep(POLL_SECONDS);
 				logOffset = printLog(logPath, logOffset);
 				var status = process.exitCode(false);
 				if (status != null) {
@@ -52,12 +56,20 @@ class WatchRun {
 					break;
 				}
 				var observed = snapshot(project);
-				if (same(baseline, observed))
+				if (same(baseline, observed)) {
+					// Writes that are not edits (the app's log, build output) also notify; do not scan again for them at once.
+					if (notified)
+						Sys.sleep(NOTIFIED_IDLE_SECONDS);
 					continue;
+				}
 				var previous = baseline;
 				baseline = observed;
 				while (true) {
-					Sys.sleep(0.5);
+					// With notifications a save is complete once none has arrived for a moment; otherwise wait out a polling interval.
+					if (watcher != null)
+						while (watcher.wait(COALESCE_SECONDS)) {}
+					else
+						Sys.sleep(0.5);
 					observed = snapshot(project);
 					if (same(baseline, observed))
 						break;
@@ -73,6 +85,7 @@ class WatchRun {
 					continue;
 				}
 				project = updated;
+				watcher = reopenWatcher(watcher, project);
 				if (liveHost != null && compilerOnly) {
 					if (profile != null)
 						profile.keepRevision(output);
@@ -95,16 +108,74 @@ class WatchRun {
 				baseline = snapshot(project);
 			}
 		} catch (error:Dynamic) {
+			if (watcher != null)
+				watcher.close();
 			stop(process);
 			finishProfile(profile);
 			printLog(logPath, logOffset);
 			throw error;
 		}
+		if (watcher != null)
+			watcher.close();
 		process.close();
 		finishProfile(profile);
 		printLog(logPath, logOffset);
 		return result;
 	}
+
+	/** Polling interval, which is also the longest an unwatched change waits to be noticed. */
+	static inline final POLL_SECONDS = 0.35;
+
+	/** A save counts as finished once no notification has arrived for this long. */
+	static inline final COALESCE_SECONDS = 0.03;
+
+	static inline final NOTIFIED_IDLE_SECONDS = 0.1;
+
+	static function reopenWatcher(old:Null<DirectoryWatcher>, project:ResolvedProject):Null<DirectoryWatcher> {
+		if (old != null)
+			old.close();
+		return openWatcher(project, snapshot(project));
+	}
+
+	/** Package roots are watched recursively; watched files outside every root (native sources elsewhere) by their directory. */
+	static function openWatcher(project:ResolvedProject, files:Map<String, String>):Null<DirectoryWatcher> {
+		var directories:Array<{path:String, recursive:Bool}> = [], roots:Array<String> = [];
+		for (item in project.packages.packages) {
+			var root = normalize(item.root), covered = false;
+			for (other in roots)
+				if (within(other, root))
+					covered = true;
+			if (covered)
+				continue;
+			roots = roots.filter(other -> !within(root, other));
+			directories = directories.filter(directory -> !within(root, normalize(directory.path)));
+			roots.push(root);
+			directories.push({path: item.root, recursive: true});
+		}
+		var loose:Map<String, Bool> = [];
+		for (path in files.keys()) {
+			var directory = Path.directory(path), key = normalize(directory);
+			var covered = false;
+			for (root in roots)
+				if (within(root, key))
+					covered = true;
+			if (!covered && !loose.exists(key)) {
+				loose.set(key, true);
+				directories.push({path: directory, recursive: false});
+			}
+		}
+		return DirectoryWatcher.create(directories);
+	}
+
+	static function normalize(path:String):String {
+		var result = path.split("\\").join("/");
+		while (result.length > 1 && StringTools.endsWith(result, "/"))
+			result = result.substr(0, result.length - 1);
+		return Sys.systemName() == "Windows" ? result.toLowerCase() : result;
+	}
+
+	static function within(parent:String, child:String):Bool
+		return child == parent || StringTools.startsWith(child, parent + "/");
 
 	static function startProfile(profiling:Null<WatchProfiling>):Null<ProfileCapture>
 		return profiling == null ? null : new ProfileCapture(profiling.profiler, ProfileCapture.nextCapture(profiling.root), profiling.processName,
