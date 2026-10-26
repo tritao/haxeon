@@ -34,6 +34,7 @@ import build.native.NativeToolchain;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
+import project.PackageManifest.InstrumentManifest;
 import project.FfiManifest.FfiImportManifest;
 import project.PackageSourceTools;
 import project.PackageResolver;
@@ -231,7 +232,43 @@ class BuildSystemMain {
 			"MSVC C++ toolchains should use cl standard, DLL, and import-library arguments");
 		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0 && gnuLink.indexOf("libfoo.dll.a") >= 0,
 			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
+		testLinuxNativeInstrumentation(root);
 		removeTree(root);
+	}
+
+	/** Linux instruments the sources in the native scope with the compiler's flags and links the hooks into each module. */
+	static function testLinuxNativeInstrumentation(root:String):Void {
+		var linux = Target.parse("linux-x86_64-gnu"),
+			scope = new InstrumentManifest(null, null, ["native/**"], ["native/vendor/skipped.c"]);
+		function toolchain(clang:Bool, ?instrument:InstrumentManifest, ?home:String):NativeToolchain {
+			var info = new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null, null, clang);
+			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug, linux, info, instrument), home);
+		}
+		var home = Path.join([root, "home"]),
+			clang = toolchain(true, scope, home),
+			gcc = toolchain(false, scope, home),
+			plain = toolchain(true, null, home),
+			noHome = toolchain(true, scope),
+			clangCompile = clang.compileArguments("native/a.c", "a.o", [], null, root),
+			gccCompile = gcc.compileArguments("native/a.c", "a.o", [], null, root);
+		expect(clang.instrumenting() && !plain.instrumenting() && !noHome.instrumenting(),
+			"Linux instruments only the instrumented flavor, and only when the hooks can be found");
+		expect(clangCompile.indexOf("-finstrument-functions-after-inlining") >= 0 && clangCompile.indexOf("-finstrument-functions") < 0,
+			"Clang should leave out functions it inlines");
+		expect(gccCompile.indexOf("-finstrument-functions") >= 0
+			&& gccCompile.indexOf("-finstrument-functions-exclude-file-list=/usr/include,/c++/") >= 0
+			&& gccCompile.indexOf("-finstrument-functions-after-inlining") < 0, "GCC should skip functions defined in system headers");
+		expect(clang.compileArguments("native/vendor/skipped.c", "s.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0
+			&& clang.compileArguments("other/b.c", "b.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0,
+			"sources outside the native scope, or excluded from it, are left alone");
+		expect(clang.compileArguments("native/a.c", "a.o", []).indexOf("-finstrument-functions-after-inlining") < 0,
+			"a source without an instrument root is left alone");
+		var hooks = Path.join([home, ".tools", "hashlink", "libhlprof_hooks.a"]),
+			link = clang.sharedArguments("a.so", ["a.o"], ["-lm"]);
+		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o") && link.indexOf(hooks) > link.indexOf("-lm"),
+			"an instrumented module links the hooks after its objects and libraries");
+		expect(!clang.writesDebugDatabase() && plain.sharedArguments("a.so", ["a.o"], ["-lm"]).indexOf(hooks) < 0,
+			"a module is linked without a PDB, and without the hooks outside the instrumented flavor");
 	}
 
 	static function testArtifactAndPlanDeterminism():Void {

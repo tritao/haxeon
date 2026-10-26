@@ -174,12 +174,17 @@ if(UNIX)
   )
 endif()
 
-# Instrumented native builds link the /Gh /GH hooks from the HashLink tools directory.
-if(TARGET hlprof_penter)
-  set_target_properties(hlprof_penter PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
-endif()
+# Instrumented native builds link the function hooks from the HashLink tools directory: hlprof_penter.lib for /Gh /GH
+# on Windows, libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
+foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
+  if(TARGET ${_hooks})
+    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+  endif()
+endforeach()
 
 add_custom_target(haxeon-native DEPENDS hl hldump hlprof-live haxeon_runtime jit_native_properties)
-if(TARGET hlprof_penter)
-  add_dependencies(haxeon-native hlprof_penter)
-endif()
+foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
+  if(TARGET ${_hooks})
+    add_dependencies(haxeon-native ${_hooks})
+  endif()
+endforeach()

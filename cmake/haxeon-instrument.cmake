@@ -1,22 +1,40 @@
-# Natively instrumented builds (MSVC x64). haxeon-native.cmake includes this file when Haxeon configures a package's
-# CMake project for the instrumented build flavor, with:
+# Natively instrumented builds (MSVC x64, Linux). haxeon-native.cmake includes this file when Haxeon configures a
+# package's CMake project for the instrumented build flavor, with:
 #
-#   HAXEON_INSTRUMENT_HOOKS    the hook library (hlprof_penter.lib) that defines _penter and _pexit
+#   HAXEON_INSTRUMENT_HOOKS    the hook library that defines the function hooks: hlprof_penter.lib (_penter and _pexit)
+#                              on MSVC, libhlprof_hooks.a (__cyg_profile_func_enter and _exit) on Linux
 #   HAXEON_INSTRUMENT_INCLUDE  glob patterns of the sources to instrument
 #   HAXEON_INSTRUMENT_EXCLUDE  glob patterns of the sources to leave alone
 #
 # A pattern matches a source's path relative to the top CMake source directory, or its absolute path, with forward
 # slashes: `*` matches within one path component, `**` across components and `?` one character. Matching sources are
-# compiled with /Gh /GH. Every module gets a PDB, so the profiler can name its functions, and links the hooks.
+# compiled with /Gh /GH (MSVC), -finstrument-functions-after-inlining (Clang) or -finstrument-functions (GCC, leaving out
+# functions defined in system and libstdc++ headers). On MSVC every module gets a PDB, so the profiler can name its
+# functions; on Linux it names them from the module's symbol table. Every module links the hooks.
 
 include_guard(GLOBAL)
 
-if(NOT MSVC OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-  return()
+# A project may use only one of the two languages.
+set(_haxeon_compiler_id "${CMAKE_C_COMPILER_ID}")
+if(NOT _haxeon_compiler_id)
+  set(_haxeon_compiler_id "${CMAKE_CXX_COMPILER_ID}")
 endif()
 
-add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/Z7>)
-add_link_options(/DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO "${HAXEON_INSTRUMENT_HOOKS}")
+if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(_haxeon_instrument_flags /Gh /GH)
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/Z7>)
+  add_link_options(/DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO "${HAXEON_INSTRUMENT_HOOKS}")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND _haxeon_compiler_id MATCHES "^(GNU|Clang)$")
+  if(_haxeon_compiler_id STREQUAL "Clang")
+    set(_haxeon_instrument_flags -finstrument-functions-after-inlining)
+  else()
+    set(_haxeon_instrument_flags -finstrument-functions -finstrument-functions-exclude-file-list=/usr/include,/c++/)
+  endif()
+  # Whole, so the hooks are linked even by a module whose objects are listed after the option.
+  add_link_options("LINKER:--whole-archive,${HAXEON_INSTRUMENT_HOOKS},--no-whole-archive")
+else()
+  return()
+endif()
 
 function(_haxeon_instrument_regex pattern out)
   string(REGEX REPLACE [=[([][.+^$(){}|\\])]=] [[\\\1]] regex "${pattern}")
@@ -65,7 +83,7 @@ function(_haxeon_instrument_directory directory)
       endif()
       _haxeon_instrument_matches("${path}" "${HAXEON_INSTRUMENT_EXCLUDE}" excluded)
       if(NOT excluded)
-        set_property(SOURCE "${path}" TARGET_DIRECTORY ${target} APPEND PROPERTY COMPILE_OPTIONS /Gh /GH)
+        set_property(SOURCE "${path}" TARGET_DIRECTORY ${target} APPEND PROPERTY COMPILE_OPTIONS ${_haxeon_instrument_flags})
       endif()
     endforeach()
   endforeach()

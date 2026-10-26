@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# Native instrumentation (Windows x64, MSVC): the instrumented flavor compiles native.sources and native.cmake packages
-# with /Gh /GH, their calls nest under the Haxe calls into them, the runtime names them from each module's PDB, and
-# the native scope's exclude leaves a source alone. Run from a Visual Studio x64 developer prompt.
+# Native instrumentation (Windows x64 with MSVC, Linux with GCC or Clang): the instrumented flavor compiles native.sources
+# and native.cmake packages with /Gh /GH (compiler instrument flags on Linux), their calls nest under the Haxe calls into
+# them, the runtime names them (from each module's PDB on Windows, its symbol table on Linux), and the native scope's
+# exclude leaves a source alone. On Windows run it from a Visual Studio x64 developer prompt.
 set -euo pipefail
 
+windows=0
 case "$(uname -s)" in
-	MINGW* | MSYS* | CYGWIN*) ;;
+	MINGW* | MSYS* | CYGWIN*) windows=1 ;;
+	Linux) ;;
 	*)
-		echo "SKIP: native instrumentation is Windows x64 only"
+		echo "SKIP: native instrumentation is Windows x64 and Linux only"
 		exit 0
 		;;
 esac
@@ -16,7 +19,11 @@ repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
 # MSBuild's file tracker fails on long paths, so the projects live directly under the temporary directory.
 scratch=$(mktemp -d /tmp/hpni-XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
-hashlink_include=$(cygpath -m "$repo_dir/vendor/hashlink/src")
+if [[ $windows == 1 ]]; then
+	hashlink_include=$(cygpath -m "$repo_dir/vendor/hashlink/src")
+else
+	hashlink_include="$repo_dir/vendor/hashlink/src"
+fi
 mkdir -p "$scratch/app/src/app" "$scratch/plain/src/plain" "$scratch/plain/native" "$scratch/cm/src/cm" "$scratch/cm/native/vendor"
 
 cat > "$scratch/plain/haxeon.json" <<'JSON'
@@ -26,7 +33,13 @@ cat > "$scratch/plain/native/plain.c" <<'C'
 #define HL_NAME(n) plain_##n
 #include <hl.h>
 
-static __declspec(noinline) int plain_leaf(int n) {
+#ifdef _MSC_VER
+#	define NOINLINE __declspec(noinline)
+#else
+#	define NOINLINE __attribute__((noinline))
+#endif
+
+static NOINLINE int plain_leaf(int n) {
 	int x = 0;
 	for( int i = 0; i < n; i++ ) x += i % 3;
 	return x;
@@ -55,10 +68,13 @@ target_include_directories(cm PRIVATE "$hashlink_include")
 target_link_libraries(cm PRIVATE cmvendor)
 set_target_properties(cm PROPERTIES PREFIX "" SUFFIX ".hdll" LIBRARY_OUTPUT_DIRECTORY "\${HAXEON_NATIVE_OUTPUT_DIR}" RUNTIME_OUTPUT_DIRECTORY "\${HAXEON_NATIVE_OUTPUT_DIR}")
 CMAKE
-printf '%s\n' 'add_library(cmvendor STATIC kept.c skipped.c)' > "$scratch/cm/native/vendor/CMakeLists.txt"
-printf '%s\n' '__declspec(noinline) int cm_skipped(int n) { int x = 0; for (int i = 0; i < n; i++) x ^= i; return x; }' \
+printf '%s\n' 'add_library(cmvendor STATIC kept.c skipped.c)' 'set_target_properties(cmvendor PROPERTIES POSITION_INDEPENDENT_CODE ON)' \
+	> "$scratch/cm/native/vendor/CMakeLists.txt"
+printf '%s\n' '#ifdef _MSC_VER' '#define NOINLINE __declspec(noinline)' '#else' '#define NOINLINE __attribute__((noinline))' '#endif' \
+	'NOINLINE int cm_skipped(int n) { int x = 0; for (int i = 0; i < n; i++) x ^= i; return x; }' \
 	> "$scratch/cm/native/vendor/skipped.c"
-printf '%s\n' 'int cm_skipped(int n);' '__declspec(noinline) int cm_kept(int n) { return cm_skipped(n) + 1; }' \
+printf '%s\n' '#ifdef _MSC_VER' '#define NOINLINE __declspec(noinline)' '#else' '#define NOINLINE __attribute__((noinline))' '#endif' \
+	'int cm_skipped(int n);' 'NOINLINE int cm_kept(int n) { return cm_skipped(n) + 1; }' \
 	> "$scratch/cm/native/vendor/kept.c"
 cat > "$scratch/cm/native/cm.c" <<'C'
 #define HL_NAME(n) cm_##n
@@ -104,7 +120,9 @@ timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json"
 	cat "$scratch/run.log" >&2
 	exit 1
 }
-test -s "$scratch/app/build-instrument/host/native/plain/plain.pdb"
+if [[ $windows == 1 ]]; then
+	test -s "$scratch/app/build-instrument/host/native/plain/plain.pdb"
+fi
 "$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
 python3 - "$scratch/trace.json" <<'PY'
 import collections

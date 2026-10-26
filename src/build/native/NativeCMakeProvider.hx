@@ -154,20 +154,19 @@ class NativeCMakeProvider {
 
 	/**
 	 * Configure arguments for the instrumented build flavor: `cmake/haxeon-instrument.cmake` compiles the sources in the
-	 * manifest's native scope with `/Gh /GH`, gives every module a PDB and links the hooks HashLink builds. Only MSVC x64
-	 * has native instrumentation; elsewhere the flavor builds native code as usual.
+	 * manifest's native scope with the compiler's function instrumentation (`/Gh /GH` on MSVC) and links the hooks
+	 * HashLink builds; on MSVC it also gives every module a PDB. Only MSVC x64 and Linux have native instrumentation;
+	 * elsewhere the flavor builds native code as usual.
 	 */
 	static function instrumentArguments(context:LoweringContext):Array<String> {
 		var instrument = context.environment.instrument,
 			target = context.environment.target;
-		if (instrument == null
-			|| target.os != TargetOs.Windows
-			|| target.abi != TargetAbi.Msvc
-			|| target.arch != build.Target.TargetArch.X64)
+		var msvcX64 = target.os == TargetOs.Windows && target.abi == TargetAbi.Msvc && target.arch == build.Target.TargetArch.X64;
+		if (instrument == null || !(msvcX64 || target.os == TargetOs.Linux))
 			return [];
 		var home = context.compilerHome;
 		return [
-			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", "hlprof_penter.lib"]),
+			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", msvcX64 ? "hlprof_penter.lib" : "libhlprof_hooks.a"]),
 			"-DHAXEON_INSTRUMENT_INCLUDE=" + instrument.nativeInclude.join(";"),
 			"-DHAXEON_INSTRUMENT_EXCLUDE=" + instrument.nativeExclude.join(";")
 		];

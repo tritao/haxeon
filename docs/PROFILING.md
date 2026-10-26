@@ -197,11 +197,18 @@ so ordinary builds and their compiler worker are untouched. It probes:
   skips when a catch takes it, also when the function that catches is left
   out of the scope. While nothing records, a probe costs about
   0.5 ns on HashLink x64.
-- **Native code we compile** (Windows x64, MSVC). Every source of a package's
-  `native.sources` or `native.cmake` project is compiled with `/Gh /GH` and
-  every module gets a PDB, which names its functions. Code we do not compile,
-  such as system libraries, appears only through the calls into it. Linux
-  and macOS do not instrument native code yet; `PROFILER-POSIX.md` is the
+- **Native code we compile** (Windows x64 with MSVC, and Linux). Every source
+  of a package's `native.sources` or `native.cmake` project in the scope is
+  compiled with `/Gh /GH` on Windows, where every module gets a PDB that
+  names its functions. On Linux, Clang gets
+  `-finstrument-functions-after-inlining`, so only calls that remain calls are
+  probed, and GCC gets `-finstrument-functions` without the functions defined
+  in system and libstdc++ headers, so it probes inlined calls too. Each
+  module links `libhlprof_hooks.a`, and the profiler names its functions from
+  the module's symbol table, so a stripped module shows offsets. A CMake
+  project's static libraries must be position independent. Code we do not
+  compile, such as system libraries, appears only through the calls into it.
+  macOS does not instrument native code yet; `PROFILER-POSIX.md` is the
   design.
 
 `haxeon.json` narrows what is probed:
@@ -452,9 +459,12 @@ last line reports the consumer's drain rate and any stalls.
 - **A forked child does not record.** The consumer does not exist in the child,
   so a `fork` handler stops recording there and forgets the session; the
   parent's capture is unaffected. A child can start a session of its own.
-- **Native instrumentation and boundary calls are Windows x64 only.** Mixed-mode
-  samples also work on Linux x86-64 (see "What a trace contains"). See
-  `PROFILER-POSIX.md` for the Linux and macOS instrumentation design.
+- **Boundary calls are Windows x64 only, and native instrumentation is Windows
+  x64 and Linux.** On Linux, calls into code we do not compile are not
+  recorded at the boundary yet, and a GCC build probes inlined functions
+  (see Instrumentation). Mixed-mode samples also work on Linux x86-64 (see
+  "What a trace contains"). See `PROFILER-POSIX.md` for the macOS design and
+  the rest of the Linux plan.
 - **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
   (see [Spans and counters](#spans-and-counters)).
 

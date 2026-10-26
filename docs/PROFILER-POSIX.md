@@ -40,11 +40,16 @@ Read from the worktree.
 - **Function hooks.** `prof_penter.c` and `prof_penter_x64.asm` are MSVC x64
   only. `hlprof_penter_on` points at a nonzero dummy until `resolve()` finds
   `libhl.dll`. It retries at most once a millisecond. After that it points at
-  `hl_prof_on`. The key is the hook's return address.
+  `hl_prof_on`. The key is the hook's return address. **Linux now has
+  `prof_hooks.c`** (built as `libhlprof_hooks.a`): the same scheme with
+  `__cyg_profile_func_enter` and `_exit`, keyed by the function's start, that
+  finds libhl through `dlsym(RTLD_DEFAULT)` or the loaded object's path.
 - **Gating.** `NativeToolchain.instrumenting()` and
-  `NativeCMakeProvider.instrumentArguments()` gate on Windows + MSVC (+ x64).
-  `cmake/haxeon-instrument.cmake` returns early unless `MSVC` and 64-bit. Its
-  source regex covers `c|cc|cpp|cxx|c++`, not `m`/`mm`.
+  `NativeCMakeProvider.instrumentArguments()` gate on Windows + MSVC (+ x64)
+  and on Linux. `cmake/haxeon-instrument.cmake` returns early unless MSVC with
+  64-bit, or Linux with GCC or Clang. Its source regex covers
+  `c|cc|cpp|cxx|c++`, not `m`/`mm`. macOS and Linux arm64 are not enabled:
+  macOS needs its own hooks and linking, and arm64 is untested.
 - **Boundary hooks.** `prof_boundary.c` compiles to stubs (`hl_prof_boundary_install`
   and friends) everywhere except `HL_WIN && HL_64 && _MSC_VER`.
 - **Recorder.** `hl_prof_enter_native(key)` puts the key in the lock-free
@@ -544,20 +549,28 @@ following, which Linux and macOS lack today (read from the runtime, October
 
 ## Prototype plan
 
-Each step is small, and each has its own test.
+Each step is small, and each has its own test. Steps 1 to 3 are done on Linux
+x86-64 with GCC 13 and Clang 18 (`tests/integration/test-profiler-native-instrument.sh`,
+`tests/tooling/BuildSystemMain.hx`); the other steps and platforms are open.
 
-1. **Flag probe.** Compile a 3-function C++ file with each compiler and
+1. **Flag probe. Done on Linux (Clang 18 probes only the functions that stay
+   calls; Apple clang is unchecked).** Compile a 3-function C++ file with each compiler and
    flag, using `-S`. **Test:** `__cyg_profile_func_enter` appears only in
    non-inlined functions with `-after-inlining`, and the flag works on Apple
    clang.
-2. **Hooks object.** Build `prof_hooks.c` and a fake `libhl` exporting
+2. **Hooks object. Done on Linux: counts match (GCC sees all 7,049,155 calls
+   of `fib(32)`; Clang sees half, as it inlines one recursion level), a
+   binary with no libhl runs, and a pair costs about 2 ns with libhl loaded and
+   not recording, 10 ns without libhl.** Build `prof_hooks.c` and a fake `libhl` exporting
    `hl_prof_on`, `hl_prof_enter_native` and `hl_prof_exit`, then run an
    instrumented `fib(32)`.
    **Tests:**
    - The counts match.
    - The binary runs without libhl, staying on the throttled path.
    - The per-pair off cost is measured against an uninstrumented build.
-3. **Recorder integration.** Run a `native.sources` package under `haxeon run
+3. **Recorder integration. Done on Linux, for `native.sources` and
+   `native.cmake`; static functions are named from the module's symbol table
+   at export.** Run a `native.sources` package under `haxeon run
    --profile instrument`. **Test:** `hlprof-live export` shows nested native
    slices with `dladdr` names for exported functions.
 4. **Module records and offline naming.** **Test:** a `static` function and an

@@ -23,8 +23,12 @@ class ToolchainInfo {
 	public final staticLibrarySuffix:String;
 	public final sharedLibrarySuffix:String;
 
+	/** Whether the C compiler is Clang rather than GCC; they take different flags to instrument functions. */
+	public final clang:Bool;
+
 	public function new(cCompiler:String, cxxCompiler:String, archiver:String, objectSuffix:String, staticLibrarySuffix:String, sharedLibrarySuffix:String,
-			?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>, ?linkFlags:Array<String>) {
+			?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>, ?linkFlags:Array<String>, clang:Bool = false) {
+		this.clang = clang;
 		this.cCompiler = cCompiler;
 		this.cxxCompiler = cxxCompiler;
 		this.linker = linker == null ? cxxCompiler : linker;
@@ -45,10 +49,11 @@ class ToolchainInfo {
 					".dll", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32"); else new ToolchainInfo("cl", "cl", "lib", ".obj", ".lib", ".dll", "cl");
 			case MacOS:
 				var flags = target.arch == TargetArch.Arm64 ? ["-arch", "arm64"] : target.arch == TargetArch.X86 ? ["-arch", "i386"] : [];
-				new ToolchainInfo("clang", "clang++", "ar", ".o", ".a", ".dylib", "clang++", null, null, flags, flags);
+				new ToolchainInfo("clang", "clang++", "ar", ".o", ".a", ".dylib", "clang++", null, null, flags, flags, true);
 			case Linux:
 				if (target.arch == TargetArch.Arm64) new ToolchainInfo("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-g++", "aarch64-linux-gnu-ar", ".o", ".a",
-					".so", "aarch64-linux-gnu-g++", "aarch64-linux-gnu"); else new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so");
+					".so", "aarch64-linux-gnu-g++", "aarch64-linux-gnu"); else new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null,
+					null, isClang("cc"));
 			case Android:
 				androidToolchain(target);
 			case Wasm:
@@ -79,7 +84,21 @@ class ToolchainInfo {
 			cxx = bin == "" ? "clang++" : Path.join([bin, "clang++"]),
 			archiver = bin == "" ? "llvm-ar" : Path.join([bin, "llvm-ar"]),
 			flags = ["--target=" + triple];
-		return new ToolchainInfo(compiler, cxx, archiver, ".o", ".a", ".so", cxx, triple, ndk, flags, flags);
+		return new ToolchainInfo(compiler, cxx, archiver, ".o", ".a", ".so", cxx, triple, ndk, flags, flags, true);
+	}
+
+	/** Whether `command --version` names Clang; false when the command does not run, as for a missing cross compiler. */
+	static function isClang(command:String):Bool {
+		try {
+			var process = new sys.io.Process(command, ["--version"]);
+			var output = process.stdout.readAll().toString();
+			process.stderr.readAll();
+			process.exitCode();
+			process.close();
+			return output.indexOf("clang") >= 0;
+		} catch (_) {
+			return false;
+		}
 	}
 }
 

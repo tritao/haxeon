@@ -79,10 +79,10 @@ class NativeSourcesProvider {
 					id = new ActionId('${isStatic ? "native-archive" : "native-link"}:${artifact.id.key()}'),
 					command = isStatic ? toolchain.archiveCommand() : toolchain.sharedCommand(),
 					arguments = isStatic ? toolchain.archiveArguments(output, objects) : toolchain.sharedArguments(output, objects);
-				// An instrumented module links the hooks and writes a PDB, which the profiler names its functions from.
+				// An instrumented module links the hooks, and on MSVC writes a PDB, which the profiler names its functions from.
 				var instrumentedLink = !isStatic && toolchain.instrumenting(),
 					linkInputs = instrumentedLink ? objects.concat([toolchain.instrumentHooks()]) : objects,
-					linkOutputs = instrumentedLink ? [output, Path.withoutExtension(output) + ".pdb"] : [output];
+					linkOutputs = instrumentedLink && toolchain.writesDebugDatabase() ? [output, Path.withoutExtension(output) + ".pdb"] : [output];
 				actions.push(new ExecutionAction(id, dependencies, linkInputs, linkOutputs,
 					'${isStatic ? "Archive" : "Link shared library"} ${ffiName == null ? library.packageName : library.packageName + " FFI " + ffiName} -> $output',
 					Process(command, arguments, resolvedPackage.root, new Map())));
