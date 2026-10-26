@@ -46,6 +46,15 @@ class BuildContext {
 	final claimed:IdSet;
 	final idsByPath:Map<String, WidgetId>;
 	var cachedIdCount:Int;
+	static inline var SCOPE_GROWTH_PRUNE = 256;
+
+	// What pruneKeyCaches last saw, so it can tell when nothing could have gone stale.
+	var prunedMountedHash:Int;
+	var prunedIdCount:Int;
+	var prunedScopeEntries:Int;
+
+	/** How many times pruneKeyCaches walked the caches, rather than finding nothing changed. */
+	public var keyCachePrunes(default, null):Int;
 	var rootScope:KeyScope;
 	var scope:KeyScope;
 	var textStyleStack:Array<ResolvedTextStyle>;
@@ -85,6 +94,10 @@ class BuildContext {
 		claimed = new IdSet();
 		idsByPath = new Map();
 		cachedIdCount = 0;
+		prunedMountedHash = 0;
+		prunedIdCount = -1;
+		prunedScopeEntries = -1;
+		keyCachePrunes = 0;
 		rootScope = new KeyScope();
 		scope = rootScope;
 		textStyleStack = [ResolvedTextStyle.fromTheme(this.theme)];
@@ -371,7 +384,21 @@ class BuildContext {
 	}
 
 	/** Cache identities only for the committed tree and retained application state. */
-	public function pruneKeyCaches(mounted:Map<Int, RenderNode>):Void {
+	/**
+	 * Drops the cached IDs and key paths of widgets that are no longer mounted. `mountedHash` summarizes which nodes are
+	 * mounted (any hash of their IDs in tree order will do). A cache entry only becomes stale when the mounted nodes change,
+	 * so with the same hash and the same cached IDs since the last walk there is nothing to find, and the walk, which hashes
+	 * the path of every cached key, is skipped. Scopes that hold no widget are created and dropped again by a build, a few
+	 * every frame, and are left until `SCOPE_GROWTH_PRUNE` of them have collected: they only cache path strings. A change that
+	 * goes unnoticed (a hash collision, or state released for a widget that stays unmounted) only leaves an entry cached until
+	 * the next change.
+	 */
+	public function pruneKeyCaches(mounted:Map<Int, RenderNode>, mountedHash:Int):Void {
+		var scopeEntries = rootScope.cachedEntries();
+		if (mountedHash == prunedMountedHash && cachedIdCount == prunedIdCount && scopeEntries >= prunedScopeEntries
+			&& scopeEntries - prunedScopeEntries < SCOPE_GROWTH_PRUNE)
+			return;
+		keyCachePrunes++;
 		var stale:Array<String> = null;
 		for (path => id in idsByPath)
 			if (!mounted.exists(id.value) && !stateStore.contains(id)) {
@@ -383,6 +410,9 @@ class BuildContext {
 			cachedIdCount--;
 		}
 		rootScope.prune(function(path) return idsByPath.exists(path));
+		prunedMountedHash = mountedHash;
+		prunedIdCount = cachedIdCount;
+		prunedScopeEntries = rootScope.cachedEntries();
 	}
 
 	/** Releases builders and pending patches when the owning UI context is disposed. */

@@ -330,6 +330,8 @@ class UiContext {
 		var missing = false;
 		var missingNode:Null<RenderNode> = null;
 		var nodeCount = 0;
+		// Which nodes are mounted, in tree order, for the key caches' pruning.
+		var mountedHash = 0;
 		var resolvedGeometryChangedNodes = 0;
 		var resolvedGeometryReusedNodes = 0;
 		var layoutPass = 0;
@@ -340,11 +342,13 @@ class UiContext {
 			missing = false;
 			missingNode = null;
 			nodeCount = 0;
+			mountedHash = 0;
 			resolvedGeometryChangedNodes = 0;
 			resolvedGeometryReusedNodes = 0;
 			diagnosticStage = 7;
 			next.walk(function(node) {
 				nodeCount++;
+				mountedHash = mountedHash * 31 + node.id.value;
 				// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
 				var item = resolvedById.get(node.layout.id);
 				if (item == null) {
@@ -424,7 +428,7 @@ class UiContext {
 		// be able to access widget state while that event is being dispatched.
 		stateStore.endFrame();
 		buildContext.pruneSelfUpdatingBuilds(nodesById);
-		buildContext.pruneKeyCaches(nodesById);
+		buildContext.pruneKeyCaches(nodesById, mountedHash);
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedStateRevision = resolvedStateRevision;
 		submittedInteractionRevision = interactionStates.revision;
