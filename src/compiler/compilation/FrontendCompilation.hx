@@ -519,7 +519,7 @@ class FrontendCompilation {
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
-			IrProgramAssembler.reflectableObjectsFrom(typedNew));
+			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
 		for (fn in cached)
 			if (PositionalName.is(fn.name))
 				ir.positionalFingerprints.set(fn.name, IrFunctionStateCodec.codeFingerprint(fn));

@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import haxe.io.Bytes;
+import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance;
@@ -48,6 +49,8 @@ class IrInlineCache {
 	 * re-inlined function with the published one then encodes only the new one, and a published function is encoded once.
 	 */
 	public var publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [];
+	/** The static-null-check copies of the program's functions, so they keep their identity between compiles. */
+	public final staticChecks:IrStaticCheckCache = new IrStaticCheckCache();
 
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
@@ -98,6 +101,8 @@ class IrInlineCache {
 			result.publishedBytes.set(name, entry);
 		for (name => entry in instrumented)
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
+		result.staticChecks.copies = staticChecks.copies;
+		result.staticChecks.helpers = staticChecks.helpers;
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
 		for (name => text in objectTexts)
