@@ -42,7 +42,9 @@ class LiveHost {
 			while (running) {
 				running = Runtime.callInt(module, functionId(description, entry + ".tick")) != 0;
 				var published = readStamp(path);
+				var seenAt = Sys.time();
 				var candidate = published == null || published != stamp ? tryDescription(path) : null;
+				var describedAt = Sys.time();
 				if (candidate != null)
 					stamp = published;
 				if (candidate != null
@@ -52,8 +54,10 @@ class LiveHost {
 						var patching = true;
 						ProfileSpan.begin("live.patch");
 						try {
-							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, File.getBytes(path + ".hlp"), candidate.changedFunctions));
+							var patchBytes = File.getBytes(path + ".hlp"), readAt = Sys.time();
+							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions));
 							patching = false;
+							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');
 							ProfileSpan.end("live.patch");
 							description = candidate;
 							revision = candidate.revision;
