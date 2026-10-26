@@ -54,12 +54,17 @@ class CompilerServer {
 			var idleSeconds = idleTimeout();
 			var idleDeadline = Sys.time() + idleSeconds;
 			while (running) {
-				if (Socket.select([listener], [], [], Math.max(0, idleDeadline - Sys.time())).read.length == 0) {
+				// A live publication's history is recorded once no request has followed it for a moment, off the edit's path.
+				var wait = Math.max(0, idleDeadline - Sys.time());
+				if (session.hasUnrecordedLiveState())
+					wait = Math.min(wait, LIVE_STATE_DELAY_SECONDS);
+				if (Socket.select([listener], [], [], wait).read.length == 0) {
+					recordLiveState(session);
 					if (Sys.time() >= idleDeadline)
 						break;
 					continue;
 				}
-				var client = listener.accept();
+				var client = listener.accept(), answered = false;
 				client.setTimeout(600);
 				try {
 					var length = client.input.readInt32();
@@ -70,6 +75,16 @@ class CompilerServer {
 						throw "Invalid compiler session token";
 					if (request.shutdown == true) {
 						running = false;
+					} else if (request.background == true) {
+						// The requester only warms the session (a live run that starts from a module it built before), so it is
+						// answered at once and the compile runs to completion with nobody waiting; later requests queue behind it.
+						send(client, {status: 0});
+						client.close();
+						answered = true;
+						var started = Sys.time();
+						var result = compileConnected(null, cast request.arguments, session);
+						recordLiveState(session);
+						Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
 					} else {
 						var started = Sys.time();
 						#if (hl && !haxeon)
@@ -84,10 +99,14 @@ class CompilerServer {
 						send(client,
 							{message: 'compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'});
 					}
-					send(client, {status: 0});
+					if (!answered)
+						send(client, {status: 0});
 				} catch (error:Dynamic) {
 					session.reset();
-					try {
+					if (answered)
+						Sys.println("background compile failed: " + Std.string(error));
+					else
+						try {
 						var message = Std.string(error);
 						if (Std.isOfType(error, CompileError)) {
 							var failure:CompileError = cast error,
@@ -98,12 +117,14 @@ class CompilerServer {
 						send(client, {status: 1});
 					} catch (_:Dynamic) {}
 				}
-				client.close();
+				if (!answered)
+					client.close();
 				idleDeadline = Sys.time() + idleSeconds;
 			}
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("Compiler server stopped: " + Std.string(error) + "\n");
 		}
+		recordLiveState(session);
 		listener.close();
 		// A concurrent startup may have published a replacement worker.
 		try {
@@ -113,7 +134,7 @@ class CompilerServer {
 	}
 
 	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
-	static function compileConnected(client:Socket, arguments:Array<String>, session:CompilerSession):compiler.Compiler.CompileResult {
+	static function compileConnected(client:Null<Socket>, arguments:Array<String>, session:CompilerSession):compiler.Compiler.CompileResult {
 		var cancellation = new CancellationToken(), done = new Lock();
 		var result:compiler.Compiler.CompileResult = null;
 		var failure:Dynamic = null;
@@ -146,6 +167,8 @@ class CompilerServer {
 			] : [""]))
 				outputs.push({temporary: temporary + suffix, destination: destination + suffix});
 		}
+		if (request.output != null)
+			Reflect.setField(staged, "publishedOutput", request.output);
 		var promoted:Map<String, Bool> = [];
 		var output = request.output;
 		// A live patch is published mid-request, ahead of the module: the destination marker goes first so no host reloads
@@ -168,20 +191,23 @@ class CompilerServer {
 			try
 				result = CompilerDriver.compile(cast staged, message -> {
 					cancellation.check();
-					send(client, {message: message});
+					var requester = client;
+					if (requester != null)
+						send(requester, {message: message});
 				}, session, cancellation, publishEarly)
 			catch (error:Dynamic)
 				failure = error;
 			done.release();
 		});
-		var disconnected = false;
+		// A background compile has no requester to disconnect.
+		var disconnected = false, watched = client;
 		while (!done.wait(0.05)) {
-			if (!disconnected)
+			if (!disconnected && watched != null)
 				try {
-					if (Socket.select([client], [], [], 0).read.length > 0) {
+					if (Socket.select([watched], [], [], 0).read.length > 0) {
 						// No further bytes are part of this protocol; readability means disconnect or invalid input.
 						try
-							client.input.readByte()
+							watched.input.readByte()
 						catch (_:Dynamic) {}
 						disconnected = true;
 						cancellation.cancel();
@@ -191,9 +217,9 @@ class CompilerServer {
 					cancellation.cancel();
 				}
 		}
-		if (!disconnected)
+		if (!disconnected && watched != null)
 			try {
-				if (Socket.select([client], [], [], 0).read.length > 0) {
+				if (Socket.select([watched], [], [], 0).read.length > 0) {
 					disconnected = true;
 					cancellation.cancel();
 				}
@@ -226,6 +252,21 @@ class CompilerServer {
 				FileSystem.deleteFile(output.destination);
 		}
 		return result;
+	}
+
+	/** How long a live publication waits for a following request before its history is recorded. */
+	static inline final LIVE_STATE_DELAY_SECONDS = 1.0;
+
+	static function recordLiveState(session:CompilerSession):Void {
+		if (!session.hasUnrecordedLiveState())
+			return;
+		var started = Sys.time();
+		try {
+			if (session.recordLiveState())
+				Sys.println('recorded live history: ${Math.round((Sys.time() - started) * 1000)} ms');
+		} catch (error:Dynamic) {
+			Sys.println("could not record live history: " + Std.string(error));
+		}
 	}
 
 	static function idleTimeout():Float {

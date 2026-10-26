@@ -160,7 +160,8 @@ class HlSymbolTable {
 		for (value in state.floats)
 			result.floats.push(value);
 		for (index in 0...state.floats.length) {
-			var key = Std.string(state.floats[index]);
+			// The key `internFloat` looks constants up by: a decoded table must find the floats it already holds.
+			var key = floatKey(state.floats[index]);
 			if (result.floatIndices.exists(key))
 				throw "Duplicate persisted float symbol";
 			else
@@ -244,9 +245,7 @@ class HlSymbolTable {
 	 * string key merged distinct constants when the compiler itself ran on HashLink.
 	 */
 	public function internFloat(value:Float):Int {
-		var bits = haxe.io.Bytes.alloc(8);
-		bits.setDouble(0, value);
-		var key = bits.getInt32(0) + ":" + bits.getInt32(4);
+		var key = floatKey(value);
 		if (floatIndices.exists(key))
 			return floatIndices.get(key);
 		ensureWritable();
@@ -254,6 +253,12 @@ class HlSymbolTable {
 		floats.push(value);
 		floatIndices.set(key, index);
 		return index;
+	}
+
+	static function floatKey(value:Float):String {
+		var bits = haxe.io.Bytes.alloc(8);
+		bits.setDouble(0, value);
+		return bits.getInt32(0) + ":" + bits.getInt32(4);
 	}
 
 	public static inline final STRING_BYTES_FIELD = 0;

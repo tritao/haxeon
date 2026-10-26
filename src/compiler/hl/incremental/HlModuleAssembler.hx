@@ -295,7 +295,13 @@ class HlModuleAssembler {
 		publishedStrings = module.strings.length;
 		publishedTypes = module.types.length;
 		publishedGlobals = module.globals.length;
-		revision++;
+		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
+		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
+		// can only reach a revision without a patch by reloading.
+		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && baseInts == publishedInts
+			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
+		if (!unchanged)
+			revision++;
 		initialized = true;
 		return {
 			module: module,

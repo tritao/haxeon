@@ -95,7 +95,19 @@ class CompilerProvider {
 			for (interfacePath in resolvedPackage.ffiInterfaces)
 				inputs.push(interfacePath);
 		}
+		var session = context.session;
+		if (context.live && !context.selfHosted && session != null)
+			session.liveWarmup = function():Int {
+				Directories.ensure(haxe.io.Path.directory(sourceManifest));
+				File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
+				// Only a resident worker can keep what it compiles; with none there is nothing to warm.
+				return CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root, () -> 0,
+					session, true);
+			};
 		var invoke = function():Int {
+			var running = context.session;
+			if (context.live && running != null)
+				running.liveCompiled = true;
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,

@@ -41,7 +41,7 @@ class CompilerClient {
 	}
 
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
-			fallback:Void->Int, ?session:build.BuildSession):Int {
+			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
 		// compiled CLI uses one there.
 		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0"
@@ -119,7 +119,10 @@ class CompilerClient {
 			markUsed(statePath);
 			var socket = connection.socket;
 			socket.setTimeout(600);
-			var bytes = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, arguments: arguments}));
+			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {token: connection.token, arguments: arguments, background: true} : {
+				token: connection.token,
+				arguments: arguments
+			}));
 			socket.output.writeInt32(bytes.length);
 			socket.output.write(bytes);
 			socket.output.flush();
