@@ -82,7 +82,7 @@ class NativeKitRequests {
 		handler:NativeKitRequestOutcome<MessageResult>->Void):haxe.Int64 {
 		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue()), options);
 		trackDialogRequest(request, function(value, cancellationRequested) switch value {
-			case DialogMessage(_, result, button):
+			case DialogMessage(_, result, button, _):
 				handler(messageOutcome(result, button, cancellationRequested));
 			case _: wrongEvent("message dialog");
 		});
@@ -214,7 +214,7 @@ class NativeKitRequests {
 		var key:Null<String> = switch value {
 			case ClipboardText(id, _, _): Std.string(id);
 			case ClipboardFiles(id, _, _): Std.string(id);
-			case DialogMessage(id, _, _): Std.string(id);
+			case DialogMessage(id, _, _, _): Std.string(id);
 			case WebViewEvaluation(_, id, _, _): Std.string(id);
 			case WebViewNavigationRequest(_, id, _): Std.string(id);
 			case NotificationActivated(id, _): Std.string(id);

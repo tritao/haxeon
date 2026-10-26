@@ -8,7 +8,7 @@ enum NativeKitEventValue {
 	ClipboardFiles(request:haxe.Int64, result:Result, paths:Array<String>);
 	DropText(source:Handle, text:String);
 	DropFiles(source:Handle, paths:Array<String>);
-	DialogMessage(request:haxe.Int64, result:Result, button:MessageResult);
+	DialogMessage(request:haxe.Int64, result:Result, button:MessageResult, checkboxChecked:Bool);
 	WebViewNavigated(source:Handle, url:String);
 	WebViewMessage(source:Handle, json:String);
 	WebViewTitleChanged(source:Handle, title:String);

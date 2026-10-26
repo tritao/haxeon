@@ -4720,11 +4720,15 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Payload of NK_EVENT_DIALOG_MESSAGE_COMPLETE.
 	 */
-	struct nk_dialog_message_result @layout(4, 4) {
+	struct nk_dialog_message_result @layout(8, 4) {
 		/**
 		 * Button selected by the user, or NK_MESSAGE_RESULT_NONE on cancellation.
 		 */
 		button: nk_message_result @offset(0);
+		/**
+		 * Nonzero when the optional verification checkbox was checked.
+		 */
+		checkbox_checked: u32 @offset(4);
 	}
 	/**
 	 * Header at the start of NK_EVENT_DROP_FILES and NK_EVENT_DROP_TEXT data.
@@ -5171,7 +5175,7 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Options for a native message dialog.
 	 */
-	struct nk_message_dialog_options @layout(32, 8) {
+	struct nk_message_dialog_options @layout(48, 8) {
 		/**
 		 * Set to sizeof(nk_message_dialog_options) before starting the dialog.
 		 */
@@ -5196,6 +5200,14 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 * Required UTF-8 message text.
 		 */
 		message: utf8 @offset(24);
+		/**
+		 * Optional label for the affirmative (YES) button.
+		 */
+		yes_label: nullable<utf8> @offset(32);
+		/**
+		 * Optional unchecked verification checkbox; null hides it.
+		 */
+		checkbox_label: nullable<utf8> @offset(40);
 	}
 	/**
 	 * Platform-owned event values forwarded by a mobile host.

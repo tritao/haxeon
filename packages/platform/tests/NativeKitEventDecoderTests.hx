@@ -33,7 +33,14 @@ class NativeKitEventDecoderTests {
 		putU32(messagePayload, 0, 3);
 		var messageContext = new NativeKitEventContext(EventKind.DialogMessageComplete, handle(0), zero, 0, 4, 0, messagePayload);
 		var messageOk = switch NativeKitEvent.decodeContext(messageContext) {
-			case DialogMessage(_, 0, 3): true;
+			case DialogMessage(_, 0, 3, false): true;
+			case _: false;
+		};
+		var checkedPayload = haxe.io.Bytes.alloc(8);
+		putU32(checkedPayload, 0, 3); putU32(checkedPayload, 4, 1);
+		var checkedContext = new NativeKitEventContext(EventKind.DialogMessageComplete, handle(0), zero, 0, 4, 0, checkedPayload);
+		messageOk = messageOk && switch NativeKitEvent.decodeContext(checkedContext) {
+			case DialogMessage(_, 0, 3, true): true;
 			case _: false;
 		};
 		var resourcesPayload = haxe.io.Bytes.alloc(16);

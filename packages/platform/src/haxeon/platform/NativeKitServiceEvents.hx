@@ -14,7 +14,8 @@ class NativeKitServiceEvents {
 		case EventKind.DropFiles: DropFiles(c.source,NativeKitEventBytes.decodeDropItems(c.data,c.dataCount));
 		case EventKind.DropText: DropText(c.source,NativeKitEventBytes.decodeDropItems(c.data,c.dataCount).join(""));
 		case EventKind.DialogMessageComplete:
-			NativeKitEventBytes.requireSize(c.data,4); DialogMessage(c.request,c.result,NativeKitEventBytes.readU32(c.data,0));
+			NativeKitEventBytes.requireSize(c.data,c.data.length == 4 ? 4 : 8); DialogMessage(c.request,c.result,NativeKitEventBytes.readU32(c.data,0),
+				c.data.length >= 8 && NativeKitEventBytes.readU32(c.data,4) != 0);
 		case EventKind.WebviewNavigated: WebViewNavigated(c.source,c.data.toString());
 		case EventKind.WebviewMessage: WebViewMessage(c.source,c.data.toString());
 		case EventKind.WebviewTitleChanged: WebViewTitleChanged(c.source,c.data.toString());
