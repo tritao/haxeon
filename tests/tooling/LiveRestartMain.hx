@@ -20,6 +20,7 @@ class LiveRestartMain {
 				"class Main {\n"
 				+ "  @:keep public static function start(arguments:String):Void {}\n"
 				+ "  @:keep public static function tick():Int return " + value + ";\n"
+				+ "  @:keep public static function scale():Float return 0.25 * " + value + ";\n"
 				+ "  @:keep public static function close():Int return 0;\n"
 				+ "  @:keep public static function saveState():String return \"\";\n"
 				+ "  @:keep public static function restoreState(state:String):Void {}\n"
@@ -47,9 +48,14 @@ class LiveRestartMain {
 		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true && next.requiresReload == false,
 			"edits after the first must keep patching");
 		expect(restarted.recordLiveState(), "the resumed session must record its own publications");
+		// History a resumed session recorded (its constant pools included) resumes again.
+		var again = build(new CompilerSession(), 4);
+		expect(again.moduleIdentity == first.moduleIdentity && again.revision == next.revision + 1 && again.patchAvailable == true
+			&& again.requiresReload == false, "history recorded by a resumed session must resume again");
+		next = again;
 		// A module the history does not describe (here, one whose marker names another revision) starts a new module.
 		File.saveContent(output + ".live.full", next.moduleIdentity + ":" + Std.string(next.revision + 7));
-		var stale = build(new CompilerSession(), 4);
+		var stale = build(new CompilerSession(), 5);
 		expect(stale.moduleIdentity != first.moduleIdentity, "history recorded for another module must not be resumed");
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
