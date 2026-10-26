@@ -140,6 +140,7 @@ class TestCatalog {
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",
 		"LiveStringArrayMain",
+		"LivePatchFirstMain",
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
 		"EqualityHelperEditMain",
