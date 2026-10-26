@@ -2,6 +2,7 @@ package haxeon.ui.host;
 
 import hl.Gc;
 import haxeon.ProfileFrame;
+import haxeon.ProfileNativeTrace;
 import haxeon.ProfileSpan;
 
 import haxeon.ui.FontCollection;
@@ -94,6 +95,8 @@ class DesktopUiHost {
 			if (NativeKit.nk_init(init) != Result.Ok)
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
+			// NativeKit's waits, frames and input then appear in profiler captures.
+			ProfileNativeTrace.install("nativekit");
 
 			var initialWidth = Std.int(Math.max(options.width, options.minimumWidth));
 			var initialHeight = Std.int(Math.max(options.height, options.minimumHeight));
