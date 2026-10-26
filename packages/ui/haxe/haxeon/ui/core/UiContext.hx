@@ -550,6 +550,7 @@ class UiContext {
 				var canvas = customCanvases.get(nodeId);
 				if (canvas == null) {
 					canvas = new Canvas();
+					canvas.retainRectangles = true;
 					customCanvases.set(nodeId, canvas);
 				}
 				canvas.reset();
@@ -629,8 +630,10 @@ class UiContext {
 		for (nodeId in stale) {
 			clearCustomPaintBindings(nodeId);
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 			var displayList = customLists.get(nodeId);
 			if (displayList != null)
 				displayList.dispose();
@@ -982,8 +985,10 @@ class UiContext {
 		session.clearCustomPaints();
 		for (nodeId in customCanvases.keys()) {
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 		}
 		for (nodeId in customLists.keys()) {
 			var displayList = customLists.get(nodeId);

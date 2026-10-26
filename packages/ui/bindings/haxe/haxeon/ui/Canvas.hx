@@ -19,6 +19,10 @@ class Canvas {
 	var savedDepth:Int;
 	var openLayers:Int;
 	final transientResources:Array<NativeKitUIResource>;
+	/** When set, solid rectangles keep their path and paint between updates, so repainting identical content records
+		identical commands and the retained list does not look changed. Release with `releaseRetained`. */
+	public var retainRectangles = false;
+	var retainedRects:Null<Map<String, {path:Path, paint:Paint}>>;
 
 	public function new(capacity:Int = 4096) {
 		commands = new CanvasCommandBuffer(capacity);
@@ -31,6 +35,7 @@ class Canvas {
 
 	public function reset():Void {
 		releaseTransientResources();
+		if (retainedRectCount > 512) releaseRetained();
 		commands.reset();
 		state.reset();
 		savedDepth = 0;
@@ -187,6 +192,28 @@ class Canvas {
 	public function fillRect(rect:Rect, color:Color):Void {
 		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Filled rectangle requires positive bounds and a color";
+		if (retainRectangles) {
+			if (retainedRects == null) retainedRects = new Map();
+			var key = rect.x + "," + rect.y + "," + rect.width + "," + rect.height + "," + color.red + "," + color.green + "," + color.blue + "," + color.alpha;
+			var entry = retainedRects.get(key);
+			if (entry == null) {
+				var retainedPath = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
+					.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
+					.close().build();
+				var retainedPaint:Paint;
+				try {
+					retainedPaint = SolidPaint.create(color);
+				} catch (error:Dynamic) {
+					retainedPath.dispose();
+					throw error;
+				}
+				entry = {path: retainedPath, paint: retainedPaint};
+				retainedRects.set(key, entry);
+				retainedRectCount++;
+			}
+			fill(entry.path, entry.paint);
+			return;
+		}
 		var path = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
 			.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
 			.close().build();
@@ -204,6 +231,21 @@ class Canvas {
 			path.dispose();
 			throw error;
 		}
+	}
+
+	var retainedRectCount = 0;
+
+	/** Disposes the paths and paints kept by `retainRectangles`. */
+	public function releaseRetained():Void {
+		var entries = retainedRects;
+		if (entries != null) {
+			for (entry in entries) {
+				entry.path.dispose();
+				entry.paint.dispose();
+			}
+			entries.clear();
+		}
+		retainedRectCount = 0;
 	}
 
 	/** Adds a filled rectangle when its bounds and color are valid. */
