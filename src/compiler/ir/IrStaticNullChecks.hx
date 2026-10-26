@@ -13,7 +13,7 @@ class IrStaticNullChecks {
 	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache):Array<IrFunction> {
 		var helpers:Map<String, IrFunction> = [];
 		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
-		var knownCopies = cache == null ? null : cache.copies;
+		var store = cache != null ? cache : new IrStaticCheckCache();
 		var result:Array<IrFunction> = [];
 		var byName = [for (fn in functions) fn.name => fn],
 			reachable:Map<String, Bool> = [],
@@ -32,11 +32,11 @@ class IrStaticNullChecks {
 				result.push(fn);
 				continue;
 			}
-			var known = knownCopies == null ? null : knownCopies.get(fn.name);
+			var known = store.copies.get(fn.name);
 			if (known != null && known.source == fn) {
 				nextCopies.set(fn.name, known);
 				for (name in known.statics)
-					helpers.set(name, cache.helpers.get("__static$nonnull$" + name));
+					helpers.set(name, store.helpers.get("__static$nonnull$" + name));
 				result.push(known.result);
 				continue;
 			}
@@ -98,7 +98,7 @@ class IrStaticNullChecks {
 						var name = origins.get(receiver.id),
 							helperName = "__static$nonnull$" + name;
 						if (!helpers.exists(name)) {
-							var knownHelper = cache == null ? null : cache.helpers.get(helperName);
+							var knownHelper = store.helpers.get(helperName);
 							if (knownHelper != null)
 								helpers.set(name, knownHelper);
 							else {
@@ -113,8 +113,7 @@ class IrStaticNullChecks {
 							builder.returnValue(builder.constVoid());
 							var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks);
 							helpers.set(name, created);
-							if (cache != null)
-								cache.helpers.set(helperName, created);
+							store.helpers.set(helperName, created);
 							}
 						}
 						used.set(name, true);
@@ -132,8 +131,7 @@ class IrStaticNullChecks {
 			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
 			result.push(copied);
 		}
-		if (cache != null)
-			cache.copies = nextCopies;
+		store.copies = nextCopies;
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
