@@ -89,6 +89,8 @@ struct DisplayListSlot {
     uint32_t custom_refs = 0;
     uint16_t generation = 1;
     uint64_t revision = 1;
+    /** Hash of the commands last submitted, so resubmitting identical commands is not seen as a change. */
+    uint64_t content_hash = 0;
 };
 
 struct FontEntry {
@@ -297,7 +299,9 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
         bool valid = false;
         /* Set once two builds in a row saw the same inputs, so one-frame promotions such as row textures have settled. */
         bool settled = false;
-        uint64_t key = 0;
+        uint64_t epoch = 0;
+        uint64_t frame_key = 0;
+        uint64_t lists_key = 0;
         std::shared_ptr<const nkui::SealedRenderPlan> plan;
         std::vector<nkui::TextEngine *> text_engines;
         std::vector<std::shared_ptr<nkui::TextEngine>> text_engine_owners;
@@ -306,7 +310,10 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
         uint64_t custom_paint_bytes = 0;
         uint64_t session_atlas_key = 0;
         uint64_t session_layout_generation = 0;
+        uint64_t session_font_generation = 0;
     } reusable_plan;
+    /* Hash of the snapshot the last submit produced; the epoch moves only when a submit changes it. */
+    uint64_t snapshot_hash = 0;
 };
 
 thread_local LayoutSessionState *active_measure_session = nullptr;
@@ -470,6 +477,10 @@ RendererSlot *resolve(nkui_renderer handle) {
     auto &entry = renderers[slot - 1];
     return entry.active && entry.generation == generation ? &entry : nullptr;
 }
+
+} // namespace
+static void apply_gpu_frame_timing(RendererSlot &slot);
+namespace {
 
 struct RenderSubmission {
     nkui_renderer renderer{};
@@ -651,6 +662,9 @@ void execute_render_submission(RenderSubmission &submission) {
                         success = register_custom_effects(*slot);
                     if (success)
                         renderer_impl = slot->renderer.get();
+                    /* The backend is created here, after the toggle was recorded, and again after device loss. */
+                    if (renderer_impl)
+                        apply_gpu_frame_timing(*slot);
                 }
             }
         }
@@ -1914,6 +1928,7 @@ extern "C" nkui_result nkui_display_list_reset(nkui_display_list list) {
         return NKUI_ERROR_INVALID_HANDLE;
     release_display_resources(*slot);
     slot->list->reset();
+    slot->content_hash = 0;
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -1946,6 +1961,19 @@ extern "C" nkui_result nkui_display_list_submit(nkui_display_list list, const ui
     }
     release_display_resources(*slot);
     slot->resources = std::move(retained);
+    {
+        uint64_t hash = UINT64_C(1469598103934665603) ^ command_bytes;
+        size_t offset = 0;
+        for (; offset + sizeof(uint64_t) <= command_bytes; offset += sizeof(uint64_t)) {
+            uint64_t word = 0;
+            std::memcpy(&word, commands + offset, sizeof(word));
+            hash = (hash ^ word) * UINT64_C(1099511628211);
+            hash ^= hash >> 29;
+        }
+        for (; offset < command_bytes; ++offset)
+            hash = (hash ^ commands[offset]) * UINT64_C(1099511628211);
+        slot->content_hash = hash;
+    }
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -2112,6 +2140,7 @@ extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_sessi
             return NKUI_ERROR_OUT_OF_MEMORY;
         state->compiler.set_font_collection(shared_fonts);
         ++state->render_epoch;
+        state->reusable_plan = {};
         configure_layout_measure_callback(*state);
         state->fonts_configured = true;
     }
@@ -2402,6 +2431,102 @@ extern "C" nkui_result nkui_layout_session_set_cache_policy(nkui_layout_session 
     return set_cache_policy(resolve(session), node_id, policy, false);
 }
 
+namespace {
+
+void hash_snapshot_value(uint64_t &hash, uint64_t value) {
+    hash ^= value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2);
+}
+
+void hash_snapshot_float(uint64_t &hash, float value) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    hash_snapshot_value(hash, bits);
+}
+
+void hash_snapshot_rect(uint64_t &hash, const nkui::LayoutRect &rect) {
+    hash_snapshot_float(hash, rect.x);
+    hash_snapshot_float(hash, rect.y);
+    hash_snapshot_float(hash, rect.width);
+    hash_snapshot_float(hash, rect.height);
+}
+
+void hash_snapshot_transform(uint64_t &hash, const nkui::LayoutTransform &transform) {
+    for (const float value : {transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty})
+        hash_snapshot_float(hash, value);
+}
+
+void hash_snapshot_string(uint64_t &hash, const std::string &text) {
+    hash_snapshot_value(hash, text.size());
+    for (const uint8_t byte : text)
+        hash_snapshot_value(hash, byte);
+}
+
+/* Covers everything the render plan compiler reads from a snapshot, so an identical layout result can be recognised. */
+uint64_t hash_layout_snapshot(const nkui::LayoutSnapshot &snapshot) {
+    uint64_t hash = UINT64_C(1469598103934665603);
+    hash_snapshot_value(hash, snapshot.items.size());
+    for (const auto &item : snapshot.items) {
+        hash_snapshot_value(hash, item.id);
+        hash_snapshot_value(hash, static_cast<uint64_t>(item.visual_kind));
+        hash_snapshot_rect(hash, item.bounds);
+        hash_snapshot_rect(hash, item.clip_bounds);
+        hash_snapshot_rect(hash, item.content_bounds);
+        hash_snapshot_rect(hash, item.world_bounds);
+        hash_snapshot_transform(hash, item.transform);
+        hash_snapshot_float(hash, item.baseline);
+        hash_snapshot_value(hash, (item.visible ? 1u : 0u) | (item.hit_self ? 2u : 0u) | (item.hit_children ? 4u : 0u));
+        hash_snapshot_value(hash, item.parent_id);
+        hash_snapshot_value(hash, item.paint_order);
+        hash_snapshot_value(hash, static_cast<uint64_t>(static_cast<int64_t>(item.z_index)));
+        hash_snapshot_value(hash, item.content_revision);
+        hash_snapshot_value(hash, item.geometry_revision);
+        hash_snapshot_value(hash, item.composite_revision);
+    }
+    hash_snapshot_value(hash, snapshot.primitives.size());
+    for (const auto &primitive : snapshot.primitives) {
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.kind));
+        hash_snapshot_value(hash, primitive.node_id);
+        hash_snapshot_rect(hash, primitive.bounds);
+        hash_snapshot_transform(hash, primitive.transform);
+        hash_snapshot_value(hash, primitive.visible ? 1u : 0u);
+        for (const float value : {primitive.color.red, primitive.color.green, primitive.color.blue,
+                                  primitive.color.alpha, primitive.radius_top_left,
+                                  primitive.radius_top_right, primitive.radius_bottom_left,
+                                  primitive.radius_bottom_right, primitive.text_style.font_size,
+                                  primitive.text_style.letter_spacing,
+                                  primitive.paragraph_style.line_height})
+            hash_snapshot_float(hash, value);
+        hash_snapshot_string(hash, primitive.text);
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.text_style.family));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.wrap));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.alignment));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.direction));
+        hash_snapshot_value(hash, primitive.paragraph_style.tab_width);
+        hash_snapshot_value(hash, primitive.text_layout_id);
+        hash_snapshot_value(hash, primitive.text_line_index);
+        hash_snapshot_value(hash, primitive.content_revision);
+        hash_snapshot_value(hash, primitive.geometry_revision);
+        hash_snapshot_value(hash, primitive.composite_revision);
+    }
+    hash_snapshot_value(hash, snapshot.text_layouts.size());
+    for (const auto &layout : snapshot.text_layouts) {
+        hash_snapshot_value(hash, layout.id);
+        hash_snapshot_value(hash, layout.node_id);
+        hash_snapshot_string(hash, layout.text);
+        hash_snapshot_float(hash, layout.width);
+        hash_snapshot_float(hash, layout.height);
+        hash_snapshot_float(hash, layout.first_line_baseline);
+        for (const auto &line : layout.lines) {
+            hash_snapshot_value(hash, line.text_offset);
+            hash_snapshot_value(hash, line.text_length);
+            hash_snapshot_rect(hash, line.bounds);
+        }
+    }
+    return hash;
+}
+
+} // namespace
+
 extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
                                                   const uint8_t *transaction,
                                                   uint32_t transaction_bytes,
@@ -2439,7 +2564,10 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     state->snapshot = std::move(snapshot);
     state->submitted = true;
-    ++state->render_epoch;
+    if (const uint64_t hash = hash_layout_snapshot(state->snapshot); hash != state->snapshot_hash) {
+        state->snapshot_hash = hash;
+        ++state->render_epoch;
+    }
     std::lock_guard<std::mutex> lists_lock(lists_mutex);
     for (auto it = state->custom_paints.begin(); it != state->custom_paints.end();) {
         const auto *item = state->snapshot.find(it->first);
@@ -3479,14 +3607,14 @@ extern "C" nkui_result nkui_renderer_set_gpu_frame_timing(nkui_renderer renderer
     if (enabled > 1)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(renderers_mutex);
-    std::unique_lock<std::shared_mutex> execution_lock;
-    if (nk::core::render_executor_physical())
-        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
     auto *slot = resolve(renderer);
     if (!slot)
         return NKUI_ERROR_INVALID_HANDLE;
     slot->gpu_frame_timing = enabled != 0;
-    apply_gpu_frame_timing(*slot);
+    /* With a render thread the backend belongs to it, which applies the recorded state before its next frame; waiting
+       for the frame in flight here would stall the caller. */
+    if (!nk::core::render_executor_physical())
+        apply_gpu_frame_timing(*slot);
     return NKUI_OK;
 }
 
@@ -4274,57 +4402,80 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     };
     /* A frame whose layout, display lists, text and targets are exactly those of the last one renders the same plan.
        Compiling it again and publishing every visible row's glyphs again only reproduces it. */
-    uint64_t reuse_key = 0;
+    uint64_t reuse_frame_key = 0;
+    uint64_t reuse_lists_key = 0;
     if (threaded) {
-        reuse_key = mix_render_key(session_state->render_epoch, compile_target.value);
-        reuse_key = mix_render_key(reuse_key, has_backdrop ? 1u : 0u);
-        reuse_key = mix_render_key(reuse_key, load_existing ? 1u : 0u);
-        reuse_key = mix_render_key(reuse_key, float_key(frame_info->pixel_scale));
-        reuse_key = mix_render_key(reuse_key, float_key(frame_info->logical_width));
-        reuse_key = mix_render_key(reuse_key, float_key(frame_info->logical_height));
-        reuse_key = mix_render_key(reuse_key, static_cast<uint64_t>(frame_info->framebuffer_width));
-        reuse_key = mix_render_key(reuse_key, static_cast<uint64_t>(frame_info->framebuffer_height));
+        reuse_frame_key = mix_render_key(0, compile_target.value);
+        reuse_frame_key = mix_render_key(reuse_frame_key, has_backdrop ? 1u : 0u);
+        reuse_frame_key = mix_render_key(reuse_frame_key, load_existing ? 1u : 0u);
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->pixel_scale));
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->logical_width));
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->logical_height));
+        reuse_frame_key = mix_render_key(reuse_frame_key, static_cast<uint64_t>(frame_info->framebuffer_width));
+        reuse_frame_key = mix_render_key(reuse_frame_key, static_cast<uint64_t>(frame_info->framebuffer_height));
         /* Unordered maps iterate in no fixed order, so each entry is mixed on its own and the results are summed. */
         uint64_t entries = 0;
         for (const auto &[node_id, list_handle] : session_state->custom_paints) {
             const auto *list_slot = resolve(list_handle);
-            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
         }
-        reuse_key = mix_render_key(reuse_key, entries);
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
         entries = 0;
         for (const auto &[node_id, list_handle] : session_state->custom_paint_composites) {
             const auto *list_slot = resolve(list_handle);
-            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->revision : 0);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
         }
-        reuse_key = mix_render_key(reuse_key, entries);
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
         entries = 0;
         for (const auto &[node_id, policy] : session_state->cache_policies)
             entries += mix_render_key(node_id, static_cast<uint64_t>(policy));
-        reuse_key = mix_render_key(reuse_key, entries);
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
         const auto &previous = session_state->reusable_plan;
-        bool current = previous.valid && previous.settled && previous.key == reuse_key;
-        for (const auto &dependency : previous.dependencies) {
-            if (!current)
-                break;
-            const auto *dependency_slot =
-                resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
-            if (!dependency_slot)
-                dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
-            current = dependency_slot && plan_dependency_state(*dependency_slot) == dependency.state;
+        /* The first reason a frame cannot reuse the last plan, counted so a capture shows why it was compiled. */
+        uint64_t nkui_renderer_stats::*miss = nullptr;
+        if (!previous.valid || !previous.plan)
+            miss = &nkui_renderer_stats::render_plan_miss_unsettled;
+        else if (previous.epoch != session_state->render_epoch)
+            miss = &nkui_renderer_stats::render_plan_miss_epoch;
+        else if (previous.frame_key != reuse_frame_key)
+            miss = &nkui_renderer_stats::render_plan_miss_frame;
+        else if (previous.lists_key != reuse_lists_key)
+            miss = &nkui_renderer_stats::render_plan_miss_lists;
+        if (!miss) {
+            bool dependencies_current = true;
+            for (const auto &dependency : previous.dependencies) {
+                const auto *dependency_slot =
+                    resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+                if (!dependency_slot)
+                    dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+                if (!dependency_slot || plan_dependency_state(*dependency_slot) != dependency.state) {
+                    dependencies_current = false;
+                    break;
+                }
+            }
+            const auto *layout_text_engine = session_state->engine->text_engine();
+            if (!dependencies_current)
+                miss = &nkui_renderer_stats::render_plan_miss_dependencies;
+            else if (layout_text_engine &&
+                     /* The session's own glyphs live in an atlas that another publication could have repacked, and
+                        added fonts change which glyphs exist. */
+                     (previous.session_atlas_key != layout_text_engine->atlas_generation_key() ||
+                      previous.session_layout_generation != layout_text_engine->layout_generation() ||
+                      previous.session_font_generation != layout_text_engine->font_collection_generation()))
+                miss = &nkui_renderer_stats::render_plan_miss_atlas;
+            else if (!previous.settled)
+                miss = &nkui_renderer_stats::render_plan_miss_unsettled;
         }
-        const auto *layout_text_engine = session_state->engine->text_engine();
-        if (current && layout_text_engine) {
-            /* The session's own glyphs live in an atlas that another publication could have repacked. */
-            current = previous.session_atlas_key == layout_text_engine->atlas_generation_key() &&
-                      previous.session_layout_generation == layout_text_engine->layout_generation();
-        }
-        if (current) {
+        if (!miss) {
+            ++renderer_slot->stats.render_plan_reuses;
             accumulate_render_plan_stats(renderer_slot->stats, previous.plan->plan());
             renderer_slot->stats.render_plan_commands += previous.render_plan_commands;
             renderer_slot->stats.custom_paint_bytes += previous.custom_paint_bytes;
             return enqueue_sealed(previous.plan, previous.text_engines, previous.text_engine_owners);
         }
+        ++(renderer_slot->stats.*miss);
     }
+    ++renderer_slot->stats.render_plan_compiles;
     const uint64_t commands_before = renderer_slot->stats.render_plan_commands;
     const uint64_t custom_bytes_before = renderer_slot->stats.custom_paint_bytes;
     std::vector<LayoutSessionState::PlanDependency> plan_dependencies;
@@ -4875,7 +5026,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                     dependency.state = plan_dependency_state(*dependency_slot);
             }
             const bool same_inputs =
-                reusable.key == reuse_key && reusable.dependencies.size() == plan_dependencies.size() &&
+                reusable.epoch == session_state->render_epoch && reusable.frame_key == reuse_frame_key &&
+                reusable.lists_key == reuse_lists_key && reusable.dependencies.size() == plan_dependencies.size() &&
                 std::equal(reusable.dependencies.begin(), reusable.dependencies.end(),
                            plan_dependencies.begin(),
                            [](const auto &left, const auto &right) {
@@ -4885,7 +5037,9 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                     (session_text_engine ? session_text_engine->atlas_generation_key() : 0);
             reusable.settled = reusable.plan != nullptr && same_inputs;
             reusable.valid = true;
-            reusable.key = reuse_key;
+            reusable.epoch = session_state->render_epoch;
+            reusable.frame_key = reuse_frame_key;
+            reusable.lists_key = reuse_lists_key;
             reusable.plan = sealed;
             reusable.text_engines = text_engines;
             reusable.text_engine_owners = text_engine_owners;
@@ -4894,6 +5048,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             reusable.custom_paint_bytes = renderer_slot->stats.custom_paint_bytes - custom_bytes_before;
             reusable.session_atlas_key = session_text_engine ? session_text_engine->atlas_generation_key() : 0;
             reusable.session_layout_generation = session_text_engine ? session_text_engine->layout_generation() : 0;
+            reusable.session_font_generation =
+                session_text_engine ? session_text_engine->font_collection_generation() : 0;
             return enqueue_sealed(std::move(sealed), std::move(text_engines), std::move(text_engine_owners));
         }
         nkui::RenderExecutionError execution_error{};

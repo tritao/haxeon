@@ -67,6 +67,19 @@ class Renderer {
 			stats.get_raster_cache_entries(), stats.get_raster_cache_bytes());
 	}
 
+	/** How often layout-session frames compiled a render plan or reused the last one, and why each compile was needed.
+		Cumulative; the reasons add up to `compiles`. */
+	public function planReuse():RenderPlanReuse {
+		ensureLive();
+		var result = NativeKitUI.nkui_renderer_get_stats(value);
+		UiResult.check(result.status, "renderer.planReuse");
+		var stats = result.out_stats;
+		return new RenderPlanReuse(haxe.Int64.toFloat(stats.get_render_plan_compiles()), haxe.Int64.toFloat(stats.get_render_plan_reuses()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_epoch()), haxe.Int64.toFloat(stats.get_render_plan_miss_frame()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_lists()), haxe.Int64.toFloat(stats.get_render_plan_miss_dependencies()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_atlas()), haxe.Int64.toFloat(stats.get_render_plan_miss_unsettled()));
+	}
+
 	var gpuFrameTiming = false;
 
 	/** Measures the GPU time of the renderer's frames while enabled. Off by default; cheap to call each frame. */
@@ -117,6 +130,36 @@ class Renderer {
 	function ensureLive():Void {
 		if (disposed)
 			throw "Renderer has been disposed";
+	}
+}
+
+/** Cumulative render plan compile and reuse counts, with the reason for each compile. */
+class RenderPlanReuse {
+	public final compiles:Float;
+	public final reuses:Float;
+	/** The session's layout changed. */
+	public final missEpoch:Float;
+	/** The frame size, scale, target or load mode changed. */
+	public final missFrame:Float;
+	/** A custom paint list, composite or cache policy changed. */
+	public final missLists:Float;
+	/** A text layout or render target the plan read changed. */
+	public final missDependencies:Float;
+	/** The session text engine's atlas, layout or fonts changed. */
+	public final missAtlas:Float;
+	/** The first plan, or one not yet confirmed by a second identical build. */
+	public final missUnsettled:Float;
+
+	public function new(compiles:Float, reuses:Float, missEpoch:Float, missFrame:Float, missLists:Float, missDependencies:Float, missAtlas:Float,
+			missUnsettled:Float) {
+		this.compiles = compiles;
+		this.reuses = reuses;
+		this.missEpoch = missEpoch;
+		this.missFrame = missFrame;
+		this.missLists = missLists;
+		this.missDependencies = missDependencies;
+		this.missAtlas = missAtlas;
+		this.missUnsettled = missUnsettled;
 	}
 }
 

@@ -467,6 +467,176 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
     return success;
 }
 
+// Layout-session render plans are reused while nothing they depend on changes, and every kind of change
+// recompiles. GPU timing enabled before the backend exists must still report once frames complete.
+bool check_plan_reuse(nk_window window, nk_surface surface) {
+    nkui_resource fonts{}, text{};
+    nkui_display_list list{};
+    nkui_layout_session session{};
+    nkui_renderer renderer{};
+    const bool success = [&]() {
+        const nkui_text_style style{sizeof(style), NKUI_FONT_FAMILY_DEFAULT, 18.0f, 0.0f};
+        const nkui_paragraph_style paragraph{sizeof(paragraph), 24.0f, NKUI_TEXT_WRAP_NONE,
+                                              NKUI_TEXT_ALIGN_START, NKUI_TEXT_DIRECTION_AUTO};
+        if (!check(nkui_font_collection_create(&fonts) == NKUI_OK &&
+                       nkui_font_collection_add(fonts, NKUI_TEST_FONT_PATH,
+                                                NKUI_FONT_FAMILY_DEFAULT) == NKUI_OK &&
+                       nkui_text_layout_create_styled(fonts, "Plan reuse", 200.0f, &style,
+                                                       &paragraph, &text) == NKUI_OK &&
+                       nkui_text_layout_set_color(text, {0.12f, 0.16f, 0.21f, 1.0f}) == NKUI_OK &&
+                       nkui_display_list_create(&list) == NKUI_OK &&
+                       nkui_layout_session_create(&session) == NKUI_OK &&
+                       nkui_layout_session_set_font_collection(session, fonts) == NKUI_OK &&
+                       nkui_renderer_create(&renderer) == NKUI_OK &&
+                       // Enabled before the first frame, so the backend is created later on the render thread.
+                       nkui_renderer_set_gpu_frame_timing(renderer, 1) == NKUI_OK,
+                   "plan reuse resources"))
+            return false;
+        const auto set_commands = [&](float x) {
+            nkui_transform_command transform{};
+            transform.header = {NKUI_COMMAND_SET_TRANSFORM, NKUI_COMMAND_VERSION, sizeof(transform)};
+            const float matrix[6] = {1.0f, 0.0f, 0.0f, 1.0f, x, 8.0f};
+            std::memcpy(transform.matrix, matrix, sizeof(matrix));
+            nkui_draw_rect_command draw{};
+            draw.header = {NKUI_COMMAND_DRAW_TEXT_LAYOUT, NKUI_COMMAND_VERSION, sizeof(draw)};
+            draw.resource = text;
+            std::vector<uint8_t> commands(sizeof(transform) + sizeof(draw));
+            std::memcpy(commands.data(), &transform, sizeof(transform));
+            std::memcpy(commands.data() + sizeof(transform), &draw, sizeof(draw));
+            return nkui_display_list_submit(list, commands.data(),
+                                            static_cast<uint32_t>(commands.size())) == NKUI_OK;
+        };
+        std::vector<uint8_t> transaction(NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
+                                         NKUI_LAYOUT_NODE_RECORD_BYTES);
+        const auto write = [&](size_t offset, const auto &value) {
+            std::memcpy(transaction.data() + offset, &value, sizeof(value));
+        };
+        write(0, uint32_t{NKUI_LAYOUT_TRANSACTION_VERSION});
+        write(4, uint32_t{1});
+        write(8, uint32_t{NKUI_LAYOUT_NODE_RECORD_BYTES});
+        write(12, static_cast<uint32_t>(transaction.size()));
+        const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
+        write(node + NKUI_LAYOUT_NODE_ID_OFFSET, uint32_t{1});
+        write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t{-1});
+        write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_CUSTOM});
+        write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
+        write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
+        write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 18.0f);
+        write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, static_cast<uint32_t>(transaction.size()));
+        write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+        write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 240.0f);
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+        write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
+        const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
+        const auto submit_layout = [&]() {
+            return nkui_layout_session_submit(session, transaction.data(),
+                                              static_cast<uint32_t>(transaction.size()),
+                                              &layout_frame) == NKUI_OK;
+        };
+        if (!check(set_commands(0.0f) && submit_layout() &&
+                       nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
+                   "plan reuse submission"))
+            return false;
+
+        nkui_renderer_stats latest{};
+        const auto render = [&](float scale) {
+            int32_t width = 0, height = 0;
+            nk_surface_frame_target target{};
+            if (!acquire_surface_frame(window, surface, width, height, target))
+                return false;
+            const nkui_frame_info frame{sizeof(frame), width / scale, height / scale, width, height,
+                                        scale};
+            if (!check(nkui_layout_session_render_frame(renderer, session, surface, &frame, 0) ==
+                           NKUI_OK,
+                       "plan reuse render"))
+                return false;
+            RenderTask barrier{};
+            barrier.function = [](RenderTask &task) noexcept { task.success = true; };
+            if (!dispatch_render_task(barrier) ||
+                !check(nkui_renderer_get_stats(renderer, &latest) == NKUI_OK &&
+                           latest.render_submission_failures == 0,
+                       "plan reuse stats"))
+                return false;
+            return nk::core::render_executor_physical() || nk_surface_present(surface) == NK_OK;
+        };
+        // A plan is reused once a second identical build has confirmed it.
+        for (int warmup = 0; warmup < 3; ++warmup)
+            if (!render(1.0f)) return false;
+        const auto steady = latest;
+        for (int repeat = 0; repeat < 3; ++repeat)
+            if (!render(1.0f)) return false;
+        if (!check(latest.render_plan_compiles == steady.render_plan_compiles &&
+                       latest.render_plan_reuses == steady.render_plan_reuses + 3,
+                   "unchanged frames reuse the render plan"))
+            return false;
+
+        // Submitting a snapshot identical to the previous one is not a layout change.
+        auto before = latest;
+        if (!submit_layout() || !render(1.0f) ||
+            !check(latest.render_plan_compiles == before.render_plan_compiles,
+                   "an identical layout submit keeps the render plan"))
+            return false;
+
+        // Submitting the same commands again is not a change either.
+        before = latest;
+        if (!set_commands(0.0f) || !render(1.0f) ||
+            !check(latest.render_plan_compiles == before.render_plan_compiles,
+                   "identical display list commands keep the render plan"))
+            return false;
+
+        const auto settle = [&](float scale) {
+            for (int repeat = 0; repeat < 3; ++repeat)
+                if (!render(scale)) return false;
+            return true;
+        };
+        const auto recompiles = [&](float scale, const char *what) {
+            before = latest;
+            return render(scale) &&
+                   check(latest.render_plan_compiles == before.render_plan_compiles + 1, what);
+        };
+        if (nkui_text_layout_set_color(text, {0.9f, 0.2f, 0.1f, 1.0f}) != NKUI_OK ||
+            !recompiles(1.0f, "a text colour change recompiles") || !settle(1.0f))
+            return false;
+        if (!set_commands(6.0f) || !recompiles(1.0f, "a display list change recompiles") ||
+            !settle(1.0f))
+            return false;
+        if (!recompiles(2.0f, "a pixel scale change recompiles") || !settle(2.0f))
+            return false;
+        // The reuse-miss counters name every compile.
+        if (nk::core::render_executor_physical() &&
+            !check(latest.render_plan_compiles ==
+                       latest.render_plan_miss_epoch + latest.render_plan_miss_frame +
+                           latest.render_plan_miss_lists + latest.render_plan_miss_dependencies +
+                           latest.render_plan_miss_atlas + latest.render_plan_miss_unsettled,
+                   "every compile is attributed to a miss reason"))
+            return false;
+
+        // GPU time arrives a few frames after its frame, where the backend can measure it.
+        uint64_t gpu_ns = 0, gpu_frames = 0;
+        for (int attempt = 0; attempt < 240 && gpu_frames == 0; ++attempt) {
+            if (!render(1.0f)) return false;
+            if (nkui_renderer_get_gpu_frame_time(renderer, &gpu_ns, &gpu_frames) != NKUI_OK)
+                return false;
+            if (!gpu_frames)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+#if defined(_WIN32)
+        return check(gpu_frames > 0 && gpu_ns > 0, "GPU frame time is reported in threaded mode");
+#else
+        return true;
+#endif
+    }();
+    if (renderer.id) nkui_renderer_destroy(renderer);
+    if (session.id) nkui_layout_session_destroy(session);
+    if (list.id) nkui_display_list_destroy(list);
+    if (text.id) nkui_resource_destroy(text);
+    if (fonts.id) nkui_resource_destroy(fonts);
+    return success;
+}
+
 void create_offscreen_resources(RenderTask &task) noexcept {
     const nkgpu_result created =
         nk::core::render_executor_physical()
@@ -878,6 +1048,11 @@ int main() {
             result = 19;
             goto cleanup;
         }
+    }
+
+    if (!check_plan_reuse(window, surface)) {
+        result = 41;
+        goto cleanup;
     }
 
     if (!check_cached_text_rows(window, surface)) {
