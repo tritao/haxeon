@@ -32,7 +32,7 @@ class LiveHostPatchMain {
 			for (name in FileSystem.readDirectory("src/runtime"))
 				if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name
 		]), false);
-		var process = new Process(".tools/hashlink/hl", [host, output, "Main", "[]"]);
+		var process = new Process(FileSystem.fullPath(".tools/hashlink/hl.exe"), [host, output, "Main", "[]"]);
 		Sys.sleep(1.5);
 		write(2);
 		build(output, "Main", root, [main], true);
