@@ -23,7 +23,7 @@ import compiler.types.NativeTypeDescriptorCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken):CompileResult {
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken, ?published:() -> Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress;
@@ -54,6 +54,11 @@ class CompilerDriver {
 			},
 			outputBytes:Null<Bytes> = null,
 			outputIndices:Null<Map<String, Int>> = null;
+		// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
+		// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
+		var deferFullModule = !isWasm && request.live && result.patchBytes != null && !result.requiresReload;
+		if (!isWasm)
+			deleteIfExists(request.output + ".live.full");
 		if (isWasm) {
 			var backend:Backend = new WasmBackend(),
 				backendResult = backend.compile(result.ir, {
@@ -70,30 +75,22 @@ class CompilerDriver {
 				});
 			outputBytes = backendResult.bytes;
 		} else {
-			if (session == null)
-				HlWriter.writeFile(result.module, request.output);
-			else
-				session.writeHashLink(result.module, request.output);
 			outputIndices = result.functionIndices;
+			if (!deferFullModule)
+				writeModule(result, request.output, session);
 		}
-		if (cancellation != null)
+		if (cancellation != null && !deferFullModule)
 			cancellation.check();
 		var backendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterEncode = AllocationMeter.sample();
-		if (isWasm)
-			File.saveBytes(request.output, outputBytes);
-		if (isWasm)
-			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
-		if (!isWasm)
-			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
-		if (!isWasm) {
-			File.saveBytes(request.output + ".hli", result.runtimeIdentity);
+		var stampedAt = -1.0;
+		var publishPatch = function() {
 			var identities = [for (name => id in result.functionIds) {name: name, id: id}];
 			identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
 			if (result.patchBytes != null)
 				File.saveBytes(request.output + ".hlp", result.patchBytes);
-			else if (FileSystem.exists(request.output + ".hlp"))
-				FileSystem.deleteFile(request.output + ".hlp");
+			else
+				deleteIfExists(request.output + ".hlp");
 			var manifest = request.output + ".live.json";
 			var temporary = manifest + ".tmp";
 			File.saveContent(temporary, Json.stringify({
@@ -110,7 +107,25 @@ class CompilerDriver {
 			var stamp = request.output + ".live.stamp";
 			File.saveContent(stamp + ".tmp", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
 			replaceFile(stamp + ".tmp", stamp);
+			stampedAt = Sys.time() * 1000.0;
+			if (published != null)
+				published();
 			compiler.acknowledgePublication(result.revision);
+		};
+		if (!isWasm && deferFullModule) {
+			publishPatch();
+			writeModule(result, request.output, session);
+		}
+		if (isWasm)
+			File.saveBytes(request.output, outputBytes);
+		if (isWasm)
+			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
+		if (!isWasm)
+			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
+		if (!isWasm) {
+			File.saveBytes(request.output + ".hli", result.runtimeIdentity);
+			if (!deferFullModule)
+				publishPatch();
 		}
 		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
 		if (request.xmlOutput != null)
@@ -124,10 +139,14 @@ class CompilerDriver {
 			throw "Compiler completed without a typed program for descriptor emission";
 		File.saveBytes(request.output + ".descriptors", NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
 		File.saveContent(request.output + ".descriptors.json", NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
+		// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
+		if (!isWasm)
+			File.saveContent(request.output + ".live.full", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
 		var artifactsWrittenAt = Sys.time() * 1000.0;
 		var allocationAfterWrite = AllocationMeter.sample();
 		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
-			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt));
+			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt)
+			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
 		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 		report(allocationReport("driver allocation phases:", [
@@ -139,6 +158,17 @@ class CompilerDriver {
 		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 		return result;
 	}
+
+	static function writeModule(result:CompileResult, output:String, session:Null<CompilerSession>):Void {
+		if (session == null)
+			HlWriter.writeFile(result.module, output);
+		else
+			session.writeHashLink(result.module, output);
+	}
+
+	static function deleteIfExists(path:String):Void
+		if (FileSystem.exists(path))
+			FileSystem.deleteFile(path);
 
 	/** Empty unless typing found modules the graph lacked; the restart then redid the whole frontend. */
 	static function frontendRestarts(reasons:Array<String>):String
