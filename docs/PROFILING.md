@@ -78,9 +78,12 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   input from low-level mouse and keyboard hooks on a thread of its own, with
   QueryPerformanceCounter, within tens of microseconds of the system taking
   it; an input the hooks missed falls back to the system tick (about 16 ms).
-  `NK_INPUT_STAMP_HOOK=0` turns the hooks off. While they are installed every
-  input on the desktop passes through them, so pausing a traced process in a
-  debugger stalls the desktop's input until Windows times the hook out.
+  `NK_INPUT_STAMP_HOOK=0` turns the hooks off, and they are removed when the
+  trace stops. While they are installed every input on the desktop passes
+  through them, so pausing a traced process in a debugger stalls the desktop's
+  input until Windows times the hook out and removes it; NativeKit reinstalls
+  it within about a second of the next button or key, and input in between
+  has the tick stamp.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark
   time and allocation rate), "Short calls dropped per frame" when short calls
   are dropped (see below), app counters from
