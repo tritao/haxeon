@@ -472,6 +472,7 @@ class DesktopUiHost {
 						framePending = false;
 						nextAnimationFrameAt = -1.0;
 						runtime.setSurfaceReady(false);
+					case _ if (isBackgroundIo(value)):
 					case _:
 						scheduleFrameWithReason("event:" + eventName);
 				}
@@ -758,7 +759,22 @@ class DesktopUiHost {
 			case SurfaceResize(_, _, _, _, _): "SurfaceResize";
 			case SurfaceLost(_): "SurfaceLost";
 			case None: "None";
+			case Raw(_, _, _, _, _, _, _): "Raw";
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _): "Task";
+			case HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _) | HttpComplete(_, _, _, _): "Http";
 			case _: "other";
+		};
+	}
+
+	/** Background I/O (sockets and pipes, tasks, HTTP) is for the code that started it, not the window: a redraw for
+		each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests a
+		frame when its state changes. */
+	static function isBackgroundIo(value:NativeKitEventValue):Bool {
+		return switch (value) {
+			case Raw(_, _, _, _, _, _, _) | TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _)
+				| TaskCancelled(_, _, _) | HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _)
+				| HttpProgressEvent(_, _, _, _, _, _) | HttpComplete(_, _, _, _): true;
+			case _: false;
 		};
 	}
 
