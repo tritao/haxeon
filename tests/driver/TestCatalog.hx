@@ -142,6 +142,7 @@ class TestCatalog {
 		"LiveNativeShiftMain",
 		"LiveStringArrayMain",
 		"LivePatchFirstMain",
+		"LiveRestartMain",
 		"LiveHostPatchMain",
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
