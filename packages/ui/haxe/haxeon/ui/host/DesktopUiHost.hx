@@ -470,6 +470,7 @@ class DesktopUiHost {
 					case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
 						surfaceAvailable = false;
 						framePending = false;
+						nextAnimationFrameAt = -1.0;
 						runtime.setSurfaceReady(false);
 					case _:
 						scheduleFrameWithReason("event:" + eventName);
@@ -511,7 +512,12 @@ class DesktopUiHost {
 				// Polling waits for native events and runs the callbacks they trigger, frames included.
 				pollSpanOpen = true;
 				ProfileSpan.begin("ui.events");
-				var polled = pump.poll();
+				// Take every queued event before drawing; a bound keeps a flood from starving frames.
+				var polled = false;
+				for (_ in 0...64) {
+					if (!pump.poll()) break;
+					polled = true;
+				}
 				pollSpanOpen = false;
 				ProfileSpan.end("ui.events");
 				if (polled) hadEvent = true;
@@ -561,7 +567,7 @@ class DesktopUiHost {
 					var waitSeconds = 1.0 / options.targetFps;
 					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
 					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
-					if (nextAnimationFrameAt >= 0.0)
+					if (surfaceAvailable && nextAnimationFrameAt >= 0.0)
 						waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
 					pump.wait(waitSeconds);
 					if (measureLoop) {
