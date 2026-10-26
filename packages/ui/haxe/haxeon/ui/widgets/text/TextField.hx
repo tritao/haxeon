@@ -500,18 +500,22 @@ class TextField implements View {
 				var visible = geometry.visibleLocalBounds();
 				var visibleTop = editor.scrollOffsetY + visible.y;
 				var visibleBottom = visibleTop + visible.height;
+				// The selection is reported clamped into the text-input window, and its rectangles must lie within what
+				// is reported: those reaching past a clamped edge are left out.
+				var window = editor.surroundingText(2048, 2048);
 				var selectionGeometry:Array<TextRangeRect> = [];
-				if (editor.selectionStart != editor.selectionEnd)
+				if (window.selectionStart != window.selectionEnd)
 					for (rect in editor.layout.selectionRangeRects(editor.anchorPosition(),
 						editor.focusPosition(), visibleTop, visibleBottom))
-						selectionGeometry.push(transformTextRangeRect(rect, geometry, transform,
-							editor.scrollOffsetY));
+						if (rect.start >= window.selectionStart && rect.end <= window.selectionEnd)
+							selectionGeometry.push(transformTextRangeRect(rect, geometry, transform,
+								editor.scrollOffsetY));
 				var compositionGeometry:Array<TextRangeRect> = [];
 				for (rect in editor.compositionRangeRects(visibleTop, visibleBottom))
 					compositionGeometry.push(transformTextRangeRect(rect, geometry, transform,
 						editor.scrollOffsetY));
-				context.textInput.update(editor.surroundingText(2048, 2048), editor.documentLength(),
-					editor.selectionStart, editor.selectionEnd, editor.compositionStart,
+				context.textInput.update(window, editor.documentLength(),
+					window.selectionStart, window.selectionEnd, editor.compositionStart,
 					editor.compositionEnd, 0,
 					multiline ? 1 : 0,
 					caretRect, selectionGeometry, compositionGeometry);

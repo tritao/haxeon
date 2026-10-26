@@ -854,6 +854,18 @@ class FrameworkSmoke {
 		var surrounding = editor.surroundingText(2048, 2048);
 		if (surrounding.text != "á🙂" || surrounding != editor.surroundingText(2048, 2048))
 			throw "unchanged surrounding text did not retain its window";
+		// A large selection does not grow the window: it stays around the caret and reports the selection clamped into it.
+		var long = new TextEditorState(fonts, StringTools.rpad("", "x", 10000));
+		long.setSelection(0, 10000);
+		var bounded = long.surroundingText(2048, 2048);
+		if (bounded.start != 10000 - 2048 || bounded.end != 10000 || Utf8Text.length(bounded.text) != 2048 ||
+			bounded.selectionStart != bounded.start || bounded.selectionEnd != 10000)
+			throw "a large selection's text-input window was not bounded around the caret";
+		long.setSelection(4000, 4100);
+		var whole = long.surroundingText(2048, 2048);
+		if (whole.start != 4100 - 2048 || whole.end != 4100 + 2048 || whole.selectionStart != 4000 || whole.selectionEnd != 4100)
+			throw "a selection within the text-input bounds was not reported whole";
+		long.dispose();
 		if (Utf8Text.length(editor.text) != 3)
 			return 32;
 		if (Utf8Text.slice(editor.text, 0, 2) != "á")
