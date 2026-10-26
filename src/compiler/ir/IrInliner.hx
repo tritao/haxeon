@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance;
@@ -41,6 +42,9 @@ class InlineMemo {
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
+
+	/** The static-null-check copies of the program's functions, so they keep their identity between compiles. */
+	public final staticChecks:IrStaticCheckCache = new IrStaticCheckCache();
 
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];

@@ -5,8 +5,15 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Diagnose dereferencing a null static instead of letting native code read null + a field offset. */
 class IrStaticNullChecks {
-	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>):Array<IrFunction> {
+	/**
+	 * `cache` keeps each instrumented copy and helper alive between compiles, so a function that did not change comes out
+	 * as the same object; the inliner memoizes on function identity and would otherwise redo everything reachable from
+	 * initialization on every compile.
+	 */
+	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache):Array<IrFunction> {
 		var helpers:Map<String, IrFunction> = [];
+		var nextCopies:Map<String, {source:IrFunction, result:IrFunction}> = [];
+		var knownCopies = cache == null ? null : cache.copies;
 		var result:Array<IrFunction> = [];
 		var byName = [for (fn in functions) fn.name => fn],
 			reachable:Map<String, Bool> = [],
@@ -23,6 +30,12 @@ class IrStaticNullChecks {
 		for (fn in functions) {
 			if (!reachable.exists(fn.name)) {
 				result.push(fn);
+				continue;
+			}
+			var known = knownCopies == null ? null : knownCopies.get(fn.name);
+			if (known != null && known.source == fn) {
+				nextCopies.set(fn.name, known);
+				result.push(known.result);
 				continue;
 			}
 			var origins:Map<Int, String> = [], nextId = 0;
@@ -83,6 +96,10 @@ class IrStaticNullChecks {
 						var name = origins.get(receiver.id),
 							helperName = "__static$nonnull$" + name;
 						if (!helpers.exists(name)) {
+							var knownHelper = cache == null ? null : cache.helpers.get(helperName);
+							if (knownHelper != null)
+								helpers.set(name, knownHelper);
+							else {
 							var builder = new IrBuilder(),
 								value = builder.argument("value", Dyn),
 								missing = builder.createBlock(),
@@ -92,7 +109,11 @@ class IrStaticNullChecks {
 							builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 							builder.select(present);
 							builder.returnValue(builder.constVoid());
-							helpers.set(name, new IrFunction(helperName, builder.arguments, Void, builder.blocks));
+							var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks);
+							helpers.set(name, created);
+							if (cache != null)
+								cache.helpers.set(helperName, created);
+							}
 						}
 						var boxed = new IrValue(nextId++, "staticReceiver", Dyn),
 							unused = new IrValue(nextId++, "staticCheck", Void);
@@ -104,12 +125,24 @@ class IrStaticNullChecks {
 				blocks.push(copy);
 			}
 			// Cached functions belong to the frontend; never instrument them in place.
-			result.push(new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention));
+			var copied = new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+			nextCopies.set(fn.name, {source: fn, result: copied});
+			result.push(copied);
 		}
+		if (cache != null)
+			cache.copies = nextCopies;
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
 			result.push(helpers.get(name));
 		return result;
 	}
+}
+
+/** What `IrStaticNullChecks` produced last time: each reachable function's instrumented copy, and the shared helpers. */
+class IrStaticCheckCache {
+	public var copies:Map<String, {source:IrFunction, result:IrFunction}> = [];
+	public var helpers:Map<String, IrFunction> = [];
+
+	public function new() {}
 }
