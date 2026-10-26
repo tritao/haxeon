@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -85,6 +86,10 @@ struct TextEngine::State {
     uint32_t last_scale_key = 0;
     uint32_t scale_generation = 0;
     std::unordered_map<uint64_t, std::weak_ptr<const PreparedGlyphs>> published_glyphs;
+    // The map above is weak, so a row nobody holds is rebuilt on its next request, which for
+    // the rows of a viewport is every frame. This keeps the most recent snapshots alive.
+    std::deque<std::pair<std::shared_ptr<const PreparedGlyphs>, std::size_t>> retained_publications;
+    std::size_t retained_publication_bytes = 0;
     // The public buffer API asks for size and contents separately. Retain one
     // bounded query so neither that pair nor repeated paints rewalks the text.
     TextLayoutId selection_layout_id = 0;
@@ -296,7 +301,26 @@ struct RenderGlyphContext {
     PreparedGlyphs *output = nullptr;
     int32_t line_start = -1;
     int32_t line_end = -1;
+    GlyphWindow window;
 };
+
+// Lines longer than this publish only the horizontal chunks a caller asks for.
+constexpr int32_t kWindowedLineCodepoints = 1024;
+// Windows snap outward to multiples of this, so small scrolls reuse a snapshot.
+constexpr float kGlyphWindowChunk = 1024.0f;
+// Slack around a window, in font sizes, for glyphs that overhang their advance.
+constexpr float kGlyphWindowSlackEm = 2.0f;
+
+// Snaps a requested extent to whole chunks. Returns false when it is not usable.
+bool quantize_glyph_window(GlyphWindow &window) {
+    if (!window.bounded())
+        return false;
+    window.min_x = std::floor(window.min_x / kGlyphWindowChunk) * kGlyphWindowChunk;
+    window.max_x = std::ceil(window.max_x / kGlyphWindowChunk) * kGlyphWindowChunk;
+    if (window.max_x <= window.min_x)
+        window.max_x = window.min_x + kGlyphWindowChunk;
+    return true;
+}
 
 // Hard line breaks participate in layout and editing, never in glyph painting.
 bool is_hard_line_break(uint32_t codepoint) {
@@ -321,6 +345,12 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
     if (render.line_start >= 0 &&
         (glyph->text_range.end <= render.line_start || glyph->text_range.start >= render.line_end))
         return true;
+    if (render.window.bounded()) {
+        const float slack = glyph->font_size * kGlyphWindowSlackEm;
+        const float x = render.origin_x + glyph->offset_x;
+        if (x + glyph->advance_x + slack < render.window.min_x || x - slack > render.window.max_x)
+            return true;
+    }
     if (std::getenv("NKUI_DEBUG_GLYPHS")) {
         const uint32_t script = skb_script_to_iso15924_tag(glyph->script);
         std::fprintf(
@@ -376,6 +406,24 @@ void atlas_texture_created(skb_image_atlas_t *, uint8_t texture_index, void *con
     const auto id = atlas_texture_ids.allocate();
     state.atlas_texture_ids[texture_index] = id;
     if (!id.value) state.atlas_identity_exhausted = true;
+}
+
+// Newest snapshots stay alive between frames, within a count and memory budget.
+constexpr std::size_t kRetainedPublicationCount = 1024;
+constexpr std::size_t kRetainedPublicationBytes = 48u * 1024u * 1024u;
+
+void retain_publication(TextEngine::State &state, const std::shared_ptr<const PreparedGlyphs> &snapshot) {
+    const std::size_t bytes = snapshot->vertices.size() * sizeof(GlyphVertex) +
+        snapshot->indices.size() * sizeof(uint32_t) +
+        snapshot->source_ranges.size() * sizeof(GlyphSourceRange);
+    state.retained_publications.emplace_back(snapshot, bytes);
+    state.retained_publication_bytes += bytes;
+    while (state.retained_publications.size() > 1 &&
+           (state.retained_publications.size() > kRetainedPublicationCount ||
+            state.retained_publication_bytes > kRetainedPublicationBytes)) {
+        state.retained_publication_bytes -= state.retained_publications.front().second;
+        state.retained_publications.pop_front();
+    }
 }
 
 } // namespace
@@ -1031,7 +1079,8 @@ bool TextEngine::prepare_glyphs_for_line(uint32_t line_index, float origin_x, fl
 
 bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                          float origin_y, float pixel_scale, GlyphMode mode,
-                                         PreparedGlyphs &output, GlyphPreparation preparation) {
+                                         PreparedGlyphs &output, GlyphPreparation preparation,
+                                         GlyphWindow window) {
     const auto *layout = find_layout(*state_, id);
     if (!layout || line_index >= layout->result.lines.size() ||
         line_index >= layout->line_ranges.size())
@@ -1040,7 +1089,7 @@ bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, f
     const auto range = layout->line_ranges[line_index];
     return prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode, output, range.start,
                                    range.end, line.bounds.x, line.bounds.y, static_cast<int32_t>(line_index), -1,
-                                   preparation);
+                                   preparation, window);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::published_glyphs(TextLayoutId id, float origin_x,
@@ -1056,9 +1105,9 @@ std::shared_ptr<const PreparedGlyphs>
 TextEngine::published_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                       float origin_y, float pixel_scale, GlyphMode mode,
                                       GlyphTint tint, const std::vector<GlyphColorRange> &ranges,
-                                      GlyphPreparation preparation) {
+                                      GlyphPreparation preparation, GlyphWindow window) {
     return publish_glyphs(id, static_cast<int32_t>(line_index), origin_x, origin_y, pixel_scale,
-                          mode, tint, ranges, -1, preparation);
+                          mode, tint, ranges, -1, preparation, window);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id,
@@ -1066,11 +1115,16 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
                                                                  float origin_y, float pixel_scale,
                                                                  GlyphMode mode, GlyphTint tint,
                                                                    const std::vector<GlyphColorRange> &ranges, int32_t end_line,
-                                                                   GlyphPreparation preparation) {
+                                                                   GlyphPreparation preparation, GlyphWindow window) {
     const auto *layout = find_layout(*state_, id);
     const auto raster_scale = text_raster_scale(pixel_scale);
     if (!layout || !raster_scale.key || !std::isfinite(origin_x) ||
-        !std::isfinite(origin_y) || !valid_glyph_color_ranges(ranges))
+        !std::isfinite(origin_y))
+        return {};
+    // The ranges of a whole document are sorted and disjoint; a row only needs to
+    // see its own, so rows check just that slice instead of every range per call.
+    const bool row_request = line_index >= 0;
+    if (!row_request && !valid_glyph_color_ranges(ranges))
         return {};
     pixel_scale = raster_scale.value;
     if (line_index >= 0 && end_line < 0 && static_cast<std::size_t>(line_index) >= layout->result.lines.size())
@@ -1091,6 +1145,20 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     mix(font_collection_generation());
     mix(raster_scale.key);
     mix(static_cast<uint64_t>(mode));
+    // Only a very long single line is windowed; its snapshot then depends on the chunks it holds.
+    const bool windowed = single_line &&
+        layout->line_ranges[line_index].end - layout->line_ranges[line_index].start >
+            kWindowedLineCodepoints &&
+        quantize_glyph_window(window);
+    if (!windowed)
+        window = {};
+    else {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &window.min_x, sizeof(bits));
+        mix(bits);
+        std::memcpy(&bits, &window.max_x, sizeof(bits));
+        mix(bits);
+    }
     if (!single_line) {
         mix(static_cast<uint64_t>(line_index + 1));
         mix(static_cast<uint64_t>(end_line + 1));
@@ -1108,8 +1176,19 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         static_cast<uint64_t>(tint.blue) << 8 | static_cast<uint64_t>(tint.alpha));
 
     std::vector<GlyphColorRange> relevant_ranges;
-    for (auto range : ranges) {
+    auto first_range = ranges.begin();
+    if (row_request) {
+        // Skip the ranges that end before this row starts.
+        const int32_t row_start = layout->line_ranges[line_index].start;
+        first_range = std::partition_point(ranges.begin(), ranges.end(),
+            [row_start](const GlyphColorRange &candidate) { return candidate.end <= row_start; });
+    }
+    for (auto range_it = first_range; range_it != ranges.end(); ++range_it) {
+        auto range = *range_it;
         if (line_index >= 0) {
+            if (range.start >= (end_line < 0 ? layout->line_ranges[line_index].end
+                                             : layout->line_ranges[end_line - 1].end))
+                break;
             if (end_line == line_index)
                 continue;
             const skb_range_t line = end_line < 0 ? layout->line_ranges[line_index]
@@ -1167,7 +1246,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         : line_index < 0 ? prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode,
                                                  *snapshot, -1, -1, 0.0f, 0.0f, -1, -1, preparation)
                        : prepare_glyphs_for_line(id, static_cast<uint32_t>(line_index), origin_x,
-                                                 origin_y, pixel_scale, mode, *snapshot, preparation);
+                                                 origin_y, pixel_scale, mode, *snapshot, preparation, window);
     if (!prepared)
         return {};
 
@@ -1186,6 +1265,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         }
     }
     state_->published_glyphs[key] = snapshot;
+    retain_publication(*state_, snapshot);
     return snapshot;
 }
 
@@ -1193,7 +1273,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                                          float pixel_scale, GlyphMode mode, PreparedGlyphs &output,
                                          int32_t line_start, int32_t line_end, float line_x,
                                          float line_y, int32_t line_index, int32_t end_line,
-                                         GlyphPreparation preparation) {
+                                         GlyphPreparation preparation, GlyphWindow window) {
     const auto *retained = find_layout(*state_, id);
     const auto raster_scale = text_raster_scale(pixel_scale);
     if (!retained || !raster_scale.key || !std::isfinite(origin_x) || !std::isfinite(origin_y))
@@ -1253,7 +1333,8 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                               mode,
                               &output,
                               line_start,
-                              line_end};
+                              line_end,
+                              window};
     if (!skb_layout_iterate_render_glyphs_range(retained->layout.get(), lines, append_render_glyph, &render))
         return false;
     if (resource_limited()) return false;

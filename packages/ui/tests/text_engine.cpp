@@ -1,6 +1,7 @@
 #include "prepare/text_engine.h"
 #include "prepare/text_raster.h"
 
+#include <algorithm>
 #include <cstring>
 #include <cstdio>
 #include <cmath>
@@ -1216,6 +1217,63 @@ int main() {
             restored->source_start != shifted->source_start ||
             moved->first_line != 2 || !rows.prepared_glyphs_current(*restored))
             return 159;
+    }
+    {
+        // A very long unwrapped line publishes only the chunks a caller windows to,
+        // and a short line ignores the window.
+        TextEngine wide(shared_fonts);
+        TextLayoutOptions wide_options;
+        wide_options.font_size = 16.0f;
+        wide_options.wrap = TextWrapMode::None;
+        const std::string wide_text = std::string(20000, 'a') + "
+short";
+        TextLayoutResult wide_layout;
+        if (!wide.layout_utf8(wide_text.c_str(), 400.0f, wide_options, &wide_layout) ||
+            wide_layout.lines.size() != 2)
+            return 230;
+        const auto whole = wide.published_glyphs_for_line(wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha);
+        const auto windowed = wide.published_glyphs_for_line(
+            wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha, {}, {}, GlyphPreparation::Rasterize,
+            GlyphWindow{4000.0f, 5000.0f});
+        if (!whole || !windowed || whole->vertices.size() < 20000 * 4 ||
+            windowed->vertices.empty() || windowed->vertices.size() > 1000 ||
+            windowed->publication_key == whole->publication_key)
+            return 231;
+        float low = INFINITY, high = -INFINITY;
+        for (const auto &vertex : windowed->vertices) {
+            low = std::min(low, vertex.x);
+            high = std::max(high, vertex.x);
+        }
+        // Snapped outward to chunks of 1024 units, plus a little slack.
+        if (low > 4000.0f || high < 5000.0f || low < 2800.0f || high > 6300.0f)
+            return 232;
+        // A nearby window in the same chunks reuses the snapshot.
+        if (wide.published_glyphs_for_line(wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha, {}, {},
+                                           GlyphPreparation::Rasterize,
+                                           GlyphWindow{4100.0f, 4900.0f}) != windowed)
+            return 233;
+        const auto short_whole = wide.published_glyphs_for_line(wide_layout.id, 1, 0, 0, 1, GlyphMode::Alpha);
+        const auto short_windowed = wide.published_glyphs_for_line(
+            wide_layout.id, 1, 0, 0, 1, GlyphMode::Alpha, {}, {}, GlyphPreparation::Rasterize,
+            GlyphWindow{4000.0f, 5000.0f});
+        if (!short_whole || short_whole != short_windowed || short_whole->vertices.empty())
+            return 234;
+    }
+    {
+        TextEngine retained(shared_fonts);
+        TextLayoutOptions retained_options;
+        retained_options.font_size = 16.0f;
+        TextLayoutResult retained_layout;
+        if (!retained.layout_utf8("one
+two
+three", 400.0f, retained_options, &retained_layout))
+            return 235;
+        const void *first_address = retained.published_glyphs_for_line(
+            retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get();
+        // No caller holds the snapshot, yet the next request returns the same object.
+        if (retained.published_glyphs_for_line(retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get() !=
+            first_address)
+            return 236;
     }
     return glyphs.vertices.size() % 4 == 0 && glyphs.indices.size() % 6 == 0 ? 0 : 41;
 }

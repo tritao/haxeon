@@ -945,10 +945,22 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 const GlyphTint tint{
                     color_byte(primitive.color.red), color_byte(primitive.color.green),
                     color_byte(primitive.color.blue), color_byte(primitive.color.alpha)};
+                // Only the part of a very long line inside the clip is published.
+                const LayoutTransform text_transform = draw_transform_for(primitive, active_raster_root);
+                GlyphWindow window;
+                if (!clips.empty() && text_transform.b == 0.0f && text_transform.c == 0.0f &&
+                    text_transform.a != 0.0f) {
+                    const LayoutRect clip = clip_for(clips.back());
+                    const float left = (clip.x - text_transform.tx) / text_transform.a - primitive.bounds.x;
+                    const float right = (clip.x + clip.width - text_transform.tx) / text_transform.a -
+                                        primitive.bounds.x;
+                    window = {std::min(left, right), std::max(left, right)};
+                }
                 auto snapshot = primitive.text_layout_id
                                     ? text->published_glyphs_for_line(
                                           layout_id, primitive.text_line_index, 0.0f, 0.0f,
-                                          raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas)
+                                          raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas,
+                                          window)
                                     : text->published_glyphs(layout_id, 0.0f, 0.0f,
                                                              raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas);
                 if (!snapshot)
