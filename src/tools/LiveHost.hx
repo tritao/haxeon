@@ -9,6 +9,7 @@ import sys.FileSystem;
 import sys.io.File;
 
 private typedef LiveFunction = {final name:String; final id:Int;}
+private typedef FullModule = {final module:haxe.io.Bytes; final identity:haxe.io.Bytes;}
 
 private typedef LiveDescription = {
 	final revision:Int;
@@ -29,14 +30,18 @@ class LiveHost {
 		var stamp = readStamp(path);
 		var description = readDescription(path);
 		// The compiler publishes a patch before the full module, so the description can lead the module files.
-		var loadedBytes = loadFullModule(path, description);
+		// Nothing is on screen yet, so waiting here is cheap; a compiler that writes no marker is trusted after a second.
+		var waitingSince = Sys.time(), loadedBytes = readFullModule(path, description, false);
 		while (loadedBytes == null) {
+			Sys.sleep(0.02);
 			description = readDescription(path);
-			loadedBytes = loadFullModule(path, description);
+			loadedBytes = readFullModule(path, description, Sys.time() - waitingSince > 1.0);
 		}
 		var module = Runtime.load(loadedBytes.module, loadedBytes.identity);
 		var revision = description.revision;
 		var rejectedPublication = "";
+		// A reload whose full module is not published yet waits here while the current module keeps running.
+		var pendingReload:Null<LiveDescription> = null, pendingSince = 0.0;
 		try {
 			Runtime.callStringArg(module, functionId(description, entry + ".start"), arguments);
 			var running = true;
@@ -77,26 +82,38 @@ class LiveHost {
 								ProfileSpan.end("live.patch");
 							report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
 							var full = completeDescription(path, candidate);
-							var replacement = full == null ? null : reload(module, description, full, path, entry, arguments);
-							if (replacement == null)
+							if (full == null)
 								rejectedPublication = publicationKey(candidate);
 							else {
-								module = replacement;
-								description = full;
-								revision = candidate.revision;
-								rejectedPublication = "";
+								pendingReload = full;
+								pendingSince = Sys.time();
 							}
 						}
 					} else {
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var full = completeDescription(path, candidate);
-						var replacement = full == null ? null : reload(module, description, full, path, entry, arguments);
-						if (replacement == null)
+						if (full == null)
 							rejectedPublication = publicationKey(candidate);
 						else {
+							pendingReload = full;
+							pendingSince = Sys.time();
+						}
+					}
+				}
+				var pending = pendingReload;
+				if (pending != null) {
+					// Never block the app's thread on the compiler: check once per tick. A compiler that writes no marker
+					// is trusted after a few seconds.
+					var bytes = readFullModule(path, pending, Sys.time() - pendingSince > 3.0);
+					if (bytes != null) {
+						pendingReload = null;
+						var replacement = reload(module, description, pending, bytes, entry, arguments);
+						if (replacement == null)
+							rejectedPublication = publicationKey(pending);
+						else {
 							module = replacement;
-							description = full;
-							revision = candidate.revision;
+							description = pending;
+							revision = pending.revision;
 							rejectedPublication = "";
 						}
 					}
@@ -115,10 +132,10 @@ class LiveHost {
 		Runtime.dispose(module);
 	}
 
-	static function reload(current:LoadedModule, previous:LiveDescription, next:LiveDescription, path:String, entry:String,
+	static function reload(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule, entry:String,
 			arguments:String):Null<LoadedModule> {
 		ProfileSpan.begin("live.reload");
-		var replacement = try reloadModule(current, previous, next, path, entry, arguments) catch (error:Dynamic) {
+		var replacement = try reloadModule(current, previous, next, bytes, entry, arguments) catch (error:Dynamic) {
 			ProfileSpan.end("live.reload");
 			throw error;
 		}
@@ -126,7 +143,7 @@ class LiveHost {
 		return replacement;
 	}
 
-	static function reloadModule(current:LoadedModule, previous:LiveDescription, next:LiveDescription, path:String, entry:String,
+	static function reloadModule(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule, entry:String,
 			arguments:String):Null<LoadedModule> {
 		var state:String;
 		try
@@ -137,9 +154,6 @@ class LiveHost {
 		}
 		var replacement:LoadedModule;
 		try {
-			var bytes = loadFullModule(path, next);
-			if (bytes == null)
-				throw "the full module of revision " + next.revision + " was not published";
 			replacement = Runtime.load(bytes.module, bytes.identity);
 		} catch (error:Dynamic) {
 			report('haxeon: could not load replacement; keeping revision ${previous.revision}: ${Std.string(error)}');
@@ -188,27 +202,21 @@ class LiveHost {
 	}
 
 	/**
-	 * Reads the full module and its identity once the compiler's `.live.full` marker says they belong to `target`, and
-	 * checks the marker again after reading. Null when they never did (a newer build is landing, or none was written).
-	 * A compiler that writes no marker is waited on briefly and then trusted.
+	 * The full module and its identity when the compiler's `.live.full` marker says they belong to `target`, checking the
+	 * marker again after reading; null when they don't yet (a newer build may be landing). With `trustMissing`, files with
+	 * no marker at all are taken as they are, which is what a compiler that writes no marker leaves. Never waits.
 	 */
-	static function loadFullModule(path:String, target:LiveDescription):Null<{module:haxe.io.Bytes, identity:haxe.io.Bytes}> {
-		var wanted = publicationKey(target), deadline = Sys.time() + 15.0;
-		while (true) {
-			var marker = readMarker(path);
-			if (marker == wanted) {
-				var bytes = {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
-				if (readMarker(path) == wanted)
-					return bytes;
-			}
-			if (Sys.time() > deadline) {
-				// No marker at all is a compiler that writes none: trust the files rather than wait forever.
-				if (marker == null)
-					return {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
-				return null;
-			}
-			Sys.sleep(0.02);
+	static function readFullModule(path:String, target:LiveDescription, trustMissing:Bool):Null<FullModule> {
+		var wanted = publicationKey(target), marker = readMarker(path);
+		if (marker == wanted) {
+			var bytes:FullModule = {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
+			if (readMarker(path) == wanted)
+				return bytes;
+			return null;
 		}
+		if (marker == null && trustMissing)
+			return {module: File.getBytes(path), identity: File.getBytes(path + ".hli")};
+		return null;
 	}
 
 	static function readMarker(path:String):Null<String> {
