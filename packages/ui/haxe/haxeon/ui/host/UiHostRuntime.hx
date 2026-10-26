@@ -180,6 +180,18 @@ class UiHostRuntime {
 				timedRenderer.setGpuFrameTiming(recording);
 				if (recording && timedRenderer.pollGpuFrameTime())
 					ProfileCounter.set("ui.frame.gpu_ns", timedRenderer.gpuFrameNanoseconds);
+				if (recording) {
+					// Cumulative: a capture reads the difference, and the reasons add up to the compiles.
+					var reuse = timedRenderer.planReuse();
+					ProfileCounter.set("ui.plan.compiles", reuse.compiles);
+					ProfileCounter.set("ui.plan.reuses", reuse.reuses);
+					ProfileCounter.set("ui.plan.miss.epoch", reuse.missEpoch);
+					ProfileCounter.set("ui.plan.miss.frame", reuse.missFrame);
+					ProfileCounter.set("ui.plan.miss.lists", reuse.missLists);
+					ProfileCounter.set("ui.plan.miss.dependencies", reuse.missDependencies);
+					ProfileCounter.set("ui.plan.miss.atlas", reuse.missAtlas);
+					ProfileCounter.set("ui.plan.miss.unsettled", reuse.missUnsettled);
+				}
 			}
 			lastRenderResourceError = null;
 			rendered++;
