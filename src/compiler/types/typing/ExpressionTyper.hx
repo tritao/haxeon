@@ -1131,15 +1131,23 @@ class ExpressionTyper {
 		var expectedMap = mapExpectation(expectedType);
 		if (values.length == 0 && expectedMap != null)
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
-		var expectedElement = isDynamicExpectation(expectedType) ? TDynamic : arrayElementExpectation(expectedType);
-		if (values.length == 0 && expectedElement == null)
-			fail("E1003", "Empty array literal requires an expected element type", span);
+		// In a Dynamic context the elements still decide the type, as they would anywhere else ([new Child()] is an
+		// Array<Child>, which does not convert to Array<Base>); only elements with no common type, or none, make it Dynamic.
+		var dynamicContext = isDynamicExpectation(expectedType);
+		var expectedElement = dynamicContext ? null : arrayElementExpectation(expectedType);
+		if (values.length == 0 && expectedElement == null) {
+			if (!dynamicContext)
+				fail("E1003", "Empty array literal requires an expected element type", span);
+			expectedElement = TDynamic;
+		}
 		var typedValues:Array<TypedExpression> = [],
 			elementType = expectedElement;
 		for (value in values) {
-			var typedValue = typeExpressionCallback(value, scope, elementType == TNull ? null : elementType, false);
+			var typedValue = typeExpressionCallback(value, scope, elementType == TNull || dynamicContext ? null : elementType, false);
 			if (expectedElement == null) {
 				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType, typedValue.type);
+				if (joined == null && dynamicContext)
+					joined = TDynamic;
 				if (joined == null)
 					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
 				elementType = joined;
