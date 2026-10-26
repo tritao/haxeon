@@ -844,6 +844,8 @@ class FrameworkSmoke {
 		if (!sidebarValid(context)) throw "sidebar registry, persistence or lazy provider regression";
 		if (!dockWorkspaceValid(context))
 			return 231;
+		if (!dockPanelStateFollowsPanel(context))
+			throw "a dock panel's state was rebuilt when the layout around it changed, or kept after it closed";
 		var emptyEditor = new TextEditorState(fonts, "");
 		if (Utf8Text.length(emptyEditor.text) != 0)
 			return 38;
@@ -5624,6 +5626,33 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** A panel's state belongs to the panel, not to its place in the split tree: it survives its neighbour closing and
+		the panel moving to another split, and goes when the panel closes. */
+	static function dockPanelStateFollowsPanel(uiContext:UiContext):Bool {
+		var created = 0, disposed = 0;
+		var model = new DockWorkspaceModel();
+		for (id in ["sidebar", "editor", "terminal"]) model.register(new DockPanelDescriptor(id, id));
+		var editor = new DockPanelSmoke(() -> created++, () -> disposed++);
+		var workspace = new DockWorkspace("panel-state-workspace", model, [
+			new DockPanelContent("sidebar", _ -> new Text("Sidebar")),
+			new DockPanelContent("editor", _ -> editor),
+			new DockPanelContent("terminal", _ -> new Text("Terminal"))
+		]);
+		var submit = () -> uiContext.submit(workspace, new LayoutFrame(640.0, 480.0)) != null;
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.25, DockNode.Panel("sidebar"),
+			DockNode.Split(DockSplitAxis.Vertical, 0.7, DockNode.Panel("editor"), DockNode.Panel("terminal"))));
+		if (!submit() || created != 1) return false;
+		// The sidebar closes: the editor's split moves up to the root.
+		model.setRoot(DockNode.Split(DockSplitAxis.Vertical, 0.7, DockNode.Panel("editor"), DockNode.Panel("terminal")));
+		if (!submit() || created != 1 || disposed != 0) return false;
+		// The editor moves to the other side of another split.
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.3, DockNode.Panel("terminal"),
+			DockNode.Split(DockSplitAxis.Vertical, 0.5, DockNode.Panel("sidebar"), DockNode.Panel("editor"))));
+		if (!submit() || created != 1 || disposed != 0) return false;
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.3, DockNode.Panel("sidebar"), DockNode.Panel("terminal")));
+		return submit() && created == 1 && disposed == 1;
+	}
+
 	static function dockWorkspaceValid(uiContext:UiContext):Bool {
 		var hierarchyBuilds = 0;
 		var viewportBuilds = 0;
@@ -6385,6 +6414,20 @@ private class SmokeHostApplication implements UiApplication {
 }
 
 /** Fixed sibling content shares the pane overlay, without becoming scroll content. */
+/** A panel holding one resource, created and disposed through the build context like an editor's state. */
+private class DockPanelSmoke implements View {
+	final create:Void->Void;
+	final dispose:Void->Void;
+	public function new(create:Void->Void, dispose:Void->Void) {
+		this.create = create;
+		this.dispose = dispose;
+	}
+	public function build(context:BuildContext):RenderNode {
+		context.resourceState(context.id("panel-resource"), () -> { create(); return 1; }, _ -> dispose());
+		return new Text("Editor").build(context);
+	}
+}
+
 private class ExternalScrollbarSmoke implements View {
 	final controller:ScrollController;
 	public function new(controller:ScrollController) this.controller = controller;

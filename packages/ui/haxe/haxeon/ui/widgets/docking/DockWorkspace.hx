@@ -24,6 +24,7 @@ import haxeon.ui.TextWrap;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
+import haxeon.ui.core.KeyScope;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
@@ -53,6 +54,8 @@ class DockWorkspace implements View {
 	public var availableWidth:Null<Float> = null;
 	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
+	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
+	var panelScope:Null<KeyScope> = null;
 
 	public function new(key:String, model:DockWorkspaceModel,
 			?panelContents:Array<DockPanelContent>, ?style:LayoutStyle,
@@ -92,6 +95,7 @@ class DockWorkspace implements View {
 		var paneCache:DockPanelCache = context.state(
 			context.id("pane-tree-cache:" + key), new DockPanelCache()).value;
 		paneCache.retain(context);
+		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
 		var content = buildNode(model.root, context, [], "layout",
 			availableWidth == null ? context.viewportWidth : availableWidth, availableHeight == null ? context.viewportHeight : availableHeight,
 			labelWidths, panelCache, paneCache);
@@ -298,7 +302,7 @@ class DockWorkspace implements View {
 		var content = panelContents.get(panelId);
 		return descriptor == null ? new Text("Missing panel: " + panelId) : content == null ?
 			new Text("Missing panel content: " + panelId) :
-			new DockPanelView(descriptor, content, availableWidth, panelCache);
+			new DockPanelView(descriptor, content, availableWidth, panelCache, panelScope);
 	}
 
 	function targetView(targetPanelId:String, child:View):View
@@ -364,13 +368,15 @@ private class DockPanelView implements View {
 	final content:DockPanelContent;
 	final availableWidth:Float;
 	final panelCache:DockPanelCache;
+	final scope:KeyScope;
 
 	public function new(descriptor:DockPanelDescriptor, content:DockPanelContent,
-			availableWidth:Float, panelCache:DockPanelCache) {
+			availableWidth:Float, panelCache:DockPanelCache, scope:KeyScope) {
 		this.descriptor = descriptor;
 		this.content = content;
 		this.availableWidth = availableWidth;
 		this.panelCache = panelCache;
+		this.scope = scope;
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -396,13 +402,16 @@ private class DockPanelView implements View {
 		var observed = context.buildProbe != null;
 		var preparationStarted = observed ? Sys.time() : 0.0;
 		var stateMarker = context.stateUsageMarker();
-		var widthBuilder = content.buildWithWidth;
-		var view = widthBuilder == null ? content.build(context) :
-			widthBuilder(context, availableWidth);
-		if (view == null)
-			view = new Text("Panel returned no content: " + descriptor.id);
-		var buildStarted = observed ? Sys.time() : 0.0;
-		var root = context.withScope(new Key("panel:" + descriptor.id), function() {
+		var buildStarted = 0.0;
+		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
+		// changes: a neighbour closing, or the panel moving to another split.
+		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
+			var widthBuilder = content.buildWithWidth;
+			var view = widthBuilder == null ? content.build(context) :
+				widthBuilder(context, availableWidth);
+			if (view == null)
+				view = new Text("Panel returned no content: " + descriptor.id);
+			buildStarted = observed ? Sys.time() : 0.0;
 			return view.build(context);
 		});
 		if (observed)
