@@ -22,7 +22,8 @@ class HlAssemblerStateCodec {
 		output.writeInt32(state.publishedStrings);
 		output.writeInt32(state.publishedTypes);
 		// Version 4 records the globals published, which literal globals made a patch-visible symbol table.
-		output.writeInt32(state.publishedGlobals);
+		// The field is optional only for decoded older baselines; an exported state always has it.
+		output.writeInt32(state.publishedGlobals == null ? 0 : state.publishedGlobals);
 		writeSection(output, state.symbols);
 		writeSection(output, state.cache);
 		writeNatives(output, state.runtimeNatives);
