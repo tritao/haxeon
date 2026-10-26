@@ -248,6 +248,9 @@ struct RendererSlot {
     nkui_renderer_stats stats{};
     /* Set by nkui_renderer_set_gpu_frame_timing, and handed to each backend renderer the slot gets. */
     bool gpu_frame_timing = false;
+    /* The newest GPU frame time, published by the render thread after each frame so a poll never waits for one. */
+    uint64_t gpu_last_frame_ns = 0;
+    uint64_t gpu_timed_frames = 0;
     uint16_t generation = 1;
 };
 
@@ -595,6 +598,8 @@ void execute_render_submission(RenderSubmission &submission) {
         nk_graphics_unbind_frame_target(&submission.frame_target);
     nkui::UiRenderer *renderer_impl = nullptr;
     bool new_backend = false;
+    nkgpu_frame_timing gpu_timing{};
+    bool have_gpu_timing = false;
     if (bound) {
         std::shared_lock<std::shared_mutex> renderer_execution_lock(renderer_execution_mutex,
                                                                     std::defer_lock);
@@ -653,11 +658,23 @@ void execute_render_submission(RenderSubmission &submission) {
                                  renderer_impl->lastError(), nkgpu_last_error());
             }
         }
+        if (renderer_impl && success && renderer_impl->gpuRenderer().id) {
+            gpu_timing.struct_size = sizeof(gpu_timing);
+            have_gpu_timing =
+                nkgpu_get_frame_timing(renderer_impl->gpuRenderer(), &gpu_timing) == NKGPU_OK;
+        }
         /* Stats are protected by renderers_mutex.  Do not reacquire it while
            the shared execution lock is held: nkui_renderer_get_stats takes
            those locks in the opposite order. */
         if (renderer_execution_lock.owns_lock())
             renderer_execution_lock.unlock();
+    }
+    if (have_gpu_timing) {
+        std::lock_guard lock(renderers_mutex);
+        if (auto *slot = resolve(submission.renderer)) {
+            slot->gpu_last_frame_ns = gpu_timing.last_frame_nanoseconds;
+            slot->gpu_timed_frames = gpu_timing.timed_frames;
+        }
     }
 
     /* GL/EGL retains a thread-local context through submit so sealed-plan
@@ -3423,14 +3440,18 @@ extern "C" nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
     if (!out_nanoseconds || !out_timed_frames)
         return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(renderers_mutex);
-    std::unique_lock<std::shared_mutex> execution_lock;
-    if (nk::core::render_executor_physical())
-        execution_lock = std::unique_lock<std::shared_mutex>(renderer_execution_mutex);
     auto *slot = resolve(renderer);
     if (!slot)
         return NKUI_ERROR_INVALID_HANDLE;
     *out_nanoseconds = 0;
     *out_timed_frames = 0;
+    if (nk::core::render_executor_physical()) {
+        /* The render thread owns the backend and holds the execution lock while it draws; waiting for that lock would
+           make every poll wait for the frame in flight. It publishes the newest result after each frame instead. */
+        *out_nanoseconds = slot->gpu_last_frame_ns;
+        *out_timed_frames = slot->gpu_timed_frames;
+        return NKUI_OK;
+    }
     apply_gpu_frame_timing(*slot);
     if (!slot->renderer || !slot->renderer->gpuRenderer().id)
         return NKUI_OK;
