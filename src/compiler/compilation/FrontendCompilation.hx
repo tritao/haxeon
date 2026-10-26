@@ -530,9 +530,9 @@ class FrontendCompilation {
 		// regenerates every function of a module whose declarations moved. Only functions whose final IR differs from the
 		// published one, or that were typed again, need lowering and patching; the rest keep their lowered form.
 		var changedIr:Map<String, Bool> = [for (name in inlinerChanged) name => true],
-			retypedNames:Map<String, Bool> = [for (name in retyped) name => true],
+			retypedNow:Map<String, Bool> = [for (name in retyped) name => true],
 			present:Map<String, Bool> = [for (fn in ir.functions) fn.name => true];
-		regenerated = [for (name in regenerated) if (!present.exists(name) || changedIr.exists(name) || retypedNames.exists(name)) name];
+		regenerated = [for (name in regenerated) if (!present.exists(name) || changedIr.exists(name) || retypedNow.exists(name)) name];
 		var listed:Map<String, Bool> = [for (name in regenerated) name => true];
 		for (name in inlinerChanged)
 			if (!listed.exists(name)) {
