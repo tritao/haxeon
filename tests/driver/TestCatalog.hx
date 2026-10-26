@@ -37,6 +37,7 @@ class TestCatalog {
 		"AuditVerifierMain",
 		"FrontendRestartMain",
 		"InlinerMain",
+		"StaticNullCheckReuseMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",
 		"InlineConfigurationMain",
