@@ -9,7 +9,7 @@ class HitTest {
 	public static function path(root:Null<RenderNode>, x:Float, y:Float):Array<RenderNode> {
 		if (root == null)
 			return [];
-		var state = new HitTestState(x, y);
+		var state = new HitTestState(root, x, y);
 		state.visit(root, null, -1);
 		return state.bestPath == null ? [] : state.bestPath;
 	}
@@ -30,12 +30,11 @@ class HitTest {
 }
 
 /**
- * Mirrors Clay's paint roots for hit testing. Normal flow content belongs to
- * the base root (z 0); an absolute node starts a separate stable z-layer and
- * its non-absolute descendants inherit that layer. Candidates are collected
- * in declaration/DFS order, then the last paint candidate wins.
+ * Mirrors native nested floating contexts. Descendants stay inside their
+ * owner's layer; candidates in each layer retain declaration/DFS order.
  */
 private class HitTestState {
+	final layers:Map<Int, Int> = new Map();
 	final x:Float;
 	final y:Float;
 	final path:Array<RenderNode>;
@@ -46,7 +45,8 @@ private class HitTestState {
 	var bestLayerOrder:Int;
 	var bestCandidateOrder:Int;
 
-	public function new(x:Float, y:Float) {
+	public function new(root:RenderNode, x:Float, y:Float) {
+		assignLayers(root);
 		this.x = x;
 		this.y = y;
 		path = [];
@@ -56,6 +56,32 @@ private class HitTestState {
 		bestLayerKind = 0;
 		bestLayerOrder = -1;
 		bestCandidateOrder = -1;
+	}
+
+	/** Mirror the native layout backend's nested floating-context ranks. */
+	function assignLayers(root:RenderNode):Void {
+		var children:Map<Int, Array<RenderNode>> = new Map();
+		function collect(node:RenderNode, owner:RenderNode):Void {
+			if (node != root && node.layout.style.positioning == LayoutPositioning.Absolute) {
+				var siblings = children.get(owner.id.value);
+				if (siblings == null) { siblings = []; children.set(owner.id.value, siblings); }
+				siblings.push(node);
+				owner = node;
+			}
+			for (child in node.children) collect(child, owner);
+		}
+		collect(root, root);
+		var rank = 0;
+		function order(owner:RenderNode):Void {
+			var siblings = children.get(owner.id.value);
+			if (siblings == null) siblings = [];
+			// Preserve declaration order for equal z-index values.
+			haxe.ds.ArraySort.sort(siblings, function(a, b) return a.layout.style.zIndex - b.layout.style.zIndex);
+			for (child in siblings) if (child.layout.style.zIndex < 0) order(child);
+			layers.set(owner.id.value, rank++);
+			for (child in siblings) if (child.layout.style.zIndex >= 0) order(child);
+		}
+		order(root);
 	}
 
 	public function visit(node:RenderNode, stackingOwner:Null<RenderNode>,
@@ -89,7 +115,7 @@ private class HitTestState {
 	}
 
 	function consider(owner:Null<RenderNode>, ownerOrder:Int, candidateOrder:Int):Void {
-		var layerZ = owner == null ? 0 : owner.layout.style.zIndex;
+		var layerZ:Int = cast layers.get(owner == null ? path[0].id.value : owner.id.value);
 		// Clay's base flow root is emitted before floating roots at the same
 		// z-index. Negative/positive z-index values still compare normally.
 		var layerKind = owner == null ? 0 : 1;

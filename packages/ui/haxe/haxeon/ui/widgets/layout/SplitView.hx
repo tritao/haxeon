@@ -100,7 +100,7 @@ class SplitView implements View {
 			var leadingNode = context.withScope(new Key("leading"), function() {
 				return leading.build(context);
 			});
-			leadingPane.add(leadingNode);
+			leadingPane.add(paneContent(context, "leading-content", leadingNode));
 			root.add(leadingPane);
 
 			if (dividerExtent > 0.0) {
@@ -195,7 +195,7 @@ class SplitView implements View {
 			var trailingNode = context.withScope(new Key("trailing"), function() {
 				return trailing.build(context);
 			});
-			trailingPane.add(trailingNode);
+			trailingPane.add(paneContent(context, "trailing-content", trailingNode));
 			root.add(trailingPane);
 			return root;
 		});
@@ -288,6 +288,19 @@ class SplitView implements View {
 	static function actionGranularity(event:UiEvent):Int {
 		var action:AccessibilityActionData = cast event.data;
 		return action != null && action.granularity > 1 ? action.granularity : 1;
+	}
+
+	/** Keep nested floating content in its pane's layer, below the resize chrome. */
+	function paneContent(context:BuildContext, key:String, content:RenderNode):RenderNode {
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.grow();
+		style.height = LayoutAxis.grow();
+		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.clipToParent = true;
+		var root = new RenderNode(context.id(key), LayoutVisualKind.Box, style);
+		root.hitTestSelf = false;
+		root.add(content);
+		return root;
 	}
 
 	function paneStyle(horizontal:Bool, resizable:Bool, paneExtent:Float):LayoutStyle {
