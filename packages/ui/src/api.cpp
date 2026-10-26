@@ -118,6 +118,10 @@ struct ResourceSlot {
     // the direct glyph path instead of creating one-use render targets.
     bool row_placement_known = false;
     std::array<float, 6> row_placement{};
+    // Admit only repeated row contents, not a new GPU target for every edit.
+    // Track publications rather than line indices so edits can move cached rows.
+    // Entries are pruned to the current visible rows (at most 96).
+    std::unordered_map<uint64_t, bool> row_raster_candidates;
     uint64_t text_content_revision = 1;
     float text_width = 0.0f;
     nkui::TextLayoutOptions text_options{};
@@ -1639,6 +1643,7 @@ void release_resource_slot(ResourceSlot &slot) {
     slot.text_color_ranges.clear();
     slot.row_placement_known = false;
     slot.row_placement = {};
+    slot.row_raster_candidates.clear();
     slot.text_content_revision = 1;
     slot.text_width = 0.0f;
     slot.text_options = {};
@@ -4392,6 +4397,9 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 const bool stable_placement = layout->row_placement_known && layout->row_placement == placement;
                 layout->row_placement = placement;
                 layout->row_placement_known = true;
+                auto &raster_candidates = layout->row_raster_candidates;
+                if (row_count > 96) raster_candidates.clear();
+                else for (auto &[publication, seen] : raster_candidates) seen = false;
                 // Small single-line paragraphs use the same row cache. Keep
                 // very long unwrapped lines on the direct single-row path.
                 if ((row_count > 1 || (row_count == 1 && layout->text->text_count() <= 2048)) &&
@@ -4408,6 +4416,13 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                             valid = false;
                             invalid_reason = "a visible text row could not be prepared";
                             break;
+                        }
+                        bool stable_content = false;
+                        if (row_count <= 96) {
+                            const auto [candidate, inserted] =
+                                raster_candidates.try_emplace(row->publication_key, true);
+                            stable_content = !inserted;
+                            candidate->second = true;
                         }
                         auto row_command = command;
                         const auto bounds = layout->text->line_bounds(row_index);
@@ -4430,7 +4445,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                             sealable = false;
                         if (!valid)
                             break;
-                        if (stable_placement && row_count <= 96 && command.transform[1] == 0.0f &&
+                        if (stable_placement && stable_content && row_count <= 96 && command.transform[1] == 0.0f &&
                             command.transform[2] == 0.0f && command.transform[0] > 0.0f &&
                             command.transform[3] > 0.0f && !row->vertices.empty()) {
                             float min_y = INFINITY, max_y = -INFINITY;
@@ -4486,6 +4501,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                      row_command.content_generation});
                         row_commands.push_back(std::move(row_command));
                     }
+                    std::erase_if(raster_candidates, [](const auto &entry) { return !entry.second; });
                     if (!valid)
                         break;
                     retain_text_engine(layout->text, text_engines, text_engine_owners);

@@ -34,13 +34,16 @@ void hash_runtime_float(uint64_t &hash, float value) {
 
 void hash_runtime_command_geometry(uint64_t &hash, const RenderCommand &command) {
     for (const float value : {command.x, command.y, command.width, command.height, command.opacity,
-                              command.scissor_x, command.scissor_y, command.scissor_width,
-                              command.scissor_height, command.stroke_width, command.miter_limit})
+                              command.stroke_width, command.miter_limit})
         hash_runtime_float(hash, value);
     for (const float value : command.transform)
         hash_runtime_float(hash, value);
     hash_runtime_u32(hash, static_cast<uint32_t>(command.composite));
     hash_runtime_u32(hash, command.has_scissor ? 1u : 0u);
+    if (command.has_scissor)
+        for (const float value : {command.scissor_x, command.scissor_y,
+                                  command.scissor_width, command.scissor_height})
+            hash_runtime_float(hash, value);
     hash_runtime_u32(hash, command.line_cap);
     hash_runtime_u32(hash, command.line_join);
     hash_runtime_u32(hash, command.custom_payload ? 1u : 0u);

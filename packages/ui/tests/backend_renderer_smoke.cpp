@@ -389,6 +389,49 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
                          stats[2].raster_cache_hits >= stats[1].raster_cache_hits + 2,
                      "cached text row reuse")) return false;
         if (!check(stats[2].atlas_pages > 0, "text created cached atlas pages")) return false;
+        // A stationary paragraph that changes every frame must stay on the
+        // glyph path. Placement alone cannot justify allocating a row texture.
+        const auto render_text_frame = [&](nkui_renderer_stats &result) {
+            int32_t width = 0, height = 0;
+            nk_surface_frame_target target{};
+            if (!acquire_surface_frame(window, surface, width, height, target)) return false;
+            const nkui_frame_info frame{sizeof(frame), static_cast<float>(width),
+                                        static_cast<float>(height), width, height, 1.0f};
+            if (nkui_layout_session_render_frame(renderer, session, surface, &frame, 0) != NKUI_OK)
+                return false;
+            RenderTask barrier{};
+            barrier.function = [](RenderTask &task) noexcept { task.success = true; };
+            if (!dispatch_render_task(barrier) ||
+                nkui_renderer_get_stats(renderer, &result) != NKUI_OK ||
+                result.render_submission_failures != 0) return false;
+            return nk::core::render_executor_physical() || nk_surface_present(surface) == NK_OK;
+        };
+        auto previous = stats[2];
+        for (int change = 0; change < 3; ++change) {
+            const std::string edited = "Edited row " + std::to_string(change) + "\nSecond edited row";
+            if (nkui_text_layout_set_text(text, edited.c_str()) != NKUI_OK) return false;
+            nkui_renderer_stats current{};
+            if (!render_text_frame(current) ||
+                !check(current.raster_cache_misses == previous.raster_cache_misses,
+                       "changing text does not allocate row rasters")) return false;
+            previous = current;
+        }
+        nkui_renderer_stats admitted{}, reused{};
+        if (!render_text_frame(admitted) || !render_text_frame(reused) ||
+            !check(admitted.raster_cache_misses >= previous.raster_cache_misses + 2 &&
+                       reused.raster_cache_misses == admitted.raster_cache_misses &&
+                       reused.raster_cache_hits >= admitted.raster_cache_hits + 2,
+                   "text caches again after editing stops")) return false;
+        previous = reused;
+        for (int change = 0; change < 3; ++change) {
+            if (nkui_text_layout_set_color(text, {0.2f + change * 0.1f, 0.3f, 0.4f, 1.0f}) != NKUI_OK)
+                return false;
+            nkui_renderer_stats current{};
+            if (!render_text_frame(current) ||
+                !check(current.raster_cache_misses == previous.raster_cache_misses,
+                       "changing text colors do not allocate row rasters")) return false;
+            previous = current;
+        }
         // Release the source engines, then submit empty frames to retire GPU
         // atlas pages after any queued frame owners have drained.
         if (nkui_layout_session_destroy(session) != NKUI_OK ||

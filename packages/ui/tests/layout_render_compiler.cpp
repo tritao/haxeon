@@ -1416,6 +1416,23 @@ int main() {
         !execute_raster_cache_plan() || raster_cache_backend.raster_cache_hits != 1 ||
         raster_cache_backend.image_count != 2)
         return 35;
+    // Row textures remove their viewport scissor before rendering locally.
+    // Its unused coordinates must not invalidate an otherwise identical row.
+    auto &raster_command = raster_cache_plan.passes[0].commands[0];
+    raster_command.scissor_x = 4.0f;
+    raster_command.scissor_y = 20.0f;
+    raster_command.scissor_width = raster_command.scissor_height = 8.0f;
+    if (!execute_raster_cache_plan() || raster_cache_backend.raster_cache_hits != 2 ||
+        raster_cache_backend.image_count != 2) return 382;
+    raster_command.has_scissor = true;
+    if (!execute_raster_cache_plan() || raster_cache_backend.raster_cache_hits != 2 ||
+        raster_cache_backend.image_count != 3) return 383;
+    raster_command.scissor_y = 30.0f;
+    if (!execute_raster_cache_plan() || raster_cache_backend.raster_cache_hits != 2 ||
+        raster_cache_backend.image_count != 4) return 384;
+    raster_command.has_scissor = false;
+    if (!execute_raster_cache_plan() || raster_cache_backend.raster_cache_hits != 3 ||
+        raster_cache_backend.image_count != 4) return 385;
 
     LayoutSnapshot recolored = snapshot;
     for (auto &primitive : recolored.primitives) {
