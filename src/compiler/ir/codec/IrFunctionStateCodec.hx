@@ -28,13 +28,20 @@ class IrFunctionStateCodec {
 		return encodeFunction(fn, true);
 
 	/**
+	 * Encodes everything `encode` does except the content hash of each source file. That hash covers the whole file, so
+	 * an edit anywhere changes it for every function of the file; the positions beside it already say where code sits.
+	 */
+	public static function encodeForComparison(fn:IrFunction):Bytes
+		return encodeFunction(fn, true, false);
+
+	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
 	 * fingerprint run the same code, wherever their source sits and whatever they are called.
 	 */
 	public static function codeFingerprint(fn:IrFunction):String
 		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false)));
 
-	static function encodeFunction(fn:IrFunction, identified:Bool):Bytes {
+	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true):Bytes {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
@@ -91,7 +98,7 @@ class IrFunctionStateCodec {
 			for (instruction in block.instructions) {
 				writeBytes(output, IrInstructionCodec.encode(instruction.value));
 				if (identified)
-					writeProvenance(output, instruction.provenance);
+					writeProvenance(output, instruction.provenance, hashed);
 			}
 			// An unreachable block may stay open, as the continuation of a try whose every path returns or throws; the verifiers
 			// check only reachable blocks. Rejecting it here made every such function compare as changed on each live edit.
@@ -105,7 +112,7 @@ class IrFunctionStateCodec {
 			IrTerminatorCodec.write(terminator, blockTerminator.value);
 			writeBytes(output, terminator.getBytes());
 			if (identified)
-				writeProvenance(output, blockTerminator.provenance);
+				writeProvenance(output, blockTerminator.provenance, hashed);
 		}
 		return output.getBytes();
 	}
@@ -195,7 +202,7 @@ class IrFunctionStateCodec {
 		}
 	}
 
-	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance):Void {
+	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance, hashed:Bool = true):Void {
 		var location = provenance.location;
 		output.writeByte(location == null ? 0 : 1);
 		if (location != null) {
@@ -206,7 +213,7 @@ class IrFunctionStateCodec {
 			output.writeInt32(location.column);
 			output.writeInt32(location.endLine);
 			output.writeInt32(location.endColumn);
-			output.writeInt32(location.sourceHash);
+			output.writeInt32(hashed ? location.sourceHash : 0);
 		}
 		switch provenance.origin {
 			case UserSource:

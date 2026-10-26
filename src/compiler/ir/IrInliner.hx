@@ -267,10 +267,14 @@ class IrInliner {
 		return changed;
 	}
 
-	/** Whether both encode to the same bytes; a function that cannot be encoded counts as different. */
+	/**
+	 * Whether both encode to the same bytes, ignoring the whole-file content hash so an edit elsewhere in the file does not
+	 * make the function look changed; a function that cannot be encoded counts as different. Any shift of its own
+	 * positions still counts, so the published function keeps the line information its lowered form carries.
+	 */
 	static function sameBytes(a:IrFunction, b:IrFunction):Bool {
 		try {
-			return IrFunctionStateCodec.encode(a).compare(IrFunctionStateCodec.encode(b)) == 0;
+			return IrFunctionStateCodec.encodeForComparison(a).compare(IrFunctionStateCodec.encodeForComparison(b)) == 0;
 		} catch (_:Dynamic) {
 			return false;
 		}
