@@ -105,8 +105,9 @@ class CompilerProvider {
 					session, true);
 			};
 		var invoke = function():Int {
-			if (context.live && session != null)
-				session.liveCompiled = true;
+			var running = context.session;
+			if (context.live && running != null)
+				running.liveCompiled = true;
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
