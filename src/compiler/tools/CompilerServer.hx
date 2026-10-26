@@ -135,6 +135,8 @@ class CompilerServer {
 				".hlp",
 				".live.json",
 				".live.json.tmp",
+				".live.patch.json",
+				".live.patch.json.tmp",
 				".live.stamp",
 				".live.stamp.tmp",
 				".build-id",
@@ -153,7 +155,7 @@ class CompilerServer {
 				return;
 			if (FileSystem.exists(output + ".live.full"))
 				FileSystem.deleteFile(output + ".live.full");
-			for (suffix in [".hlp", ".live.json", ".live.stamp"]) {
+			for (suffix in [".hlp", ".live.patch.json", ".live.json", ".live.stamp"]) {
 				var temporary = output + stagingSuffix + suffix;
 				if (FileSystem.exists(temporary)) {
 					CompilerDriver.replaceFile(temporary, output + suffix);
