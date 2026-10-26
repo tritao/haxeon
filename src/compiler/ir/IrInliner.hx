@@ -58,6 +58,35 @@ class IrInlineCache {
 	/** Functions the last run found unchanged except for where they sit in their file: lowered again, never patched. */
 	public var relocated:Array<String> = [];
 
+	/**
+	 * Code fingerprints of the positionally named functions (lambdas), by the function they were taken from: an unchanged
+	 * module keeps its IR functions between compiles, so its ~100 ms of re-encoding and hashing per compile is skipped.
+	 * Assembly rewrites calls to C natives inside the functions, so a different set of C natives starts over.
+	 */
+	var positionalPrints:Map<String, {fn:IrFunction, print:String}> = [];
+
+	var nextPositionalPrints:Map<String, {fn:IrFunction, print:String}> = [];
+	var positionalNatives:Null<String> = null;
+
+	/** `IrFunctionStateCodec.codeFingerprint(fn)`, remembered while `fn` and the program's C natives stay the same. */
+	public function positionalFingerprint(fn:IrFunction, cNatives:String):String {
+		if (positionalNatives != cNatives) {
+			positionalPrints = [];
+			positionalNatives = cNatives;
+		}
+		var known = positionalPrints.get(fn.name);
+		if (known == null || known.fn != fn)
+			known = {fn: fn, print: IrFunctionStateCodec.codeFingerprint(fn)};
+		nextPositionalPrints.set(fn.name, known);
+		return known.print;
+	}
+
+	/** Keeps only the fingerprints this compile asked for, so a removed function's entry does not stay alive. */
+	public function finishPositionalFingerprints():Void {
+		positionalPrints = nextPositionalPrints;
+		nextPositionalPrints = [];
+	}
+
 	var lastFingerprint:Null<String> = null;
 	var lastFingerprintId = 0;
 	var objectTexts:Map<String, String> = [];
@@ -106,6 +135,9 @@ class IrInlineCache {
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.staticChecks.copies = staticChecks.copies;
 		result.staticChecks.helpers = staticChecks.helpers;
+		for (name => entry in positionalPrints)
+			result.positionalPrints.set(name, entry);
+		result.positionalNatives = positionalNatives;
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
 		for (name => text in objectTexts)

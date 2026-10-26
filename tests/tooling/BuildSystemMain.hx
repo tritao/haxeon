@@ -71,6 +71,7 @@ class BuildSystemMain {
 		testSharedDigestsAcrossExecutions();
 		testWorkerVersionMemo();
 		testWatchChangeClassification();
+		testWatchSnapshot();
 		testDirectoryWatcher();
 		testArtifactCache();
 		testDelegatedNativeInvalidation();
@@ -629,6 +630,29 @@ class BuildSystemMain {
 			"a watch session keeps the worker it chose after the compiler sources change");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, null) != one, "without a session the version follows the sources");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one, "a profile port selects a different worker");
+		removeTree(root);
+	}
+
+	/** The watch snapshot stats each Haxe file under the source roots and the manifest, and nothing else. */
+	@:access(tools.WatchRun)
+	static function testWatchSnapshot():Void {
+		var root = temporaryDirectory("watch-snapshot");
+		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}',
+			["src/Main.hx", "src/deep/er/B.hx", "src/notes.txt", "src/folder.hx/C.hx"]);
+		ensureDirectory(Path.join([root, "src", "empty"]));
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
+			files = WatchRun.snapshot(project),
+			names = [for (path in files.keys()) path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)];
+		names.sort(Reflect.compare);
+		expect(names.join(",") == "haxeon.json,src/Main.hx,src/deep/er/B.hx,src/folder.hx/C.hx",
+			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));
+		for (path => stamp in files) {
+			var stat = FileSystem.stat(path);
+			expect(stamp == '${stat.mtime.getTime()}:${stat.size}', "a snapshot entry is the file's modification time and size");
+		}
+		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
+");
+		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
 		removeTree(root);
 	}
 
