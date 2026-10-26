@@ -480,6 +480,33 @@ int main() {
         floating_paint->scissor_x != 78.0f || floating_paint->scissor_y != 54.0f ||
         floating_paint->scissor_width != 1.5f || floating_paint->scissor_height != 3.0f)
         return 291;
+    // A horizontal scrollbar in a vertically scrolled code block is a normal
+    // shape, not a custom painter. Its inherited clip must survive even when
+    // Clay emits it after the ancestor scissor ended. Text shares this rule.
+    for (float clip_width : {1.0f, 0.0f}) {
+        auto floating_shapes = floating_snapshot;
+        floating_shapes.primitives.erase(
+            std::remove_if(floating_shapes.primitives.begin(), floating_shapes.primitives.end(),
+                [](const LayoutPrimitive &primitive) {
+                    return !((primitive.node_id == 2 && primitive.kind == LayoutPrimitiveKind::Rectangle) ||
+                             (primitive.node_id == 3 && primitive.kind == LayoutPrimitiveKind::Text));
+                }), floating_shapes.primitives.end());
+        for (auto &item : floating_shapes.items)
+            if (item.id == 2 || item.id == 3)
+                item.clip_bounds = {52.0f, 36.0f, clip_width, 2.0f};
+        LayoutRenderFrame shapes_frame;
+        if (!compiler.compile(floating_shapes, main_target, 1.5f, shapes_frame, &compile_error,
+                              false, engine.text_engine())) return 350;
+        int clipped_commands = 0;
+        for (const auto &pass : shapes_frame.plan().passes)
+            for (const auto &command : pass.commands) {
+                if (command.kind != RenderCommandKind::Path && command.kind != RenderCommandKind::GlyphBatch) continue;
+                if (!command.has_scissor || command.scissor_x != 78.0f || command.scissor_y != 54.0f ||
+                    command.scissor_width != clip_width * 1.5f || command.scissor_height != 3.0f) return 351;
+                ++clipped_commands;
+            }
+        if (clipped_commands < 2) return 352;
+    }
     // Floating Clay scissors can retain pre-scroll coordinates. The resolved
     // scene clip already includes every ancestor in viewport space.
     auto stale_clip_snapshot = floating_snapshot;

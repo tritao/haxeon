@@ -891,6 +891,17 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 close_raster_if_last(index);
                 continue;
             }
+
+            // Floating shapes and text can be emitted outside ancestor scissor
+            // commands, just like custom painters. Use the resolved scene clip
+            // so nested scrollbars cannot paint beyond their scrolled viewport.
+            // Cached subtrees retain local scissors; their outer clip belongs
+            // to the composite, so scrolling does not change cached pixels.
+            const auto *scene_item = active_raster_root == no_raster_root ? snapshot.find(primitive.node_id) : nullptr;
+            const bool has_primitive_clip = scene_item || !clips.empty();
+            LayoutRect primitive_clip = scene_item ? scene_item->clip_bounds : LayoutRect{};
+            if (!clips.empty() && (!scene_item || active_raster_root != no_raster_root))
+                primitive_clip = scene_item ? intersect(primitive_clip, clips.back()) : clips.back();
             if (primitive.kind == LayoutPrimitiveKind::Rectangle) {
                 if (primitive.bounds.width <= 0.0f || primitive.bounds.height <= 0.0f) {
                     close_raster_if_last(index);
@@ -922,8 +933,8 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     out.sealable_ = false;
                 RenderCommand command{RenderCommandKind::Path, id};
                 command.content_generation = content_generation;
-                if (!clips.empty())
-                    set_scissor(command, clip_for(clips.back()), pixel_scale);
+                if (has_primitive_clip)
+                    set_scissor(command, clip_for(primitive_clip), pixel_scale);
                 out.plan_.passes[current_main_pass].commands.push_back(std::move(command));
                 out.paths_.push_back(std::move(prepared));
                 if (!append_custom_for_primitive(index))
@@ -974,8 +985,8 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                                       primitive.bounds.height};
                 command.content_generation = content_generation;
                 command.transform = device_transform(draw_transform, pixel_scale);
-                if (!clips.empty())
-                    set_scissor(command, clip_for(clips.back()), pixel_scale);
+                if (has_primitive_clip)
+                    set_scissor(command, clip_for(primitive_clip), pixel_scale);
                 out.plan_.passes[current_main_pass].commands.push_back(std::move(command));
                 if (!append_custom_for_primitive(index))
                     return false;
