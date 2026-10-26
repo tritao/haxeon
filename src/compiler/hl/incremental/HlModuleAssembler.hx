@@ -193,7 +193,7 @@ class HlModuleAssembler {
 		return true;
 	}
 
-	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
+	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0,
 			publishedSlots = cache.slots.length;
 		cache.update(program.functions);
@@ -273,7 +273,8 @@ class HlModuleAssembler {
 					throw 'Added function $name has no slot';
 				addedFunctions.push({slot: slot, name: name});
 			}
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
+			relocated == null ? regenerated : regenerated.concat(relocated),
 			runtimeNatives, debugMetadata),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;

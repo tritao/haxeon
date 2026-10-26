@@ -142,8 +142,16 @@ function main():Int return stay(1);
 ";
 		var lineCache = new IrInlineCache();
 		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache);
-		var offsetEdit = IrInliner.run(Frontend.compile(linesFor("// a longer comment")), lineCache);
+		var offsetProgram = Frontend.compile(linesFor("// a longer comment"));
+		var offsetEdit = IrInliner.run(offsetProgram, lineCache);
 		expect(offsetEdit.indexOf("stay") < 0, "a function whose lines and columns held is unchanged when only byte offsets moved");
+		expect(lineCache.relocated.indexOf("stay") >= 0, "a function that only moved within its file is lowered again");
+		// It keeps the new positions, so a warm build names the same source snapshot as a cold one.
+		var coldProgram = Frontend.compile(linesFor("// a longer comment"));
+		IrInliner.run(coldProgram, new IrInlineCache());
+		expect(IrFunctionStateCodec.encode(programFunction(offsetProgram, "stay"))
+			.compare(IrFunctionStateCodec.encode(programFunction(coldProgram, "stay"))) == 0,
+			"a function that only moved carries the positions a cold compile gives it");
 		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
 // b")), lineCache);
 		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");

@@ -31,10 +31,39 @@ class IrFunctionStateCodec {
 	 * Encodes everything `encode` does except the content hash of each source file and the byte offsets of each location.
 	 * The hash covers the whole file and the offsets move with any edit before the function, so an edit anywhere would make
 	 * every later function of the file look different. Line and column numbers stay in: a function whose lines moved differs.
-	 * One that keeps its previous form keeps its hash and offsets too, which still describe the source snapshot it carries.
+	 * `samePlacement` tells whether two functions with the same comparison encoding also agree on what it leaves out.
 	 */
 	public static function encodeForComparison(fn:IrFunction):Bytes
 		return encodeFunction(fn, true, false);
+
+	/**
+	 * Whether two functions with the same comparison encoding also have the same file hashes and byte offsets, so one can
+	 * stand in for the other in a build: its debug information then names a source snapshot the build carries.
+	 */
+	public static function samePlacement(left:IrFunction, right:IrFunction):Bool {
+		for (index in 0...left.debugBindings.length) {
+			var a = left.debugBindings[index], b = right.debugBindings[index];
+			if (a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd)
+				return false;
+		}
+		for (blockIndex in 0...left.blocks.length) {
+			var a = left.blocks[blockIndex], b = right.blocks[blockIndex];
+			for (index in 0...a.instructions.length)
+				if (!samePlace(a.instructions[index].provenance, b.instructions[index].provenance))
+					return false;
+			var leftTerminator = a.terminator, rightTerminator = b.terminator;
+			if (leftTerminator != null && rightTerminator != null && !samePlace(leftTerminator.provenance, rightTerminator.provenance))
+				return false;
+		}
+		return true;
+	}
+
+	static function samePlace(left:SourceProvenance, right:SourceProvenance):Bool {
+		var a = left.location, b = right.location;
+		if (a == null || b == null)
+			return a == b;
+		return a.start == b.start && a.end == b.end && a.sourceHash == b.sourceHash;
+	}
 
 	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same

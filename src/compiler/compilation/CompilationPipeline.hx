@@ -97,7 +97,7 @@ class CompilationPipeline {
 			frontendGraphDoneAt = frontend.frontendGraphDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
-		var backend = BackendAssembly.assemble(context, ir, regenerated, token);
+		var backend = BackendAssembly.assemble(context, ir, regenerated, frontend.relocated, token);
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
 			candidateAssembler = backend.assembler,

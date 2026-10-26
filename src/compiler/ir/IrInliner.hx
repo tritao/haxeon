@@ -55,6 +55,9 @@ class IrInlineCache {
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 
+	/** Functions the last run found unchanged except for where they sit in their file: lowered again, never patched. */
+	public var relocated:Array<String> = [];
+
 	var lastFingerprint:Null<String> = null;
 	var lastFingerprintId = 0;
 	var objectTexts:Map<String, String> = [];
@@ -244,7 +247,8 @@ class IrInliner {
 	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool, ?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
 		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
-			changed:Array<String> = [];
+			changed:Array<String> = [],
+			relocated:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
@@ -267,9 +271,16 @@ class IrInliner {
 				if (previousEntry == null || previousEntry.fn != previous)
 					previousEntry = {fn: previous, bytes: encodeOrNull(previous)};
 				var resultBytes = previousEntry.bytes == null ? null : encodeOrNull(result);
-				if (resultBytes != null && previousEntry.bytes.compare(resultBytes) == 0)
-					result = previous;
-				else {
+				if (resultBytes != null && previousEntry.bytes.compare(resultBytes) == 0) {
+					// The same code on the same lines. One that only moved within its file keeps its new positions, so its
+					// debug information names the snapshot this build carries; it is lowered again but needs no patch.
+					if (IrFunctionStateCodec.samePlacement(previous, result))
+						result = previous;
+					else {
+						relocated.push(fn.name);
+						previousEntry = {fn: result, bytes: resultBytes};
+					}
+				} else {
 					changed.push(fn.name);
 					previousEntry = {fn: result, bytes: resultBytes};
 				}
@@ -291,6 +302,7 @@ class IrInliner {
 				publishedBytes.set(name, entry);
 		cache.publishedBytes = publishedBytes;
 		cache.instrumented = instrumented;
+		cache.relocated = relocated;
 		return changed;
 	}
 

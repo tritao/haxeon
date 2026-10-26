@@ -31,7 +31,7 @@ typedef BackendAssemblyResult = {
 
 /** Plans and assembles one IR candidate for the HashLink backend. */
 class BackendAssembly {
-	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
+	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var nextAbi = RuntimeAbi.describe(ir), // Patch planning describes what a running module must do to adopt this build. Without live patching
 		// there is no running module, and the plan would only mix session history into the build.
@@ -52,7 +52,7 @@ class BackendAssembly {
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision);
+		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		attachSourceSnapshots(context, assembly.module);

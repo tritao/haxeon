@@ -35,6 +35,9 @@ typedef FrontendResult = {
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
+
+	/** Functions whose code is unchanged but whose positions moved in their file: lowered again, not patched. */
+	final relocated:Array<String>;
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
 	final semanticAliasMs:Float;
@@ -457,6 +460,7 @@ class FrontendCompilation {
 				retyped: retyped,
 				invalidations: semanticAssembly.invalidations,
 				regenerated: regenerated,
+				relocated: [],
 				typerMetrics: typerMetrics,
 				frontendGraphDoneAt: frontendGraphDoneAt,
 				semanticAliasMs: semanticAssembly.aliasSetupMs,
@@ -540,6 +544,7 @@ class FrontendCompilation {
 				regenerated.push(name);
 			}
 		regenerated.sort(Reflect.compare);
+		var relocated = [for (name in context.inlineCache().relocated) if (!listed.exists(name)) name];
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
@@ -549,6 +554,7 @@ class FrontendCompilation {
 			retyped: retyped,
 			invalidations: semanticAssembly.invalidations,
 			regenerated: regenerated,
+			relocated: relocated,
 			typerMetrics: typerMetrics,
 			frontendGraphDoneAt: frontendGraphDoneAt,
 			semanticAliasMs: semanticAssembly.aliasSetupMs,
