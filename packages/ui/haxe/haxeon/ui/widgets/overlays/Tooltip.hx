@@ -78,6 +78,24 @@ class Tooltip implements View {
 			var anchorNode = root.children[0];
 			var tooltipNode = root.children[1];
 			tooltipNode.layout.style.visible = state.value;
+			tooltipNode.onResolved(function(_) {
+				if (root.resolved == null || anchorNode.resolved == null || tooltipNode.parent == null ||
+					tooltipNode.parent.resolved == null) return;
+				var anchorBounds = root.globalBounds();
+				var parentBounds = tooltipNode.parent.globalBounds();
+				var bounds = tooltipNode.globalBounds();
+				var edge = 6.0;
+				var maxWidth = Math.max(1, context.viewportWidth - 2 * edge);
+				var nextX = Math.max(edge, Math.min(anchorBounds.x + x, context.viewportWidth - edge - bounds.width)) - parentBounds.x;
+				var nextY = Math.max(edge, Math.min(anchorBounds.y + y, context.viewportHeight - edge - bounds.height)) - parentBounds.y;
+				if (tooltipNode.layout.style.positionX != nextX || tooltipNode.layout.style.positionY != nextY ||
+					tooltipNode.layout.style.width.max != maxWidth) {
+					tooltipNode.layout.style.positionX = nextX;
+					tooltipNode.layout.style.positionY = nextY;
+					tooltipNode.layout.style.width = LayoutAxis.fit(0, maxWidth);
+					context.requestLayoutFeedback();
+				}
+			});
 			anchorNode.on(UiEventKind.HoverEnter, function(_) {
 				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
 			});
