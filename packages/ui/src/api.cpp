@@ -3756,10 +3756,11 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                 const auto base_window = visible_text_window(command, transform, *frame_info,
                                                              pass.target_descriptor);
                 // A row keeps its own immutable glyph snapshot and cache key.
-                // Leave one-row views and unusually large ranges on the bounded
-                // aggregate path so transient resource IDs cannot overflow.
-                if (row_count > 1 && row_count <=
-                    std::numeric_limits<uint16_t>::max() - prepared_slot) {
+                // Leave short one-row views and unusually large ranges on the bounded
+                // aggregate path so transient resource IDs cannot overflow. A one-row
+                // view of a very long line takes the row path to be windowed.
+                if ((row_count > 1 || (row_count == 1 && layout->text->text_count() > 2048)) &&
+                    row_count <= std::numeric_limits<uint16_t>::max() - prepared_slot) {
                     std::vector<nkui::RenderCommand> row_commands;
                     row_commands.reserve(row_count);
                     for (uint32_t row_index = visible.first; row_index < visible.second; ++row_index) {
@@ -4436,16 +4437,16 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 auto &raster_candidates = layout->row_raster_candidates;
                 if (row_count > 96) raster_candidates.clear();
                 else for (auto &[publication, seen] : raster_candidates) seen = false;
-                // Small single-line paragraphs use the same row cache. Keep
-                // very long unwrapped lines on the direct single-row path.
-                if ((row_count > 1 || (row_count == 1 && layout->text->text_count() <= 2048)) &&
+                // Single-line paragraphs use the same row cache, so a very long
+                // unwrapped line publishes only the window the clip shows.
+                if (row_count >= 1 &&
                     row_count <=
                     std::numeric_limits<uint16_t>::max() - prepared_slot + 1) {
                     std::vector<nkui::RenderCommand> row_commands;
                     row_commands.reserve(row_count);
                     for (uint32_t row_index = visible.first; row_index < visible.second; ++row_index) {
-                        const auto window = row_window(base_window,
-                                                       layout->text->line_bounds(row_index).x);
+                        const auto bounds = layout->text->line_bounds(row_index);
+                        const auto window = row_window(base_window, bounds.x);
                         auto row = layout->text->published_glyphs_for_line(
                             layout->text->active_layout_id(), row_index, 0, 0, raster_scale,
                             nkui::GlyphMode::Alpha, glyph_tint_from_color(layout->text_color),
@@ -4463,7 +4464,6 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                             candidate->second = true;
                         }
                         auto row_command = command;
-                        const auto bounds = layout->text->line_bounds(row_index);
                         row_command.resource = nkui::make_resource_id(
                             nkui::ResourceKind::TextLayout, 0x0FFD,
                             static_cast<uint16_t>(prepared_slot++));

@@ -16,7 +16,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <deque>
+#include <iterator>
+#include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -88,8 +89,16 @@ struct TextEngine::State {
     std::unordered_map<uint64_t, std::weak_ptr<const PreparedGlyphs>> published_glyphs;
     // The map above is weak, so a row nobody holds is rebuilt on its next request, which for
     // the rows of a viewport is every frame. This keeps the most recent snapshots alive.
-    std::deque<std::pair<std::shared_ptr<const PreparedGlyphs>, std::size_t>> retained_publications;
+    struct RetainedPublication {
+        uint64_t key = 0;
+        std::shared_ptr<const PreparedGlyphs> glyphs;
+        std::size_t bytes = 0;
+    };
+    std::list<RetainedPublication> retained_publications;
+    std::unordered_map<uint64_t, std::list<RetainedPublication>::iterator> retained_index;
     std::size_t retained_publication_bytes = 0;
+    // The weak map is swept when it reaches this size, which then grows with the live entries.
+    std::size_t published_sweep_size = 256;
     // The public buffer API asks for size and contents separately. Retain one
     // bounded query so neither that pair nor repeated paints rewalks the text.
     TextLayoutId selection_layout_id = 0;
@@ -412,16 +421,27 @@ void atlas_texture_created(skb_image_atlas_t *, uint8_t texture_index, void *con
 constexpr std::size_t kRetainedPublicationCount = 1024;
 constexpr std::size_t kRetainedPublicationBytes = 48u * 1024u * 1024u;
 
-void retain_publication(TextEngine::State &state, const std::shared_ptr<const PreparedGlyphs> &snapshot) {
+// Keeps a snapshot alive and marks it newest; a snapshot over the whole budget is not kept.
+void retain_publication(TextEngine::State &state, uint64_t key,
+                        const std::shared_ptr<const PreparedGlyphs> &snapshot) {
     const std::size_t bytes = snapshot->vertices.size() * sizeof(GlyphVertex) +
         snapshot->indices.size() * sizeof(uint32_t) +
         snapshot->source_ranges.size() * sizeof(GlyphSourceRange);
-    state.retained_publications.emplace_back(snapshot, bytes);
+    if (const auto found = state.retained_index.find(key); found != state.retained_index.end()) {
+        state.retained_publication_bytes -= found->second->bytes;
+        state.retained_publications.erase(found->second);
+        state.retained_index.erase(found);
+    }
+    if (bytes > kRetainedPublicationBytes)
+        return;
+    state.retained_publications.push_back({key, snapshot, bytes});
+    state.retained_index[key] = std::prev(state.retained_publications.end());
     state.retained_publication_bytes += bytes;
-    while (state.retained_publications.size() > 1 &&
-           (state.retained_publications.size() > kRetainedPublicationCount ||
-            state.retained_publication_bytes > kRetainedPublicationBytes)) {
-        state.retained_publication_bytes -= state.retained_publications.front().second;
+    while (state.retained_publications.size() > kRetainedPublicationCount ||
+           state.retained_publication_bytes > kRetainedPublicationBytes) {
+        const auto &oldest = state.retained_publications.front();
+        state.retained_publication_bytes -= oldest.bytes;
+        state.retained_index.erase(oldest.key);
         state.retained_publications.pop_front();
     }
 }
@@ -1176,26 +1196,25 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         static_cast<uint64_t>(tint.blue) << 8 | static_cast<uint64_t>(tint.alpha));
 
     std::vector<GlyphColorRange> relevant_ranges;
+    // The span a row request covers; an empty span has no rows to color or look up.
+    const bool empty_span = row_request && end_line == line_index;
+    skb_range_t span{0, 0};
     auto first_range = ranges.begin();
-    if (row_request) {
-        // Skip the ranges that end before this row starts.
-        const int32_t row_start = layout->line_ranges[line_index].start;
+    if (row_request && !empty_span) {
+        span = end_line < 0 ? layout->line_ranges[line_index]
+                            : skb_range_t{layout->line_ranges[line_index].start,
+                                          layout->line_ranges[end_line - 1].end};
+        // Skip the ranges that end before the span starts.
         first_range = std::partition_point(ranges.begin(), ranges.end(),
-            [row_start](const GlyphColorRange &candidate) { return candidate.end <= row_start; });
+            [&span](const GlyphColorRange &candidate) { return candidate.end <= span.start; });
     }
-    for (auto range_it = first_range; range_it != ranges.end(); ++range_it) {
+    for (auto range_it = empty_span ? ranges.end() : first_range; range_it != ranges.end(); ++range_it) {
         auto range = *range_it;
-        if (line_index >= 0) {
-            if (range.start >= (end_line < 0 ? layout->line_ranges[line_index].end
-                                             : layout->line_ranges[end_line - 1].end))
+        if (row_request) {
+            if (range.start >= span.end)
                 break;
-            if (end_line == line_index)
-                continue;
-            const skb_range_t line = end_line < 0 ? layout->line_ranges[line_index]
-                : skb_range_t{layout->line_ranges[line_index].start,
-                              layout->line_ranges[end_line - 1].end};
-            range.start = std::max(range.start, line.start);
-            range.end = std::min(range.end, line.end);
+            range.start = std::max(range.start, span.start);
+            range.end = std::min(range.end, span.end);
             if (range.start >= range.end)
                 continue;
         }
@@ -1229,11 +1248,14 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
                 }
                 if (prepared_glyphs_current(*rebased)) {
                     state_->published_glyphs[key] = rebased;
+                    retain_publication(*state_, key, rebased);
                     return rebased;
                 }
             }
-            if (prepared_glyphs_current(*cached))
+            if (prepared_glyphs_current(*cached)) {
+                retain_publication(*state_, key, cached);
                 return cached;
+            }
         }
     }
 
@@ -1255,7 +1277,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     snapshot->publication_key = key;
 
     /* Weak entries keep live snapshots shared and let the rest expire. */
-    if (state_->published_glyphs.size() >= 256) {
+    if (state_->published_glyphs.size() >= state_->published_sweep_size) {
         for (auto entry = state_->published_glyphs.begin();
              entry != state_->published_glyphs.end();) {
             if (entry->second.expired())
@@ -1263,9 +1285,10 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
             else
                 ++entry;
         }
+        state_->published_sweep_size = std::max<std::size_t>(256, state_->published_glyphs.size() * 2);
     }
     state_->published_glyphs[key] = snapshot;
-    retain_publication(*state_, snapshot);
+    retain_publication(*state_, key, snapshot);
     return snapshot;
 }
 

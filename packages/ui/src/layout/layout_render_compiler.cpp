@@ -946,13 +946,13 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     color_byte(primitive.color.red), color_byte(primitive.color.green),
                     color_byte(primitive.color.blue), color_byte(primitive.color.alpha)};
                 // Only the part of a very long line inside the clip is published.
-                const LayoutTransform text_transform = draw_transform_for(primitive, active_raster_root);
+                const LayoutTransform draw_transform = draw_transform_for(primitive, active_raster_root);
                 GlyphWindow window;
-                if (!clips.empty() && text_transform.b == 0.0f && text_transform.c == 0.0f &&
-                    text_transform.a != 0.0f) {
+                if (!clips.empty() && draw_transform.b == 0.0f && draw_transform.c == 0.0f &&
+                    draw_transform.a != 0.0f) {
                     const LayoutRect clip = clip_for(clips.back());
-                    const float left = (clip.x - text_transform.tx) / text_transform.a - primitive.bounds.x;
-                    const float right = (clip.x + clip.width - text_transform.tx) / text_transform.a -
+                    const float left = (clip.x - draw_transform.tx) / draw_transform.a - primitive.bounds.x;
+                    const float right = (clip.x + clip.width - draw_transform.tx) / draw_transform.a -
                                         primitive.bounds.x;
                     window = {std::min(left, right), std::max(left, right)};
                 }
@@ -968,7 +968,6 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 const ResourceId id =
                     make_resource_id(ResourceKind::TextLayout, kTransientGeneration,
                                      static_cast<uint16_t>(transient_slot++));
-                const LayoutTransform draw_transform = draw_transform_for(primitive, active_raster_root);
                 auto generation_primitive = primitive;
                 generation_primitive.transform = draw_transform;
                 const uint64_t content_generation = primitive_content_generation(

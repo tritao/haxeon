@@ -1271,6 +1271,43 @@ int main() {
         if (retained.published_glyphs_for_line(retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get() !=
             first_address)
             return 236;
+
+        // Empty spans publish nothing and never index past the lines, with colour ranges present.
+        const std::vector<GlyphColorRange> spans = {{0, 6, GlyphTint{10, 20, 30, 255}}};
+        const uint32_t line_total = static_cast<uint32_t>(retained_layout.lines.size());
+        for (const uint32_t at : {0u, line_total}) {
+            const auto none = retained.published_glyphs_for_lines(
+                retained_layout.id, at, at, 0, 0, 1, GlyphMode::Alpha, GlyphTint{}, spans);
+            if (!none || !none->vertices.empty())
+                return 237;
+        }
+
+        // A colour range that starts in an earlier row and runs into this one colours its start only.
+        const auto spanned = retained.published_glyphs_for_line(
+            retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha, GlyphTint{}, spans);
+        if (!spanned)
+            return 238;
+        bool tinted = false, plain = false;
+        for (const auto &vertex : spanned->vertices) {
+            tinted = tinted || vertex.red == 10;
+            plain = plain || vertex.red == 255;
+        }
+        if (!tinted || !plain)
+            return 239;
+
+        // After a line is inserted above, a row below is rebased once and then reused.
+        const auto below = retained.published_glyphs_for_line(
+            retained_layout.id, 2, 0, 0, 1, GlyphMode::Alpha);
+        TextLayoutResult inserted;
+        if (!below || !retained.edit_utf8(0, 0, "x\n", &inserted) || inserted.lines.size() != 4)
+            return 240;
+        const auto moved_once = retained.published_glyphs_for_line(
+            inserted.id, 3, 0, 0, 1, GlyphMode::Alpha);
+        const auto moved_again = retained.published_glyphs_for_line(
+            inserted.id, 3, 0, 0, 1, GlyphMode::Alpha);
+        if (!moved_once || moved_once != moved_again ||
+            moved_once->vertices.size() != below->vertices.size())
+            return 241;
     }
     return glyphs.vertices.size() % 4 == 0 && glyphs.indices.size() % 6 == 0 ? 0 : 41;
 }
