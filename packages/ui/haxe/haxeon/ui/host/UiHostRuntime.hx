@@ -17,6 +17,9 @@ import haxeon.ui.core.NativeInputAdapter;
 
 /** Shared application, input, frame, and disposal ownership used by host adapters. */
 class UiHostRuntime {
+	/** Longest frame delta while animations only wait for a deadline; longer than any such delay. */
+	static inline var MaxWaitingDeltaSeconds:Float = 1.0;
+
 	public final session:UiHostSession;
 	public var logicalWidth(get, never):Float;
 	public var logicalHeight(get, never):Float;
@@ -149,7 +152,9 @@ class UiHostRuntime {
 			phaseStarted = Sys.time();
 			phaseAllocated = AllocationProbe.now();
 			frame.setViewport(frameState.layoutWidth, frameState.layoutHeight);
-			frame.deltaSeconds = frameState.nextDelta(timeSeconds);
+			// A frame that ends an animation's wait must count the whole wait, not one capped frame.
+			frame.deltaSeconds = frameState.nextDelta(timeSeconds,
+				application.context().animationWaitSeconds() >= 0.0 ? MaxWaitingDeltaSeconds : 0.1);
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
 			ProfileSpan.begin(openPhase = "ui.submit");

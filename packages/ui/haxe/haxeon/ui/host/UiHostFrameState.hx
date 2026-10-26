@@ -46,9 +46,10 @@ class UiHostFrameState {
 			framebufferWidth > 0 && framebufferHeight > 0;
 	}
 
-	public function nextDelta(timeSeconds:Float):Float {
+	/** Elapsed time since the last frame, capped so a stall does not jump an animation. */
+	public function nextDelta(timeSeconds:Float, maxSeconds:Float = 0.1):Float {
 		var delta = previousTime < 0.0 ? 0.0 :
-			Math.max(0.0, Math.min(0.1, timeSeconds - previousTime));
+			Math.max(0.0, Math.min(maxSeconds, timeSeconds - previousTime));
 		previousTime = timeSeconds;
 		return delta;
 	}

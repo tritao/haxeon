@@ -197,6 +197,8 @@ class DesktopUiHost {
 			var repaintOnlyRequested = false;
 			var frameRequestedAt = -1.0;
 			var nextCaretFrameAt = -1.0;
+			// When animations are only counting down a delay, no frames run until this time.
+			var nextAnimationFrameAt = -1.0;
 			var frameRequestReason = "none";
 			var frameRequestSerial = 0;
 			var inputRequestedAt = -1.0;
@@ -358,6 +360,8 @@ class DesktopUiHost {
 									var renderedApp = runtime.app();
 									nextCaretFrameAt = renderedApp != null
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
+									var animationWait = renderedApp != null ? renderedApp.context().animationWaitSeconds() : -1.0;
+									nextAnimationFrameAt = animationWait >= 0.0 ? Sys.time() + animationWait : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
 									if (captureReady) {
@@ -537,6 +541,11 @@ class DesktopUiHost {
 					nextCaretFrameAt = -1.0;
 					scheduleFrameWithReason("text-caret");
 				}
+				if (active && surfaceAvailable && nextAnimationFrameAt >= 0.0 &&
+					Sys.time() >= nextAnimationFrameAt) {
+					nextAnimationFrameAt = -1.0;
+					scheduleFrameWithReason("animation");
+				}
 				submitFrameRequest();
 				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
 					frameGc.idle();
@@ -552,6 +561,8 @@ class DesktopUiHost {
 					var waitSeconds = 1.0 / options.targetFps;
 					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
 					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+					if (nextAnimationFrameAt >= 0.0)
+						waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
 					pump.wait(waitSeconds);
 					if (measureLoop) {
 						loopTiming.waits++;
