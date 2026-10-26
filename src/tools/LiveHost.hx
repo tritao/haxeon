@@ -5,6 +5,7 @@ import haxeon.ProfileSpan;
 import runtime.LoadedModule;
 import runtime.PatchSet;
 import runtime.Runtime;
+import sys.FileSystem;
 import sys.io.File;
 
 private typedef LiveFunction = {final name:String; final id:Int;}
@@ -42,7 +43,9 @@ class LiveHost {
 			while (running) {
 				running = Runtime.callInt(module, functionId(description, entry + ".tick")) != 0;
 				var published = readStamp(path);
+				var seenAt = Sys.time();
 				var candidate = published == null || published != stamp ? tryDescription(path) : null;
+				var describedAt = Sys.time();
 				if (candidate != null)
 					stamp = published;
 				if (candidate != null
@@ -52,10 +55,20 @@ class LiveHost {
 						var patching = true;
 						ProfileSpan.begin("live.patch");
 						try {
-							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, File.getBytes(path + ".hlp"), candidate.changedFunctions));
+							var patchBytes = File.getBytes(path + ".hlp"), readAt = Sys.time();
+							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions));
 							patching = false;
+							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');
 							ProfileSpan.end("live.patch");
-							description = candidate;
+							// Function ids are stable across patches, so the summary stands in for the 1 MB full description.
+							description = {
+								revision: candidate.revision,
+								moduleIdentity: candidate.moduleIdentity,
+								requiresReload: candidate.requiresReload,
+								patchAvailable: candidate.patchAvailable,
+								changedFunctions: candidate.changedFunctions,
+								identities: description.identities
+							};
 							revision = candidate.revision;
 							rejectedPublication = "";
 							report('haxeon: patched live module to revision $revision');
@@ -63,24 +76,26 @@ class LiveHost {
 							if (patching)
 								ProfileSpan.end("live.patch");
 							report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
-							var replacement = reload(module, description, candidate, path, entry, arguments);
+							var full = completeDescription(path, candidate);
+							var replacement = full == null ? null : reload(module, description, full, path, entry, arguments);
 							if (replacement == null)
 								rejectedPublication = publicationKey(candidate);
 							else {
 								module = replacement;
-								description = candidate;
+								description = full;
 								revision = candidate.revision;
 								rejectedPublication = "";
 							}
 						}
 					} else {
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
-						var replacement = reload(module, description, candidate, path, entry, arguments);
+						var full = completeDescription(path, candidate);
+						var replacement = full == null ? null : reload(module, description, full, path, entry, arguments);
 						if (replacement == null)
 							rejectedPublication = publicationKey(candidate);
 						else {
 							module = replacement;
-							description = candidate;
+							description = full;
 							revision = candidate.revision;
 							rejectedPublication = "";
 						}
@@ -215,8 +230,8 @@ class LiveHost {
 	}
 
 	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
-	static function readDescription(path:String):LiveDescription {
-		var value:Dynamic = Json.parse(File.getContent(path + ".live.json"));
+	static function readDescription(path:String, file:String = ".live.json"):LiveDescription {
+		var value:Dynamic = Json.parse(File.getContent(path + file));
 		var changed:Array<Dynamic> = value.changedFunctions,
 			identities:Array<Dynamic> = value.identities;
 		return {
@@ -234,11 +249,18 @@ class LiveHost {
 		};
 	}
 
+	/** The small summary the compiler writes beside the full description, so a patch does not parse the whole function list. */
 	static function tryDescription(path:String):Null<LiveDescription> {
 		try
-			return readDescription(path)
+			return readDescription(path, FileSystem.exists(path + ".live.patch.json") ? ".live.patch.json" : ".live.json")
 		catch (_:Dynamic)
 			return null;
+	}
+
+	/** The full description of the summary's publication, or null when another build has replaced it since. */
+	static function completeDescription(path:String, summary:LiveDescription):Null<LiveDescription> {
+		var full = try readDescription(path) catch (_:Dynamic) null;
+		return full != null && publicationKey(full) == publicationKey(summary) ? full : null;
 	}
 
 	static function functionId(description:LiveDescription, name:String):Int {

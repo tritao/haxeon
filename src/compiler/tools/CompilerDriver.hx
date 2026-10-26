@@ -91,6 +91,17 @@ class CompilerDriver {
 				File.saveBytes(request.output + ".hlp", result.patchBytes);
 			else
 				deleteIfExists(request.output + ".hlp");
+			// The host applies a patch from this summary alone; the full description (every function id) is for reloads.
+			var summary = request.output + ".live.patch.json";
+			File.saveContent(summary + ".tmp", Json.stringify({
+				revision: result.revision,
+				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+				requiresReload: result.requiresReload,
+				patchAvailable: result.patchBytes != null,
+				changedFunctions: result.changedFunctions,
+				identities: ([] : Array<Dynamic>)
+			}));
+			replaceFile(summary + ".tmp", summary);
 			var manifest = request.output + ".live.json";
 			var temporary = manifest + ".tmp";
 			File.saveContent(temporary, Json.stringify({
