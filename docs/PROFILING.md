@@ -74,8 +74,13 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   has a later `input polled move`, `button` or `key` when the application takes
   the event from NativeKit's queue, with an "Input polled age" counter: the age
   by then, of the oldest input when moves were merged.
-  The stamp has 1 ms resolution on GTK and the system tick's (about 16 ms) on
-  Windows.
+  The stamp has 1 ms resolution on GTK. On Windows NativeKit stamps each
+  input from low-level mouse and keyboard hooks on a thread of its own, with
+  QueryPerformanceCounter, within tens of microseconds of the system taking
+  it; an input the hooks missed falls back to the system tick (about 16 ms).
+  `NK_INPUT_STAMP_HOOK=0` turns the hooks off. While they are installed every
+  input on the desktop passes through them, so pausing a traced process in a
+  debugger stalls the desktop's input until Windows times the hook out.
 - **Counters.** HashLink GC counters (heap, allocated bytes, collections, mark
   time and allocation rate), "Short calls dropped per frame" when short calls
   are dropped (see below), app counters from
