@@ -147,13 +147,14 @@ class CompilerDriver {
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
-			+ " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
-			+ milliseconds(metrics.graphParseMs) + " dependencies=" + milliseconds(metrics.graphDependencyMs) + " initialization="
-			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + " (alias-setup="
-			+ milliseconds(metrics.semanticAliasMs) + " canonicalization=" + milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse="
-			+ milliseconds(metrics.semanticContributionReuseMs) + " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs)
-			+ " invalidation=" + milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))"
-			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
+			+ " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts) + " (graph="
+			+ milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs) + " dependencies="
+			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs) + " semantic="
+			+ milliseconds(metrics.semanticAssemblyMs) + " (alias-setup=" + milliseconds(metrics.semanticAliasMs) + " canonicalization="
+			+ milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse=" + milliseconds(metrics.semanticContributionReuseMs)
+			+ " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs) + " invalidation="
+			+ milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))" + " typing/lowering="
+			+ milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
 			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + " setup="
 			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="
 			+ milliseconds(metrics.typerMetadataMs) + " bodies=" + milliseconds(metrics.typerBodiesMs) + " body-transition="
