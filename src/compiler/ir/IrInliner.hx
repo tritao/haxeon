@@ -135,6 +135,9 @@ class IrInlineCache {
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.staticChecks.copies = staticChecks.copies;
 		result.staticChecks.helpers = staticChecks.helpers;
+		for (name => entry in positionalPrints)
+			result.positionalPrints.set(name, entry);
+		result.positionalNatives = positionalNatives;
 		result.lastFingerprint = lastFingerprint;
 		result.lastFingerprintId = lastFingerprintId;
 		for (name => text in objectTexts)
