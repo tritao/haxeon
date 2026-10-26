@@ -30,11 +30,98 @@ nkui::PreparedTexture texture(uint32_t token, std::vector<uint8_t> pixels) {
     result.pixels = std::move(pixels);
     return result;
 }
-bool pixels_match() {
+bool pixels_match(bool swapped = false) {
     std::array<uint8_t, 4> left{}, right{};
     glReadPixels(16, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, left.data());
     glReadPixels(48, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, right.data());
+    if (swapped) std::swap(left, right);
     return left[0] > 240 && left[2] < 10 && right[0] < 10 && right[2] > 240;
+}
+bool raster_reuse(nk_surface surface, bool recorded) {
+    auto renderer = nkui::create_ui_renderer(surface);
+    if (!check(renderer && renderer->initialize(), "initialize raster reuse", renderer.get())) return false;
+    auto red = texture(1, {255, 0, 0, 255});
+    auto blue = texture(2, {0, 0, 255, 255});
+    auto white = texture(3, {255, 255, 255, 255});
+    const auto target = nkui::make_resource_id(nkui::ResourceKind::RenderTarget, 1, 0x8000);
+    nkui::UiRendererStats full{};
+    // Establish the borrowed window framebuffer before the offscreen passes.
+    // Overflow the 128-entry cache with equal-sized, changing contents. Its
+    // GPU allocation count must plateau while every new result still renders.
+    for (uint64_t key = 1; key <= 144; ++key) {
+        bool hit = false;
+        const bool swapped = key % 2 == 0;
+        if (!check(renderer->beginFrame(recorded) &&
+                   renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+                   renderer->beginRasterPass(target, key, 64, 64, hit) && !hit &&
+                   renderer->drawImage(swapped ? blue : red, 0, 0, 32, 64, identity) &&
+                   renderer->drawImage(swapped ? red : blue, 32, 0, 32, 64, identity) &&
+                   renderer->endPass() && renderer->beginWindowPass(64, 64, true) &&
+                   renderer->compositeImage(target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
+                   renderer->endFrame() && pixels_match(swapped),
+                   "raster replacement pixels", renderer.get())) {
+            std::array<uint8_t, 4> left{}, right{};
+            glReadPixels(16, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, left.data());
+            glReadPixels(48, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, right.data());
+            std::fprintf(stderr, "raster key=%llu recorded=%d left=%u,%u,%u right=%u,%u,%u\n",
+                static_cast<unsigned long long>(key), recorded, left[0], left[1], left[2], right[0], right[1], right[2]);
+            return false;
+        }
+        auto stats = renderer->stats();
+        if (key == 128) full = stats;
+        if (key > 128 && !check(stats.gpu.resource_creations == full.gpu.resource_creations &&
+                              stats.gpu.resource_destructions == full.gpu.resource_destructions &&
+                              stats.raster_cache_entries == 128 &&
+                              stats.raster_cache_bytes == full.raster_cache_bytes,
+                              "raster replacement allocated or grew the cache", renderer.get())) return false;
+    }
+    // A hit protects the oldest entry while another key needs a replacement.
+    const auto protected_target = nkui::make_resource_id(nkui::ResourceKind::RenderTarget, 1, 0x8001);
+    bool hit = false;
+    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+               renderer->beginRasterPass(protected_target, 17, 64, 64, hit) && hit &&
+               renderer->beginRasterPass(target, 145, 64, 64, hit) && !hit &&
+               renderer->drawImage(blue, 0, 0, 64, 64, identity) && renderer->endPass() &&
+               renderer->beginWindowPass(64, 64, true) &&
+               renderer->compositeImage(protected_target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
+               renderer->endFrame() && pixels_match(), "current-frame raster was recycled", renderer.get())) return false;
+    // A recycled target must be cleared, not retain the unused right half.
+    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+               renderer->beginRasterPass(target, 146, 64, 64, hit) &&
+               !hit && renderer->drawImage(red, 0, 0, 32, 64, identity) && renderer->endPass() &&
+               renderer->beginWindowPass(64, 64, true) &&
+               renderer->drawImage(white, 0, 0, 64, 64, identity) &&
+               renderer->compositeImage(target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
+               renderer->endFrame(), "clear recycled raster", renderer.get())) return false;
+    std::array<uint8_t, 4> right{};
+    glReadPixels(48, 32, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, right.data());
+    if (!check(right[0] > 240 && right[1] > 240 && right[2] > 240,
+               "recycled raster retained old pixels", renderer.get())) return false;
+    // Aborting a replacement cannot publish its unfinished contents as a hit.
+    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+               renderer->beginRasterPass(target, 147, 64, 64, hit) &&
+               !hit, "begin aborted replacement", renderer.get())) return false;
+    renderer->abortFrame();
+    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+               renderer->beginRasterPass(target, 147, 64, 64, hit) &&
+               !hit && renderer->drawImage(red, 0, 0, 32, 64, identity) &&
+               renderer->drawImage(blue, 32, 0, 32, 64, identity) && renderer->endPass() &&
+               renderer->beginWindowPass(64, 64, true) &&
+               renderer->compositeImage(target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
+               renderer->endFrame() && pixels_match(), "retry aborted replacement", renderer.get())) return false;
+    // An incompatible size still allocates correctly and renders at its new extent.
+    const auto before_resize = renderer->stats();
+    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+               renderer->beginRasterPass(target, 148, 32, 32, hit) && !hit &&
+               renderer->drawImage(red, 0, 0, 16, 32, identity) &&
+               renderer->drawImage(blue, 16, 0, 16, 32, identity) && renderer->endPass() &&
+               renderer->beginWindowPass(64, 64, true) &&
+               renderer->compositeImage(target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
+               renderer->endFrame() && pixels_match() &&
+               renderer->stats().gpu.resource_creations > before_resize.gpu.resource_creations &&
+               renderer->stats().raster_cache_entries == 128,
+               "raster size change", renderer.get())) return false;
+    return true;
 }
 bool run(nk_surface surface, bool recorded) {
     nkui::UiStreamBufferConfig config{64, 64, 64, 8192};
@@ -122,11 +209,12 @@ int main() {
         ready = nk_surface_make_current(surface) == NK_OK;
         if (!ready) nk_wait_events_timeout(.01);
     }
-    if (success && ready) success = run(surface, false) && run(surface, true);
+    if (success && ready) success = run(surface, false) && run(surface, true) &&
+                                  raster_reuse(surface, false) && raster_reuse(surface, true);
     else success = false;
     if (surface) nk_surface_destroy(surface);
     if (window) nk_window_destroy(window);
     nk_shutdown();
-    if (success) std::puts("PASS: stream page rollover, oversized meshes, reuse, pixels, budgets and allocation recovery");
+    if (success) std::puts("PASS: stream pages, raster recycling, pixels, budgets and allocation recovery");
     return success ? 0 : 1;
 }
