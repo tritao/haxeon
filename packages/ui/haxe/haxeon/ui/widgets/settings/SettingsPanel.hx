@@ -70,6 +70,9 @@ class SettingsPanel implements View {
 		if (Std.isOfType(saved, String)) select(cast saved);
 	}
 
+	public function hasUnsavedChanges():Bool return false;
+	public function discardUnsavedChanges():Void {}
+
 	public function setFilter(value:String):Void {
 		var next = value == null ? "" : value;
 		if (next == filter)
@@ -187,7 +190,7 @@ class SettingsPanel implements View {
 			new KeyedView("header", header),
 			new KeyedView("body", compact ? compactBody(inspectorView) : split),
 			new KeyedView("status", new Text(catalog.store.lastError != null ? catalog.store.lastError :
-				(current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically"))
+				(hasUnsavedChanges() ? "Unsaved list changes · Apply each list to save" : (current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically")))
 		], columnStyle).build(context);
 	}
 

@@ -18,6 +18,18 @@ import haxeon.ui.widgets.text.TextField;
 class StructuredPropertyEditor implements PropertyEditorExtension {
 	/** Optional host chooser; selected paths join the staged list until Apply. */
 	public var chooseItems:Null<(Array<String>->Void)->Void>;
+	/** Keep drafts when an inspector is rebuilt or changes category. */
+	public var retainDrafts:Bool = false;
+	public var onDraftChanged:Null<Void->Void>;
+	final retainedDrafts:Map<String, StructuredPropertyDrafts> = new Map();
+	public function hasDrafts():Bool {
+		for (draft in retainedDrafts) if (draft.dirty) return true;
+		return false;
+	}
+	public function discardDrafts():Void {
+		retainedDrafts.clear();
+		if (onDraftChanged != null) onDraftChanged();
+	}
 	final id:String;
 	final vector:Bool;
 	final record:Bool;
@@ -53,11 +65,13 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		var root:Dynamic = switch value { case Custom(_, data): data; default: new Array<Dynamic>(); };
 		var base = display(root);
 		var draftState:State<StructuredPropertyDrafts> = context.state(context.id(key + ":drafts"), new StructuredPropertyDrafts(base));
-		var local = draftState.value;
+		var local = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
+		if (local == null) local = new StructuredPropertyDrafts(base);
 		if (local.base != base) {
 			local = new StructuredPropertyDrafts(base);
 			draftState.update(local);
 		}
+		if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 		var drafts = local.drafts;
 		if (!vector) root = local.current;
 		function candidate():Dynamic {
@@ -70,14 +84,29 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			}
 			return copy;
 		}
+		function changed():Void {
+			try { local.dirty = display(candidate()) != base; } catch (_:Dynamic) { local.dirty = true; }
+			draftState.update(local);
+			if (onDraftChanged != null) onDraftChanged();
+			context.commands.refresh();
+		}
 		function commit():Void {
-			try { apply(Custom(id, candidate())); }
+			try {
+				var next = candidate();
+				apply(Custom(id, next));
+				var saved = descriptor.readValue(context.commandContext);
+				if (switch saved { case Custom(_, data): same(data, next); default: false; }) {
+					local.dirty = false;
+					if (retainDrafts) retainedDrafts.remove(descriptor.id);
+				}
+				if (onDraftChanged != null) onDraftChanged();
+			}
 			catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
 		}
 		function stage(copy:Dynamic):Void {
 			if (vector) apply(Custom(id, copy));
 			else {
-				local.current = copy; drafts.clear(); draftState.update(local);
+				local.current = copy; drafts.clear(); changed();
 				context.commands.refresh();
 			}
 		}
@@ -99,10 +128,10 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			}
 			var initial = Std.isOfType(item, String) ? (cast item:String) : haxe.Json.stringify(item);
 			var field = new TextField("item:" + address, drafts.exists(draftKey) ? drafts.get(draftKey) : initial,
-				text -> { drafts.set(draftKey, text); draftState.update(local); }, compact ? new LayoutStyle() : style(), label);
+				text -> { drafts.set(draftKey, text); changed(); }, compact ? new LayoutStyle() : style(), label);
 			field.enabled = enabled;
 			field.onSubmit = text -> {
-				drafts.set(draftKey, text); draftState.update(local); commit();
+				drafts.set(draftKey, text); changed(); commit();
 			};
 			var displayLabel = compact ? component : label;
 			if (!compact && path.length > 0 && !~/^[0-9]+$/.match(path[path.length - 1])) displayLabel = path[path.length - 1];
@@ -191,11 +220,16 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		}
 		var children:Array<KeyedView> = [];
 		if (!vector) {
+			if (local.dirty) children.push(new KeyedView("unsaved", new Text("Unsaved changes")));
 			var applyButton = new Button("Apply " + descriptor.label, null, commit, "apply");
 			applyButton.enabled = enabled;
 			children.push(new KeyedView("apply", applyButton));
 			var revert = new Button(record ? "Revert record draft" : "Revert list draft", null, () -> {
-				draftState.update(new StructuredPropertyDrafts(base)); context.commands.refresh();
+				local = new StructuredPropertyDrafts(base);
+				if (retainDrafts) retainedDrafts.set(descriptor.id, local);
+				draftState.update(local);
+				if (onDraftChanged != null) onDraftChanged();
+				context.commands.refresh();
 			}, "revert");
 			revert.enabled = enabled;
 			children.push(new KeyedView("revert", revert));
@@ -246,6 +280,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 private class StructuredPropertyDrafts {
 	public final base:String;
 	public var current:Dynamic;
+	public var dirty:Bool = false;
 	public final drafts:Map<String, String> = new Map();
 	public function new(base:String) { this.base = base; current = haxe.Json.parse(base); }
 }

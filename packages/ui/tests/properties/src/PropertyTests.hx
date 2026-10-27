@@ -103,6 +103,7 @@ class PropertyTests {
 
 	static function structuredControls():Void {
 		var list = new ListPropertyEditor();
+		list.retainDrafts = true;
 		var original:Array<Dynamic> = [true, false, true];
 		var current:Dynamic = original;
 		var descriptor = new PropertyDescriptor("items", "Items", PropertyType.Custom(ListPropertyEditor.TYPE),
@@ -123,14 +124,21 @@ class PropertyTests {
 		}
 		action("Items Add item");
 		check(current == original, "List changes are staged before application");
+		check(list.hasDrafts(), "Staged edits report unsaved changes");
+		context = new BuildContext(new StateStore());
 		action("Apply Items");
 		check(haxe.Json.stringify(current) == "[true,false,true,true]" && original.length == 3, "Add produces a detached candidate");
+		check(!list.hasDrafts(), "Successful Apply clears unsaved changes after rebuilding the inspector");
 		action("Items item 2 Remove");
 		action("Apply Items");
 		check(haxe.Json.stringify(current) == "[true,false,true]", "Remove addresses the selected item");
 		action("Items item 1 Up");
 		action("Apply Items");
 		check(haxe.Json.stringify(current) == "[false,true,true]", "Reorder moves the selected item");
+		action("Items Add item");
+		check(list.hasDrafts(), "Adding another item is unsaved");
+		list.discardDrafts();
+		check(!list.hasDrafts(), "Discard clears pending list changes");
 		action("Items Add item", false);
 		check(haxe.Json.stringify(current) == "[false,true,true]", "Disabled controls cannot submit");
 		var options = new PropertyDescriptorOptions();
