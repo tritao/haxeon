@@ -39,6 +39,7 @@ class SettingsTests {
 			catalog();
 			editing();
 			panel();
+			settingsImprovements();
 			shortcutNames();
 			customShortcuts();
 			shortcutPersistence();
@@ -49,6 +50,36 @@ class SettingsTests {
 			Sys.println('Settings tests failed: $error');
 			return 1;
 		}
+	}
+
+	static function settingsImprovements():Void {
+		var registry = new SettingsRegistry();
+		var options = new SettingOptions();
+		options.tooltip = "Scale the whole application";
+		options.restartRequired = true;
+		registry.define("appearance/workbench/zoom", PropertyType.Int, PropertyValue.Int(100), options);
+		registry.define("editor/fonts/size", PropertyType.Int, PropertyValue.Int(14));
+		var explicit = new SettingOptions();
+		explicit.preserveExplicitDefault = true;
+		registry.define("editor/indentation/width", PropertyType.Int, PropertyValue.Int(4), explicit);
+		var store = new SettingsStore(registry);
+		var panel = new SettingsPanel("improvements", store);
+		panel.setFilter("whole scale");
+		var help:PropertyInspector = cast panel.currentInspector();
+		var descriptor = help.descriptors[0];
+		check(descriptor.description == options.tooltip && descriptor.restartRequired, "help and restart metadata reach the row");
+		panel.setFilter("i");
+		var results:PropertyInspector = cast panel.currentInspector();
+		check(results.descriptors.length == 3, "search combines results across categories");
+		panel.setFilter("");
+		panel.setModifiedOnly(true);
+		check(panel.currentInspector() == null, "modified filter starts empty");
+		store.set("editor/indentation/width", PropertyValue.Int(4));
+		var modified:PropertyInspector = cast panel.currentInspector();
+		check(modified != null && modified.descriptors.length == 1, "explicit default override counts as modified");
+		var reset = modified.descriptors[0].reset;
+		if (reset != null) reset();
+		check(store.isDefault("editor/indentation/width") && panel.currentInspector() == null, "reset removes override and updates filtered results");
 	}
 
 	static function check(condition:Bool, message:String):Void
@@ -350,7 +381,7 @@ class SettingsTests {
 		check(sections[1].descriptors.length == 1, "advanced settings are hidden by default");
 		check(catalog.sections("interface/editor", "", true)[1].descriptors.length == 2, "and shown when asked for");
 		check(sections[1].descriptors[0].label == "Main Font Size", "rows use the setting labels");
-		check(catalog.sections("interface/theme", "", false)[0].descriptors[0].label == "Preset *",
+		check(catalog.sections("interface/theme", "", false)[0].descriptors[0].restartRequired,
 			"settings that need a restart are marked");
 
 		check(catalog.categories("font", false).join(",") == "interface/editor", "the filter narrows the categories");

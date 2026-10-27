@@ -37,6 +37,8 @@ class SettingsPanel implements View {
 	public final catalog:SettingsCatalog;
 	public var filter(default, null):String;
 	public var showAdvanced(default, null):Bool;
+	public var modifiedOnly(default, null):Bool = false;
+	var storeRevision:Int = -1;
 	/** The category shown on the right, or null when nothing matches. */
 	public var selectedCategory(default, null):Null<String>;
 	public var onChanged:Null<Void->Void>;
@@ -79,6 +81,12 @@ class SettingsPanel implements View {
 		refresh();
 	}
 
+	public function setModifiedOnly(value:Bool):Void {
+		if (modifiedOnly == value) return;
+		modifiedOnly = value;
+		refresh();
+	}
+
 	/** Selects a category, or the first category under a tree group such as "interface". */
 	public function select(key:String):Void {
 		var target = treeModel.categoryFor(key);
@@ -93,13 +101,27 @@ class SettingsPanel implements View {
 		return treeModel.categories.copy();
 
 	/** The inspector for the selected category; rebuilt only when the category, filter or Advanced switch changes. */
+	public function invalidateInspector():Void {
+		inspector = null;
+	}
+
 	public function currentInspector():Null<PropertyInspector> {
+		if (storeRevision != catalog.store.revision) refresh();
 		if (selectedCategory == null)
 			return null;
-		var nextKey = selectedCategory + "|" + filter + "|" + showAdvanced;
+		var searching = StringTools.trim(filter).length > 0;
+		var nextKey = selectedCategory + "|" + filter + "|" + showAdvanced + "|" + modifiedOnly + "|" + (modifiedOnly ? catalog.store.revision : 0);
 		if (inspector == null || inspectorKey != nextKey) {
+			var sections = [];
+			for (category in searching ? categories() : [selectedCategory]) {
+				for (section in catalog.sections(category, filter, showAdvanced, modifiedOnly)) {
+					sections.push(searching ? new haxeon.ui.properties.PropertyInspectorSection(section.id,
+						[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ") + " — " + section.label,
+						section.descriptors) : section);
+				}
+			}
 			inspector = new PropertyInspector(key + ":inspector:" + selectedCategory, null, null, null,
-				catalog.sections(selectedCategory, filter, showAdvanced), null,
+				sections, null,
 				SettingsCatalog.labelOf(selectedCategory) + " settings");
 			inspectorKey = nextKey;
 		}
@@ -107,6 +129,7 @@ class SettingsPanel implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
+		if (storeRevision != catalog.store.revision) refresh();
 		var headerStyle = new LayoutStyle();
 		headerStyle.width = LayoutAxis.grow();
 		headerStyle.height = LayoutAxis.fit();
@@ -117,6 +140,7 @@ class SettingsPanel implements View {
 		searchStyle.width = LayoutAxis.grow();
 		var header = new Row(key + ":header", [
 			new KeyedView("filter", new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings")),
+			new KeyedView("modified", new Toggle(key + ":modified", "Modified only", modifiedOnly, setModifiedOnly)),
 			new KeyedView("advanced", new Toggle(key + ":advanced", "Advanced Settings", showAdvanced, setShowAdvanced))
 		], headerStyle);
 
@@ -127,7 +151,7 @@ class SettingsPanel implements View {
 		var inspectorView:View = null;
 		var current = currentInspector();
 		if (current == null) {
-			inspectorView = new Text(filter.length == 0 ? "No settings." : "No settings match \"" + filter + "\".");
+			inspectorView = new Text(filter.length == 0 ? (modifiedOnly ? "No modified settings." : "No settings.") : "No settings match \"" + filter + "\".");
 		} else {
 			current.labelWidth = labelWidth;
 			var inspectorStyle = fill();
@@ -152,13 +176,16 @@ class SettingsPanel implements View {
 		columnStyle.childGap = 8.0;
 		return new Column(key, [
 			new KeyedView("header", header),
-			new KeyedView("body", split)
+			new KeyedView("body", split),
+			new KeyedView("status", new Text(catalog.store.lastError != null ? catalog.store.lastError :
+				(current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically"))
 		], columnStyle).build(context);
 	}
 
 	/** Recomputes the tree after the filter or Advanced switch changed, keeping the selection when it still matches. */
 	function refresh():Void {
-		treeModel.update(catalog.categories(filter, showAdvanced));
+		storeRevision = catalog.store.revision;
+		treeModel.update(catalog.categories(filter, showAdvanced, modifiedOnly));
 		if (selectedCategory == null || treeModel.categories.indexOf(selectedCategory) < 0)
 			selectedCategory = treeModel.categories.length == 0 ? null : treeModel.categories[0];
 		changed();

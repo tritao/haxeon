@@ -15,6 +15,10 @@ class PropertyDescriptorOptions {
 	public var structure:Null<PropertyStructure>;
 	public var commit:Null<PropertyCommitter>;
 	public var category:String;
+	public var description:Null<String>;
+	public var restartRequired:Bool = false;
+	public var modified:Null<Void->Bool>;
+	public var reset:Null<Void->Void>;
 	public var readOnly:Bool;
 	/** Whether edits enter the owning editor document's undo history. */
 	public var recordHistory:Bool;

@@ -10,6 +10,10 @@ class PropertyDescriptor {
 	public final label:String;
 	public final type:PropertyType;
 	public final category:String;
+	public final description:Null<String>;
+	public final restartRequired:Bool;
+	public final modified:Null<Void->Bool>;
+	public final reset:Null<Void->Void>;
 	public final readOnly:Bool;
 	public final recordHistory:Bool;
 	public final minimum:Null<Float>;
@@ -40,6 +44,10 @@ class PropertyDescriptor {
 					throw "Custom property types require a stable type ID";
 			default:
 		}
+		this.description = config.description;
+		this.restartRequired = config.restartRequired;
+		this.modified = config.modified;
+		this.reset = config.reset;
 		this.structure = config.structure;
 		this.commit = config.commit;
 		this.id = id;

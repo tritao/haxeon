@@ -108,6 +108,19 @@ class PropertyEditor implements View {
 		return result == PropertyEditResult.Applied;
 	}
 
+	public function resetValue(context:BuildContext, descriptor:PropertyDescriptor):Void {
+		var reset = descriptor.reset;
+		if (reset == null) {
+			applyValue(context, descriptor, descriptor.defaultValue);
+			return;
+		}
+		reset();
+		drafts.remove(descriptor.id);
+		errors.remove(descriptor.id);
+		revision++;
+		context.commands.refresh();
+	}
+
 	public function build(context:BuildContext):RenderNode {
 		if (cachedColumn == null || cachedShowCategories != showCategories) {
 			var children:Array<KeyedView> = [];
@@ -344,7 +357,8 @@ private class PropertyEditorRow implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var value = descriptor.readValue(context.commandContext);
-		var revision = owner.rowRevision(descriptor, value);
+		var isModified = descriptor.modified;
+		var revision = owner.rowRevision(descriptor, value) + (isModified != null && isModified() ? 1 : 0);
 		var retained = new RetainedView("property-row:" + descriptor.id,
 			function(_) return new PropertyEditorRowContent(owner, descriptor, value),
 			function() return revision);
@@ -378,17 +392,21 @@ private class PropertyEditorRowContent implements View {
 			new KeyedView("label", new Text(PropertyEditor.accessibleName(descriptor), labelStyle)),
 			new KeyedView("value", owner.editorView(context, descriptor, value))
 		];
-		// Like a revert arrow: offered only while the value differs from its default.
+		var isModified = descriptor.modified;
+		var modified = isModified != null ? isModified() :
+			descriptor.defaultValue != null && !owner.registry.same(value, descriptor.defaultValue);
+		if (descriptor.modified != null && modified)
+			children.push(new KeyedView("modified", new Text("Modified")));
 		if (descriptor.defaultValue != null && !descriptor.readOnly
-			&& !owner.registry.same(value, descriptor.defaultValue)) {
+			&& modified) {
 			var reset = new IconButton("reset", IconName.Reset, "Reset " + descriptor.label + " to default",
-				function() owner.applyValue(context, descriptor, descriptor.defaultValue));
+				function() owner.resetValue(context, descriptor));
 			reset.enabled = owner.enabled && !owner.pending.exists(descriptor.id);
 			children.push(new KeyedView("reset", reset));
 		}
 		var row = new Row("row", children, rowStyle);
 		var error = owner.errorFor(descriptor.id);
-		if (error == null) {
+		if (error == null && descriptor.description == null && !descriptor.restartRequired) {
 			var result = row.build(context);
 			if (observed)
 				context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
@@ -400,10 +418,14 @@ private class PropertyEditorRowContent implements View {
 		columnStyle.width = LayoutAxis.grow();
 		columnStyle.height = LayoutAxis.fit();
 		columnStyle.childGap = 2.0;
-		var result = new Column("error-row", [
-			new KeyedView("field", row),
-			new KeyedView("message", new Text(error, errorStyle))
-		], columnStyle).build(context);
+		var details:Array<KeyedView> = [new KeyedView("field", row)];
+		if (descriptor.description != null && descriptor.description.length > 0)
+			details.push(new KeyedView("description", new Text(descriptor.description, errorStyle, context.theme.tokens.textSecondary,
+				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter), haxeon.ui.theme.TextRole.Caption)));
+		if (descriptor.restartRequired)
+			details.push(new KeyedView("restart", new Text("Requires restart", errorStyle)));
+		if (error != null) details.push(new KeyedView("message", new Text(error, errorStyle)));
+		var result = new Column("details-row", details, columnStyle).build(context);
 		if (observed)
 			context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 		return result;
