@@ -64,6 +64,9 @@ class SettingsTests {
 		registry.define("editor/indentation/width", PropertyType.Int, PropertyValue.Int(4), explicit);
 		var store = new SettingsStore(registry);
 		var panel = new SettingsPanel("improvements", store);
+		panel.select("editor/fonts");
+		var reopened = new SettingsPanel("improvements", store);
+		check(reopened.selectedCategory == "editor/fonts", "reopening restores the selected category");
 		panel.setFilter("whole scale");
 		var help:PropertyInspector = cast panel.currentInspector();
 		var descriptor = help.descriptors[0];

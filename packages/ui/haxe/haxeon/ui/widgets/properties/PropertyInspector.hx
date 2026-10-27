@@ -37,6 +37,7 @@ class PropertyInspector implements View {
 	public var controller(default, null):ScrollController;
 	public var enabled:Bool;
 	public var labelWidth:Float;
+	public var stackedRows:Bool = false;
 	/** Disable when a parent pane already owns scrolling. */
 	public var scrollable:Bool;
 	public var showScrollbar:Bool;
@@ -142,6 +143,7 @@ class PropertyInspector implements View {
 				var editor = editors.get(section.id);
 				editor.enabled = enabled;
 				editor.labelWidth = labelWidth;
+				editor.stackedRows = stackedRows;
 				var header = new PropertyInspectorSectionHeader("header", section,
 					function() {
 						if (setSectionExpanded(section.id, !section.expanded))

@@ -44,6 +44,8 @@ class SettingsPanel implements View {
 	public var onChanged:Null<Void->Void>;
 	public var treeWidth:Float;
 	public var labelWidth:Float;
+	public final editorRegistry = new haxeon.ui.properties.PropertyEditorRegistry();
+	public var compact:Bool = false;
 
 	final treeModel:SettingsTreeModel;
 	var inspector:Null<PropertyInspector>;
@@ -55,7 +57,7 @@ class SettingsPanel implements View {
 		this.key = key;
 		catalog = new SettingsCatalog(store);
 		filter = "";
-		showAdvanced = false;
+		showAdvanced = store.getState(key + ":advanced") == true;
 		selectedCategory = null;
 		this.onChanged = onChanged;
 		treeWidth = 220.0;
@@ -64,6 +66,8 @@ class SettingsPanel implements View {
 		inspector = null;
 		inspectorKey = "";
 		refresh();
+		var saved:Dynamic = store.getState(key + ":category");
+		if (Std.isOfType(saved, String)) select(cast saved);
 	}
 
 	public function setFilter(value:String):Void {
@@ -78,6 +82,7 @@ class SettingsPanel implements View {
 		if (value == showAdvanced)
 			return;
 		showAdvanced = value;
+		catalog.store.setState(key + ":advanced", value);
 		refresh();
 	}
 
@@ -93,6 +98,7 @@ class SettingsPanel implements View {
 		if (target == null || target == selectedCategory)
 			return;
 		selectedCategory = target;
+		catalog.store.setState(this.key + ":category", target);
 		changed();
 	}
 
@@ -120,7 +126,7 @@ class SettingsPanel implements View {
 						section.descriptors) : section);
 				}
 			}
-			inspector = new PropertyInspector(key + ":inspector:" + selectedCategory, null, null, null,
+			inspector = new PropertyInspector(key + ":inspector:" + selectedCategory, null, null, editorRegistry,
 				sections, null,
 				SettingsCatalog.labelOf(selectedCategory) + " settings");
 			inspectorKey = nextKey;
@@ -138,11 +144,13 @@ class SettingsPanel implements View {
 		headerStyle.childGap = 12.0;
 		var searchStyle = new LayoutStyle();
 		searchStyle.width = LayoutAxis.grow();
-		var header = new Row(key + ":header", [
+		var headerChildren:Array<KeyedView> = [
 			new KeyedView("filter", new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings")),
 			new KeyedView("modified", new Toggle(key + ":modified", "Modified only", modifiedOnly, setModifiedOnly)),
 			new KeyedView("advanced", new Toggle(key + ":advanced", "Advanced Settings", showAdvanced, setShowAdvanced))
-		], headerStyle);
+		];
+		if (compact) headerStyle.direction = LayoutDirection.TopToBottom;
+		var header:View = compact ? new Column(key + ":header", headerChildren, headerStyle) : new Row(key + ":header", headerChildren, headerStyle);
 
 		var treeStyle = fill();
 		var tree = new TreeView(key + ":tree:" + treeModel.revision(), treeModel, treeStyle, null, 400.0,
@@ -153,7 +161,8 @@ class SettingsPanel implements View {
 		if (current == null) {
 			inspectorView = new Text(filter.length == 0 ? (modifiedOnly ? "No modified settings." : "No settings.") : "No settings match \"" + filter + "\".");
 		} else {
-			current.labelWidth = labelWidth;
+			current.labelWidth = compact ? 100 : labelWidth;
+			current.stackedRows = compact;
 			var inspectorStyle = fill();
 			inspectorStyle.padding = new Insets(12.0, 0.0, 4.0, 0.0);
 			current.setStyle(inspectorStyle);
@@ -176,10 +185,21 @@ class SettingsPanel implements View {
 		columnStyle.childGap = 8.0;
 		return new Column(key, [
 			new KeyedView("header", header),
-			new KeyedView("body", split),
+			new KeyedView("body", compact ? compactBody(inspectorView) : split),
 			new KeyedView("status", new Text(catalog.store.lastError != null ? catalog.store.lastError :
 				(current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically"))
 		], columnStyle).build(context);
+	}
+
+	function compactBody(inspector:View):View {
+		var options = [for (category in categories()) new haxeon.ui.widgets.controls.SelectOption(category,
+			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › "), category)];
+		var children:Array<KeyedView> = [];
+		if (options.length > 0) children.push(new KeyedView("category", new haxeon.ui.widgets.controls.Select(
+			key + ":category", options, selectedCategory, select)));
+		children.push(new KeyedView("inspector", inspector));
+		var style = fill(); style.childGap = 8;
+		return new Column(key + ":compact", children, style);
 	}
 
 	/** Recomputes the tree after the filter or Advanced switch changed, keeping the selection when it still matches. */

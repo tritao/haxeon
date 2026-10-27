@@ -39,6 +39,7 @@ class PropertyEditor implements View {
 	public var revision(default, null):Int;
 	public var enabled:Bool;
 	public var labelWidth:Float;
+	public var stackedRows:Bool = false;
 	/** When false, category headers are supplied by an outer inspector. */
 	public var showCategories:Bool;
 	final drafts:Map<String, String>;
@@ -175,7 +176,7 @@ class PropertyEditor implements View {
 	 */
 	function rowRevision(descriptor:PropertyDescriptor, value:PropertyValue):String {
 		var result = descriptor.id + ":value=" + valueKey(value) +
-			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":labelWidth=" + labelWidth + ":generation=" + generation;
+			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":stacked=" + stackedRows + ":labelWidth=" + labelWidth + ":generation=" + generation;
 		if (drafts.exists(descriptor.id))
 			result += ":draft=" + drafts.get(descriptor.id);
 		var error = errors.get(descriptor.id);
@@ -381,11 +382,11 @@ private class PropertyEditorRowContent implements View {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
 		var labelStyle = new LayoutStyle();
-		labelStyle.width = LayoutAxis.fixed(owner.labelWidth);
+		labelStyle.width = owner.stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(owner.labelWidth);
 		var rowStyle = new LayoutStyle();
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fit();
-		rowStyle.direction = LayoutDirection.LeftToRight;
+		rowStyle.direction = owner.stackedRows ? LayoutDirection.TopToBottom : LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = switch descriptor.type { case Custom(_): LayoutAlignmentY.Start; default: LayoutAlignmentY.Center; };
 		rowStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [
@@ -404,7 +405,7 @@ private class PropertyEditorRowContent implements View {
 			reset.enabled = owner.enabled && !owner.pending.exists(descriptor.id);
 			children.push(new KeyedView("reset", reset));
 		}
-		var row = new Row("row", children, rowStyle);
+		var row:View = owner.stackedRows ? new Column("row", children, rowStyle) : new Row("row", children, rowStyle);
 		var error = owner.errorFor(descriptor.id);
 		if (error == null && descriptor.description == null && !descriptor.restartRequired) {
 			var result = row.build(context);

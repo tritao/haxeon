@@ -16,6 +16,8 @@ import haxeon.ui.widgets.text.TextField;
  * Domain validation, model mutation and undo history remain application-owned.
  */
 class StructuredPropertyEditor implements PropertyEditorExtension {
+	/** Optional host chooser; selected paths join the staged list until Apply. */
+	public var chooseItems:Null<(Array<String>->Void)->Void>;
 	final id:String;
 	final vector:Bool;
 	final record:Bool;
@@ -199,6 +201,19 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			children.push(new KeyedView("revert", revert));
 		}
 		children.push(new KeyedView("items", tree(new Array<String>(), root, descriptor.structure)));
+		var choose = chooseItems;
+		if (!vector && choose != null) {
+			var browse = new Button("Choose files…", null, function() choose(function(paths) {
+				if (paths.length == 0) return;
+				try {
+					var copy:Array<Dynamic> = cast candidate();
+					for (path in paths) copy.push(path);
+					stage(copy);
+				} catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
+			}), "choose-files");
+			browse.enabled = enabled;
+			children.push(new KeyedView("choose-files", browse));
+		}
 		return new Column(key, children, style());
 	}
 	static function initial(structure:Null<PropertyStructure>):Dynamic {
