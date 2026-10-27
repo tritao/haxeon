@@ -948,7 +948,8 @@ private class TreeViewRow implements View {
 					event.stopPropagation();
 				}
 			});
-			if (entry.depth > 0) {
+			// Keep the outermost tree level open; draw guides only within nested branches.
+			if (entry.depth > 1) {
 				var guides = new LayoutStyle();
 				guides.positioning = LayoutPositioning.Absolute;
 				guides.width = LayoutAxis.grow();
@@ -960,15 +961,15 @@ private class TreeViewRow implements View {
 				var hasNext = entry.hasNextSibling;
 				var border = context.theme.tokens.border;
 				var guideColor = Color.rgba(border.red, border.green, border.blue, border.alpha * guideOpacity);
-				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
+				var guideKey = "tree-guide:nested:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
 					(entry.hasChildren ? "branch" : "leaf") + ":";
-				for (level in 1...depth)
+				for (level in 2...depth)
 					guideKey += continuation[level] ? "1" : "0";
 				guideNode.onPaint(function(canvas, geometry) {
 					var path = new PathBuilder();
 					var hasSegments = false;
 					var centerY = geometry.height * 0.5;
-					for (level in 1...depth) if (continuation[level]) {
+					for (level in 2...depth) if (continuation[level]) {
 						var x = (level - 1) * indentWidth + indentWidth * 0.5;
 						path.moveTo(x, 0.0).lineTo(x, geometry.height);
 						hasSegments = true;
