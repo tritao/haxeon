@@ -172,6 +172,16 @@ and glyph atlas entries; an empty array clears them. Replacing text or updating
 the layout clears ranges, while `setColor` changes the fallback color and keeps
 overrides. Color changes invalidate the affected resource's raster cache.
 
+Single-row terminal layouts can use `TextLayout.setGridPositions` to supply a
+physical x coordinate for every codepoint boundary. Repeated positions represent
+combining clusters; a wide character spans multiple cells. The native renderer
+projects each shaped cluster into that span, fitting wider fallback glyphs
+horizontally while preserving their vertical metrics. The row keeps its shared
+atlas, source text, color ranges and glyph batches. Carets and hit testing use
+the projected positions. Grid changes invalidate published geometry without
+reshaping or rerasterizing glyphs. An empty array restores natural spacing;
+text updates clear the grid. Ordinary text layouts keep their natural spacing.
+
 The virtualization paths can be measured independently with:
 
 ```sh

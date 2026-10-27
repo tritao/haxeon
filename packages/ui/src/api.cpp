@@ -2593,6 +2593,7 @@ extern "C" nkui_result nkui_text_layout_update(nkui_resource layout, const char 
         return NKUI_ERROR_INVALID_ARGUMENT;
     slot->text_width = width;
     slot->text_options = options;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2611,6 +2612,7 @@ extern "C" nkui_result nkui_text_layout_set_text(nkui_resource layout, const cha
     nkui::TextLayoutResult shaped;
     if (!slot->text->layout_utf8(text ? text : "", slot->text_width, slot->text_options, &shaped))
         return NKUI_ERROR_INVALID_ARGUMENT;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2630,6 +2632,7 @@ extern "C" nkui_result nkui_text_layout_edit(nkui_resource layout, int32_t start
     nkui::TextLayoutResult shaped;
     if (!slot->text->edit_utf8(start, end, replacement ? replacement : "", &shaped))
         return NKUI_ERROR_INVALID_ARGUMENT;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2670,6 +2673,36 @@ extern "C" nkui_result nkui_text_layout_set_color_ranges(nkui_resource layout,
     tint_text_glyphs(slot->text_glyphs, slot->text_color, slot->text_color_ranges);
     for (auto &[_, glyphs] : slot->scaled_text_glyphs)
         tint_text_glyphs(glyphs, slot->text_color, slot->text_color_ranges);
+    return NKUI_OK;
+}
+
+extern "C" nkui_result nkui_text_layout_set_grid_positions(nkui_resource layout,
+    const uint8_t *positions, uint32_t position_bytes) {
+    if ((!positions && position_bytes) || position_bytes % 4 || position_bytes > 4 * 1048576)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(resources_mutex);
+    auto *slot = resolve(layout, nkui::ResourceKind::TextLayout);
+    if (!slot || !slot->text) return NKUI_ERROR_INVALID_HANDLE;
+    std::vector<float> grid;
+    grid.reserve(position_bytes / 4);
+    for (uint32_t index = 0; index < position_bytes; index += 4) {
+        uint32_t bits = static_cast<uint32_t>(positions[index]) |
+            (static_cast<uint32_t>(positions[index + 1]) << 8) |
+            (static_cast<uint32_t>(positions[index + 2]) << 16) |
+            (static_cast<uint32_t>(positions[index + 3]) << 24);
+        float x;
+        std::memcpy(&x, &bits, sizeof(x));
+        grid.push_back(x);
+    }
+    bool changed = false;
+    if (!slot->text->set_grid_positions(grid, &changed)) return NKUI_ERROR_INVALID_ARGUMENT;
+    if (changed) {
+        ++slot->text_content_revision;
+        slot->text_glyphs = {};
+        slot->scaled_text_glyphs.clear();
+        slot->visible_text_glyphs.clear();
+        slot->visible_line_glyphs.clear();
+    }
     return NKUI_OK;
 }
 

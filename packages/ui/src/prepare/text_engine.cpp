@@ -63,6 +63,9 @@ struct TextEngine::State {
         std::vector<uint64_t> line_revisions;
         std::vector<float> prefix_bottoms;
         std::vector<float> suffix_tops;
+        std::vector<float> grid_positions;
+        std::vector<float> grid_source_positions;
+        uint64_t grid_revision = 0;
     };
 
     std::shared_ptr<FontCollection> font_collection;
@@ -332,6 +335,8 @@ struct RenderGlyphContext {
     PreparedGlyphs *output = nullptr;
     int32_t line_start = -1;
     int32_t line_end = -1;
+    const std::vector<float> *grid_positions = nullptr;
+    const std::vector<float> *grid_source_positions = nullptr;
 };
 
 // Hard line breaks participate in layout and editing, never in glyph painting.
@@ -370,12 +375,29 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
                 ? skb_layout_get_text_at(render.layout, glyph->text_range.start) : 0u,
             glyph->offset_x, glyph->offset_y);
     }
-    const skb_quad_t quad = skb_image_atlas_get_glyph_quad(
+    skb_quad_t quad = skb_image_atlas_get_glyph_quad(
         render.state->atlas, render.origin_x + glyph->offset_x, render.origin_y + glyph->offset_y,
         render.pixel_scale, render.font_collection, glyph->font_handle, glyph->glyph_id,
         glyph->font_size, glyph->color, raster_mode(render.requested_mode));
     if (quad.flags & SKB_QUAD_IS_EMPTY)
         return true;
+
+    if (render.grid_positions && !render.grid_positions->empty()) {
+        const auto start = static_cast<size_t>(glyph->text_range.start);
+        const auto end = static_cast<size_t>(glyph->text_range.end);
+        if (end < render.grid_positions->size() && start < end) {
+            const auto &target = *render.grid_positions;
+            const auto &source = *render.grid_source_positions;
+            const float left = std::min(source[start], source[end]);
+            const float advance = std::abs(source[end] - source[start]);
+            const float width = target[end] - target[start];
+            const float scale = advance > width && advance > 0 ? width / advance : 1.0f;
+            const float inset = std::max(0.0f, (width - advance * scale) * 0.5f);
+            quad.geom.x = render.output->origin_x + target[start] + inset +
+                          (quad.geom.x - render.origin_x - left) * scale;
+            quad.geom.width *= scale;
+        }
+    }
 
     const GlyphMode actual_mode = quad_mode(quad, render.requested_mode);
     const AtlasTextureId atlas_id = render.state->atlas_texture_ids[quad.texture_idx];
@@ -1129,6 +1151,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     mix(single_line ? layout->line_revisions[line_index]
                     : skb_layout_get_generation(layout->layout.get()));
     mix(font_collection_generation());
+    mix(layout->grid_revision);
     mix(raster_scale.key);
     mix(static_cast<uint64_t>(mode));
     if (!single_line) {
@@ -1256,6 +1279,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
     output.first_line = line_index;
     output.end_line = end_line < 0 ? line_index + 1 : end_line;
     output.layout_generation = skb_layout_get_generation(retained->layout.get());
+    output.grid_revision = retained->grid_revision;
     output.line_revision = line_index >= 0 && end_line < 0 &&
         static_cast<std::size_t>(line_index) < retained->line_revisions.size()
         ? retained->line_revisions[line_index] : 0;
@@ -1293,7 +1317,9 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                               mode,
                               &output,
                               line_start,
-                              line_end};
+                              line_end,
+                              &retained->grid_positions,
+                              &retained->grid_source_positions};
     if (!skb_layout_iterate_render_glyphs_range(retained->layout.get(), lines, append_render_glyph, &render))
         return false;
     if (resource_limited()) return false;
@@ -1303,7 +1329,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
 
 bool TextEngine::prepared_glyphs_current(const PreparedGlyphs &glyphs) const {
     const auto *layout = find_layout(*state_, glyphs.layout_id);
-    if (!state_->atlas || !layout)
+    if (!state_->atlas || !layout || glyphs.grid_revision != layout->grid_revision)
         return false;
     if (glyphs.line_revision != 0) {
         if (glyphs.first_line < 0 || glyphs.end_line != glyphs.first_line + 1 ||
@@ -1341,13 +1367,66 @@ TextRect TextEngine::bounds() const {
     if (!layout)
         return {};
     const skb_rect2_t value = skb_layout_get_bounds(layout->layout.get());
-    return {value.x, value.y, value.width, value.height};
+    return {layout->grid_positions.empty() ? value.x : 0.0f, value.y,
+            layout->grid_positions.empty() ? value.width : layout->grid_positions.back(), value.height};
+}
+
+bool TextEngine::set_grid_positions(const std::vector<float> &positions, bool *changed) {
+    if (changed) *changed = false;
+    auto *layout = active_layout(*state_);
+    if (!layout) return false;
+    if (!positions.empty()) {
+        if (layout->result.lines.size() > 1 || positions.size() != static_cast<size_t>(text_count()) + 1)
+            return false;
+        float previous = 0;
+        for (float x : positions) {
+            if (!std::isfinite(x) || x < previous) return false;
+            previous = x;
+        }
+    }
+    if (positions == layout->grid_positions) return true;
+    layout->grid_positions = positions;
+    layout->grid_source_positions.assign(positions.size(), 0.0f);
+    if (!positions.empty()) {
+        std::vector<bool> assigned(positions.size(), false);
+        auto iterator = skb_caret_iterator_make(layout->layout.get(), 0);
+        float x = 0, advance = 0, midpoint = 0;
+        skb_caret_iterator_result_t left{}, right{};
+        while (skb_caret_iterator_next(&iterator, &x, &advance, &midpoint, &left, &right)) {
+            for (const auto &candidate : {left, right}) {
+                if (candidate.layout_run_idx == SKB_INVALID_INDEX) continue;
+                const auto offset = static_cast<size_t>(skb_layout_get_offset_from_text_position(
+                    layout->layout.get(), candidate.text_position));
+                if (offset < positions.size() && !assigned[offset]) {
+                    layout->grid_source_positions[offset] = x;
+                    assigned[offset] = true;
+                }
+            }
+        }
+        for (size_t offset = 1; offset < positions.size(); ++offset)
+            if (!assigned[offset]) layout->grid_source_positions[offset] = layout->grid_source_positions[offset - 1];
+    }
+    layout->grid_revision = ++state_->line_revision_sequence;
+    state_->published_glyphs.clear();
+    state_->selection_layout_id = 0;
+    if (changed) *changed = true;
+    return true;
 }
 
 TextPosition TextEngine::hit_test(float x, float y) const {
     const auto *layout = active_layout(*state_);
     if (!layout)
         return {};
+    if (!layout->grid_positions.empty()) {
+        const auto &grid = layout->grid_positions;
+        auto end = std::upper_bound(grid.begin(), grid.end(), x);
+        const size_t first = end == grid.begin() ? 0 : static_cast<size_t>(end - grid.begin() - 1);
+        const size_t next = std::min(first + 1, grid.size() - 1);
+        const float span = grid[next] - grid[first];
+        const float fraction = span > 0 ? std::clamp((x - grid[first]) / span, 0.0f, 1.0f) : 0.0f;
+        x = layout->grid_source_positions[first] + fraction *
+            (layout->grid_source_positions[next] - layout->grid_source_positions[first]);
+    }
     const skb_text_position_t value = skb_layout_hit_test(layout->layout.get(), SKB_MOVEMENT_CARET, x, y);
     return {value.offset, static_cast<uint8_t>(value.affinity)};
 }
@@ -1368,7 +1447,10 @@ TextCaret TextEngine::caret(TextPosition position) const {
     const skb_text_position_t value = {position.offset,
                                        static_cast<skb_caret_affinity_t>(position.affinity)};
     const skb_caret_info_t result = skb_layout_get_caret_info_at(layout->layout.get(), value);
-    return {result.x, result.y, result.ascender, result.descender, result.slope, result.direction};
+    const int32_t offset = skb_layout_get_offset_from_text_position(layout->layout.get(), value);
+    const float x = !layout->grid_positions.empty() && offset >= 0 &&
+        static_cast<size_t>(offset) < layout->grid_positions.size() ? layout->grid_positions[offset] : result.x;
+    return {x, result.y, result.ascender, result.descender, result.slope, result.direction};
 }
 
 // Code selection is lexical rather than natural-language word segmentation.

@@ -967,6 +967,14 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_text_layout_set_color_ranges(layout: nkui_resource, ranges: ptr<const<nkui_text_color_range>> @in_array("count"), count: u32) -> nkui_result;
 	/**
+	 * Projects a single-row layout onto supplied physical x positions, one float32
+	 * little-endian value per logical codepoint boundary (text length + 1).
+	 * Positions must be finite, nonnegative and nondecreasing. Zero bytes restores
+	 * natural layout. Glyphs share the row's existing atlas and color ranges.
+	 * Updating text/layout clears the projection. Invalid input leaves it intact.
+	 */
+	extern fn nkui_text_layout_set_grid_positions(layout: nkui_resource, positions: ptr<const<u8>> @in_array("position_bytes"), position_bytes: u32) -> nkui_result;
+	/**
 	 * Re-shapes an existing layout with new UTF-8 text while retaining its handle and style; null text
 	 * is empty.
 	 */

@@ -962,6 +962,15 @@ typedef struct nkui_text_color_range {
 NKUI_API nkui_result nkui_text_layout_set_color_ranges(nkui_resource layout,
     const nkui_text_color_range *ranges NKUI_IN_ARRAY(count), uint32_t count);
 
+/** Projects a single-row layout onto supplied physical x positions, one float32
+ * little-endian value per logical codepoint boundary (text length + 1).
+ * Positions must be finite, nonnegative and nondecreasing. Zero bytes restores
+ * natural layout. Glyphs share the row's existing atlas and color ranges.
+ * Updating text/layout clears the projection. Invalid input leaves it intact.
+ */
+NKUI_API nkui_result nkui_text_layout_set_grid_positions(nkui_resource layout,
+    const uint8_t *positions NKUI_IN_ARRAY(position_bytes), uint32_t position_bytes);
+
 /** Sets the color used when this retained text layout is drawn. */
 NKUI_API nkui_result nkui_text_layout_set_color(nkui_resource layout, nkui_color color);
 

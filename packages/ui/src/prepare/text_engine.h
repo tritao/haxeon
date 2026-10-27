@@ -81,6 +81,7 @@ struct PreparedGlyphs {
     GlyphMode mode = GlyphMode::Alpha;
     TextLayoutId layout_id = 0;
     uint64_t layout_generation = 0;
+    uint64_t grid_revision = 0;
     uint64_t line_revision = 0;
     uint64_t publication_key = 0;
     int32_t source_start = -1;
@@ -284,6 +285,8 @@ class TextEngine {
                               const std::vector<GlyphColorRange> &ranges = {},
                               GlyphPreparation preparation = GlyphPreparation::Rasterize);
     bool prepared_glyphs_current(const PreparedGlyphs &glyphs) const;
+    /** Optional physical x positions for every codepoint boundary of a single row. */
+    bool set_grid_positions(const std::vector<float> &positions, bool *changed = nullptr);
     int32_t text_count() const;
     TextRect bounds() const;
     TextPosition hit_test(float x, float y) const;
