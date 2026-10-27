@@ -58,6 +58,8 @@ class DockWorkspace implements View {
 	public var headerActionsRevision:String = "";
 	/** Expand a matching group vertically without changing the persisted dock tree. */
 	public var expandedGroup:Null<Array<String>> = null;
+	/** Presentation-only suppression; preserves the model, split paths and saved layout. */
+	public var hiddenPanels:Array<String> = [];
 	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
 	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
@@ -121,11 +123,17 @@ class DockWorkspace implements View {
 		switch (node) {
 			case DockNode.Empty: return new Text("No panels");
 			case DockNode.Panel(panelId):
+				if (hiddenPanels.indexOf(panelId) >= 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
 				return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, function() {
 					return targetView(panelId, buildTabs([panelId], panelId, context, nodeKey,
 						availableWidth, labelWidths, panelCache));
 				});
 			case DockNode.Tabs(panelIds, activePanelId):
+				if (hiddenPanels.length > 0) {
+					panelIds = panelIds == null ? [] : [for (id in panelIds) if (hiddenPanels.indexOf(id) < 0) id];
+					if (panelIds.length == 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
+					if (panelIds.indexOf(activePanelId) < 0) activePanelId = panelIds[0];
+				}
 				var targetPanelId = activePanelId == null && panelIds != null && panelIds.length > 0
 					? panelIds[0] : activePanelId;
 				return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, function() {
@@ -241,6 +249,12 @@ class DockWorkspace implements View {
 		return labelWidths.measure(context.fonts, label, style.textStyle, style.paragraphStyle);
 	}
 
+	function hasPresentedPanel(node:DockNode):Bool {
+		for (id in haxeon.ui.docking.DockNodeTools.panelIds(node))
+			if (hiddenPanels.indexOf(id) < 0) return true;
+		return false;
+	}
+
 	function buildSplit(axis:DockSplitAxis, ratio:Float, first:DockNode, second:DockNode,
 		context:BuildContext, path:Array<Int>, nodeKey:String,
 		availableWidth:Float, availableHeight:Float, labelWidths:DockTextWidthCache,
@@ -249,6 +263,12 @@ class DockWorkspace implements View {
 		firstPath.push(0);
 		var secondPath = path.copy();
 		secondPath.push(1);
+		if (hiddenPanels.length > 0) {
+			if (!hasPresentedPanel(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+			if (!hasPresentedPanel(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+		}
 		if (axis == DockSplitAxis.Vertical && expandedGroup != null) {
 			if (matchesExpandedGroup(second) && !matchesExpandedGroup(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
 				availableWidth, availableHeight, labelWidths, panelCache, paneCache);

@@ -903,6 +903,7 @@ class FrameworkSmoke {
 			return 0;
 		}
 		if (!sidebarValid(context)) throw "sidebar registry, persistence or lazy provider regression";
+		DockPresentationTests.run(context);
 		if (!dockWorkspaceValid(context))
 			return 231;
 		if (!dockPanelStateFollowsPanel(context))
