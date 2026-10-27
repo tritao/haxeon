@@ -65,6 +65,11 @@ class TreeView implements View {
 	public var expandOnSingleClick:Bool = false;
 	public var onItemContextMenu:Null<String->UiEvent->Void>;
 	public var onItemRename:Null<String->Void>;
+	/** Optional intra-tree drag/drop policy. Drops use stable model keys. */
+	public var canDragItem:Null<String->Bool>;
+	public var canDropItem:Null<(String, String)->Bool>;
+	public var onItemDrop:Null<(String, String)->Void>;
+	var drag = new TreeItemDrag();
 	/** Optional row builder receiving the current expansion state. */
 	public var itemBuilder:Null<(String, Bool)->View>;
 	/** Return false to defer a requested expansion; toggles identify repeated pointer/activation intent. */
@@ -148,6 +153,9 @@ class TreeView implements View {
 		extentIndex = null;
 		itemIds = new Map();
 	}
+
+	/** Cancel an in-flight drag when the owning workspace changes. */
+	public function cancelDrag():Void drag.clear();
 
 	/** Selects a visible node. Null clears selection; notify=false synchronizes without a callback. */
 	public function select(nextKey:Null<String>, notify:Bool = true):Bool {
@@ -301,6 +309,8 @@ class TreeView implements View {
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
 			var treeId = context.id("tree");
+			drag = context.resourceState(context.id("tree-drag"),
+				function() return new TreeItemDrag(), function(value) value.dispose()).value;
 			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(treeId), StyleState.Hovered)
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
@@ -328,6 +338,7 @@ class TreeView implements View {
 			}
 			if (onStateReady != null) onStateReady(this);
 			itemIds = new Map();
+			drag.rows.clear();
 
 			var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight :
 				(viewportStyle.height.sizing == LayoutSizing.Fixed ? viewportStyle.height.value :
@@ -362,7 +373,7 @@ class TreeView implements View {
 							} else if (count == 2) activateItem(nodeKey, event);
 						},
 						function(event) { handleNodeKey(context, entry, event); },
-						function(id) { itemIds.set(nodeKey, id); },
+						function(node) { itemIds.set(nodeKey, node.id); drag.rows.set(nodeKey, node); },
 						function(event) {
 							var handler = onItemContextMenu;
 							if (handler != null) handler(nodeKey, event);
@@ -392,6 +403,9 @@ class TreeView implements View {
 			root.semantics = semantics;
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
+			if (canDragItem != null && canDropItem != null && onItemDrop != null)
+				drag.attach(root, this, context);
+			else drag.clear();
 			root.states = context.interactionStates.get(root.id);
 			guideVisibility.root = root;
 			return root;
@@ -872,13 +886,13 @@ private class TreeViewRow implements View {
 	final onToggle:Void->Void;
 	final onClick:UiEvent->Void;
 	final onKey:UiEvent->Void;
-	final onBuilt:WidgetId->Void;
+	final onBuilt:RenderNode->Void;
 	final onContextMenu:UiEvent->Void;
 
 	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
 			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool, guideOpacity:Float,
 			onSelect:Void->Void, onActivate:UiEvent->Void, onToggle:Void->Void,
-			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
+			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:RenderNode->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
 		this.itemKey = itemKey;
 		this.child = child;
@@ -997,7 +1011,7 @@ private class TreeViewRow implements View {
 					LayoutAxis.fixed(entry.extent));
 			node.add(context.withScope(new Key("disclosure"), function() return disclosure.build(context)));
 			node.add(new KeyedView('item:$itemKey', child).build(context));
-			onBuilt(node.id);
+			onBuilt(node);
 			return node;
 		});
 	}
