@@ -38,6 +38,8 @@ class SettingsPanel implements View {
 	public var filter(default, null):String;
 	public var showAdvanced(default, null):Bool;
 	public var modifiedOnly(default, null):Bool = false;
+	public var restartOnly(default, null):Bool = false;
+	var focusSearchPending:Bool = false;
 	var storeRevision:Int = -1;
 	var visibleCounts:Map<String, Int> = new Map();
 	/** The category shown on the right, or null when nothing matches. */
@@ -73,6 +75,16 @@ class SettingsPanel implements View {
 
 	public function hasUnsavedChanges():Bool return false;
 	public function discardUnsavedChanges():Void {}
+
+	public function requestSearchFocus():Void { focusSearchPending = true; changed(); }
+
+	/** Include advanced restart changes and resets back to a default value. */
+	public function showRestartChanges():Void {
+		filter = ""; modifiedOnly = false; showAdvanced = true; restartOnly = true;
+		refresh();
+	}
+
+	public function showAllSettings():Void { restartOnly = false; refresh(); }
 
 	public function setFilter(value:String):Void {
 		var next = value == null ? "" : value;
@@ -125,8 +137,8 @@ class SettingsPanel implements View {
 		if (storeRevision != catalog.store.revision) refresh();
 		if (selectedCategory == null)
 			return null;
-		var searching = StringTools.trim(filter).length > 0;
-		var nextKey = selectedCategory + "|" + filter + "|" + showAdvanced + "|" + modifiedOnly + "|" + (modifiedOnly ? catalog.store.revision : 0);
+		var searching = StringTools.trim(filter).length > 0 || restartOnly;
+		var nextKey = selectedCategory + "|" + filter + "|" + showAdvanced + "|" + modifiedOnly + "|" + restartOnly + "|" + ((modifiedOnly || restartOnly) ? catalog.store.revision : 0);
 		if (inspector == null || inspectorKey != nextKey) {
 			var sections = [];
 			for (category in searching ? categories() : [selectedCategory]) {
@@ -154,8 +166,23 @@ class SettingsPanel implements View {
 		headerStyle.childGap = 12.0;
 		var searchStyle = new LayoutStyle();
 		searchStyle.width = LayoutAxis.grow();
+		var searchNode:Null<RenderNode> = null, categoryNode:Null<RenderNode> = null, inspectorNode:Null<RenderNode> = null;
+		var search = new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings");
+		function firstControl(node:Null<RenderNode>):Null<haxeon.ui.core.WidgetId> {
+			var first:Null<haxeon.ui.core.WidgetId> = null;
+			if (node != null) node.walk(function(child) {
+				if (first == null && child.focusable && child.enabled && child.styleClasses.indexOf("inspector-section-header") < 0
+					&& child.styleType != "scrollbar-thumb" && (child.semantics == null || child.semantics.role != haxeon.ui.semantics.AccessibilityRole.ScrollArea)) first = child.id;
+			});
+			return first;
+		}
+		function focusRegion(node:Null<RenderNode>):Bool {
+			var target = firstControl(node);
+			return target != null && context.requestFocus(target);
+		}
+		search.onSubmit = function(_) focusRegion(inspectorNode);
 		var headerChildren:Array<KeyedView> = [
-			new KeyedView("filter", new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter Settings")),
+			new KeyedView("filter", new SettingsFocusRegion(search, function(node) searchNode = node)),
 			new KeyedView("modified", new Toggle(key + ":modified", "Modified only", modifiedOnly, setModifiedOnly)),
 			new KeyedView("advanced", new Toggle(key + ":advanced", "Advanced Settings", showAdvanced, setShowAdvanced))
 		];
@@ -190,32 +217,59 @@ class SettingsPanel implements View {
 			treeWidth = width;
 			changed();
 		};
-		var split = new SplitView(key + ":split", tree, inspectorView, options);
 
 		var columnStyle = fill();
 		columnStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [
 			new KeyedView("header", header),
-			new KeyedView("body", compact ? compactBody(inspectorView) : split),
+			new KeyedView("body", compact ? compactBody(new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node), function(node) categoryNode = node) :
+				new SplitView(key + ":keyboard-split", new SettingsFocusRegion(tree, function(node) categoryNode = node),
+					new SettingsFocusRegion(inspectorView, function(node) inspectorNode = node), options)),
 			new KeyedView("status", new Text(catalog.store.lastError != null ? catalog.store.lastError :
 				(hasUnsavedChanges() ? "Unsaved list changes · Apply each list to save" : (current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically")))
 		];
 		var restart = catalog.store.restartChanges();
-		if (restart.length > 0) {
+		if (restart.length > 0 || restartOnly) {
 			var summaryStyle = new LayoutStyle(); summaryStyle.width = LayoutAxis.grow();
-			children.push(new KeyedView("restart-summary", new Text("Restart required for " + restart.length +
+			if (restart.length > 0) children.push(new KeyedView("restart-summary", new Text("Restart required for " + restart.length +
 				(restart.length == 1 ? " changed setting: " : " changed settings: ") + [for (setting in restart) setting.label].join(", "),
 				summaryStyle, null, haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter))));
 		}
-		return new Column(key, children, columnStyle).build(context);
+		if (restart.length > 0 || restartOnly) children.push(new KeyedView("restart-action", new haxeon.ui.widgets.controls.Button(
+			restartOnly ? "Show all settings" : "Show changed settings", null, restartOnly ? showAllSettings : showRestartChanges, key + ":restart-action")));
+		children.push(new KeyedView("keyboard-help", new Text("F6 / Shift+F6: move between search, categories, and settings", null, context.theme.tokens.textSecondary,
+			null, haxeon.ui.theme.TextRole.Caption)));
+		var root = new Column(key, children, columnStyle).build(context);
+		if (focusSearchPending) {
+			var target = firstControl(searchNode);
+			if (target != null) { context.requestFocusAfterLayout(target); focusSearchPending = false; }
+		}
+		root.on(haxeon.ui.core.UiEventKind.KeyDown, function(event) {
+			if (event.key == haxeon.ui.core.UiKey.F && (event.modifiers & (haxeon.ui.core.UiModifier.Control | haxeon.ui.core.UiModifier.Super)) != 0) {
+				if (focusRegion(searchNode)) { event.preventDefault(); event.stopPropagation(); }
+				return;
+			}
+			var inSearch = searchNode != null && searchNode.find(event.target) != null;
+			if (inSearch && event.key == haxeon.ui.core.UiKey.Down && event.modifiers == 0) {
+				if (focusRegion(categoryNode)) { event.preventDefault(); event.stopPropagation(); }
+				return;
+			}
+			if (event.key != haxeon.ui.core.UiKey.F6 || (event.modifiers & ~(haxeon.ui.core.UiModifier.Shift)) != 0) return;
+			var regions = [searchNode, categoryNode, inspectorNode];
+			var index = 0;
+			for (i in 0...regions.length) if (regions[i] != null && regions[i].find(event.target) != null) index = i;
+			var step = (event.modifiers & haxeon.ui.core.UiModifier.Shift) != 0 ? -1 : 1;
+			for (offset in 1...4) if (focusRegion(regions[(index + step * offset + 6) % 3])) { event.preventDefault(); event.stopPropagation(); break; }
+		}, "capture");
+		return root;
 	}
 
-	function compactBody(inspector:View):View {
+	function compactBody(inspector:View, onCategory:RenderNode->Void):View {
 		var options = [for (category in categories()) new haxeon.ui.widgets.controls.SelectOption(category,
 			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ") + " (" + categoryCount(category) + ")", category)];
 		var children:Array<KeyedView> = [];
-		if (options.length > 0) children.push(new KeyedView("category", new haxeon.ui.widgets.controls.Select(
-			key + ":category", options, selectedCategory, select)));
+		if (options.length > 0) children.push(new KeyedView("category", new SettingsFocusRegion(new haxeon.ui.widgets.controls.Select(
+			key + ":category", options, selectedCategory, select), onCategory)));
 		children.push(new KeyedView("inspector", inspector));
 		var style = fill(); style.childGap = 8;
 		return new Column(key + ":compact", children, style);
@@ -224,6 +278,7 @@ class SettingsPanel implements View {
 	/** Recomputes the tree after the filter or Advanced switch changed, keeping the selection when it still matches. */
 	function refresh():Void {
 		storeRevision = catalog.store.revision;
+		catalog.onlyPaths = restartOnly ? [for (setting in catalog.store.restartChanges()) setting.path] : null;
 		visibleCounts = catalog.categoryCounts(filter, showAdvanced, modifiedOnly);
 		treeModel.update(catalog.categories(filter, showAdvanced, modifiedOnly), visibleCounts, filter);
 		if (selectedCategory == null || treeModel.categories.indexOf(selectedCategory) < 0)
@@ -352,4 +407,11 @@ private class SettingsTreeModel implements TreeViewModel {
 
 	public function revision():Int
 		return treeRevision;
+}
+
+private class SettingsFocusRegion implements View {
+	final child:View;
+	final built:RenderNode->Void;
+	public function new(child:View, built:RenderNode->Void) { this.child = child; this.built = built; }
+	public function build(context:BuildContext):RenderNode { var node = child.build(context); built(node); return node; }
 }

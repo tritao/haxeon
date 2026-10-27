@@ -104,12 +104,20 @@ class SettingsTests {
 		store.set("editor/fonts/path", PropertyValue.Text("changed.ttf"));
 		check(panel.categoryCount("editor/fonts") == 1, "count changes refresh even with the same matching category");
 		check(store.restartChanges().length == 1, "restart summary detects changes from startup");
+		panel.setFilter("no matching setting");
+		panel.showRestartChanges();
+		var changed:PropertyInspector = cast panel.currentInspector();
+		check(panel.restartOnly && panel.filter == "" && !panel.modifiedOnly && changed.descriptors.length == 1,
+			"restart action clears restrictive filters and reveals only pending changes");
 		var replacement = new SettingsStore(registry);
 		replacement.set("editor/fonts/path", PropertyValue.Text("changed.ttf"));
 		replacement.inheritRestartBaseline(store);
 		check(replacement.restartChanges().length == 1, "reloading preserves the running restart baseline");
 		store.reset("editor/fonts/path");
 		check(store.restartChanges().length == 0, "reverting to the startup value clears the summary");
+		check(panel.currentInspector() == null, "reverting the last restart change empties the filtered view");
+		panel.showAllSettings();
+		check(!panel.restartOnly && panel.categoryCount("editor/fonts") == 3, "show all restores ordinary categories");
 		var file = DIRECTORY + "/restart-summary.json";
 		if (FileSystem.exists(file)) FileSystem.deleteFile(file);
 		var saved = new SettingsStore(registry, file);
@@ -118,6 +126,11 @@ class SettingsTests {
 		check(restarted.restartChanges().length == 0, "saved startup overrides do not request another restart");
 		restarted.reset("editor/fonts/path");
 		check(restarted.restartChanges().length == 1, "resetting a startup override to default requires a restart");
+		var resetPanel = new SettingsPanel("reset-restart", restarted);
+		resetPanel.showRestartChanges();
+		var resetInspector:PropertyInspector = cast resetPanel.currentInspector();
+		check(restarted.isDefault("editor/fonts/path") && resetInspector.descriptors.length == 1,
+			"restart filter includes resets to defaults that modified-only would hide");
 		FileSystem.deleteFile(file);
 		var ranges = haxeon.ui.widgets.text.HighlightedText.matches("😀 Font FONT", "font font on");
 		check(ranges.length == 2 && ranges[0].start == 2 && ranges[0].end == 6 && ranges[1].start == 7,

@@ -16,6 +16,7 @@ import haxeon.ui.properties.PropertyValue;
  */
 class SettingsCatalog {
 	public final store:SettingsStore;
+	public var onlyPaths:Null<Array<String>>;
 	final descriptors:Map<String, PropertyDescriptor>;
 
 	public function new(store:SettingsStore) {
@@ -69,7 +70,7 @@ class SettingsCatalog {
 		var result:Array<String> = [];
 		for (definition in store.registry.all()) {
 			var category = categoryOf(definition);
-			if (visible(definition, filter, showAdvanced) && (!modifiedOnly || !store.isDefault(definition.path)) && result.indexOf(category) < 0)
+			if ((onlyPaths == null || onlyPaths.indexOf(definition.path) >= 0) && visible(definition, filter, showAdvanced) && (!modifiedOnly || !store.isDefault(definition.path)) && result.indexOf(category) < 0)
 				result.push(category);
 		}
 		return result;
@@ -79,7 +80,7 @@ class SettingsCatalog {
 	public function categoryCounts(filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Map<String, Int> {
 		var counts:Map<String, Int> = new Map();
 		for (definition in store.registry.all()) {
-			if (!visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
 			var category = categoryOf(definition), previous = counts.get(category);
 			counts.set(category, previous == null ? 1 : previous + 1);
 		}
@@ -91,7 +92,7 @@ class SettingsCatalog {
 		var order:Array<String> = [];
 		var grouped:Map<String, Array<PropertyDescriptor>> = new Map();
 		for (definition in store.registry.all()) {
-			if (categoryOf(definition) != category || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path)))
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || categoryOf(definition) != category || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path)))
 				continue;
 			var section = sectionOf(definition);
 			if (!grouped.exists(section)) {
