@@ -29,6 +29,28 @@ UI has no dependency on a Materia or SceneKit checkout.
 Compiler and native artifacts should live under Haxeon’s `out/` tree or an
 explicit build directory, rather than inside the package’s source folders.
 
+## Search pickers and tooltips
+
+`widgets.commands.SearchPicker` owns input focus, a virtualized result viewport,
+keyboard routing, selection reveal and popup sizing. Retain its instance across
+builds and supply a `SearchPickerModel` plus a row builder. The model owns queries,
+results, selection and activation; the builder receives selection, hover and
+tooltip-dismissal revision values. `CommandPalette` uses this same surface with
+a command-registry adapter. `ShortcutKeycaps` renders shortcut alternatives and
+chords independently of command or file models.
+
+`widgets.overlays.Tooltip` accepts either explicit x/y offsets or a preferred
+`placement` side. Side positioning supports `delaySeconds`, optional bounding
+rectangles and a `TooltipHoverGroup` for switching between neighboring anchors
+without restarting the initial delay. Wrap the window content in
+`TooltipOverlayHost` to lift tooltip surfaces above clipped containers.
+
+Run the picker interaction tests after building the native UI library:
+
+```sh
+packages/ui/tools/test-search-picker.sh
+```
+
 ## Component Lab
 
 The Haxe package `haxeon.ui.lab` provides a reusable isolated-component

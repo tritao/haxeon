@@ -1,10 +1,7 @@
 package haxeon.ui.widgets.commands;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.controls.SearchField;
 import haxeon.ui.widgets.layout.Align;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.widgets.overlays.Popup;
 import haxeon.ui.widgets.text.Text;
 
 import haxeon.ui.Insets;
@@ -20,12 +17,8 @@ import haxeon.ui.core.CommandResult;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.widgets.collections.ListView;
-import haxeon.ui.widgets.collections.ListViewItemMetadata;
-import haxeon.ui.widgets.collections.ListViewModel;
 
 /** Searchable, virtualized command launcher suitable for editor key palettes. */
 class CommandPalette implements View {
@@ -63,162 +56,120 @@ class CommandPalette implements View {
 			var queryState:State<String> = context.state(context.id("query"), query);
 			query = queryState.value;
 			var selectionQuery:State<String> = context.state(context.id("selection-query"), query);
-			var queryChanged = selectionQuery.value != query;
-			if (queryChanged) selectionQuery.update(query);
-			var model = new CommandPaletteModel(commands, actualContext, query);
-			var searchStyle = new LayoutStyle();
-			searchStyle.width = LayoutAxis.grow();
-			if (centered) searchStyle.height = LayoutAxis.fixed(38.0);
-			var search = new SearchField("search", query, function(next) {
-				query = next;
-				queryState.update(next);
-			}, searchStyle, "Search commands");
-			var listStyle = new LayoutStyle();
-			listStyle.width = LayoutAxis.grow();
-			var listHeight = centered ? Math.min(320.0, Math.max(120.0, context.viewportHeight - 102.0)) : 320.0;
-			listStyle.height = LayoutAxis.fixed(listHeight);
-			var activate = function(index:Int) {
-				if (index < 0 || index >= model.commands.length || !model.enabledAt(index))
-					return;
-				var result = commands.executeContext(model.commands[index].id, actualContext);
-				if (onResult != null)
-					onResult(result);
-				if (result.succeeded && onDismiss != null)
-					onDismiss();
-			};
-			var list = new ListView("commands", model, listStyle, null, listHeight,
-				model.firstEnabledIndex(),
-				null, activate, null, model);
-			list.activateOnClick = true;
-			search.onSubmit = function(_) activate(list.selectedIndex < 0
-				? model.firstEnabledIndex() : list.selectedIndex);
-			var contentStyle = new LayoutStyle();
-			var contentWidth = centered ? Math.min(480.0, Math.max(200.0, context.viewportWidth - 32.0)) : 480.0;
-			contentStyle.width = LayoutAxis.fixed(contentWidth);
-			contentStyle.padding = new Insets(12.0, 12.0, 12.0, 12.0);
-			contentStyle.childGap = 8.0;
-			contentStyle.background = context.theme.panelBackground;
-			var content = new Column("content", [
-				new KeyedView("search", search),
-				new KeyedView("commands", list)
-			], contentStyle);
-			var popupX = centered ? Math.max(8.0, (context.viewportWidth - contentWidth - 16.0) / 2.0) : x;
-			var popupY = centered ? Math.max(8.0, (context.viewportHeight - listHeight - 86.0) / 2.0) : y;
-			var popup = new Popup(key, content, popupX, popupY, null, onDismiss);
-			popup.label = "Command palette";
-			popup.modal = true;
-			popup.dimBackdrop = true;
-			if (centered) popup.layerZIndex = 1000;
-			var root = popup.build(context);
-			if (queryChanged)
-				list.select(model.firstEnabledIndex());
-			var navigate = function(event:haxeon.ui.core.UiEvent) {
-				if (event.defaultPrevented ||
-					(event.key != UiKey.Up && event.key != UiKey.Down))
-					return;
-				if (model.firstEnabledIndex() < 0) {
-					event.preventDefault();
-					return;
-				}
-				var step = event.key == UiKey.Down ? 1 : -1;
-				var next = list.selectedIndex;
-				if (next < 0 && step < 0) next = 0;
-				for (_ in 0...model.commands.length) {
-					next = (next + step + model.commands.length) % model.commands.length;
-					if (model.enabledAt(next)) break;
-				}
-				list.select(next);
-				list.scrollTo(next);
-				event.preventDefault();
-			};
-			root.on(UiEventKind.KeyDown, navigate);
-			root.on(UiEventKind.KeyRepeat, navigate);
-			return root;
+			var selection:State<Int> = context.state(context.id("selection"), -1);
+			var model = new CommandPaletteModel(commands, actualContext, query, selection,
+				function(next) { query = next; queryState.update(next); }, onResult, onDismiss);
+			if (selectionQuery.value != query || selection.value < 0 || selection.value >= model.count()) {
+				selectionQuery.update(query);
+				selection.update(model.firstEnabledIndex());
+			}
+			var picker = context.resourceState(context.id("picker"), function() return new SearchPicker(key, model,
+				function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered),
+				function() {}, function() {}), function(_) {}).value;
+			picker.model = model;
+			picker.buildRow = function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered);
+			picker.onDismiss = function() { if (onDismiss != null) onDismiss(); };
+			picker.onChanged = function() context.commands.refresh();
+			picker.width = 504;
+			picker.rowHeight = 36;
+			picker.maxListHeight = 320;
+			picker.label = "Command palette";
+			picker.placeholder = "Search commands";
+			picker.centered = centered;
+			picker.x = x;
+			var listHeight = Math.min(Math.max(36, model.count() * 36), Math.max(36, Math.min(320, context.viewportHeight - 80)));
+			picker.y = centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y;
+			picker.dimBackdrop = true;
+			picker.menuSurface = false;
+			picker.layerZIndex = centered ? 1000 : 0;
+			return picker.build(context);
 		});
 	}
 }
 
-private class CommandPaletteModel implements ListViewModel implements ListViewItemMetadata {
+private class CommandPaletteModel implements SearchPickerModel {
 	public final commands:Array<Command>;
 	final context:CommandContext;
+	final registry:CommandRegistry;
+	final queryValue:String;
+	final selection:State<Int>;
+	final onQuery:String->Void;
+	final onResult:Null<CommandResult->Void>;
+	final onDismiss:Null<Void->Void>;
 
-	public function new(registry:CommandRegistry, context:CommandContext, query:String) {
+	public function new(registry:CommandRegistry, context:CommandContext, query:String, selection:State<Int>,
+			onQuery:String->Void, onResult:Null<CommandResult->Void>, onDismiss:Null<Void->Void>) {
 		commands = [];
 		this.context = context == null ? new CommandContext() : context;
+		this.queryValue = query;
+		this.selection = selection;
+		this.onQuery = onQuery;
+		this.onResult = onResult;
+		this.onDismiss = onDismiss;
 		var needle = query == null ? "" : query.toLowerCase();
 		for (id in registry.ids()) {
 			var command = registry.get(id);
-			if (command != null && (needle.length == 0 || matches(command, needle)))
-				commands.push(command);
+			if (command != null && (needle.length == 0 || matches(command, needle))) commands.push(command);
 		}
+		this.registry = registry;
 	}
-
-	public function count():Int
-		return commands.length;
-
-	public function keyAt(index:Int):String
-		return commands[index].id;
-
-	public function labelAt(index:Int):String
-		return commands[index].label;
-
-	public function enabledAt(index:Int):Bool
-		return commands[index].isEnabled(context);
-
+	public function query():String return queryValue;
+	public function selectedIndex():Int return selection.value;
+	public function count():Int return commands.length;
+	public function labelAt(index:Int):String return commands[index].label;
+	public function enabledAt(index:Int):Bool return commands[index].isEnabled(context);
+	public function setQuery(value:String):Void onQuery(value);
 	public function firstEnabledIndex():Int {
-		for (index in 0...commands.length)
-			if (enabledAt(index)) return index;
+		for (index in 0...commands.length) if (enabledAt(index)) return index;
 		return -1;
 	}
-
-	public function estimatedExtent():Float
-		return 36.0;
-
-	public function extentIsUniform():Bool
-		return true;
-
-	public function extentAt(index:Int):Float
-		return 36.0;
-
-	public function extentRevisionAt(index:Int):Int
-		return 0;
-
-	public function totalExtent():Null<Float>
-		return commands.length * 36.0;
-
-	public function buildItem(index:Int):View {
-		var command = commands[index];
-		return new CommandPaletteItem(command.label, enabledAt(index),
-			command.isChecked(context));
+	public function activate(index:Int):Void {
+		if (index < 0 || index >= commands.length || !enabledAt(index)) return;
+		var result = registry.executeContext(commands[index].id, context);
+		if (onResult != null) onResult(result);
+		if (result.succeeded && onDismiss != null) onDismiss();
 	}
-
-	public function revision():Int
-		return 0;
-
-	static function matches(command:Command, needle:String):Bool {
-		return command.id.toLowerCase().indexOf(needle) >= 0 ||
-			command.label.toLowerCase().indexOf(needle) >= 0;
+	public function navigate(key:Int, modifiers:Int, pageSize:Int):Void {
+		if (key == UiKey.Enter) { activate(selection.value); return; }
+		if (firstEnabledIndex() < 0) return;
+		var step = key == UiKey.Up || key == UiKey.PageUp ? -1 : 1;
+		var count = key == UiKey.PageUp || key == UiKey.PageDown ? pageSize : 1;
+		var next = selection.value;
+		if (next < 0 && step < 0) next = 0;
+		for (_ in 0...count) for (_ in 0...commands.length) {
+			next = (next + step + commands.length) % commands.length;
+			if (enabledAt(next)) break;
+		}
+		selection.update(next);
 	}
+	public function buildItem(index:Int, selected:Bool, hovered:Bool):View
+		return new CommandPaletteItem(commands[index].label, enabledAt(index), commands[index].isChecked(context), selected, hovered);
+	static function matches(command:Command, needle:String):Bool
+		return command.id.toLowerCase().indexOf(needle) >= 0 || command.label.toLowerCase().indexOf(needle) >= 0;
 }
 
 private class CommandPaletteItem implements View {
 	final label:String;
 	final enabled:Bool;
 	final checked:Bool;
+	final selected:Bool;
+	final hovered:Bool;
 
-	public function new(label:String, enabled:Bool, checked:Bool) {
+	public function new(label:String, enabled:Bool, checked:Bool, selected:Bool, hovered:Bool) {
 		this.label = label;
 		this.enabled = enabled;
 		this.checked = checked;
+		this.selected = selected; this.hovered = hovered;
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var color = enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled;
+		var color = !enabled ? context.theme.tokens.textDisabled : selected ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary;
 		var rowStyle = new LayoutStyle();
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fixed(36.0);
 		rowStyle.padding = new Insets(12.0, 0.0, 12.0, 0.0);
 		rowStyle.childGap = 8.0;
+		rowStyle.background = selected ? context.theme.tokens.accent : hovered ? context.theme.tokens.navigationHover : context.theme.tokens.navigationBackground;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
 		var children:Array<KeyedView> = [
 			new KeyedView("label", new Text(label, null, color))
