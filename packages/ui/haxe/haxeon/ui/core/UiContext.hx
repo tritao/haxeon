@@ -50,6 +50,12 @@ class UiContext {
 	/** Current document/selection context used by command-bound UI. */
 	public var commandContext(default, null):CommandContext;
 	public var root(default, null):Null<RenderNode>;
+	/** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
+	public var inspectionHighlight(default, set):Int = 0;
+	/** Optional detailed paint probe. Disabled unless an inspector explicitly subscribes. */
+	public var onInspectionPaint:Null<Int->Float->Void>;
+	var inspectionEnabled = false;
+	var inspectionNode:Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
 	var windowFocused:Bool = true;
 	var focusBeforeWindowBlur:Null<WidgetId> = null;
@@ -297,6 +303,7 @@ class UiContext {
 		var next = buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext));
 		if (next == null || next.parent != null)
 			throw "A view must produce one unparented render tree root";
+		if (inspectionEnabled) appendInspectionOverlay(next, frame);
 		// Decorations may be assigned by view wrappers after widget construction.
 		// Promote those boxes before invalidation compares their native visual kind.
 		next.walk(function(node) node.syncPaintKind());
@@ -564,6 +571,7 @@ class UiContext {
 				}
 				canvas.reset();
 				var geometry:ResolvedLayoutItem = cast node.resolved;
+				var inspectionStarted = onInspectionPaint == null || node == inspectionNode ? 0.0 : Sys.time();
 				canvas.withState(function(target) {
 					target.resetTransform();
 					// Custom painters own only node-local pixels. Native layout and
@@ -577,6 +585,7 @@ class UiContext {
 					customLists.set(nodeId, displayList);
 				}
 				canvas.update(displayList);
+				if (onInspectionPaint != null && node != inspectionNode) onInspectionPaint(nodeId, Sys.time() - inspectionStarted);
 				var hasCommands = displayList.info().commandCount > 0;
 				customListHasCommands.set(nodeId, hasCommands);
 				if (hasCommands) {
@@ -990,6 +999,41 @@ class UiContext {
 		if (animations.activeCount > 0)
 			result |= UiDirtyFlag.NeedsComposite;
 		return result;
+	}
+
+	function set_inspectionHighlight(value:Int):Int {
+		if (value != inspectionHighlight) submittedBuildKey = null;
+		if (value > 0) inspectionEnabled = true;
+		return inspectionHighlight = value;
+	}
+
+	/** A final retained paint plane shares the application's frame acquisition and presentation. */
+	function appendInspectionOverlay(tree:RenderNode, frame:LayoutFrame):Void {
+		if (inspectionNode != null && inspectionNode.parent == tree) return;
+		var style = new haxeon.ui.LayoutStyle();
+		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.width = haxeon.ui.LayoutAxis.fixed(frame.width);
+		style.height = haxeon.ui.LayoutAxis.fixed(frame.height);
+		style.zIndex = 32767;
+		style.clipToParent = false;
+		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"), function() return buildContext.id("overlay"));
+		var node = new RenderNode(id, haxeon.ui.LayoutVisualKind.Custom, style);
+		node.setStyleIdentity("devtools-overlay", null, null);
+		node.hitTestSelf = false;
+		node.onPaint(function(canvas, geometry) {
+			if (inspectionHighlight <= 0 || root == null) return;
+			var inspected = root.find(new WidgetId(inspectionHighlight));
+			if (inspected == null || inspected.resolved == null || !inspected.resolved.visible) return;
+			var bounds = inspected.resolved.clippedViewportBounds();
+			var x = bounds.x - geometry.x, y = bounds.y - geometry.y;
+			var color = haxeon.ui.Color.fromBytes(80, 180, 255, 220);
+			canvas.fillRectIfPositive(new Rect(x, y, bounds.width, 2), color);
+			canvas.fillRectIfPositive(new Rect(x, y + bounds.height - 2, bounds.width, 2), color);
+			canvas.fillRectIfPositive(new Rect(x, y, 2, bounds.height), color);
+			canvas.fillRectIfPositive(new Rect(x + bounds.width - 2, y, 2, bounds.height), color);
+		});
+		inspectionNode = node;
+		tree.add(node);
 	}
 
 	/** Returns a deterministic headless snapshot of the most recently submitted tree. */

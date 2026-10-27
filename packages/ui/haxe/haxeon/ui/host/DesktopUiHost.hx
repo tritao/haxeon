@@ -481,6 +481,11 @@ class DesktopUiHost {
 						surfaceAvailable = false;
 						framePending = false;
 						runtime.setSurfaceReady(false);
+					case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.TransportConnected ||
+						kind == EventKind.TransportAccepted || kind == EventKind.TransportData ||
+						kind == EventKind.TransportWritable || kind == EventKind.TransportClosed || kind == EventKind.TransportFailed):
+						// Background transport traffic is not a visual change. Its consumer requests a frame
+						// after changing application state; inspection must not wake an otherwise idle UI.
 					case _:
 						scheduleFrameWithReason("event:" + eventName);
 				}
