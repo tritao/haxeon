@@ -39,6 +39,7 @@ class SettingsPanel implements View {
 	public var showAdvanced(default, null):Bool;
 	public var modifiedOnly(default, null):Bool = false;
 	var storeRevision:Int = -1;
+	var visibleCounts:Map<String, Int> = new Map();
 	/** The category shown on the right, or null when nothing matches. */
 	public var selectedCategory(default, null):Null<String>;
 	public var onChanged:Null<Void->Void>;
@@ -110,6 +111,12 @@ class SettingsPanel implements View {
 		return treeModel.categories.copy();
 
 	/** The inspector for the selected category; rebuilt only when the category, filter or Advanced switch changes. */
+	public function categoryCount(category:String):Int {
+		if (storeRevision != catalog.store.revision) refresh();
+		var count = visibleCounts.get(category);
+		return count == null ? 0 : count;
+	}
+
 	public function invalidateInspector():Void {
 		inspector = null;
 	}
@@ -166,6 +173,7 @@ class SettingsPanel implements View {
 		} else {
 			current.labelWidth = compact ? 100 : labelWidth;
 			current.stackedRows = compact;
+			current.searchQuery = filter;
 			var inspectorStyle = fill();
 			inspectorStyle.padding = new Insets(12.0, 0.0, 4.0, 0.0);
 			current.setStyle(inspectorStyle);
@@ -186,17 +194,25 @@ class SettingsPanel implements View {
 
 		var columnStyle = fill();
 		columnStyle.childGap = 8.0;
-		return new Column(key, [
+		var children:Array<KeyedView> = [
 			new KeyedView("header", header),
 			new KeyedView("body", compact ? compactBody(inspectorView) : split),
 			new KeyedView("status", new Text(catalog.store.lastError != null ? catalog.store.lastError :
 				(hasUnsavedChanges() ? "Unsaved list changes · Apply each list to save" : (current == null ? "0 settings" : Std.string(current.descriptors.length) + " settings") + " · Changes save automatically")))
-		], columnStyle).build(context);
+		];
+		var restart = catalog.store.restartChanges();
+		if (restart.length > 0) {
+			var summaryStyle = new LayoutStyle(); summaryStyle.width = LayoutAxis.grow();
+			children.push(new KeyedView("restart-summary", new Text("Restart required for " + restart.length +
+				(restart.length == 1 ? " changed setting: " : " changed settings: ") + [for (setting in restart) setting.label].join(", "),
+				summaryStyle, null, haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter))));
+		}
+		return new Column(key, children, columnStyle).build(context);
 	}
 
 	function compactBody(inspector:View):View {
 		var options = [for (category in categories()) new haxeon.ui.widgets.controls.SelectOption(category,
-			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › "), category)];
+			[for (part in category.split("/")) SettingsCatalog.labelOf(part)].join(" › ") + " (" + categoryCount(category) + ")", category)];
 		var children:Array<KeyedView> = [];
 		if (options.length > 0) children.push(new KeyedView("category", new haxeon.ui.widgets.controls.Select(
 			key + ":category", options, selectedCategory, select)));
@@ -208,7 +224,8 @@ class SettingsPanel implements View {
 	/** Recomputes the tree after the filter or Advanced switch changed, keeping the selection when it still matches. */
 	function refresh():Void {
 		storeRevision = catalog.store.revision;
-		treeModel.update(catalog.categories(filter, showAdvanced, modifiedOnly));
+		visibleCounts = catalog.categoryCounts(filter, showAdvanced, modifiedOnly);
+		treeModel.update(catalog.categories(filter, showAdvanced, modifiedOnly), visibleCounts, filter);
 		if (selectedCategory == null || treeModel.categories.indexOf(selectedCategory) < 0)
 			selectedCategory = treeModel.categories.length == 0 ? null : treeModel.categories[0];
 		changed();
@@ -237,6 +254,9 @@ private class SettingsTreeModel implements TreeViewModel {
 	var roots:Array<String>;
 	var children:Map<String, Array<String>>;
 	var treeRevision:Int;
+	var counts:Map<String, Int> = new Map();
+	var query:String = "";
+	var contentKey:String = "";
 
 	public function new() {
 		categories = [];
@@ -245,9 +265,13 @@ private class SettingsTreeModel implements TreeViewModel {
 		treeRevision = 0;
 	}
 
-	public function update(next:Array<String>):Void {
-		if (next.join("\n") == categories.join("\n"))
+	public function update(next:Array<String>, nextCounts:Map<String, Int>, filter:String):Void {
+		var nextKey = [for (category in next) category + ":" + nextCounts.get(category)].join("\n") + "|" + filter;
+		if (nextKey == contentKey)
 			return;
+		contentKey = nextKey;
+		counts = nextCounts;
+		query = filter;
 		categories = next.copy();
 		roots = [];
 		children = new Map();
@@ -317,8 +341,14 @@ private class SettingsTreeModel implements TreeViewModel {
 	public function extentAt(_key:String):Float
 		return 28.0;
 
-	public function buildItem(key:String):View
-		return new Text(SettingsCatalog.labelOf(key));
+	public function buildItem(key:String):View {
+		var count = 0;
+		for (category in categories) if (category == key || StringTools.startsWith(category, key + "/")) {
+			var value = counts.get(category);
+			if (value != null) count += value;
+		}
+		return new haxeon.ui.widgets.text.HighlightedText(SettingsCatalog.labelOf(key) + " (" + count + ")", query);
+	}
 
 	public function revision():Int
 		return treeRevision;

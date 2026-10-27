@@ -38,6 +38,7 @@ class PropertyInspector implements View {
 	public var enabled:Bool;
 	public var labelWidth:Float;
 	public var stackedRows:Bool = false;
+	public var searchQuery:String = "";
 	/** Disable when a parent pane already owns scrolling. */
 	public var scrollable:Bool;
 	public var showScrollbar:Bool;
@@ -144,6 +145,7 @@ class PropertyInspector implements View {
 				editor.enabled = enabled;
 				editor.labelWidth = labelWidth;
 				editor.stackedRows = stackedRows;
+				editor.searchQuery = searchQuery;
 				var header = new PropertyInspectorSectionHeader("header", section,
 					function() {
 						if (setSectionExpanded(section.id, !section.expanded))

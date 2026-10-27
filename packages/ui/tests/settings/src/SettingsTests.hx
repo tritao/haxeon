@@ -40,6 +40,7 @@ class SettingsTests {
 			editing();
 			panel();
 			settingsImprovements();
+			discoverability();
 			shortcutNames();
 			customShortcuts();
 			shortcutPersistence();
@@ -83,6 +84,45 @@ class SettingsTests {
 		var reset = modified.descriptors[0].reset;
 		if (reset != null) reset();
 		check(store.isDefault("editor/indentation/width") && panel.currentInspector() == null, "reset removes override and updates filtered results");
+	}
+
+	static function discoverability():Void {
+		var registry = new SettingsRegistry();
+		var restart = new SettingOptions(); restart.restartRequired = true;
+		registry.define("editor/fonts/path", PropertyType.Text, PropertyValue.Text("initial.ttf"), restart);
+		registry.define("editor/fonts/size", PropertyType.Int, PropertyValue.Int(15));
+		var advanced = new SettingOptions(); advanced.advanced = true;
+		registry.define("editor/fonts/fallback", PropertyType.Text, PropertyValue.Text(""), advanced);
+		registry.define("terminal/fonts/size", PropertyType.Int, PropertyValue.Int(15));
+		var store = new SettingsStore(registry);
+		var panel = new SettingsPanel("discovery", store);
+		check(panel.categoryCount("editor/fonts") == 2, "category counts hide advanced settings");
+		panel.setFilter("fonts");
+		check(panel.categoryCount("editor/fonts") == 3 && panel.categoryCount("terminal/fonts") == 1, "counts follow search visibility");
+		panel.setModifiedOnly(true);
+		check(panel.categoryCount("editor/fonts") == 0, "modified filter updates category counts");
+		store.set("editor/fonts/path", PropertyValue.Text("changed.ttf"));
+		check(panel.categoryCount("editor/fonts") == 1, "count changes refresh even with the same matching category");
+		check(store.restartChanges().length == 1, "restart summary detects changes from startup");
+		var replacement = new SettingsStore(registry);
+		replacement.set("editor/fonts/path", PropertyValue.Text("changed.ttf"));
+		replacement.inheritRestartBaseline(store);
+		check(replacement.restartChanges().length == 1, "reloading preserves the running restart baseline");
+		store.reset("editor/fonts/path");
+		check(store.restartChanges().length == 0, "reverting to the startup value clears the summary");
+		var file = DIRECTORY + "/restart-summary.json";
+		if (FileSystem.exists(file)) FileSystem.deleteFile(file);
+		var saved = new SettingsStore(registry, file);
+		saved.set("editor/fonts/path", PropertyValue.Text("saved.ttf"));
+		var restarted = new SettingsStore(registry, file);
+		check(restarted.restartChanges().length == 0, "saved startup overrides do not request another restart");
+		restarted.reset("editor/fonts/path");
+		check(restarted.restartChanges().length == 1, "resetting a startup override to default requires a restart");
+		FileSystem.deleteFile(file);
+		var ranges = haxeon.ui.widgets.text.HighlightedText.matches("😀 Font FONT", "font font on");
+		check(ranges.length == 2 && ranges[0].start == 2 && ranges[0].end == 6 && ranges[1].start == 7,
+			"highlights merge overlapping terms and use Unicode codepoint offsets");
+		check(haxeon.ui.widgets.text.HighlightedText.matches("Font", "  ").length == 0, "empty queries do not mark text");
 	}
 
 	static function check(condition:Bool, message:String):Void

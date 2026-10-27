@@ -75,6 +75,17 @@ class SettingsCatalog {
 		return result;
 	}
 
+	/** Counts share the result rows' filter, Advanced, and override rules. */
+	public function categoryCounts(filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Map<String, Int> {
+		var counts:Map<String, Int> = new Map();
+		for (definition in store.registry.all()) {
+			if (!visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
+			var category = categoryOf(definition), previous = counts.get(category);
+			counts.set(category, previous == null ? 1 : previous + 1);
+		}
+		return counts;
+	}
+
 	/** The category's visible settings as inspector sections: unsectioned first, then in definition order. */
 	public function sections(category:String, filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Array<PropertyInspectorSection> {
 		var order:Array<String> = [];

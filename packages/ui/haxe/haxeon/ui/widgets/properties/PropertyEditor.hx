@@ -40,6 +40,7 @@ class PropertyEditor implements View {
 	public var enabled:Bool;
 	public var labelWidth:Float;
 	public var stackedRows:Bool = false;
+	public var searchQuery:String = "";
 	/** When false, category headers are supplied by an outer inspector. */
 	public var showCategories:Bool;
 	final drafts:Map<String, String>;
@@ -176,7 +177,7 @@ class PropertyEditor implements View {
 	 */
 	function rowRevision(descriptor:PropertyDescriptor, value:PropertyValue):String {
 		var result = descriptor.id + ":value=" + valueKey(value) +
-			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":stacked=" + stackedRows + ":labelWidth=" + labelWidth + ":generation=" + generation;
+			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":search=" + searchQuery + ":stacked=" + stackedRows + ":labelWidth=" + labelWidth + ":generation=" + generation;
 		if (drafts.exists(descriptor.id))
 			result += ":draft=" + drafts.get(descriptor.id);
 		var error = errors.get(descriptor.id);
@@ -390,7 +391,7 @@ private class PropertyEditorRowContent implements View {
 		rowStyle.childAlignY = switch descriptor.type { case Custom(_): LayoutAlignmentY.Start; default: LayoutAlignmentY.Center; };
 		rowStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [
-			new KeyedView("label", new Text(PropertyEditor.accessibleName(descriptor), labelStyle)),
+			new KeyedView("label", new haxeon.ui.widgets.text.HighlightedText(PropertyEditor.accessibleName(descriptor), owner.searchQuery, labelStyle)),
 			new KeyedView("value", owner.editorView(context, descriptor, value))
 		];
 		var isModified = descriptor.modified;
@@ -407,7 +408,7 @@ private class PropertyEditorRowContent implements View {
 		}
 		var row:View = owner.stackedRows ? new Column("row", children, rowStyle) : new Row("row", children, rowStyle);
 		var error = owner.errorFor(descriptor.id);
-		if (error == null && descriptor.description == null && !descriptor.restartRequired) {
+		if (error == null && descriptor.description == null && !descriptor.restartRequired && StringTools.trim(owner.searchQuery).length == 0) {
 			var result = row.build(context);
 			if (observed)
 				context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
@@ -421,8 +422,11 @@ private class PropertyEditorRowContent implements View {
 		columnStyle.childGap = 2.0;
 		var details:Array<KeyedView> = [new KeyedView("field", row)];
 		if (descriptor.description != null && descriptor.description.length > 0)
-			details.push(new KeyedView("description", new Text(descriptor.description, errorStyle, context.theme.tokens.textSecondary,
+			details.push(new KeyedView("description", new haxeon.ui.widgets.text.HighlightedText(descriptor.description, owner.searchQuery, errorStyle, context.theme.tokens.textSecondary,
 				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter), haxeon.ui.theme.TextRole.Caption)));
+		if (StringTools.trim(owner.searchQuery).length > 0)
+			details.push(new KeyedView("path", new haxeon.ui.widgets.text.HighlightedText(descriptor.id, owner.searchQuery, errorStyle,
+				context.theme.tokens.textSecondary, null, haxeon.ui.theme.TextRole.Caption)));
 		if (descriptor.restartRequired)
 			details.push(new KeyedView("restart", new Text("Requires restart", errorStyle)));
 		if (error != null) details.push(new KeyedView("message", new Text(error, errorStyle)));
