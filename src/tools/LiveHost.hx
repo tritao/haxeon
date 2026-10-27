@@ -105,10 +105,14 @@ class LiveHost {
 								}
 							}
 						}
-					} else if (strict) {
+					} else if (strict && candidate.moduleIdentity == description.moduleIdentity) {
 						refuse(revision, candidate, reloadCause(description, candidate));
 						rejectedPublication = publicationKey(candidate);
 					} else {
+						// A new module identity (a compiler session without this module's history) can only reload, so strict mode
+						// lets it, and says so.
+						if (strict)
+							report('haxeon: strict live: reloading for a new compiler session; edits patch from here on');
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var full = completeDescription(path, candidate);
 						if (full == null)
