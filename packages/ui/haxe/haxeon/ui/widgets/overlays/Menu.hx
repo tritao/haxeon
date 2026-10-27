@@ -53,7 +53,7 @@ class Menu implements View {
 
 	public function build(context:BuildContext):haxeon.ui.core.RenderNode {
 		var children:Array<KeyedView> = [];
-		var widestItem = 220.0;
+		var widestItem = 160.0;
 		for (item in items) {
 			if (item.separatorBefore && children.length > 0) {
 				var separatorStyle = new LayoutStyle();
@@ -62,7 +62,8 @@ class Menu implements View {
 				separatorStyle.background = context.theme.tokens.border;
 				var separator = new haxeon.ui.widgets.layout.Spacer(item.key + "-separator", separatorStyle.width, separatorStyle.height);
 				separator.style.background = separatorStyle.background;
-				children.push(new KeyedView(item.key + "-separator", separator));
+				children.push(new KeyedView(item.key + "-separator", new haxeon.ui.widgets.layout.Padding(
+					item.key + "-separator-spacing", separator, new Insets(0.0, 3.0, 0.0, 3.0))));
 			}
 			var button = new Button(item.label, null, function() {
 				if (item.hasSelectHandler)
@@ -76,11 +77,12 @@ class Menu implements View {
 			button.semanticRole = AccessibilityRole.MenuItem;
 			button.semanticActions = AccessibilityAction.Select;
 			if (item.shortcut != null && item.shortcut.length > 0)
-				button.trailingView = new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(12));
+				button.trailingView = new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(13));
 			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
 				["menu-item", "navigation"], ["button"], 0), button.style);
 			var itemStyle = computed.toLayoutStyle();
-			var typography = context.resolveTextRole(TextRole.Button, TextStyleOverride.paragraph(TextWrap.None));
+			var typography = context.resolveTextRole(TextRole.Button, TextStyleOverride.combine(
+				TextStyleOverride.text(13), TextStyleOverride.paragraph(TextWrap.None)));
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			typography = typography.merge(new TextStyleOverride(null,
@@ -112,7 +114,7 @@ class Menu implements View {
 		// Include popup padding in the 360px cap and leave 8px at each window edge.
 		var availableWidth = Math.max(1.0, Math.min(360.0, context.viewportWidth - 16.0) - 8.0);
 		menuStyle.width = LayoutAxis.fixed(Math.min(widestItem, availableWidth));
-		menuStyle.childGap = 2.0;
+		menuStyle.childGap = 0.0;
 		var content = new Column("menu-items", children, menuStyle);
 		var popupStyle = new LayoutStyle();
 		popupStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
