@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <memory>
+#include <vector>
 
 struct FallbackProbe {
     skb_font_handle_t handle = 0;
@@ -19,10 +20,15 @@ static skb_font_handle_t resolve(skb_font_collection_t *, const char *, uint32_t
     return probe.handle;
 }
 
-struct GlyphProbe { int count = 0; int missing = 0; };
+struct GlyphProbe {
+    int count = 0;
+    int missing = 0;
+    std::vector<skb_font_handle_t> fonts;
+};
 static bool glyph(const skb_layout_render_glyph_t *item, void *context) {
     auto &probe = *static_cast<GlyphProbe *>(context);
     ++probe.count;
+    probe.fonts.push_back(item->font_handle);
     if (!item->glyph_id) ++probe.missing;
     return true;
 }
@@ -56,6 +62,25 @@ int main() {
     const auto resolved = shape("A─┌B");
     if (resolved.count != 4 || resolved.missing || probe.calls != 1 || probe.requested != 0x2500)
         return 2;
+    // A symbol fallback may also contain Latin. It must not take over the
+    // rest of the run simply because it can render the following letters.
+    if (resolved.fonts != std::vector<skb_font_handle_t>{primary, fallback, fallback, primary})
+        return 8;
+    const auto prefix = shape("─AB");
+    if (prefix.missing || prefix.fonts != std::vector<skb_font_handle_t>{fallback, primary, primary})
+        return 9;
+    const auto middle = shape("AB─CD");
+    if (middle.missing || middle.fonts != std::vector<skb_font_handle_t>{primary, primary, fallback, primary, primary})
+        return 10;
+    const auto repeated = shape("A─B─C");
+    if (repeated.missing || repeated.fonts != std::vector<skb_font_handle_t>{primary, fallback, primary, fallback, primary})
+        return 11;
+    const auto combining = shape("─ÁB");
+    if (combining.missing || combining.fonts.size() < 3 || combining.fonts[0] != fallback)
+        return 12;
+    // Returning to the primary must keep the base and combining mark together.
+    for (std::size_t i = 1; i < combining.fonts.size(); ++i)
+        if (combining.fonts[i] != primary) return 13;
     // A bad callback must not make the shaper accept a font without coverage.
     probe.handle = primary;
     probe.calls = 0;
