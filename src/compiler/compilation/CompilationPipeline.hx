@@ -144,6 +144,7 @@ class CompilationPipeline {
 			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, candidateAssembler.cache.stableIds),
 			revision: assembly.revision,
+			baseRevision: assembly.baseRevision,
 			patchBytes: patchBytes,
 			metrics: {
 				allocationPhases: allocationPhases,

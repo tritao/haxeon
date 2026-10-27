@@ -96,6 +96,7 @@ class CompilerDriver {
 			var summary = request.output + ".live.patch.json";
 			File.saveContent(summary + ".tmp", Json.stringify({
 				revision: result.revision,
+				baseRevision: result.baseRevision,
 				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
 				requiresReload: result.requiresReload,
 				reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
@@ -108,6 +109,7 @@ class CompilerDriver {
 			var temporary = manifest + ".tmp";
 			File.saveContent(temporary, Json.stringify({
 				revision: result.revision,
+				baseRevision: result.baseRevision,
 				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
 				requiresReload: result.requiresReload,
 				reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],

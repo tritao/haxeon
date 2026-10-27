@@ -50,7 +50,7 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
-			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
+			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(context.assembler) : context.assembler.copy();
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
@@ -68,7 +68,7 @@ class BackendAssembly {
 		var patchBytes = reloadReasons.length > 0
 			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
-				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
+				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals);
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
@@ -90,6 +90,16 @@ class BackendAssembly {
 				AllocationMeter.delta("patch", allocationAfterSnapshots, allocationAfterPatch)
 			].concat(assembly.allocationPhases)
 		};
+	}
+
+	/**
+	 * A fresh layout for the same module identity. It keeps the stable function ids and continues the revision count: the
+	 * module it replaces is still running, and a revision number that starts over would look like an older build of it.
+	 */
+	static function freshLayout(previous:HlModuleAssembler):HlModuleAssembler {
+		var fresh = new HlModuleAssembler(CompilationContext.copyIndices(previous.cache.stableIds));
+		fresh.continueRevisions(previous.lastRevision());
+		return fresh;
 	}
 
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {
