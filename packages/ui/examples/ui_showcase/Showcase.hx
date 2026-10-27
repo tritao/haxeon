@@ -1,3 +1,5 @@
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.internal.event.NativeEvent;
 import haxeon.ui.Paint.SolidPaint;
 import haxeon.ui.TextLayout.TextPosition;
 
@@ -32,8 +34,6 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import NativeKitUI;
 import nativekit.ffi.NativeKitConstants;
-import haxeon.platform.NativeKitEvent;
-import haxeon.platform.NativeKitEventValue;
 import haxe.io.Bytes;
 import haxeon.ui.GradientStop;
 import haxeon.ui.LinearGradientPaint;

@@ -28,7 +28,7 @@ import haxeon.gpu.Shader.ShaderBuilder;
 /** Owns one renderer and all resources created through it. */
 class Renderer {
 	final surface:Surface;
-	final resources = new haxeon.platform.NativeResourceRegistry();
+	final resources = new haxeon.platform.internal.DisposalRegistry();
 	var value:nkgpu_renderer;
 	var disposed:Bool = false;
 	var frameActive:Bool = false;
@@ -331,7 +331,7 @@ class Renderer {
 
 	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
 		Uniforms, SurfaceFrame)
-	function registerResource(release:Void->Void):haxeon.platform.NativeResourceRegistry.NativeResourceRegistration {
+	function registerResource(release:Void->Void):haxeon.platform.DisposalRegistration {
 		ensureLive();
 		return resources.register(release);
 	}

@@ -1,15 +1,15 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.resource.ResourceCacheLoad;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceCache;
-import haxeon.platform.resource.ResourceCache.ResourceCacheLoad;
 
 /**
  * Named audio resource catalog built on NativeKit's general ResourceCache.
@@ -20,9 +20,9 @@ import haxeon.platform.resource.ResourceCache.ResourceCacheLoad;
  */
 class AudioBank {
 	final cache:ResourceCache;
-	final events:NativeKitEvents;
+	final events:EventPump;
 	final entries:Array<AudioBankEntry> = [];
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var disposed:Bool = false;
 
 	/** Called once when an async or synchronous entry reaches the ready state. */
@@ -30,7 +30,7 @@ class AudioBank {
 	/** Called once when an async entry fails to load. */
 	public var onFailed:AudioBankEntry->Result->Void = null;
 
-	public function new(cache:ResourceCache, events:NativeKitEvents) {
+	public function new(cache:ResourceCache, events:EventPump) {
 		if (cache == null)
 			throw BindingError.invalidArgument("AudioBank.new", "Audio bank resource cache must not be null");
 		if (cache.isDisposed())
@@ -152,7 +152,7 @@ class AudioBank {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onEvent(value:NativeKitEventValue):Void {
+	function onEvent(value:PlatformEvent):Void {
 		switch value {
 			case ResourceAssetReady(source, request): notify(source, request);
 			case ResourceAssetLoadFailed(source, request, _): notify(source, request);

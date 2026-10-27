@@ -14,7 +14,7 @@ import haxeon.gpu.Enums.TimestampState;
 /** Owns one asynchronous GPU timestamp interval. */
 class Timestamp {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_timestamp;
 	var disposed:Bool = false;
 

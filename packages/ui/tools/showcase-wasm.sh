@@ -145,19 +145,19 @@ compiler_args=(
 	"$module_dir/haxe/haxeon/ui/host/"*.hx
 	"$haxeon_dir/packages/platform/src/haxeon/platform/GraphicsImageRef.hx"
 	"$module_dir/bindings/haxe/haxeon/ui/"*.hx
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvent.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvents.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventValue.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventContext.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventBytes.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindowEvents.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitInputEvents.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitServiceEvents.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitResourceEvents.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequests.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequestOutcome.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindow.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWebView.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/NativeEvent.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/event/EventPump.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/event/PlatformEvent.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/EventSnapshot.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/EventBytes.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/WindowEventDecoder.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/InputEventDecoder.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ServiceEventDecoder.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ResourceEventDecoder.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/async/Requests.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/async/Outcome.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/Window.hx"
+	"$haxeon_dir/packages/platform/src/haxeon/platform/WebView.hx"
 )
 
 wasm_exports=${NATIVEKIT_UI_WASM_EXPORTS:-ShowcaseWeb.main,ShowcaseWeb.configure,ShowcaseWeb.configureMode,ShowcaseWeb.configureUiVisual,ShowcaseWeb.configureBenchmark,ShowcaseWeb.frame,ShowcaseWeb.status,ShowcaseWeb.diagnostic,ShowcaseWeb.caretOffset,ShowcaseWeb.caretAffinity,ShowcaseWeb.caretDirection,ShowcaseWeb.shutdown}

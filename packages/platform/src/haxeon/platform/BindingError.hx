@@ -1,7 +1,9 @@
 package haxeon.platform;
 
+import haxeon.platform.PlatformError;
+
 /** Managed API validation or lifecycle failure. Native backend errors keep their own domain. */
-class BindingError extends NativeError {
+class BindingError extends PlatformError {
 	public final kind:BindingErrorKind;
 
 	public function new(kind:BindingErrorKind, operation:String, message:String) {

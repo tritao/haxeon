@@ -17,7 +17,7 @@ import haxeon.gpu.Enums.BatchPassKind;
 /** Reusable sealed submission batch owned by one renderer. */
 class Batch {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_batch;
 	var sealed:Bool = false;
 	var disposed:Bool = false;

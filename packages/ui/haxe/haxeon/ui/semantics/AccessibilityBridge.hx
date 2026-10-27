@@ -1,9 +1,10 @@
 package haxeon.ui.semantics;
+
+import haxeon.platform.Surface;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
 
 import nativekit.ffi.NativeKit;
-import haxeon.platform.NativeKitSurface;
 import haxeon.ui.Rect;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
@@ -11,11 +12,11 @@ import haxeon.ui.core.WidgetId;
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
 class AccessibilityBridge {
 	public var coordinateScale:Float = 1.0;
-	final surface:NativeKitSurface;
+	final surface:Surface;
 	var previousParents:Map<Int, Int>;
 	var disposed:Bool;
 
-	public function new(surface:NativeKitSurface) {
+	public function new(surface:Surface) {
 		if (surface == null || surface.isDisposed())
 			throw "Accessibility projection requires a live NativeKit surface";
 		this.surface = surface;

@@ -1,26 +1,25 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
-
-import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 
 /**
  * Generic coordinator for one long-running audio track and one queued track.
  *
  * The player borrows tracks, the optional bus, and the event pump. Call
- * update() once per frame after polling NativeKitRuntime.events so scheduled
+ * update() once per frame after polling Runtime.events so scheduled
  * transition and stop voices can be retired on the Haxe side.
  */
 class AudioTrackPlayer {
-	final events:NativeKitEvents;
+	final events:EventPump;
 	final bus:Null<Bus>;
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var currentTrackValue:Null<AudioTrack>;
 	var currentVoiceValue:Null<Voice>;
 	var outgoingTrackValue:Null<AudioTrack>;
@@ -46,7 +45,7 @@ class AudioTrackPlayer {
 	/** Called when a pending crossfade is superseded before completion. */
 	public var onTransitionCancelled:AudioTrack->Void = null;
 
-	public function new(events:NativeKitEvents, ?bus:Bus) {
+	public function new(events:EventPump, ?bus:Bus) {
 		if (events == null)
 			throw BindingError.invalidArgument("AudioTrackPlayer.new", "Audio track player event pump must not be null");
 		if (bus != null && bus.isDisposed())
@@ -242,7 +241,7 @@ class AudioTrackPlayer {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onNativeEvent(value:NativeKitEventValue):Void {
+	function onNativeEvent(value:PlatformEvent):Void {
 		switch value {
 			case AudioVoiceComplete(source): handleVoiceEnded(source);
 			case AudioVoiceStolen(source): handleVoiceEnded(source);

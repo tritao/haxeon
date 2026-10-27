@@ -1,8 +1,8 @@
 package haxeon.gpu;
 
 import haxeon.platform.BindingError;
-
 import haxeon.platform.NativeKitError;
+import haxeon.platform.Window;
 
 import haxeon.gpu.SurfaceFrame;
 
@@ -13,17 +13,15 @@ import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
-import haxeon.platform.NativeKitWindow;
-
 /** Owns a GPU-adapter surface associated with a NativeKit window. */
 class Surface {
-	final window:NativeKitWindow;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final window:Window;
+	final registration:haxeon.platform.DisposalRegistration;
 	final renderers:Array<Renderer> = [];
 	var value:SurfaceHandle;
 	var disposed:Bool = false;
 
-	private function new(window:NativeKitWindow, value:SurfaceHandle) {
+	private function new(window:Window, value:SurfaceHandle) {
 		this.window = window;
 		this.value = value;
 		registration = window.registerDependent(function() {
@@ -31,7 +29,7 @@ class Surface {
 		});
 	}
 
-	public static function create(window:NativeKitWindow, width:Int, height:Int):Surface {
+	public static function create(window:Window, width:Int, height:Int):Surface {
 		if (width <= 0 || height <= 0)
 			throw BindingError.invalidArgument("Surface.create", "GPU surface dimensions must be positive");
 		var made = NativeKitGpu.nkgpu_surface_create(window.nativeHandle(), width, height);
@@ -39,7 +37,7 @@ class Surface {
 		return new Surface(window, made.out_surface);
 	}
 
-	public static function createForApi(window:NativeKitWindow, api:GraphicsApi, width:Int, height:Int):Surface {
+	public static function createForApi(window:Window, api:GraphicsApi, width:Int, height:Int):Surface {
 		if (width <= 0 || height <= 0)
 			throw BindingError.invalidArgument("Surface.createForApi", "GPU surface dimensions must be positive");
 		var made = NativeKitGpu.nkgpu_surface_create_for_api(window.nativeHandle(), api, width, height);
@@ -99,7 +97,7 @@ class Surface {
 	function rendererDisposed(renderer:Renderer):Void { renderers.remove(renderer); }
 
 	@:allow(Renderer)
-	function windowOwner():NativeKitWindow
+	function windowOwner():Window
 		return window;
 
 	function ensureLive():Void {

@@ -1,13 +1,14 @@
 package haxeon.ui.core;
 
+import haxeon.platform.Surface;
+import haxeon.platform.input.TextInput;
+import haxeon.platform.input.TextInputState;
+
 import haxeon.ui.TextLayout.TextRangeRect;
 
 import haxeon.ui.widgets.text.Text;
 
-
 import nativekit.ffi.NativeKitTypes.Result;
-import haxeon.platform.NativeKitSurface;
-import haxeon.platform.NativeKitTextInput;
 import haxeon.ui.Rect;
 import haxeon.ui.widgets.text.TextInputWindow;
 
@@ -15,7 +16,7 @@ import haxeon.ui.widgets.text.TextInputWindow;
 class TextInputBridge {
 	/** Application layout to window logical coordinates for IME geometry. */
 	public var coordinateScale:Float = 1.0;
-	var surface:Null<NativeKitSurface>;
+	var surface:Null<Surface>;
 	var requestedActive:Bool;
 	var activeOwner:Null<WidgetId>;
 	var nextCaretFrameAt:Float = -1.0;
@@ -39,7 +40,7 @@ class TextInputBridge {
 		disposed = false;
 	}
 
-	public function attach(surface:NativeKitSurface):Void {
+	public function attach(surface:Surface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed())
 			throw "Text input requires a live NativeKit surface";
@@ -117,9 +118,17 @@ class TextInputBridge {
 			publishedState[8] != cursor.x || publishedState[9] != cursor.y ||
 			publishedState[10] != cursor.width || publishedState[11] != cursor.height;
 		if (stateChanged) {
-			var result = NativeKitTextInput.updateResult(surface, window.text, window.start,
-				documentLength, selectionStart, selectionEnd, compositionStart, compositionEnd,
-				cast inputType, cast flags, null, cursor.x, cursor.y, cursor.width, cursor.height);
+			var state = new TextInputState(window.text, documentLength, selectionStart, selectionEnd);
+			state.textStart = window.start;
+			state.compositionStart = compositionStart;
+			state.compositionEnd = compositionEnd;
+			state.inputType = cast inputType;
+			state.flags = cast flags;
+			state.cursorX = cursor.x;
+			state.cursorY = cursor.y;
+			state.cursorWidth = cursor.width;
+			state.cursorHeight = cursor.height;
+			var result = TextInput.updateResult(surface, state);
 			if (!checkPlatformResult(result, "text-input update")) return;
 			publishedText = window.text;
 			publishedState[0] = window.start;
@@ -138,7 +147,7 @@ class TextInputBridge {
 		if (!stateChanged && publishedGeometry &&
 			matchesRects(selectionRects, publishedSelection) &&
 			matchesRects(compositionRects, publishedComposition)) return;
-		var result = NativeKitTextInput.updateGeometryResult(surface, selectionStart, selectionEnd,
+		var result = TextInput.updateGeometryResult(surface, selectionStart, selectionEnd,
 			compositionStart, compositionEnd, encodeRangeRects(selectionRects),
 			encodeRangeRects(compositionRects));
 		if (checkPlatformResult(result, "text-input geometry update")) {
@@ -168,7 +177,7 @@ class TextInputBridge {
 		if (platformActive || (platformChecked && !platformSupported) || surface == null ||
 			surface.isDisposed())
 			return;
-		if (checkPlatformResult(NativeKitTextInput.setActiveResult(surface, true),
+		if (checkPlatformResult(TextInput.setActiveResult(surface, true),
 			"text-input activation"))
 			platformActive = true;
 	}
@@ -180,7 +189,7 @@ class TextInputBridge {
 		publishedSelection.resize(0);
 		publishedComposition.resize(0);
 		if (platformActive && platformSupported && surface != null && !surface.isDisposed())
-			checkPlatformResult(NativeKitTextInput.setActiveResult(surface, false),
+			checkPlatformResult(TextInput.setActiveResult(surface, false),
 				"text-input deactivation");
 		platformActive = false;
 	}

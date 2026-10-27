@@ -1,7 +1,9 @@
 package haxeon.platform;
 
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.GraphicsApi;
+import nativekit.ffi.NativeKitTypes.GraphicsImage;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** An explicitly retained, backend-neutral sampled graphics image reference. */
 class GraphicsImageRef {

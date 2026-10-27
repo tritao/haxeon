@@ -1,8 +1,8 @@
 package haxeon.platform;
 
-import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.InitOptions;
 
-/** Managed options; native ABI storage is created only at the interop boundary. */
+/** Application identity and event-queue options used to start a runtime. */
 class RuntimeOptions {
 	public var eventQueueCapacity:Int = 0;
 	public var applicationId:Null<String> = null;

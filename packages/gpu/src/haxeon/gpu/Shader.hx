@@ -19,7 +19,7 @@ import haxeon.gpu.Enums.UniformType;
 /** Renderer-owned shader resource. */
 class Shader {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_shader;
 	var disposed:Bool = false;
 
@@ -94,7 +94,7 @@ class Shader {
 /** Configures shader bindings before creating the immutable shader resource. */
 class ShaderBuilder {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_shader_builder;
 	var consumed:Bool = false;
 

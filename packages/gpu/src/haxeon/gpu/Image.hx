@@ -18,7 +18,7 @@ import haxeon.platform.GraphicsImageRef;
 /** Renderer-owned RGBA8 sampled image. */
 class Image {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_image;
 	public final width:Int;
 	public final height:Int;

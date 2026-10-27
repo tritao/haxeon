@@ -1,22 +1,25 @@
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
+import haxeon.platform.Runtime;
+import haxeon.platform.Window;
+import haxeon.platform.async.Future;
+import haxeon.platform.async.Outcome;
+import haxeon.platform.async.Promise;
+import haxeon.platform.async.Requests;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.input.TextInput;
+import haxeon.platform.internal.event.EventBytes;
+import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions;
+import nativekit.ffi.NativeKitTypes.TextInputState as NativeTextInputState;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxeon.platform.NativeKitError;
-import haxeon.platform.NativeKitRequests;
 
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEventBytes;
 import NativeKitEventDecoderTests;
 import NativeKitHttpEventTests;
-import haxeon.platform.NativeKitTextInput;
-import haxeon.platform.NativeKitRuntime;
-import haxeon.platform.NativeKitWindow;
-import haxeon.platform.NativeKitRequestOutcome;
-import haxeon.platform.NativeFuture;
-import haxeon.platform.NativePromise;
 
 class Smoke {
 	static function main():Int {
@@ -36,7 +39,7 @@ class Smoke {
 		var initOptions = new InitOptions();
 		initOptions.set_api_version(NativeKitConstants.NK_API_VERSION);
 		initOptions.set_event_queue_capacity(32);
-		var runtime = NativeKitRuntime.startNative(initOptions);
+		var runtime = Runtime.startNative(initOptions);
 		if (runtime.isDisposed())
 			return 2;
 		// Counted inputs project their count from the managed array or buffer.
@@ -59,20 +62,20 @@ class Smoke {
 			resultErrorOk = error.result == Result.ErrorInvalidHandle && error.operation == "nk_window_show" && error.diagnostic != null;
 
 		var events = runtime.events;
-		var promise = new NativePromise<Int>();
+		var promise = new Promise<Int>();
 		var futureValue = 0;
 		promise.future.onComplete(function(outcome) switch outcome {
 			case Success(value): futureValue = value;
 			case _: futureValue = -1;
 		});
 		promise.complete(42);
-		var cancelPromise = new NativePromise<Int>();
+		var cancelPromise = new Promise<Int>();
 		cancelPromise.future.stopObserving();
 		var futureOk = futureValue == 42 && promise.future.isComplete() && cancelPromise.future.isComplete();
 		var lifetimeSubscription = events.listen(function(_) {});
 		var eventOk = !events.poll();
 		try {
-			NativeKitEventBytes.decodeClipboardFiles(haxe.io.Bytes.alloc(4), 0);
+			EventBytes.decodeClipboardFiles(haxe.io.Bytes.alloc(4), 0);
 			eventOk = false;
 		} catch (_:Dynamic) {}
 		var payloadOk = true;
@@ -120,7 +123,7 @@ class Smoke {
 		if (resourceArrayResult != 0 && resourceArrayResult != Result.ErrorUnsupported)
 			return 15;
 
-		var windowOptions = new WindowOptions();
+		var windowOptions = new NativeWindowOptions();
 		windowOptions.set_width(320);
 		windowOptions.set_height(200);
 		windowOptions.set_title("NativeKit smoke");
@@ -133,7 +136,7 @@ class Smoke {
 		var imageFilter = new DialogFilter();
 		imageFilter.set_patterns("*.png;*.jpg");
 		imageFilter.set_name("Imágenes");
-		var filters = new FileDialogOptions();
+		var filters = new NativeFileDialogOptions();
 		filters.set_filters([textFilter, imageFilter]);
 		if (filters.get_filter_count() != 2)
 			return 12;
@@ -157,22 +160,41 @@ class Smoke {
 		windowOptions.set_title(null);
 		if (windowOptions.get_title() != null)
 			return 10;
-		var textState = NativeKitTextInput.state("first", 0, 5, 5, 5);
-		textState.set_text("olá 👋");
-		if (textState.get_text() != "olá 👋" || textState.get_struct_size() != TextInputState.size())
+		var textState = new haxeon.platform.input.TextInputState("olá 👋", 200, 23, 25);
+		textState.textStart = 20;
+		textState.compositionStart = 21;
+		textState.compositionEnd = 24;
+		textState.cursorX = 4;
+		textState.cursorY = 5;
+		textState.cursorWidth = 6;
+		textState.cursorHeight = 7;
+		var nativeText = textState.nativeValue();
+		textState.text = "changed";
+		if (nativeText.get_text() != "olá 👋" || nativeText.get_struct_size() != NativeTextInputState.size()
+			|| nativeText.get_text_start() != 20 || nativeText.get_document_length() != 200
+			|| nativeText.get_selection_start() != 23 || nativeText.get_selection_end() != 25
+			|| nativeText.get_composition_start() != 21 || nativeText.get_composition_end() != 24
+			|| nativeText.get_cursor_x() != 4 || nativeText.get_cursor_y() != 5
+			|| nativeText.get_cursor_width() != 6 || nativeText.get_cursor_height() != 7)
 			return 11;
+		textState.compositionStart = null;
+		textState.compositionEnd = null;
+		if (textState.nativeValue().get_composition_start() != NativeKitConstants.NK_TEXT_POSITION_NONE
+			|| textState.nativeValue().get_composition_end() != NativeKitConstants.NK_TEXT_POSITION_NONE)
+			return 11;
+
 		var windowOk = false;
 		var windowCreated = false;
 		var dialogCancellationOk = true;
 		try {
-			var configuredWindow = new haxeon.platform.WindowConfig(320, 200);
+			var configuredWindow = new haxeon.platform.WindowOptions(320, 200);
 			configuredWindow.flags = WindowFlags.Hidden;
 			var window = runtime.createWindow(configuredWindow);
 			windowCreated = true;
 			windowOk = window.nativeHandle().isValid();
 			var requests = events.requests;
 			{
-				var options = new haxeon.platform.FileDialogConfig();
+				var options = new haxeon.platform.dialog.FileDialogOptions();
 				options.title = "Cancellation smoke";
 				var completed = false, cancelled = false;
 				var future = requests.openResource(window, options);
@@ -187,7 +209,7 @@ class Smoke {
 			}
 
 			{
-				var options = new haxeon.platform.MessageDialogConfig("Cancel through the future");
+				var options = new haxeon.platform.dialog.MessageDialogOptions("Cancel through the future");
 				options.title = "Cancellation smoke";
 				options.buttons = MessageButtons.Yes | MessageButtons.No;
 				var completed = false, cancelled = false;

@@ -66,22 +66,22 @@ fi
     "$gpu_dir/src/haxeon/gpu/ImageDesc.hx" \
     "$gpu_dir/src/haxeon/gpu/RenderPassDesc.hx" \
     "$platform_dir/src/haxeon/platform/GraphicsImageRef.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitHttpEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitHttpResponse.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitEventContext.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitEventBytes.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitWindowEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitInputEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitServiceEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitResourceEvents.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitRequests.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitRequestOutcome.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitWindow.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitWebView.hx" \
-    "$platform_dir/src/haxeon/platform/NativeKitRuntime.hx")
+    "$platform_dir/src/haxeon/platform/internal/event/NativeEvent.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/HttpEventDecoder.hx" \
+    "$platform_dir/src/haxeon/platform/http/HttpResponse.hx" \
+    "$platform_dir/src/haxeon/platform/event/EventPump.hx" \
+    "$platform_dir/src/haxeon/platform/event/PlatformEvent.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/EventSnapshot.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/EventBytes.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/WindowEventDecoder.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/InputEventDecoder.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
+    "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
+    "$platform_dir/src/haxeon/platform/async/Requests.hx" \
+    "$platform_dir/src/haxeon/platform/async/Outcome.hx" \
+    "$platform_dir/src/haxeon/platform/Window.hx" \
+    "$platform_dir/src/haxeon/platform/WebView.hx" \
+    "$platform_dir/src/haxeon/platform/Runtime.hx")
 
 set +e
 (cd "$haxeon_dir/out" && \

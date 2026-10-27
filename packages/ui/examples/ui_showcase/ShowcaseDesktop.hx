@@ -1,4 +1,10 @@
-import haxeon.platform.NativeKitSurface.NativeKitSurfaceFrameSubscription;
+import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.UiResult.UiError;
 
 import haxeon.ui.FontCollection;
@@ -7,10 +13,6 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitGpu;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
-import haxeon.platform.NativeKitSurface;
 import haxeon.platform.NativeKitError;
 import haxeon.ui.core.NativeInputAdapter;
 import WindowChromeDemo;
@@ -90,16 +92,16 @@ class ShowcaseDesktop {
                 return 2;
 
         var initialized = false;
-        var eventPump:Null<NativeKitEvents> = null;
-        var eventSubscription:Null<NativeKitEventSubscription> = null;
+        var eventPump:Null<EventPump> = null;
+        var eventSubscription:Null<EventSubscription> = null;
         var window = WindowHandle.invalid();
         var surface = SurfaceHandle.invalid();
         var graphics:Null<Showcase> = null;
         var explorer:Null<UiExplorer> = null;
         var chromeDemo:Null<WindowChromeDemo> = null;
         var explorerInput:Null<NativeInputAdapter> = null;
-        var nativeSurface:Null<NativeKitSurface> = null;
-        var frameSubscription:Null<NativeKitSurfaceFrameSubscription> = null;
+        var nativeSurface:Null<Surface> = null;
+        var frameSubscription:Null<SurfaceFrameSubscription> = null;
         var chromeTestResult:Int = -1;
         var result = 0;
         try {
@@ -110,7 +112,7 @@ class ShowcaseDesktop {
                 return 10;
             initialized = true;
 
-            var windowOptions = new WindowOptions();
+            var windowOptions = new NativeWindowOptions();
             windowOptions.set_width(initialWidth);
             windowOptions.set_height(initialHeight);
             windowOptions.set_title("Haxeon UI Explorer");
@@ -124,7 +126,7 @@ class ShowcaseDesktop {
             }
             window = createdWindow.out_window.borrow();
 
-            var surfaceOptions = new SurfaceOptions();
+            var surfaceOptions = new NativeSurfaceOptions();
             var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
             var surfaceFlags = SurfaceFlags.Stencil;
             if (graphicsApi == GraphicsApi.Opengl) {
@@ -143,11 +145,11 @@ class ShowcaseDesktop {
                 return 12;
             }
             surface = createdSurface.out_surface.borrow();
-            var frameSurface = NativeKitSurface.borrowNativeHandle(surface);
+            var frameSurface = Surface.borrowNativeHandle(surface);
             nativeSurface = frameSurface;
             var running = true;
             var started = Date.now().getTime();
-            var activePump = new NativeKitEvents();
+            var activePump = new EventPump();
             eventPump = activePump;
             var frameState = new ShowcaseFrameState();
             frameState.graphicsMode = graphicsMode;
@@ -209,7 +211,7 @@ class ShowcaseDesktop {
                     fonts.dispose();
                     throw error;
                 }
-                explorer.attachSurface(NativeKitSurface.borrowNativeHandle(surface));
+                explorer.attachSurface(Surface.borrowNativeHandle(surface));
                 explorer.attachWindow(window);
                 explorerInput = explorer.attachInput(activePump, new Handle(window.rawValue()));
                 if (uiVisualCase >= 0 && !explorer.setVisualCase(uiVisualCase))

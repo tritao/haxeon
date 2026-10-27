@@ -1,11 +1,11 @@
 package testing;
 
+import haxeon.platform.input.TextEdit;
+
 import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
 
-
 import UiExplorer;
-import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 import haxeon.ui.core.State;
 import haxeon.ui.core.WidgetId;
@@ -42,7 +42,7 @@ class ExplorerFocusSequence {
 						editor.setSelection(15, 15);
 						if (editor.selectionStart != 15 || editor.selectionEnd != 15)
 							throw "UI visual test could not place composition caret";
-						var composition = new NativeKitTextEdit(TextEditAction.SetComposition, null,
+						var composition = new TextEdit(TextEditAction.SetComposition, null,
 							0, 0, 15, 15, 6, 15);
 						editor.applyTextEdit(composition);
 						if (editor.compositionStart != 6 || editor.compositionEnd != 15)

@@ -1,3 +1,8 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.input.TextEdit as PlatformTextEdit;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 
@@ -31,7 +36,6 @@ import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.Rect;
@@ -45,10 +49,6 @@ import haxeon.ui.TextColorRange;
 import haxeon.ui.widgets.text.TextDecoration;
 import haxeon.ui.widgets.text.TextDecorationKind;
 import haxeon.ui.TextWrap;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitRuntime;
 import NativeKitEventDecoderTests;
 import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.CursorShape as UiCursorShape;
@@ -200,10 +200,8 @@ import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleImpact;
 import haxeon.ui.style.StyleSource;
-import haxeon.ui.style.StyleDiff;
 import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
-import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
@@ -760,7 +758,7 @@ class FrameworkSmoke {
 		if (!editor.deleteBackward() || editor.text != "")
 			return 37;
 		editor.insert("hi");
-		var composition = new NativeKitTextEdit(TextEditAction.Compose, "á", 2, 2,
+		var composition = new PlatformTextEdit(TextEditAction.Compose, "á", 2, 2,
 			4, 4, 2, 4, 1, 6);
 		if (!editor.applyTextEdit(composition) || editor.text != "hiá" ||
 			editor.selectionEnd != 4 || editor.selectionFocusAffinity != 1 ||
@@ -788,7 +786,7 @@ class FrameworkSmoke {
 		if (!haxeon.ui.core.TextInputBridge.matchesRects([], publishedRects))
 			throw "Empty input geometry should reuse its published snapshot";
 		var nativeDeleteEditor = new TextEditorState(fonts, "ab");
-		var nativeDelete = new NativeKitTextEdit(TextEditAction.Delete, null, 1, 2,
+		var nativeDelete = new PlatformTextEdit(TextEditAction.Delete, null, 1, 2,
 			1, 1, -1, -1, 1, 2);
 		if (!nativeDeleteEditor.applyTextEdit(nativeDelete) || nativeDeleteEditor.text != "a" ||
 			nativeDeleteEditor.selectionFocusAffinity != 1 ||
@@ -1009,7 +1007,7 @@ class FrameworkSmoke {
 			sharedSemantics.documentLength != 3)
 			return 294;
 		context.text(UiEventKind.TextEdit, null,
-			new NativeKitTextEdit(TextEditAction.Compose, "x", 2, 2, 3, 3, 2, 3));
+			new PlatformTextEdit(TextEditAction.Compose, "x", 2, 2, 3, 3, 2, 3));
 		if (sharedDocument.text != "áx🙂" || sharedEdit == null ||
 			sharedEdit.replacementStart != 2 || sharedEdit.replacementEnd != 2 ||
 			sharedEdit.replacementText != "x" || sharedEdit.replacedText != "" ||
@@ -1021,7 +1019,7 @@ class FrameworkSmoke {
 			sharedEditor.compositionStart != 2 || sharedEditor.compositionEnd != 3)
 			return 215;
 		context.text(UiEventKind.TextEdit, null,
-			new NativeKitTextEdit(TextEditAction.Commit, "x", 2, 3, 3, 3, -1, -1));
+			new PlatformTextEdit(TextEditAction.Commit, "x", 2, 3, 3, 3, -1, -1));
 		if (sharedDocument.text != "áx🙂" || sharedEditor.compositionStart != -1)
 			return 216;
 		sharedDocument.replace(0, sharedDocument.codepointCount, "external update");
@@ -1101,7 +1099,7 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Backspace);
 		if (field.value != "🙂" || fieldEditor.selectionEnd != 0)
 			return 43;
-		var compositionEdit = new NativeKitTextEdit(TextEditAction.Compose, "x", 1, 1,
+		var compositionEdit = new PlatformTextEdit(TextEditAction.Compose, "x", 1, 1,
 			2, 2, 1, 2);
 		context.text(UiEventKind.TextEdit, null, compositionEdit);
 		if (field.value != "🙂x" || fieldEditor.compositionStart != 1 ||
@@ -1112,16 +1110,16 @@ class FrameworkSmoke {
 			fieldDiagnostics.compositionStart != 1 || fieldDiagnostics.compositionEnd != 2 ||
 			fieldDiagnostics.compositionText != "x" || fieldDiagnostics.caretRect == null)
 			return 213;
-		var commitEdit = new NativeKitTextEdit(TextEditAction.Commit, "x", 1, 2,
+		var commitEdit = new PlatformTextEdit(TextEditAction.Commit, "x", 1, 2,
 			2, 2, -1, -1);
 		context.text(UiEventKind.TextEdit, null, commitEdit);
 		if (fieldEditor.compositionStart != -1 || field.value != "🙂x")
 			return 45;
-		var cancelEdit = new NativeKitTextEdit(TextEditAction.SetComposition, null, 0, 0,
+		var cancelEdit = new PlatformTextEdit(TextEditAction.SetComposition, null, 0, 0,
 			2, 2, 1, 2);
 		if (!fieldEditor.applyTextEdit(cancelEdit) || fieldEditor.compositionStart != 1 ||
 			fieldEditor.compositionRects().length == 0 ||
-			!fieldEditor.applyTextEdit(new NativeKitTextEdit(TextEditAction.FinishComposition,
+			!fieldEditor.applyTextEdit(new PlatformTextEdit(TextEditAction.FinishComposition,
 				null, 0, 0, 2, 2, -1, -1)) || fieldEditor.compositionStart != -1)
 			return 210;
 		if (!context.accessibilityAction(fieldRoot.id.value, AccessibilityRequest.SetSelection,
@@ -1849,7 +1847,7 @@ class FrameworkSmoke {
 		var source = new Handle(17);
 		var surface = new Handle(19);
 		var input = new NativeInputAdapter(context, source, surface);
-		var eventRuntime = NativeKitRuntime.start();
+		var eventRuntime = Runtime.start();
 		var eventPump = eventRuntime.events;
 		var pumpEvents = 0;
 		var pumpSubscription = eventPump.listen(function(_) { pumpEvents++; });
@@ -1913,7 +1911,7 @@ class FrameworkSmoke {
 			return 24;
 		if (!input.consume(TextInput(source, 0x1f642)) || committedText != "🙂")
 			return 16;
-		var edit = new NativeKitTextEdit(TextEditAction.Compose, "compose", 0, 0,
+		var edit = new PlatformTextEdit(TextEditAction.Compose, "compose", 0, 0,
 			0, 0, 0, 7);
 		if (input.consume(TextEdit(new Handle(20), edit)) || editSeen ||
 			!input.consume(TextEdit(source, edit)) || !editSeen)
@@ -4396,7 +4394,7 @@ class FrameworkSmoke {
 	}
 
 	static function testHostRuntime(session:UiHostSession, fonts:FontCollection):UiHostRuntime {
-		var context = new UiHostContext(fonts, new NativeKitEvents(),
+		var context = new UiHostContext(fonts, new EventPump(),
 			function() session.stop(), function() {});
 		return new UiHostRuntime(session, context, WindowHandle.invalid(), SurfaceHandle.invalid(),
 			800, 600);
@@ -4483,14 +4481,14 @@ class FrameworkSmoke {
 	}
 
 	static function checkWindowChrome(context:UiContext):Bool {
-		var runtime:Null<NativeKitRuntime> = null;
+		var runtime:Null<Runtime> = null;
 		var attached = false;
 		var result = false;
 		try {
 			var initOptions = new InitOptions();
 			initOptions.set_api_version(NativeKit.nk_api_version());
-			runtime = NativeKitRuntime.startNative(initOptions);
-			var windowOptions = new WindowOptions();
+			runtime = Runtime.startNative(initOptions);
+			var windowOptions = new NativeWindowOptions();
 			windowOptions.set_width(320);
 			windowOptions.set_height(192);
 			windowOptions.set_title("NativeKit UI chrome smoke");

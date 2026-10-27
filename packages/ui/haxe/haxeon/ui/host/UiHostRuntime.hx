@@ -1,11 +1,12 @@
 package haxeon.ui.host;
 
+import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.event.EventPump;
+
 import haxeon.ui.FrameInfo;
 import haxeon.ui.UiResult.UiError;
 import NativeKitUI.UiStatus;
 import haxeon.ui.LayoutFrame;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitSurface;
 import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
 import haxeon.ui.debug.AllocationProbe;
@@ -39,7 +40,7 @@ class UiHostRuntime {
 	final context:UiHostContext;
 	var application:Null<UiApplication> = null;
 	var input:Null<NativeInputAdapter> = null;
-	var nativeSurface:Null<NativeKitSurface> = null;
+	var nativeSurface:Null<PlatformSurface> = null;
 	var renderer:Null<Renderer> = null;
 	var frame:LayoutFrame;
 	var frameInfo:FrameInfo;
@@ -88,7 +89,7 @@ class UiHostRuntime {
 			} else {
 				application = created;
 				renderer = Renderer.create();
-				nativeSurface = NativeKitSurface.borrowNativeHandle(surface);
+				nativeSurface = PlatformSurface.borrowNativeHandle(surface);
 				created.context().attachPlatformSurface(nativeSurface);
 				created.context().attachPlatformWindow(window);
 				input = new NativeInputAdapter(created.context(), new Handle(window.rawValue()),

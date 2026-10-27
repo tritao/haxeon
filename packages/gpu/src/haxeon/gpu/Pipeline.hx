@@ -17,7 +17,7 @@ import haxeon.gpu.Enums.VertexFormat;
 /** Renderer-owned pipeline resource. */
 class Pipeline {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_pipeline;
 	var disposed:Bool = false;
 
@@ -92,7 +92,7 @@ class Pipeline {
 /** Configures one vertex/index layout before creating an immutable pipeline. */
 class PipelineBuilder {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_pipeline_builder;
 	var consumed:Bool = false;
 

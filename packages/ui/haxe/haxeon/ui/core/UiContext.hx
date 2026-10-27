@@ -1,5 +1,8 @@
 package haxeon.ui.core;
 
+import haxeon.platform.Surface as PlatformSurface;
+import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
+
 import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes;
@@ -15,7 +18,6 @@ import haxeon.ui.FrameInfo;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.FontCollection;
-import haxeon.platform.NativeKitSurface;
 import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.semantics.AccessibilityBridge;
@@ -94,7 +96,7 @@ class UiContext {
 	final currentNodesById:Map<Int, RenderNode>;
 	final resolvedById:Map<Int, ResolvedLayoutItem>;
 	var accessibilityBridge:Null<AccessibilityBridge>;
-	var accessibilitySurface:Null<NativeKitSurface>;
+	var accessibilitySurface:Null<PlatformSurface>;
 	var decorationWindow:Null<WindowHandle>;
 	var decorationCapabilityChecked:Bool;
 	var decorationAvailable:Bool;
@@ -203,7 +205,7 @@ class UiContext {
 	}
 
 	/** Attaches the host surface used by platform text-input synchronization. */
-	public function attachPlatformSurface(surface:NativeKitSurface):Void {
+	public function attachPlatformSurface(surface:PlatformSurface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed())
 			throw "UI context requires a live NativeKit surface";
@@ -478,7 +480,7 @@ class UiContext {
 		return diagnosticStage;
 
 	/** Connects this frame's semantic projection to a NativeKit platform surface. */
-	public function updateAccessibility(surface:NativeKitSurface):Void {
+	public function updateAccessibility(surface:PlatformSurface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed())
 			throw "Accessibility projection requires a live NativeKit surface";
@@ -1036,7 +1038,7 @@ class UiContext {
 	function syncWindowDecorations(tree:RenderNode):Void {
 		if (decorationWindow == null || !supportsWindowDecorations())
 			return;
-		var regions:Array<WindowDecorationRegion> = [];
+		var regions:Array<NativeWindowDecorationRegion> = [];
 		tree.walk(function(node) {
 			if (node.windowDecoration == null || node.resolved == null ||
 				!node.resolved.visible)
@@ -1048,7 +1050,7 @@ class UiContext {
 			var bottom = Math.min(buildContext.viewportHeight, bounds.y + bounds.height);
 			if (right <= left || bottom <= top)
 				return;
-			var region = new WindowDecorationRegion();
+			var region = new NativeWindowDecorationRegion();
 			region.set_x(left * platformCoordinateScale);
 			region.set_y(top * platformCoordinateScale);
 			region.set_width((right - left) * platformCoordinateScale);

@@ -1,14 +1,14 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 
-import haxeon.platform.NativeKitRuntime;
-import haxeon.platform.NativeKitEvents;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import NativeKitEventDecoderTests;
 import haxe.io.Bytes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 import haxeon.audio.AudioBank;
 import haxeon.audio.AudioBankEntry;
 import haxeon.audio.AudioCue;
@@ -74,7 +74,7 @@ class AudioSmoke {
 			throw "NativeKit audio event decoder tests failed";
 		var init = new InitOptions();
 		init.set_api_version(NativeKit.nk_api_version());
-		var runtime = NativeKitRuntime.startNative(init);
+		var runtime = Runtime.startNative(init);
 		DspSmoke.run();
 		DaisySourceSmoke.run();
 		var bus:Bus = null;
@@ -95,8 +95,8 @@ class AudioSmoke {
 		var first:Voice = null;
 		var second:Voice = null;
 		var completion:Voice = null;
-		var transitionSubscription:NativeKitEventSubscription = null;
-		var completionSubscription:NativeKitEventSubscription = null;
+		var transitionSubscription:EventSubscription = null;
+		var completionSubscription:EventSubscription = null;
 		var resourceCache:ResourceCache = null;
 		var audioBank:AudioBank = null;
 		var bankEntry:AudioBankEntry = null;

@@ -16,7 +16,7 @@ import haxeon.gpu.Enums.Wrap;
 /** Renderer-owned texture sampler with typed filter and wrap modes. */
 class Sampler {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_sampler;
 	var disposed:Bool = false;
 

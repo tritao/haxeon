@@ -1,10 +1,11 @@
 package haxeon.platform.resource;
 
 import haxeon.platform.BindingError;
-
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.ResourceFlags;
+import nativekit.ffi.NativeKitTypes.ResourceValue;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** Describes a URI-backed NativeKit resource for NativeKit APIs. */
 class Resource {
@@ -38,6 +39,6 @@ class Resource {
 	public static function cancelLoad(request:haxe.Int64):Void {
 		var status = NativeKit.nk_resource_load_cancel(request);
 		if (status != Result.Ok)
-			throw new haxeon.platform.NativeKitError(status, "resource.cancelLoad", NativeKit.nk_last_error());
+			throw new NativeKitError(status, "resource.cancelLoad", NativeKit.nk_last_error());
 	}
 }

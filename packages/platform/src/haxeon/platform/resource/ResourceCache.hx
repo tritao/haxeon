@@ -1,10 +1,12 @@
 package haxeon.platform.resource;
 
 import haxeon.platform.BindingError;
-
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitError;
+import haxeon.platform.resource.ResourceCacheLoad;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.OwnedResourceCacheHandle;
+import nativekit.ffi.NativeKitTypes.ResourceCacheHandle;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** Native URI cache for deduplicated, complete resource byte loads. */
 class ResourceCache {
@@ -68,7 +70,7 @@ class ResourceCache {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new haxeon.platform.NativeKitError(status, "resource.cache.dispose", NativeKit.nk_last_error());
+			throw new NativeKitError(status, "resource.cache.dispose", NativeKit.nk_last_error());
 	}
 
 	public function isDisposed():Bool
@@ -77,16 +79,5 @@ class ResourceCache {
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("ResourceCache.ensureLive", "Resource cache has been disposed");
-	}
-}
-
-/** Result of joining or starting an asynchronous resource cache load. */
-class ResourceCacheLoad {
-	public final asset:ResourceAsset;
-	public final request:haxe.Int64;
-
-	private function new(asset:ResourceAsset, request:haxe.Int64) {
-		this.asset = asset;
-		this.request = request;
 	}
 }

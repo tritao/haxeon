@@ -83,21 +83,21 @@ fi
     "$module_dir/haxe/haxeon/ui/animation/"*.hx \
     "$haxeon_dir/packages/platform/src/haxeon/platform/GraphicsImageRef.hx" \
     "$module_dir/bindings/haxe/haxeon/ui/"*.hx \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvent.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventValue.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitHttpEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitHttpResponse.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventContext.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitEventBytes.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindowEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitInputEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitServiceEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitResourceEvents.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequests.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitRequestOutcome.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWindow.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/NativeKitWebView.hx")
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/NativeEvent.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/event/EventPump.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/event/PlatformEvent.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/HttpEventDecoder.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/http/HttpResponse.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/EventSnapshot.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/EventBytes.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/WindowEventDecoder.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/InputEventDecoder.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/async/Requests.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/async/Outcome.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/Window.hx" \
+    "$haxeon_dir/packages/platform/src/haxeon/platform/WebView.hx")
 
 echo "showcase: built $artifact"
 if [[ "$build_only" == true ]]; then

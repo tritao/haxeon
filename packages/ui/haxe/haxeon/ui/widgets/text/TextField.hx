@@ -1,4 +1,6 @@
 package haxeon.ui.widgets.text;
+
+import haxeon.platform.input.TextEdit;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 
@@ -13,7 +15,6 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
-import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
@@ -856,7 +857,7 @@ class TextField implements View {
 			node.on(UiEventKind.TextEdit, function(event) {
 				if (!enabled || readOnly || event.data == null)
 					return;
-				var edit:NativeKitTextEdit = cast event.data;
+				var edit:TextEdit = cast event.data;
 				var previousRevision = editor.documentRevision();
 				if (editor.applyTextEdit(edit)) {
 					editor.resetCaretBlink(Sys.time());

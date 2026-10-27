@@ -1,3 +1,10 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.Window;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
@@ -5,13 +12,6 @@ import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitRuntime;
-import haxeon.platform.NativeKitSurface;
-import haxeon.platform.NativeKitSurface.NativeKitSurfaceFrameSubscription;
-import haxeon.platform.NativeKitWindow;
 import nativekit.ffi.NativeKitGpu;
 import audiolab.AudioLabEngine;
 import audiolab.AudioLabView;
@@ -25,25 +25,25 @@ class Main {
 	static inline var INITIAL_HEIGHT:Int = 820;
 
 	public static function main():Int {
-		var runtime:Null<NativeKitRuntime> = null;
-		var window:Null<NativeKitWindow> = null;
-		var surface:Null<NativeKitSurface> = null;
+		var runtime:Null<Runtime> = null;
+		var window:Null<Window> = null;
+		var surface:Null<PlatformSurface> = null;
 		var fonts:Null<FontCollection> = null;
 		var renderer:Null<Renderer> = null;
 		var context:Null<UiContext> = null;
 		var input:Null<NativeInputAdapter> = null;
-		var frameSubscription:Null<NativeKitSurfaceFrameSubscription> = null;
-		var eventSubscription:Null<NativeKitEventSubscription> = null;
+		var frameSubscription:Null<SurfaceFrameSubscription> = null;
+		var eventSubscription:Null<EventSubscription> = null;
 		var lab:Null<AudioLabEngine> = null;
 		try {
-			runtime = NativeKitRuntime.start();
-			var windowOptions = new haxeon.platform.WindowConfig(INITIAL_WIDTH, INITIAL_HEIGHT);
+			runtime = Runtime.start();
+			var windowOptions = new haxeon.platform.WindowOptions(INITIAL_WIDTH, INITIAL_HEIGHT);
 			windowOptions.title = "NativeKit Audio Lab";
 			windowOptions.flags = WindowFlags.Resizable;
 			window = runtime.createWindow(windowOptions);
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
-			var surfaceOptions = new haxeon.platform.SurfaceConfig(INITIAL_WIDTH, INITIAL_HEIGHT);
+			var surfaceOptions = new haxeon.platform.SurfaceOptions(INITIAL_WIDTH, INITIAL_HEIGHT);
 			var surfaceFlags = SurfaceFlags.Stencil;
 			if (graphicsApi == GraphicsApi.Opengl) {
 				surfaceFlags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
@@ -154,9 +154,9 @@ class Main {
 		}
 	}
 
-	static function disposeAll(input:Null<NativeInputAdapter>, frameSubscription:Null<NativeKitSurfaceFrameSubscription>,
-		eventSubscription:Null<NativeKitEventSubscription>, context:Null<UiContext>, renderer:Null<Renderer>,
-		fonts:Null<FontCollection>, lab:Null<AudioLabEngine>, runtime:Null<NativeKitRuntime>):Void {
+	static function disposeAll(input:Null<NativeInputAdapter>, frameSubscription:Null<SurfaceFrameSubscription>,
+		eventSubscription:Null<EventSubscription>, context:Null<UiContext>, renderer:Null<Renderer>,
+		fonts:Null<FontCollection>, lab:Null<AudioLabEngine>, runtime:Null<Runtime>):Void {
 		if (input != null)
 			input.detach();
 		if (frameSubscription != null)

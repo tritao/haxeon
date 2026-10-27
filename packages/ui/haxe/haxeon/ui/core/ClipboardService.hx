@@ -1,8 +1,9 @@
 package haxeon.ui.core;
+
+import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitTypes;
 
 import nativekit.ffi.NativeKit;
-import haxeon.platform.NativeKitEventValue;
 
 /** UI-thread clipboard bridge with asynchronous paste completion routing. */
 class ClipboardService {
@@ -42,7 +43,7 @@ class ClipboardService {
 	}
 
 	/** Consumes a decoded clipboard completion only when this service owns its request. */
-	public function consume(event:NativeKitEventValue):Bool {
+	public function consume(event:PlatformEvent):Bool {
 		ensureLive();
 		return switch (event) {
 			case ClipboardText(request, result, text):

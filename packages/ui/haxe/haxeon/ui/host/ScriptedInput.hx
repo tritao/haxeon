@@ -1,9 +1,10 @@
 package haxeon.ui.host;
 
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.PlatformEvent;
+
 import haxe.Json;
 import sys.io.File;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEventValue;
 import nativekit.ffi.NativeKitTypes;
 
 /** Timed, window-local logical input through the normal managed event pump.
@@ -51,14 +52,14 @@ class ScriptedInput {
   }
 
   /** Dispatch one due event; the host drains overdue input before requesting the next frame. */
-  public function tick(now:Float, pump:NativeKitEvents, window:WindowHandle,
+  public function tick(now:Float, pump:EventPump, window:WindowHandle,
       checkpoint:String->Void, before:Float->Void, after:Float->Void):Bool {
     if (origin < 0 || complete || now < origin + events[index].at) return false;
     var event = events[index++];
     scheduledAt = origin + event.at;
     if (event.kind == "checkpoint") { checkpoint(event.label); return true; }
     var source = new Handle(window.rawValue());
-    var value:NativeKitEventValue = switch (Std.string(event.kind)) {
+    var value:PlatformEvent = switch (Std.string(event.kind)) {
       case "move": PointerMove(source, event.x, event.y);
       case "down", "up": PointerButton(source, cast 0,
         event.kind == "down" ? InputAction.Press : InputAction.Release, cast 0, event.x, event.y);

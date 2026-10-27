@@ -1,0 +1,70 @@
+package haxeon.platform;
+
+import haxeon.platform.Window;
+import haxeon.platform.WindowOptions;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.internal.DisposalRegistry;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.InitOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
+
+/** Owns one initialized NativeKit generation and all windows created through it. */
+class Runtime {
+	final windows = new DisposalRegistry();
+	public final events:EventPump;
+	var disposed:Bool = false;
+	var disposing:Bool = false;
+
+	private function new() {
+		events = new EventPump();
+	}
+
+	public static function start(?options:RuntimeOptions):Runtime
+		return startNative((options == null ? new RuntimeOptions() : options).nativeValue());
+
+	public function createWindow(options:WindowOptions):Window
+		return createWindowNative(options.nativeValue());
+
+	public static function startNative(?options:InitOptions):Runtime {
+		var configured = options;
+		if (configured == null) {
+			configured = new InitOptions();
+			configured.set_api_version(NativeKit.nk_api_version());
+		}
+		NativeKit.nk_init_checked(configured);
+		return new Runtime();
+	}
+
+	public function createWindowNative(options:NativeWindowOptions):Window {
+		ensureLive();
+		var owned = NativeKit.nk_window_create_checked(options);
+		var window = new Window(owned);
+		window.attachOwner(windows.register(window.dispose));
+		return window;
+	}
+
+	/** Destroys owned children, then ends the NativeKit generation. */
+	public function dispose():Void {
+		if (disposed || disposing)
+			return;
+		disposing = true;
+		try {
+			windows.releaseAll();
+			NativeKit.nk_shutdown();
+		} catch (error:Dynamic) {
+			disposing = false;
+			throw error;
+		}
+		disposing = false;
+		disposed = true;
+		events.runtimeShutdown();
+	}
+
+	public function isDisposed():Bool
+		return disposed;
+
+	function ensureLive():Void {
+		if (disposed || disposing)
+			throw BindingError.disposed("Runtime.ensureLive", "NativeKit runtime has been disposed");
+	}
+}

@@ -1,8 +1,9 @@
 package haxeon.ui;
 
+import haxeon.platform.Surface as PlatformSurface;
+
 /** A host-owned native surface capability accepted by Renderer. */
 import nativekit.ffi.NativeKitTypes.SurfaceHandle;
-import haxeon.platform.NativeKitSurface;
 
 class Surface {
 	final value:SurfaceHandle;
@@ -14,7 +15,7 @@ class Surface {
 	public static function fromNativeHandle(handle:SurfaceHandle):Surface
 		return new Surface(handle);
 
-	public static function fromNativeSurface(surface:NativeKitSurface):Surface
+	public static function fromNativeSurface(surface:PlatformSurface):Surface
 		return new Surface(surface.nativeHandle());
 
 	@:allow(Renderer)

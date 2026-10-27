@@ -1,11 +1,13 @@
 package haxeon.platform.resource;
 
-import haxeon.platform.BindingError;
-
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 import haxe.io.Bytes;
+import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.OwnedResourceAssetHandle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetHandle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetLoadState;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** One independently owned view of complete bytes retained by a resource cache. */
 class ResourceAsset {
@@ -69,7 +71,7 @@ class ResourceAsset {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new haxeon.platform.NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
+			throw new NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
 	}
 
 	public function isDisposed():Bool

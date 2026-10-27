@@ -1,3 +1,6 @@
+import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.WebView;
+import haxeon.platform.event.EventPump;
 import haxeon.ui.Renderer.RendererStats;
 
 import haxeon.ui.LayoutDirection;
@@ -14,9 +17,6 @@ import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitSurface;
-import haxeon.platform.NativeKitWebView;
 import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
 import haxeon.ui.core.NativeInputAdapter;
@@ -118,9 +118,9 @@ class UiExplorer {
 	final demoLoadedImage:Image;
 	final demoPixelLinear:Image;
 	final demoPixelNearest:Image;
-	var nativeSurface:Null<NativeKitSurface>;
+	var nativeSurface:Null<PlatformSurface>;
 	var nativeWindow:Null<Handle>;
-	var webView:Null<NativeKitWebView>;
+	var webView:Null<WebView>;
 	var webViewAttempted:Bool = false;
 	var webViewSupported:Bool = false;
 	var webViewVisible:Bool = false;
@@ -180,7 +180,7 @@ class UiExplorer {
 	}
 
 	/** Installs the native surface used by text editing, IME state, and accessibility. */
-	public function attachSurface(surface:NativeKitSurface):Void {
+	public function attachSurface(surface:PlatformSurface):Void {
 		nativeSurface = surface;
 		context.attachPlatformSurface(surface);
 		if (supportsNativeAccessibility())
@@ -229,7 +229,7 @@ class UiExplorer {
 		return makeTheme(state.lightTheme);
 
 	/** Routes platform input through the framework's standard NativeKit adapter. */
-	public function attachInput(events:NativeKitEvents, window:Handle):NativeInputAdapter {
+	public function attachInput(events:EventPump, window:Handle):NativeInputAdapter {
 		nativeWindow = window;
 		webViewSupported = supportsCapability(Capabilities.webview());
 		var accessibilitySource = nativeSurface == null || !supportsNativeAccessibility() ? window :
@@ -363,7 +363,7 @@ class UiExplorer {
 			options.set_y(-10000);
 			options.set_width(1);
 			options.set_height(1);
-			webView = NativeKitWebView.createNative(nativeWindow, options);
+			webView = WebView.createNative(nativeWindow, options);
 			webView.show(false);
 			webView.setHtml(webViewDemoHtml());
 		} catch (_:Dynamic) {

@@ -1,12 +1,12 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 
 /**
  * Associates an AudioCue with an entity-style spatial transform.
@@ -18,13 +18,13 @@ import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 class AudioEmitter {
 	final cue:AudioCue;
 	final voices:Array<Voice> = [];
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var position:Vector3 = Vector3.zero();
 	var direction:Vector3 = new Vector3(0.0, 0.0, -1.0);
 	var velocity:Vector3 = Vector3.zero();
 	var disposed:Bool = false;
 
-	public function new(cue:AudioCue, events:NativeKitEvents) {
+	public function new(cue:AudioCue, events:EventPump) {
 		if (cue == null)
 			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter cue must not be null");
 		if (events == null)
@@ -150,7 +150,7 @@ class AudioEmitter {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onEvent(value:NativeKitEventValue):Void {
+	function onEvent(value:PlatformEvent):Void {
 		switch value {
 			case AudioVoiceComplete(source): release(source);
 			case AudioVoiceStolen(source): release(source);

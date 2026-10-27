@@ -17,7 +17,7 @@ import haxeon.gpu.Enums.ReadbackState;
 /** Owns one asynchronous image or buffer readback request. */
 class Readback {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_readback;
 	var disposed:Bool = false;
 

@@ -1,12 +1,12 @@
 package haxeon.audio;
 
 import haxeon.platform.BindingError;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 import haxeon.audio.Enums.AudioCueOverflow;
 import haxeon.audio.Enums.AudioCueSelection;
 
@@ -20,7 +20,7 @@ import haxeon.audio.Enums.AudioCueSelection;
  */
 class AudioCue {
 	final variants:Array<Clip>;
-	final events:NativeKitEvents;
+	final events:EventPump;
 	final bus:Null<Bus>;
 	final voiceOptions:VoiceOptions;
 	final maxVoices:Int;
@@ -28,7 +28,7 @@ class AudioCue {
 	final voiceVariants:Array<Int> = [];
 	final available:Array<Voice> = [];
 	final active:Array<Voice> = [];
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var nextVariant:Int = 0;
 	var disposed:Bool = false;
 
@@ -53,7 +53,7 @@ class AudioCue {
 	public var pitchMax:Float;
 
 	/** Creates a cue containing one clip. */
-	public static function fromClip(clip:Clip, events:NativeKitEvents, ?bus:Bus,
+	public static function fromClip(clip:Clip, events:EventPump, ?bus:Bus,
 		?voiceOptions:VoiceOptions, maxVoices:Int = 8):AudioCue {
 		var options = new AudioCueOptions(voiceOptions);
 		options.maxVoices = maxVoices;
@@ -61,12 +61,12 @@ class AudioCue {
 	}
 
 	/** Creates a cue containing one or more clip variants. */
-	public static function fromClips(clips:Array<Clip>, events:NativeKitEvents, ?bus:Bus,
+	public static function fromClips(clips:Array<Clip>, events:EventPump, ?bus:Bus,
 		?options:AudioCueOptions):AudioCue {
 		return new AudioCue(clips, events, bus, options);
 	}
 
-	private function new(clips:Array<Clip>, events:NativeKitEvents, bus:Null<Bus>,
+	private function new(clips:Array<Clip>, events:EventPump, bus:Null<Bus>,
 		options:Null<AudioCueOptions>) {
 		if (clips == null || clips.length == 0)
 			throw BindingError.invalidArgument("AudioCue.new", "Audio cue must contain at least one clip");
@@ -266,7 +266,7 @@ class AudioCue {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onEvent(value:NativeKitEventValue):Void {
+	function onEvent(value:PlatformEvent):Void {
 		switch value {
 			case AudioVoiceComplete(source): release(source);
 			case AudioVoiceStolen(source): release(source);

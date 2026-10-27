@@ -10,7 +10,7 @@ import nativekit.ffi.NativeKitGpu;
 /** One consumed uniform block staged for the current renderer frame. */
 class Uniforms {
 	final renderer:Renderer;
-	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_uniform_builder;
 	var consumed:Bool = false;
 
