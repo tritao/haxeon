@@ -2234,6 +2234,8 @@ class FrameworkSmoke {
 		var scrollView = new ScrollView("demo-scroll", new Column("long-content", [
 			new KeyedView("message", new Button("Scrollable content"))
 		], longContentStyle), viewportStyle, ScrollAxis.Vertical);
+		// Geometry and capture checks need a hittable thumb without advancing the auto-hide clock.
+		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
 		var scrollFrame = new LayoutFrame(256.0, 80.0);
 		var scrollRoot = context.submit(scrollView, scrollFrame);
 		var contentGeometry:ResolvedLayoutItem = cast scrollRoot.children[0].resolved;
@@ -2302,6 +2304,8 @@ class FrameworkSmoke {
 		var heldX = heldThumb.x + heldThumb.width * 0.5;
 		var heldY = heldThumb.y + heldThumb.height * 0.5;
 		context.pointerDown(heldX, heldY, 0);
+		if (!context.events.hasPointerCapture(scrollRoot.children[1].children[0].id))
+			throw "Scrollbar resize fixture must capture its visible thumb before resizing";
 		scrollView.style.height = LayoutAxis.fixed(160.0);
 		scrollRoot = context.submit(scrollView, new LayoutFrame(256.0, 160.0));
 		context.pointerMove(heldX, heldY - 2.0);
@@ -3062,13 +3066,15 @@ class FrameworkSmoke {
 		var originalControl = theme.tokens.controlUnselected;
 		theme.tokens.surfaceRaised = Color.rgba(0.31, 0.32, 0.33, 1.0);
 		theme.tokens.border = Color.rgba(0.41, 0.42, 0.43, 1.0);
+		theme.tokens.focusRing = Color.rgba(0.61, 0.42, 0.73, 1.0);
 		if (theme.tokens.buttonBackground != originalButton ||
 			theme.tokens.controlUnselected != originalControl)
 			return 225;
 		theme.tokens.deriveComponents();
 		if (theme.tokens.navigationBackground != theme.tokens.surfaceRaised ||
-			theme.tokens.selectionBorder != theme.tokens.border)
-			return 225;
+			theme.tokens.selectionBorder != theme.tokens.border ||
+			theme.tokens.buttonFocused != theme.tokens.focusRing)
+			throw "Derived component colors must follow semantic surface, border and focus tokens";
 		theme.body.color = Color.rgba(0.10, 0.14, 0.21, 1.0);
 		theme.button.color = Color.rgba(1.0, 1.0, 1.0, 1.0);
 		var styleTheme = new StyleSheet("StyleTheme");
@@ -3535,10 +3541,11 @@ class FrameworkSmoke {
 		context.setStyleSheet(new StyleSheet("Application"));
 		var lightNeutral = Color.rgba(0.87, 0.90, 0.95, 1.0);
 		var accentButton = Color.rgba(0.18, 0.39, 0.70, 1.0);
-		if (theme.buttonLabelColor(true, lightNeutral) != theme.body.color ||
+		if (Theme.contrastRatio(theme.buttonLabelColor(true, lightNeutral), lightNeutral) < 4.5 ||
+			theme.buttonLabelColor(true, lightNeutral, theme.body.color) != theme.body.color ||
 			theme.buttonLabelColor(true, accentButton) != theme.button.color ||
 			theme.buttonLabelColor(false, accentButton) != theme.disabledButtonText)
-			return 101;
+			throw "Button labels must retain readable preferences, choose contrasting defaults and honor disabled colors";
 		theme.buttonHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
 		theme.buttonPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
 		theme.buttonFocused = Color.rgba(0.4, 0.2, 0.8, 1.0);
@@ -3751,7 +3758,9 @@ class FrameworkSmoke {
 		var captureButton = captureRoot.children[2].children[0];
 		var captureHoverEnters = 0;
 		var capturePointerDowns = 0;
-		captureButton.on(UiEventKind.HoverEnter, function(_) { captureHoverEnters++; });
+		captureButton.on(UiEventKind.HoverEnter, function(event) {
+			if (event.target.equals(captureButton.id)) captureHoverEnters++;
+		});
 		captureButton.on(UiEventKind.PointerDown, function(_) { capturePointerDowns++; });
 		var captureDividerGeometry:ResolvedLayoutItem = cast captureDivider.resolved;
 		var captureButtonGeometry:ResolvedLayoutItem = cast captureButton.resolved;
@@ -3793,7 +3802,7 @@ class FrameworkSmoke {
 			context.events.hasPointerCapture(captureDivider.id) ||
 			platformCaptureStates.length != 2 || platformCaptureStates[1] ||
 			context.events.hoveredId() == null ||
-			!context.events.hoveredId().equals(captureButton.id) ||
+			captureButton.find(context.events.hoveredId()) == null ||
 			context.events.cursorShape() != UiCursorShape.Arrow)
 			return 250;
 		context.pointerMove(captureDividerX, captureDividerY);
@@ -3901,8 +3910,10 @@ class FrameworkSmoke {
 		if (!context.focusWidget(themedRoot.id))
 			return 80;
 		themedRoot = context.submit(themedButton, themedFrame);
-		if (themedRoot.layout.style.background.red != 0.4)
-			return 81;
+		if (themedRoot.layout.style.background != theme.buttonBackground ||
+			themedRoot.computedStyle.get(StyleProperty.BorderColor) != theme.tokens.textOnAccent ||
+			themedRoot.computedStyle.get(StyleProperty.BorderWidth) != 1.0)
+			throw "Focused primary buttons must retain their fill and show a contrasting border";
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, true))
 			return 237;

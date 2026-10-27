@@ -138,7 +138,7 @@ class ThemeTokens {
 		buttonBackground = accent;
 		buttonHover = accentHover;
 		buttonPressed = accentPressed;
-		buttonFocused = accent;
+		buttonFocused = focusRing;
 		buttonSelected = accentPressed;
 		buttonDisabled = surfaceSunken;
 		navigationBackground = surfaceRaised;

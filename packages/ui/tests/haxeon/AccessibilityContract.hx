@@ -56,7 +56,8 @@ class AccessibilityContract {
 			new TabItem("second", "Second", new Text("Second content"))
 		], "first", function(_) { changes++; });
 		var tabsRoot = context.submit(tabs, frame);
-		var tabsSnapshot = AccessibilityBridge.project(tabsRoot, tabsRoot.children[0].children[1].children[0].id);
+		var secondTabNode = findNode(tabsRoot, AccessibilityRole.Tab, "Second");
+		var tabsSnapshot = AccessibilityBridge.project(tabsRoot, secondTabNode.id);
 		var tabList = findSnapshot(tabsSnapshot, AccessibilityRole.TabList);
 		var firstTab = findSnapshot(tabsSnapshot, AccessibilityRole.Tab);
 		var tabPanel = findSnapshot(tabsSnapshot, AccessibilityRole.TabPanel);
@@ -69,12 +70,11 @@ class AccessibilityContract {
 		if (tabList == null || firstTab == null || tabPanel == null ||
 			tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected)
 			return 1;
-		var secondTabNode = tabsRoot.children[0].children[1].children[0];
 		if (!context.accessibilityAction(secondTabNode.id.value, AccessibilityRequest.Select,
 			null, -1, -1, 1) || tabs.selectedKey != "second" || changes != 1)
 			return 2;
 		tabsRoot = context.submit(tabs, frame);
-		var selectedTab:Null<Semantics> = cast tabsRoot.children[0].children[1].children[0].semantics;
+		var selectedTab:Null<Semantics> = cast findNode(tabsRoot, AccessibilityRole.Tab, "Second").semantics;
 		if (selectedTab == null || (selectedTab.states & AccessibilityState.Selected) == 0)
 			return 3;
 
@@ -621,6 +621,16 @@ class AccessibilityContract {
 			"one", -1, -1, 1) || combo.value != "one" || selected != "one" || changes != 2)
 			return false;
 		return true;
+	}
+
+	/** Locate semantic targets independently of scroll rails and decorative wrappers. */
+	static function findNode(root:RenderNode, role:AccessibilityRole, label:String):RenderNode {
+		var found:Null<RenderNode> = null;
+		root.walk(function(node) {
+			if (node.semantics != null && node.semantics.role == role && node.semantics.label == label) found = node;
+		});
+		if (found == null) throw "Missing accessible target: " + label;
+		return found;
 	}
 
 	static function findSnapshot(snapshot:Array<AccessibilitySnapshotNode>,
