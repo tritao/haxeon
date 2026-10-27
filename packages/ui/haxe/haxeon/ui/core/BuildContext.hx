@@ -155,6 +155,17 @@ class BuildContext {
 	public function resolveStyle(target:StyleTarget, local:Null<LayoutStyle>, ?localTextColor:haxeon.ui.Color):ComputedStyle
 		return styleResolver.resolve(target, styleParent, theme.styles, styleSheet, local, environment, localTextColor);
 
+	/** Conservative guard for retained hover. Conditional rules are included even when inactive. */
+	public function hasHoverStyle(node:RenderNode):Bool {
+		if (node.styleType == null) return false;
+		var target = new StyleTarget(node.styleType, node.styleKey, node.styleId,
+			node.styleClasses, node.styleTags, -1);
+		for (sheet in [theme.styles, styleSheet])
+			for (rule in sheet.rules)
+				if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0 && rule.selector.matches(target)) return true;
+		return false;
+	}
+
 	/** Revision fingerprint used to classify style work before the next submission. */
 	public var styleRevision(get, never):Int;
 	function get_styleRevision():Int {

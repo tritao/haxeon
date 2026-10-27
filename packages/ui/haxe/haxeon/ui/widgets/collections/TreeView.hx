@@ -908,11 +908,19 @@ private class TreeViewRow implements View {
 			style.childAlignY = LayoutAlignmentY.Center;
 			style.childGap = 2.0;
 			style.padding = new Insets(entry.depth * indentWidth, 0.0, 0.0, 0.0);
-			style.background = selected ? context.theme.tokens.selectionHighlight :
-				StyleStateUtil.contains(flags, StyleState.Hovered)
-					? context.theme.tokens.selectionHover : Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var node = new RenderNode(id, LayoutVisualKind.Box, style);
+			// Row width follows the viewport, independent of the custom painter's intrinsic width.
+			style.width = LayoutAxis.stretch();
+			var node = new RenderNode(id, LayoutVisualKind.Custom, style);
 			node.states = flags;
+			node.hoverPaintOnly = true;
+			var normalHover = context.theme.tokens.selectionHover;
+			var selectedColor = context.theme.tokens.selectionHighlight;
+			node.onPaint(function(canvas, geometry) {
+				var hovered = StyleStateUtil.contains(context.interactionStates.get(id), StyleState.Hovered);
+				if (selected || hovered) canvas.fillRectIfPositive(new haxeon.ui.Rect(0.0, 0.0, geometry.width, geometry.height),
+					selected ? selectedColor : normalHover);
+			}, "tree-row-background:" + selected + ":" + normalHover.red + ":" + normalHover.green + ":" + normalHover.blue + ":" + normalHover.alpha
+				+ ":" + selectedColor.red + ":" + selectedColor.green + ":" + selectedColor.blue + ":" + selectedColor.alpha);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.TreeItem);
 			semantics.label = itemKey;

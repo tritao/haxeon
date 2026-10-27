@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"ui-tree-hover-tests"},"entry":"TreeHoverTests","sourceRoots":["."],"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}

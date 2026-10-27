@@ -269,13 +269,20 @@ class UiContext {
 			animations.advance(frame.deltaSeconds);
 		buildContext.setViewport(frame.width, frame.height);
 		buildContext.setEnvironmentViewport(frame.width, frame.height);
-		if (reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame)) {
+		var hoverPaintNodes = -1;
+		var reuse = reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame);
+		if (!reuse && reconcileNewFocus && cacheKey != null) {
+			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
+			reuse = hoverPaintNodes >= 0;
+		}
+		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
 				buildContext.styleResolver.cachedStyleCount, 0, submittedNodeCount, UiDirtyFlag.None,
 				0, 0, 0, 0, 0, 0, Sys.time() - submitStartedAt, false, true, 0,
 				submittedNodeCount);
 			lastFrameMetrics.markReusedSubmission();
+			if (hoverPaintNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = hoverPaintNodes;
 			diagnosticStage = 0;
 			return cast root;
 		}
@@ -434,6 +441,7 @@ class UiContext {
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedStateRevision = resolvedStateRevision;
 		submittedInteractionRevision = interactionStates.revision;
+		interactionStates.acknowledge();
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedGestureRevision = gestures.revision;
@@ -864,6 +872,30 @@ class UiContext {
 	public function text(kind:String, value:Null<String>, data:Dynamic = null):Void {
 		ensureLive();
 		events.text(kind, value, data);
+	}
+
+	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
+	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
+		if (root == null || submittedBuildKey != cacheKey || submittedStateRevision != stateStore.revision ||
+			submittedStyleRevision != buildContext.styleRevision || submittedFrameWidth != frame.width ||
+			submittedFrameHeight != frame.height || animations.activeCount > 0 ||
+			animations.revision != submittedAnimationRevision || gestures.revision != submittedGestureRevision ||
+			commands.revision != submittedCommandRevision || buildContext.theme != submittedTheme ||
+			buildContext.styleSheet != submittedStyleSheet) return -1;
+		var changes = interactionStates.changes();
+		for (change in changes) {
+			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
+			var node = currentNodesById.get(change.id);
+			if (node == null || (node.recordsInteraction && (!node.hoverPaintOnly || buildContext.hasHoverStyle(node)))) return -1;
+		}
+		var painted = 0;
+		for (change in changes) {
+			var node:RenderNode = cast currentNodesById.get(change.id);
+			if (node.hasPaintHandler()) { node.invalidatePaint(); painted++; }
+		}
+		submittedInteractionRevision = interactionStates.revision;
+		interactionStates.acknowledge();
+		return painted;
 	}
 
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {

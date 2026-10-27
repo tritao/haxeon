@@ -52,6 +52,15 @@ class RenderNode {
 	 * when the pointer moves over them, so cache validation ignores them.
 	 */
 	public var recordsInteraction(default, null):Bool = false;
+	/** Opt-in contract: hover changes only custom paint, or have no visual effect.
+	 * UiContext still rejects this path when a matching stylesheet hover rule exists. */
+	public var hoverPaintOnly:Bool = false;
+
+	/** Invalidate a retained custom display list without changing geometry or text. */
+	public function invalidatePaint():Void {
+		contentRevision++;
+		invalidationFlags = UiDirtyFlag.NeedsPaint;
+	}
 
 	inline function set_states(value:Int):Int {
 		recordsInteraction = true;
@@ -427,8 +436,10 @@ class RenderNode {
 		}
 		if (basePaintKey == null) return null;
 		var style = computedStyle == null ? null : computedStyle.getReadOnly(StyleProperty.Decorations);
-		return style != null && style.decorations.length > 0
+		var result = style != null && style.decorations.length > 0
 			? basePaintKey + "|style-decorations:" + style.key() : basePaintKey;
+		// Keep the rendered key truthful even when hover falls back to a full build.
+		return hoverPaintOnly ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
 	}
 
 	function buildBasePaintKey():Null<String> {

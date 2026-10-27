@@ -202,10 +202,17 @@ class DesktopUiHost {
 			var inputRequestedAt = -1.0;
 			var lastInputDeliveredAt = -1.0;
 			var inputRequestCount = 0;
+			var pointerRequestedAt = -1.0;
+			var latestPointerAt = -1.0;
+			var pointerMoveCount = 0;
 			var inputDispatchSeconds = 0.0;
 			if (options.captureDirectory != null)
 				inputTraceSubscription = pump.listen(function(value) {
 					switch value {
+						case PointerMove(source, _, _) if (source.rawValue() == window.rawValue()):
+							latestPointerAt = Sys.time();
+							if (pointerRequestedAt < 0) pointerRequestedAt = latestPointerAt;
+							pointerMoveCount++;
 						case TextInput(source, _) if (source.rawValue() == window.rawValue()):
 							lastInputDeliveredAt = Sys.time();
 							if (inputRequestedAt < 0.0) inputRequestedAt = lastInputDeliveredAt;
@@ -323,6 +330,8 @@ class DesktopUiHost {
 									var scriptedFrameDeliveredAt = scriptedDeliveredAt;
 									var scriptedFrameDispatch = scriptedDispatch;
 									scriptedCount = 0; scriptedAt = -1.0; scriptedDeliveredAt = -1.0; scriptedDispatch = 0.0;
+									var pointerFirstAt = pointerRequestedAt, pointerLatestAt = latestPointerAt, pointerCount = pointerMoveCount;
+									pointerRequestedAt = -1.0; latestPointerAt = -1.0; pointerMoveCount = 0;
 									var textInputRequestedAt = inputRequestedAt;
 									var textInputCount = inputRequestCount;
 									var textInputDispatchSeconds = inputDispatchSeconds;
@@ -378,6 +387,11 @@ class DesktopUiHost {
 										var metrics = runtime.app() == null ? null : runtime.app().context().frameMetrics;
 										var record = {
 											frame: runtime.rendered,
+											pointerMoveCount: pointerCount,
+											pointerToPaintSeconds: pointerFirstAt < 0 ? null : frameFinishedAt - pointerFirstAt,
+											latestPointerToPaintSeconds: pointerLatestAt < 0 ? null : frameFinishedAt - pointerLatestAt,
+											hoverPaintUpdatedNodes: metrics == null ? 0 : metrics.hoverPaintUpdatedNodes,
+											reusedSubmission: metrics == null ? false : metrics.reusedSubmission,
 											repaintOnly: repaintOnly,
 											allocatedBytes: runtime.lastFrameAllocatedBytes,
 											prepareSeconds: runtime.lastPrepareSeconds,
