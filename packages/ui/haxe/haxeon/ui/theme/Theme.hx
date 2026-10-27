@@ -407,6 +407,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("dialog-heading"),
 			[StyleValue.textColor(text)]);
 		styles.rule(StyleSelector.widget("tooltip"), [
+			StyleValue.fontSize(tokens.tooltipFontSize),
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
