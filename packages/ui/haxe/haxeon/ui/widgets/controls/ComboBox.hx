@@ -219,17 +219,13 @@ class ComboBox<T> implements View {
 			SelectionIndicator.fieldFrame(context, inputNode, "input-frame");
 			SelectionIndicator.search(context, inputNode, "input-search",
 				enabled ? context.theme.mutedText : context.theme.disabledText);
-			SelectionIndicator.chevron(context, inputNode, "input-indicator",
-				enabled ? context.theme.text : context.theme.disabledText, isOpen);
 			var inputSemantics:Semantics = cast inputNode.semantics;
 			inputSemantics.states |= AccessibilityState.HasPopup;
 			if (isOpen)
 				inputSemantics.states |= AccessibilityState.Expanded;
 			inputNode.on(UiEventKind.PointerDown, function(event) {
-				if (enabled && event.button == 0)
-					open();
+				if (enabled && event.button == 0) open();
 			});
-			inputNode.on(UiEventKind.Click, function(_) { open(); });
 			inputNode.on(UiEventKind.Activate, function(event) {
 				if (!enabled)
 					return;
@@ -281,7 +277,51 @@ class ComboBox<T> implements View {
 					focusOption(filteredPosition(filteredIndices, next));
 				event.preventDefault();
 			});
-			root.add(inputNode);
+			// The arrow is a sibling of the editor, so its events cannot edit the
+			// selection or bubble into the editor's open-on-click handler.
+			var rowStyle = new LayoutStyle();
+			rowStyle.width = LayoutAxis.grow();
+			rowStyle.height = style.height;
+			rowStyle.direction = LayoutDirection.LeftToRight;
+			var triggerRow = new RenderNode(context.id("trigger-row"), LayoutVisualKind.Box, rowStyle);
+			triggerRow.hitTestSelf = false;
+			triggerRow.add(inputNode);
+			var anchorStyle = new LayoutStyle();
+			anchorStyle.width = LayoutAxis.percent(0);
+			anchorStyle.height = LayoutAxis.grow();
+			var arrowAnchor = new RenderNode(context.id("toggle-anchor"), LayoutVisualKind.Box, anchorStyle);
+			arrowAnchor.hitTestSelf = false;
+			var arrowStyle = new LayoutStyle();
+			arrowStyle.width = LayoutAxis.fixed(32);
+			arrowStyle.height = LayoutAxis.grow();
+			arrowStyle.padding = new Insets(0, 0, 0, 0);
+			var arrow = new Button("", arrowStyle, function() {
+				if (openState.value == true) close();
+				else { open(); context.requestFocus(inputNode.id); }
+			}, "toggle");
+			arrow.variant = ButtonVariant.Navigation;
+			arrow.enabled = enabled;
+			arrow.accessibilityLabel = isOpen ? "Hide options" : "Show options";
+			arrow.semanticActions = AccessibilityAction.Activate |
+				(isOpen ? AccessibilityAction.Collapse : AccessibilityAction.Expand);
+			var arrowNode = context.withScope(new Key("toggle"), function() return arrow.build(context));
+			arrowNode.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+			arrowNode.layout.style.positionX = -32;
+			arrowNode.layout.style.zIndex = 3;
+			arrowNode.layout.style.clipToParent = false;
+			var arrowSemantics:Semantics = cast arrowNode.semantics;
+			arrowSemantics.states |= AccessibilityState.HasPopup;
+			if (isOpen) arrowSemantics.states |= AccessibilityState.Expanded;
+			SelectionIndicator.chevron(context, arrowNode, "toggle-indicator",
+				enabled ? context.theme.text : context.theme.disabledText, isOpen);
+			arrowNode.on(UiEventKind.KeyDown, function(event) {
+				if (event.key == UiKey.Escape && openState.value == true) {
+					close(); event.preventDefault();
+				}
+			});
+			arrowAnchor.add(arrowNode);
+			triggerRow.add(arrowAnchor);
+			root.add(triggerRow);
 			inputNode.onResolved(function(geometry) {
 				if (finite(geometry.x) && finite(geometry.y) && finite(geometry.width) &&
 					finite(geometry.height) && geometry.width >= 0.0 && geometry.height >= 0.0) {

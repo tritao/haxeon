@@ -546,7 +546,7 @@ class AccessibilityContract {
 		});
 		var frame = new LayoutFrame(256.0, 192.0);
 		var root = context.submit(combo, frame);
-		var input = root.children[0];
+		var input = root.children[0].children[0];
 		var semantics:Semantics = cast input.semantics;
 		if (root.children.length != 1 || semantics.role != AccessibilityRole.ComboBox ||
 			semantics.value != "One" || (semantics.states & AccessibilityState.HasPopup) == 0 ||
@@ -564,7 +564,7 @@ class AccessibilityContract {
 		root = context.submit(combo, frame);
 		if (root.children.length != 1)
 			return false;
-		input = root.children[0];
+		input = root.children[0].children[0];
 		context.focusWidget(input.id);
 		context.key(UiEventKind.KeyDown, UiKey.Space);
 		root = context.submit(combo, frame);
@@ -574,29 +574,29 @@ class AccessibilityContract {
 		root = context.submit(combo, frame);
 		if (root.children.length != 1)
 			return false;
-		input = root.children[0];
+		input = root.children[0].children[0];
 		context.key(UiEventKind.KeyDown, UiKey.A, UiModifier.Control);
 		context.text(UiEventKind.TextInput, "Tw");
 		root = context.submit(combo, frame);
 		if (root.children.length != 2 || root.children[1].children.length != 1 ||
 			(cast(root.children[1].children[0].semantics, Semantics)).label != "Two")
 			return false;
-		input = root.children[0];
+		input = root.children[0].children[0];
 		context.key(UiEventKind.KeyDown, UiKey.A, UiModifier.Control);
 		context.text(UiEventKind.TextInput, "Zed");
 		root = context.submit(combo, frame);
 		if (root.children.length != 1)
 			return false;
-		if (!context.accessibilityAction(root.children[0].id.value, AccessibilityRequest.SetValue,
+		if (!context.accessibilityAction(root.children[0].children[0].id.value, AccessibilityRequest.SetValue,
 			"one", -1, -1, 1))
 			return false;
 		root = context.submit(combo, frame);
 		if (root.children.length != 1)
 			return false;
-		input = root.children[0];
+		input = root.children[0].children[0];
 		context.key(UiEventKind.KeyDown, UiKey.Down);
 		root = context.submit(combo, frame);
-		input = root.children[0];
+		input = root.children[0].children[0];
 		semantics = cast input.semantics;
 		var listSemantics:Semantics = cast root.children[1].semantics;
 		if (root.children.length != 2 || !root.focusTrap ||
@@ -613,7 +613,7 @@ class AccessibilityContract {
 		if (combo.value != "two" || selected != "two" || changes != 1)
 			return false;
 		root = context.submit(combo, frame);
-		input = root.children[0];
+		input = root.children[0].children[0];
 		if (root.children.length != 1 || context.focus.focusedId == null ||
 			!context.focus.focusedId.equals(input.id) || !AccessibilityAudit.isValid(root))
 			return false;
