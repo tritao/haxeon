@@ -171,6 +171,16 @@ class Tabs implements View {
 					});
 					content.layout.style.width = LayoutAxis.stretch();
 					node.add(content);
+					// A quiet content boundary is independent of the active-tab accent.
+					var dividerStyle = new LayoutStyle();
+					dividerStyle.width = LayoutAxis.stretch();
+					dividerStyle.height = LayoutAxis.fixed(1.0);
+					dividerStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
+					dividerStyle.zIndex = 1;
+					dividerStyle.background = context.theme.tokens.border;
+					var divider = new RenderNode(context.id("tab-content-divider"), LayoutVisualKind.Box, dividerStyle);
+					divider.hitTestSelf = false;
+					node.add(divider);
 					return node;
 				});
 				root.add(panel);
@@ -224,7 +234,7 @@ class Tabs implements View {
 				var close = item.onClose;
 				if (close != null) close();
 			}, "capture");
-			header.add(item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode));
+			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode);
 			var indicatorStyle = new LayoutStyle();
 			indicatorStyle.width = LayoutAxis.grow();
 			indicatorStyle.height = LayoutAxis.fixed(2.0);
@@ -234,6 +244,7 @@ class Tabs implements View {
 				LayoutVisualKind.Box, indicatorStyle);
 			indicator.hitTestSelf = false;
 			header.add(indicator);
+			header.add(headerContent);
 			strip.add(header);
 			buttonNodes.push(buttonNode);
 			if (onTabHeaderBuilt != null)
