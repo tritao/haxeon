@@ -411,7 +411,7 @@ class Theme {
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
-			StyleValue.borderColor(tokens.borderStrong), StyleValue.borderWidth(1.0),
+			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0),
 			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration(), BorderDecoration.deviceHairline()])),
 			// Compositor effects include their ink overflow; shadow parameters alone
 			// do not paint a shadow, and node-local decorations are clipped.
