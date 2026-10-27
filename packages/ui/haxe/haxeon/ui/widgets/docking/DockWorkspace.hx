@@ -52,6 +52,12 @@ class DockWorkspace implements View {
 	public var availableHeight:Null<Float> = null;
 	/** Available content width when the workspace sits beside application chrome. */
 	public var availableWidth:Null<Float> = null;
+	/** Optional fixed actions for a dock tab group, including single dock headers. */
+	public var headerActions:Null<Array<String>->String->Null<View>> = null;
+	/** Application-owned action state included in retained pane keys. */
+	public var headerActionsRevision:String = "";
+	/** Expand a matching group vertically without changing the persisted dock tree. */
+	public var expandedGroup:Null<Array<String>> = null;
 	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
 	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
@@ -178,6 +184,7 @@ class DockWorkspace implements View {
 		tabsStyle.height = LayoutAxis.grow();
 		var options = new TabsOptions();
 		options.style = tabsStyle;
+		if (headerActions != null) options.headerTrailing = headerActions([for (panel in visiblePanels) panel.id], selectedId);
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.onTabDragStart = function(panelId, event)
 			interaction.beginTabDrag(panelId, event.pointerId, event.x, event.y);
@@ -219,6 +226,13 @@ class DockWorkspace implements View {
 		}, options);
 	}
 
+	function matchesExpandedGroup(node:DockNode):Bool {
+		var ids = haxeon.ui.docking.DockNodeTools.panelIds(node);
+		if (ids.length == 0 || expandedGroup == null) return false;
+		for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
+		return true;
+	}
+
 	function tabLabelWidth(label:String, context:BuildContext,
 		labelWidths:DockTextWidthCache):Float {
 		if (context.fonts == null) return label.length * 8.0;
@@ -235,6 +249,12 @@ class DockWorkspace implements View {
 		firstPath.push(0);
 		var secondPath = path.copy();
 		secondPath.push(1);
+		if (axis == DockSplitAxis.Vertical && expandedGroup != null) {
+			if (matchesExpandedGroup(second) && !matchesExpandedGroup(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+			if (matchesExpandedGroup(first) && !matchesExpandedGroup(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+		}
 		var horizontal = axis == DockSplitAxis.Horizontal;
 		var available = horizontal ? availableWidth : availableHeight;
 		if (available <= 0.0)
@@ -287,7 +307,7 @@ class DockWorkspace implements View {
 		var contentKey:Null<DockPanelCacheKeyBuilder> = content == null ? null : content.cacheKey;
 		if (contentKey == null)
 			return null;
-		var text = nodeKey + "|width=" + availableWidth + "|style=" + context.styleRevision + "|viewport=" + context.viewportWidth + "x" +
+		var text = nodeKey + "|actions=" + headerActionsRevision + "|width=" + availableWidth + "|style=" + context.styleRevision + "|viewport=" + context.viewportWidth + "x" +
 			context.viewportHeight + "|drag=" + interaction.revision + "|active=" + selected;
 		for (panelId in panelIds) {
 			var descriptor = model.get(panelId);
