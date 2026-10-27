@@ -752,6 +752,8 @@ class FrameworkSmoke {
 			return 270;
 		if (!hostSessionLifecycleValid())
 			return 271;
+		if (!retainedRectanglesFollowThePaint())
+			return 278;
 		if (!hostPendingResourcesValid())
 			return 273;
 		if (!coordinateMathValid())
@@ -4531,6 +4533,37 @@ class FrameworkSmoke {
 		session.dispose();
 		return stops == 1 && !session.isActive() &&
 			session.state == UiHostLifecycle.Stopping;
+	}
+
+	/** A retained canvas keeps every rectangle its last paint drew, however many, so an identical repaint of a large
+		paint records identical commands; it disposes only the rectangles a paint stopped drawing. */
+	@:access(haxeon.ui.Canvas)
+	static function retainedRectanglesFollowThePaint():Bool {
+		var canvas = new Canvas();
+		canvas.retainRectangles = true;
+		var color = Color.fromBytes(10, 20, 30);
+		function paint(rects:Int):Void {
+			canvas.reset();
+			for (i in 0...rects) canvas.fillRect(new Rect(i, 0, 1, 1), color);
+			canvas.fillRect(new Rect(0, 0, 1, 1), color);
+		}
+		function count(entries:Null<Map<String, {path:Path, paint:Paint}>>):Int {
+			var n = 0;
+			if (entries != null) for (_ in entries) n++;
+			return n;
+		}
+		paint(600);
+		var first = new Map<String, Path>();
+		for (key in canvas.paintedRects.keys()) first.set(key, canvas.paintedRects.get(key).path);
+		paint(600);
+		var reused = count(canvas.paintedRects) == 600;
+		for (key in first.keys())
+			if (canvas.paintedRects.get(key) == null || canvas.paintedRects.get(key).path != first.get(key)) reused = false;
+		paint(10);
+		canvas.reset();
+		var swept = count(canvas.retainedRects) == 10 && count(canvas.paintedRects) == 0;
+		canvas.releaseRetained();
+		return first.keys().hasNext() && reused && swept && count(canvas.retainedRects) == 0;
 	}
 
 	static function hostPendingResourcesValid():Bool {
