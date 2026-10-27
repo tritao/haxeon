@@ -124,7 +124,9 @@ class EventDispatcher {
 				targetPath[targetPath.length - 1].id, x, y, 0.0, 0.0, 0, 0,
 				modifiers, null, data, 0, pointerId);
 			dispatchPath(targetPath, event);
-			if (event.defaultPrevented)
+			// Only motion within a pressed gesture can suppress its click.
+			// Consumed hover (for example terminal mouse tracking) has no click.
+			if (event.defaultPrevented && pressedIds.exists(pointerId))
 				suppressedClicks.set(pointerId, true);
 			applyPointerCaptureRequest(pointerId, event);
 			if (event.pointerReleaseRequested)
@@ -136,6 +138,8 @@ class EventDispatcher {
 			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
 		if (capturedIds.exists(pointerId))
 			pointerCancel(pointerId, x, y, modifiers, data);
+		// Suppression belongs to one press/release sequence, never a later one.
+		suppressedClicks.remove(pointerId);
 		rememberPointer(pointerId, x, y);
 		var path = hitPath(x, y);
 		if (root != null)
