@@ -13,6 +13,12 @@ class SidebarModel {
 	static final widthPattern = ~/^[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$/;
 	public var width(default, null):Float = 240;
 	var savedVisible:Map<String, Bool> = [];
+	/** The user's destination order, including saved ids that are not registered yet. Empty keeps the default order. */
+	var savedOrder:Array<String> = [];
+	var defaultOrder:SidebarMode->SidebarMode->Int = registrationOrder;
+	/** True once the user has moved a destination; the saved order then overrides the default one. */
+	public var customOrder(get, never):Bool;
+	function get_customOrder():Bool return savedOrder.length > 0;
 	public function new() {}
 
 	public function register(id:String, provider:Void->View, options:SidebarModeOptions):Void {
@@ -21,7 +27,7 @@ class SidebarModel {
 		var mode = new SidebarMode(id, provider, options, sequence++);
 		if (savedVisible.exists(id)) mode.visible = savedVisible.get(id);
 		modes.push(mode);
-		modes.sort(function(a, b) return a.order == b.order ? a.sequence - b.sequence : a.order - b.order);
+		arrange();
 		if (mode.visible && (activeId == "" || savedActive == id)) activeId = id;
 		onChange();
 	}
@@ -64,20 +70,66 @@ class SidebarModel {
 		var selected = selected(); activeId = selected == null ? "" : selected.id; savedActive = activeId;
 		onChange(); return true;
 	}
+	/** Move a destination before another one, or to the end when `before` is null. Returns false when nothing moved. */
+	public function moveMode(id:String, before:Null<String>):Bool {
+		var mode = find(id);
+		if (mode == null || before == id) return false;
+		var target = before == null ? null : find(before);
+		if (before != null && target == null) return false;
+		var from = modes.indexOf(mode);
+		modes.remove(mode);
+		var index = target == null ? modes.length : modes.indexOf(target);
+		modes.insert(index, mode);
+		if (index == from) return false;
+		var order = [for (each in modes) each.id];
+		for (saved in savedOrder) if (find(saved) == null) order.push(saved);
+		savedOrder = order;
+		onChange(); return true;
+	}
+	/** Replace the default order, such as a layout preset's; a user's saved order still wins. Does not notify. */
+	public function setDefaultOrder(compare:SidebarMode->SidebarMode->Int):Void {
+		defaultOrder = compare == null ? registrationOrder : compare;
+		arrange();
+	}
+	/** Forget the user's order and return to the default one. */
+	public function resetOrder():Bool {
+		if (savedOrder.length == 0) return false;
+		savedOrder = []; arrange(); onChange(); return true;
+	}
+	static function registrationOrder(a:SidebarMode, b:SidebarMode):Int
+		return a.order == b.order ? a.sequence - b.sequence : a.order - b.order;
+	/** Default order first; then the slots held by destinations with a saved place take them in saved order.
+		Destinations without one, such as newly added ones, keep their default slots. */
+	function arrange():Void {
+		modes.sort(defaultOrder);
+		if (savedOrder.length == 0) return;
+		var rank:Map<String, Int> = [];
+		for (i in 0...savedOrder.length) rank.set(savedOrder[i], i);
+		var slots:Array<Int> = [], placed:Array<SidebarMode> = [];
+		for (i in 0...modes.length) if (rank.exists(modes[i].id)) { slots.push(i); placed.push(modes[i]); }
+		placed.sort(function(a, b) {
+			var left:Int = rank.get(a.id), right:Int = rank.get(b.id);
+			return left - right;
+		});
+		for (i in 0...slots.length) modes[slots[i]] = placed[i];
+	}
 	public function encode():String {
 		var shown:Map<String, Bool> = [];
 		for (id in savedVisible.keys()) shown.set(id, savedVisible.get(id));
 		for (mode in modes) shown.set(mode.id, mode.visible);
 		var values = [for (id in shown.keys()) id + "," + (shown.get(id) ? "1" : "0")];
 		values.sort(Reflect.compare);
-		return "2|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|" + values.join(";");
+		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|" + values.join(";") +
+			"|" + savedOrder.join(",");
 	}
-	/** Parse atomically. Legacy layouts migrate using the saved active destination's width. */
+	/** Parse atomically. Legacy layouts migrate using the saved active destination's width; layouts before
+		version 3 carry no order and restore the default one. */
 	public function restore(value:String):Bool {
 		if (value.length > 65536) return false;
 		var parts = value.split("|");
 		var legacy = parts[0] == "1";
-		if ((legacy ? parts.length != 4 : parts.length != 5 || parts[0] != "2") ||
+		var expected = legacy ? 4 : parts[0] == "2" ? 5 : parts[0] == "3" ? 6 : -1;
+		if (parts.length != expected ||
 			(parts[1] != "" && !validId(parts[1])) || (parts[2] != "0" && parts[2] != "1")) return false;
 		var nextWidth = width;
 		if (!legacy) {
@@ -100,9 +152,18 @@ class SidebarModel {
 			}
 			shown.set(fields[0], flag == "1");
 		}
-		savedActive = parts[1]; savedVisible = shown; width = nextWidth;
+		var order:Array<String> = [];
+		if (parts.length == 6 && parts[5] != "") {
+			var seen:Map<String, Bool> = [];
+			for (id in parts[5].split(",")) {
+				if (!validId(id) || seen.exists(id)) return false;
+				seen.set(id, true); order.push(id);
+			}
+		}
+		savedActive = parts[1]; savedVisible = shown; width = nextWidth; savedOrder = order;
 		visible = parts[2] == "1";
 		for (mode in modes) if (shown.exists(mode.id)) mode.visible = shown.get(mode.id);
+		arrange();
 		activeId = savedActive;
 		var active = selected(); activeId = active == null ? "" : active.id;
 		onChange(); return true;

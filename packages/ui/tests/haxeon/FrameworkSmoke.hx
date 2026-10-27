@@ -905,6 +905,7 @@ class FrameworkSmoke {
 			return 0;
 		}
 		if (!sidebarValid(context)) throw "sidebar registry, persistence or lazy provider regression";
+		sidebarOrder();
 		DockPresentationTests.run(context);
 		if (!dockWorkspaceValid(context))
 			return 231;
@@ -5757,6 +5758,70 @@ class FrameworkSmoke {
 		if (future == null || future.id != "future" || restored.width != 360) return false;
 		trace("PASS: sidebar lazy providers, shared width, deferred registration and atomic persistence");
 		return true;
+	}
+
+	/** Users reorder destinations; the order survives persistence, late registration and hiding. */
+	static function sidebarOrder():Void {
+		function make(names:Array<String>):haxeon.ui.widgets.sidebar.SidebarModel {
+			var model = new haxeon.ui.widgets.sidebar.SidebarModel();
+			var order = 0;
+			for (name in names) model.register(name, function() return new Text(name), new haxeon.ui.widgets.sidebar.SidebarModeOptions(name, order++));
+			return model;
+		}
+		function ids(model:haxeon.ui.widgets.sidebar.SidebarModel):String return [for (mode in model.modes) mode.id].join(",");
+		function require(value:Bool, message:String):Void if (!value) throw "sidebar order: " + message;
+		var model = make(["files", "search", "scm", "agents"]);
+		var changes = 0;
+		model.onChange = function() changes++;
+		require(!model.customOrder && !model.moveMode("files", "search") && !model.moveMode("files", "files") && changes == 0,
+			"a move to the same place changed the order");
+		require(!model.moveMode("missing", null) && !model.moveMode("files", "missing"), "unknown ids moved");
+		require(model.moveMode("agents", "files") && ids(model) == "agents,files,search,scm" && changes == 1 && model.customOrder,
+			"move before did not reorder");
+		require(model.moveMode("files", null) && ids(model) == "agents,search,scm,files", "move to the end failed");
+		var saved = model.encode();
+		require(StringTools.startsWith(saved, "3|") && StringTools.endsWith(saved, "|agents,search,scm,files"), "order not encoded: " + saved);
+		// Restoring before registration applies the order as destinations arrive; new ones keep their default slot.
+		var restored = new haxeon.ui.widgets.sidebar.SidebarModel();
+		require(restored.restore(saved), "saved order rejected");
+		var order = 0;
+		for (name in ["files", "search", "extra", "scm", "agents"])
+			restored.register(name, function() return new Text(name), new haxeon.ui.widgets.sidebar.SidebarModeOptions(name, order++));
+		require(ids(restored) == "agents,search,extra,scm,files", "late registration ignored the saved order: " + ids(restored));
+		require(StringTools.endsWith(restored.encode(), "|agents,search,scm,files"), "untouched restore changed the saved order");
+		// Restoring after registration reorders in place.
+		var late = make(["files", "search", "scm", "agents"]);
+		require(late.restore(saved) && ids(late) == "agents,search,scm,files", "restore after registration ignored the order");
+		// A hidden destination keeps its place and returns to it.
+		require(late.setModeVisible("search", false) && late.moveMode("files", "scm") && ids(late) == "agents,search,files,scm",
+			"hidden destination lost its place");
+		var hidden = make(["files", "search", "scm", "agents"]);
+		require(hidden.restore(late.encode()) && !hidden.find("search").visible && ids(hidden) == "agents,search,files,scm",
+			"hidden order did not round trip");
+		require(hidden.setModeVisible("search", true) && ids(hidden) == "agents,search,files,scm", "re-added destination moved");
+		// Unregistered destinations keep their saved place for later.
+		require(hidden.unregister("agents") && hidden.moveMode("scm", "search") && StringTools.endsWith(hidden.encode(), "|scm,search,files,agents"),
+			"move dropped an unregistered destination from the order");
+		// Version 2 layouts migrate to the default order.
+		var legacy = make(["files", "search", "scm", "agents"]);
+		require(legacy.moveMode("agents", "files") && legacy.restore("2|search|1|300|search,0") && !legacy.customOrder &&
+			ids(legacy) == "files,search,scm,agents" && !legacy.find("search").visible && legacy.width == 300, "v2 layout did not migrate");
+		var before = late.encode();
+		for (invalid in ["3|files|1|240|", "3|files|1|240||files,files", "3|files|1|240||files,", "3|files|1|240||fi les",
+			"3|files|1|240||files|x", "4|files|1|240||files"])
+			require(!late.restore(invalid) && late.encode() == before && ids(late) == "agents,search,files,scm", "invalid order accepted: " + invalid);
+		// Presets supply the default order; the user's order overrides them until reset.
+		var preset = make(["files", "search", "scm", "agents"]);
+		preset.setDefaultOrder(function(a:haxeon.ui.widgets.sidebar.SidebarMode, b:haxeon.ui.widgets.sidebar.SidebarMode):Int {
+			var left = a.id == "agents" ? 0 : 1, right = b.id == "agents" ? 0 : 1;
+			return left == right ? a.order - b.order : left - right;
+		});
+		require(ids(preset) == "agents,files,search,scm", "preset order not applied");
+		require(preset.moveMode("scm", "agents") && ids(preset) == "scm,agents,files,search", "user move under a preset failed");
+		preset.setDefaultOrder(null);
+		require(ids(preset) == "scm,agents,files,search", "preset change overrode the user's order");
+		require(preset.resetOrder() && ids(preset) == "files,search,scm,agents" && !preset.customOrder, "reset kept the user's order");
+		trace("PASS: sidebar move, persisted order, late registration, hidden places, v2 migration and preset precedence");
 	}
 
 	/** A panel's state belongs to the panel, not to its place in the split tree: it survives its neighbour closing and
