@@ -222,6 +222,19 @@ if(NK_BUILD_TESTS)
         NKUI_TEST_COLOR_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/NotoColorEmoji-Regular.ttf")
     target_link_libraries(nativekit_ui_text_engine_test PRIVATE nkui_skribidi nkui_sheenbidi)
     add_test(NAME nativekit_ui_text_engine COMMAND nativekit_ui_text_engine_test)
+    add_executable(nativekit_ui_system_fonts_test tests/system_fonts.cpp src/prepare/system_fonts.cpp)
+    target_include_directories(nativekit_ui_system_fonts_test PRIVATE src)
+    target_compile_definitions(nativekit_ui_system_fonts_test PRIVATE
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf"
+        NKUI_TEST_MONO_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexMono-Regular.ttf")
+    target_link_libraries(nativekit_ui_system_fonts_test PRIVATE nkui_skribidi nkui_sheenbidi)
+    if(TARGET PkgConfig::FONTCONFIG)
+        target_link_libraries(nativekit_ui_system_fonts_test PRIVATE PkgConfig::FONTCONFIG)
+        target_compile_definitions(nativekit_ui_system_fonts_test PRIVATE NKUI_HAS_FONTCONFIG=1)
+    elseif(APPLE)
+        target_link_libraries(nativekit_ui_system_fonts_test PRIVATE "-framework CoreText" "-framework CoreFoundation")
+    endif()
+    add_test(NAME nativekit_ui_system_fonts COMMAND nativekit_ui_system_fonts_test)
     add_executable(nativekit_ui_compositor_test
         tests/compositor.cpp
         src/compositor/compositor.cpp
@@ -413,6 +426,7 @@ if(NK_BUILD_TESTS)
         nativekit_ui_nanovg_recorder_test
         nativekit_ui_nanovg_path_test
         nativekit_ui_text_engine_test
+        nativekit_ui_system_fonts_test
         nativekit_ui_compositor_test
         nativekit_ui_frame_resources_test
         nativekit_ui_layout_engine_test

@@ -19,6 +19,10 @@ struct SystemFontFallback {
 
 const std::vector<SystemFontFallback> &system_font_fallbacks();
 
+/** Ask the platform for fonts covering this scalar, in preference order. */
+std::vector<SystemFontFallback> system_font_fallbacks_for_codepoint(uint32_t codepoint,
+                                                                  bool monospace, bool emoji);
+
 } // namespace nkui
 
 #endif

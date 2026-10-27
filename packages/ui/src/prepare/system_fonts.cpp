@@ -172,13 +172,16 @@ void append_fontconfig_emoji_matches(std::vector<SystemFontFallback> &fonts) {
 
 #if defined(__APPLE__)
 void append_core_text_match(std::vector<SystemFontFallback> &fonts, const char *sample, bool emoji,
-                            uint32_t script_tag) {
+                            uint32_t script_tag, bool monospace = false) {
     CFStringRef text = CFStringCreateWithCString(nullptr, sample, kCFStringEncodingUTF8);
     if (!text)
         return;
-    // A null current font asks Core Text to choose the best system fallback. The
-    // SDK annotates this parameter as nonnull even though the API accepts null.
-    CTFontRef current_font = nullptr;
+    CTFontRef current_font = monospace ? CTFontCreateWithName(CFSTR("Menlo"), 14, nullptr)
+                                      : CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, 14, nullptr);
+    if (!current_font) {
+        CFRelease(text);
+        return;
+    }
     CTFontRef font =
         CTFontCreateForString(current_font, text, CFRangeMake(0, CFStringGetLength(text)));
     if (font) {
@@ -194,6 +197,7 @@ void append_core_text_match(std::vector<SystemFontFallback> &fonts, const char *
         CFRelease(font);
     }
     CFRelease(text);
+    CFRelease(current_font);
 }
 #endif
 
@@ -349,6 +353,74 @@ std::vector<SystemFontFallback> discover_system_font_fallbacks() {
 
 const std::vector<SystemFontFallback> &system_font_fallbacks() {
     static const std::vector<SystemFontFallback> fonts = discover_system_font_fallbacks();
+    return fonts;
+}
+
+std::vector<SystemFontFallback> system_font_fallbacks_for_codepoint(uint32_t codepoint,
+                                                                  bool monospace, bool emoji) {
+    std::vector<SystemFontFallback> fonts;
+    if (codepoint > 0x10ffff || (codepoint >= 0xd800 && codepoint <= 0xdfff))
+        return fonts;
+#if defined(NKUI_HAS_FONTCONFIG)
+    if (!FcInit()) return fonts;
+    FcPattern *pattern = FcPatternCreate();
+    FcCharSet *charset = FcCharSetCreate();
+    if (!pattern || !charset) {
+        if (pattern) FcPatternDestroy(pattern);
+        if (charset) FcCharSetDestroy(charset);
+        return fonts;
+    }
+    FcCharSetAddChar(charset, codepoint);
+    FcPatternAddCharSet(pattern, FC_CHARSET, charset);
+    FcCharSetDestroy(charset);
+    FcPatternAddString(pattern, FC_FAMILY,
+                       reinterpret_cast<const FcChar8 *>(monospace ? "monospace" : "sans-serif"));
+    FcPatternAddBool(pattern, FC_SCALABLE, FcTrue);
+    FcConfigSubstitute(nullptr, pattern, FcMatchPattern);
+    FcDefaultSubstitute(pattern);
+    FcResult result = FcResultNoMatch;
+    // Keep alternatives with overlapping coverage: the first face may be an
+    // unsupported bitmap font or a collection face unavailable to the loader.
+    FcFontSet *matches = FcFontSort(nullptr, pattern, FcFalse, nullptr, &result);
+    if (matches) {
+        for (int index = 0; index < matches->nfont; ++index) {
+            FcChar8 *file = nullptr;
+            FcCharSet *coverage = nullptr;
+            if (FcPatternGetString(matches->fonts[index], FC_FILE, 0, &file) != FcResultMatch || !file ||
+                FcPatternGetCharSet(matches->fonts[index], FC_CHARSET, 0, &coverage) != FcResultMatch ||
+                !coverage || !FcCharSetHasChar(coverage, codepoint)) continue;
+            const std::string path(reinterpret_cast<const char *>(file));
+            const bool outline = has_sfnt_table(path, SKB_TAG_STR("glyf")) ||
+                                 has_sfnt_table(path, SKB_TAG_STR("CFF ")) ||
+                                 has_sfnt_table(path, SKB_TAG_STR("CFF2"));
+            if (!outline && !(emoji && supports_skribidi_color(path))) continue;
+            append_unique(fonts, path, emoji, 0);
+        }
+        FcFontSetDestroy(matches);
+    }
+    FcPatternDestroy(pattern);
+    if (emoji)
+        std::stable_partition(fonts.begin(), fonts.end(), [](const auto &font) { return font.color; });
+#elif defined(__APPLE__)
+    std::string sample;
+    if (codepoint <= 0x7f) sample.push_back(static_cast<char>(codepoint));
+    else {
+        const int count = codepoint <= 0x7ff ? 2 : codepoint <= 0xffff ? 3 : 4;
+        sample.push_back(static_cast<char>((count == 2 ? 0xc0 : count == 3 ? 0xe0 : 0xf0) |
+                                          (codepoint >> (6 * (count - 1)))));
+        for (int index = count - 2; index >= 0; --index)
+            sample.push_back(static_cast<char>(0x80 | ((codepoint >> (6 * index)) & 0x3f)));
+    }
+    append_core_text_match(fonts, sample.c_str(), emoji, 0, monospace);
+#elif defined(_WIN32)
+    // The registry supplies candidates; the caller verifies the loaded cmap.
+    (void)monospace;
+    for (const auto &font : system_font_fallbacks())
+        if (font.emoji == emoji) fonts.push_back(font);
+#else
+    (void)monospace;
+    (void)emoji;
+#endif
     return fonts;
 }
 

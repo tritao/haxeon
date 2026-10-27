@@ -145,6 +145,16 @@ showcase and framework tests live under `examples/ui_haxeon` and
 `tests/haxeon`; generated bindings are checked with
 `tools/check-hxi.sh`.
 
+`FontCollection.addSystemFallbacks()` installs both script and missing-character
+lookup. On Linux, Fontconfig is queried for the actual missing Unicode scalar,
+with a monospace preference for terminal text. Loaded glyph coverage is checked
+before accepting a fallback. Common-script symbols can use that font even when
+the surrounding run resolves to Latin or another script. Each collection caches
+successful lookups, misses, and loaded font handles. macOS queries Core Text for
+the missing character; Windows verifies coverage in its registry candidates.
+Browser hosts still supply their own font assets. The native
+`nativekit_ui_system_fonts` test checks the callback and platform discovery.
+
 Code editors opt into `TextField.codeWordBoundaries` (also available on `TextArea`
 and `TextEditorLayout`). The default remains natural-language segmentation.
 The native layout owns the shared policy used by double-click selection, word

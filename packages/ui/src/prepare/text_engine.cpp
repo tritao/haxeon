@@ -23,9 +23,14 @@
 
 namespace nkui {
 
+struct SystemFontFallbackState {
+    std::unordered_map<std::string, skb_font_handle_t> fonts;
+    std::unordered_map<uint64_t, skb_font_handle_t> codepoints;
+};
+
 struct FontCollection::State {
     skb_font_collection_t *fonts = nullptr;
-    std::unordered_set<std::string> system_fonts_loaded;
+    SystemFontFallbackState system_fonts;
     std::vector<std::shared_ptr<std::vector<uint8_t>>> font_data;
     uint32_t font_load_count = 0;
 };
@@ -132,9 +137,19 @@ const TextEngine::State::RetainedLayout *active_layout(const TextEngine::State &
 
 namespace {
 
+skb_font_handle_t load_system_font(skb_font_collection_t *fonts, const std::string &path,
+                                   uint8_t family, SystemFontFallbackState &state) {
+    const std::string key = std::to_string(static_cast<unsigned>(family)) + ":" + path;
+    const auto previous = state.fonts.find(key);
+    if (previous != state.fonts.end()) return previous->second;
+    const auto handle = skb_font_collection_add_font(fonts, path.c_str(), family, nullptr);
+    state.fonts.emplace(key, handle);
+    return handle;
+}
+
 bool system_font_fallback(skb_font_collection_t *font_collection, const char *, uint8_t script,
                           uint8_t font_family, void *context) {
-    auto *system_fonts_loaded = static_cast<std::unordered_set<std::string> *>(context);
+    auto &state = *static_cast<SystemFontFallbackState *>(context);
     const uint32_t script_tag = skb_script_to_iso15924_tag(script);
     const bool emoji = font_family == SKB_FONT_FAMILY_EMOJI;
     if (std::getenv("NKUI_DEBUG_GLYPHS"))
@@ -153,10 +168,9 @@ bool system_font_fallback(skb_font_collection_t *font_collection, const char *, 
                 continue;
             const std::string key =
                 std::to_string(static_cast<unsigned>(font_family)) + ":" + font.path;
-            if (!system_fonts_loaded->insert(key).second)
-                return true;
-            if (skb_font_collection_add_font(font_collection, font.path.c_str(), font_family,
-                                             nullptr)) {
+            if (state.fonts.find(key) != state.fonts.end())
+                continue;
+            if (load_system_font(font_collection, font.path, font_family, state)) {
                 added = true;
                 if (std::getenv("NKUI_DEBUG_GLYPHS"))
                     std::fprintf(stderr, "fallback font %s color=%u\n", font.path.c_str(),
@@ -170,6 +184,28 @@ bool system_font_fallback(skb_font_collection_t *font_collection, const char *, 
         }
     }
     return added;
+}
+
+skb_font_handle_t system_codepoint_fallback(skb_font_collection_t *fonts, const char *,
+                                           uint32_t codepoint, uint8_t family, void *context) {
+    auto &state = *static_cast<SystemFontFallbackState *>(context);
+    const uint64_t key = (static_cast<uint64_t>(family) << 32) | codepoint;
+    const auto previous = state.codepoints.find(key);
+    if (previous != state.codepoints.end()) return previous->second;
+    const auto candidates = system_font_fallbacks_for_codepoint(codepoint,
+        family == SKB_FONT_FAMILY_MONOSPACE, family == SKB_FONT_FAMILY_EMOJI);
+    skb_font_handle_t resolved = 0;
+    for (const auto &font : candidates) {
+        const auto handle = load_system_font(fonts, font.path, family, state);
+        if (handle && skb_font_collection_font_has_codepoint(fonts, handle, codepoint)) {
+            resolved = handle;
+            break;
+        }
+    }
+    // Cache misses too: unsupported characters must not trigger a platform
+    // font scan on every row or frame. Each collection owns this cache.
+    state.codepoints.emplace(key, resolved);
+    return resolved;
 }
 
 skb_rasterize_alpha_mode_t raster_mode(GlyphMode mode) {
@@ -435,6 +471,7 @@ bool FontCollection::add_font(const char *path, FontFamily family) {
     if (!path || !skb_font_collection_add_font(state_->fonts, path, skb_family, nullptr))
         return false;
     ++state_->font_load_count;
+    state_->system_fonts.codepoints.clear();
     return true;
 }
 
@@ -450,6 +487,7 @@ bool FontCollection::add_font_from_shared_data(const char *name,
         return false;
     state_->font_data.push_back(data);
     ++state_->font_load_count;
+    state_->system_fonts.codepoints.clear();
     return true;
 }
 
@@ -457,7 +495,9 @@ bool FontCollection::add_system_fallbacks() {
     if (!valid())
         return false;
     skb_font_collection_set_on_font_fallback(state_->fonts, system_font_fallback,
-                                             &state_->system_fonts_loaded);
+                                             &state_->system_fonts);
+    skb_font_collection_set_on_codepoint_fallback(state_->fonts, system_codepoint_fallback,
+                                                 &state_->system_fonts);
     return true;
 }
 
