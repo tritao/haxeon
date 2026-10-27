@@ -56,25 +56,27 @@ class AccessibilityContract {
 			new TabItem("second", "Second", new Text("Second content"))
 		], "first", function(_) { changes++; });
 		var tabsRoot = context.submit(tabs, frame);
-		var tabsSnapshot = AccessibilityBridge.project(tabsRoot, tabsRoot.children[0].children[1].children[0].id);
+		var secondTabNode = findAccessibleNode(tabsRoot, AccessibilityRole.Tab, "Second");
+		var tabsSnapshot = AccessibilityBridge.project(tabsRoot, secondTabNode.id);
 		var tabList = findSnapshot(tabsSnapshot, AccessibilityRole.TabList);
 		var firstTab = findSnapshot(tabsSnapshot, AccessibilityRole.Tab);
 		var tabPanel = findSnapshot(tabsSnapshot, AccessibilityRole.TabPanel);
+		if (tabList == null || firstTab == null || tabPanel == null)
+			return 1;
 		var tabListRecord:AccessibilitySnapshotNode = cast tabList;
 		var firstTabRecord:AccessibilitySnapshotNode = cast firstTab;
 		var tabOrientation:Int = cast tabListRecord.orientation;
 		var expectedTabOrientation:Int = cast AccessibilityOrientation.Horizontal;
 		var tabHasSelect = (firstTabRecord.actions & AccessibilityAction.Select) != 0;
 		var firstTabSelected = (firstTabRecord.states & AccessibilityState.Selected) != 0;
-		if (tabList == null || firstTab == null || tabPanel == null ||
-			tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected)
+		if (tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected)
 			return 1;
-		var secondTabNode = tabsRoot.children[0].children[1].children[0];
 		if (!context.accessibilityAction(secondTabNode.id.value, AccessibilityRequest.Select,
 			null, -1, -1, 1) || tabs.selectedKey != "second" || changes != 1)
 			return 2;
 		tabsRoot = context.submit(tabs, frame);
-		var selectedTab:Null<Semantics> = cast tabsRoot.children[0].children[1].children[0].semantics;
+		var selectedTab:Null<Semantics> = cast findAccessibleNode(tabsRoot,
+			AccessibilityRole.Tab, "Second").semantics;
 		if (selectedTab == null || (selectedTab.states & AccessibilityState.Selected) == 0)
 			return 3;
 
@@ -621,6 +623,18 @@ class AccessibilityContract {
 			"one", -1, -1, 1) || combo.value != "one" || selected != "one" || changes != 2)
 			return false;
 		return true;
+	}
+
+	static function findAccessibleNode(root:RenderNode, role:AccessibilityRole, label:String):RenderNode {
+		var found:Null<RenderNode> = null;
+		root.walk(function(node) {
+			var semantics:Null<Semantics> = cast node.semantics;
+			if (semantics != null && semantics.role == role && semantics.label == label)
+				found = node;
+		});
+		if (found == null)
+			throw "Missing accessible node: " + label;
+		return cast found;
 	}
 
 	static function findSnapshot(snapshot:Array<AccessibilitySnapshotNode>,

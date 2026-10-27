@@ -1369,9 +1369,17 @@ class FrameworkSmoke {
 		keyboardEditor.placeCaret(0, false);
 		for (_ in 0...12)
 			context.key(UiEventKind.KeyDown, UiKey.Down);
-		if (keyboardEditor.scrollOffsetY <= 0.0)
+		// Keyboard navigation requests reveal; the next layout resolves it with current geometry.
+		keyboardRoot = context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
+		var keyboardGeometry:ResolvedLayoutItem = cast keyboardRoot.children[0].resolved;
+		var keyboardViewport = keyboardGeometry.height;
+		var keyboardCaret = keyboardEditor.layout.caret(keyboardEditor.focusPosition());
+		var caretBottom = keyboardCaret.y + Math.max(keyboardCaret.ascender, keyboardCaret.descender);
+		if (keyboardEditor.scrollOffsetY <= 0.0 ||
+			caretBottom > keyboardEditor.scrollOffsetY + keyboardViewport + 0.01)
 			return 217;
 		context.key(UiEventKind.KeyDown, UiKey.Home, UiModifier.Control);
+		context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
 		if (keyboardEditor.selectionFocus != 0 || keyboardEditor.scrollOffsetY != 0.0)
 			return 218;
 		var clickField = new TextField("single-double-click", "first last", null,
@@ -2049,6 +2057,8 @@ class FrameworkSmoke {
 		var scrollView = new ScrollView("demo-scroll", new Column("long-content", [
 			new KeyedView("message", new Button("Scrollable content"))
 		], longContentStyle), viewportStyle, ScrollAxis.Vertical);
+		// Interaction checks require a visible thumb without advancing the fade animation.
+		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
 		var scrollFrame = new LayoutFrame(256.0, 80.0);
 		var scrollRoot = context.submit(scrollView, scrollFrame);
 		var contentGeometry:ResolvedLayoutItem = cast scrollRoot.children[0].resolved;
@@ -2117,6 +2127,8 @@ class FrameworkSmoke {
 		var heldX = heldThumb.x + heldThumb.width * 0.5;
 		var heldY = heldThumb.y + heldThumb.height * 0.5;
 		context.pointerDown(heldX, heldY, 0);
+		if (!context.events.hasCapturedPointer())
+			return 270;
 		scrollView.style.height = LayoutAxis.fixed(160.0);
 		scrollRoot = context.submit(scrollView, new LayoutFrame(256.0, 160.0));
 		context.pointerMove(heldX, heldY - 2.0);
@@ -2870,7 +2882,8 @@ class FrameworkSmoke {
 
 		var theme = new Theme();
 		if (theme.tokens.textPrimary != theme.text || theme.tokens.textSecondary != theme.mutedText ||
-			theme.tokens.surface != theme.panelBackground || theme.tokens.focusRing != theme.buttonFocused ||
+			theme.tokens.surface != theme.panelBackground || theme.tokens.accent != theme.buttonFocused ||
+			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
 			theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0)
 			return 225;
 		var originalButton = theme.tokens.buttonBackground;
@@ -2880,8 +2893,13 @@ class FrameworkSmoke {
 		if (theme.tokens.buttonBackground != originalButton ||
 			theme.tokens.controlUnselected != originalControl)
 			return 225;
+		var customFocusRing = Color.rgba(0.51, 0.52, 0.53, 1.0);
+		theme.tokens.focusRing = customFocusRing;
 		theme.tokens.deriveComponents();
 		if (theme.tokens.navigationBackground != theme.tokens.surfaceRaised ||
+			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
+			theme.tokens.buttonFocused != theme.tokens.accent ||
+			theme.tokens.focusRing != customFocusRing ||
 			theme.tokens.selectionBorder != theme.tokens.border)
 			return 225;
 		theme.body.color = Color.rgba(0.10, 0.14, 0.21, 1.0);
@@ -3350,7 +3368,8 @@ class FrameworkSmoke {
 		context.setStyleSheet(new StyleSheet("Application"));
 		var lightNeutral = Color.rgba(0.87, 0.90, 0.95, 1.0);
 		var accentButton = Color.rgba(0.18, 0.39, 0.70, 1.0);
-		if (theme.buttonLabelColor(true, lightNeutral) != theme.body.color ||
+		if (Theme.contrastRatio(theme.buttonLabelColor(true, lightNeutral), lightNeutral) < 4.5 ||
+			theme.buttonLabelColor(true, lightNeutral, theme.body.color) != theme.body.color ||
 			theme.buttonLabelColor(true, accentButton) != theme.button.color ||
 			theme.buttonLabelColor(false, accentButton) != theme.disabledButtonText)
 			return 101;
@@ -3716,7 +3735,9 @@ class FrameworkSmoke {
 		if (!context.focusWidget(themedRoot.id))
 			return 80;
 		themedRoot = context.submit(themedButton, themedFrame);
-		if (themedRoot.layout.style.background.red != 0.4)
+		if (themedRoot.layout.style.background != theme.buttonBackground ||
+			themedRoot.computedStyle.get(StyleProperty.BorderColor) != theme.tokens.textOnAccent ||
+			themedRoot.computedStyle.get(StyleProperty.BorderWidth) != 1.0)
 			return 81;
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, true))
