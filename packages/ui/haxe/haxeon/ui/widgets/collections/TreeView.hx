@@ -23,6 +23,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.PointerClickSequence;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityAction;
@@ -85,8 +86,13 @@ class TreeView implements View {
 	public var guidesOnInteraction:Bool = false;
 	/** Align leaf content in the disclosure column instead of reserving arrow space. */
 	public var compactLeafIndent:Bool = false;
+	/** Shift-click selects a range and Control/Super-click toggles rows; plain clicks select one row. */
+	public var multiSelect:Bool = false;
 
 	final fallbackViewportHeight:Float;
+	/** Rows selected besides selectedKey, which stays the focused row of a multi-selection. */
+	final extraSelected:Map<String, Bool> = new Map();
+	var selectionAnchor:Null<String>;
 	final expandedKeys:Map<String, Bool>;
 	var expandedState:Null<State<Map<String, Bool>>>;
 	var selectedState:Null<State<String>>;
@@ -162,13 +168,94 @@ class TreeView implements View {
 		ensureTreeMetrics();
 		if (nextKey != null && (nextKey.length == 0 || !branchByKey.exists(nextKey)))
 			throw "TreeView selection key is not visible";
-		if (nextKey == selectedKey)
+		if (nextKey == selectedKey && !hasExtraSelection())
 			return false;
+		extraSelected.clear();
+		selectionAnchor = nextKey;
 		selectedKey = nextKey;
 		updateSelectedState(nextKey);
 		if (notify && nextKey != null && onSelectionChanged != null)
 			onSelectionChanged(nextKey);
 		return true;
+	}
+
+	/** True for the focused row and every row a multi-selection added. */
+	public function isSelected(nodeKey:String):Bool
+		return nodeKey == selectedKey || extraSelected.exists(nodeKey);
+
+	/** Selected visible keys in tree order. */
+	public function selectedKeys():Array<String> {
+		ensureTreeMetrics();
+		var keys = [for (key in extraSelected.keys()) if (branchByKey.exists(key)) key];
+		if (selectedKey != null && branchByKey.exists(selectedKey)) keys.push(selectedKey);
+		var rows:Array<{key:String, index:Int}> = [for (key in keys) {key: key, index: cast indexOfKey(key)}];
+		rows.sort(function(a, b) return a.index - b.index);
+		return [for (row in rows) row.key];
+	}
+
+	/** Selects the visible rows from the anchor to a row; the anchor stays for later ranges. */
+	public function extendSelection(nodeKey:String, notify:Bool = true):Bool {
+		ensureTreeMetrics();
+		var end = indexOfKey(nodeKey);
+		if (end == null)
+			throw "TreeView selection key is not visible";
+		var anchor = selectionAnchor != null && branchByKey.exists(selectionAnchor) ? selectionAnchor : selectedKey;
+		var start = anchor == null ? null : indexOfKey(anchor);
+		if (start == null)
+			return select(nodeKey, notify);
+		var first:Int = cast start, last:Int = cast end;
+		if (first > last) { var swap = first; first = last; last = swap; }
+		extraSelected.clear();
+		for (index in first...last + 1) extraSelected.set(entryAt(index).key, true);
+		extraSelected.remove(nodeKey);
+		selectionAnchor = anchor;
+		selectedKey = nodeKey;
+		updateSelectedState(nodeKey);
+		if (notify && onSelectionChanged != null)
+			onSelectionChanged(nodeKey);
+		return true;
+	}
+
+	/** Adds or removes one row, keeping the rest of the selection. */
+	public function toggleSelection(nodeKey:String, notify:Bool = true):Bool {
+		ensureTreeMetrics();
+		if (!branchByKey.exists(nodeKey))
+			throw "TreeView selection key is not visible";
+		if (nodeKey == selectedKey) {
+			selectedKey = null;
+			for (key in extraSelected.keys()) { selectedKey = key; break; }
+			if (selectedKey != null) extraSelected.remove(selectedKey);
+		} else if (extraSelected.exists(nodeKey)) {
+			extraSelected.remove(nodeKey);
+		} else {
+			if (selectedKey != null) extraSelected.set(selectedKey, true);
+			selectedKey = nodeKey;
+		}
+		selectionAnchor = nodeKey;
+		updateSelectedState(selectedKey);
+		if (notify && selectedKey != null && onSelectionChanged != null)
+			onSelectionChanged(selectedKey);
+		return true;
+	}
+
+	/** Shift extends and Control/Super toggles a multi-selection; returns whether the click was used. */
+	function selectWithModifiers(nodeKey:String, modifiers:Int):Bool {
+		if (!multiSelect)
+			return false;
+		if ((modifiers & UiModifier.Shift) != 0) {
+			extendSelection(nodeKey);
+			return true;
+		}
+		if ((modifiers & (UiModifier.Control | UiModifier.Super)) != 0) {
+			toggleSelection(nodeKey);
+			return true;
+		}
+		return false;
+	}
+
+	function hasExtraSelection():Bool {
+		for (_ in extraSelected.keys()) return true;
+		return false;
 	}
 
 	/** Expands or collapses a visible node. */
@@ -336,6 +423,8 @@ class TreeView implements View {
 				selectedKey = null;
 				selection.update("");
 			}
+			for (hidden in [for (extra in extraSelected.keys()) if (!branchByKey.exists(extra)) extra])
+				extraSelected.remove(hidden);
 			if (onStateReady != null) onStateReady(this);
 			itemIds = new Map();
 			drag.rows.clear();
@@ -359,11 +448,14 @@ class TreeView implements View {
 					if (item == null)
 						throw 'TreeView model returned null for key $nodeKey';
 					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
-						compactLeafIndent, selectedKey == nodeKey, guideOpacity,
+						compactLeafIndent, isSelected(nodeKey), guideOpacity,
 						function() { select(nodeKey); },
 						function(event) { if (entry.hasChildren) toggleExpanded(nodeKey); else activateItem(nodeKey, event); },
 						function() { toggleExpanded(nodeKey); },
 						function(event) {
+							// Modified clicks only change the selection; they neither open nor expand.
+							if (selectWithModifiers(nodeKey, event.modifiers)) return;
+							select(nodeKey);
 							var count = clicks.value.register(nodeKey, event);
 							if (onItemClicked != null) onItemClicked(nodeKey, count);
 							if (entry.hasChildren) {
@@ -375,6 +467,8 @@ class TreeView implements View {
 						function(event) { handleNodeKey(context, entry, event); },
 						function(node) { itemIds.set(nodeKey, node.id); drag.rows.set(nodeKey, node); },
 						function(event) {
+							// A menu on a selected row applies to the whole selection.
+							if (!isSelected(nodeKey)) select(nodeKey);
 							var handler = onItemContextMenu;
 							if (handler != null) handler(nodeKey, event);
 						});
@@ -415,7 +509,7 @@ class TreeView implements View {
 	function handleNodeKey(context:BuildContext, entry:TreeEntry, event:UiEvent):Void {
 		var menu = onItemContextMenu;
 		if (UiKey.isContextMenuRequest(event.key, event.modifiers) && menu != null) {
-			select(entry.key);
+			if (!isSelected(entry.key)) select(entry.key);
 			menu(entry.key, event);
 			event.preventDefault();
 			event.stopPropagation();
@@ -458,7 +552,8 @@ class TreeView implements View {
 		if (nextKey == null || nextKey == entry.key)
 			return;
 		event.preventDefault();
-		select(nextKey);
+		if (multiSelect && (event.modifiers & UiModifier.Shift) != 0) extendSelection(nextKey);
+		else select(nextKey);
 		scrollTo(nextKey);
 		var target = itemIds.get(nextKey);
 		if (target != null)
@@ -950,13 +1045,13 @@ private class TreeViewRow implements View {
 			semantics.positionInSet = entry.depth + 1;
 			semantics.hierarchyLevel = entry.depth + 1;
 			node.semantics = semantics;
-			node.on(UiEventKind.Click, function(event) { if (event.button == 0) { onSelect(); onClick(event); } });
+			// The tree applies click and menu selection itself, so modifiers can extend it.
+			node.on(UiEventKind.Click, function(event) { if (event.button == 0) onClick(event); });
 			node.on(UiEventKind.Activate, function(event) { onSelect(); onActivate(event); });
 			node.on(UiEventKind.KeyDown, onKey);
 			node.on(UiEventKind.KeyRepeat, onKey);
 			node.on(UiEventKind.PointerDown, function(event) {
 				if (event.button == 1) {
-					onSelect();
 					onContextMenu(event);
 					event.preventDefault();
 					event.stopPropagation();

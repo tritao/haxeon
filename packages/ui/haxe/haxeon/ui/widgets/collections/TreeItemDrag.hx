@@ -73,7 +73,8 @@ class TreeItemDrag implements haxeon.ui.animation.Animation {
 			if (source == null || pointer != event.pointerId) return;
 			var dx = event.x - startX, dy = event.y - startY;
 			if (!dragging && dx * dx + dy * dy < 36) return;
-			if (!dragging) tree.select(source);
+			// Dragging a selected row carries the selection; the drop handler decides what moves.
+			if (!dragging && !tree.isSelected(source)) tree.select(source);
 			dragging = true; suppressClick = true;
 			var target = rowAt(event);
 			var canDrop:(String, String)->Bool = cast tree.canDropItem;
