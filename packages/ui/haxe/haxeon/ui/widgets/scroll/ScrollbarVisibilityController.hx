@@ -1,10 +1,10 @@
 package haxeon.ui.widgets.scroll;
 
-import haxeon.ui.animation.Animation;
+import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.AnimationScheduler;
 
 /** Mount-owned scrollbar visibility, independent of scroll geometry and paint. */
-class ScrollbarVisibilityController implements Animation {
+class ScrollbarVisibilityController implements DelayedAnimation {
 	static inline var FadeInSeconds:Float = 0.3;
 	static inline var IdleSeconds:Float = 0.5;
 	static inline var FadeOutSeconds:Float = 0.2;
@@ -128,6 +128,12 @@ class ScrollbarVisibilityController implements Animation {
 	function animating():Bool {
 		return available && policy == ScrollbarVisibility.Auto &&
 			(opacity != targetOpacity || (!held() && targetOpacity > 0));
+	}
+
+	/** The idle grace after a fade-in changes nothing on screen, so it needs a wake, not frames. */
+	public function delaySeconds():Float {
+		if (!animating() || held() || targetOpacity <= 0.0 || opacity != 1.0) return 0.0;
+		return idleRemaining;
 	}
 
 	function updateAnimation():Void {

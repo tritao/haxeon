@@ -23,6 +23,15 @@ class AnimationHandle {
 	function advance(deltaSeconds:Float):Bool
 		return animation.advance(deltaSeconds);
 
+	/** Time before this animation next changes anything visible; 0 when it changes every frame. */
+	@:allow(haxeon.ui.animation.AnimationScheduler)
+	function delaySeconds():Float {
+		if (!Std.isOfType(animation, DelayedAnimation))
+			return 0.0;
+		var delayed:DelayedAnimation = cast animation;
+		return delayed.delaySeconds();
+	}
+
 	@:allow(haxeon.ui.animation.AnimationScheduler)
 	function deactivate():Void
 		active = false;

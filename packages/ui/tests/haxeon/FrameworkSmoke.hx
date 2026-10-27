@@ -752,6 +752,8 @@ class FrameworkSmoke {
 			return 270;
 		if (!hostSessionLifecycleValid())
 			return 271;
+		if (!retainedRectanglesFollowThePaint())
+			return 278;
 		if (!hostPendingResourcesValid())
 			return 273;
 		if (!coordinateMathValid())
@@ -4545,6 +4547,37 @@ class FrameworkSmoke {
 			session.state == UiHostLifecycle.Stopping;
 	}
 
+	/** A retained canvas keeps every rectangle its last paint drew, however many, so an identical repaint of a large
+		paint records identical commands; it disposes only the rectangles a paint stopped drawing. */
+	@:access(haxeon.ui.Canvas)
+	static function retainedRectanglesFollowThePaint():Bool {
+		var canvas = new Canvas();
+		canvas.retainRectangles = true;
+		var color = Color.fromBytes(10, 20, 30);
+		function paint(rects:Int):Void {
+			canvas.reset();
+			for (i in 0...rects) canvas.fillRect(new Rect(i, 0, 1, 1), color);
+			canvas.fillRect(new Rect(0, 0, 1, 1), color);
+		}
+		function count(entries:Null<Map<String, {path:Path, paint:Paint}>>):Int {
+			var n = 0;
+			if (entries != null) for (_ in entries) n++;
+			return n;
+		}
+		paint(600);
+		var first = new Map<String, Path>();
+		for (key in canvas.paintedRects.keys()) first.set(key, canvas.paintedRects.get(key).path);
+		paint(600);
+		var reused = count(canvas.paintedRects) == 600;
+		for (key in first.keys())
+			if (canvas.paintedRects.get(key) == null || canvas.paintedRects.get(key).path != first.get(key)) reused = false;
+		paint(10);
+		canvas.reset();
+		var swept = count(canvas.retainedRects) == 10 && count(canvas.paintedRects) == 0;
+		canvas.releaseRetained();
+		return first.keys().hasNext() && reused && swept && count(canvas.retainedRects) == 0;
+	}
+
 	static function hostPendingResourcesValid():Bool {
 		var pending = new UiHostPendingResources<String>();
 		pending.add("first", "font-a");
@@ -5484,12 +5517,24 @@ class FrameworkSmoke {
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-in");
 		visibility.reveal(); clock.advance(0.15);
 		scrollbarCheck(visibility.opacity == 1, "repeated activity preserves fade progress");
+		scrollbarCheck(!clock.needsFrame && Math.abs(clock.waitSeconds() - 0.5) < 0.001, "idle delay waits for a deadline instead of frames");
+		clock.advance(0.01);
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.49) < 0.001, "idle delay counts down");
+		visibility.reveal();
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.5) < 0.001, "activity restarts the idle delay");
 		clock.advance(0.49);
 		scrollbarCheck(visibility.opacity == 1, "idle delay follows completed fade-in");
+		scrollbarCheck(!clock.needsFrame && clock.waitSeconds() > 0.0 && clock.waitSeconds() < 0.011, "idle delay ends at its deadline");
 		clock.advance(0.11);
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-out");
 		clock.advance(0.11);
 		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "idle animation stops");
+		visibility.reveal(); clock.advance(0.3);
+		scrollbarCheck(!clock.needsFrame, "idle delay after a fade-in needs no frames");
+		clock.advance(0.5);
+		scrollbarCheck(clock.needsFrame && clock.waitSeconds() < 0.0, "fade-out needs frames");
+		clock.advance(0.2);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "a late wake still fades out");
 
 		visibility.setViewportHovered(true); clock.advance(0.15);
 		visibility.setAvailable(true);

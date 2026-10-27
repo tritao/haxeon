@@ -567,6 +567,7 @@ class UiContext {
 				var canvas = customCanvases.get(nodeId);
 				if (canvas == null) {
 					canvas = new Canvas();
+					canvas.retainRectangles = true;
 					customCanvases.set(nodeId, canvas);
 				}
 				canvas.reset();
@@ -648,8 +649,10 @@ class UiContext {
 		for (nodeId in stale) {
 			clearCustomPaintBindings(nodeId);
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 			var displayList = customLists.get(nodeId);
 			if (displayList != null)
 				displayList.dispose();
@@ -974,7 +977,11 @@ class UiContext {
 
 	public var needsAnimationFrame(get, never):Bool;
 	inline function get_needsAnimationFrame():Bool
-		return animations.activeCount > 0;
+		return animations.needsFrame;
+
+	/** Seconds until animations that are only waiting next need a frame, or -1 for none. */
+	public function animationWaitSeconds():Float
+		return animations.waitSeconds();
 
 	/** Reports pending work categories without changing the current full-submit behavior. */
 	public var dirtyFlags(get, never):Int;
@@ -1072,8 +1079,10 @@ class UiContext {
 		session.clearCustomPaints();
 		for (nodeId in customCanvases.keys()) {
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 		}
 		for (nodeId in customLists.keys()) {
 			var displayList = customLists.get(nodeId);

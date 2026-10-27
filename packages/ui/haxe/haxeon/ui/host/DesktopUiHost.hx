@@ -197,6 +197,8 @@ class DesktopUiHost {
 			var repaintOnlyRequested = false;
 			var frameRequestedAt = -1.0;
 			var nextCaretFrameAt = -1.0;
+			// When animations are only counting down a delay, no frames run until this time.
+			var nextAnimationFrameAt = -1.0;
 			var frameRequestReason = "none";
 			var frameRequestSerial = 0;
 			var inputRequestedAt = -1.0;
@@ -367,6 +369,8 @@ class DesktopUiHost {
 									var renderedApp = runtime.app();
 									nextCaretFrameAt = renderedApp != null
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
+									var animationWait = renderedApp != null ? renderedApp.context().animationWaitSeconds() : -1.0;
+									nextAnimationFrameAt = animationWait >= 0.0 ? Sys.time() + animationWait : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
 									if (captureReady) {
@@ -480,12 +484,9 @@ class DesktopUiHost {
 					case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
 						surfaceAvailable = false;
 						framePending = false;
+						nextAnimationFrameAt = -1.0;
 						runtime.setSurfaceReady(false);
-					case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.TransportConnected ||
-						kind == EventKind.TransportAccepted || kind == EventKind.TransportData ||
-						kind == EventKind.TransportWritable || kind == EventKind.TransportClosed || kind == EventKind.TransportFailed):
-						// Background transport traffic is not a visual change. Its consumer requests a frame
-						// after changing application state; inspection must not wake an otherwise idle UI.
+					case _ if (isBackgroundIo(value)):
 					case _:
 						scheduleFrameWithReason("event:" + eventName);
 				}
@@ -526,7 +527,12 @@ class DesktopUiHost {
 				// Polling waits for native events and runs the callbacks they trigger, frames included.
 				pollSpanOpen = true;
 				ProfileSpan.begin("ui.events");
-				var polled = pump.poll();
+				// Take every queued event before drawing; a bound keeps a flood from starving frames.
+				var polled = false;
+				for (_ in 0...64) {
+					if (!pump.poll()) break;
+					polled = true;
+				}
 				pollSpanOpen = false;
 				ProfileSpan.end("ui.events");
 				if (polled) hadEvent = true;
@@ -556,6 +562,11 @@ class DesktopUiHost {
 					nextCaretFrameAt = -1.0;
 					scheduleFrameWithReason("text-caret");
 				}
+				if (active && surfaceAvailable && nextAnimationFrameAt >= 0.0 &&
+					Sys.time() >= nextAnimationFrameAt) {
+					nextAnimationFrameAt = -1.0;
+					scheduleFrameWithReason("animation");
+				}
 				submitFrameRequest();
 				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
 					frameGc.idle();
@@ -571,6 +582,8 @@ class DesktopUiHost {
 					var waitSeconds = 1.0 / options.targetFps;
 					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
 					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+					if (surfaceAvailable && nextAnimationFrameAt >= 0.0)
+						waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
 					pump.wait(waitSeconds);
 					if (measureLoop) {
 						loopTiming.waits++;
@@ -760,7 +773,27 @@ class DesktopUiHost {
 			case SurfaceResize(_, _, _, _, _): "SurfaceResize";
 			case SurfaceLost(_): "SurfaceLost";
 			case None: "None";
+			case Raw(_, _, _, _, _, _, _): "Raw";
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _): "Task";
+			case HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _) | HttpComplete(_, _, _, _): "Http";
 			case _: "other";
+		};
+	}
+
+	/** Background I/O (transports, terminals, tasks, HTTP) is for the code that started it, not the window: a redraw
+		for each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests
+		a frame when its state changes. Other raw events (menus, file watches, application lifecycle) still redraw. */
+	static function isBackgroundIo(value:NativeKitEventValue):Bool {
+		return switch (value) {
+			case Raw(kind, _, _, _, _, _, _):
+				kind == EventKind.TransportConnected || kind == EventKind.TransportAccepted
+					|| kind == EventKind.TransportData || kind == EventKind.TransportWritable
+					|| kind == EventKind.TransportClosed || kind == EventKind.TransportFailed
+					|| kind == EventKind.PtyReadable || kind == EventKind.PtyExited;
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _)
+				| HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _)
+				| HttpComplete(_, _, _, _): true;
+			case _: false;
 		};
 	}
 

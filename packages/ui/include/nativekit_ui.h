@@ -254,6 +254,22 @@ typedef struct nkui_renderer_stats {
     uint64_t render_submission_execution_ns;
     /** Cumulative time from frame acquisition until platform frame close, in nanoseconds. */
     uint64_t render_submission_acquire_to_present_ns;
+    /** Layout-session frames whose render plan was compiled. */
+    uint64_t render_plan_compiles;
+    /** Layout-session frames that submitted the previous render plan again. */
+    uint64_t render_plan_reuses;
+    /** Compiles because the session's layout changed since the previous plan. */
+    uint64_t render_plan_miss_epoch;
+    /** Compiles because the frame size, scale, target or load mode changed. */
+    uint64_t render_plan_miss_frame;
+    /** Compiles because a custom-paint display list, composite or cache policy changed. */
+    uint64_t render_plan_miss_lists;
+    /** Compiles because a text layout or render target the plan read changed. */
+    uint64_t render_plan_miss_dependencies;
+    /** Compiles because the session text engine's atlas, layout or fonts changed. */
+    uint64_t render_plan_miss_atlas;
+    /** Compiles of a first plan, or of a plan not yet confirmed by a second identical build. */
+    uint64_t render_plan_miss_unsettled;
 } nkui_renderer_stats;
 
 /** 16-bit opcode identifying one display-list command record. */

@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -15,6 +17,17 @@ namespace nkui {
 
 /** PreparedAtlas requires a matching prepare_glyph_atlas call before publication. */
 enum class GlyphPreparation { Rasterize, PreparedAtlas };
+
+/**
+ * Horizontal extent, in the coordinates of the published geometry, that a line's glyphs must cover. Only very long
+ * lines honor it: their snapshot holds the glyphs of the chunks overlapping the extent
+ * instead of every glyph of the line. Shorter lines ignore it and publish whole.
+ */
+struct GlyphWindow {
+    float min_x = -std::numeric_limits<float>::infinity();
+    float max_x = std::numeric_limits<float>::infinity();
+    bool bounded() const { return std::isfinite(min_x) && std::isfinite(max_x) && min_x <= max_x; }
+};
 
 enum class GlyphMode : uint8_t {
     Alpha = 1,
@@ -263,7 +276,8 @@ class TextEngine {
     bool prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                  float origin_y, float pixel_scale, GlyphMode mode,
                                  PreparedGlyphs &output,
-                                 GlyphPreparation preparation = GlyphPreparation::Rasterize);
+                                 GlyphPreparation preparation = GlyphPreparation::Rasterize,
+                                 GlyphWindow window = {});
     /**
      * Returns an immutable glyph snapshot for one layout or one of its lines.
      *
@@ -283,7 +297,8 @@ class TextEngine {
     published_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x, float origin_y,
                               float pixel_scale, GlyphMode mode, GlyphTint tint = {},
                               const std::vector<GlyphColorRange> &ranges = {},
-                              GlyphPreparation preparation = GlyphPreparation::Rasterize);
+                              GlyphPreparation preparation = GlyphPreparation::Rasterize,
+                              GlyphWindow window = {});
     bool prepared_glyphs_current(const PreparedGlyphs &glyphs) const;
     /** Optional physical x positions for every codepoint boundary of a single row. */
     bool set_grid_positions(const std::vector<float> &positions, bool *changed = nullptr);
@@ -323,11 +338,13 @@ class TextEngine {
                                                          float pixel_scale, GlyphMode mode,
                                                          GlyphTint tint,
                                                          const std::vector<GlyphColorRange> &ranges, int32_t end_line = -1,
-                                                         GlyphPreparation preparation = GlyphPreparation::Rasterize);
+                                                         GlyphPreparation preparation = GlyphPreparation::Rasterize,
+                                                         GlyphWindow window = {});
     bool prepare_glyphs_internal(TextLayoutId id, float origin_x, float origin_y, float pixel_scale,
                                  GlyphMode mode, PreparedGlyphs &output, int32_t line_start,
                                  int32_t line_end, float line_x, float line_y, int32_t line_index = -1, int32_t end_line = -1,
-                                 GlyphPreparation preparation = GlyphPreparation::Rasterize);
+                                 GlyphPreparation preparation = GlyphPreparation::Rasterize,
+                                 GlyphWindow window = {});
 
     State *state_ = nullptr;
 };
