@@ -109,7 +109,7 @@ class PropertyTests {
 		var descriptor = new PropertyDescriptor("items", "Items", PropertyType.Custom(ListPropertyEditor.TYPE),
 			_ -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {});
 		var context = new BuildContext(new StateStore());
-		function action(label:String, enabled:Bool = true):Void {
+		function action(label:String, enabled:Bool = true, ?expectedEnabled:Bool):Void {
 			context.beginFrame();
 			var view = list.build("items", descriptor, Custom(ListPropertyEditor.TYPE, current), context, enabled, next -> {
 				switch next { case Custom(_, value): current = value; default: throw "Wrong custom value"; }
@@ -120,13 +120,16 @@ class PropertyTests {
 			check(target != null, "Structured action has an accessible label: " + label);
 			var dispatcher = new EventDispatcher(new FocusManager()); dispatcher.setRoot(root);
 			var control:RenderNode = target;
+			if (expectedEnabled != null) check(control.enabled == expectedEnabled, "Draft action enabled state: " + label);
 			dispatcher.targetEvent(UiEventKind.Activate, control.id);
 		}
+		action("Apply Items", true, false);
+		action("Revert list draft", true, false);
 		action("Items Add item");
 		check(current == original, "List changes are staged before application");
 		check(list.hasDrafts(), "Staged edits report unsaved changes");
 		context = new BuildContext(new StateStore());
-		action("Apply Items");
+		action("Apply Items", true, true);
 		check(haxe.Json.stringify(current) == "[true,false,true,true]" && original.length == 3, "Add produces a detached candidate");
 		check(!list.hasDrafts(), "Successful Apply clears unsaved changes after rebuilding the inspector");
 		action("Items item 2 Remove");
