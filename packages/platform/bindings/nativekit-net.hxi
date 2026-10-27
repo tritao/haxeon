@@ -136,7 +136,7 @@ interface NativeKitNet @target("portable-abi64") @library("nativekit") @depends(
 	/**
 	 * Reads currently buffered bytes without blocking. Zero means no data or EOF.
 	 */
-	extern fn nk_http_stream_read(stream: nk_http_stream, buffer: ptr<void>, size: u64, out_read: ptr<u64>) -> nk_result;
+	extern fn nk_http_stream_read(stream: nk_http_stream, buffer: ptr<u8>, size: u64, out_read: ptr<u64> @out) -> nk_result;
 	/**
 	 * Session configuration copied by nk_http_client_create().
 	 */
