@@ -87,10 +87,11 @@ class WatchRun {
 				var change = classify(previous, baseline),
 					compilerOnly = change.compilerOnly;
 				Sys.println("haxeon: source changed; rebuilding" + (compilerOnly ? " Haxe code" : " project"));
+				// `baseline` stays the snapshot this build started from: a save that lands while it runs differs from it, so the
+				// next pass builds again. Snapshotting after the build would take such a save as built.
 				var updated = rebuild(change);
 				if (updated == null) {
 					Sys.stderr().writeString("haxeon: build failed; keeping the current app open\n");
-					baseline = snapshot(project);
 					continue;
 				}
 				project = updated;
@@ -98,7 +99,6 @@ class WatchRun {
 				if (liveHost != null && compilerOnly) {
 					if (profile != null)
 						profile.keepRevision(output);
-					baseline = snapshot(project);
 					continue;
 				}
 				logOffset = printLog(logPath, logOffset);
@@ -114,7 +114,6 @@ class WatchRun {
 				profile = startProfile(profiling);
 				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
 				logOffset = 0;
-				baseline = snapshot(project);
 			}
 		} catch (error:Dynamic) {
 			if (watcher != null)

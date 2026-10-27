@@ -56,6 +56,12 @@ import sys.thread.Thread;
 
 class BuildSystemMain {
 	static function main():Void {
+		// testWatchBuildsSavesMadeDuringABuild launches this program as its watched app.
+		var args = Sys.args();
+		if (args.length == 2 && args[0] == "--watch-test-app") {
+			Sys.sleep(Std.parseFloat(args[1]));
+			return;
+		}
 		testArtifactAndPlanDeterminism();
 		testExecutorOrderingAndFailure();
 		testExecutorBackendSelection();
@@ -74,6 +80,9 @@ class BuildSystemMain {
 		testWatchChangeClassification();
 		testWatchSnapshot();
 		testDirectoryWatcher();
+		#if (target.threaded && !eval)
+		testWatchBuildsSavesMadeDuringABuild();
+		#end
 		testArtifactCache();
 		testDelegatedNativeInvalidation();
 		testCMakeLibraryOutputs();
@@ -693,6 +702,46 @@ class BuildSystemMain {
 		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
 		removeTree(root);
 	}
+
+	#if (target.threaded && !eval)
+	/**
+	 * A save that lands while a build runs is built next, after a failed build and after a successful one. Three quick saves
+	 * once left the app on the first: its build failed and the watch loop took the snapshot after it as built.
+	 */
+	static function testWatchBuildsSavesMadeDuringABuild():Void {
+		var root = temporaryDirectory("watch-during-build");
+		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}', ["src/Main.hx"]);
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])), source = Path.join([root, "src", "Main.hx"]);
+		var saves = 1;
+		function save():Void File.saveContent(source, "class Main { static function main() {} }" + StringTools.lpad("", " ", saves++) + "\n");
+		Thread.create(function() {
+			Sys.sleep(1.0);
+			save();
+		});
+		var builds:Array<String> = [];
+		var program = Sys.programPath();
+		// The app sleeps long enough for every build; each successful build relaunches it.
+		var status = WatchRun.run(project, Sys.executablePath(), program, ["--watch-test-app", "6"], null, "Main", null, function(_) {
+			builds.push(File.getContent(source));
+			switch builds.length {
+				case 1:
+					// Saved during the first build, which fails.
+					save();
+					return null;
+				case 2:
+					// Saved during the second build, which succeeds.
+					save();
+					return project;
+				default:
+					return null;
+			}
+		});
+		expect(status == 0, "the watched app exits normally");
+		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
+		expect(builds[2] == File.getContent(source), "the last build saw the last save");
+		removeTree(root);
+	}
+	#end
 
 	static function testWatchChangeClassification():Void {
 		var before = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];
