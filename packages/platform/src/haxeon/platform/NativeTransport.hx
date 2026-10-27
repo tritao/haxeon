@@ -12,9 +12,9 @@ class NativeTransport {
 
 	public static function options(port:Int, ?host:String = "127.0.0.1"):TransportOptions {
 		if (port <= 0 || port > 65535)
-			throw "NativeKit transport port is outside the valid range";
+			throw BindingError.invalidArgument("NativeTransport.options", "NativeKit transport port is outside the valid range");
 		if (host == null || host.length == 0)
-			throw "NativeKit transport host must not be empty";
+			throw BindingError.invalidArgument("NativeTransport.options", "NativeKit transport host must not be empty");
 		var value = new TransportOptions();
 		value.set_struct_size(TransportOptions.size());
 		value.set_kind(TransportKind.Tcp);
@@ -33,7 +33,7 @@ class NativeTransport {
 		value.set_flags(TransportFlags.ReuseAddress);
 		var result = NativeKit.nk_transport_listen(value);
 		if (result.status != Result.Ok)
-			throw 'NativeKit transport listen failed: ${NativeKit.nk_last_error()}';
+			throw new NativeKitError(result.status, "NativeTransport.listen", NativeKit.nk_last_error());
 		return result.out_listener;
 	}
 
@@ -41,14 +41,14 @@ class NativeTransport {
 		var value = options(port, host);
 		var result = NativeKit.nk_transport_connect(value);
 		if (result.status != Result.Ok)
-			throw 'NativeKit transport connect failed: ${NativeKit.nk_last_error()}';
+			throw new NativeKitError(result.status, "NativeTransport.connect", NativeKit.nk_last_error());
 		return result.out_transport;
 	}
 
 	/** WebSocket JSON/message transport; NativeKit owns the handshake and control frames. */
 	public static function websocket(host:String, port:Int, path:String, timeout:Float, secure:Bool = false):OwnedTransportHandle {
 		if (!Math.isFinite(timeout) || timeout < 0.001 || timeout > 2147483.0)
-			throw "Invalid WebSocket timeout";
+			throw BindingError.invalidArgument("NativeTransport.websocket", "Invalid WebSocket timeout");
 		var value = options(port, host);
 		value.set_kind(TransportKind.Websocket);
 		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : 0));
@@ -56,7 +56,7 @@ class NativeTransport {
 		value.set_timeout_ms(Std.int(timeout * 1000));
 		var result = NativeKit.nk_transport_connect(value);
 		if (result.status != Result.Ok)
-			throw 'NativeKit WebSocket connect failed: ${NativeKit.nk_last_error()}';
+			throw new NativeKitError(result.status, "NativeTransport.websocket", NativeKit.nk_last_error());
 		return result.out_transport;
 	}
 
@@ -69,43 +69,43 @@ class NativeTransport {
 		if (result.status == Result.ErrorPayloadTooLarge) {
 			var needed = Int64.toInt(result.out_received);
 			if (needed < 0 || needed > 4 * 1024 * 1024)
-				throw "NativeKit message exceeds receive limit";
+				throw new NativeKitError(result.status, "NativeTransport.receiveMessage", "NativeKit message exceeds receive limit");
 			buffer = Bytes.alloc(needed);
 			result = NativeKit.nk_transport_receive(transport, buffer);
 		}
 		if (result.status != Result.Ok)
-			throw 'NativeKit message receive failed: ${result.status}';
+			throw new NativeKitError(result.status, "NativeTransport.receiveMessage", NativeKit.nk_last_error());
 		return Bytes.view(buffer, 0, Int64.toInt(result.out_received));
 	}
 
 	public static function send(transport:TransportHandle, bytes:Bytes):Void {
 		if (bytes == null)
-			throw "NativeKit transport cannot send null bytes";
+			throw BindingError.invalidArgument("NativeTransport.send", "NativeKit transport cannot send null bytes");
 		NativeKit.nk_transport_send_checked(transport, bytes);
 	}
 
 	public static function sendStatus(transport:TransportHandle, bytes:Bytes):Int {
 		if (bytes == null)
-			throw "NativeKit transport cannot send null bytes";
+			throw BindingError.invalidArgument("NativeTransport.sendStatus", "NativeKit transport cannot send null bytes");
 		return NativeKit.nk_transport_send(transport, bytes);
 	}
 
 	public static function sendQueue(transport:TransportHandle):TransportSendQueue {
 		var result = NativeKit.nk_transport_get_send_queue(transport);
 		if (result.status != Result.Ok)
-			throw 'NativeKit transport send queue query failed: ${NativeKit.nk_last_error()}';
+			throw new NativeKitError(result.status, "NativeTransport.sendQueue", NativeKit.nk_last_error());
 		return new TransportSendQueue(result.out_queued_bytes, result.out_capacity);
 	}
 
 	public static function receive(transport:TransportHandle, ?capacity:Int = 64 * 1024):Bytes {
 		if (capacity <= 0)
-			throw "NativeKit transport receive capacity must be positive";
+			throw BindingError.invalidArgument("NativeTransport.receive", "NativeKit transport receive capacity must be positive");
 		var buffer = Bytes.alloc(capacity);
 		var result = NativeKit.nk_transport_receive(transport, buffer);
 		if (result.status == RECEIVE_WOULD_BLOCK)
 			return Bytes.alloc(0);
 		if (result.status != Result.Ok)
-			throw 'NativeKit transport receive failed: ${NativeKit.nk_last_error()}';
+			throw new NativeKitError(result.status, "NativeTransport.receive", NativeKit.nk_last_error());
 		var count = Int64.toInt(result.out_received);
 		return count == 0 ? Bytes.alloc(0) : Bytes.view(buffer, 0, count);
 	}

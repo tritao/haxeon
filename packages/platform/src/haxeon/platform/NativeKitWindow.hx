@@ -85,11 +85,11 @@ class NativeKitWindow {
 
 	function ensureCanCreate():Void {
 		ensureLive();
-		if (disposing) throw "Cannot create children while a NativeKit window is being disposed";
+		if (disposing) throw BindingError.invalidState("NativeKitWindow.ensureCanCreate", "Cannot create children while a NativeKit window is being disposed");
 	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "NativeKit window has been disposed";
+			throw BindingError.disposed("NativeKitWindow.ensureLive", "NativeKit window has been disposed");
 	}
 }

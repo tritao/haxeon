@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKit;
@@ -145,7 +147,7 @@ class Bus {
 	public function setConcurrency(options:BusConcurrencyOptions):Void {
 		ensureLive();
 		if (options == null)
-			throw "Audio bus concurrency options must not be null";
+			throw BindingError.invalidArgument("Bus.setConcurrency", "Audio bus concurrency options must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_bus_set_concurrency(value, options.nativeValue()),
 			"audio.bus.setConcurrency");
 	}
@@ -215,7 +217,7 @@ class Bus {
     /** Attenuates this bus from post-fader key audio without mixing it in. */
     public function addDucking(key:Bus):BusEffect {
         ensureLive();
-        if (key==null) throw "Ducking requires a key bus";
+        if (key==null) throw BindingError.invalidArgument("Bus.addDucking", "Ducking requires a key bus");
         var made=NativeKitAudio.nk_audio_bus_effect_create_ducking(value,key.nativeHandle());
         AudioResult.check(made.status,"audio.bus.addDucking");
         var effect=new BusEffect(made.out_effect); retainEffect(effect); return effect;
@@ -224,7 +226,7 @@ class Bus {
 	/** Adds an independent post-fader route to a shared return bus. */
 	public function addSend(destination:Bus, volume:Float = 0.0):BusSend {
 		ensureLive();
-		if (destination == null) throw "Audio send destination must not be null";
+		if (destination == null) throw BindingError.invalidArgument("Bus.addSend", "Audio send destination must not be null");
 		var made = NativeKitAudio.nk_audio_bus_send_create(value, destination.nativeHandle(), volume);
 		AudioResult.check(made.status, "audio.bus.addSend");
 		// Applications may dispose borrowed sends while retaining their source bus.
@@ -277,6 +279,6 @@ class Bus {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio bus has been disposed";
+			throw BindingError.disposed("Bus.ensureLive", "Audio bus has been disposed");
 	}
 }

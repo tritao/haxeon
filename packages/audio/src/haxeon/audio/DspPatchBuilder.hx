@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
@@ -28,7 +30,7 @@ class DspPatchBuilder {
 	/** Appends a pitched source and returns this builder for fluent construction. */
 	public function addOscillator(?oscillator:DspOscillatorOptions):DspPatchBuilder {
 		if (oscillators.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
-			throw "DSP patch oscillator limit exceeded";
+			throw BindingError.invalidArgument("DspPatchBuilder.addOscillator", "DSP patch oscillator limit exceeded");
 		oscillators.push(oscillator == null ? new DspOscillatorOptions() : oscillator);
 		return this;
 	}
@@ -36,7 +38,7 @@ class DspPatchBuilder {
 	/** Adds another independent LFO; existing lfo is always the first source. */
 	public function addLfo(?options:DspLfoOptions):DspPatchBuilder {
 		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS - 1)
-			throw "DSP patch LFO limit exceeded";
+			throw BindingError.invalidArgument("DspPatchBuilder.addLfo", "DSP patch LFO limit exceeded");
 		additionalLfos.push(options == null ? new DspLfoOptions() : options);
 		return this;
 	}
@@ -44,9 +46,9 @@ class DspPatchBuilder {
 	/** Appends a route and returns this builder for fluent patch construction. */
 	public function addRoute(route:DspModulationRoute):DspPatchBuilder {
 		if (route == null)
-			throw "DSP modulation route must not be null";
+			throw BindingError.invalidArgument("DspPatchBuilder.addRoute", "DSP modulation route must not be null");
 		if (routes.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_MODULATION_ROUTES)
-			throw "DSP patch modulation route limit exceeded";
+			throw BindingError.invalidArgument("DspPatchBuilder.addRoute", "DSP patch modulation route limit exceeded");
 		routes.push(route);
 		return this;
 	}
@@ -71,15 +73,15 @@ class DspPatchBuilder {
 	/** Materializes the current builder state into an immutable native patch. */
 	public function build():DspPatch {
 		if (oscillators == null || noise == null || envelope == null || filter == null || lfo == null || filterEnvelope == null || unison == null || articulation == null)
-			throw "DSP patch components must not be null";
+			throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch components must not be null");
 		if (oscillators.length > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
-			throw "DSP patch oscillator limit exceeded";
+			throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch oscillator limit exceeded");
 		var options = new NativeDspPatchOptions();
 		options.set_struct_size(NativeDspPatchOptions.size());
 		options.set_oscillator_count(oscillators.length);
 		for (index in 0...oscillators.length) {
 			if (oscillators[index] == null)
-				throw "DSP patch oscillators must not be null";
+				throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch oscillators must not be null");
 			options.set_oscillators(index, oscillators[index].nativeValue());
 		}
 		options.set_noise(noise.nativeValue());
@@ -105,9 +107,9 @@ class DspPatchBuilder {
 		voice.set_accent_filter_semitones(articulation.accentFilterSemitones);
 		voice.set_accent_velocity_threshold(articulation.accentVelocityThreshold);
 		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS)
-			throw "DSP patch LFO limit exceeded";
+			throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch LFO limit exceeded");
 		for (index in 0...additionalLfos.length) {
-			if (additionalLfos[index] == null) throw "DSP LFO must not be null";
+			if (additionalLfos[index] == null) throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP LFO must not be null");
 			voice.set_additional_lfos(index, additionalLfos[index].nativeValue());
 		}
 		voice.set_additional_lfo_count(additionalLfos.length);

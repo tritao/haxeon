@@ -16,7 +16,7 @@ class NativeKitResourceEvents {
 			var o=NativeKitEventBytes.readU32(c.data,0),d=NativeKitEventBytes.decodeResourceList(c.data,o);
 			ShareReceived(NativeKitEventBytes.readOptionalString(c.data,NativeKitEventBytes.readU32(c.data,4),16),NativeKitEventBytes.readOptionalString(c.data,NativeKitEventBytes.readU32(c.data,8),16),d.items);
 		case EventKind.ResourceDrop:
-			if(c.data.length<32) throw "NativeKit resource drop payload is truncated";
+			if(c.data.length<32) throw BindingError.invalidData("NativeKitResourceEvents.decode", "NativeKit resource drop payload is truncated");
 			var h:ResourceDrop=c.data,d=NativeKitEventBytes.decodeResourceList(c.data,h.get_resources_offset());
 			ResourceDrop(c.source,h.get_x(),h.get_y(),NativeKitEventBytes.readOptionalString(c.data,h.get_text_offset(),32),d.items);
 		case EventKind.ResourceCommitComplete:

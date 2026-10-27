@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitEventValue;
@@ -67,14 +69,14 @@ class AudioCue {
 	private function new(clips:Array<Clip>, events:NativeKitEvents, bus:Null<Bus>,
 		options:Null<AudioCueOptions>) {
 		if (clips == null || clips.length == 0)
-			throw "Audio cue must contain at least one clip";
+			throw BindingError.invalidArgument("AudioCue.new", "Audio cue must contain at least one clip");
 		if (events == null)
-			throw "Audio cue event pump must not be null";
+			throw BindingError.invalidArgument("AudioCue.new", "Audio cue event pump must not be null");
 		for (clip in clips) {
 			if (clip == null)
-				throw "Audio cue clips must not contain null values";
+				throw BindingError.invalidArgument("AudioCue.new", "Audio cue clips must not contain null values");
 			if (clip.isDisposed())
-				throw "Audio cue clips must be live";
+				throw BindingError.invalidArgument("AudioCue.new", "Audio cue clips must be live");
 		}
 		if (options == null)
 			options = new AudioCueOptions();
@@ -104,7 +106,7 @@ class AudioCue {
 	public function variant(index:Int):Clip {
 		ensureLive();
 		if (index < 0 || index >= variants.length)
-			throw "Audio cue variant index is out of range";
+			throw BindingError.invalidArgument("AudioCue.variant", "Audio cue variant index is out of range");
 		return variants[index];
 	}
 
@@ -380,33 +382,33 @@ class AudioCue {
 
 	static function validateOptions(options:AudioCueOptions):Void {
 		if (options.voiceOptions == null)
-			throw "Audio cue voice options must not be null";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue voice options must not be null");
 		if (options.maxVoices < 0)
-			throw "Audio cue maximum voice count must be non-negative";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue maximum voice count must be non-negative");
 		if (options.priority < 0)
-			throw "Audio cue priority must be non-negative";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue priority must be non-negative");
 		if (!finite(options.volumeMin) || !finite(options.volumeMax) || options.volumeMin < 0.0 ||
 			options.volumeMax < options.volumeMin)
-			throw "Audio cue volume range must be finite, non-negative, and ordered";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue volume range must be finite, non-negative, and ordered");
 		if (!finite(options.pitchMin) || !finite(options.pitchMax) || options.pitchMin <= 0.0 ||
 			options.pitchMax < options.pitchMin)
-			throw "Audio cue pitch range must be finite, positive, and ordered";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue pitch range must be finite, positive, and ordered");
 		if (options.selection != AudioCueSelection.Random &&
 			options.selection != AudioCueSelection.RoundRobin)
-			throw "Audio cue selection strategy is invalid";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue selection strategy is invalid");
 		if (options.overflow != AudioCueOverflow.Drop &&
 			options.overflow != AudioCueOverflow.StealOldest)
-			throw "Audio cue overflow policy is invalid";
+			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue overflow policy is invalid");
 	}
 
 	function validatePlayback(effectiveVolume:Float, effectivePitch:Float,
 		effectivePriority:Int):Void {
 		if (!finite(volume) || volume < 0.0 || !finite(effectiveVolume) || effectiveVolume < 0.0)
-			throw "Audio cue volume must be finite and non-negative";
+			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue volume must be finite and non-negative");
 		if (!finite(pitch) || pitch <= 0.0 || !finite(effectivePitch) || effectivePitch <= 0.0)
-			throw "Audio cue pitch must be finite and positive";
+			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue pitch must be finite and positive");
 		if (effectivePriority < 0)
-			throw "Audio cue priority must be non-negative";
+			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue priority must be non-negative");
 	}
 
 	static function copyVoiceOptions(source:VoiceOptions):VoiceOptions {
@@ -424,6 +426,6 @@ class AudioCue {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio cue has been disposed";
+			throw BindingError.disposed("AudioCue.ensureLive", "Audio cue has been disposed");
 	}
 }

@@ -43,7 +43,7 @@ class NativeKitEvents {
 	public function listen(listener:NativeKitEventValue->Void):NativeKitEventSubscription {
 		ensureLive();
 		if (listener == null)
-			throw "NativeKit event listeners cannot be null";
+			throw BindingError.invalidArgument("NativeKitEvents.listen", "NativeKit event listeners cannot be null");
 		listeners.push(listener);
 		return new NativeKitEventSubscription(this, listener);
 	}
@@ -99,7 +99,7 @@ class NativeKitEvents {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "NativeKit event pump has been disposed with its runtime";
+			throw BindingError.disposed("NativeKitEvents.ensureLive", "NativeKit event pump has been disposed with its runtime");
 	}
 }
 

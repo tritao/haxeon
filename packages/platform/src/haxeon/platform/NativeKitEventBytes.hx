@@ -7,14 +7,14 @@ import haxeon.platform.NativeKitEventValue;
 /** Validates and decodes byte-oriented NativeKit event payloads. */
 class NativeKitEventBytes {
 	public static function requireSize(data:haxe.io.Bytes, size:Int):Void
-		if (data.length != size) throw "NativeKit event payload has an invalid size";
+		if (data.length != size) throw BindingError.invalidData("NativeKitEventBytes.requireSize", "NativeKit event payload has an invalid size");
 
 	public static function requireMinimumSize(data:haxe.io.Bytes, size:Int):Void
-		if (size < 0 || data.length < size) throw "NativeKit event payload is truncated";
+		if (size < 0 || data.length < size) throw BindingError.invalidData("NativeKitEventBytes.requireMinimumSize", "NativeKit event payload is truncated");
 
 	public static function readU32(data:haxe.io.Bytes, offset:Int):Int {
 		if (offset < 0 || offset > data.length - 4)
-			throw "NativeKit event payload has a truncated integer";
+			throw BindingError.invalidData("NativeKitEventBytes.readU32", "NativeKit event payload has a truncated integer");
 		return data.get(offset) | data.get(offset + 1) << 8 |
 			data.get(offset + 2) << 16 | data.get(offset + 3) << 24;
 	}
@@ -27,16 +27,16 @@ class NativeKitEventBytes {
 
 	public static function decodeResourceList(data:haxe.io.Bytes, listOffset:Int):{accepted:Bool, items:Array<NativeKitResource>} {
 		if (listOffset < 0 || listOffset > data.length - 16)
-			throw "NativeKit resource payload has an invalid list offset";
+			throw BindingError.invalidData("NativeKitEventBytes.decodeResourceList", "NativeKit resource payload has an invalid list offset");
 		var accepted = readU32(data, listOffset) != 0;
 		var count = readU32(data, listOffset + 4), items = readU32(data, listOffset + 8), strings = readU32(data, listOffset + 12);
 		if (items < listOffset + 16 || strings < items || strings > data.length || count > Std.int((strings - items) / 16))
-			throw "NativeKit resource payload has an invalid table";
+			throw BindingError.invalidData("NativeKitEventBytes.decodeResourceList", "NativeKit resource payload has an invalid table");
 		var values:Array<NativeKitResource> = [];
 		for (index in 0...count) {
 			var base = items + index * 16;
 			var uri = readOptionalString(data, readU32(data, base + 4), strings);
-			if (uri == null || uri.length == 0) throw "NativeKit resource payload has an invalid URI";
+			if (uri == null || uri.length == 0) throw BindingError.invalidData("NativeKitEventBytes.decodeResourceList", "NativeKit resource payload has an invalid URI");
 			values.push(new NativeKitResource(readU32(data, base), uri,
 				readOptionalString(data, readU32(data, base + 8), strings),
 				readOptionalString(data, readU32(data, base + 12), strings)));
@@ -51,11 +51,11 @@ class NativeKitEventBytes {
 
 	public static function readUtf8Slice(data:haxe.io.Bytes, offset:Int, length:Int, minimum:Int):Null<String> {
 		if (length == 0) {
-			if (offset != 0) throw "NativeKit event payload has an invalid empty string offset";
+			if (offset != 0) throw BindingError.invalidData("NativeKitEventBytes.readUtf8Slice", "NativeKit event payload has an invalid empty string offset");
 			return null;
 		}
 		if (offset < minimum || length < 0 || offset > data.length - length)
-			throw "NativeKit event payload has an invalid string range";
+			throw BindingError.invalidData("NativeKitEventBytes.readUtf8Slice", "NativeKit event payload has an invalid string range");
 		var cursor = offset, end = offset + length;
 		while (cursor < end) {
 			var first = data.get(cursor++);
@@ -81,19 +81,19 @@ class NativeKitEventBytes {
 		if (offset >= end || data.get(offset) < 0x80 || data.get(offset) > 0xbf) invalidUtf8();
 
 	static function invalidUtf8():Void
-		throw "NativeKit event payload contains invalid UTF-8";
+		throw BindingError.invalidData("NativeKitEventBytes.invalidUtf8", "NativeKit event payload contains invalid UTF-8");
 
 	static function decodePackedStrings(data:haxe.io.Bytes, expectedCount:Int, headerSize:Int):Array<String> {
 		requireMinimumSize(data, headerSize);
 		var count = readU32(data, headerSize == 8 ? 0 : 8);
 		var strings = readU32(data, headerSize == 8 ? 4 : 12);
 		if (count != expectedCount || strings < headerSize || strings > data.length)
-			throw "NativeKit packed event payload has an invalid header";
+			throw BindingError.invalidData("NativeKitEventBytes.decodePackedStrings", "NativeKit packed event payload has an invalid header");
 		var values:Array<String> = [], cursor = strings;
 		for (_ in 0...count) {
 			var end = cursor;
 			while (end < data.length && data.get(end) != 0) end++;
-			if (end >= data.length) throw "NativeKit event payload has an unterminated string";
+			if (end >= data.length) throw BindingError.invalidData("NativeKitEventBytes.decodePackedStrings", "NativeKit event payload has an unterminated string");
 			values.push(data.getString(cursor, end - cursor));
 			cursor = end + 1;
 		}
@@ -102,10 +102,10 @@ class NativeKitEventBytes {
 
 	static function requireString(data:haxe.io.Bytes, offset:Int, minimum:Int):String {
 		if (offset < minimum || offset >= data.length)
-			throw "NativeKit event payload has an invalid string offset";
+			throw BindingError.invalidData("NativeKitEventBytes.requireString", "NativeKit event payload has an invalid string offset");
 		var end = offset;
 		while (end < data.length && data.get(end) != 0) end++;
-		if (end >= data.length) throw "NativeKit event payload has an unterminated string";
+		if (end >= data.length) throw BindingError.invalidData("NativeKitEventBytes.requireString", "NativeKit event payload has an unterminated string");
 		return data.getString(offset, end - offset);
 	}
 }

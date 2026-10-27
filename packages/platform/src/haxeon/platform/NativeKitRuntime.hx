@@ -62,6 +62,6 @@ class NativeKitRuntime {
 
 	function ensureLive():Void {
 		if (disposed || disposing)
-			throw "NativeKit runtime has been disposed";
+			throw BindingError.disposed("NativeKitRuntime.ensureLive", "NativeKit runtime has been disposed");
 	}
 }

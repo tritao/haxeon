@@ -50,6 +50,11 @@ class Triangle {
 			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
 		}
 		if (!caught) throw "GPU errors must expose their domain, status, and operation";
+		var argument = false;
+		try Surface.create(null, 0, 0) catch (error:haxeon.platform.BindingError) {
+			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument && error.operation == "Surface.create";
+		}
+		if (!argument) throw "GPU argument errors must use BindingError";
 	}
 
 	static function createVertexBuffer(renderer:Renderer):Buffer {

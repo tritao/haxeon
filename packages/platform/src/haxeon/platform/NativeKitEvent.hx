@@ -90,5 +90,5 @@ class NativeKitEvent {
 	public function isReleased():Bool return released;
 
 	function ensureOpen():Void
-		if (released) throw "NativeKit event has already been released";
+		if (released) throw BindingError.disposed("NativeKitEvent.ensureOpen", "NativeKit event has already been released");
 }

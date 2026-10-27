@@ -67,7 +67,7 @@ class Smoke {
 		});
 		promise.complete(42);
 		var cancelPromise = new NativePromise<Int>();
-		cancelPromise.future.cancel();
+		cancelPromise.future.stopObserving();
 		var futureOk = futureValue == 42 && promise.future.isComplete() && cancelPromise.future.isComplete();
 		var lifetimeSubscription = events.listen(function(_) {});
 		var eventOk = !events.poll();
@@ -78,55 +78,38 @@ class Smoke {
 		var payloadOk = true;
 		if (NativeKit.nk_clipboard_set_text("nativekit ffi") == Result.Ok) {
 			var completed = false, requestSeenByListener = false;
-			var requestSubscription:Null<NativeKitEventSubscription> = null;
 			var requests = events.requests;
-			var request = requests.readClipboardTextCallback(function(outcome) {
-				payloadOk = switch outcome {
-					case Success(text): text == "nativekit ffi";
-					case _: false;
-				};
+			var future = requests.readClipboardText();
+			future.onComplete(function(outcome) {
+				payloadOk = switch outcome { case Success(text): text == "nativekit ffi"; case _: false; };
 				completed = true;
 			});
-			requestSubscription = events.listen(function(value) switch value {
-				case ClipboardText(id, _, _) if (Std.string(id) == Std.string(request)):
-					requestSeenByListener = completed;
+			var subscription = events.listen(function(value) switch value {
+				case ClipboardText(_, _, _): requestSeenByListener = completed;
 				case _:
 			});
-			var duplicateRejected = false;
-			try requests.track(request, function(_) {}) catch (_:Dynamic) duplicateRejected = true;
-			payloadOk = payloadOk && duplicateRejected && requests.pending() == 1;
-			for (_ in 0...1000) {
-				events.poll();
-				if (completed)
-					break;
-			}
-			payloadOk = payloadOk && completed && requestSeenByListener && requests.pending() == 0
-				&& !requests.cancelDialog(request) && !requests.forget(request);
-			payloadOk = payloadOk && requests.pending() == 0;
-			if (requestSubscription != null)
-				requestSubscription.dispose();
-			var cancelledFuture = requests.readClipboardText();
-			var futureCancelled = false;
-			cancelledFuture.onComplete(function(outcome) switch outcome { case Cancelled: futureCancelled = true; case _: });
-			cancelledFuture.cancel();
-			payloadOk = payloadOk && futureCancelled && cancelledFuture.isComplete() && requests.pending() == 0;
+			payloadOk = payloadOk && !future.canCancel() && !future.cancel() && !future.isComplete() && requests.pending() == 1;
+			for (_ in 0...1000) { events.poll(); if (completed) break; }
+			subscription.dispose();
+			payloadOk = payloadOk && completed && requestSeenByListener && requests.pending() == 0 && !future.stopObserving();
 
-			var forgottenCallbackCalled = false;
-			var forgottenEventSeen = false;
-			var forgottenRequest = requests.readClipboardTextCallback(function(_) forgottenCallbackCalled = true);
-			var forgottenSubscription = events.listen(function(value) switch value {
-				case ClipboardText(id, _, _) if (Std.string(id) == Std.string(forgottenRequest)):
-					forgottenEventSeen = true;
+			var stopped = requests.readClipboardText();
+			var stoppedCount = 0, successAfterStop = false, lateEventSeen = false;
+			stopped.onComplete(function(outcome) switch outcome {
+				case Stopped: stoppedCount++;
+				case Success(_): successAfterStop = true;
 				case _:
 			});
-			payloadOk = payloadOk && !requests.cancelDialog(forgottenRequest)
-				&& requests.forget(forgottenRequest);
-			for (_ in 0...1000) {
-				events.poll();
-				if (forgottenEventSeen) break;
-			}
-			forgottenSubscription.dispose();
-			payloadOk = payloadOk && forgottenEventSeen && !forgottenCallbackCalled && requests.pending() == 0;
+			var lateSubscription = events.listen(function(value) switch value {
+				case ClipboardText(_, _, _): lateEventSeen = true;
+				case _:
+			});
+			payloadOk = payloadOk && stopped.stopObserving() && !stopped.stopObserving() && !stopped.cancel()
+				&& stopped.isComplete() && stoppedCount == 1 && requests.pending() == 0;
+			for (_ in 0...1000) { events.poll(); if (lateEventSeen) break; }
+			lateSubscription.dispose();
+			payloadOk = payloadOk && lateEventSeen && !successAfterStop && stoppedCount == 1;
+
 		}
 		var fileArrayResult = NativeKit.nk_clipboard_set_files(["/tmp/nativekit-a", "/tmp/nativekit-b"]);
 		if (fileArrayResult != 0 && fileArrayResult != Result.ErrorUnsupported)
@@ -189,18 +172,20 @@ class Smoke {
 			windowOk = window.nativeHandle().isValid();
 			var requests = events.requests;
 			{
-				var options = new FileDialogOptions();
-				options.set_title("Cancellation smoke");
+				var options = new haxeon.platform.FileDialogConfig();
+				options.title = "Cancellation smoke";
 				var completed = false, cancelled = false;
-				var id = requests.openResourceCallback(window, options, function(outcome) {
+				var future = requests.openResource(window, options);
+				future.onComplete(function(outcome) {
 					cancelled = switch outcome { case Cancelled: true; case _: false; };
 					completed = true;
 				});
-				dialogCancellationOk = requests.cancelDialog(id) && !requests.cancelDialog(id);
+				dialogCancellationOk = future.canCancel() && future.cancel() && !future.cancel()
+					&& future.isCancellationRequested() && !future.isComplete();
 				for (_ in 0...1000) { events.poll(); if (completed) break; }
-				dialogCancellationOk = dialogCancellationOk && completed && cancelled
-					&& requests.pending() == 0 && !requests.cancelDialog(id) && !requests.forget(id);
+				dialogCancellationOk = dialogCancellationOk && completed && cancelled && requests.pending() == 0 && !future.cancel();
 			}
+
 			{
 				var options = new haxeon.platform.MessageDialogConfig("Cancel through the future");
 				options.title = "Cancellation smoke";

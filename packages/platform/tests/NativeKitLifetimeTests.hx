@@ -20,6 +20,7 @@ class NativeKitLifetimeTests {
 	static var secondShutdownCompleted:Bool = false;
 
 	public static function run(events:NativeKitEvents):Bool {
+		if (!BindingErrorTests.run()) return false;
 		var requests = events.requests;
 		var source = new Handle(900001);
 		var task = NativeTask.adopt(new TaskHandle(source.rawValue()));
@@ -38,7 +39,8 @@ class NativeKitLifetimeTests {
 		var decodingFailed = false;
 		var bad = requests.trackTask(task, function(bytes):Int { throw "bad payload"; });
 		bad.onComplete(function(outcome) switch outcome {
-			case Failure(result, message): decodingFailed = result == Result.ErrorUnknown && message == "bad payload";
+			case Failure(error): decodingFailed = error.domain == "haxeon-bindings"
+				&& error.code == haxeon.platform.BindingErrorKind.InvalidData && error.diagnostic == "bad payload";
 			case _:
 		});
 		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(0)));
@@ -54,9 +56,66 @@ class NativeKitLifetimeTests {
 		var cancellationFailed = false;
 		var retry = requests.trackTask(task, function(bytes) return bytes.length);
 		try retry.cancel() catch (_:Dynamic) cancellationFailed = true;
-		if (!cancellationFailed || retry.isComplete()) return false;
+		if (!cancellationFailed || retry.isComplete() || retry.isCancellationRequested() || !retry.canCancel()) return false;
 		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(1)));
 		if (!retry.isComplete()) return false;
+
+		// Stop observation is independent of native cancellation, including for tasks.
+		var taskStopped = false;
+		var stoppedTask = requests.trackTask(task, function(bytes) return bytes.length);
+		stoppedTask.onComplete(function(outcome) switch outcome { case Stopped: taskStopped = true; case _: });
+		if (!stoppedTask.stopObserving() || !taskStopped || stoppedTask.isCancellationRequested() || requests.pending() != 0) return false;
+		if (requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(1)))) return false;
+
+		// Request IDs and task handles occupy different namespaces in the same registry.
+		var id = haxe.Int64.ofInt(source.rawValue());
+		var rawValue = 0;
+		var raw = requests.trackNative(id, function(event):NativeKitRequestOutcome<Int> switch event {
+			case ClipboardText(_, result, text): Success(text.length);
+			case _: Failure(haxeon.platform.BindingError.invalidData("test.decode", "wrong event"));
+		});
+		raw.onComplete(function(outcome) switch outcome { case Success(n): rawValue = n; case _: });
+		var duplicateRejected = false;
+		try requests.trackNative(id, function(_):NativeKitRequestOutcome<Int> return Success(0)) catch (error:haxeon.platform.BindingError) {
+			duplicateRejected = error.kind == haxeon.platform.BindingErrorKind.InvalidState;
+		}
+		var sameNumberTask = requests.trackTask(task, function(bytes) return bytes.length);
+		if (!duplicateRejected || requests.pending() != 2) return false;
+		requests.handle(ClipboardText(id, Result.Ok, "abc"));
+		if (rawValue != 3 || requests.pending() != 1 || sameNumberTask.isComplete()) return false;
+		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(2)));
+		if (!sameNumberTask.isComplete() || requests.pending() != 0) return false;
+
+		// Native cancellation is idempotent, awaits acknowledgement, and tolerates a completion race.
+		var calls = 0;
+		var racing = requests.trackNative(id, function(_):NativeKitRequestOutcome<Int> return Success(9), function() { calls++; });
+		if (!racing.cancel() || racing.cancel() || calls != 1 || racing.isComplete() || !racing.isCancellationRequested()) return false;
+		requests.handle(ClipboardText(id, Result.Ok, "done"));
+		if (!racing.isComplete() || racing.cancel() || requests.pending() != 0) return false;
+
+		// Structured decoder errors retain their original identity and metadata.
+		var expectedError = haxeon.platform.BindingError.invalidData("test.decode", "bad format");
+		var errorPreserved = false;
+		var malformed = requests.trackNative(id, function(_):NativeKitRequestOutcome<Int> { throw expectedError; });
+		malformed.onComplete(function(outcome) switch outcome {
+			case Failure(error): errorPreserved = error == expectedError;
+			case _:
+		});
+		requests.handle(ClipboardText(id, Result.Ok, "bad"));
+		if (!errorPreserved || !malformed.isComplete() || requests.pending() != 0) return false;
+
+		// Reusing a native ID while decoding must not let the old future detach its replacement.
+		var previous:haxeon.platform.NativeFuture<Int> = null;
+		var replacement:haxeon.platform.NativeFuture<Int> = null;
+		previous = requests.trackNative(id, function(_):NativeKitRequestOutcome<Int> {
+			replacement = requests.trackNative(id, function(_):NativeKitRequestOutcome<Int> return Success(2));
+			previous.stopObserving();
+			return Success(1);
+		});
+		requests.handle(ClipboardText(id, Result.Ok, "first"));
+		if (!previous.isComplete() || replacement.isComplete() || requests.pending() != 1) return false;
+		requests.handle(ClipboardText(id, Result.Ok, "second"));
+		if (!replacement.isComplete() || requests.pending() != 0) return false;
 
 		// One throwing observer must not starve other completion observers.
 		var promise = new NativePromise<Int>();
@@ -114,7 +173,7 @@ class NativeKitLifetimeTests {
 
 	public static function afterShutdown(requests:NativeKitRequests):Bool {
 		var rejected = false;
-		try requests.track(haxe.Int64.ofInt(99), function(_) {}) catch (_:Dynamic) rejected = true;
+		try requests.trackNative(haxe.Int64.ofInt(99), function(_):NativeKitRequestOutcome<Int> return Success(1)) catch (error:haxeon.platform.BindingError) rejected = error.kind == haxeon.platform.BindingErrorKind.Disposed;
 		return shutdownCompleted && secondShutdownCompleted && requests.pending() == 0 && rejected;
 	}
 }

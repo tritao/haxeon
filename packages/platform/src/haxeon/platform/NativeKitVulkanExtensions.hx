@@ -14,7 +14,7 @@ class NativeKitVulkanExtensions {
 		var extensions:Array<String> = [];
 		for (extension in result.extensions) {
 			if (extension == null)
-				throw "NativeKit returned a null Vulkan extension name";
+				throw BindingError.invalidData("NativeKitVulkanExtensions.requiredInstanceExtensions", "NativeKit returned a null Vulkan extension name");
 			extensions.push(extension);
 		}
 		return extensions;

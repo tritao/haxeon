@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import haxe.Int64;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
@@ -41,14 +43,14 @@ class DspTransport {
         this.engine = engine; this.id = id;
     }
     public function play(section:Int, startFrame:Int64):Void {
-        if (disposed) throw "DSP transport has been disposed";
+        if (disposed) throw BindingError.disposed("DspTransport.play", "DSP transport has been disposed");
         AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_play_transport(engine.nativeHandle(),
             id, section, startFrame), "audio.dsp.transport.play");
     }
     static function groupTracks(programs:Array<DspTransport>):Array<NativeDspTransportTrack> {
         var tracks:Array<NativeDspTransportTrack> = [];
         for (program in programs) {
-            if (program.disposed) throw "DSP transport has been disposed";
+            if (program.disposed) throw BindingError.disposed("DspTransport.groupTracks", "DSP transport has been disposed");
             var track = new NativeDspTransportTrack();
             track.set_engine(program.engine.nativeHandle()); track.set_program_id(program.id);
             tracks.push(track);

@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import sys.thread.Condition;
 import sys.thread.Lock;
 import sys.thread.Thread;
@@ -33,7 +35,7 @@ class AudioPreparation<T> {
     var disposed:Bool = false;
 
     public function new(capacity:Int = 8) {
-        if (capacity < 1 || capacity > 64) throw "Audio preparation capacity must be 1..64";
+        if (capacity < 1 || capacity > 64) throw BindingError.invalidArgument("AudioPreparation.new", "Audio preparation capacity must be 1..64");
         this.capacity = capacity;
         #if !wasm
         Thread.create(run);
@@ -75,7 +77,7 @@ class AudioPreparation<T> {
     #end
     /** Deliver completed work outside the worker mutex. */
     public function update():Void {
-        if (disposed) throw "Audio preparation worker disposed";
+        if (disposed) throw BindingError.disposed("AudioPreparation.update", "Audio preparation worker disposed");
         condition.acquire();
         var ready = results.copy(); results.resize(0); outstanding -= ready.length;
         condition.release();

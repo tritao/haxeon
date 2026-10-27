@@ -7,6 +7,7 @@ class NativeResourceRegistry {
 	public function new() {}
 
 	public function register(release:Void->Void):NativeResourceRegistration {
+		if (release == null) throw BindingError.invalidArgument("NativeResourceRegistry.register", "Release callback cannot be null");
 		var entry = new NativeResourceRegistration(this, release);
 		entries.push(entry);
 		return entry;

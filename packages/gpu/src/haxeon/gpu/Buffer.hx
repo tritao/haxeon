@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
@@ -28,7 +30,7 @@ class Buffer {
 	/** Creates a buffer from the current generic buffer descriptor. */
 	public static function create(renderer:Renderer, desc:BufferDesc):Buffer {
 		if (desc == null || desc.size <= 0)
-			throw "GPU buffer descriptor size must be positive";
+			throw BindingError.invalidArgument("Buffer.create", "GPU buffer descriptor size must be positive");
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_buffer_create_desc(renderer.nativeHandle(), desc.nativeValue());
 		GpuResult.check(made.status, "buffer.create");
@@ -37,7 +39,7 @@ class Buffer {
 
 	public static function fromBytes(renderer:Renderer, data:Bytes):Buffer {
 		if (data == null || data.length == 0)
-			throw "GPU buffer data must not be empty";
+			throw BindingError.invalidArgument("Buffer.fromBytes", "GPU buffer data must not be empty");
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_buffer_create(renderer.nativeHandle(), data, data.length);
 		GpuResult.check(made.status, "buffer.create");
@@ -46,7 +48,7 @@ class Buffer {
 
 	public static function vertexFloats(renderer:Renderer, values:Array<Float>):Buffer {
 		if (values == null || values.length == 0 || values.length > 536870911)
-			throw "GPU vertex buffer requires a non-empty, bounded float array";
+			throw BindingError.invalidArgument("Buffer.vertexFloats", "GPU vertex buffer requires a non-empty, bounded float array");
 		renderer.ensureResourceOperation();
 		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 4, BufferUsage.Vertex);
 		GpuResult.check(madeBuilder.status, "buffer.beginVertex");
@@ -59,7 +61,7 @@ class Buffer {
 
 	public static function indices16(renderer:Renderer, values:Array<Int>):Buffer {
 		if (values == null || values.length == 0 || values.length > 1073741823)
-			throw "GPU index buffer requires a non-empty, bounded index array";
+			throw BindingError.invalidArgument("Buffer.indices16", "GPU index buffer requires a non-empty, bounded index array");
 		renderer.ensureResourceOperation();
 		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 2, BufferUsage.Index);
 		GpuResult.check(madeBuilder.status, "buffer.beginIndex");
@@ -79,7 +81,7 @@ class Buffer {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0 || offset < 0)
-			throw "GPU vertex-buffer slot and offset must be non-negative";
+			throw BindingError.invalidArgument("Buffer.applyVertex", "GPU vertex-buffer slot and offset must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_vertex_buffer(renderer.nativeHandle(), slot, value, offset), "buffer.applyVertex");
 	}
 
@@ -87,7 +89,7 @@ class Buffer {
 		ensureLive();
 		renderer.ensureFrame();
 		if (offset < 0)
-			throw "GPU index-buffer offset must be non-negative";
+			throw BindingError.invalidArgument("Buffer.applyIndex", "GPU index-buffer offset must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_index_buffer(renderer.nativeHandle(), value, offset), "buffer.applyIndex");
 	}
 
@@ -96,7 +98,7 @@ class Buffer {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0)
-			throw "GPU storage-buffer slot must be non-negative";
+			throw BindingError.invalidArgument("Buffer.applyStorage", "GPU storage-buffer slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_storage_buffer(renderer.nativeHandle(), slot, value),
 			"buffer.applyStorage");
 	}
@@ -105,7 +107,7 @@ class Buffer {
 	public function update(offset:Int, data:Bytes):Void {
 		ensureLive();
 		if (offset < 0 || data == null || data.length == 0)
-			throw "GPU buffer update arguments are invalid";
+			throw BindingError.invalidArgument("Buffer.update", "GPU buffer update arguments are invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_buffer_update(renderer.nativeHandle(), value, offset, data,
 			data.length), "buffer.update");
 	}
@@ -135,7 +137,7 @@ class Buffer {
 	@:allow(Renderer)
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU buffer has been disposed";
+			throw BindingError.disposed("Buffer.ensureLive", "GPU buffer has been disposed");
 		renderer.ensureLive();
 	}
 }

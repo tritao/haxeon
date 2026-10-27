@@ -13,7 +13,7 @@ class NativeTask {
 
 	/** Adopts a handle returned by native code or a Haxeon native trampoline. */
 	public static function adopt(value:TaskHandle):NativeTask {
-		if (value == null || value.rawValue() == 0) throw "NativeTask cannot adopt an invalid handle";
+		if (value == null || value.rawValue() == 0) throw BindingError.invalidArgument("NativeTask.adopt", "NativeTask cannot adopt an invalid handle");
 		return new NativeTask(value);
 	}
 
@@ -40,7 +40,7 @@ class NativeTask {
 
 	public function isDisposed():Bool return disposed;
 
-	function ensureLive():Void if (disposed) throw "NativeTask has been disposed";
+	function ensureLive():Void if (disposed) throw BindingError.disposed("NativeTask.ensureLive", "NativeTask has been disposed");
 
 	static function check(status:Result, operation:String):Void
 		if (status != Result.Ok)

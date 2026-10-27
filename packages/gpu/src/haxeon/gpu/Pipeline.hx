@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Shader;
@@ -29,9 +31,9 @@ class Pipeline {
 	public static function begin(renderer:Renderer, shader:Shader, stride:Int):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
-			throw "GPU pipeline shader belongs to a different renderer";
+			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline shader belongs to a different renderer");
 		if (stride <= 0)
-			throw "GPU pipeline vertex stride must be positive";
+			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline vertex stride must be positive");
 		var made = NativeKitGpu.nkgpu_pipeline_begin(renderer.nativeHandle(), shader.nativeHandle(), stride);
 		GpuResult.check(made.status, "pipeline.begin");
 		return new PipelineBuilder(renderer, made.out_builder);
@@ -41,7 +43,7 @@ class Pipeline {
 	public static function beginCompute(renderer:Renderer, shader:Shader):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
-			throw "GPU compute pipeline shader belongs to a different renderer";
+			throw BindingError.invalidArgument("Pipeline.beginCompute", "GPU compute pipeline shader belongs to a different renderer");
 		var made = NativeKitGpu.nkgpu_pipeline_begin_compute(renderer.nativeHandle(), shader.nativeHandle());
 		GpuResult.check(made.status, "pipeline.beginCompute");
 		return new PipelineBuilder(renderer, made.out_builder);
@@ -82,7 +84,7 @@ class Pipeline {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU pipeline has been disposed";
+			throw BindingError.disposed("Pipeline.ensureLive", "GPU pipeline has been disposed");
 		renderer.ensureLive();
 	}
 }
@@ -104,7 +106,7 @@ class PipelineBuilder {
 	public function attribute(location:Int, bufferIndex:Int, offset:Int, format:VertexFormat):PipelineBuilder {
 		ensureLive();
 		if (location < 0 || bufferIndex < 0 || offset < 0)
-			throw "GPU vertex attribute indices and offset must be non-negative";
+			throw BindingError.invalidArgument("PipelineBuilder.attribute", "GPU vertex attribute indices and offset must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_attribute(value, location, bufferIndex, offset, format), "pipeline.attribute");
 		return this;
 	}
@@ -145,7 +147,7 @@ class PipelineBuilder {
 
 	function ensureLive():Void {
 		if (consumed)
-			throw "GPU pipeline builder has been consumed";
+			throw BindingError.invalidState("PipelineBuilder.ensureLive", "GPU pipeline builder has been consumed");
 		renderer.ensureResourceOperation();
 	}
 }

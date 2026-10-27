@@ -18,7 +18,7 @@ class NativeKitInputEvents {
 			var affinity = v.get_selection_affinity();
 			var history = v.get_history_kind();
 			if (affinity > 4 || history > 6)
-				throw "NativeKit text edit payload has invalid metadata";
+				throw BindingError.invalidData("NativeKitInputEvents.decode", "NativeKit text edit payload has invalid metadata");
 			TextEdit(c.source,new NativeKitTextEdit(v.get_action(),text,v.get_replace_start(),v.get_replace_end(),v.get_selection_start(),v.get_selection_end(),v.get_composition_start(),v.get_composition_end(),affinity,history));
 		case EventKind.AccessibilityAction:
 			NativeKitEventBytes.requireMinimumSize(c.data,32);
@@ -30,11 +30,11 @@ class NativeKitInputEvents {
 			var selectionEnd = NativeKitEventBytes.readU32(c.data, 20);
 			var granularity = NativeKitEventBytes.readU32(c.data, 24);
 			if (nodeId <= 0 || action < 1 || action > 11 || NativeKitEventBytes.readU32(c.data, 28) != 0)
-				throw "NativeKit accessibility action payload has invalid fields";
+				throw BindingError.invalidData("NativeKitInputEvents.decode", "NativeKit accessibility action payload has invalid fields");
 			var value = NativeKitEventBytes.readUtf8Slice(c.data, valueOffset, valueLength, 32);
 			if (valueLength > 0 && (valueOffset + valueLength >= c.data.length ||
 				c.data.get(valueOffset + valueLength) != 0))
-				throw "NativeKit accessibility action value is not NUL-terminated";
+				throw BindingError.invalidData("NativeKitInputEvents.decode", "NativeKit accessibility action value is not NUL-terminated");
 			AccessibilityAction(c.source, nodeId, action, value, selectionStart,
 				selectionEnd, granularity);
 		case EventKind.PointerMove: NativeKitEventBytes.requireSize(c.data,16); var v:PointerMoveEvent=c.data; PointerMove(c.source,v.get_x(),v.get_y());

@@ -68,7 +68,7 @@ class NativeKitWebView {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "NativeKit WebView has been disposed";
+			throw BindingError.disposed("NativeKitWebView.ensureLive", "NativeKit WebView has been disposed");
 	}
 
 	static function check(status:Result, operation:String):Void {

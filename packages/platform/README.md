@@ -46,21 +46,37 @@ runtime.events.requests.messageDialog(window, dialog).onComplete(function(outcom
     switch outcome {
         case Success(button): trace(button);
         case Cancelled: trace("Cancelled");
-        case Failure(result, message): trace(message);
+        case Stopped: trace("Observation stopped");
+        case Failure(error): trace(error.message);
     }
 });
 // Pump runtime.events until the application exits, then call runtime.dispose().
 ```
 
 Request methods return `NativeFuture<T>`, with one terminal `Success`,
-`Failure`, or `Cancelled` outcome. Dialog and task `cancel()` requests native
-cancellation and waits for a terminal event; a completion already in flight may
-win the race. Other requests stop observation and settle locally as `Cancelled`
-without stopping native work. A failed native cancellation throws and leaves the
-future eligible for completion or a later cancellation attempt. Keep pumping
-events after requesting native cancellation. Task decoder exceptions become
-`Failure` outcomes. All completion observers run even if one throws; the first
-observer exception is then propagated.
+`Failure(error)`, `Cancelled`, or `Stopped` outcome. All operations share one
+tracking registry; request IDs and task handles have separate key namespaces.
+
+`canCancel()` reports whether native cancellation can currently be requested.
+`cancel()` returns true when it requests native cancellation and leaves the
+future pending until a terminal event. It returns false for operations without
+native cancellation, completed futures, or repeated cancellation requests; it
+never detaches observation. `isCancellationRequested()` reports a successful
+request. A completion already in flight may win the race. A failed native
+cancellation throws and leaves the future eligible for completion or retry.
+Keep pumping events after requesting cancellation.
+
+`stopObserving()` explicitly detaches tracking and settles as `Stopped`, without
+cancelling native work. It returns false once the future has completed. This is
+also available for operations which cannot be cancelled natively. Late native
+events remain visible to event listeners but do not complete a stopped future
+again. The caller still owns any native task or stream associated with the work.
+
+Decoder exceptions become structured `Failure` outcomes. Existing `NativeError`
+instances are preserved; other decoder exceptions become `BindingError` with
+kind `InvalidData`. All completion observers run even if one throws; the first
+observer exception is propagated after the remaining observers run. Observer
+exceptions do not replace an operation's already settled outcome.
 
 Runtime shutdown settles outstanding managed operations as `Cancelled`, clears
 request handlers and subscriptions, and rejects new work. Failed child disposal
@@ -71,15 +87,21 @@ windows, surfaces, renderers, resources, or consumed builders. Adapter code usin
 
 Interop callers can use `startNative`, `createWindowNative`,
 `createSurfaceNative`, `createWebViewNative`, `setDecorationRegionsNative`, and `NativeKitWebView.createNative`
-with generated records. The explicit `*Callback` request methods retain raw
-request IDs; `commitResourceNative` accepts a raw resource stream and returns a
-future. `track(id, handler, onShutdown)` supports custom native operations; supply
-`onShutdown` when the operation owns a managed completion. `forget(id)` only
-removes observation and never cancels native work. It replaces the old misleading
-`requests.cancel(id)` alias. Call `cancelDialog(id)` to request cancellation of a
-tracked dialog while preserving its terminal completion.
+with generated records. `commitResourceNative` accepts a raw resource stream.
+`trackNative(id, decoder, cancelNative)` adapts a custom native request to the
+same future lifecycle; the decoder returns a typed `NativeKitRequestOutcome<T>`
+and the native cancellation callback is optional. `trackTask(task, decoder)`
+uses the same registry and retains caller ownership of the task. The old
+`*Callback`, ID-based `track`, `forget`, and `cancelDialog` APIs have been removed;
+use futures, `onComplete`, `stopObserving()`, and `cancel()` instead.
 
-Platform/audio failures throw `NativeKitError`, and GPU failures throw
+Platform/audio backend failures throw `NativeKitError`, and GPU backend failures throw
 `haxeon.gpu.GpuError`. Both extend `NativeError`, exposing `domain`, `code`,
 `operation`, and `diagnostic`; `NativeKitError` also preserves its typed `result`.
 Codes belong to their domain and must not be compared across platform and GPU.
+
+Managed argument, lifecycle, and event-data validation failures use `BindingError`
+(domain `haxeon-bindings`). Its typed `kind` is `InvalidArgument`, `InvalidState`,
+`Disposed`, or `InvalidData`; it also extends `NativeError`. Async `Failure(error)`
+uses the same error objects, preserving domain, code, operation, and diagnostic.
+Native result codes are retained for backend failures, including transport errors.

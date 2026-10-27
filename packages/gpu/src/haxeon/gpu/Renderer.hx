@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Batch;
 import haxeon.gpu.Buffer;
 import haxeon.gpu.CommandBuffer;
@@ -77,7 +79,7 @@ class Renderer {
 	public function beginFrame():Void {
 		ensureLive();
 		if (frameActive)
-			throw "GPU frame is already active";
+			throw BindingError.invalidState("Renderer.beginFrame", "GPU frame is already active");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_frame(value), "renderer.beginFrame");
 		frameActive = true;
 		passActive = true;
@@ -86,7 +88,7 @@ class Renderer {
 	public function endFrame():Void {
 		ensureLive();
 		if (!frameActive)
-			throw "GPU frame is not active";
+			throw BindingError.invalidState("Renderer.endFrame", "GPU frame is not active");
 		GpuResult.check(NativeKitGpu.nkgpu_end_frame(value), "renderer.endFrame");
 		frameActive = false;
 		passActive = false;
@@ -96,7 +98,7 @@ class Renderer {
 	public function beginPassFrame():Void {
 		ensureLive();
 		if (frameActive)
-			throw "GPU frame is already active";
+			throw BindingError.invalidState("Renderer.beginPassFrame", "GPU frame is already active");
 		GpuResult.check(NativeKitGpu.nkgpu_frame_begin(value), "renderer.beginPassFrame");
 		frameActive = true;
 		passActive = false;
@@ -106,9 +108,9 @@ class Renderer {
 	public function beginRenderPass(desc:RenderPassDesc):Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw "GPU render pass requires a frame without an active pass";
+			throw BindingError.invalidState("Renderer.beginRenderPass", "GPU render pass requires a frame without an active pass");
 		if (desc == null)
-			throw "GPU render-pass descriptor must not be null";
+			throw BindingError.invalidArgument("Renderer.beginRenderPass", "GPU render-pass descriptor must not be null");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_render_pass(value, desc.nativeValue()),
 			"renderer.beginRenderPass");
 		passActive = true;
@@ -118,7 +120,7 @@ class Renderer {
 	public function beginComputePass():Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw "GPU compute pass requires a frame without an active pass";
+			throw BindingError.invalidState("Renderer.beginComputePass", "GPU compute pass requires a frame without an active pass");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_compute_pass(value), "renderer.beginComputePass");
 		passActive = true;
 	}
@@ -127,7 +129,7 @@ class Renderer {
 	public function beginCopyPass():Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw "GPU copy pass requires a frame without an active pass";
+			throw BindingError.invalidState("Renderer.beginCopyPass", "GPU copy pass requires a frame without an active pass");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_copy_pass(value), "renderer.beginCopyPass");
 		passActive = true;
 	}
@@ -136,7 +138,7 @@ class Renderer {
 	public function endPass():Void {
 		ensureFrame();
 		if (!passActive)
-			throw "GPU pass is not active";
+			throw BindingError.invalidState("Renderer.endPass", "GPU pass is not active");
 		GpuResult.check(NativeKitGpu.nkgpu_end_pass(value), "renderer.endPass");
 		passActive = false;
 	}
@@ -145,7 +147,7 @@ class Renderer {
 	public function dispatch(x:Int, y:Int = 1, z:Int = 1):Void {
 		ensureFrame();
 		if (x <= 0 || y <= 0 || z <= 0)
-			throw "GPU dispatch dimensions must be positive";
+			throw BindingError.invalidArgument("Renderer.dispatch", "GPU dispatch dimensions must be positive");
 		GpuResult.check(NativeKitGpu.nkgpu_dispatch(value, x, y, z), "renderer.dispatch");
 	}
 
@@ -157,7 +159,7 @@ class Renderer {
 		destination.ensureLive();
 		if (source.rendererOwner() != this || destination.rendererOwner() != this || size <= 0 ||
 			sourceOffset < 0 || destinationOffset < 0)
-			throw "GPU buffer-copy arguments are invalid";
+			throw BindingError.invalidArgument("Renderer.copyBuffer", "GPU buffer-copy arguments are invalid");
 		var desc = new nkgpu_buffer_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_copy_desc.size());
 		desc.set_source(source.nativeHandle());
@@ -176,7 +178,7 @@ class Renderer {
 		destination.ensureLive();
 		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
 			height <= 0 || sourceX < 0 || sourceY < 0 || destinationX < 0 || destinationY < 0)
-			throw "GPU image-copy arguments are invalid";
+			throw BindingError.invalidArgument("Renderer.copyImage", "GPU image-copy arguments are invalid");
 		var desc = new nkgpu_image_copy_desc();
 		desc.set_struct_size(nkgpu_image_copy_desc.size());
 		desc.set_source(source.nativeHandle());
@@ -204,7 +206,7 @@ class Renderer {
 		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
 			height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU buffer-to-image arguments are invalid";
+			throw BindingError.invalidArgument("Renderer.bufferToImage", "GPU buffer-to-image arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
 		desc.set_buffer(source.nativeHandle());
@@ -230,7 +232,7 @@ class Renderer {
 		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
 			height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU image-to-buffer arguments are invalid";
+			throw BindingError.invalidArgument("Renderer.imageToBuffer", "GPU image-to-buffer arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
 		desc.set_buffer(destination.nativeHandle());
@@ -250,7 +252,7 @@ class Renderer {
 	public function viewport(x:Int, y:Int, width:Int, height:Int):Void {
 		ensureFrame();
 		if (width <= 0 || height <= 0)
-			throw "GPU viewport dimensions must be positive";
+			throw BindingError.invalidArgument("Renderer.viewport", "GPU viewport dimensions must be positive");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_viewport(value, x, y, width, height), "renderer.viewport");
 	}
 
@@ -259,7 +261,7 @@ class Renderer {
 		height:Int = 0):Void {
 		ensureFrame();
 		if (enabled && (width <= 0 || height <= 0))
-			throw "GPU scissor dimensions must be positive when enabled";
+			throw BindingError.invalidArgument("Renderer.scissor", "GPU scissor dimensions must be positive when enabled");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_scissor(value, enabled ? 1 : 0, x, y, width, height),
 			"renderer.scissor");
 	}
@@ -285,7 +287,7 @@ class Renderer {
 	public function uniforms(size:Int):Uniforms {
 		ensureFrame();
 		if (size <= 0)
-			throw "GPU uniform block size must be positive";
+			throw BindingError.invalidArgument("Renderer.uniforms", "GPU uniform block size must be positive");
 		var made = NativeKitGpu.nkgpu_uniforms_begin(value, size);
 		GpuResult.check(made.status, "renderer.uniforms");
 		return new Uniforms(this, made.out_builder);
@@ -294,7 +296,7 @@ class Renderer {
 	public function draw(baseElement:Int, elementCount:Int, instanceCount:Int = 1):Void {
 		ensureFrame();
 		if (baseElement < 0 || elementCount <= 0 || instanceCount <= 0)
-			throw "GPU draw range and instance count must be positive";
+			throw BindingError.invalidArgument("Renderer.draw", "GPU draw range and instance count must be positive");
 		GpuResult.check(NativeKitGpu.nkgpu_draw(value, baseElement, elementCount, instanceCount), "renderer.draw");
 	}
 
@@ -302,7 +304,7 @@ class Renderer {
 		if (disposed)
 			return;
 		if (frameActive)
-			throw "Cannot dispose a GPU renderer during an active frame";
+			throw BindingError.invalidState("Renderer.dispose", "Cannot dispose a GPU renderer during an active frame");
 		GpuResult.check(NativeKitGpu.nkgpu_renderer_destroy(value), "renderer.dispose");
 		disposed = true;
 		surface.rendererDisposed(this);
@@ -317,14 +319,14 @@ class Renderer {
 	function ensureFrame():Void {
 		ensureLive();
 		if (!frameActive)
-			throw "GPU operation requires an active frame";
+			throw BindingError.invalidState("Renderer.ensureFrame", "GPU operation requires an active frame");
 	}
 
 	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
 		CommandBuffer, Uniforms, SurfaceFrame)
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU renderer has been disposed";
+			throw BindingError.disposed("Renderer.ensureLive", "GPU renderer has been disposed");
 	}
 
 	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
@@ -339,6 +341,6 @@ class Renderer {
 	function ensureResourceOperation():Void {
 		ensureLive();
 		if (frameActive)
-			throw "GPU resources can only change while the renderer is idle";
+			throw BindingError.invalidState("Renderer.ensureResourceOperation", "GPU resources can only change while the renderer is idle");
 	}
 }

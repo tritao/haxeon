@@ -30,7 +30,7 @@ class GraphicsImageRef {
 	private static function fromBorrowedHandle(value:GraphicsImage, width:Int, height:Int,
 		api:GraphicsApi):GraphicsImageRef {
 		if (width <= 0 || height <= 0)
-			throw "Graphics image dimensions must be positive";
+			throw BindingError.invalidArgument("GraphicsImageRef.fromBorrowedHandle", "Graphics image dimensions must be positive");
 		NativeKit.nk_graphics_image_retain_checked(value);
 		return new GraphicsImageRef(value, width, height, api);
 	}
@@ -39,11 +39,11 @@ class GraphicsImageRef {
 	@:allow(nativekit.scene.SceneRenderer)
 	private static function fromBorrowedId(id:Int, width:Int, height:Int):GraphicsImageRef {
 		if (id == 0)
-			throw "Graphics image ID must be non-zero";
+			throw BindingError.invalidArgument("GraphicsImageRef.fromBorrowedId", "Graphics image ID must be non-zero");
 		var value = new GraphicsImage(id);
 		var queried = NativeKit.nk_graphics_image_get_info(value);
 		if (queried.status != Result.Ok)
-			throw "Could not query the borrowed graphics image";
+			throw new NativeKitError(queried.status, "GraphicsImageRef.fromBorrowedId", NativeKit.nk_last_error());
 		return fromBorrowedHandle(value, width, height, queried.out_info.get_api());
 	}
 
@@ -72,6 +72,6 @@ class GraphicsImageRef {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Graphics image reference has been disposed";
+			throw BindingError.disposed("GraphicsImageRef.ensureLive", "Graphics image reference has been disposed");
 	}
 }

@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitEventValue;
@@ -24,9 +26,9 @@ class AudioEmitter {
 
 	public function new(cue:AudioCue, events:NativeKitEvents) {
 		if (cue == null)
-			throw "Audio emitter cue must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter cue must not be null");
 		if (events == null)
-			throw "Audio emitter event pump must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter event pump must not be null");
 		this.cue = cue;
 		this.subscription = events.listen(onEvent);
 	}
@@ -52,7 +54,7 @@ class AudioEmitter {
 	public function setPosition(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter position must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setPosition", "Audio emitter position must not be null");
 		position = value;
 		forEachVoice(function(voice) voice.setPosition(position));
 	}
@@ -61,7 +63,7 @@ class AudioEmitter {
 	public function setDirection(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter direction must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setDirection", "Audio emitter direction must not be null");
 		direction = value;
 		forEachVoice(function(voice) voice.setDirection(direction));
 	}
@@ -70,7 +72,7 @@ class AudioEmitter {
 	public function setVelocity(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter velocity must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setVelocity", "Audio emitter velocity must not be null");
 		velocity = value;
 		forEachVoice(function(voice) voice.setVelocity(velocity));
 	}
@@ -191,6 +193,6 @@ class AudioEmitter {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio emitter has been disposed";
+			throw BindingError.disposed("AudioEmitter.ensureLive", "Audio emitter has been disposed");
 	}
 }

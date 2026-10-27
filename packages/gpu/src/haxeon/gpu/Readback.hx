@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Buffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Image;
@@ -30,7 +32,7 @@ class Readback {
 		mipLevel:Int = 0, layer:Int = 0):Readback {
 		if (image == null || width <= 0 || height <= 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU readback region is invalid";
+			throw BindingError.invalidArgument("Readback.begin", "GPU readback region is invalid");
 		var renderer = image.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_image_readback_desc();
@@ -50,7 +52,7 @@ class Readback {
 	/** Starts a tightly packed readback of an arbitrary buffer range. */
 	public static function beginBuffer(buffer:Buffer, offset:Int, size:Int):Readback {
 		if (buffer == null || offset < 0 || size <= 0)
-			throw "GPU buffer readback range is invalid";
+			throw BindingError.invalidArgument("Readback.beginBuffer", "GPU buffer readback range is invalid");
 		var renderer = buffer.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_buffer_readback_desc();
@@ -74,7 +76,7 @@ class Readback {
 	public function read(data:Bytes):Int {
 		ensureLive();
 		if (data == null || data.length == 0)
-			throw "GPU readback destination must not be empty";
+			throw BindingError.invalidArgument("Readback.read", "GPU readback destination must not be empty");
 		renderer.ensureResourceOperation();
 		var result = NativeKitGpu.nkgpu_readback_read(renderer.nativeHandle(), value, data, data.length);
 		GpuResult.check(result.status, "readback.read");
@@ -101,7 +103,7 @@ class Readback {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU readback has been disposed";
+			throw BindingError.disposed("Readback.ensureLive", "GPU readback has been disposed");
 		renderer.ensureLive();
 	}
 }

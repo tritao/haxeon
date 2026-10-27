@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 
@@ -42,7 +44,7 @@ class Sampler {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0)
-			throw "GPU sampler slot must be non-negative";
+			throw BindingError.invalidArgument("Sampler.apply", "GPU sampler slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_sampler(renderer.nativeHandle(), slot, value), "sampler.apply");
 	}
 
@@ -70,7 +72,7 @@ class Sampler {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU sampler has been disposed";
+			throw BindingError.disposed("Sampler.ensureLive", "GPU sampler has been disposed");
 		renderer.ensureLive();
 	}
 }

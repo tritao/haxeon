@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -28,17 +30,17 @@ class SoundFont {
         value = owned.borrow();
     }
     public static function fromMemory(bytes:Bytes):SoundFont {
-        if (bytes == null || bytes.length == 0) throw "SoundFont data must not be empty";
+        if (bytes == null || bytes.length == 0) throw BindingError.invalidArgument("SoundFont.fromMemory", "SoundFont data must not be empty");
         var result = NativeKitAudio.nk_audio_soundfont_load_memory(bytes);
         AudioResult.check(result.status, "audio.soundfont.load");
         return new SoundFont(result.out_soundfont);
     }
     public static function fromFile(path:String):SoundFont {
-        if (path == null || path.length == 0) throw "SoundFont path must not be empty";
+        if (path == null || path.length == 0) throw BindingError.invalidArgument("SoundFont.fromFile", "SoundFont path must not be empty");
         return fromMemory(File.getBytes(path));
     }
     public function nativeHandle():SoundFontHandle {
-        if (disposed) throw "SoundFont has been disposed";
+        if (disposed) throw BindingError.disposed("SoundFont.nativeHandle", "SoundFont has been disposed");
         return value;
     }
     public function presets():Array<SoundFontPresetInfo> {
@@ -75,7 +77,7 @@ class SoundFontPreset implements InstrumentDefinition {
     final gain:Float;
     public function new(font:SoundFont, index:Int, gain:Float) {
         if (font == null || index < 0 || !Math.isFinite(gain) || gain < 0 || gain > 4)
-            throw "Invalid SoundFont preset";
+            throw BindingError.invalidArgument("SoundFontPreset.new", "Invalid SoundFont preset");
         this.font = font; this.index = index; this.gain = gain;
     }
     public function createInstrument(engine:DspEngine):DspInstrument

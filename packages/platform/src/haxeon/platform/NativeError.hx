@@ -1,6 +1,6 @@
 package haxeon.platform;
 
-/** Structured failure from a native service. Codes are scoped to domain. */
+/** Structured binding or backend failure. Codes are scoped to domain. */
 class NativeError extends haxe.Exception {
 	public final domain:String;
 	public final code:Int;

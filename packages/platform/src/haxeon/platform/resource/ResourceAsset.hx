@@ -1,5 +1,7 @@
 package haxeon.platform.resource;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitError;
@@ -27,7 +29,7 @@ class ResourceAsset {
 		ensureLive();
 		var buffer = NativeKit.nk_resource_asset_get_uri_checked(value);
 		if (buffer == null)
-			throw "NativeKit resource asset returned no URI";
+			throw BindingError.invalidArgument("ResourceAsset.uri", "NativeKit resource asset returned no URI");
 		return buffer.sub(0, buffer.length - 1).toString();
 	}
 
@@ -54,7 +56,7 @@ class ResourceAsset {
 		ensureLive();
 		var byteCount = size();
 		if (haxe.Int64.compare(byteCount, haxe.Int64.ofInt(0x7fffffff)) > 0)
-			throw "NativeKit resource asset is too large for a Haxe byte buffer";
+			throw BindingError.invalidArgument("ResourceAsset.copyData", "NativeKit resource asset is too large for a Haxe byte buffer");
 		var bytes = Bytes.alloc(haxe.Int64.toInt(byteCount));
 		NativeKit.nk_resource_asset_copy_data_checked(value, bytes, byteCount);
 		return bytes;
@@ -75,6 +77,6 @@ class ResourceAsset {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Resource asset has been disposed";
+			throw BindingError.disposed("ResourceAsset.ensureLive", "Resource asset has been disposed");
 	}
 }

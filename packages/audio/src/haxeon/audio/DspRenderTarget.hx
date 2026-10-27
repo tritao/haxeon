@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import haxe.io.Bytes;
@@ -12,9 +14,9 @@ class DspRenderTarget {
 
 	public function new(frameCount:Int, channels:Int) {
 		if (frameCount <= 0)
-			throw "DSP render frame count must be positive";
+			throw BindingError.invalidArgument("DspRenderTarget.new", "DSP render frame count must be positive");
 		if (channels <= 0)
-			throw "DSP render channel count must be positive";
+			throw BindingError.invalidArgument("DspRenderTarget.new", "DSP render channel count must be positive");
 		this.frameCount = frameCount;
 		this.channels = channels;
 		this.samples = Bytes.alloc(frameCount * channels * 4);

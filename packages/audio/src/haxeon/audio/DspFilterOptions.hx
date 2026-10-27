@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
@@ -15,7 +17,7 @@ class DspFilterOptions {
 
 	/** Nominal linear SVF Q, [0.5, 100]. Drive suppresses the measured resonance peak. */
 	public function setQ(q:Float):DspFilterOptions {
-		if (!Math.isFinite(q) || q<0.5 || q>100) throw "SVF Q must be 0.5..100";
+		if (!Math.isFinite(q) || q<0.5 || q>100) throw BindingError.invalidArgument("DspFilterOptions.setQ", "SVF Q must be 0.5..100");
 		// Daisy's damping is 2*(1-resonance^(1/4)); keep its domain behind the facade.
 		resonance=Math.pow(1-0.5/q,4);
 		return this;

@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
@@ -8,7 +10,7 @@ class Mixer {
 	/** Configures the process-wide playback device before the first audio use. */
 	public static function configureDevice(options:DeviceOptions):Void {
 		if (options == null)
-			throw "Audio device options must not be null";
+			throw BindingError.invalidArgument("Mixer.configureDevice", "Audio device options must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_device_configure(options.nativeValue()),
 			"audio.device.configure");
 	}
@@ -100,7 +102,7 @@ class Mixer {
 	/** Sets the process-wide listener position in world coordinates. */
 	public static function setListenerPosition(position:Vector3):Void {
 		if (position == null)
-			throw "Audio listener position must not be null";
+			throw BindingError.invalidArgument("Mixer.setListenerPosition", "Audio listener position must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_position(position.nativeValue()),
 			"audio.listener.setPosition");
 	}
@@ -115,7 +117,7 @@ class Mixer {
 	/** Sets the process-wide listener forward direction. */
 	public static function setListenerDirection(direction:Vector3):Void {
 		if (direction == null)
-			throw "Audio listener direction must not be null";
+			throw BindingError.invalidArgument("Mixer.setListenerDirection", "Audio listener direction must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_direction(direction.nativeValue()),
 			"audio.listener.setDirection");
 	}
@@ -130,7 +132,7 @@ class Mixer {
 	/** Sets the process-wide listener velocity in world units per second. */
 	public static function setListenerVelocity(velocity:Vector3):Void {
 		if (velocity == null)
-			throw "Audio listener velocity must not be null";
+			throw BindingError.invalidArgument("Mixer.setListenerVelocity", "Audio listener velocity must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_velocity(velocity.nativeValue()),
 			"audio.listener.setVelocity");
 	}
@@ -145,7 +147,7 @@ class Mixer {
 	/** Sets the process-wide listener world-up direction. */
 	public static function setListenerWorldUp(worldUp:Vector3):Void {
 		if (worldUp == null)
-			throw "Audio listener world up must not be null";
+			throw BindingError.invalidArgument("Mixer.setListenerWorldUp", "Audio listener world up must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_world_up(worldUp.nativeValue()),
 			"audio.listener.setWorldUp");
 	}
@@ -160,7 +162,7 @@ class Mixer {
 	/** Sets the process-wide listener directional attenuation cone. */
 	public static function setListenerCone(cone:Cone):Void {
 		if (cone == null)
-			throw "Audio listener cone must not be null";
+			throw BindingError.invalidArgument("Mixer.setListenerCone", "Audio listener cone must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_cone(cone.innerAngleRadians,
 			cone.outerAngleRadians, cone.outerGain), "audio.listener.setCone");
 	}

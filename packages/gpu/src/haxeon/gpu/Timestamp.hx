@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Enums;
 
 import haxeon.gpu.Renderer;
@@ -33,7 +35,7 @@ class Timestamp {
 	/** Begins a named timing scope in the active render or compute pass. */
 	public static function beginNamed(renderer:Renderer, label:String):Timestamp {
 		if (label == null)
-			throw "GPU timestamp label must not be null";
+			throw BindingError.invalidArgument("Timestamp.beginNamed", "GPU timestamp label must not be null");
 		renderer.ensureFrame();
 		var desc = new nkgpu_timestamp_desc();
 		desc.set_struct_size(nkgpu_timestamp_desc.size());
@@ -86,7 +88,7 @@ class Timestamp {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU timestamp has been disposed";
+			throw BindingError.disposed("Timestamp.ensureLive", "GPU timestamp has been disposed");
 		renderer.ensureLive();
 	}
 }

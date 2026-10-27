@@ -65,6 +65,11 @@ class AudioSmoke {
 	}
 
 	static function main():Void {
+		var argument = false;
+		try new haxeon.audio.DspRenderTarget(0, 2) catch (error:haxeon.platform.BindingError) {
+			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument && error.operation == "DspRenderTarget.new";
+		}
+		if (!argument) throw "Audio argument errors must use BindingError";
 		if (!NativeKitEventDecoderTests.run())
 			throw "NativeKit audio event decoder tests failed";
 		var init = new InitOptions();

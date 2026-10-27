@@ -44,7 +44,7 @@ class NativeKitHttpEvents {
 			var value = NativeKitEventBytes.readUtf8Slice(header.get_value_bytes(), 0,
 				header.get_value_size(), 0);
 			if (name == null || value == null)
-				throw "NativeKit HTTP response contains an invalid UTF-8 header";
+				throw BindingError.invalidData("NativeKitHttpEvents.response", "NativeKit HTTP response contains an invalid UTF-8 header");
 			headers.push(new NativeKitHttpHeader(name, value));
 		}
 		return new NativeKitHttpResponse(view.get_status_code(), view.get_flags(),

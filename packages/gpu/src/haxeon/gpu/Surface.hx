@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.platform.NativeKitError;
 
 import haxeon.gpu.SurfaceFrame;
@@ -31,7 +33,7 @@ class Surface {
 
 	public static function create(window:NativeKitWindow, width:Int, height:Int):Surface {
 		if (width <= 0 || height <= 0)
-			throw "GPU surface dimensions must be positive";
+			throw BindingError.invalidArgument("Surface.create", "GPU surface dimensions must be positive");
 		var made = NativeKitGpu.nkgpu_surface_create(window.nativeHandle(), width, height);
 		GpuResult.check(made.status, "surface.create");
 		return new Surface(window, made.out_surface);
@@ -39,7 +41,7 @@ class Surface {
 
 	public static function createForApi(window:NativeKitWindow, api:GraphicsApi, width:Int, height:Int):Surface {
 		if (width <= 0 || height <= 0)
-			throw "GPU surface dimensions must be positive";
+			throw BindingError.invalidArgument("Surface.createForApi", "GPU surface dimensions must be positive");
 		var made = NativeKitGpu.nkgpu_surface_create_for_api(window.nativeHandle(), api, width, height);
 		GpuResult.check(made.status, "surface.createForApi");
 		return new Surface(window, made.out_surface);
@@ -69,7 +71,7 @@ class Surface {
 	public function resize(width:Int, height:Int):Void {
 		ensureLive();
 		if (width <= 0 || height <= 0)
-			throw "GPU surface dimensions must be positive";
+			throw BindingError.invalidArgument("Surface.resize", "GPU surface dimensions must be positive");
 		GpuResult.check(NativeKitGpu.nkgpu_surface_resize(value, width, height), "surface.resize");
 	}
 
@@ -102,6 +104,6 @@ class Surface {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU surface has been disposed";
+			throw BindingError.disposed("Surface.ensureLive", "GPU surface has been disposed");
 	}
 }

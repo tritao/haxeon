@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 /**
  * Borrowed source descriptor for long-running playback.
  *
@@ -15,17 +17,17 @@ class AudioTrack {
 
 	public function new(clip:Clip, ?options:AudioTrackOptions) {
 		if (clip == null)
-			throw "Audio track clip must not be null";
+			throw BindingError.invalidArgument("AudioTrack.new", "Audio track clip must not be null");
 		if (clip.isDisposed())
-			throw "Audio track clip must be live";
+			throw BindingError.invalidArgument("AudioTrack.new", "Audio track clip must be live");
 		if (options == null)
 			options = new AudioTrackOptions();
 		if (!finite(options.volume) || options.volume < 0.0)
-			throw "Audio track volume must be finite and non-negative";
+			throw BindingError.invalidArgument("AudioTrack.new", "Audio track volume must be finite and non-negative");
 		if (!finite(options.pitch) || options.pitch <= 0.0)
-			throw "Audio track pitch must be finite and positive";
+			throw BindingError.invalidArgument("AudioTrack.new", "Audio track pitch must be finite and positive");
 		if (options.priority < 0)
-			throw "Audio track priority must be non-negative";
+			throw BindingError.invalidArgument("AudioTrack.new", "Audio track priority must be non-negative");
 		this.clip = clip;
 		this.volume = options.volume;
 		this.pitch = options.pitch;

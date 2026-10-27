@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -22,7 +24,7 @@ class Clip {
 
 	public static function fromFile(path:String):Clip {
 		if (path == null || path.length == 0)
-			throw "Audio clip path must not be empty";
+			throw BindingError.invalidArgument("Clip.fromFile", "Audio clip path must not be empty");
 		var made = NativeKitAudio.nk_audio_clip_create_from_file(path);
 		AudioResult.check(made.status, "audio.clip.fromFile");
 		return new Clip(made.out_clip);
@@ -31,7 +33,7 @@ class Clip {
 	/** Creates a clip from a ready asset in the core resource cache. */
 	public static function fromAsset(asset:ResourceAsset):Clip {
 		if (asset == null)
-			throw "Audio clip resource asset must not be null";
+			throw BindingError.invalidArgument("Clip.fromAsset", "Audio clip resource asset must not be null");
 		var made = NativeKitAudio.nk_audio_clip_create_from_asset(asset.nativeHandle());
 		AudioResult.check(made.status, "audio.clip.fromAsset");
 		return new Clip(made.out_clip);
@@ -40,7 +42,7 @@ class Clip {
 	/** Creates a streaming clip backed by independent provider streams. */
 	public static function fromStream(resource:Resource):Clip {
 		if (resource == null)
-			throw "Audio streaming resource must not be null";
+			throw BindingError.invalidArgument("Clip.fromStream", "Audio streaming resource must not be null");
 		var made = NativeKitAudio.nk_audio_clip_create_from_stream(resource.nativeValue());
 		AudioResult.check(made.status, "audio.clip.fromStream");
 		return new Clip(made.out_clip);
@@ -48,7 +50,7 @@ class Clip {
 
 	public static function fromMemory(data:Bytes):Clip {
 		if (data == null || data.length == 0)
-			throw "Audio clip data must not be empty";
+			throw BindingError.invalidArgument("Clip.fromMemory", "Audio clip data must not be empty");
 		var made = NativeKitAudio.nk_audio_clip_create_from_memory(data, data.length);
 		AudioResult.check(made.status, "audio.clip.fromMemory");
 		return new Clip(made.out_clip);
@@ -79,6 +81,6 @@ class Clip {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio clip has been disposed";
+			throw BindingError.disposed("Clip.ensureLive", "Audio clip has been disposed");
 	}
 }

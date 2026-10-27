@@ -1,5 +1,7 @@
 package haxeon.platform.resource;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitError;
@@ -14,7 +16,7 @@ class Resource {
 	public function new(uri:String, ?mimeType:String, ?displayName:String,
 		?flags:ResourceFlags) {
 		if (uri == null || uri.length == 0)
-			throw "NativeKit resource URI must not be empty";
+			throw BindingError.invalidArgument("Resource.new", "NativeKit resource URI must not be empty");
 		this.flags = flags == null ? ResourceFlags.Readable : flags;
 		this.uri = uri;
 		this.mimeType = mimeType;

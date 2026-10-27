@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.AttachmentAction;
 import haxeon.gpu.Image;
 
@@ -36,7 +38,7 @@ class RenderPassDesc {
 	public function color(image:Image, action:AttachmentAction,
 		resolveImage:Null<Image> = null):RenderPassDesc {
 		if (colors.length >= 4)
-			throw "GPU render passes support at most four color attachments";
+			throw BindingError.invalidArgument("RenderPassDesc.color", "GPU render passes support at most four color attachments");
 		colors.push(new ColorAttachment(image, action, resolveImage));
 		return this;
 	}

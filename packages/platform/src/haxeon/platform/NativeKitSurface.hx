@@ -20,7 +20,7 @@ class NativeKitSurface {
 	/** Creates a non-owning view of a surface managed by a raw NativeKit host. */
 	public static function borrowNativeHandle(value:SurfaceHandle):NativeKitSurface {
 		if (!value.isValid())
-			throw "Cannot borrow a null NativeKit surface handle";
+			throw BindingError.invalidArgument("NativeKitSurface.borrowNativeHandle", "Cannot borrow a null NativeKit surface handle");
 		return new NativeKitSurface(value, false);
 	}
 
@@ -65,7 +65,7 @@ class NativeKitSurface {
 	/** Releases a borrowed wrapper without destroying its host-owned surface. */
 	public function releaseBorrowed():Void {
 		if (ownsHandle)
-			throw "Cannot release a borrowed view of an owned NativeKit surface";
+			throw BindingError.invalidState("NativeKitSurface.releaseBorrowed", "Cannot release a borrowed view of an owned NativeKit surface");
 		dispose();
 	}
 
@@ -88,7 +88,7 @@ class NativeKitSurface {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "NativeKit surface has been disposed";
+			throw BindingError.disposed("NativeKitSurface.ensureLive", "NativeKit surface has been disposed");
 	}
 }
 

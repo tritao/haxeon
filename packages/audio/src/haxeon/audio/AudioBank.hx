@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitEventValue;
@@ -30,11 +32,11 @@ class AudioBank {
 
 	public function new(cache:ResourceCache, events:NativeKitEvents) {
 		if (cache == null)
-			throw "Audio bank resource cache must not be null";
+			throw BindingError.invalidArgument("AudioBank.new", "Audio bank resource cache must not be null");
 		if (cache.isDisposed())
-			throw "Audio bank resource cache must be live";
+			throw BindingError.invalidArgument("AudioBank.new", "Audio bank resource cache must be live");
 		if (events == null)
-			throw "Audio bank event pump must not be null";
+			throw BindingError.invalidArgument("AudioBank.new", "Audio bank event pump must not be null");
 		this.cache = cache;
 		this.events = events;
 		this.subscription = events.listen(onEvent);
@@ -82,7 +84,7 @@ class AudioBank {
 	public function get(name:String):AudioBankEntry {
 		var entry = find(name);
 		if (entry == null)
-			throw "Audio bank entry was not found: " + name;
+			throw BindingError.invalidArgument("AudioBank.get", "Audio bank entry was not found: " + name);
 		return entry;
 	}
 
@@ -188,21 +190,21 @@ class AudioBank {
 
 	function ensureNameAvailable(name:String):Void {
 		if (indexOf(name) >= 0)
-			throw "Audio bank entry name is already registered: " + name;
+			throw BindingError.invalidState("AudioBank.ensureNameAvailable", "Audio bank entry name is already registered: " + name);
 	}
 
 	static function validateName(name:String):Void {
 		if (name == null || name.length == 0)
-			throw "Audio bank entry name must not be empty";
+			throw BindingError.invalidArgument("AudioBank.validateName", "Audio bank entry name must not be empty");
 	}
 
 	static function validateResource(resource:Resource):Void {
 		if (resource == null)
-			throw "Audio bank resource must not be null";
+			throw BindingError.invalidArgument("AudioBank.validateResource", "Audio bank resource must not be null");
 	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio bank has been disposed";
+			throw BindingError.disposed("AudioBank.ensureLive", "Audio bank has been disposed");
 	}
 }
