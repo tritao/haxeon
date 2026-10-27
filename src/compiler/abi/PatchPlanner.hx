@@ -36,7 +36,9 @@ enum PatchDecision {
 class PatchPlanner {
 	/**
 	 * `addsFunctions`: the running module can take functions a patch adds (HashLink live patching), so a new function is not a
-	 * reason to reload. Positionally named functions are still checked for renumbering, which an addition can cause.
+	 * reason to reload, and neither is a removed one: its slot and last body stay in the module, and the new code does not
+	 * call it. A removed constructor still reloads, since it goes with a class. Positionally named functions are still checked
+	 * for renumbering, which an addition or removal can cause.
 	 */
 	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false):PatchDecision {
 		if (previous == null)
@@ -64,15 +66,16 @@ class PatchPlanner {
 		if (addsFunctions)
 			reasons = [
 				for (reason in reasons)
-					if (!isAddition(reason)) reason
+					if (!keepsLayout(reason)) reason
 			];
 		reasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		return reasons.length == 0 ? Patch : ReloadDomain(reasons);
 	}
 
-	static function isAddition(reason:AbiChange):Bool
+	static function keepsLayout(reason:AbiChange):Bool
 		return switch reason {
 			case FunctionAdded(_): true;
+			case FunctionRemoved(name): !StringTools.endsWith(name, ".new");
 			default: false;
 		};
 

@@ -43,7 +43,21 @@ class AddedStaticCallerMain {
 		var result = Runtime.callInt(live, mainId);
 		if (result != 34)
 			throw 'The patched module returned $result instead of 34';
+		// Undoing the edit removes the function again, which patches too.
+		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
+		var undone = compiler.compile("Main");
+		if (undone.requiresReload || undone.patchBytes == null)
+			throw 'Removing the function required a reload: ' + [for (reason in undone.reloadReasons) Std.string(reason)].join(", ");
+		Runtime.patchSet(live, new PatchSet(changed.revision, undone.revision, undone.patchBytes, undone.changedFunctions));
+		result = Runtime.callInt(live, mainId);
+		if (result != 14)
+			throw 'After removing the function the patched module returned $result instead of 14';
+		var fresh = Runtime.load(HlWriter.encode(undone.module), undone.runtimeIdentity);
+		result = Runtime.callInt(fresh, undone.functionIds.get("main"));
+		Runtime.dispose(fresh);
+		if (result != 14)
+			throw 'After removing the function the full module returned $result instead of 14';
 		Runtime.dispose(live);
-		Sys.println("PASS: an added static function called by existing methods of its class patches the running module");
+		Sys.println("PASS: adding a static function that existing methods call, and removing it again, patch the running module");
 	}
 }

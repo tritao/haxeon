@@ -94,6 +94,9 @@ class AbiMatrixMain {
 			},
 				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]), Reload(GeneratedFunctionsRenumbered("$lambda:main:main"))),
 			fixture("function added to a module that takes added functions", empty, abi(["helper" => "()->I32"]), Patch, true),
+			fixture("function removed from a module that takes added functions", abi(["helper" => "()->I32"]), empty, Patch, true),
+			fixture("constructor removed from a module that takes added functions", abi(["Editor.new" => "(Editor)->Void"]), empty,
+				Reload(FunctionRemoved("Editor.new")), true),
 			fixture("lambda appended in a module that takes added functions",
 				abi(["$lambda:main:main#0" => "()->I32"], null, null, null, null, ["$lambda:main:main#0" => "a"]),
 				abi(["$lambda:main:main#0" => "()->I32", "$lambda:main:main#1" => "()->I32"], null, null, null, null,
@@ -115,8 +118,11 @@ class AbiMatrixMain {
 			// HashLink modules take added functions, so an addition patches.
 			sourceFixture("function addition", "function main():Int { return 40; }", "function helper():Int { return 2; } function main():Int { return 40; }",
 				BodyPatch),
+			// A removed function keeps its slot and body in a HashLink module, so the removal patches.
 			sourceFixture("function removal", "function helper():Int { return 2; } function main():Int { return 40; }", "function main():Int { return 40; }",
-				ReloadFor(FunctionRemoved("Main.helper"))),
+				BodyPatch),
+			sourceFixture("function removal with its caller",
+				"function helper():Int { return 2; } function main():Int { return helper(); }", "function main():Int { return 2; }", BodyPatch),
 			sourceFixture("function signature", "function helper(value:Int):Int { return value; } function main():Int { return 40; }",
 				"function helper(value:Float):Int { return 2; } function main():Int { return 40; }", ReloadFor(FunctionSignatureChanged("Main.helper"))),
 			sourceFixture("instance field addition",
