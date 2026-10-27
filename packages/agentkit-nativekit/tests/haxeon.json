@@ -1,0 +1,12 @@
+{
+	"version": 1,
+	"package": { "name": "haxeon-agentkit-nativekit-check" },
+	"entry": "NativeTransportCheck",
+	"sourceRoots": ["src"],
+	"scopeSourceRoots": false,
+	"dependencies": {
+		"haxeon-agentkit-nativekit": { "path": ".." }
+	},
+	"target": "host",
+	"outputDir": "build"
+}

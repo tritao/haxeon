@@ -8,6 +8,8 @@
 | `gpu` | `haxeon-gpu` | `haxeon.gpu.*` |
 | `editor` | `haxeon-editor` | `haxeon.editor.*` |
 | `ui` | `haxeon-ui` | `haxeon.ui.*` |
+| `agentkit` | `haxeon-agentkit` | `haxeon.agent.*` |
+| `agentkit-nativekit` | `haxeon-agentkit-nativekit` | `haxeon.agent.nativekit.*` |
 
 Animation is renderer-independent; its optional `animation/native` provider builds glTF/ozz support.
 Audio and GPU depend on platform. Headless audio applications can add the
@@ -15,6 +17,9 @@ optional `audio/native` provider (`haxeon-audio-native`). UI/audio applications
 can share a native provider, as shown in `examples/audio-lab`. UI depends on platform, GPU, and editor. The editor
 package is independent of UI and native services. SceneKit remains in Materia,
 including the orbit camera (`nativekit.scene.PerspectiveCamera`).
+
+Agentkit is a headless agent runtime independent of the platform; `agentkit-nativekit` supplies its
+streaming HTTP transport on NativeKit.
 
 The `vendor/nativekit` submodule pins the native implementation. Initialize it
 and UI's private dependencies with:
