@@ -6,7 +6,7 @@ import nativekit.ffi.NativeKitTypes;
 enum NativeKitRequestOutcome<T> {
 	/** The asynchronous operation completed successfully. */
 	Success(value:T);
-	/** A dialog was cancelled or dismissed without an accepted result. */
+	/** The operation was cancelled, dismissed, or ended by runtime shutdown. */
 	Cancelled;
 	/** The operation failed; `message` is optional backend-specific detail. */
 	Failure(result:Result, message:Null<String>);

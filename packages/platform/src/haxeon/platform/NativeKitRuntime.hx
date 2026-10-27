@@ -7,15 +7,22 @@ import haxeon.platform.NativeKitEvents;
 
 /** Owns one initialized NativeKit generation and all windows created through it. */
 class NativeKitRuntime {
-	final windows:Array<NativeKitWindow> = [];
+	final windows = new NativeResourceRegistry();
 	public final events:NativeKitEvents;
 	var disposed:Bool = false;
+	var disposing:Bool = false;
 
 	private function new() {
 		events = new NativeKitEvents();
 	}
 
-	public static function start(?options:InitOptions):NativeKitRuntime {
+	public static function start(?options:RuntimeOptions):NativeKitRuntime
+		return startNative((options == null ? new RuntimeOptions() : options).nativeValue());
+
+	public function createWindow(options:WindowConfig):NativeKitWindow
+		return createWindowNative(options.nativeValue());
+
+	public static function startNative(?options:InitOptions):NativeKitRuntime {
 		var configured = options;
 		if (configured == null) {
 			configured = new InitOptions();
@@ -25,36 +32,28 @@ class NativeKitRuntime {
 		return new NativeKitRuntime();
 	}
 
-	public function createWindow(options:WindowOptions):NativeKitWindow {
+	public function createWindowNative(options:WindowOptions):NativeKitWindow {
 		ensureLive();
 		var owned = NativeKit.nk_window_create_checked(options);
 		var window = new NativeKitWindow(owned);
-		windows.push(window);
+		window.attachOwner(windows.register(window.dispose));
 		return window;
 	}
 
 	/** Destroys owned children, then ends the NativeKit generation. */
 	public function dispose():Void {
-		if (disposed)
+		if (disposed || disposing)
 			return;
-		var failure:Dynamic = null;
-		for (index in 0...windows.length) {
-			var window = windows[windows.length - 1 - index];
-			try {
-				window.dispose();
-			} catch (error:Dynamic) {
-				if (failure == null)
-					failure = error;
-			}
+		disposing = true;
+		try {
+			windows.releaseAll();
+			NativeKit.nk_shutdown();
+		} catch (error:Dynamic) {
+			disposing = false;
+			throw error;
 		}
-		// Keep the generation alive when a dependent refuses to close; callers
-		// can release that resource and retry without invalidating live wrappers.
-		if (failure != null)
-			throw failure;
-		NativeKit.nk_shutdown();
+		disposing = false;
 		disposed = true;
-		for (window in windows)
-			window.runtimeShutdown();
 		events.runtimeShutdown();
 	}
 
@@ -62,7 +61,7 @@ class NativeKitRuntime {
 		return disposed;
 
 	function ensureLive():Void {
-		if (disposed)
+		if (disposed || disposing)
 			throw "NativeKit runtime has been disposed";
 	}
 }

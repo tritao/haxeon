@@ -14,13 +14,14 @@ import haxeon.gpu.Enums.Wrap;
 /** Renderer-owned texture sampler with typed filter and wrap modes. */
 class Sampler {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_sampler;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_sampler) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function create(renderer:Renderer, minFilter:Filter = Filter.Nearest,
@@ -51,6 +52,7 @@ class Sampler {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_sampler_destroy(renderer.nativeHandle(), value), "sampler.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -61,8 +63,10 @@ class Sampler {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)

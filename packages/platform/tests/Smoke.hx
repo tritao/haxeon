@@ -36,7 +36,7 @@ class Smoke {
 		var initOptions = new InitOptions();
 		initOptions.set_api_version(NativeKitConstants.NK_API_VERSION);
 		initOptions.set_event_queue_capacity(32);
-		var runtime = NativeKitRuntime.start(initOptions);
+		var runtime = NativeKitRuntime.startNative(initOptions);
 		if (runtime.isDisposed())
 			return 2;
 		// Counted inputs project their count from the managed array or buffer.
@@ -80,7 +80,7 @@ class Smoke {
 			var completed = false, requestSeenByListener = false;
 			var requestSubscription:Null<NativeKitEventSubscription> = null;
 			var requests = events.requests;
-			var request = requests.readClipboardText(function(outcome) {
+			var request = requests.readClipboardTextCallback(function(outcome) {
 				payloadOk = switch outcome {
 					case Success(text): text == "nativekit ffi";
 					case _: false;
@@ -105,9 +105,15 @@ class Smoke {
 			payloadOk = payloadOk && requests.pending() == 0;
 			if (requestSubscription != null)
 				requestSubscription.dispose();
+			var cancelledFuture = requests.readClipboardText();
+			var futureCancelled = false;
+			cancelledFuture.onComplete(function(outcome) switch outcome { case Cancelled: futureCancelled = true; case _: });
+			cancelledFuture.cancel();
+			payloadOk = payloadOk && futureCancelled && cancelledFuture.isComplete() && requests.pending() == 0;
+
 			var forgottenCallbackCalled = false;
 			var forgottenEventSeen = false;
-			var forgottenRequest = requests.readClipboardText(function(_) forgottenCallbackCalled = true);
+			var forgottenRequest = requests.readClipboardTextCallback(function(_) forgottenCallbackCalled = true);
 			var forgottenSubscription = events.listen(function(value) switch value {
 				case ClipboardText(id, _, _) if (Std.string(id) == Std.string(forgottenRequest)):
 					forgottenEventSeen = true;
@@ -176,7 +182,9 @@ class Smoke {
 		var windowCreated = false;
 		var dialogCancellationOk = true;
 		try {
-			var window = runtime.createWindow(windowOptions);
+			var configuredWindow = new haxeon.platform.WindowConfig(320, 200);
+			configuredWindow.flags = WindowFlags.Hidden;
+			var window = runtime.createWindow(configuredWindow);
 			windowCreated = true;
 			windowOk = window.nativeHandle().isValid();
 			var requests = events.requests;
@@ -184,7 +192,7 @@ class Smoke {
 				var options = new FileDialogOptions();
 				options.set_title("Cancellation smoke");
 				var completed = false, cancelled = false;
-				var id = requests.openResource(window, options, function(outcome) {
+				var id = requests.openResourceCallback(window, options, function(outcome) {
 					cancelled = switch outcome { case Cancelled: true; case _: false; };
 					completed = true;
 				});
@@ -194,20 +202,32 @@ class Smoke {
 					&& requests.pending() == 0 && !requests.cancelDialog(id) && !requests.forget(id);
 			}
 			{
-				var options = new MessageDialogOptions();
-				options.set_title("Cancellation smoke");
-				options.set_message("Cancel this dialog through NativeKitRequests");
-				options.set_buttons(MessageButtons.Yes | MessageButtons.No);
+				var options = new haxeon.platform.MessageDialogConfig("Cancel through the future");
+				options.title = "Cancellation smoke";
+				options.buttons = MessageButtons.Yes | MessageButtons.No;
 				var completed = false, cancelled = false;
-				var id = requests.messageDialog(window, options, function(outcome) {
+				var future = requests.messageDialog(window, options);
+				future.onComplete(function(outcome) {
 					cancelled = switch outcome { case Cancelled: true; case _: false; };
 					completed = true;
 				});
-				dialogCancellationOk = requests.cancelDialog(id) && !requests.cancelDialog(id) && dialogCancellationOk;
+				future.cancel();
+				future.cancel();
+				dialogCancellationOk = !future.isComplete() && dialogCancellationOk;
 				for (_ in 0...1000) { events.poll(); if (completed) break; }
 				dialogCancellationOk = dialogCancellationOk && completed && cancelled && requests.pending() == 0;
 			}
+
 			window.setDecorationRegions([]);
+			var childBusy = true;
+			window.registerDependent(function() {
+				if (!window.nativeHandle().isValid()) throw "dependent lost its parent handle";
+				if (childBusy) throw "child is busy";
+			});
+			var refused = false;
+			try window.dispose() catch (_:Dynamic) refused = true;
+			windowOk = windowOk && refused && !window.isDisposed() && window.nativeHandle().isValid();
+			childBusy = false;
 			window.dispose();
 			windowOk = windowOk && window.isDisposed();
 		} catch (error:Dynamic) {
@@ -224,7 +244,11 @@ class Smoke {
 
 		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == -3 && NativeKit.nk_last_error() != null;
 		var httpEventOk = NativeKitHttpEventTests.run(events);
-		runtime.dispose();
+		var lifetimeOk = NativeKitLifetimeTests.run(events);
+		var shutdownObserverError = false;
+		try runtime.dispose() catch (error:Dynamic) shutdownObserverError = Std.string(error) == "shutdown observer";
+		if (!shutdownObserverError) return 28;
+		if (!lifetimeOk || !NativeKitLifetimeTests.afterShutdown(events.requests)) return 27;
 		if (!events.isDisposed() || !lifetimeSubscription.isDisposed())
 			return 21;
 		if (!eventOk)

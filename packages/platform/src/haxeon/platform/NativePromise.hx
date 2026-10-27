@@ -1,6 +1,5 @@
 package haxeon.platform;
 
-import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.NativeKitRequestOutcome;
 

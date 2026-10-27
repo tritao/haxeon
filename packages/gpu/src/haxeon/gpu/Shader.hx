@@ -17,6 +17,7 @@ import haxeon.gpu.Enums.UniformType;
 /** Renderer-owned shader resource. */
 class Shader {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_shader;
 	var disposed:Bool = false;
 
@@ -24,7 +25,7 @@ class Shader {
 	private function new(renderer:Renderer, value:nkgpu_shader) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function create(renderer:Renderer, language:ShaderLanguage,
@@ -69,14 +70,17 @@ class Shader {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_shader_destroy(renderer.nativeHandle(), value), "shader.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
@@ -88,6 +92,7 @@ class Shader {
 /** Configures shader bindings before creating the immutable shader resource. */
 class ShaderBuilder {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_shader_builder;
 	var consumed:Bool = false;
 
@@ -95,7 +100,7 @@ class ShaderBuilder {
 	private function new(renderer:Renderer, value:nkgpu_shader_builder) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public function uniformBlock(slot:Int, stage:ShaderStage, size:Int):ShaderBuilder {
@@ -169,13 +174,16 @@ class ShaderBuilder {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_shader_end(value);
 		consumed = true;
+		registration.detach();
 		GpuResult.check(made.status, "shader.end");
 		return new Shader(renderer, made.out_shader);
 	}
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		consumed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (consumed)

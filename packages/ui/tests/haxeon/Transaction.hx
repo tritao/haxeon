@@ -35,7 +35,7 @@ class Transaction {
 		var init = new InitOptions();
 		init.set_api_version(NativeKitConstants.NK_API_VERSION);
 		init.set_event_queue_capacity(32);
-		var runtime = NativeKitRuntime.start(init);
+		var runtime = NativeKitRuntime.startNative(init);
 
 		var windowOptions = new WindowOptions();
 		windowOptions.set_flags(WindowFlags.Resizable);

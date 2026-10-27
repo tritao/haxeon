@@ -15,13 +15,14 @@ import haxeon.gpu.Enums.BufferUsage;
 /** Renderer-owned GPU buffer; its handle cannot be used after disposal. */
 class Buffer {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_buffer;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_buffer) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Creates a buffer from the current generic buffer descriptor. */
@@ -115,6 +116,7 @@ class Buffer {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_buffer_destroy(renderer.nativeHandle(), value), "buffer.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -125,8 +127,10 @@ class Buffer {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	@:allow(Renderer)
 	function ensureLive():Void {

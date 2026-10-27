@@ -64,6 +64,7 @@ class NativeKitEvents {
 	private function runtimeShutdown():Void {
 		disposed = true;
 		listeners.resize(0);
+		requests.runtimeShutdown();
 	}
 
 	/** Routes a decoded value through the same request and listener path as poll(). */

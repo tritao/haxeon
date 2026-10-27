@@ -16,6 +16,7 @@ import haxeon.platform.NativeKitWindow;
 /** Owns a GPU-adapter surface associated with a NativeKit window. */
 class Surface {
 	final window:NativeKitWindow;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final renderers:Array<Renderer> = [];
 	var value:SurfaceHandle;
 	var disposed:Bool = false;
@@ -23,7 +24,7 @@ class Surface {
 	private function new(window:NativeKitWindow, value:SurfaceHandle) {
 		this.window = window;
 		this.value = value;
-		window.registerDependent(function() {
+		registration = window.registerDependent(function() {
 			dispose();
 		});
 	}
@@ -53,7 +54,7 @@ class Surface {
 	public function acquireFrame():haxeon.gpu.SurfaceFrame {
 		ensureLive();
 		var target = new SurfaceFrameTarget();
-		target.set_struct_size(80);
+		target.set_struct_size(SurfaceFrameTarget.size());
 		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
 		if (acquired.status != Result.Ok)
 			throw new NativeKitError(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
@@ -62,9 +63,7 @@ class Surface {
 
 	public function createRenderer():Renderer {
 		ensureLive();
-		var renderer = Renderer.create(this);
-		renderers.push(renderer);
-		return renderer;
+		return Renderer.create(this);
 	}
 
 	public function resize(width:Int, height:Int):Void {
@@ -77,14 +76,25 @@ class Surface {
 	public function dispose():Void {
 		if (disposed)
 			return;
-		for (index in 0...renderers.length)
-			renderers[renderers.length - 1 - index].dispose();
+		var snapshot = renderers.copy();
+		for (index in 0...snapshot.length)
+			snapshot[snapshot.length - 1 - index].dispose();
 		GpuResult.check(NativeKitGpu.nkgpu_surface_destroy(value), "surface.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
+
+	@:allow(Renderer)
+	function attachRenderer(renderer:Renderer):Void {
+		ensureLive();
+		renderers.push(renderer);
+	}
+
+	@:allow(Renderer)
+	function rendererDisposed(renderer:Renderer):Void { renderers.remove(renderer); }
 
 	@:allow(Renderer)
 	function windowOwner():NativeKitWindow

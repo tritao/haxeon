@@ -34,8 +34,8 @@ class NativeTask {
 
 	public function dispose():Void {
 		if (disposed) return;
-		disposed = true;
 		check(NativeKit.nk_task_destroy(value), "task.dispose");
+		disposed = true;
 	}
 
 	public function isDisposed():Bool return disposed;

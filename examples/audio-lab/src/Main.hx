@@ -36,31 +36,22 @@ class Main {
 		var eventSubscription:Null<NativeKitEventSubscription> = null;
 		var lab:Null<AudioLabEngine> = null;
 		try {
-			var init = new InitOptions();
-			init.set_api_version(NativeKit.nk_api_version());
-			runtime = NativeKitRuntime.start(init);
-
-			var windowOptions = new WindowOptions();
-			windowOptions.set_width(INITIAL_WIDTH);
-			windowOptions.set_height(INITIAL_HEIGHT);
-			windowOptions.set_title("NativeKit Audio Lab");
-			windowOptions.set_flags(WindowFlags.Resizable);
-			windowOptions.set_owner(WindowHandle.invalid());
-			windowOptions.set_kind(WindowKind.Normal);
+			runtime = NativeKitRuntime.start();
+			var windowOptions = new haxeon.platform.WindowConfig(INITIAL_WIDTH, INITIAL_HEIGHT);
+			windowOptions.title = "NativeKit Audio Lab";
+			windowOptions.flags = WindowFlags.Resizable;
 			window = runtime.createWindow(windowOptions);
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
-			var surfaceOptions = new SurfaceOptions();
+			var surfaceOptions = new haxeon.platform.SurfaceConfig(INITIAL_WIDTH, INITIAL_HEIGHT);
 			var surfaceFlags = SurfaceFlags.Stencil;
 			if (graphicsApi == GraphicsApi.Opengl) {
 				surfaceFlags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
-				surfaceOptions.set_major_version(3);
-				surfaceOptions.set_minor_version(3);
+				surfaceOptions.majorVersion = 3;
+				surfaceOptions.minorVersion = 3;
 			}
-			surfaceOptions.set_flags(surfaceFlags);
-			surfaceOptions.set_api(graphicsApi);
-			surfaceOptions.set_width(INITIAL_WIDTH);
-			surfaceOptions.set_height(INITIAL_HEIGHT);
+			surfaceOptions.flags = surfaceFlags;
+			surfaceOptions.api = graphicsApi;
 			surface = window.createSurface(surfaceOptions);
 
 			fonts = FontCollection.create();

@@ -69,7 +69,7 @@ class AudioSmoke {
 			throw "NativeKit audio event decoder tests failed";
 		var init = new InitOptions();
 		init.set_api_version(NativeKit.nk_api_version());
-		var runtime = NativeKitRuntime.start(init);
+		var runtime = NativeKitRuntime.startNative(init);
 		DspSmoke.run();
 		DaisySourceSmoke.run();
 		var bus:Bus = null;

@@ -50,7 +50,7 @@ class RenderPassDesc {
 	@:allow(Renderer)
 	function nativeValue():nkgpu_render_pass_desc {
 		var value = new nkgpu_render_pass_desc();
-		value.set_struct_size(204);
+		value.set_struct_size(nkgpu_render_pass_desc.size());
 		value.set_color_count(colors.length);
 		for (index in 0...colors.length) {
 			var source = colors[index];

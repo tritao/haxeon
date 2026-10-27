@@ -15,6 +15,7 @@ import haxeon.gpu.Enums.VertexFormat;
 /** Renderer-owned pipeline resource. */
 class Pipeline {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_pipeline;
 	var disposed:Bool = false;
 
@@ -22,7 +23,7 @@ class Pipeline {
 	private function new(renderer:Renderer, value:nkgpu_pipeline) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function begin(renderer:Renderer, shader:Shader, stride:Int):PipelineBuilder {
@@ -63,6 +64,7 @@ class Pipeline {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_destroy(renderer.nativeHandle(), value), "pipeline.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -73,8 +75,10 @@ class Pipeline {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
@@ -86,6 +90,7 @@ class Pipeline {
 /** Configures one vertex/index layout before creating an immutable pipeline. */
 class PipelineBuilder {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_pipeline_builder;
 	var consumed:Bool = false;
 
@@ -93,7 +98,7 @@ class PipelineBuilder {
 	private function new(renderer:Renderer, value:nkgpu_pipeline_builder) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public function attribute(location:Int, bufferIndex:Int, offset:Int, format:VertexFormat):PipelineBuilder {
@@ -127,13 +132,16 @@ class PipelineBuilder {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_pipeline_end(value);
 		consumed = true;
+		registration.detach();
 		GpuResult.check(made.status, "pipeline.end");
 		return new Pipeline(renderer, made.out_pipeline);
 	}
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		consumed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (consumed)

@@ -16,6 +16,7 @@ import haxeon.platform.GraphicsImageRef;
 /** Renderer-owned RGBA8 sampled image. */
 class Image {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_image;
 	public final width:Int;
 	public final height:Int;
@@ -26,7 +27,7 @@ class Image {
 		this.value = value;
 		this.width = width;
 		this.height = height;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Creates an image from the current generic image descriptor. */
@@ -107,6 +108,7 @@ class Image {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_image_destroy(renderer.nativeHandle(), value), "image.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -117,8 +119,10 @@ class Image {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	@:allow(Renderer)
 	function ensureLive():Void {

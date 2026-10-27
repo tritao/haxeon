@@ -363,7 +363,7 @@ class UiExplorer {
 			options.set_y(-10000);
 			options.set_width(1);
 			options.set_height(1);
-			webView = NativeKitWebView.create(nativeWindow, options);
+			webView = NativeKitWebView.createNative(nativeWindow, options);
 			webView.show(false);
 			webView.setHtml(webViewDemoHtml());
 		} catch (_:Dynamic) {

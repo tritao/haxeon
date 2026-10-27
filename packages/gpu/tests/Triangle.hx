@@ -44,6 +44,14 @@ class Triangle {
 			throw "generated GPU enum members changed values";
 	}
 
+	static function verifyStructuredErrors():Void {
+		var caught = false;
+		try haxeon.gpu.GpuResult.check(-3, "test.invalidHandle") catch (error:haxeon.platform.NativeError) {
+			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
+		}
+		if (!caught) throw "GPU errors must expose their domain, status, and operation";
+	}
+
 	static function createVertexBuffer(renderer:Renderer):Buffer {
 		var values = [
 			-0.04, 0.04, 1.0, 0.30, 0.35, 0.0, 0.0,
@@ -247,6 +255,7 @@ class Triangle {
 
 	static function main():Int {
 		verifyGeneratedEnumMembers();
+		verifyStructuredErrors();
 		var runtime = NativeKitRuntime.start();
 		var windowOptions = new WindowOptions();
 		windowOptions.set_width(800);
@@ -255,7 +264,7 @@ class Triangle {
 		windowOptions.set_flags(WindowFlags.Resizable);
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
-		var window:NativeKitWindow = runtime.createWindow(windowOptions);
+		var window:NativeKitWindow = runtime.createWindowNative(windowOptions);
 		var surface = Surface.create(window, 800, 600);
 		var renderer:Null<Renderer> = null;
 		var buffer:Null<Buffer> = null;

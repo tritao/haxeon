@@ -8,6 +8,7 @@ import nativekit.ffi.NativeKitGpu;
 /** One consumed uniform block staged for the current renderer frame. */
 class Uniforms {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_uniform_builder;
 	var consumed:Bool = false;
 
@@ -15,7 +16,7 @@ class Uniforms {
 	private function new(renderer:Renderer, value:nkgpu_uniform_builder) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public function writeFloat(offset:Int, number:Float):Uniforms {
@@ -32,11 +33,14 @@ class Uniforms {
 			throw "GPU uniform slot must be non-negative";
 		GpuResult.check(NativeKitGpu.nkgpu_apply_uniforms(renderer.nativeHandle(), slot, value), "uniforms.apply");
 		consumed = true;
+		registration.detach();
 	}
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		consumed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (consumed)

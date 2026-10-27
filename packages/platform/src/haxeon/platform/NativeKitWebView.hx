@@ -7,16 +7,19 @@ import haxeon.platform.NativeKitError;
 /** Owns one native child WebView. */
 class NativeKitWebView {
 	final value:WebViewHandle;
-	final owned:OwnedWebViewHandle;
 	var disposed:Bool = false;
+	var owner:Null<NativeResourceRegistry.NativeResourceRegistration>;
 
+	/** Transfers the fresh native handle into this retryable managed owner. */
 	@:allow(NativeKitWindow)
 	private function new(owned:OwnedWebViewHandle) {
-		this.owned = owned;
 		this.value = owned.borrow();
 	}
 
-	public static function create(parent:Handle, options:WebviewOptions):NativeKitWebView
+	public static function create(parent:NativeKitWindow, options:WebViewConfig):NativeKitWebView
+		return parent.createWebView(options);
+
+	public static function createNative(parent:Handle, options:WebviewOptions):NativeKitWebView
 		return new NativeKitWebView(NativeKit.nk_webview_create_checked(parent, options));
 
 	public function show(visible:Bool):Void {
@@ -52,18 +55,16 @@ class NativeKitWebView {
 	public function dispose():Void {
 		if (disposed)
 			return;
+		NativeKit.nk_webview_destroy_checked(value);
 		disposed = true;
-		var status = owned.close();
-		if (status != null && status != Result.Ok)
-			throw new NativeKitError(status, "webview.dispose", NativeKit.nk_last_error());
+		if (owner != null) owner.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(NativeKitWindow)
-	function runtimeShutdown():Void
-		disposed = true;
+	function attachOwner(registration:NativeResourceRegistry.NativeResourceRegistration):Void owner = registration;
 
 	function ensureLive():Void {
 		if (disposed)

@@ -4489,7 +4489,7 @@ class FrameworkSmoke {
 		try {
 			var initOptions = new InitOptions();
 			initOptions.set_api_version(NativeKit.nk_api_version());
-			runtime = NativeKitRuntime.start(initOptions);
+			runtime = NativeKitRuntime.startNative(initOptions);
 			var windowOptions = new WindowOptions();
 			windowOptions.set_width(320);
 			windowOptions.set_height(192);
@@ -4497,7 +4497,7 @@ class FrameworkSmoke {
 			windowOptions.set_flags(WindowFlags.Hidden | WindowFlags.Borderless);
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
-			var window = runtime.createWindow(windowOptions);
+			var window = runtime.createWindowNative(windowOptions);
 			context.attachPlatformWindow(window.nativeHandle());
 			attached = true;
 			var root = context.submit(new WindowChrome("chrome", WindowDecorationRegionKind.Drag,

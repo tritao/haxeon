@@ -26,7 +26,7 @@ import haxeon.gpu.Shader.ShaderBuilder;
 /** Owns one renderer and all resources created through it. */
 class Renderer {
 	final surface:Surface;
-	final resources:Array<Void->Void> = [];
+	final resources = new haxeon.platform.NativeResourceRegistry();
 	var value:nkgpu_renderer;
 	var disposed:Bool = false;
 	var frameActive:Bool = false;
@@ -40,7 +40,9 @@ class Renderer {
 	public static function create(surface:Surface):Renderer {
 		var made = NativeKitGpu.nkgpu_renderer_create(surface.nativeHandle());
 		GpuResult.check(made.status, "renderer.create");
-		return new Renderer(surface, made.out_renderer);
+		var renderer = new Renderer(surface, made.out_renderer);
+		surface.attachRenderer(renderer);
+		return renderer;
 	}
 
 	public function nativeHandle():nkgpu_renderer {
@@ -157,7 +159,7 @@ class Renderer {
 			sourceOffset < 0 || destinationOffset < 0)
 			throw "GPU buffer-copy arguments are invalid";
 		var desc = new nkgpu_buffer_copy_desc();
-		desc.set_struct_size(24);
+		desc.set_struct_size(nkgpu_buffer_copy_desc.size());
 		desc.set_source(source.nativeHandle());
 		desc.set_source_offset(sourceOffset);
 		desc.set_destination(destination.nativeHandle());
@@ -176,7 +178,7 @@ class Renderer {
 			height <= 0 || sourceX < 0 || sourceY < 0 || destinationX < 0 || destinationY < 0)
 			throw "GPU image-copy arguments are invalid";
 		var desc = new nkgpu_image_copy_desc();
-		desc.set_struct_size(52);
+		desc.set_struct_size(nkgpu_image_copy_desc.size());
 		desc.set_source(source.nativeHandle());
 		desc.set_source_mip(0);
 		desc.set_source_layer(0);
@@ -204,7 +206,7 @@ class Renderer {
 			mipLevel < 0 || layer < 0)
 			throw "GPU buffer-to-image arguments are invalid";
 		var desc = new nkgpu_buffer_image_copy_desc();
-		desc.set_struct_size(44);
+		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
 		desc.set_buffer(source.nativeHandle());
 		desc.set_buffer_offset(bufferOffset);
 		desc.set_row_pitch(rowPitch);
@@ -230,7 +232,7 @@ class Renderer {
 			mipLevel < 0 || layer < 0)
 			throw "GPU image-to-buffer arguments are invalid";
 		var desc = new nkgpu_buffer_image_copy_desc();
-		desc.set_struct_size(44);
+		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
 		desc.set_buffer(destination.nativeHandle());
 		desc.set_buffer_offset(bufferOffset);
 		desc.set_row_pitch(rowPitch);
@@ -303,8 +305,8 @@ class Renderer {
 			throw "Cannot dispose a GPU renderer during an active frame";
 		GpuResult.check(NativeKitGpu.nkgpu_renderer_destroy(value), "renderer.dispose");
 		disposed = true;
-		for (release in resources)
-			release();
+		surface.rendererDisposed(this);
+		resources.releaseAll();
 	}
 
 	public function isDisposed():Bool
@@ -327,9 +329,9 @@ class Renderer {
 
 	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
 		Uniforms, SurfaceFrame)
-	function registerResource(release:Void->Void):Void {
+	function registerResource(release:Void->Void):haxeon.platform.NativeResourceRegistry.NativeResourceRegistration {
 		ensureLive();
-		resources.push(release);
+		return resources.register(release);
 	}
 
 	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Batch,

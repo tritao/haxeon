@@ -160,7 +160,7 @@ class Main {
 		windowOptions.set_flags(WindowFlags.Resizable);
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
-		var window = realRuntime.createWindow(windowOptions),
+		var window = realRuntime.createWindowNative(windowOptions),
 			surface = Surface.create(window, 64, 64),
 			ready = false,
 			subscription = realRuntime.events.listen(function(value) switch value {

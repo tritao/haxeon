@@ -15,13 +15,14 @@ import haxeon.gpu.Enums.ReadbackState;
 /** Owns one asynchronous image or buffer readback request. */
 class Readback {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_readback;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_readback) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Starts a tightly packed readback of an image rectangle. */
@@ -33,7 +34,7 @@ class Readback {
 		var renderer = image.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_image_readback_desc();
-		desc.set_struct_size(32);
+		desc.set_struct_size(nkgpu_image_readback_desc.size());
 		desc.set_image(image.nativeHandle());
 		desc.set_mip_level(mipLevel);
 		desc.set_layer(layer);
@@ -53,7 +54,7 @@ class Readback {
 		var renderer = buffer.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_buffer_readback_desc();
-		desc.set_struct_size(16);
+		desc.set_struct_size(nkgpu_buffer_readback_desc.size());
 		desc.set_buffer(buffer.nativeHandle());
 		desc.set_offset(offset);
 		desc.set_size(size);
@@ -86,14 +87,17 @@ class Readback {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_readback_destroy(renderer.nativeHandle(), value), "readback.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)

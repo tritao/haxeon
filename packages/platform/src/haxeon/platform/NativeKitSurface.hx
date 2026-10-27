@@ -2,33 +2,31 @@ package haxeon.platform;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 
 /** Owns one graphics surface attached to a NativeKit window. */
 class NativeKitSurface {
 	final value:SurfaceHandle;
-	final owned:Null<OwnedSurfaceHandle>;
 	final ownsHandle:Bool;
 	var disposed:Bool = false;
+	var owner:Null<NativeResourceRegistry.NativeResourceRegistration>;
 	var frameSubscription:Null<NativeKitSurfaceFrameSubscription>;
 
 	@:allow(NativeKitWindow)
-	private function new(value:SurfaceHandle, ?owned:OwnedSurfaceHandle) {
+	private function new(value:SurfaceHandle, ownsHandle:Bool) {
 		this.value = value;
-		this.owned = owned;
-		this.ownsHandle = owned != null;
+		this.ownsHandle = ownsHandle;
 	}
 
 	/** Creates a non-owning view of a surface managed by a raw NativeKit host. */
 	public static function borrowNativeHandle(value:SurfaceHandle):NativeKitSurface {
 		if (!value.isValid())
 			throw "Cannot borrow a null NativeKit surface handle";
-		return new NativeKitSurface(value);
+		return new NativeKitSurface(value, false);
 	}
 
 	@:allow(NativeKitWindow)
 	private static function adopt(owned:OwnedSurfaceHandle):NativeKitSurface
-		return new NativeKitSurface(owned.borrow(), owned);
+		return new NativeKitSurface(owned.borrow(), true);
 
 	public function nativeHandle():SurfaceHandle {
 		ensureLive();
@@ -58,23 +56,17 @@ class NativeKitSurface {
 			return;
 		if (frameSubscription != null)
 			frameSubscription.dispose();
-		if (owned != null) {
-			var status = owned.close();
-			disposed = true;
-			if (status != null && status != Result.Ok)
-				throw new NativeKitError(status, "surface.dispose", NativeKit.nk_last_error());
-			return;
-		}
 		if (ownsHandle)
 			NativeKit.nk_surface_destroy_checked(value);
 		disposed = true;
+		if (owner != null) owner.detach();
 	}
 
 	/** Releases a borrowed wrapper without destroying its host-owned surface. */
 	public function releaseBorrowed():Void {
 		if (ownsHandle)
 			throw "Cannot release a borrowed view of an owned NativeKit surface";
-		disposed = true;
+		dispose();
 	}
 
 	public function isDisposed():Bool
@@ -92,13 +84,7 @@ class NativeKitSurface {
 	}
 
 	@:allow(NativeKitWindow)
-	function runtimeShutdown():Void {
-		if (frameSubscription != null) {
-			frameSubscription.releasedAfterRuntimeShutdown();
-			frameSubscription = null;
-		}
-		disposed = true;
-	}
+	function attachOwner(registration:NativeResourceRegistry.NativeResourceRegistration):Void owner = registration;
 
 	function ensureLive():Void {
 		if (disposed)
@@ -135,9 +121,6 @@ class NativeKitSurfaceFrameSubscription {
 		callback.close();
 	}
 
-	@:allow(NativeKitSurface)
-	function releasedAfterRuntimeShutdown():Void
-		releasedAfterDetach();
 }
 
 /** Adapts NativeKit's full ABI callback to the ergonomic size-only surface callback. */

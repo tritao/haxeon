@@ -15,6 +15,7 @@ import haxeon.gpu.Enums.BatchPassKind;
 /** Reusable sealed submission batch owned by one renderer. */
 class Batch {
 	final renderer:Renderer;
+	final registration:haxeon.platform.NativeResourceRegistry.NativeResourceRegistration;
 	final value:nkgpu_batch;
 	var sealed:Bool = false;
 	var disposed:Bool = false;
@@ -22,7 +23,7 @@ class Batch {
 	private function new(renderer:Renderer, value:nkgpu_batch) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function begin(renderer:Renderer):Batch {
@@ -100,21 +101,24 @@ class Batch {
 			return;
 		GpuResult.check(NativeKitGpu.nkgpu_batch_destroy(value), "batch.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function appendPass(kind:BatchPassKind, width:Int, height:Int, clear:Bool):Void {
 		ensureMutable();
 		if (kind == BatchPassKind.Window && (width <= 0 || height <= 0))
 			throw "GPU batch window-pass dimensions must be positive";
 		var pass = new nkgpu_batch_pass();
-		pass.set_struct_size(32);
+		pass.set_struct_size(nkgpu_batch_pass.size());
 		pass.set_kind(kind);
 		pass.set_clear(clear ? 1 : 0);
 		pass.set_width(width);
