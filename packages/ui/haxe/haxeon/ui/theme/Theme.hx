@@ -185,6 +185,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Disabled),
 			[StyleValue.background(tokens.surfaceSunken)]);
 		styles.rule(StyleSelector.widget("button").className("tab-header"), [
+			StyleValue.fontSize(tokens.tabHeaderFontSize),
 			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
 			StyleValue.padding(new Insets(10.0, 6.0, 10.0, 6.0)),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 0.0),

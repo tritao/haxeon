@@ -136,10 +136,12 @@ class Tabs implements View {
 			var revision:Null<Void->String> = headerRevision;
 			var strip = revision == null ? stripView.build(context) :
 				new RetainedView("tab-headers", function(_) return stripView,
-					function() return active.length + ":" + active + revision()).build(context);
+					function() return context.theme.tokens.tabHeaderHeight + ":" + active.length + ":" + active + revision()).build(context);
+			strip.layout.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			if (headerTrailing != null) {
 				var headerStyle = new LayoutStyle();
 				headerStyle.width = LayoutAxis.grow();
+				headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 				headerStyle.direction = LayoutDirection.LeftToRight;
 				headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
 				var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
@@ -193,6 +195,7 @@ class Tabs implements View {
 			select:String->Void):RenderNode {
 		var stripStyle = new LayoutStyle();
 		stripStyle.width = LayoutAxis.grow();
+		stripStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 		stripStyle.direction = LayoutDirection.LeftToRight;
 		stripStyle.childGap = 4.0;
 		var strip = new RenderNode(context.id("tab-strip"), LayoutVisualKind.Box, stripStyle);
@@ -202,8 +205,10 @@ class Tabs implements View {
 			onTabDragCancel != null)
 			tabDragState = context.state(context.id("tab-drag"), new TabDragState());
 		for (item in items) {
+			var buttonStyle = new LayoutStyle();
+			buttonStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			var button = new Button(item.displayLabel == null ? item.label : item.displayLabel,
-				null, null, item.key);
+				buttonStyle, null, item.key);
 			button.onClickEvent = function(event) {
 				if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
 			};
@@ -224,6 +229,7 @@ class Tabs implements View {
 			});
 			var headerStyle = new LayoutStyle();
 			headerStyle.direction = LayoutDirection.TopToBottom;
+			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			var header = new RenderNode(context.id("tab-header:" + item.key),
 				LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
@@ -238,13 +244,16 @@ class Tabs implements View {
 			var indicatorStyle = new LayoutStyle();
 			indicatorStyle.width = LayoutAxis.grow();
 			indicatorStyle.height = LayoutAxis.fixed(2.0);
+			indicatorStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
+			indicatorStyle.zIndex = 1;
+			indicatorStyle.clipToParent = true;
 			indicatorStyle.background = item.key == active ? context.theme.tokens.accent :
 				Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var indicator = new RenderNode(context.id("tab-indicator:" + item.key),
 				LayoutVisualKind.Box, indicatorStyle);
 			indicator.hitTestSelf = false;
-			header.add(indicator);
 			header.add(headerContent);
+			header.add(indicator);
 			strip.add(header);
 			buttonNodes.push(buttonNode);
 			if (onTabHeaderBuilt != null)
@@ -296,6 +305,7 @@ class Tabs implements View {
 		strip.layout.style.width = LayoutAxis.fit();
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.stretch();
+		style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 		var scroll = new ScrollView("tab-viewport",
 			new TabsStripView(function(_) return strip), style,
 			ScrollAxis.Horizontal, state.controller);
@@ -397,7 +407,7 @@ class Tabs implements View {
 		var result = new LayoutStyle();
 		result.width = LayoutAxis.grow();
 		result.direction = LayoutDirection.TopToBottom;
-		result.childGap = 8.0;
+		result.childGap = 0.0;
 		return result;
 	}
 
