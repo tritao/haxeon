@@ -103,14 +103,9 @@ class SidebarModel {
 	function arrange():Void {
 		modes.sort(defaultOrder);
 		if (savedOrder.length == 0) return;
-		var rank:Map<String, Int> = [];
-		for (i in 0...savedOrder.length) rank.set(savedOrder[i], i);
 		var slots:Array<Int> = [], placed:Array<SidebarMode> = [];
-		for (i in 0...modes.length) if (rank.exists(modes[i].id)) { slots.push(i); placed.push(modes[i]); }
-		placed.sort(function(a, b) {
-			var left:Int = rank.get(a.id), right:Int = rank.get(b.id);
-			return left - right;
-		});
+		for (i in 0...modes.length) if (savedOrder.indexOf(modes[i].id) >= 0) { slots.push(i); placed.push(modes[i]); }
+		placed.sort(function(a, b) return savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
 		for (i in 0...slots.length) modes[slots[i]] = placed[i];
 	}
 	public function encode():String {
