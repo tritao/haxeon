@@ -13,7 +13,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.theme.TextRole;
@@ -118,8 +117,7 @@ class Button implements View {
 				if (onClickEvent != null) onClickEvent(event);
 				else onClick();
 			};
-			node.on(UiEventKind.Click, activate);
-			node.on(UiEventKind.Activate, activate);
+			node.onActivate(activate);
 		}
 		var foreground = context.theme.buttonLabelColor(enabled, resolvedStyle.background,
 			variant == ButtonVariant.Primary ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary);

@@ -154,7 +154,7 @@ class EventDispatcher {
 		var event = new UiEvent(UiEventKind.PointerDown, target.id, x, y,
 			0.0, 0.0, button, 0, modifiers, null, data, 0, pointerId,
 			timestamp < 0.0 ? NativeKit.nk_time_seconds() : timestamp);
-		updatePathState(path, StyleState.Pressed, true);
+		updatePathState(path, StyleState.Pressed, button == 0);
 		dispatchPath(path, event);
 		if (event.defaultPrevented)
 			suppressedClicks.set(pointerId, true);
@@ -197,6 +197,7 @@ class EventDispatcher {
 		}
 		var path = capturedPath(pointerId);
 		var pressed = pressedIds.get(pointerId);
+		var pressedButton = pressedButtons.get(pointerId);
 		var clickSuppressed = suppressedClicks.exists(pointerId);
 		if (path.length == 0)
 			path = pressedPath(pointerId);
@@ -215,7 +216,7 @@ class EventDispatcher {
 			probe("pointerDispatchSeconds", now - stageStarted);
 			stageStarted = now;
 		}
-		if (!clickSuppressed && pressed != null && releasePath.length > 0 &&
+		if (!clickSuppressed && pressed != null && pressedButton == button && releasePath.length > 0 &&
 			releasePath[releasePath.length - 1].id.equals(pressed)) {
 			dispatchPath(releasePath, new UiEvent(UiEventKind.Click, pressed, x, y,
 				0.0, 0.0, button, 0, modifiers, null, data, 0, pointerId));

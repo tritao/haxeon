@@ -268,6 +268,17 @@ class RenderNode {
 		return this;
 	}
 
+	/** Primary pointer clicks and semantic activation (keyboard/accessibility).
+	 * Other mouse buttons remain available to raw Click/context-menu handlers.
+	 */
+	public function onActivate(handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
+		if (handler == null) throw "Activation handlers require a callback";
+		on(UiEventKind.Click, function(event) {
+			if (event.button == 0) handler(event);
+		}, phase);
+		return on(UiEventKind.Activate, handler, phase);
+	}
+
 	/** Runs when a pointer press targets a node outside this node's subtree. */
 	public function onPointerDownOutside(handler:UiEvent->Void):RenderNode {
 		if (handler == null)

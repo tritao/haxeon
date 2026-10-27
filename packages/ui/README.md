@@ -277,6 +277,14 @@ When application state changes outside a command action, call
 `EventDispatcher` routes unhandled key-down chords to the active command
 registry, while focused widgets can consume a key event first.
 
+Action controls register `RenderNode.onActivate` for primary pointer clicks and
+semantic keyboard/accessibility activation. Raw `Click` events retain their
+mouse button, so secondary/context-menu and middle-button behavior stays
+available without invoking the primary action. Pressed feedback is primary-only,
+and click synthesis requires matching press/release buttons on the same target.
+`tools/test-activation.sh` verifies these rules across shared controls; set
+`NATIVEKIT_BUILD_DIR` when the native UI libraries live outside the default build.
+
 Contextual commands use `CommandContext` to receive the active
 `EditorDocument`, selected object IDs, viewport ID, typed parameter accessors,
 and invocation source. Set it once per active editor context with

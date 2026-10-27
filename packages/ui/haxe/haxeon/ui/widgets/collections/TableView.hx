@@ -392,14 +392,13 @@ private class TableHeaderCell implements View {
 			};
 			node.on(UiEventKind.PointerUp, finishResize);
 			node.on(UiEventKind.PointerCancel, finishResize);
-			node.on(UiEventKind.Click, function(event:UiEvent) {
-				if (didResize) {
+			node.onActivate(function(event:UiEvent) {
+				if (event.kind == UiEventKind.Click && didResize) {
 					didResize = false;
 					return;
 				}
 				onSort();
 			});
-			node.on(UiEventKind.Activate, function(event:UiEvent) { onSort(); });
 			node.add(context.withScope(new Key("content"), function() {
 				return new Text(column.label + sortSuffix).build(context);
 			}));

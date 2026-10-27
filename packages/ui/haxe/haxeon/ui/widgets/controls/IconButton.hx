@@ -6,7 +6,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityAction;
@@ -62,8 +61,7 @@ class IconButton implements View {
 				var activate = function(_:UiEvent) {
 					onClick();
 				};
-				node.on(UiEventKind.Click, activate);
-				node.on(UiEventKind.Activate, activate);
+				node.onActivate(activate);
 			}
 			var foreground = context.theme.buttonLabelColor(enabled,
 				node.layout.style.background);
