@@ -34,6 +34,8 @@ class Menu implements View {
 	final items:Array<MenuItem>;
 	public final x:Float;
 	public final y:Float;
+	/** Optional outside-click routing for associated menu triggers. */
+	public var onOutsideClick:Null<haxeon.ui.core.UiEvent->Bool> = null;
 	public var onDismiss:Void->Void;
 	public var hasDismissHandler(default, null):Bool;
 	/** Keyboard invocation selects an item; pointer invocation focuses only the menu. */
@@ -127,6 +129,7 @@ class Menu implements View {
 		popup.menuSurface = true;
 		popup.viewportMargin = 8.0;
 		popup.flipHorizontally = true;
+		popup.onOutsideClick = onOutsideClick;
 		popup.modal = true;
 		popup.dimBackdrop = false;
 		var root:RenderNode = popup.build(context);

@@ -46,6 +46,8 @@ class Popup implements View {
 	 * shifted to stay inside the layer.
 	 */
 	public var flipHorizontally:Bool;
+	/** Handle an outside click (for example, a sibling menu trigger); true skips default dismissal. */
+	public var onOutsideClick:Null<UiEvent->Bool> = null;
 	public var onDismiss:Void->Void;
 	public var hasDismissHandler(default, null):Bool;
 	public function new(key:String, child:View, x:Float = 0.0, y:Float = 0.0,
@@ -111,11 +113,11 @@ class Popup implements View {
 			backdrop.setStyleIdentity("popup-backdrop", "backdrop", "backdrop", null, ["popup"]);
 			backdrop.states = context.interactionStates.get(backdropId);
 			backdrop.computedStyle = backdropComputed;
-			if (dismissOnOutside && hasDismissHandler)
+			if (dismissOnOutside && (hasDismissHandler || onOutsideClick != null))
 				backdrop.on(UiEventKind.Click, function(event) {
-				onDismiss();
-				event.stopPropagation();
-			});
+					if (onOutsideClick == null || !onOutsideClick(event)) onDismiss();
+					event.stopPropagation();
+				});
 			root.add(backdrop);
 
 			var panelStyle = style.copy();
