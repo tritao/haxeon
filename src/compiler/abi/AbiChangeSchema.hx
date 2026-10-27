@@ -26,6 +26,7 @@ class AbiChangeSchema {
 			case EnumChanged(name): record("enum_changed", "enum", name);
 			case GlobalLayoutChanged(name): record("global_layout_changed", "global", name);
 			case GeneratedFunctionsRenumbered(group): record("generated_functions_renumbered", "generated_function_group", group);
+			case AssemblyLayoutChanged(detail): record("assembly_layout_changed", "module", detail);
 		};
 
 	public static function decode(version:Int, record:AbiChangeRecord):AbiChange {
@@ -45,6 +46,7 @@ class AbiChangeSchema {
 			case "enum_changed": requireKind(record, "enum", EnumChanged(record.entityId));
 			case "global_layout_changed": requireKind(record, "global", GlobalLayoutChanged(record.entityId));
 			case "generated_functions_renumbered": requireKind(record, "generated_function_group", GeneratedFunctionsRenumbered(record.entityId));
+			case "assembly_layout_changed": requireKind(record, "module", AssemblyLayoutChanged(record.entityId));
 			case unknown: throw 'Unknown ABI change code "$unknown"';
 		};
 	}

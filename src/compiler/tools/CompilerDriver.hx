@@ -98,6 +98,7 @@ class CompilerDriver {
 				revision: result.revision,
 				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
 				requiresReload: result.requiresReload,
+				reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
 				patchAvailable: result.patchBytes != null,
 				changedFunctions: result.changedFunctions,
 				identities: ([] : Array<Dynamic>)

@@ -281,6 +281,8 @@ class TestCatalog {
 				"generated-function-renumbering-test.hl", 0, "edits that renumber lambdas or function adapters never reroute stored closures"),
 			hxmlCase("runtime", "added-function-patch", "tests/hxml/added-function-patch-test.hxml", "added-function-patch-test.hl", 0,
 				"edits that add functions patch the running module"),
+			hxmlCase("runtime", "added-static-caller", "tests/hxml/added-static-caller-test.hxml", "added-static-caller-test.hl", 0,
+				"an added static function that existing methods start calling patches the running module"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,

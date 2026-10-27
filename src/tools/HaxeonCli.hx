@@ -52,6 +52,8 @@ private typedef BuildOptions = {
 	final compilerOnly:Bool;
 	final watch:Bool;
 	final live:Bool;
+	/** `--strict-live`: report an edit that cannot patch instead of reloading the module, so unexpected reloads show. */
+	final strictLive:Bool;
 	final jobs:Int;
 	final selfHosted:Bool;
 	final profile:Bool;
@@ -604,6 +606,8 @@ class HaxeonCli {
 			throw 'Option "--watch" is only valid with "haxeon run"';
 		if (options.live && !options.watch)
 			throw 'Option "--live" requires "haxeon run --watch"';
+		if (options.strictLive && !options.live)
+			throw 'Option "--strict-live" requires "haxeon run --watch --live"';
 		if (options.watch
 			&& !(targetInfo.equals(Target.detectHost()) && Target.parse(project.manifest.target).equals(Target.detectHost())))
 			throw 'Option "--watch" currently requires a host project';
@@ -666,6 +670,9 @@ class HaxeonCli {
 			var runPath = environmentCopy("PATH");
 			if (options.watch) {
 				var liveHost:Null<String> = null;
+				// The live host inherits it and refuses unpatchable edits instead of reloading.
+				if (options.strictLive)
+					Sys.putEnv("HAXEON_LIVE_STRICT", "1");
 				if (options.live) {
 					// Under the build PATH, like the rebuilds below, so the host build reaches the same compiler worker.
 					var swapPath = buildPath != null && runPath != null;
@@ -1018,7 +1025,7 @@ class HaxeonCli {
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
 		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, jobs = 4,
+			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, strictLive = false, jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null,
 			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null,
 			profileMinCall:Null<Float> = null;
@@ -1041,6 +1048,8 @@ class HaxeonCli {
 				watch = true;
 			else if (argument == "--live")
 				live = true;
+			else if (argument == "--strict-live")
+				strictLive = true;
 			else if (argument == "--self-hosted")
 				selfHosted = true;
 			else if (argument == "--profile")
@@ -1127,6 +1136,7 @@ class HaxeonCli {
 			compilerOnly: compilerOnly,
 			watch: watch,
 			live: live,
+			strictLive: strictLive,
 			jobs: jobs,
 			selfHosted: selfHosted,
 			profile: profile,
@@ -1491,6 +1501,7 @@ class HaxeonCli {
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
+		Sys.println("       [--strict-live]              With --live, report an edit that cannot patch instead of reloading");
 		Sys.println("       [--profile[=SOURCES]]        Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace;");
 		Sys.println("                                    SOURCES is a comma list of instrument, sampling, alloc (default instrument,");
 		Sys.println("                                    which runs the instrumented build from <outputDir>-instrument)");

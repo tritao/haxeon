@@ -15,6 +15,8 @@ private typedef LiveDescription = {
 	final revision:Int;
 	final moduleIdentity:String;
 	final requiresReload:Bool;
+	/** Why the compiler could not publish a patch, as "code entity" lines. */
+	final reloadReasons:Array<String>;
 	final patchAvailable:Bool;
 	final changedFunctions:Array<Int>;
 	final identities:Array<LiveFunction>;
@@ -22,6 +24,12 @@ private typedef LiveDescription = {
 
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
+	/**
+	 * `haxeon run --watch --live --strict-live`: an edit that cannot patch is reported and left out instead of reloading the
+	 * module, so a reload the edit should not have needed cannot pass unnoticed.
+	 */
+	static final strict:Bool = Sys.getEnv("HAXEON_LIVE_STRICT") == "1";
+
 	static function main():Void {
 		var args = Sys.args();
 		if (args.length != 3)
@@ -72,6 +80,7 @@ class LiveHost {
 								revision: candidate.revision,
 								moduleIdentity: candidate.moduleIdentity,
 								requiresReload: candidate.requiresReload,
+								reloadReasons: candidate.reloadReasons,
 								patchAvailable: candidate.patchAvailable,
 								changedFunctions: candidate.changedFunctions,
 								identities: description.identities
@@ -82,15 +91,23 @@ class LiveHost {
 						} catch (error:Dynamic) {
 							if (patching)
 								ProfileSpan.end("live.patch");
-							report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
-							var full = completeDescription(path, candidate);
-							if (full == null)
+							if (strict) {
+								refuse(revision, candidate, 'the runtime rejected its patch: ${Std.string(error)}');
 								rejectedPublication = publicationKey(candidate);
-							else {
-								pendingReload = full;
-								pendingSince = Sys.time();
+							} else {
+								report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
+								var full = completeDescription(path, candidate);
+								if (full == null)
+									rejectedPublication = publicationKey(candidate);
+								else {
+									pendingReload = full;
+									pendingSince = Sys.time();
+								}
 							}
 						}
+					} else if (strict) {
+						refuse(revision, candidate, reloadCause(description, candidate));
+						rejectedPublication = publicationKey(candidate);
 					} else {
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var full = completeDescription(path, candidate);
@@ -193,8 +210,17 @@ class LiveHost {
 		if (candidate.moduleIdentity != current.moduleIdentity)
 			return 'module identity changed from ${current.moduleIdentity} to ${candidate.moduleIdentity}';
 		if (candidate.requiresReload)
-			return 'the build requires a reload';
+			return 'the build requires a reload'
+				+ (candidate.reloadReasons.length == 0 ? '' : ': ' + candidate.reloadReasons.join(", "));
 		return 'the build carries no patch';
+	}
+
+	/** Strict mode: the running revision stays, and the edit is reported where it cannot be missed. */
+	static function refuse(revision:Int, candidate:LiveDescription, cause:String):Void {
+		report('haxeon: ================================================================');
+		report('haxeon: LIVE PATCH REFUSED (--strict-live): revision ${candidate.revision} was not applied; still running revision $revision');
+		report('haxeon: $cause');
+		report('haxeon: ================================================================');
 	}
 
 	/** Flushes each message because the watcher redirects this process's output to a log file. */
@@ -243,11 +269,13 @@ class LiveHost {
 	static function readDescription(path:String, file:String = ".live.json"):LiveDescription {
 		var value:Dynamic = Json.parse(File.getContent(path + file));
 		var changed:Array<Dynamic> = value.changedFunctions,
-			identities:Array<Dynamic> = value.identities;
+			identities:Array<Dynamic> = value.identities,
+			reasons:Null<Array<Dynamic>> = value.reloadReasons;
 		return {
 			revision: value.revision,
 			moduleIdentity: value.moduleIdentity,
 			requiresReload: value.requiresReload,
+			reloadReasons: reasons == null ? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],
 			patchAvailable: value.patchAvailable,
 			changedFunctions: [for (id in changed) (id : Int)],
 			identities: [

@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main AddedStaticCallerMain
+-hl out/added-static-caller-test.hl

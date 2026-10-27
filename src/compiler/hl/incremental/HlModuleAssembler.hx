@@ -43,6 +43,8 @@ typedef HlAssemblyResult = {
 
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
+	/** Why the assembler published a fresh module on its own, beyond the ABI plan's reasons. */
+	final layoutReasons:Array<String>;
 	final revision:Int;
 	final baseInts:Int;
 	final baseFloats:Int;
@@ -211,6 +213,7 @@ class HlModuleAssembler {
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
 		var reuseLowered = initialized && !reload;
+		var layoutReasons:Array<String> = [];
 		// A domain reload rediscovers native imports without preserving their old slots.
 		// Cached object prototypes contain absolute function indices, just like opcodes.
 		if (initialized && reload)
@@ -222,6 +225,8 @@ class HlModuleAssembler {
 		// never reuse opcodes or patch a live module with the old slot layout.
 		if (reuseLowered && runtimeNatives.length != previousNatives.length) {
 			reload = true;
+			var known = [for (native in previousNatives) native.name => true];
+			layoutReasons.push('runtime natives added: ' + [for (native in runtimeNatives) if (!known.exists(native.name)) native.name].join(", "));
 			reuseLowered = false;
 			discardPublishedSymbols();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
@@ -231,6 +236,7 @@ class HlModuleAssembler {
 		var nextDispatch = [for (native in HlLower.discoverCDispatchNatives(ordered)) native.name];
 		if (reuseLowered && !sameNames(dispatchNatives, nextDispatch)) {
 			reload = true;
+			layoutReasons.push("dispatch natives");
 			reuseLowered = false;
 			discardPublishedSymbols();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
@@ -248,6 +254,7 @@ class HlModuleAssembler {
 				var previous = loweredFunctions.get(fn.name);
 				if (previous != null && previous.functionIndex != layout.get(fn.name)) {
 					reload = true;
+					layoutReasons.push('slot of ${fn.name} moved from ${previous.functionIndex} to ${layout.get(fn.name)}');
 					reuseLowered = false;
 					discardPublishedSymbols();
 					break;
@@ -279,8 +286,10 @@ class HlModuleAssembler {
 		var loweredAt = Sys.time() * 1000.0;
 		// A running module can take new String constants but no other global, so a build that adds any other publishes a
 		// fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
-		if (initialized && !reload && !addsOnlyConstantGlobals(module.globals.length))
+		if (initialized && !reload && !addsOnlyConstantGlobals(module.globals.length)) {
 			reload = true;
+			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants');
+		}
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
 			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);
@@ -309,6 +318,7 @@ class HlModuleAssembler {
 			addedFunctions: addedFunctions,
 			functionIndices: layout,
 			requiresReload: reload,
+			layoutReasons: layoutReasons,
 			revision: revision,
 			baseInts: baseInts,
 			baseFloats: baseFloats,

@@ -20,6 +20,9 @@ enum AbiChange {
 	 * `PatchPlanner.renumberedGroups`).
 	 */
 	GeneratedFunctionsRenumbered(group:String);
+
+	/** The assembler could not keep the running module's slots or globals (`detail` names which). */
+	AssemblyLayoutChanged(detail:String);
 }
 
 /** Permitted publication strategy after comparing two runtime ABIs. */

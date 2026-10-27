@@ -54,6 +54,8 @@ class BackendAssembly {
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
+		for (detail in assembly.layoutReasons)
+			reloadReasons.push(AssemblyLayoutChanged(detail));
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		attachSourceSnapshots(context, assembly.module);
