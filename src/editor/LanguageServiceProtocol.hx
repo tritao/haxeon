@@ -74,7 +74,7 @@ class LanguageServiceProtocol {
 						compatibility: {
 							schemaVersion: AbiChangeSchema.VERSION,
 							decision: build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
-							baseRevision: artifactKind == "patch" ? build.revision - 1 : 0,
+							baseRevision: artifactKind == "patch" ? build.baseRevision : 0,
 							targetRevision: build.revision,
 							domainIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
 							artifactKind: artifactKind,

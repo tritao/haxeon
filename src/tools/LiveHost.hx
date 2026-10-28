@@ -13,6 +13,8 @@ private typedef FullModule = {final module:haxe.io.Bytes; final identity:haxe.io
 
 private typedef LiveDescription = {
 	final revision:Int;
+	/** The revision the build's patch applies to; -1 from a compiler that does not say. */
+	final baseRevision:Int;
 	final moduleIdentity:String;
 	final requiresReload:Bool;
 	/** Why the compiler could not publish a patch, as "code entity" lines. */
@@ -65,7 +67,15 @@ class LiveHost {
 				if (candidate != null
 					&& (candidate.revision != revision || candidate.moduleIdentity != description.moduleIdentity)
 					&& publicationKey(candidate) != rejectedPublication) {
-					if (candidate.moduleIdentity == description.moduleIdentity && candidate.patchAvailable && !candidate.requiresReload) {
+					// The same module numbered from scratch is a history the running module never had, like a new session.
+					var restarted = candidate.moduleIdentity == description.moduleIdentity && candidate.revision < revision;
+					if (strict && !restarted && candidate.moduleIdentity == description.moduleIdentity && candidate.patchAvailable
+						&& !candidate.requiresReload && candidate.baseRevision >= 0 && candidate.baseRevision != revision) {
+						refuse(path, description, revision, candidate,
+							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision');
+						rejectedPublication = publicationKey(candidate);
+					} else if (!restarted && candidate.moduleIdentity == description.moduleIdentity && candidate.patchAvailable
+						&& !candidate.requiresReload) {
 						var patching = true;
 						ProfileSpan.begin("live.patch");
 						try {
@@ -78,6 +88,7 @@ class LiveHost {
 							// Function ids are stable across patches, so the summary stands in for the 1 MB full description.
 							description = {
 								revision: candidate.revision,
+								baseRevision: candidate.baseRevision,
 								moduleIdentity: candidate.moduleIdentity,
 								requiresReload: candidate.requiresReload,
 								reloadReasons: candidate.reloadReasons,
@@ -92,7 +103,7 @@ class LiveHost {
 							if (patching)
 								ProfileSpan.end("live.patch");
 							if (strict) {
-								refuse(revision, candidate, 'the runtime rejected its patch: ${Std.string(error)}');
+								refuse(path, description, revision, candidate, 'the runtime rejected its patch: ${Std.string(error)}');
 								rejectedPublication = publicationKey(candidate);
 							} else {
 								report('haxeon: patch rejected; reloading module: ${Std.string(error)}');
@@ -105,14 +116,15 @@ class LiveHost {
 								}
 							}
 						}
-					} else if (strict && candidate.moduleIdentity == description.moduleIdentity) {
-						refuse(revision, candidate, reloadCause(description, candidate));
+					} else if (strict && !restarted && candidate.moduleIdentity == description.moduleIdentity) {
+						refuse(path, description, revision, candidate, reloadCause(description, candidate));
 						rejectedPublication = publicationKey(candidate);
 					} else {
 						// A new module identity (a compiler session without this module's history) can only reload, so strict mode
 						// lets it, and says so.
 						if (strict)
-							report('haxeon: strict live: reloading for a new compiler session; edits patch from here on');
+							report('haxeon: strict live: reloading for a new compiler session' + (restarted ? ' (revision ${candidate.revision} restarts the numbering of revision $revision)' : '')
+								+ '; edits patch from here on');
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var full = completeDescription(path, candidate);
 						if (full == null)
@@ -213,17 +225,27 @@ class LiveHost {
 	static function reloadCause(current:LiveDescription, candidate:LiveDescription):String {
 		if (candidate.moduleIdentity != current.moduleIdentity)
 			return 'module identity changed from ${current.moduleIdentity} to ${candidate.moduleIdentity}';
+		if (candidate.revision < current.revision)
+			return 'the compiler numbered the module from scratch';
 		if (candidate.requiresReload)
 			return 'the build requires a reload'
 				+ (candidate.reloadReasons.length == 0 ? '' : ': ' + candidate.reloadReasons.join(", "));
 		return 'the build carries no patch';
 	}
 
-	/** Strict mode: the running revision stays, and the edit is reported where it cannot be missed. */
-	static function refuse(revision:Int, candidate:LiveDescription, cause:String):Void {
+	/**
+	 * Strict mode: the running revision stays, and the edit is reported where it cannot be missed. The compiler is told in
+	 * `<module>.live.refused`, so its next build patches the revision this app runs instead of the refused one.
+	 */
+	static function refuse(path:String, current:LiveDescription, revision:Int, candidate:LiveDescription, cause:String):Void {
+		try
+			File.saveContent(path + ".live.refused", current.moduleIdentity + ":" + revision + ":" + candidate.revision)
+		catch (error:Dynamic)
+			report('haxeon: could not tell the compiler about the refusal: ${Std.string(error)}');
 		report('haxeon: ================================================================');
 		report('haxeon: LIVE PATCH REFUSED (--strict-live): revision ${candidate.revision} was not applied; still running revision $revision');
 		report('haxeon: $cause');
+		report('haxeon: the next build patches revision $revision with the refused edits in it');
 		report('haxeon: ================================================================');
 	}
 
@@ -275,8 +297,10 @@ class LiveHost {
 		var changed:Array<Dynamic> = value.changedFunctions,
 			identities:Array<Dynamic> = value.identities,
 			reasons:Null<Array<Dynamic>> = value.reloadReasons;
+		var base:Null<Dynamic> = value.baseRevision;
 		return {
 			revision: value.revision,
+			baseRevision: base == null ? -1 : (base : Int),
 			moduleIdentity: value.moduleIdentity,
 			requiresReload: value.requiresReload,
 			reloadReasons: reasons == null ? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],

@@ -129,14 +129,15 @@ class ProtocolMain {
 		if (!reload.ok
 			|| reload.result.compatibility.decision != "reload_domain"
 			|| reload.result.compatibility.baseRevision != 0
-			|| reload.result.compatibility.targetRevision != 1
+			// A fresh layout keeps numbering the module's revisions after the acknowledged revision 2.
+			|| reload.result.compatibility.targetRevision != 3
 			|| reload.result.compatibility.artifactKind != "module"
 			|| reload.result.compatibility.reasons.length == 0
 			|| reload.result.compatibility.reasons[0].code != "object_layout_changed"
 			|| reload.result.compatibility.reasons[0].entityKind != "object"
 			|| reload.result.compatibility.reasons[0].entityId != "Editor")
 			throw "protocol compile did not return a structured reload decision";
-		assertOk(protocol.handle('{"id":84,"method":"acknowledge","revision":1}'));
+		assertOk(protocol.handle('{"id":84,"method":"acknowledge","revision":3}'));
 		var invalid:Dynamic = Json.parse(protocol.handle('{"id":9,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));
 		if (!invalid.ok)
 			throw "protocol update should acknowledge unsaved edits";

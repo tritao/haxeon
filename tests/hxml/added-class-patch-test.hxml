@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main AddedClassPatchMain
+-hl out/added-class-patch-test.hl

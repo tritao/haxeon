@@ -18,9 +18,61 @@ existing closures and object prototypes valid, while superseded JIT code is
 reclaimed after protected calls complete. Retained objects and closures pin
 their owning module until released, and module disposal is idempotent.
 
-Type-table growth remains a reload boundary because initialized HashLink modules
-store direct `hl_type*` pointers. Haxeon fails closed for new function or
-structural types until the runtime has a non-moving type arena.
+## What a patch can add
+
+Initialized HashLink modules store direct `hl_type*` pointers, so the runtime
+reserves room up front and never moves what it has: function slots
+(`HL_PATCH_FUNCTION_RESERVE`), globals (`HL_PATCH_GLOBAL_RESERVE`) and the type
+table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
+
+- **Functions**, after the module's last slot. A removed function keeps its
+  slot and last body; the new code does not call it.
+- **Types** (HLP 10): function, abstract, reference, null and packed types, and
+  object, struct and virtual types with their layout. So an edit that adds a
+  class (plain, a subclass of a loaded class, or an implementation of a loaded
+  interface), a new interface or a closure environment patches. The runtime builds the entries in
+  place (`stage_patch_object_type`), links them to the module and their value
+  slot once the patch's globals are staged (`link_patch_object_types`), and
+  publishes them with the patch. Types the module already has never change.
+- **Globals**: String constants, and the null value slot each new object type
+  has. Patches cannot write the globals they add.
+
+Still a reload: new runtime natives (they sit before every function slot),
+changed C dispatch natives, moved slots, other new globals (an added static
+variable), changed layouts of existing objects (instances of the old layout are
+alive), enum changes, changes to existing interfaces, removed classes and changed function
+signatures.
+
+### Lambda names
+
+A lambda is named `<member>#<anchor>#<ordinal>` (`Parser.openLambda`,
+`LambdaName`). The anchor is where it is written: the variable, field or local
+function it is assigned to, the calls it is an argument of, `return`; for
+example `build#hover=/resourceState(1)#0`. The ordinal counts the lambdas before
+it at the same anchor only, so adding or removing a lambda renames nothing at
+other anchors. A lambda with no anchor is `<member>#<ordinal>`; an anchor longer
+than 48 characters keeps its last step and a hash. The planner still checks each
+group of same-anchor siblings for renumbering (`PatchPlanner.renumberedGroups`):
+inserting a lambda before a sibling at the same anchor (two `items.push(...)`
+callbacks, say) reloads.
+
+A lambda that captures is named after its captures too (a hash before the
+ordinal). An edit that keeps the captures is the same function with a new
+body, which closures made before the edit pick up. An edit that changes them
+makes a new function with a new environment type; closures made before the edit
+keep the code and environment they were made with.
+
+### Strict mode
+
+`haxeon run --watch --live --strict-live` refuses an edit that cannot patch
+instead of reloading. The host records the refusal in `<module>.live.refused`
+(`<identity>:<running revision>:<refused revision>`), and before the next build
+the compiler takes the refused publications back (it keeps the last three,
+`CompilerPublication.RETRACTABLE`), so that build patches the revision the app
+runs, with the refused edits in it. Patches name the revision they apply to
+(`baseRevision`). A build that needs a fresh layout keeps numbering the
+module's revisions, and the host treats a same-identity revision that goes
+backwards like a new session.
 
 ## Object layout changes
 

@@ -168,7 +168,10 @@ class ClosureTyper {
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
-		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, identity),
+		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
+		// function with a new environment type: closures made before the edit keep the code that reads their environment.
+		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures) capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
+		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
@@ -204,7 +207,7 @@ class ClosureTyper {
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = '$' + 'lambda-env:${session.currentContext.name}:$identity';
+			environment = '$' + 'lambda-env:${session.currentContext.name}:$capturedIdentity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({

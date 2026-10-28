@@ -112,6 +112,10 @@ typedef CompileResult = {
 	final functionIds:Map<String, Int>;
 	final runtimeIdentity:Bytes;
 	final revision:Int;
+
+	/** The revision `patchBytes` applies to. */
+	final baseRevision:Int;
+
 	final patchBytes:Null<Bytes>;
 	final metrics:CompileMetrics;
 }
@@ -351,6 +355,22 @@ class Compiler {
 		var candidate = publication.reject(revision);
 		restore(candidate.snapshot);
 		assembler = candidate.assembler;
+	}
+
+	/**
+	 * Returns to the state the module had at `revision`, which the live host still runs after refusing the revisions published
+	 * since, so the next build patches the module the host has. Their edits are still in the sources and come back in that
+	 * build. False when the compiler no longer holds that state.
+	 */
+	public function retractPublication(revision:Int):Bool {
+		var latest = assembler.lastRevision(), candidate = publication.retract(revision);
+		if (candidate == null)
+			return false;
+		restore(candidate.snapshot);
+		assembler = candidate.assembler.copy();
+		// The refused revisions were published; their numbers stay used.
+		assembler.continueRevisions(latest);
+		return true;
 	}
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
@@ -722,6 +742,7 @@ class Compiler {
 				functionIds: cached.functionIds,
 				runtimeIdentity: cached.runtimeIdentity,
 				revision: cached.revision,
+				baseRevision: cached.revision,
 				patchBytes: null,
 				metrics: {
 					allocationPhases: [],

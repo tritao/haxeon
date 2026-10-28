@@ -117,6 +117,8 @@ class CompilerSession {
 				}
 			}
 		}
+		if (request.live)
+			takeBackRefusedRevisions(request, report);
 		// `report` is caller code, so nothing proved about the field survives a call to it; a local does.
 		var existing = compiler;
 		if (existing == null) {
@@ -168,6 +170,40 @@ class CompilerSession {
 	}
 
 	/** Notes a live publication whose history `recordLiveState` writes once the session is idle. */
+	/**
+	 * The live host writes `<output>.live.refused` when `--strict-live` refuses a revision: `<module identity>:<running
+	 * revision>:<refused revision>`. The app keeps running the older revision, so a patch built on the refused one could never
+	 * apply, and neither could any after it. The compiler takes the refused revisions back before it reads the sources, and
+	 * this build patches the revision the app runs, with the refused edits in it again.
+	 */
+	function takeBackRefusedRevisions(request:CompilerRequest, report:String->Void):Void {
+		var active = compiler;
+		if (active == null)
+			return;
+		var published = request.publishedOutput == null ? request.output : request.publishedOutput,
+			path = published + ".live.refused";
+		if (!FileSystem.exists(path))
+			return;
+		var record = try File.getContent(path) catch (_:Dynamic) null;
+		try
+			FileSystem.deleteFile(path)
+		catch (_:Dynamic) {}
+		var marker = try File.getContent(published + ".live.full") catch (_:Dynamic) null;
+		if (record == null || marker == null)
+			return;
+		var fields = StringTools.trim(record).split(":"), identity = marker.substring(0, marker.lastIndexOf(":"));
+		if (fields.length != 3 || fields[0] != identity)
+			return;
+		var running = Std.parseInt(fields[1]);
+		if (running == null)
+			return;
+		var runningRevision:Int = running;
+		if (active.retractPublication(runningRevision))
+			report('live host refused revision ${fields[2]}; patching from revision $runningRevision, which it runs');
+		else
+			report('live host runs revision $runningRevision, which this compiler no longer holds; restart the live session to patch again');
+	}
+
 	public function recordLivePublication(output:String, marker:String):Void
 		unrecordedPublication = {output: output, marker: marker};
 

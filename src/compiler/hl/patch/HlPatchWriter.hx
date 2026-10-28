@@ -191,8 +191,9 @@ class HlPatchWriter {
 	}
 
 	/**
-	 * The globals the running module lacks. Each is a String constant: its type, then the fields its object is made of,
-	 * as indices into the module's ints and strings. A patch cannot create a global with no initial value.
+	 * The globals the running module lacks, each a kind byte and its type. A String constant (kind 1) then has the fields its
+	 * object is made of, as indices into the module's ints and strings. The value slot of a new object type (kind 0) starts
+	 * null. A patch cannot add any other global.
 	 */
 	static function encodeGlobals(code:HlCode, baseGlobals:Int):HaxeBytes {
 		checkBase(baseGlobals, code.globals.length);
@@ -205,25 +206,35 @@ class HlPatchWriter {
 			else
 				high = middle;
 		}
-		var count = code.globals.length - baseGlobals;
-		if (code.constants.length - low != count)
-			throw "A patch can add only constant globals";
+		var count = code.globals.length - baseGlobals, next = low;
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		out.writeInt32(hashGlobals(code.globals, baseGlobals));
 		writeIndex(out, baseGlobals);
 		writeIndex(out, count);
-		for (index in 0...count) {
-			var constant = code.constants[low + index];
-			if (constant.global != baseGlobals + index)
-				throw "A patch can add only constant globals";
-			writeIndex(out, code.globals[constant.global]);
-			writeIndex(out, constant.fields.length);
-			for (field in constant.fields)
-				writeIndex(out, field);
+		for (global in baseGlobals...code.globals.length) {
+			if (next < code.constants.length && code.constants[next].global == global) {
+				var constant = code.constants[next++];
+				out.writeByte(1);
+				writeIndex(out, code.globals[global]);
+				writeIndex(out, constant.fields.length);
+				for (field in constant.fields)
+					writeIndex(out, field);
+			} else if (isObjectValueGlobal(code, global)) {
+				out.writeByte(0);
+				writeIndex(out, code.globals[global]);
+			} else
+				throw "A patch can add only constant globals and the value globals of new object types";
 		}
 		return out.getBytes();
 	}
+
+	/** Whether `global` is the value slot of the object or struct type it holds (`HlSymbolTable.internObject`). */
+	public static function isObjectValueGlobal(code:HlCode, global:Int):Bool
+		return switch code.types[code.globals[global]] {
+			case Object(_, _, value, _, _, _), Structure(_, value, _, _, _): value == global + 1;
+			default: false;
+		};
 
 	static function encodeAddedFunctions(selected:Array<HlFunction>, added:Array<{slot:Int, name:String}>, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
 		var out = new BytesOutput();
@@ -468,11 +479,13 @@ class HlPatchWriter {
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
-				if (kind == HashLinkType.Ref || kind == HashLinkType.Null)
+				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed)
 					throw 'HashLink type $kind requires a parameter';
+				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual || kind == HashLinkType.Enum)
+					throw 'HashLink type $kind requires its layout';
 				out.writeByte(kind);
 			case Parameterized(kind, parameter):
-				if (kind != HashLinkType.Ref && kind != HashLinkType.Null)
+				if (kind != HashLinkType.Ref && kind != HashLinkType.Null && kind != HashLinkType.Packed)
 					throw 'Unsupported parameterized HashLink patch type $kind';
 				out.writeByte(kind);
 				writeSignedIndex(out, parameter);
@@ -485,15 +498,46 @@ class HlPatchWriter {
 				for (a in args)
 					writeSignedIndex(out, a);
 				writeSignedIndex(out, result);
-			case Object(_, _, _, _, _, _):
-				throw "Object type patches require a structural reload";
-			case Structure(_, _, _, _, _):
-				throw "Structure type patches require a structural reload";
-			case Virtual(_):
-				throw "Virtual type patches require a structural reload";
+			// As an HLB file has them: name, base, value global, the counts, then fields, methods and bindings.
+			case Object(name, base, global, fields, methods, bindings):
+				out.writeByte(HashLinkType.Obj);
+				writeObjectType(out, name, base, global, fields, methods, bindings);
+			case Structure(name, global, fields, methods, bindings):
+				out.writeByte(HashLinkType.Struct);
+				writeObjectType(out, name, -1, global, fields, methods, bindings);
+			case Virtual(fields):
+				out.writeByte(HashLinkType.Virtual);
+				writeIndex(out, fields.length);
+				for (field in fields) {
+					writeIndex(out, field.name);
+					writeIndex(out, field.type);
+				}
 			case Enum(_, _, _):
 				throw "Enum type patches require a structural reload";
 		}
+
+	static function writeObjectType(out:BytesOutput, name:Int, base:Int, global:Int, fields:Array<compiler.hl.HlCode.HlObjectField>,
+			methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
+		if (bindings.length % 2 != 0)
+			throw "Object bindings come in field and function pairs";
+		writeIndex(out, name);
+		writeSignedIndex(out, base);
+		writeIndex(out, global);
+		writeIndex(out, fields.length);
+		writeIndex(out, methods.length);
+		writeIndex(out, bindings.length >> 1);
+		for (field in fields) {
+			writeIndex(out, field.name);
+			writeIndex(out, field.type);
+		}
+		for (method in methods) {
+			writeIndex(out, method.name);
+			writeIndex(out, method.functionIndex);
+			writeSignedIndex(out, method.prototype);
+		}
+		for (binding in bindings)
+			writeIndex(out, binding);
+	}
 
 	static function writeIndex(out:BytesOutput, v:Int):Void {
 		if (v < 0)

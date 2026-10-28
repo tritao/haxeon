@@ -26,6 +26,7 @@ class AbiChangeSchema {
 			case ObjectMethodDispatchChanged(name): record("object_method_dispatch_changed", "object_method", name);
 			case ClosureLayoutChanged(name): record("closure_layout_changed", "closure_environment", name);
 			case InterfaceChanged(name): record("interface_changed", "interface", name);
+			case InterfaceAdded(name): record("interface_added", "interface", name);
 			case EnumChanged(name): record("enum_changed", "enum", name);
 			case GlobalLayoutChanged(name): record("global_layout_changed", "global", name);
 			case GeneratedFunctionsRenumbered(group): record("generated_functions_renumbered", "generated_function_group", group);
@@ -49,6 +50,7 @@ class AbiChangeSchema {
 			case "object_method_dispatch_changed": requireKind(record, "object_method", ObjectMethodDispatchChanged(record.entityId));
 			case "closure_layout_changed": requireKind(record, "closure_environment", ClosureLayoutChanged(record.entityId));
 			case "interface_changed": requireKind(record, "interface", InterfaceChanged(record.entityId));
+			case "interface_added": requireKind(record, "interface", InterfaceAdded(record.entityId));
 			case "enum_changed": requireKind(record, "enum", EnumChanged(record.entityId));
 			case "global_layout_changed": requireKind(record, "global", GlobalLayoutChanged(record.entityId));
 			case "generated_functions_renumbered": requireKind(record, "generated_function_group", GeneratedFunctionsRenumbered(record.entityId));

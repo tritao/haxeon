@@ -709,7 +709,8 @@ class DeclarationIndex {
 			default: type;
 		};
 
-	static function typeKey(type:CompilerType):String
+	/** A stable spelling of `type`; a recursive structure is spelled by its name. */
+	public static function typeKey(type:CompilerType):String
 		return switch type {
 			case TInt: "Int";
 			case TInt64: "haxe.Int64";

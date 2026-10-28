@@ -76,7 +76,13 @@ enum ReconnectReason {
 
 /** Owns valid compiler-to-runtime publication transitions and revision checks. */
 class CompilerPublication {
+	/** How many acknowledged publications can be taken back (`retract`); each holds a snapshot and an assembler. */
+	public static inline final RETRACTABLE = 3;
+
 	var state:PublicationState = Untracked;
+
+	/** Acknowledged publications, oldest first, each with the state it was built from. */
+	var acknowledged:Array<PendingPublication> = [];
 
 	public function new() {}
 
@@ -110,6 +116,31 @@ class CompilerPublication {
 	public function acknowledge(revision:Int):Void {
 		var candidate = requirePending(revision);
 		state = Ready({revision: revision, abi: candidate.abi, backendAvailable: true});
+		acknowledged.push(candidate);
+		if (acknowledged.length > RETRACTABLE)
+			acknowledged.shift();
+	}
+
+	/**
+	 * Takes back the acknowledged publications after `revision`, which the host still runs because it refused them (`haxeon
+	 * run --watch --live --strict-live` does not reload). Returns the publication that was built on `revision`, whose snapshot
+	 * and assembler describe it, or null when it is not among the last few or a newer build is pending.
+	 */
+	public function retract(revision:Int):Null<PendingPublication> {
+		switch state {
+			case Ready(_):
+			case Untracked, Pending(_):
+				return null;
+		}
+		var index = acknowledged.length - 1;
+		while (index >= 0 && acknowledged[index].baseline.revision != revision)
+			index--;
+		if (index < 0)
+			return null;
+		var candidate = acknowledged[index];
+		acknowledged.splice(index, acknowledged.length - index);
+		state = Ready(candidate.baseline);
+		return candidate;
 	}
 
 	public function reject(revision:Int):PendingPublication {

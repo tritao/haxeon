@@ -47,6 +47,10 @@ typedef HlAssemblyResult = {
 
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
+
+	/** The revision a patch of this build applies to: the one the assembler's published state had before it. */
+	final baseRevision:Int;
+
 	/** Why the assembler published a fresh module on its own, beyond the ABI plan's reasons. */
 	final layoutReasons:Array<String>;
 
@@ -92,6 +96,14 @@ class HlModuleAssembler {
 
 	var initialized:Bool = false;
 	var revision:Int = 0;
+
+	/**
+	 * Revisions up to this one were handed out already, by this assembler's history or one it replaces, so the next build is
+	 * numbered after it. A fresh layout under the same module identity, or a published revision the live host refused and the
+	 * compiler took back, must never reuse a number: the host tells builds apart by identity and revision.
+	 */
+	var revisionFloor:Int = 0;
+
 	var publishedInts = 0;
 	var publishedFloats = 0;
 	var publishedStrings = 0;
@@ -128,6 +140,7 @@ class HlModuleAssembler {
 		result.cache = cache.copy();
 		result.initialized = initialized;
 		result.revision = revision;
+		result.revisionFloor = revisionFloor;
 		result.publishedInts = publishedInts;
 		result.publishedFloats = publishedFloats;
 		result.publishedStrings = publishedStrings;
@@ -206,6 +219,15 @@ class HlModuleAssembler {
 		return result;
 	}
 
+	/** The last revision handed out, by this history or one it continues. */
+	public function lastRevision():Int
+		return revision > revisionFloor ? revision : revisionFloor;
+
+	/** Numbers this assembler's next build after `revision`, which another history of the same module already used. */
+	public function continueRevisions(revision:Int):Void
+		if (revision > revisionFloor)
+			revisionFloor = revision;
+
 	/**
 	 * Forgets every published symbol index. Interned object types record the slot of each method, so once
 	 * the slot layout has moved they would point every method table at a neighbouring function; a module
@@ -221,13 +243,19 @@ class HlModuleAssembler {
 		publishedGlobals = 0;
 	}
 
-	function addsOnlyConstantGlobals(total:Int):Bool {
-		var constants = symbols.stringConstantGlobals(), added = 0, index = constants.length - 1;
-		while (index >= 0 && constants[index].global >= publishedGlobals) {
-			added++;
-			index--;
-		}
-		return added == total - publishedGlobals;
+	/**
+	 * Whether every global `module` has past the published ones is a String constant or the value slot of an object type the
+	 * build adds, which are the globals a patch can carry.
+	 */
+	function addsOnlyPatchableGlobals(module:HlCode):Bool {
+		var constants:Map<Int, Bool> = [];
+		for (constant in symbols.stringConstantGlobals())
+			if (constant.global >= publishedGlobals)
+				constants.set(constant.global, true);
+		for (global in publishedGlobals...module.globals.length)
+			if (!constants.exists(global) && !(module.globals[global] >= publishedTypes && HlPatchWriter.isObjectValueGlobal(module, global)))
+				return false;
+		return true;
 	}
 
 	static function sameNames(previous:Null<Array<String>>, next:Array<String>):Bool {
@@ -488,11 +516,11 @@ class HlModuleAssembler {
 			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
-		// A running module can take new String constants but no other global, so a build that adds any other publishes a
-		// fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
-		if (initialized && !reload && !addsOnlyConstantGlobals(module.globals.length)) {
+		// A running module can take new String constants and the value slots of new object types but no other global, so a
+		// build that adds any other publishes a fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
+		if (initialized && !reload && !addsOnlyPatchableGlobals(module)) {
 			reload = true;
-			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants');
+			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants and new types');
 		}
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
@@ -510,10 +538,11 @@ class HlModuleAssembler {
 		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
+		var baseRevision = revision;
 		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && objectLayout == null && baseInts == publishedInts
 			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
 		if (!unchanged)
-			revision++;
+			revision = lastRevision() + 1;
 		initialized = true;
 		return {
 			module: module,
@@ -522,6 +551,7 @@ class HlModuleAssembler {
 			addedFunctions: addedFunctions,
 			functionIndices: layout,
 			requiresReload: reload,
+			baseRevision: baseRevision,
 			layoutReasons: layoutReasons,
 			objectReasons: objectReasons,
 			objectLayout: reload ? null : objectLayout,

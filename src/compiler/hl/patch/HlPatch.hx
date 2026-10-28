@@ -62,6 +62,10 @@ typedef HlPatchAddedFunction = {
 /** A global the patch adds, with the constant it holds: the fields of its object, as indices into the module's tables. */
 typedef HlPatchGlobal = {
 	final type:Int;
+
+	/** False for the null value slot of a new object type, which has no fields. */
+	final constant:Bool;
+
 	final fields:Array<Int>;
 }
 

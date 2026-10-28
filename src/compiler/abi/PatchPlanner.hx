@@ -24,6 +24,9 @@ enum AbiChange {
 	ObjectMethodDispatchChanged(name:String);
 	ClosureLayoutChanged(name:String);
 	InterfaceChanged(name:String);
+
+	/** An interface the previous build did not have. Only new classes can implement it, so no loaded layout changes. */
+	InterfaceAdded(name:String);
 	EnumChanged(name:String);
 	GlobalLayoutChanged(name:String);
 
@@ -47,10 +50,12 @@ enum PatchDecision {
 /** Compares the exact ABI descriptors consumed by HL lowering. */
 class PatchPlanner {
 	/**
-	 * `addsFunctions`: the running module can take functions a patch adds (HashLink live patching), so a new function is not a
-	 * reason to reload, and neither is a removed one: its slot and last body stay in the module, and the new code does not
-	 * call it. A removed constructor still reloads, since it goes with a class. Positionally named functions are still checked
-	 * for renumbering, which an addition or removal can cause.
+	 * `addsFunctions`: the running module can take functions and types a patch adds (HashLink live patching), so a new function
+	 * is not a reason to reload, and neither is a removed one: its slot and last body stay in the module, and the new code does
+	 * not call it. A removed constructor still reloads, since it goes with a class. A new class or closure environment is a type
+	 * the patch appends to the module's type table. A removed closure environment or capture cell stays in the table for the
+	 * closures that still hold one, as their code does. Positionally named functions are still checked for renumbering, which
+	 * an addition or removal can cause.
 	 *
 	 * `checksObjectMembers`: the assembler holds the layout the running module has, so it can take an object's added,
 	 * removed and reordered fields and its added methods. An object whose kind, base and interfaces stayed the same is then
@@ -85,7 +90,8 @@ class PatchPlanner {
 				default:
 					reasons.push(reason);
 			}
-		compare(previous.interfaces, next.interfaces, function(name, _, _) return InterfaceChanged(name), reasons);
+		compare(previous.interfaces, next.interfaces, function(name, oldValue, _) return oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
+			reasons);
 		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
 		for (group in renumberedGroups(previous.positional, next.positional))
@@ -125,8 +131,18 @@ class PatchPlanner {
 		return switch reason {
 			case FunctionAdded(_): true;
 			case FunctionRemoved(name): !StringTools.endsWith(name, ".new");
+			case ObjectAdded(_), InterfaceAdded(_): true;
+			case ObjectRemoved(name): isGeneratedType(name);
 			default: false;
 		};
+
+	/** Types the compiler makes for closures: their environments and the cells of the locals they capture. */
+	static function isGeneratedType(name:String):Bool {
+		for (prefix in ["$lambda-env:", "$function-adapter-env:", "$cell:"])
+			if (StringTools.startsWith(name, prefix))
+				return true;
+		return false;
+	}
 
 	/** Whether producing the replacement module requires discarding backend tombstones and layout caches. */
 	public static function requiresFreshLayout(decision:PatchDecision):Bool
