@@ -16,6 +16,7 @@ import compiler.syntax.Token.TokenKind;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Path;
+import runtime.LiveRefusal;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -169,41 +170,37 @@ class CompilerSession {
 		return compiler;
 	}
 
-	/** Notes a live publication whose history `recordLiveState` writes once the session is idle. */
 	/**
-	 * The live host writes `<output>.live.refused` when `--strict-live` refuses a revision: `<module identity>:<running
-	 * revision>:<refused revision>`. The app keeps running the older revision, so a patch built on the refused one could never
-	 * apply, and neither could any after it. The compiler takes the refused revisions back before it reads the sources, and
-	 * this build patches the revision the app runs, with the refused edits in it again.
+	 * The live host writes `<output>.live.refused` (`runtime.LiveRefusal`) when `--strict-live` refuses a revision. The app
+	 * keeps running the older revision, so a patch built on the refused one could never apply, and neither could any after
+	 * it. The compiler takes the refused revisions back before it reads the sources, and this build patches the revision
+	 * the app runs, with the refused edits in it again.
 	 */
 	function takeBackRefusedRevisions(request:CompilerRequest, report:String->Void):Void {
 		var active = compiler;
 		if (active == null)
 			return;
 		var published = request.publishedOutput == null ? request.output : request.publishedOutput,
-			path = published + ".live.refused";
+			path = LiveRefusal.path(published);
 		if (!FileSystem.exists(path))
 			return;
-		var record = try File.getContent(path) catch (_:Dynamic) null;
+		var text = try File.getContent(path) catch (_:Dynamic) null;
 		try
 			FileSystem.deleteFile(path)
 		catch (_:Dynamic) {}
 		var marker = try File.getContent(published + ".live.full") catch (_:Dynamic) null;
-		if (record == null || marker == null)
+		if (text == null || marker == null)
 			return;
-		var fields = StringTools.trim(record).split(":"), identity = marker.substring(0, marker.lastIndexOf(":"));
-		if (fields.length != 3 || fields[0] != identity)
+		var record = LiveRefusal.parse(text);
+		if (record == null || record.identity != marker.substring(0, marker.lastIndexOf(":")))
 			return;
-		var running = Std.parseInt(fields[1]);
-		if (running == null)
-			return;
-		var runningRevision:Int = running;
-		if (active.retractPublication(runningRevision))
-			report('live host refused revision ${fields[2]}; patching from revision $runningRevision, which it runs');
+		if (active.retractPublication(record.running))
+			report('live host refused revision ${record.refused}; patching from revision ${record.running}, which it runs');
 		else
-			report('live host runs revision $runningRevision, which this compiler no longer holds; restart the live session to patch again');
+			report('live host runs revision ${record.running}, which this compiler no longer holds; restart the live session to patch again');
 	}
 
+	/** Notes a live publication whose history `recordLiveState` writes once the session is idle. */
 	public function recordLivePublication(output:String, marker:String):Void
 		unrecordedPublication = {output: output, marker: marker};
 
