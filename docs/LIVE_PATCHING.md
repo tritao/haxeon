@@ -49,9 +49,10 @@ An edit that changes a function's signature, such as a parameter added to a cons
 It is the old function removed and a new one added under the same name: the assembler moves the old function out of
 its slot under a retired name (`<name>~retired<revision>`, `HlModuleAssembler.moveChangedSignatures`), where it keeps its
 code, and the function takes a new slot with a new stable ID. Callers the patch compiles again call the new function.
-Closures made before the edit (a stored `scale`), objects made before the edit, and callers the patch
-does not recompile keep calling the old function with the arguments it takes, so nothing calls a function with the wrong
-arguments. A subclass constructor that calls a changed `super(...)` is recompiled with it.
+Closures made before the edit (a stored `scale`) and callers the patch does not recompile keep calling the old function
+with the arguments it takes, so nothing calls a function with the wrong arguments. Objects made before the edit keep the
+state the old constructor gave them; constructors never run again on existing objects (see "Object layout changes"). A
+subclass constructor that calls a changed `super(...)` is recompiled with it.
 
 A method an object dispatches to through its prototype keeps its slot: the prototype entry names the slot, and the
 running module's types never change. A changed signature of such a method (`Point.sum()` given a parameter, an
