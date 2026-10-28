@@ -124,7 +124,6 @@ class LiveClosureGuardMain {
 		catch (error:RuntimeError)
 			throw '$label: the runtime refused the patch: ${error.message}';
 		session.build = changed;
-		session.compiler.acknowledgePublication(changed.revision);
 	}
 
 	/** The edit compiles to a patch, which the runtime refuses because stored closures reach what it drops; its message. */

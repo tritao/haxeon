@@ -690,6 +690,10 @@ class HlSymbolTable {
 		return internGlobal(STRING_CONSTANT_PREFIX + value, IrType.Bytes);
 
 	/** The literal globals, in index order, with the literal each one holds. */
+	/** Every named global (the static fields), by name: what a refused patch names a stored closure's holder by. */
+	public function namedGlobals():Map<String, Int>
+		return [for (name => index in globalIndices) name => index];
+
 	public function stringConstantGlobals():Array<{global:Int, value:String}>
 		return stringConstants;
 

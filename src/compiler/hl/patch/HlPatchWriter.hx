@@ -31,7 +31,8 @@ class HlPatchWriter {
 			tag:Int,
 			bytes:HaxeBytes
 		}>, ?addedFunctions:Array<{slot:Int, name:String}>,
-			baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>):HaxeBytes {
+			baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>,
+			?globalNames:Map<String, Int>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -106,7 +107,7 @@ class HlPatchWriter {
 			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals),
 			objectFields = layout == null || layout.fields.length == 0 ? null : encodeObjectFields(layout),
 			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot),
-			guarded = guards == null || guards.length == 0 ? null : encodeGuards(guards);
+			guarded = guards == null || guards.length == 0 ? null : encodeGuards(guards, globalNames);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -177,19 +178,31 @@ class HlPatchWriter {
 	/** Each migration: the class whose instances it initializes, and the stable ID of the function it runs on each. */
 	/**
 	 * The functions the patch drops that stored closures may still reach (`HlAssemblyResult.guards`): each a stable ID and what
-	 * happened to it. The module refuses the patch while a live closure refers to one.
+	 * happened to it. The module refuses the patch while a live closure refers to one. Then the names of the globals, which
+	 * the module has no names for, so a refusal can say which static field holds a closure.
 	 */
-	static function encodeGuards(guards:Array<{stableId:Int, description:String}>):HaxeBytes {
+	static function encodeGuards(guards:Array<{stableId:Int, description:String}>, globalNames:Null<Map<String, Int>>):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, guards.length);
 		for (guard in guards) {
-			var text = HaxeBytes.ofString(guard.description);
 			writeIndex(out, guard.stableId);
-			writeIndex(out, text.length);
-			out.write(text);
+			writeText(out, guard.description);
+		}
+		var names = globalNames == null ? [] : [for (name in globalNames.keys()) name];
+		names.sort(Reflect.compare);
+		writeIndex(out, names.length);
+		for (name in names) {
+			writeIndex(out, globalNames.get(name));
+			writeText(out, name);
 		}
 		return out.getBytes();
+	}
+
+	static function writeText(out:BytesOutput, value:String):Void {
+		var text = HaxeBytes.ofString(value);
+		writeIndex(out, text.length);
+		out.write(text);
 	}
 
 	static function encodeMigrations(layout:HlObjectLayout, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
