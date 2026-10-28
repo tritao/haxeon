@@ -497,6 +497,27 @@ class HlSymbolTable {
 		return index;
 	}
 
+	/**
+	 * Gives types new names as `rewrite` says (see `compiler.abi.LambdaAlignment`): the keys of objects, and of the types made
+	 * from them (`fun(obj:...)`, `null:obj:...`), move to the new names and keep their indices. The definitions are not touched,
+	 * so the running module's types stay what they are; a name the rewrite frees is interned afresh when a build uses it.
+	 */
+	public function renameTypes(rewrite:compiler.abi.LambdaAlignment.NameRewrite):Void {
+		if (rewrite.isEmpty())
+			return;
+		ensureWritable();
+		typeIndices = rewrite.indexKeys(typeIndices);
+		objectIndices = rewrite.indexKeys(objectIndices);
+		var methods:Map<String, Map<String, Int>> = [];
+		for (name => slots in objectMethodIndices)
+			methods.set(rewrite.apply(name), slots);
+		objectMethodIndices = methods;
+		var pending:Map<String, Bool> = [];
+		for (key => value in pendingTypes)
+			pending.set(rewrite.apply(key), value);
+		pendingTypes = pending;
+	}
+
 	/** The published definition of object `name`, or null when no published type has that name. */
 	public function objectDefinition(name:String):Null<{index:Int, definition:HlTypeDef}> {
 		var index = objectIndices.get(name);

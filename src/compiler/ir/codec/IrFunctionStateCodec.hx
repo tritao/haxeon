@@ -67,10 +67,22 @@ class IrFunctionStateCodec {
 
 	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
-	 * fingerprint run the same code, wherever their source sits and whatever they are called.
+	 * fingerprint run the same code, wherever their source sits and whatever they are called. Lambda ordinals are left out of
+	 * the names it mentions (`IrTypeCodec.withoutOrdinals`), so a lambda that only moved among its siblings keeps its
+	 * fingerprint even though its environment and nested lambdas are renamed with it (see `LambdaAlignment`).
 	 */
-	public static function codeFingerprint(fn:IrFunction):String
-		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false)));
+	public static function codeFingerprint(fn:IrFunction):String {
+		IrTypeCodec.erasingOrdinals = true;
+		var bytes:Bytes;
+		try {
+			bytes = encodeFunction(fn, false);
+		} catch (error:Dynamic) {
+			IrTypeCodec.erasingOrdinals = false;
+			throw error;
+		}
+		IrTypeCodec.erasingOrdinals = false;
+		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(bytes));
+	}
 
 	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true):Bytes {
 		var values:Map<Int, IrValue> = [];

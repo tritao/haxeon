@@ -148,6 +148,76 @@ class HlFunctionCache {
 		}
 	}
 
+	/**
+	 * Renames functions, all at once: each key of `names` that the cache knows takes the value as its name, keeping its slot,
+	 * stable ID, code and signature. A name nothing is renamed away from must not be taken.
+	 */
+	public function rename(names:Map<String, String>):Void {
+		var moved:Array<{from:String, to:String}> = [];
+		for (from => to in names)
+			if (from != to && (userSlots.exists(from) || stableIds.exists(from)))
+				moved.push({from: from, to: to});
+		if (moved.length == 0)
+			return;
+		var sources:Map<String, Bool> = [for (entry in moved) entry.from => true];
+		for (entry in moved)
+			if (!sources.exists(entry.to) && (userSlots.exists(entry.to) || stableIds.exists(entry.to)))
+				throw 'Cannot rename function ${entry.from} to ${entry.to}, which exists';
+		var slotsOf:Map<String, Int> = [], idsOf:Map<String, Int> = [], bodies:Map<String, IrFunction> = [], signaturesOf:Map<String, String> = [];
+		for (entry in moved) {
+			if (userSlots.exists(entry.from))
+				slotsOf.set(entry.from, userSlots.get(entry.from));
+			if (stableIds.exists(entry.from))
+				idsOf.set(entry.from, stableIds.get(entry.from));
+			if (functions.exists(entry.from))
+				bodies.set(entry.from, functions.get(entry.from));
+			if (signatures.exists(entry.from))
+				signaturesOf.set(entry.from, signatures.get(entry.from));
+			userSlots.remove(entry.from);
+			stableIds.remove(entry.from);
+			functions.remove(entry.from);
+			signatures.remove(entry.from);
+		}
+		for (entry in moved) {
+			if (slotsOf.exists(entry.from)) {
+				var slot = slotsOf.get(entry.from);
+				userSlots.set(entry.to, slot);
+				slots[slot] = entry.to;
+			}
+			if (idsOf.exists(entry.from))
+				stableIds.set(entry.to, idsOf.get(entry.from));
+			var body = bodies.get(entry.from);
+			if (body != null)
+				functions.set(entry.to, new IrFunction(entry.to, body.arguments, body.result, body.blocks, body.debugBindings, body.inlineHint,
+					body.retention));
+			if (signaturesOf.exists(entry.from))
+				signatures.set(entry.to, signaturesOf.get(entry.from));
+		}
+	}
+
+	/**
+	 * Forgets the functions `isRetired` names: their slots, code and stable IDs. Only a fresh module may drop them, since the
+	 * slots of the functions after them move. Returns whether any went.
+	 */
+	public function dropRetired(isRetired:String->Bool):Bool {
+		var kept = [for (name in slots) if (!isRetired(name)) name];
+		if (kept.length == slots.length)
+			return false;
+		for (name in slots)
+			if (isRetired(name)) {
+				userSlots.remove(name);
+				stableIds.remove(name);
+				functions.remove(name);
+				signatures.remove(name);
+			}
+		slots.resize(0);
+		for (name in kept) {
+			userSlots.set(name, slots.length);
+			slots.push(name);
+		}
+		return true;
+	}
+
 	static function validateStableId(name:String, id:Int):Void {
 		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init") || (name == "__init" && id != INIT_STABLE_ID))
 			throw 'Invalid stable function ID for "$name"';
