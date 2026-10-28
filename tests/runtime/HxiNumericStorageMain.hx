@@ -133,9 +133,12 @@ function main():Int {
 		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
 		// A later compile can demand a previously unused buffer and its methods.
 		var replacement = Sys.args().indexOf("--replace-program") >= 0;
+		// The replacement adds a static variable, which a running module cannot take, so it reloads: added methods alone
+		// would patch.
 		compiler.update("Main.hx", replacement ? 'import NumericStorage;
+class Expected { public static var x:Int = 42; }
 function main():Int {
- var point = new Point(); point.set_x(42);
+ var point = new Point(); point.set_x(Expected.x);
  var batch = new Batch(); batch.set_points(0,point);
  var buffer = new BatchBuffer(1); buffer.set(0,batch);
  return buffer.copy(0).get_points(0).get_x();
@@ -146,7 +149,7 @@ function main():Int {
 '));
 		var incremental = compiler.compile("Main");
 		if (replacement && (!incremental.requiresReload || incremental.module.natives.length >= result.module.natives.length))
-			throw "Program replacement must exercise a reload with fewer runtime imports";
+			throw "Program replacement must exercise a reload with fewer runtime imports (reasons: " + incremental.reloadReasons.join(", ") + ")";
 		if (!Lambda.exists(incremental.ir.functions, fn -> fn.name.indexOf("BatchBuffer.") >= 0))
 			throw "A previously unused buffer must become available on demand";
 		// Reloads can remove runtime imports, moving every user-function slot.
