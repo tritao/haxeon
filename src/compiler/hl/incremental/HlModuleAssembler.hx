@@ -3,6 +3,7 @@ package compiler.hl.incremental;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.abi.LambdaAlignment;
+import compiler.ir.codec.IrTypeCodec;
 import compiler.abi.LambdaAlignment.NameRewrite;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
@@ -273,7 +274,10 @@ class HlModuleAssembler {
 				dispatched.set(method.functionName, true);
 		for (fn in program.functions) {
 			var known = cache.signatures.get(fn.name);
-			if (known == null || !cache.userSlots.exists(fn.name) || known == HlFunctionCache.signature(fn)
+			// A lambda renamed for this build (`renameLambdas`) still has the signature it was cached with, which names its
+			// environment by its old ordinal; the renamed environment keeps its type, so ordinals do not count.
+			if (known == null || !cache.userSlots.exists(fn.name)
+				|| IrTypeCodec.withoutOrdinals(known) == IrTypeCodec.withoutOrdinals(HlFunctionCache.signature(fn))
 				|| !PatchPlanner.movesOnSignatureChange(fn.name, dispatched))
 				continue;
 			renames.set(fn.name, LambdaAlignment.retiredFunctionName(fn.name, tag));

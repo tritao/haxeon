@@ -24,7 +24,8 @@ class LambdaRenumberPatchMain {
 		"timesTen" => "x * scale * 10",
 		"timesTwenty" => "x * scale * 20",
 		"plusForty" => "x + scale + 40",
-		"nested" => "apply(y -> y * x, scale + 1)"
+		"nested" => "apply(y -> y * x, scale + 1)",
+		"nestedTwice" => "apply(y -> y * x * 2, scale + 1)"
 	];
 
 	static function main():Void {
@@ -68,6 +69,9 @@ class LambdaRenumberPatchMain {
 		var session = start(source(["nested", "timesTen"]), 4 * 100 + 30);
 		patch("nested: one inserted before a lambda with a capturing lambda in it", session, source(["plusForty", "nested", "timesTen"]), 4 * 100
 			+ 30, 44 * 10000 + 4 * 100 + 30);
+		// The inner lambda moved with the outer one: editing it now reaches the stored outer closure, which makes it on each call.
+		patch("nested: the moved inner lambda edited afterwards", session, source(["plusForty", "nestedTwice", "timesTen"]), 8 * 100 + 30,
+			44 * 10000 + 8 * 100 + 30);
 		Runtime.dispose(session.live);
 		Sys.println("PASS: inserting, deleting and reordering lambdas at one anchor patches, and stored closures keep their functions");
 	}

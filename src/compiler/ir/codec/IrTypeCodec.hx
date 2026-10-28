@@ -139,7 +139,8 @@ class IrTypeCodec {
 
 	/**
 	 * `name` with every lambda ordinal (`#<digits>` ending a name or a step of one, see `LambdaName`) reduced to `#`.
-	 * Haxe identifiers cannot contain `#`, so only the compiler's own separators are touched.
+	 * Haxe identifiers cannot contain `#`, so only the compiler's own separators are touched. It also takes text that names
+	 * types, like a signature (`(Obj($lambda-env:...#0),I32)->I32`), where a name can end at `)`, `,` or `>`.
 	 */
 	public static function withoutOrdinals(name:String):String {
 		if (name.indexOf("#") < 0)
@@ -154,11 +155,14 @@ class IrTypeCodec {
 			var end = index;
 			while (end < name.length && name.charCodeAt(end) >= "0".code && name.charCodeAt(end) <= "9".code)
 				end++;
-			if (end > index && (end == name.length || name.charCodeAt(end) == ":".code))
+			if (end > index && (end == name.length || endsStep(name.charCodeAt(end))))
 				index = end;
 		}
 		return result.toString();
 	}
+
+	static function endsStep(code:Int):Bool
+		return code == ":".code || code == ")".code || code == ",".code || code == ">".code;
 
 	public static function writeString(output:BytesOutput, value:String):Void {
 		var bytes = haxe.io.Bytes.ofString(value);
