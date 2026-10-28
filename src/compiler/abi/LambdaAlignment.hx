@@ -50,7 +50,10 @@ typedef GroupAlignment = {
  *
  * - Siblings with the same fingerprint are matched in order. They and every lambda written in them run the same code, so
  *   which of them takes which slot cannot be observed.
- * - A new sibling nothing matches is added; a running one nothing matches is removed and keeps its slot and code.
+ * - An edited sibling is followed through the saved file's text diff (`followEdit`, `SourceLineMap`), when both builds
+ *   recorded where their lambdas start; a pair is taken only when neither's code appears elsewhere in its group.
+ * - A new sibling nothing matches is added; a running one nothing matches is removed and keeps its slot and code, and the
+ *   patch applies only when no stored closure reaches it (`HlModuleAssembler.dropGuards`).
  * - Between two matched siblings, one unmatched running sibling and one unmatched new sibling are the same function edited,
  *   provided neither's code appears elsewhere in its group (else nothing tells an edit from a copy inserted beside a
  *   deletion). Any other combination of unmatched siblings on both sides of the same gap is refused, as is one when the
