@@ -99,9 +99,7 @@ class PatchPlanner {
 		for (group in renumberedGroups(previous.positional, next.positional))
 			reasons.push(GeneratedFunctionsRenumbered(group));
 		if (addsFunctions) {
-			var dispatched = methodFunctions(previous.objects);
-			for (name => _ in methodFunctions(next.objects))
-				dispatched.set(name, true);
+			var dispatched = dispatchedFunctions(previous, next);
 			reasons = [
 				for (reason in reasons)
 					if (!keepsLayout(reason, dispatched)) reason
@@ -134,11 +132,20 @@ class PatchPlanner {
 	}
 
 	/**
-	 * The functions objects dispatch to through their prototypes (`methods=<name>:<function>` in `RuntimeAbi.describe`). A
-	 * prototype entry names a slot, so such a function cannot move to a new one.
+	 * The functions objects dispatch to through their prototypes (`methods=<name>:<function>` in `RuntimeAbi.describe`), in the
+	 * running module (`previous`) or the new build. A prototype entry names a slot, so such a function cannot move to a new one
+	 * (`movesOnSignatureChange`). The one place that decides it: the planner and the assembler (`HlModuleAssembler.assemble`)
+	 * both use it.
 	 */
-	static function methodFunctions(objects:Map<String, String>):Map<String, Bool> {
+	public static function dispatchedFunctions(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
+		if (previous != null)
+			addMethodFunctions(previous.objects, result);
+		addMethodFunctions(next.objects, result);
+		return result;
+	}
+
+	static function addMethodFunctions(objects:Map<String, String>, result:Map<String, Bool>):Void {
 		for (description in objects)
 			for (part in description.split(";"))
 				if (StringTools.startsWith(part, "methods="))
@@ -147,7 +154,6 @@ class PatchPlanner {
 						if (separator > 0)
 							result.set(method.substr(separator + 1), true);
 					}
-		return result;
 	}
 
 	/** Whether a function whose signature changed can be given a new slot, the old one keeping its code (see `plan`). */
@@ -201,44 +207,15 @@ class PatchPlanner {
 	 * for its function again; a HashLink build applies those renames before it plans (`BackendAssembly`), so it gets here
 	 * with nothing left to rename. A group is reported when it cannot be matched, or when it would need renaming: a module that
 	 * cannot take the renames (a Wasm module, or one the compiler resumed without its layout) reloads instead. Function adapter
-	 * groups are never renamed; they must keep every name's function (`sameFunctions`).
+	 * groups are never renamed; they must keep every name's function (`LambdaAlignment.keepsNames`).
 	 *
 	 * Groups that only appear in one build are new or deleted functions, which have their own reasons.
 	 */
 	public static function renumberedGroups(previous:Null<Map<String, String>>, next:Null<Map<String, String>>):Array<String> {
-		var alignment = LambdaAlignment.align(previous, next, ""),
+		var alignment = LambdaAlignment.align(previous, next, LambdaAlignment.PLANNING),
 			result = alignment.refused.concat(alignment.renamed);
 		result.sort(Reflect.compare);
 		return result;
-	}
-
-	/**
-	 * Whether a group's functions provably keep their names, by their code fingerprints:
-	 *
-	 * - None changed, or functions were only added or removed after the last one that is kept: every kept name runs its old code.
-	 * - Exactly one changed, the count is the same, and neither its old nor its new code appears elsewhere in the group: that is
-	 *   an edit of that function. (A sibling inserted above and a later one deleted changes every name in between, unless those
-	 *   siblings have identical code, which the uniqueness check rules out.)
-	 */
-	public static function sameFunctions(previous:Array<Null<String>>, next:Array<Null<String>>):Bool {
-		var changed:Array<Int> = [];
-		for (ordinal in 0...(previous.length < next.length ? previous.length : next.length))
-			if (previous[ordinal] == null || previous[ordinal] != next[ordinal])
-				changed.push(ordinal);
-		if (changed.length == 0)
-			return true;
-		if (changed.length > 1 || previous.length != next.length)
-			return false;
-		var ordinal = changed[0];
-		return occurrences(previous, previous[ordinal]) == 1 && occurrences(next, next[ordinal]) == 1;
-	}
-
-	static function occurrences(sources:Array<Null<String>>, source:Null<String>):Int {
-		var count = 0;
-		for (candidate in sources)
-			if (candidate == source)
-				count++;
-		return count;
 	}
 
 	static function compare(previous:Map<String, String>, next:Map<String, String>, change:(String, Null<String>, Null<String>) -> AbiChange,

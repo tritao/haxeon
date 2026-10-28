@@ -138,7 +138,30 @@ class LambdaRenumberPatchMain {
 		if (value != fresh)
 			throw '$label: the full module returned $value instead of $fresh';
 		session.build = changed;
+		checkEnvironmentNames(label, changed);
 		Sys.println('$label: patched');
+	}
+
+	/**
+	 * Every closure environment in the module the build writes is named after a lambda the build has, and no two share a name:
+	 * a renamed lambda's environment carries its new name (`HlSymbolTable.renameTypes`).
+	 */
+	static function checkEnvironmentNames(label:String, build:Dynamic):Void {
+		var code:compiler.hl.HlCode = build.module, ids:Map<String, Int> = build.functionIds, seen:Map<String, Bool> = [];
+		for (type in code.types)
+			switch type {
+				case Object(name, _, _, _, _, _):
+					var text = code.strings[name];
+					if (!StringTools.startsWith(text, "$lambda-env:"))
+						continue;
+					if (seen.exists(text))
+						throw '$label: two closure environments are named $text';
+					seen.set(text, true);
+					var lambda = "$lambda:" + text.substr("$lambda-env:".length);
+					if (!ids.exists(lambda))
+						throw '$label: the closure environment $text names no lambda of the build';
+				default:
+			}
 	}
 
 	static function refuse(label:String, session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int}, after:String):Void {

@@ -71,20 +71,11 @@ class IrFunctionStateCodec {
 	 * the names it mentions (`IrTypeCodec.withoutOrdinals`), so a lambda that only moved among its siblings keeps its
 	 * fingerprint even though its environment and nested lambdas are renamed with it (see `LambdaAlignment`).
 	 */
-	public static function codeFingerprint(fn:IrFunction):String {
-		IrTypeCodec.erasingOrdinals = true;
-		var bytes:Bytes;
-		try {
-			bytes = encodeFunction(fn, false);
-		} catch (error:Dynamic) {
-			IrTypeCodec.erasingOrdinals = false;
-			throw error;
-		}
-		IrTypeCodec.erasingOrdinals = false;
-		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(bytes));
-	}
+	public static function codeFingerprint(fn:IrFunction):String
+		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false, true, true)));
 
-	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true):Bytes {
+	/** With `erase`, names lose their lambda ordinals (see `codeFingerprint`). */
+	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true, erase:Bool = false):Bytes {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
@@ -98,7 +89,7 @@ class IrFunctionStateCodec {
 			if (terminator != null)
 				collectTerminator(terminator.value, values);
 		}
-		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value], identified),
+		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value], identified, erase),
 			output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRF");
@@ -108,7 +99,7 @@ class IrFunctionStateCodec {
 		output.writeInt32(fn.arguments.length);
 		for (argument in fn.arguments)
 			IrValueTableCodec.writeReference(output, argument);
-		IrTypeCodec.writeType(output, fn.result, 0);
+		IrTypeCodec.writeType(output, fn.result, 0, erase);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
 		var debugBindings = identified ? fn.debugBindings : [];
@@ -139,7 +130,7 @@ class IrFunctionStateCodec {
 				throw "Too many IR instructions";
 			output.writeInt32(block.instructions.length);
 			for (instruction in block.instructions) {
-				writeBytes(output, IrInstructionCodec.encode(instruction.value));
+				writeBytes(output, IrInstructionCodec.encode(instruction.value, erase));
 				if (identified)
 					writeProvenance(output, instruction.provenance, hashed);
 			}

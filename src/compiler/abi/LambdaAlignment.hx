@@ -2,107 +2,12 @@ package compiler.abi;
 
 import compiler.semantic.LambdaName;
 
-/**
- * One simultaneous renaming of lambdas (`LambdaName`): each key becomes its value. A lambda's name is part of the names of
- * everything made for it, so a rename moves them too: the lambdas written in it (`$lambda:<lambda>:...`), their environments
- * (`$lambda-env:<lambda>:...`), the cells of the variables it captures (`$cell:<lambda>:...`), its own environment
- * (`$lambda-env:<enclosing>:<identity>`), and these names wherever they appear in type keys or ABI descriptions.
- */
-class NameRewrite {
-	/** The renames the rewrite was made from, by full lambda name. */
-	public final lambdas:Map<String, String>;
-
-	final pairs:Array<{from:String, to:String}> = [];
-
-	static inline final LAMBDA:String = LambdaName.PREFIX;
-	static inline final ENVIRONMENT:String = LambdaName.ENVIRONMENT_PREFIX;
-
-	public function new(lambdas:Map<String, String>) {
-		this.lambdas = lambdas;
-		for (from => to in lambdas) {
-			if (!LambdaName.is(from) || !LambdaName.is(to))
-				throw 'Only lambdas are renamed: $from -> $to';
-			pairs.push({from: from, to: to});
-			pairs.push({from: ENVIRONMENT + from.substr(LAMBDA.length), to: ENVIRONMENT + to.substr(LAMBDA.length)});
-		}
-		// The longest first, so a name never matches where a longer one it is a prefix of does.
-		pairs.sort((a, b) -> b.from.length - a.from.length);
-	}
-
-	public function isEmpty():Bool
-		return pairs.length == 0;
-
-	/**
-	 * `text` with every renamed name in it replaced. A name counts only as a whole: what comes before it must start a name (the
-	 * start, or one of `:(,< =`) and what follows must end one (the end, or one of `:),> ;`), so `g#1` never matches in `g#10`.
-	 */
-	public function apply(text:String):String {
-		if (pairs.length == 0 || text.indexOf("$lambda") < 0)
-			return text;
-		var result = new StringBuf(), index = 0, copied = 0;
-		while (index < text.length) {
-			var found = text.indexOf("$lambda", index);
-			if (found < 0)
-				break;
-			var replaced = false;
-			if (found == 0 || startsName(text.charCodeAt(found - 1)))
-				for (pair in pairs) {
-					var end = found + pair.from.length;
-					if (end <= text.length && text.substr(found, pair.from.length) == pair.from
-						&& (end == text.length || endsName(text.charCodeAt(end)))) {
-						result.add(text.substring(copied, found));
-						result.add(pair.to);
-						copied = index = end;
-						replaced = true;
-						break;
-					}
-				}
-			if (!replaced)
-				index = found + 1;
-		}
-		if (copied == 0)
-			return text;
-		result.add(text.substring(copied));
-		return result.toString();
-	}
-
-	static function startsName(code:Null<Int>):Bool
-		return code == ":".code || code == "(".code || code == ",".code || code == "<".code || code == " ".code || code == "=".code;
-
-	static function endsName(code:Null<Int>):Bool
-		return code == ":".code || code == ")".code || code == ",".code || code == ">".code || code == " ".code || code == ";".code;
-
-	/** `map` with its keys rewritten. */
-	public function keys(map:Map<String, String>):Map<String, String> {
-		var result:Map<String, String> = [];
-		for (key => value in map)
-			result.set(apply(key), value);
-		return result;
-	}
-
-	/** `map` with its keys rewritten. */
-	public function indexKeys(map:Map<String, Int>):Map<String, Int> {
-		var result:Map<String, Int> = [];
-		for (key => value in map)
-			result.set(apply(key), value);
-		return result;
-	}
-
-	/** `map` with its keys and values rewritten. */
-	public function entries(map:Map<String, String>):Map<String, String> {
-		var result:Map<String, String> = [];
-		for (key => value in map)
-			result.set(apply(key), apply(value));
-		return result;
-	}
-}
-
 /** How the lambdas of one build stand for the lambdas of the build the running module has. */
 typedef LambdaAlignmentResult = {
 	/**
 	 * Renames that give each lambda of the running module the name its function has in the new build, applied in order.
 	 * A running lambda the new build no longer has, whose name a different function takes, is renamed out of the way
-	 * (`LambdaAlignment.retiredName`): it keeps its slot and code for the closures that hold it.
+	 * (`RetiredName.lambda`): it keeps its slot and code for the closures that hold it.
 	 */
 	final steps:Array<NameRewrite>;
 
@@ -111,6 +16,15 @@ typedef LambdaAlignmentResult = {
 
 	/** Groups whose functions cannot be shown to be the same functions as before. */
 	final refused:Array<String>;
+}
+
+/** How one group's running siblings stand for its new ones (`LambdaAlignment.alignGroup`). */
+typedef GroupAlignment = {
+	/** The new ordinal each matched running ordinal stands for. */
+	final mapping:Map<Int, Int>;
+
+	/** Running ordinals nothing stands for whose names the new build gives to another function. */
+	final retired:Array<Int>;
 }
 
 /**
@@ -132,11 +46,19 @@ typedef LambdaAlignmentResult = {
  *   matches are reordered and siblings were also edited.
  *
  * The result renames the running module's names to the new build's. Function adapters (`$function-adapter:`) are not
- * renamed; their groups patch only while every name keeps its function (`PatchPlanner.sameFunctions`).
+ * renamed; their groups patch only while every name keeps its function (`keepsNames`).
  */
 class LambdaAlignment {
-	static inline final RETIRED:String = "~retired";
+	/**
+	 * The tag `PatchPlanner` aligns with. The planner reads only which groups are renamed or refused; the names it would retire
+	 * lambdas to are never used, so they need no build to tell them apart.
+	 */
+	public static inline final PLANNING:String = "";
 
+	/**
+	 * How to rename the running module's lambdas (`previous` fingerprints, by name) so that each stands for its function in
+	 * the new build (`next`). `tag` goes into the names of lambdas retired by this build (`RetiredName.lambda`).
+	 */
 	public static function align(previous:Null<Map<String, String>>, next:Null<Map<String, String>>, tag:String):LambdaAlignmentResult {
 		var steps:Array<NameRewrite> = [], renamed:Array<String> = [], refused:Array<String> = [], after = groups(next);
 		var names = [for (group in after.keys()) group];
@@ -150,7 +72,7 @@ class LambdaAlignment {
 			if (old == null)
 				continue;
 			if (!LambdaName.is(group)) {
-				if (!PatchPlanner.sameFunctions(old, now))
+				if (!keepsNames(old, now))
 					refused.push(group);
 				continue;
 			}
@@ -159,25 +81,8 @@ class LambdaAlignment {
 				refused.push(group);
 				continue;
 			}
-			var renames:Map<String, String> = [], sources:Map<String, Bool> = [];
-			for (from => to in aligned.mapping)
-				if (from != to) {
-					renames.set(member(group, from), member(group, to));
-					sources.set(member(group, from), true);
-				}
-			for (ordinal in aligned.retired) {
-				renames.set(member(group, ordinal), retiredName(group, ordinal, tag));
-				sources.set(member(group, ordinal), true);
-			}
-			// A name a rename moves onto may still be held by a function the running module no longer uses (removed by an
-			// earlier edit); move it out of the way with its environments and nested lambdas.
-			for (to in [for (_ => to in renames) to])
-				if (!sources.exists(to) && to.indexOf(RETIRED) < 0)
-					renames.set(to, retiredName(group, PositionalName.ordinal(to), tag));
-			var count = 0;
-			for (_ in renames.keys())
-				count++;
-			if (count == 0)
+			var renames = groupRenames(group, aligned, tag);
+			if (!renames.keys().hasNext())
 				continue;
 			var step = new NameRewrite(renames);
 			steps.push(step);
@@ -187,6 +92,26 @@ class LambdaAlignment {
 		}
 		refused.sort(Reflect.compare);
 		return {steps: steps, renamed: renamed, refused: refused};
+	}
+
+	/** The renames that carry out `aligned` for `group`, by full lambda name. */
+	static function groupRenames(group:String, aligned:GroupAlignment, tag:String):Map<String, String> {
+		var renames:Map<String, String> = [], sources:Map<String, Bool> = [];
+		for (from => to in aligned.mapping)
+			if (from != to) {
+				renames.set(member(group, from), member(group, to));
+				sources.set(member(group, from), true);
+			}
+		for (ordinal in aligned.retired) {
+			renames.set(member(group, ordinal), RetiredName.lambda(group, ordinal, tag));
+			sources.set(member(group, ordinal), true);
+		}
+		// A name a rename moves onto may still be held by a function the running module no longer uses (removed by an earlier
+		// edit); move it out of the way with its environments and nested lambdas.
+		for (to in [for (_ => to in renames) to])
+			if (!sources.exists(to) && !RetiredName.is(to))
+				renames.set(to, RetiredName.lambda(group, PositionalName.ordinal(to), tag));
+		return renames;
 	}
 
 	/** `abi` with the running module's names renamed as `steps` say. */
@@ -207,20 +132,6 @@ class LambdaAlignment {
 			positional: positional
 		};
 	}
-
-	/**
-	 * The name a running lambda takes when the new build gives its name to another function: in a group of its own, which no
-	 * build has, so nothing is ever compared with it or patched into it. `tag` keeps the names of different builds apart.
-	 */
-	public static function retiredName(group:String, ordinal:Int, tag:String):String
-		return group + RETIRED + tag + "#" + ordinal;
-
-	/** The name a function whose signature changed leaves behind in the slot it had (see `HlModuleAssembler`). */
-	public static function retiredFunctionName(name:String, tag:String):String
-		return name + RETIRED + tag;
-
-	public static function isRetired(name:String):Bool
-		return name.indexOf(RETIRED) >= 0;
 
 	static function member(group:String, ordinal:Int):String
 		return group + "#" + ordinal;
@@ -247,8 +158,24 @@ class LambdaAlignment {
 	 * The running ordinal each new ordinal stands for (`mapping`, from running to new), and the running ordinals whose names
 	 * the new build gives to another function (`retired`); null when the group cannot be matched.
 	 */
-	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>):Null<{mapping:Map<Int, Int>, retired:Array<Int>}> {
-		var waiting:Map<String, Array<Int>> = [], mapping:Map<Int, Int> = [], matchedNew:Map<Int, Bool> = [];
+	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>):Null<GroupAlignment> {
+		var mapping = matchSameCode(before, after);
+		var matchedNew:Map<Int, Bool> = [for (_ => to in mapping) to => true];
+		var unmatchedOld = [for (ordinal in 0...before.length) if (before[ordinal] != null && !mapping.exists(ordinal)) ordinal],
+			unmatchedNew = [for (ordinal in 0...after.length) if (after[ordinal] != null && !matchedNew.exists(ordinal)) ordinal];
+		if (unmatchedOld.length > 0 && unmatchedNew.length > 0 && !pairEdits(before, after, mapping, unmatchedOld, unmatchedNew))
+			return null;
+		// A running sibling nothing stands for keeps its name, unless the new build gives that name to another function.
+		var retired = [
+			for (ordinal in 0...before.length)
+				if (before[ordinal] != null && !mapping.exists(ordinal) && ordinal < after.length && after[ordinal] != null) ordinal
+		];
+		return {mapping: mapping, retired: retired};
+	}
+
+	/** Siblings with the same fingerprint, matched in order: running ordinal to new ordinal. */
+	static function matchSameCode(before:Array<Null<String>>, after:Array<Null<String>>):Map<Int, Int> {
+		var waiting:Map<String, Array<Int>> = [], mapping:Map<Int, Int> = [];
 		for (ordinal in 0...before.length) {
 			var print = before[ordinal];
 			if (print == null)
@@ -268,55 +195,74 @@ class LambdaAlignment {
 			if (list != null && list.length > 0) {
 				var from:Int = list.shift();
 				mapping.set(from, ordinal);
-				matchedNew.set(ordinal, true);
 			}
 		}
-		var unmatchedOld = [for (ordinal in 0...before.length) if (before[ordinal] != null && !mapping.exists(ordinal)) ordinal],
-			unmatchedNew = [for (ordinal in 0...after.length) if (after[ordinal] != null && !matchedNew.exists(ordinal)) ordinal];
-		if (unmatchedOld.length > 0 && unmatchedNew.length > 0) {
-			// Unmatched siblings on both sides may be edits. Pair them only between the same matched neighbours.
-			var pairs = [for (from => to in mapping) {from: from, to: to}];
-			pairs.sort((a, b) -> a.from - b.from);
-			for (index in 1...pairs.length)
-				if (pairs[index].to < pairs[index - 1].to)
-					return null;
-			function gap(ordinal:Int, old:Bool):Int {
-				var count = 0;
-				for (pair in pairs)
-					if ((old ? pair.from : pair.to) < ordinal)
-						count++;
-				return count;
-			}
-			var gaps:Map<Int, {olds:Array<Int>, news:Array<Int>}> = [];
-			function at(index:Int):{olds:Array<Int>, news:Array<Int>} {
-				var entry = gaps.get(index);
-				if (entry == null) {
-					entry = {olds: [], news: []};
-					gaps.set(index, entry);
-				}
-				return entry;
-			}
-			for (ordinal in unmatchedOld)
-				at(gap(ordinal, true)).olds.push(ordinal);
-			for (ordinal in unmatchedNew)
-				at(gap(ordinal, false)).news.push(ordinal);
-			for (entry in gaps) {
-				if (entry.olds.length == 0 || entry.news.length == 0)
-					continue;
-				if (entry.olds.length != 1 || entry.news.length != 1)
-					return null;
-				var from = entry.olds[0], to = entry.news[0];
-				if (occurrences(before, before[from]) != 1 || occurrences(after, after[to]) != 1)
-					return null;
-				mapping.set(from, to);
-			}
+		return mapping;
+	}
+
+	/**
+	 * Pairs the unmatched siblings on both sides as edits, adding them to `mapping`: only one running and one new sibling between
+	 * the same matched neighbours, neither of whose code appears elsewhere in its group. False when they cannot be told apart.
+	 */
+	static function pairEdits(before:Array<Null<String>>, after:Array<Null<String>>, mapping:Map<Int, Int>, unmatchedOld:Array<Int>,
+			unmatchedNew:Array<Int>):Bool {
+		var pairs = [for (from => to in mapping) {from: from, to: to}];
+		pairs.sort((a, b) -> a.from - b.from);
+		for (index in 1...pairs.length)
+			if (pairs[index].to < pairs[index - 1].to)
+				return false;
+		function gap(ordinal:Int, old:Bool):Int {
+			var count = 0;
+			for (pair in pairs)
+				if ((old ? pair.from : pair.to) < ordinal)
+					count++;
+			return count;
 		}
-		// A running sibling nothing stands for keeps its name, unless the new build gives that name to another function.
-		var retired = [
-			for (ordinal in 0...before.length)
-				if (before[ordinal] != null && !mapping.exists(ordinal) && ordinal < after.length && after[ordinal] != null) ordinal
-		];
-		return {mapping: mapping, retired: retired};
+		var gaps:Map<Int, {olds:Array<Int>, news:Array<Int>}> = [];
+		function at(index:Int):{olds:Array<Int>, news:Array<Int>} {
+			var entry = gaps.get(index);
+			if (entry == null) {
+				entry = {olds: [], news: []};
+				gaps.set(index, entry);
+			}
+			return entry;
+		}
+		for (ordinal in unmatchedOld)
+			at(gap(ordinal, true)).olds.push(ordinal);
+		for (ordinal in unmatchedNew)
+			at(gap(ordinal, false)).news.push(ordinal);
+		for (entry in gaps) {
+			if (entry.olds.length == 0 || entry.news.length == 0)
+				continue;
+			if (entry.olds.length != 1 || entry.news.length != 1)
+				return false;
+			var from = entry.olds[0], to = entry.news[0];
+			if (occurrences(before, before[from]) != 1 || occurrences(after, after[to]) != 1)
+				return false;
+			mapping.set(from, to);
+		}
+		return true;
+	}
+
+	/**
+	 * Whether a group that is never renamed (function adapters) provably keeps its names, by its code fingerprints:
+	 *
+	 * - None changed, or functions were only added or removed after the last one that is kept: every kept name runs its old code.
+	 * - Exactly one changed, the count is the same, and neither its old nor its new code appears elsewhere in the group: that is
+	 *   an edit of that function. (A sibling inserted above and a later one deleted changes every name in between, unless those
+	 *   siblings have identical code, which the uniqueness check rules out.)
+	 */
+	public static function keepsNames(previous:Array<Null<String>>, next:Array<Null<String>>):Bool {
+		var changed:Array<Int> = [];
+		for (ordinal in 0...(previous.length < next.length ? previous.length : next.length))
+			if (previous[ordinal] == null || previous[ordinal] != next[ordinal])
+				changed.push(ordinal);
+		if (changed.length == 0)
+			return true;
+		if (changed.length > 1 || previous.length != next.length)
+			return false;
+		var ordinal = changed[0];
+		return occurrences(previous, previous[ordinal]) == 1 && occurrences(next, next[ordinal]) == 1;
 	}
 
 	static function occurrences(sources:Array<Null<String>>, source:Null<String>):Int {

@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.abi.LambdaAlignment;
+import compiler.abi.RetiredName;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -74,7 +75,8 @@ class BackendAssembly {
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
+		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
 		for (reason in assembly.objectReasons)
@@ -119,12 +121,12 @@ class BackendAssembly {
 	/**
 	 * A fresh layout for the same module identity. It keeps the stable function ids and continues the revision count: the
 	 * module it replaces is still running, and a revision number that starts over would look like an older build of it.
-	 * Retired functions (`LambdaAlignment.isRetired`) are left behind: only closures of the running module call them, and the
+	 * Retired functions (`RetiredName`) are left behind: only closures of the running module call them, and the
 	 * fresh module replaces it, so keeping their IDs would only let them pile up across reloads.
 	 */
 	static function freshLayout(previous:HlModuleAssembler):HlModuleAssembler {
 		var ids = CompilationContext.copyIndices(previous.cache.stableIds);
-		for (name in [for (name in ids.keys()) if (LambdaAlignment.isRetired(name)) name])
+		for (name in [for (name in ids.keys()) if (RetiredName.is(name)) name])
 			ids.remove(name);
 		var fresh = new HlModuleAssembler(ids);
 		fresh.continueRevisions(previous.lastRevision());

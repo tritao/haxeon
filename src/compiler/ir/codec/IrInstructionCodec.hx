@@ -71,12 +71,13 @@ class IrInstructionCodec {
 		"EnumField" => true
 	];
 
-	public static function encode(instruction:IrInstruction):HaxeBytes {
+	/** `instruction`'s bytes; with `erase`, the names in it lose their lambda ordinals (see `IrTypeCodec.writeType`). */
+	public static function encode(instruction:IrInstruction, erase:Bool = false):HaxeBytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRI");
 		output.writeByte(VERSION);
-		write(output, instruction);
+		write(output, instruction, erase);
 		return output.getBytes();
 	}
 
@@ -102,7 +103,7 @@ class IrInstructionCodec {
 		}
 	}
 
-	public static function write(output:BytesOutput, instruction:IrInstruction):Void {
+	public static function write(output:BytesOutput, instruction:IrInstruction, erase:Bool = false):Void {
 		switch instruction {
 			case Phi(value, inputs):
 				begin(output, "Phi", 2);
@@ -153,7 +154,7 @@ class IrInstructionCodec {
 			case TypeValue(value, type):
 				begin(output, "TypeValue", 2);
 				writeValue(output, value);
-				writeType(output, type);
+				writeType(output, type, erase);
 			case ToDyn(outputValue, value):
 				writeTwoValues(output, "ToDyn", outputValue, value);
 			case IntToFloat(outputValue, value):
@@ -179,10 +180,10 @@ class IrInstructionCodec {
 			case GlobalGet(value, name):
 				begin(output, "GlobalGet", 2);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 			case GlobalSet(name, value):
 				begin(output, "GlobalSet", 2);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValue(output, value);
 			case Add(value, left, right):
 				writeThreeValues(output, "Add", value, left, right);
@@ -215,21 +216,21 @@ class IrInstructionCodec {
 			case Call(value, name, arguments):
 				begin(output, "Call", 3);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValues(output, arguments);
 			case CNativeCall(value, name, arguments):
 				begin(output, "CNativeCall", 3);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValues(output, arguments);
 			case StaticClosure(value, name):
 				begin(output, "StaticClosure", 2);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 			case InstanceClosure(value, name, receiver):
 				begin(output, "InstanceClosure", 3);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValue(output, receiver);
 			case CallClosure(value, closure, arguments):
 				begin(output, "CallClosure", 3);
@@ -242,21 +243,21 @@ class IrInstructionCodec {
 				begin(output, "MethodCall", 4);
 				writeValue(output, value);
 				writeValue(output, object);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValues(output, arguments);
 			case NewObject(value, name):
 				begin(output, "NewObject", 2);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 			case FieldGet(value, object, name):
 				begin(output, "FieldGet", 3);
 				writeValue(output, value);
 				writeValue(output, object);
-				writeName(output, name);
+				writeName(output, name, erase);
 			case FieldSet(object, name, value):
 				begin(output, "FieldSet", 3);
 				writeValue(output, object);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeValue(output, value);
 			case ArrayGet(value, array, index):
 				writeThreeValues(output, "ArrayGet", value, array, index);
@@ -273,7 +274,7 @@ class IrInstructionCodec {
 			case MakeEnum(value, name, constructor, arguments):
 				begin(output, "MakeEnum", 4);
 				writeValue(output, value);
-				writeName(output, name);
+				writeName(output, name, erase);
 				writeInt(output, constructor);
 				writeValues(output, arguments);
 			case EnumIndex(outputValue, value):
@@ -563,8 +564,8 @@ class IrInstructionCodec {
 	}
 
 	/** A function, object, global, field or enum name: written like text, its lambda ordinals left out in a fingerprint. */
-	static function writeName(output:BytesOutput, value:String):Void
-		writeText(output, IrTypeCodec.erasingOrdinals ? IrTypeCodec.withoutOrdinals(value) : value);
+	static function writeName(output:BytesOutput, value:String, erase:Bool):Void
+		writeText(output, erase ? IrTypeCodec.withoutOrdinals(value) : value);
 
 	static function writeText(output:BytesOutput, value:String):Void {
 		output.writeByte(4);
@@ -583,9 +584,9 @@ class IrInstructionCodec {
 		}
 	}
 
-	static function writeType(output:BytesOutput, value:IrType):Void {
+	static function writeType(output:BytesOutput, value:IrType, erase:Bool):Void {
 		output.writeByte(6);
-		IrTypeCodec.writeType(output, value, 0);
+		IrTypeCodec.writeType(output, value, 0, erase);
 	}
 
 	static function writeValues(output:BytesOutput, values:Array<IrValue>):Void {

@@ -397,7 +397,7 @@ class AbiMatrixMain {
 				throw 'lambda alignment, ${entry.name}: expected "${entry.expected}", got "$actual"';
 		}
 		// Every name a lambda's name is part of moves with it, and only whole names do.
-		var rewrite = new compiler.abi.LambdaAlignment.NameRewrite([group + "#1" => group + "#2", group + "#0" => group + "#1"]);
+		var rewrite = new compiler.abi.NameRewrite([group + "#1" => group + "#2", group + "#0" => group + "#1"]);
 		var renamed = [
 			"fun(obj:$lambda-env:main:main#push(0)#0,i32)->i32",
 			"$lambda:$lambda:main:main#push(0)#1:inner#0",
@@ -415,6 +415,17 @@ class AbiMatrixMain {
 		for (index in 0...expected.length)
 			if (renamed[index] != expected[index])
 				throw 'lambda rename: expected ${expected[index]}, got ${renamed[index]}';
+		// A rewrite that renames a key onto one the map still holds would drop an entry; it throws instead.
+		var keyed = [group + "#0" => 1, group + "#1" => 2];
+		var collided = try {
+			new compiler.abi.NameRewrite([group + "#0" => group + "#1"]).keys(keyed);
+			false;
+		} catch (error:String) StringTools.startsWith(error, "Renaming lambdas gives");
+		if (!collided)
+			throw 'lambda rename: renaming #0 onto a #1 the map still holds must throw';
+		var moved = new compiler.abi.NameRewrite([group + "#0" => group + "#1", group + "#1" => group + "#0"]).keys(keyed);
+		if (moved.get(group + "#1") != 1 || moved.get(group + "#0") != 2)
+			throw 'lambda rename: a swap must keep both entries';
 		Sys.println('PASS: ${cases.length} lambda alignment fixtures');
 	}
 

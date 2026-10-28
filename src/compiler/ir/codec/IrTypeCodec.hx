@@ -38,7 +38,12 @@ class IrTypeCodec {
 		}
 	}
 
-	public static function writeType(output:BytesOutput, type:IrType, depth:Int):Void {
+	/**
+	 * Writes `type`. With `erase`, names are written without their lambda ordinals (`IrFunctionStateCodec.codeFingerprint`):
+	 * a lambda's environment and the lambdas written in it are named after it, so without this a lambda that only moved among
+	 * its siblings would look like different code.
+	 */
+	public static function writeType(output:BytesOutput, type:IrType, depth:Int, erase:Bool = false):Void {
 		if (depth >= MAX_DEPTH)
 			throw "IR type nesting limit exceeded";
 		switch type {
@@ -60,26 +65,26 @@ class IrTypeCodec {
 				output.writeByte(6);
 			case Array(element):
 				output.writeByte(7);
-				writeType(output, element, depth + 1);
+				writeType(output, element, depth + 1, erase);
 			case Iterator(element):
 				output.writeByte(15);
-				writeType(output, element, depth + 1);
+				writeType(output, element, depth + 1, erase);
 			case Enum(name):
-				writeNamed(output, 8, name);
+				writeNamed(output, 8, name, erase);
 			case Obj(name):
-				writeNamed(output, 9, name);
+				writeNamed(output, 9, name, erase);
 			case Abstract(name):
-				writeNamed(output, 10, name);
+				writeNamed(output, 10, name, erase);
 			case Virtual(name):
-				writeNamed(output, 11, name);
+				writeNamed(output, 11, name, erase);
 			case Function(arguments, result):
 				if (arguments.length > MAX_ARGUMENTS)
 					throw "Too many IR function type arguments";
 				output.writeByte(12);
 				output.writeInt32(arguments.length);
 				for (argument in arguments)
-					writeType(output, argument, depth + 1);
-				writeType(output, result, depth + 1);
+					writeType(output, argument, depth + 1, erase);
+				writeType(output, result, depth + 1, erase);
 			case I64:
 				output.writeByte(13);
 			case RawPtr:
@@ -88,7 +93,7 @@ class IrTypeCodec {
 				output.writeByte(17);
 			case Nullable(element):
 				output.writeByte(18);
-				writeType(output, element, depth + 1);
+				writeType(output, element, depth + 1, erase);
 		}
 	}
 
@@ -123,19 +128,12 @@ class IrTypeCodec {
 		};
 	}
 
-	static function writeNamed(output:BytesOutput, tag:Int, name:String):Void {
+	static function writeNamed(output:BytesOutput, tag:Int, name:String, erase:Bool):Void {
 		if (name.length == 0)
 			throw "IR named type cannot be empty";
 		output.writeByte(tag);
-		writeString(output, erasingOrdinals ? withoutOrdinals(name) : name);
+		writeString(output, erase ? withoutOrdinals(name) : name);
 	}
-
-	/**
-	 * While set, names are written without their lambda ordinals (`IrFunctionStateCodec.codeFingerprint`): a lambda's
-	 * environment and the lambdas written in it are named after it, so without this a lambda that only moved among its
-	 * siblings would look like different code.
-	 */
-	public static var erasingOrdinals:Bool = false;
 
 	/**
 	 * `name` with every lambda ordinal (`#<digits>` ending a name or a step of one, see `LambdaName`) reduced to `#`.

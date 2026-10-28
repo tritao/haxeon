@@ -2,9 +2,9 @@ package compiler.hl.incremental;
 
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
-import compiler.abi.LambdaAlignment;
 import compiler.ir.codec.IrTypeCodec;
-import compiler.abi.LambdaAlignment.NameRewrite;
+import compiler.abi.NameRewrite;
+import compiler.abi.RetiredName;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -276,14 +276,12 @@ class HlModuleAssembler {
 	/**
 	 * A function whose signature changed cannot take its slot's new code: closures, and callers this build does not lower
 	 * again, call the slot with the old arguments. So it leaves the slot under a retired name, keeping its code for them, and
-	 * the function takes a new slot (`LambdaAlignment.retiredFunctionName`). Prototype entries name slots too, so a method an
-	 * object dispatches to keeps its slot; the plan reloads for those (`PatchPlanner.plan`). Returns the moved names.
+	 * the function takes a new slot (`RetiredName.movedFunction`). Prototype entries name slots too, so a method an object
+	 * dispatches to (`dispatched`, see `PatchPlanner.dispatchedFunctions`) keeps its slot; the plan reloads for those
+	 * (`PatchPlanner.plan`). Returns the moved names.
 	 */
-	function moveChangedSignatures(program:IrProgram, tag:String):Array<String> {
-		var dispatched:Map<String, Bool> = [], renames:Map<String, String> = [], moved:Array<String> = [];
-		for (object in program.objects)
-			for (method in object.methods)
-				dispatched.set(method.functionName, true);
+	function moveChangedSignatures(program:IrProgram, tag:String, dispatched:Map<String, Bool>):Array<String> {
+		var renames:Map<String, String> = [], moved:Array<String> = [];
 		for (fn in program.functions) {
 			var known = cache.signatures.get(fn.name);
 			// A lambda renamed for this build (`renameLambdas`) still has the signature it was cached with, which names its
@@ -292,7 +290,7 @@ class HlModuleAssembler {
 				|| IrTypeCodec.withoutOrdinals(known) == IrTypeCodec.withoutOrdinals(HlFunctionCache.signature(fn))
 				|| !PatchPlanner.movesOnSignatureChange(fn.name, dispatched))
 				continue;
-			renames.set(fn.name, LambdaAlignment.retiredFunctionName(fn.name, tag));
+			renames.set(fn.name, RetiredName.movedFunction(fn.name, tag));
 			moved.push(fn.name);
 		}
 		if (moved.length > 0) {
@@ -520,7 +518,12 @@ class HlModuleAssembler {
 		return result;
 	}
 
-	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
+	/**
+	 * `dispatched`: the functions object prototypes dispatch to (`PatchPlanner.dispatchedFunctions`), which keep their slots
+	 * when their signatures change; described from `program` when not given.
+	 */
+	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>,
+			?dispatched:Map<String, Bool>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		var reload = switch decision {
 			case Patch: false;
@@ -528,7 +531,8 @@ class HlModuleAssembler {
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
 		if (initialized && !reload) {
-			var moved = moveChangedSignatures(program, Std.string(lastRevision() + 1));
+			var moved = moveChangedSignatures(program, Std.string(lastRevision() + 1),
+				dispatched != null ? dispatched : PatchPlanner.dispatchedFunctions(null, compiler.abi.RuntimeAbi.describe(program)));
 			if (moved.length > 0) {
 				var listed:Map<String, Bool> = [for (name in regenerated) name => true];
 				regenerated = regenerated.concat([for (name in moved) if (!listed.exists(name)) name]);
@@ -548,7 +552,7 @@ class HlModuleAssembler {
 		// running module call them. Lowering their stale code again could fail, as it names functions whose signatures changed.
 		function startFresh():Void {
 			discardPublishedSymbols();
-			if (cache.dropRetired(LambdaAlignment.isRetired))
+			if (cache.dropRetired(RetiredName.is))
 				ordered.functions = cache.ordered();
 		}
 		var reuseLowered = initialized && !reload;
