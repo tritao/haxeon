@@ -109,13 +109,61 @@ class SidebarModel {
 		for (i in 0...slots.length) modes[slots[i]] = placed[i];
 	}
 	public function encode():String {
+		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|" + encodeShown() +
+			"|" + savedOrder.join(",");
+	}
+	/** True when the user hid a destination or moved one, including destinations not registered now. */
+	public var customDestinations(get, never):Bool;
+	function get_customDestinations():Bool {
+		if (savedOrder.length > 0) return true;
+		for (mode in modes) if (!mode.visible) return true;
+		for (id in savedVisible.keys()) if (find(id) == null && savedVisible.get(id) == false) return true;
+		return false;
+	}
+	/** The user's own destination choices alone, which destinations show and their order, without the selection, width
+		or sidebar visibility; an application can keep them once for every window. */
+	public function encodeDestinations():String return "1|" + encodeShown() + "|" + savedOrder.join(",");
+	/** Apply choices from encodeDestinations, keeping the selection where it is still shown. Parses atomically. */
+	public function restoreDestinations(value:String):Bool {
+		if (value.length > 65536) return false;
+		var parts = value.split("|");
+		if (parts.length != 3 || parts[0] != "1") return false;
+		var shown = parseShown(parts[1], false), order = parseOrder(parts[2]);
+		if (shown == null || order == null) return false;
+		savedVisible = shown; savedOrder = order;
+		for (mode in modes) if (shown.exists(mode.id)) mode.visible = shown.get(mode.id);
+		arrange();
+		var active = selected(); activeId = active == null ? "" : active.id;
+		onChange(); return true;
+	}
+	function encodeShown():String {
 		var shown:Map<String, Bool> = [];
 		for (id in savedVisible.keys()) shown.set(id, savedVisible.get(id));
 		for (mode in modes) shown.set(mode.id, mode.visible);
 		var values = [for (id in shown.keys()) id + "," + (shown.get(id) ? "1" : "0")];
 		values.sort(Reflect.compare);
-		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|" + values.join(";") +
-			"|" + savedOrder.join(",");
+		return values.join(";");
+	}
+	/** `id,flag` rows separated by `;`, or null when malformed. */
+	static function parseShown(rows:String, legacy:Bool):Null<Map<String, Bool>> {
+		var shown:Map<String, Bool> = [];
+		if (rows != "") for (row in rows.split(";")) {
+			var fields = row.split(",");
+			if (fields.length != (legacy ? 3 : 2) || !validId(fields[0]) || shown.exists(fields[0])) return null;
+			var flag = fields[legacy ? 2 : 1];
+			if (flag != "0" && flag != "1") return null;
+			shown.set(fields[0], flag == "1");
+		}
+		return shown;
+	}
+	/** Comma-separated distinct ids, or null when malformed. */
+	static function parseOrder(value:String):Null<Array<String>> {
+		var order:Array<String> = [], seen:Map<String, Bool> = [];
+		if (value != "") for (id in value.split(",")) {
+			if (!validId(id) || seen.exists(id)) return null;
+			seen.set(id, true); order.push(id);
+		}
+		return order;
 	}
 	/** Parse atomically. Legacy layouts migrate using the saved active destination's width; layouts before
 		version 3 carry no order and restore the default one. */
@@ -132,29 +180,18 @@ class SidebarModel {
 			nextWidth = Std.parseFloat(parts[3]);
 			if (!validWidth(nextWidth)) return false;
 		}
-		var shown:Map<String, Bool> = [];
 		var rows = parts[legacy ? 3 : 4];
-		if (rows != "") for (row in rows.split(";")) {
+		var shown = parseShown(rows, legacy);
+		if (shown == null) return false;
+		if (legacy && rows != "") for (row in rows.split(";")) {
 			var fields = row.split(",");
-			if (fields.length != (legacy ? 3 : 2) || !validId(fields[0]) || shown.exists(fields[0])) return false;
-			var flag = fields[legacy ? 2 : 1];
-			if (flag != "0" && flag != "1") return false;
-			if (legacy) {
-				if (!widthPattern.match(fields[1])) return false;
-				var oldWidth = Std.parseFloat(fields[1]);
-				if (!validWidth(oldWidth)) return false;
-				if (fields[0] == parts[1]) nextWidth = oldWidth;
-			}
-			shown.set(fields[0], flag == "1");
+			if (!widthPattern.match(fields[1])) return false;
+			var oldWidth = Std.parseFloat(fields[1]);
+			if (!validWidth(oldWidth)) return false;
+			if (fields[0] == parts[1]) nextWidth = oldWidth;
 		}
-		var order:Array<String> = [];
-		if (parts.length == 6 && parts[5] != "") {
-			var seen:Map<String, Bool> = [];
-			for (id in parts[5].split(",")) {
-				if (!validId(id) || seen.exists(id)) return false;
-				seen.set(id, true); order.push(id);
-			}
-		}
+		var order = parts.length == 6 ? parseOrder(parts[5]) : [];
+		if (order == null) return false;
 		savedActive = parts[1]; savedVisible = shown; width = nextWidth; savedOrder = order;
 		visible = parts[2] == "1";
 		for (mode in modes) if (shown.exists(mode.id)) mode.visible = shown.get(mode.id);
