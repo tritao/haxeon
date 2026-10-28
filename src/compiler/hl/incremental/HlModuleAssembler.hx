@@ -301,6 +301,39 @@ class HlModuleAssembler {
 	}
 
 	/**
+	 * The functions whose lowered code calls, or makes a closure of, the slot a function in `moved` left (see
+	 * `moveChangedSignatures`), retired functions aside. Each is lowered again in the same build, wherever its source is, so
+	 * it calls the function's new slot: a caller the edit did not touch, in another file say, would otherwise keep reaching
+	 * the code left in the old slot.
+	 */
+	function callersOfMoved(moved:Array<String>, tag:String):Array<String> {
+		var oldSlots:Map<Int, Bool> = [];
+		for (name in moved) {
+			var lowered = loweredFunctions.get(RetiredName.movedFunction(name, tag));
+			if (lowered != null)
+				oldSlots.set(lowered.functionIndex, true);
+		}
+		var callers:Array<String> = [];
+		for (name => fn in loweredFunctions)
+			if (!RetiredName.is(name) && referencesAny(fn, oldSlots))
+				callers.push(name);
+		callers.sort(Reflect.compare);
+		return callers;
+	}
+
+	static function referencesAny(fn:HlFunction, slots:Map<Int, Bool>):Bool {
+		for (opcode in fn.opcodes)
+			switch opcode {
+				case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target, _) | StaticClosure(_, target)
+					| InstanceClosure(_, target, _):
+					if (slots.exists(target))
+						return true;
+				default:
+			}
+		return false;
+	}
+
+	/**
 	 * Forgets every published symbol index. Interned object types record the slot of each method, so once
 	 * the slot layout has moved they would point every method table at a neighbouring function; a module
 	 * that cannot be patched must intern its types afresh against the new layout.
@@ -531,11 +564,19 @@ class HlModuleAssembler {
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
 		if (initialized && !reload) {
-			var moved = moveChangedSignatures(program, Std.string(lastRevision() + 1),
+			var tag = Std.string(lastRevision() + 1);
+			var moved = moveChangedSignatures(program, tag,
 				dispatched != null ? dispatched : PatchPlanner.dispatchedFunctions(null, compiler.abi.RuntimeAbi.describe(program)));
 			if (moved.length > 0) {
 				var listed:Map<String, Bool> = [for (name in regenerated) name => true];
 				regenerated = regenerated.concat([for (name in moved) if (!listed.exists(name)) name]);
+				for (name in moved)
+					listed.set(name, true);
+				for (name in callersOfMoved(moved, tag))
+					if (!listed.exists(name)) {
+						listed.set(name, true);
+						regenerated.push(name);
+					}
 			}
 		}
 		var publishedSlots = cache.slots.length;

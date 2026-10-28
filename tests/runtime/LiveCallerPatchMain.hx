@@ -2,6 +2,8 @@ import compiler.hl.HlWriter;
 import compiler.Compiler;
 import runtime.PatchSet;
 import runtime.Runtime;
+import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.hl.HlFunction;
 
 /**
  * A function whose signature changes takes a new slot. Every caller that called its old slot is compiled again in the same
@@ -34,7 +36,43 @@ class LiveCallerPatchMain {
 			expect(Runtime.callInt(live, mainId), expected, 'version $version, the patched module against a fresh one');
 		}
 		Runtime.dispose(live);
+		assemblerRecompilesCallers();
 		Sys.println("PASS: callers of a function whose signature changed call its new code, from files the edit did not touch too");
+	}
+
+	/**
+	 * The assembler on its own: told that only `scale` changed, it still lowers `Other.twice` again, because its lowered code
+	 * calls the slot `scale` left.
+	 */
+	static function assemblerRecompilesCallers():Void {
+		var first = new Compiler(), second = new Compiler();
+		for (compiler in [first, second])
+			compiler.update("Other.hx", "class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
+		first.update("Main.hx", source(0));
+		second.update("Main.hx", source(1));
+		var before = first.compile("Main").ir, after = second.compile("Main").ir;
+		var assembler = new compiler.hl.incremental.HlModuleAssembler();
+		assembler.fieldReserve = 0;
+		assembler.assemble(before, [for (fn in before.functions) fn.name], Patch);
+		var assembly = assembler.assemble(after, ["Main.scale"], Patch);
+		if (assembly.requiresReload)
+			throw 'the assembler reloaded: ${assembly.layoutReasons.join(", ")}';
+		var twiceId = assembler.cache.stableIds.get("Other.twice"), scaleSlot = assembly.functionIndices.get("Main.scale");
+		if (assembly.changedFunctions.indexOf(twiceId) < 0)
+			throw 'Other.twice calls the slot Main.scale left, but the patch does not compile it again';
+		var twiceSlot = assembly.functionIndices.get("Other.twice"), calls = 0;
+		for (fn in assembly.module.functions)
+			if (fn.functionIndex == twiceSlot)
+				for (opcode in fn.opcodes)
+					switch opcode {
+						case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target, _):
+							if (target != scaleSlot)
+								throw 'Other.twice calls slot $target, not the new slot $scaleSlot of Main.scale';
+							calls++;
+						default:
+					}
+		if (calls != 2)
+			throw 'Other.twice makes $calls calls to Main.scale, not 2';
 	}
 
 	static function source(version:Int):String
