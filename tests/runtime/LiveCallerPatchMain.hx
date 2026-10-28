@@ -10,10 +10,11 @@ import compiler.hl.HlFunction;
  * patch, those in files the edit did not touch too, so no direct call keeps reaching the old code.
  */
 class LiveCallerPatchMain {
+	// Recursive, so the inliner leaves the calls to it in place.
 	static final callee = [
-		"function scale(v:Int):Int return v * 2;\n",
-		"function scale(v:Int, by:Int = 3):Int return v * by;\n",
-		"function scale(v:Int, by:Int = 3, plus:Int = 0):Int return v * by + plus + 1000;\n"
+		"function scale(v:Int):Int return v <= 0 ? 0 : 2 + scale(v - 1);\n",
+		"function scale(v:Int, by:Int = 3):Int return v <= 0 ? 0 : by + scale(v - 1, by);\n",
+		"function scale(v:Int, by:Int = 3, plus:Int = 0):Int return v <= 0 ? plus + 1000 : by + scale(v - 1, by, plus);\n"
 	];
 
 	static function main():Void {
