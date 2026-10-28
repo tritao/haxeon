@@ -1,5 +1,6 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
 import runtime.RuntimeError;
@@ -242,14 +243,20 @@ class LiveClosureGuardMain {
 		Runtime.dispose(session.live);
 	}
 
-	/** A handler only a native root holds (thread-local storage keeps its value in one): deleting it is refused. */
+	/**
+	 * A handler only a native root holds: deleting it is refused. HashLink's thread-local storage keeps its value in a root
+	 * (`hl_tls_set`), as a native UI callback would.
+	 */
 	static function refusesDeletingAHandlerANativeRootHolds():Void {
-		var holder = "class Holder {\n  public static var local:sys.thread.Tls<Int->Int> = new sys.thread.Tls();\n}\n";
-		var session = start(holder + "function handleKey(x:Int):Int return x * 3;\n"
-			+ "function main():Int {\n  if (Holder.local.value == null) Holder.local.value = handleKey;\n  var handler = Holder.local.value;\n"
+		var holder = "@:hlNative(\"std\", \"tls_alloc\") extern function tlsAlloc(gcValue:Bool):hl.Abstract<\"hl_tls\">;\n"
+			+ "@:hlNative(\"std\", \"tls_get\") extern function tlsGet(tls:hl.Abstract<\"hl_tls\">):Dynamic;\n"
+			+ "@:hlNative(\"std\", \"tls_set\") extern function tlsSet(tls:hl.Abstract<\"hl_tls\">, value:Dynamic):Void;\n"
+			+ "class Holder {\n  public static var local:hl.Abstract<\"hl_tls\"> = tlsAlloc(true);\n}\n";
+		var session = start(holder + "function handleKey(x:Int):Int return x * 3;\n" + "function main():Int {\n"
+			+ "  if (tlsGet(Holder.local) == null) tlsSet(Holder.local, handleKey);\n  var handler:Int->Int = tlsGet(Holder.local);\n"
 			+ "  return handler(2);\n}\n");
 		expect(Runtime.callInt(session.live, session.mainId), 6, "the handler thread-local storage holds");
-		var message = refused(session, holder + "function main():Int return Holder.local.value == null ? -1 : 0;\n", "the handler deleted");
+		var message = refused(session, holder + "function main():Int return tlsGet(Holder.local) == null ? -1 : 0;\n", "the handler deleted");
 		mention(message, "handleKey", "the refusal");
 		mention(message, "held by a native root", "the refusal");
 		expect(Runtime.callInt(session.live, session.mainId), 6, "the handler after the refused patch");
@@ -269,7 +276,7 @@ class LiveClosureGuardMain {
 				+ "    Work.finished = true;\n  });\n  while (!Work.ready) Sys.sleep(0.001);\n  return 0;\n}\n"
 				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.finished) Sys.sleep(0.001);\n  return Work.result;\n}\n"
 				+ "function main():Int return 0;\n";
-		var session = start(program(true));
+		var session = start(program(true), true);
 		var finish:Int = session.build.functionIds.get("Main.finish");
 		expect(Runtime.callInt(session.live, session.build.functionIds.get("Main.start")), 0, "starting the thread");
 		var changed = compileEdit(session, program(false), "the handler a thread holds deleted");
@@ -306,8 +313,13 @@ class LiveClosureGuardMain {
 			+ "  var value = 0;\n" + "  for (handler in list) value = value * 100 + handler(1);\n" + "  return value;\n" + "}\n";
 	}
 
-	static function start(source:String):{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
+	/** The program `source` compiled and loaded; `stdlib` lets it use the standard library (`Sys`, threads). */
+	static function start(source:String, stdlib:Bool = false):{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
 		var compiler = new Compiler();
+		if (stdlib) {
+			CompilerIntrinsics.register(compiler);
+			compiler.addSourceRoot("stdlib");
+		}
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");
 		return {
