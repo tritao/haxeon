@@ -377,12 +377,13 @@ class AbiMatrixMain {
 			parts.sort(Reflect.compare);
 			return parts.join(" ");
 		}
+		// A name a lambda moves onto is first cleared of any function the running module no longer uses (`~retired`).
 		var cases = [
 			{name: "unchanged", before: ["a", "b"], after: ["a", "b"], expected: ""},
 			{name: "edited in place", before: ["a", "b"], after: ["a", "c"], expected: ""},
 			{name: "appended", before: ["a"], after: ["a", "b"], expected: ""},
-			{name: "inserted first", before: ["a", "b"], after: ["c", "a", "b"], expected: "#0>#1 #1>#2"},
-			{name: "inserted first, last edited", before: ["a", "b"], after: ["c", "a", "d"], expected: "#0>#1 #1>#2"},
+			{name: "inserted first", before: ["a", "b"], after: ["c", "a", "b"], expected: "#0>#1 #1>#2 #2>~retired7#2"},
+			{name: "inserted first, last edited", before: ["a", "b"], after: ["c", "a", "d"], expected: "#0>#1 #1>#2 #2>~retired7#2"},
 			{name: "first deleted", before: ["a", "b"], after: ["b"], expected: "#0>~retired7#0 #1>#0"},
 			{name: "swapped", before: ["a", "b"], after: ["b", "a"], expected: "#0>#1 #1>#0"},
 			{name: "both edited", before: ["a", "b"], after: ["c", "d"], expected: "refused"},
