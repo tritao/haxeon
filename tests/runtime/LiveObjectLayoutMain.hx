@@ -282,8 +282,10 @@ class LiveObjectLayoutMain {
   public static var done = false;
   public static var unset = 0;
 "
+				// The Int array literal makes the module import what the added field's initializer needs.
 				+ "  public static var rounds = 0;
   public static var kept:Array<Item> = [];
+  public static var sample:Array<Int> = [7];
 }
 "
 				+ "function start():Int {
