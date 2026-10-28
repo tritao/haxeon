@@ -77,7 +77,7 @@ enum ReconnectReason {
 /** Owns valid compiler-to-runtime publication transitions and revision checks. */
 class CompilerPublication {
 	/** How many acknowledged publications can be taken back (`retract`); each holds a snapshot and an assembler. */
-	public static inline final RETRACTABLE = 3;
+	public static inline final RETRACTABLE:Int = 3;
 
 	var state:PublicationState = Untracked;
 

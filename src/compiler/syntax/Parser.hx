@@ -497,7 +497,7 @@ class Parser {
 		lambdaPath = outer == null ? [] : outer;
 	}
 
-	static inline final LAMBDA_ANCHOR_LIMIT = 48;
+	static inline final LAMBDA_ANCHOR_LIMIT:Int = 48;
 
 	function lambdaAnchor():String {
 		var anchor = lambdaPath.join("/");

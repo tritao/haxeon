@@ -84,7 +84,7 @@ class PatchPlanner {
 				return ObjectAdded(name);
 			if (newValue == null)
 				return ObjectRemoved(name);
-			return StringTools.startsWith(name, "$lambda-env:") ? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
+			return StringTools.startsWith(name, LambdaAlignment.ENVIRONMENT) ? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
 		}, objectReasons);
 		for (reason in objectReasons)
 			switch reason {

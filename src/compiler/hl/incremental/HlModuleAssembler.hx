@@ -9,7 +9,7 @@ import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.patch.HlPatchWriter.HlLayoutPatch;
+import compiler.hl.patch.HlObjectLayout;
 import compiler.ir.Ir.IrObject;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
@@ -38,16 +38,15 @@ typedef HlAssemblerState = {
 
 	/** Names of the C dispatch natives, which follow the runtime natives in the layout. Absent in older baselines. */
 	@:optional final dispatchNatives:Array<String>;
+
+	/** `HlModuleAssembler.retiredFields`, as `Class.field` names. Absent in older baselines, which retired none. */
+	@:optional final retiredFields:Array<String>;
 }
 
-/**
- * Fields a build gives existing objects in their reserved slots, with the definitions the running module has for those
- * objects; `migrations` name the function that initializes each object's added fields.
- */
-typedef HlObjectLayout = {
-	fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
-	previousTypes:Map<Int, HlTypeDef>,
-	migrations:Array<{type:Int, functionName:String}>
+/** What `HlModuleAssembler.planObjects` found: the changes a patch cannot make, or the layout the patch changes (null for none). */
+private typedef ObjectPlan = {
+	final reasons:Array<AbiChange>;
+	final layout:Null<HlObjectLayout>;
 }
 
 /** Module plus identity and delta metadata produced by one assembly transaction. */
@@ -122,6 +121,14 @@ class HlModuleAssembler {
 	/** Null when a restored baseline does not record them, so the next build cannot trust their slots. */
 	var dispatchNatives:Null<Array<String>> = [];
 
+	/**
+	 * Fields of published objects that the last published program no longer has, as `Class.field`. Each keeps its slot, its
+	 * name and the values instances had (see `planObjects`), so when the field comes back the running module has it already;
+	 * but instances made while it was gone never ran its initializer, and the others hold a stale value. So the field counts
+	 * as one the running module lacks (`publishedField`), and its initializer runs on every instance again.
+	 */
+	var retiredFields:Map<String, Bool> = [];
+
 	final debugMetadata:HlDebugMetadataCache;
 
 	/**
@@ -131,7 +138,7 @@ class HlModuleAssembler {
 	public var fieldReserve:Int = 0;
 
 	/** The function a live build adds to initialize an object's added fields on existing instances (see `IrProgramAssembler`). */
-	public static inline final LIVE_INITIALIZER = "__liveinit";
+	public static inline final LIVE_INITIALIZER:String = "__liveinit";
 
 	/** Methods HashLink's runtime finds by name in the prototype, which a direct call cannot stand in for. */
 	static final runtimeMethods:Array<String> = ["__string", "__compare", "__cast", "__get_field"];
@@ -157,6 +164,7 @@ class HlModuleAssembler {
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
+		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		return result;
 	}
 
@@ -169,7 +177,7 @@ class HlModuleAssembler {
 	 * has not published: the object is new, and nothing needs its fields initialized.
 	 */
 	public function publishedField(objectName:String, fieldName:String):Bool
-		return initialized && symbols.objectFieldIndex(objectName, fieldName) != null;
+		return initialized && symbols.objectFieldIndex(objectName, fieldName) != null && !retiredFields.exists(objectName + "." + fieldName);
 
 	public function publishedObject(objectName:String):Bool
 		return initialized && symbols.objectDefinition(objectName) != null;
@@ -186,7 +194,8 @@ class HlModuleAssembler {
 			symbols: HlSymbolStateCodec.encode(symbols.exportState()),
 			cache: HlFunctionCacheStateCodec.encode(cache.exportState()),
 			runtimeNatives: runtimeNatives.copy(),
-			dispatchNatives: dispatchNatives == null ? null : dispatchNatives.copy()
+			dispatchNatives: dispatchNatives == null ? null : dispatchNatives.copy(),
+			retiredFields: [for (name in retiredFields.keys()) name]
 		};
 
 	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
@@ -199,6 +208,9 @@ class HlModuleAssembler {
 			// Import indices are part of the published layout; guessing can patch the wrong slots.
 			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
 		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
+		if (state.retiredFields != null)
+			for (name in state.retiredFields)
+				result.retiredFields.set(name, true);
 		if (state.revision < 0
 			|| state.publishedInts < 0
 			|| state.publishedFloats < 0
@@ -303,6 +315,7 @@ class HlModuleAssembler {
 		publishedStrings = 0;
 		publishedTypes = 0;
 		publishedGlobals = 0;
+		retiredFields = [];
 	}
 
 	/**
@@ -332,8 +345,8 @@ class HlModuleAssembler {
 	/**
 	 * Checks the published objects' fields and methods against `program` for a patch, and gives fields added to an object
 	 * the object's reserved slots. A patch keeps every published field where it is: one the program no longer has keeps
-	 * its slot and is no longer read, and a reordered one keeps its slot, so neither needs anything. Each reason is a
-	 * change a patch cannot make, for which the assembler publishes a fresh module:
+	 * its slot and is no longer read (it is retired, see `retiredFields`), and a reordered one keeps its slot, so neither
+	 * needs anything. Each reason is a change a patch cannot make, for which the assembler publishes a fresh module:
 	 *
 	 * - a field whose type changed, or an added field when every reserved slot is taken, or one stored inline (a value
 	 *   object) or laid out for natives;
@@ -345,145 +358,166 @@ class HlModuleAssembler {
 	 * closure environments.
 	 *
 	 * `program` is this build's IR, not the cache's ordered functions: those keep functions the program no longer has,
-	 * such as the initializer of fields an earlier patch added.
+	 * such as the initializer of fields an earlier patch added. `slots` is the build's function layout, which places the
+	 * migrations.
 	 */
-	function planObjects(program:IrProgram):{
-		reasons:Array<AbiChange>,
-		fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
-		previousTypes:Map<Int, HlTypeDef>,
-		migrations:Array<{type:Int, functionName:String}>
-	} {
+	function planObjects(program:IrProgram, slots:Map<String, Int>):ObjectPlan {
 		var reasons:Array<AbiChange> = [],
-			fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}> = [],
-			previousTypes:Map<Int, HlTypeDef> = [],
-			migrations:Array<{type:Int, functionName:String}> = [],
-			byName:Map<String, IrObject> = [],
-			valueObjects:Map<String, Bool> = [],
+			layout:HlObjectLayout = {fields: [], previousTypes: [], migrations: []},
 			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
+			byName:Map<String, IrObject> = [for (object in program.objects) object.name => object],
+			valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			// Runtime natives only reach standard library objects, so the program's own natives name the user's.
-			nativeVisible = compiler.ir.hl.HlLower.nativeVisibleObjects(program.objects, [program.natives]);
-		// An added field can have a type the same patch adds (a new class); reserve the new types as lowering does, in its
-		// order, so the field's type has an index before the type is laid out.
+			nativeVisible = HlLower.nativeVisibleObjects(program.objects, [program.natives]);
+		reserveProgramTypes(program);
+		for (object in program.objects) {
+			var published = symbols.objectDefinition(object.name);
+			if (published == null || object.isValue || StringTools.startsWith(object.name, LambdaAlignment.ENVIRONMENT))
+				continue;
+			switch published.definition {
+				case Object(_, _, _, _, methods, _):
+					planObjectFields(object, published.index, valueObjects, nativeVisible, layout, reasons);
+					planObjectMethods(object, [for (method in methods) symbols.strings[method.name]], program.objects, byName, reasons);
+				default:
+					continue;
+			}
+			var initializer = object.name + "." + LIVE_INITIALIZER;
+			if (functions.exists(initializer))
+				layout.migrations.push({type: published.index, slot: slots.get(initializer)});
+		}
+		// Bases first, so a subclass's initializers see the fields of its base initialized.
+		layout.migrations.sort(function(a, b) return baseDepth(a.type) - baseDepth(b.type));
+		return {reasons: reasons, layout: layout.fields.length > 0 || layout.migrations.length > 0 ? layout : null};
+	}
+
+	/**
+	 * Reserves the types the program has, as lowering does and in its order: an added field can have a type the same patch
+	 * adds (a new class), which needs an index before the type is laid out.
+	 */
+	function reserveProgramTypes(program:IrProgram):Void {
 		for (enumDecl in program.enums)
 			symbols.reserveEnum(enumDecl.name);
 		for (interfaceDecl in program.interfaces)
 			symbols.reserveInterface(interfaceDecl.name);
 		for (object in program.objects)
 			symbols.reserveObject(object.name);
-		for (object in program.objects) {
-			byName.set(object.name, object);
-			if (object.isValue)
-				valueObjects.set(object.name, true);
+	}
+
+	/**
+	 * Gives the fields `object` adds a reserved slot of its published type `type`, and records which of its published fields
+	 * the program no longer has (`retiredFields`). A field it has again keeps its slot and is no longer retired.
+	 */
+	function planObjectFields(object:IrObject, type:Int, valueObjects:Map<String, Bool>, nativeVisible:Map<String, Bool>, layout:HlObjectLayout,
+			reasons:Array<AbiChange>):Void {
+		var native = object.nativeLayout != null || nativeVisible.exists(object.name), exhausted = false, present:Map<String, Bool> = [];
+		for (field in object.fields) {
+			present.set(field.name, true);
+			if (field.nativeLayout != null)
+				native = true;
 		}
-		function extendsObject(name:String, base:String):Bool {
-			var current = byName.get(name);
-			while (current != null && current.base != null) {
-				var parent = Std.string(current.base);
-				if (parent == base)
-					return true;
-				current = byName.get(parent);
+		var previous = symbols.types[type];
+		for (field in ownFields(type))
+			if (!symbols.isReservedField(field)) {
+				var name = symbols.strings[field.name];
+				if (present.exists(name))
+					retiredFields.remove(object.name + "." + name);
+				else
+					retiredFields.set(object.name + "." + name, true);
 			}
-			return false;
-		}
-		for (object in program.objects) {
-			var published = symbols.objectDefinition(object.name);
-			if (published == null || object.isValue || StringTools.startsWith(object.name, "$lambda-env:"))
+		for (field in object.fields) {
+			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, field.nativeLayout), slot = -1, own = ownFields(type);
+			for (index in 0...own.length)
+				if (symbols.strings[own[index].name] == field.name)
+					slot = index;
+			if (slot >= 0) {
+				if (own[slot].type != fieldType)
+					reasons.push(ObjectFieldTypeChanged(object.name + "." + field.name));
 				continue;
-			var ownFields:Array<compiler.hl.HlCode.HlObjectField> = [], ownMethods:Array<String> = [];
-			switch published.definition {
-				case Object(_, _, _, own, methods, _):
-					ownFields = own;
-					for (method in methods)
-						ownMethods.push(symbols.strings[method.name]);
+			}
+			var stored = switch symbols.types[fieldType] {
+				case Parameterized(kind, _): kind == compiler.hl.HlType.Packed;
+				default: false;
+			};
+			if (native || stored) {
+				reasons.push(ObjectLayoutChanged(object.name));
+				continue;
+			}
+			if (exhausted)
+				continue;
+			var assigned = symbols.assignReservedField(object.name, field.name, fieldType);
+			if (assigned < 0) {
+				exhausted = true;
+				reasons.push(ObjectFieldReserveExhausted(object.name));
+				continue;
+			}
+			if (!layout.previousTypes.exists(type))
+				layout.previousTypes.set(type, previous);
+			layout.fields.push({type: type, field: assigned, name: symbols.internString(field.name), fieldType: fieldType});
+		}
+	}
+
+	/** The fields the published object type `type` declares itself, as its definition has them now. */
+	function ownFields(type:Int):Array<compiler.hl.HlCode.HlObjectField>
+		return switch symbols.types[type] {
+			case Object(_, _, _, own, _, _): own;
+			default: [];
+		};
+
+	/** Checks the methods `object` adds or removes against the ones its published type has (`published`). */
+	function planObjectMethods(object:IrObject, published:Array<String>, objects:Array<IrObject>, byName:Map<String, IrObject>,
+			reasons:Array<AbiChange>):Void {
+		var inherited = object.base == null ? null : symbols.objectMethodSlots(Std.string(object.base));
+		for (method in object.methods) {
+			if (published.indexOf(method.name) >= 0)
+				continue;
+			var dispatched = runtimeMethods.indexOf(method.name) >= 0 || inherited != null && inherited.exists(method.name);
+			if (!dispatched)
+				for (other in objects)
+					if (other != object && extendsObject(byName, other, object.name))
+						for (overriding in other.methods)
+							if (overriding.name == method.name)
+								dispatched = true;
+			if (dispatched)
+				reasons.push(ObjectMethodDispatchChanged(object.name + "." + method.name));
+		}
+		for (name in published) {
+			var kept = false;
+			for (method in object.methods)
+				if (method.name == name)
+					kept = true;
+			if (!kept && inherited != null && inherited.exists(name))
+				reasons.push(ObjectMethodDispatchChanged(object.name + "." + name));
+		}
+	}
+
+	/** Whether `object` extends the object named `base`, directly or through other bases of `byName`. */
+	static function extendsObject(byName:Map<String, IrObject>, object:IrObject, base:String):Bool {
+		var current = object;
+		while (current != null && current.base != null) {
+			var parent = Std.string(current.base);
+			if (parent == base)
+				return true;
+			current = byName.get(parent);
+		}
+		return false;
+	}
+
+	/** How many bases the published object type `type` has. */
+	function baseDepth(type:Int):Int {
+		var result = 0, current = type, searching = true;
+		while (searching) {
+			searching = false;
+			switch symbols.types[current] {
+				case Object(_, base, _, _, _, _):
+					if (base >= 0) {
+						result++;
+						current = base;
+						searching = true;
+					}
 				default:
-					continue;
 			}
-			var native = object.nativeLayout != null || nativeVisible.exists(object.name), exhausted = false;
-			for (field in object.fields)
-				if (field.nativeLayout != null)
-					native = true;
-			for (field in object.fields) {
-				var type = symbols.internObjectFieldType(field.type, valueObjects, field.nativeLayout), slot = -1;
-				for (index in 0...ownFields.length)
-					if (symbols.strings[ownFields[index].name] == field.name)
-						slot = index;
-				if (slot >= 0) {
-					if (ownFields[slot].type != type)
-						reasons.push(ObjectFieldTypeChanged(object.name + "." + field.name));
-					continue;
-				}
-				var stored = switch symbols.types[type] {
-					case Parameterized(kind, _): kind == compiler.hl.HlType.Packed;
-					default: false;
-				};
-				if (native || stored) {
-					reasons.push(ObjectLayoutChanged(object.name));
-					continue;
-				}
-				if (exhausted)
-					continue;
-				var previous = symbols.types[published.index];
-				var assigned = symbols.assignReservedField(object.name, field.name, type);
-				if (assigned < 0) {
-					exhausted = true;
-					reasons.push(ObjectFieldReserveExhausted(object.name));
-					continue;
-				}
-				if (!previousTypes.exists(published.index))
-					previousTypes.set(published.index, previous);
-				fields.push({type: published.index, field: assigned, name: symbols.internString(field.name), fieldType: type});
-				// The definition changed, so read the slots again for the next added field.
-				switch symbols.types[published.index] {
-					case Object(_, _, _, own, _, _):
-						ownFields = own;
-					default:
-				}
-			}
-			var inherited = object.base == null ? null : symbols.objectMethodSlots(Std.string(object.base));
-			for (method in object.methods) {
-				if (ownMethods.indexOf(method.name) >= 0)
-					continue;
-				var dispatched = runtimeMethods.indexOf(method.name) >= 0 || inherited != null && inherited.exists(method.name);
-				if (!dispatched)
-					for (other in program.objects)
-						if (other != object && extendsObject(other.name, object.name))
-							for (overriding in other.methods)
-								if (overriding.name == method.name)
-									dispatched = true;
-				if (dispatched)
-					reasons.push(ObjectMethodDispatchChanged(object.name + "." + method.name));
-			}
-			for (name in ownMethods) {
-				var kept = false;
-				for (method in object.methods)
-					if (method.name == name)
-						kept = true;
-				if (!kept && inherited != null && inherited.exists(name))
-					reasons.push(ObjectMethodDispatchChanged(object.name + "." + name));
-			}
-			var initializer = object.name + "." + LIVE_INITIALIZER;
-			if (functions.exists(initializer))
-				migrations.push({type: published.index, functionName: initializer});
 		}
-		// Bases first, so a subclass's initializers see the fields of its base initialized.
-		function depth(type:Int):Int {
-			var result = 0, current = type, searching = true;
-			while (searching) {
-				searching = false;
-				switch symbols.types[current] {
-					case Object(_, base, _, _, _, _):
-						if (base >= 0) {
-							result++;
-							current = base;
-							searching = true;
-						}
-					default:
-				}
-			}
-			return result;
-		}
-		migrations.sort(function(a, b) return depth(a.type) - depth(b.type));
-		return {reasons: reasons, fields: fields, previousTypes: previousTypes, migrations: migrations};
+		return result;
 	}
 
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
@@ -572,15 +606,15 @@ class HlModuleAssembler {
 			}
 		var objectReasons:Array<AbiChange> = [], objectLayout:Null<HlObjectLayout> = null;
 		if (reuseLowered) {
-			var planned = planObjects(program);
+			var planned = planObjects(program, layout);
 			if (planned.reasons.length > 0) {
 				reload = true;
 				objectReasons = planned.reasons;
 				reuseLowered = false;
 				startFresh();
 				layout = slotLayout();
-			} else if (planned.fields.length > 0 || planned.migrations.length > 0)
-				objectLayout = {fields: planned.fields, previousTypes: planned.previousTypes, migrations: planned.migrations};
+			} else
+				objectLayout = planned.layout;
 		}
 		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
 		if (initialized)

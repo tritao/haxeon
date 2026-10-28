@@ -7,17 +7,7 @@ import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlType as HashLinkType;
-
-/**
- * Fields a patch gives existing classes, in their reserved slots, and the initializers to run on the instances made
- * before it (see `HlModuleAssembler`). `previousTypes` holds the definitions the running module has for the types the
- * patch rewrites, which its type prefix is checked against.
- */
-typedef HlLayoutPatch = {
-	final fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>;
-	final previousTypes:Map<Int, HlTypeDef>;
-	final migrations:Array<{type:Int, stableId:Int}>;
-}
+import compiler.hl.patch.HlObjectLayout;
 
 /** Encodes versioned, transactional HLP deltas from an assembled module. */
 class HlPatchWriter {
@@ -27,8 +17,8 @@ class HlPatchWriter {
 	static inline final SOURCE_SNAPSHOTS = 4;
 	static inline final ADDED_FUNCTIONS = 5;
 	static inline final GLOBALS = 6;
-	static inline final OBJECT_FIELDS = 7;
-	static inline final MIGRATIONS = 8;
+	static inline final OBJECT_FIELDS:Int = 7;
+	static inline final MIGRATIONS:Int = 8;
 
 	/**
 	 * `addedFunctions` are the changed slots the running module does not have yet, with their names; they must be the
@@ -40,7 +30,7 @@ class HlPatchWriter {
 			tag:Int,
 			bytes:HaxeBytes
 		}>, ?addedFunctions:Array<{slot:Int, name:String}>,
-			baseGlobals:Int = -1, ?layout:HlLayoutPatch):HaxeBytes {
+			baseGlobals:Int = -1, ?layout:HlObjectLayout):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -114,7 +104,7 @@ class HlPatchWriter {
 				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot),
 			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals),
 			objectFields = layout == null || layout.fields.length == 0 ? null : encodeObjectFields(layout),
-			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout);
+			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -154,7 +144,7 @@ class HlPatchWriter {
 	}
 
 	/** The running module's view of the first `count` types: the definitions it has for the ones the patch rewrites. */
-	static function baseTypeDefinitions(types:Array<HlTypeDef>, count:Int, layout:Null<HlLayoutPatch>):Array<HlTypeDef> {
+	static function baseTypeDefinitions(types:Array<HlTypeDef>, count:Int, layout:Null<HlObjectLayout>):Array<HlTypeDef> {
 		if (layout == null || !layout.previousTypes.keys().hasNext())
 			return types;
 		var result = types.slice(0, count);
@@ -165,7 +155,7 @@ class HlPatchWriter {
 	}
 
 	/** Each field: its class's type, its index among the class's own fields, its name and its type. */
-	static function encodeObjectFields(layout:HlLayoutPatch):HaxeBytes {
+	static function encodeObjectFields(layout:HlObjectLayout):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, layout.fields.length);
@@ -179,13 +169,16 @@ class HlPatchWriter {
 	}
 
 	/** Each migration: the class whose instances it initializes, and the stable ID of the function it runs on each. */
-	static function encodeMigrations(layout:HlLayoutPatch):HaxeBytes {
+	static function encodeMigrations(layout:HlObjectLayout, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, layout.migrations.length);
 		for (migration in layout.migrations) {
+			var stableId = stableIdsBySlot.get(migration.slot);
+			if (stableId == null)
+				throw 'Missing stable ID for migration slot ${migration.slot}';
 			writeIndex(out, migration.type);
-			writeIndex(out, migration.stableId);
+			writeIndex(out, stableId);
 		}
 		return out.getBytes();
 	}

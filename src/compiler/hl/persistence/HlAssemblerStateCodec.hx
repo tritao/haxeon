@@ -14,7 +14,7 @@ class HlAssemblerStateCodec {
 		var state = assembler.exportState(), output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HAS");
-		output.writeByte(4);
+		output.writeByte(5);
 		output.writeByte(state.initialized ? 1 : 0);
 		output.writeInt32(state.revision);
 		output.writeInt32(state.publishedInts);
@@ -35,6 +35,11 @@ class HlAssemblerStateCodec {
 			for (name in dispatch)
 				IrTypeCodec.writeString(output, name);
 		}
+		// Version 5 records the retired fields.
+		var retired = state.retiredFields == null ? [] : state.retiredFields;
+		output.writeInt32(retired.length);
+		for (name in retired)
+			IrTypeCodec.writeString(output, name);
 		return output.getBytes();
 	}
 
@@ -45,7 +50,7 @@ class HlAssemblerStateCodec {
 			if (input.readString(3) != "HAS")
 				throw "Invalid HashLink assembler state";
 			var version = input.readByte();
-			if (version != 1 && version != 2 && version != 3 && version != 4)
+			if (version < 1 || version > 5)
 				throw "Unsupported HashLink assembler state version";
 			var initialized = input.readByte();
 			if (initialized != 0 && initialized != 1)
@@ -61,7 +66,8 @@ class HlAssemblerStateCodec {
 				symbols: readSection(input, bytes.length),
 				cache: readSection(input, bytes.length),
 				runtimeNatives: version >= 2 ? readNatives(input, bytes.length) : null,
-				dispatchNatives: version >= 3 ? readDispatchNatives(input, bytes.length) : null
+				dispatchNatives: version >= 3 ? readDispatchNatives(input, bytes.length) : null,
+				retiredFields: version >= 5 ? [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)] : null
 			};
 			if (input.position != bytes.length)
 				throw "Trailing HashLink assembler state data";

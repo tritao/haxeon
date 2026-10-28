@@ -1482,7 +1482,7 @@ class HlLower {
 	 * inline, not objects natives lay out, and not closure environments, whose captures a patch cannot change.
 	 */
 	function reservedSlots(object:IrObject):Int {
-		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, "$lambda-env:")
+		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, compiler.abi.LambdaAlignment.ENVIRONMENT)
 			|| nativeVisible.exists(object.name))
 			return 0;
 		for (field in object.fields)

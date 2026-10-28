@@ -9,7 +9,6 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult;
 import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.patch.HlPatchWriter.HlLayoutPatch;
 import compiler.ir.Ir.IrProgram;
 import compiler.service.CancellationToken;
 import haxe.io.Bytes;
@@ -94,7 +93,7 @@ class BackendAssembly {
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
 				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals,
-				layoutPatch(candidateAssembler, assembly));
+				assembly.objectLayout);
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
 			assembly: assembly,
@@ -125,21 +124,6 @@ class BackendAssembly {
 		var fresh = new HlModuleAssembler(CompilationContext.copyIndices(previous.cache.stableIds));
 		fresh.continueRevisions(previous.lastRevision());
 		return fresh;
-	}
-
-	/** The object fields and migrations of a patch, with each migration's function by its stable ID. */
-	static function layoutPatch(assembler:HlModuleAssembler, assembly:HlAssemblyResult):Null<HlLayoutPatch> {
-		var layout = assembly.objectLayout;
-		if (layout == null)
-			return null;
-		var migrations:Array<{type:Int, stableId:Int}> = [];
-		for (migration in layout.migrations) {
-			var stableId = assembler.cache.stableIds.get(migration.functionName);
-			if (stableId == null)
-				throw 'Migration function ${migration.functionName} has no stable ID';
-			migrations.push({type: migration.type, stableId: stableId});
-		}
-		return {fields: layout.fields, previousTypes: layout.previousTypes, migrations: migrations};
 	}
 
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {
