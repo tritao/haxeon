@@ -1014,6 +1014,14 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		NK_EVENT_APPLICATION_RESUMED = 514;
 		/**
+		 * A tray icon was clicked; flags is 1 for a double click. See nativekit_tray.h.
+		 */
+		NK_EVENT_TRAY_ACTIVATED = 520;
+		/**
+		 * A tray icon asked for its context menu; answer with nk_tray_show_menu.
+		 */
+		NK_EVENT_TRAY_MENU_REQUESTED = 521;
+		/**
 		 * The attached mobile host geometry or insets changed.
 		 */
 		NK_EVENT_MOBILE_HOST_GEOMETRY_CHANGED = 600;
@@ -4044,6 +4052,24 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 */
 	extern fn nk_transport_send(transport: nk_transport, data: ptr<const<void>> @in_array("size"), size: u64) -> nk_result;
 	/**
+	 * Adds a tray icon. Must be called on the UI thread.
+	 */
+	extern fn nk_tray_create(options: ptr<const<nk_tray_options>>, out_tray: ptr<nk_tray> @out @owned) -> nk_result;
+	/**
+	 * Removes the tray icon.
+	 */
+	extern fn nk_tray_destroy(tray: nk_tray) -> nk_result;
+	/**
+	 * Replaces the hover text.
+	 */
+	extern fn nk_tray_set_tooltip(tray: nk_tray, tooltip: utf8) -> nk_result;
+	/**
+	 * Shows `menu` as a popup at the pointer and returns once it closes. A chosen
+	 * item is reported as NK_EVENT_MENU_ITEM_ACTIVATED, as for application menus.
+	 * The menu is not retained; the caller may destroy it after this returns.
+	 */
+	extern fn nk_tray_show_menu(tray: nk_tray, menu: nk_menu) -> nk_result;
+	/**
 	 * Publishes every pending change for this view's parent and makes the whole
 	 * sibling set the committed state. This preserves the legacy per-view entry
 	 * point while making one layout transaction atomic for the parent/window.
@@ -6399,6 +6425,31 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		reserved2: array<u64, 2> @offset(72);
 	}
 	/**
+	 * Options for nk_tray_create.
+	 */
+	struct nk_tray_options @layout(32, 8) {
+		/**
+		 * Set to sizeof(nk_tray_options) before passing the structure.
+		 */
+		struct_size: u32 @offset(0) @struct_size;
+		/**
+		 * Reserved; set to zero.
+		 */
+		flags: u32 @offset(4);
+		/**
+		 * Optional UTF-8 hover text; the platform may truncate it (Windows keeps 127 characters).
+		 */
+		tooltip: nullable<utf8> @offset(8);
+		/**
+		 * Optional absolute path of an icon file (.ico on Windows); empty uses a generic icon.
+		 */
+		icon: nullable<utf8> @offset(12);
+		/**
+		 * Reserved for future options; set all elements to zero.
+		 */
+		reserved: array<u64, 2> @offset(16);
+	}
+	/**
 	 * A display mode reported by a monitor backend.
 	 */
 	struct nk_video_mode @layout(56, 8) {
@@ -6872,6 +6923,16 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * A connected or connecting byte/datagram transport.
 	 */
 	handle nk_transport : u32 @destroy("nk_transport_close");
+	/**
+	 * A status icon in the desktop notification area (the Windows system tray).
+	 * Only the Windows backend implements trays; other backends return
+	 * NK_ERROR_UNSUPPORTED. Events carry the tray handle as their source:
+	 * NK_EVENT_TRAY_ACTIVATED for a primary click (flags is 1 for a double click)
+	 * and NK_EVENT_TRAY_MENU_REQUESTED for a secondary click or the keyboard
+	 * context-menu gesture. The application answers a menu request by building a
+	 * menu and calling nk_tray_show_menu, so the menu reflects current state.
+	 */
+	handle nk_tray : u32 @destroy("nk_tray_destroy");
 	/**
 	 * A NativeKit-owned native child view.
 	 *
