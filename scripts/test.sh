@@ -206,6 +206,8 @@ run_timed fatal-stack-integration python3 "$root_dir/tests/integration/test-fata
 run_timed stdout-buffering-integration python3 "$root_dir/tests/integration/test-stdout-buffering.py"
 run_timed process-output-capture-integration bash "$root_dir/tests/integration/test-process-output-capture.sh"
 
+run_timed dependent-projects "$root_dir/scripts/check-dependents.sh"
+
 wasm_status=0
 wait "$wasm_stages" || wasm_status=$?
 cat "$wasm_log"

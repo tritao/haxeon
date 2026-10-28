@@ -101,6 +101,17 @@ class NullReassignmentMain {
 				}
 				throw 'Unsafe null reassignment $index was accepted';
 			}
+		// The error names the variable and the cause, so a reader is not left with a bare "requires an object".
+		var explained = compiler();
+		explained.update("Main.hx", source('var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;'));
+		try {
+			explained.compile("Main");
+			throw "The write through an escaped closure was accepted";
+		} catch (e:CompileError) {
+			if (e.diagnostic.message.indexOf('"x" is assigned by a closure') < 0
+				|| e.diagnostic.message.indexOf("Copy the checked value") < 0)
+				throw 'The nullable-receiver error does not explain itself: ${e.diagnostic.message}';
+		}
 		Sys.println("PASS: null reassignment, saved copies, captures, shadowing and exceptional flow, clean and incremental");
 	}
 }
