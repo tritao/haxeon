@@ -295,6 +295,8 @@ class TestCatalog {
 				"inserting, deleting and reordering lambdas at one anchor patches, and stored closures keep their functions"),
 			hxmlCase("runtime", "live-signature-patch", "tests/hxml/live-signature-patch-test.hxml", "live-signature-patch-test.hl", 0,
 				"changed constructor and function signatures patch, and a changed method signature reloads"),
+			hxmlCase("runtime", "live-caller-patch", "tests/hxml/live-caller-patch-test.hxml", "live-caller-patch-test.hl", 0,
+				"callers of a function whose signature changed call its new code, from files the edit did not touch too"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,
