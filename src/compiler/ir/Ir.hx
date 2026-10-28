@@ -226,6 +226,17 @@ typedef IrEnum = {final name:String; final cases:Array<IrEnumCase>;}
 /** Module-level storage slot required by an IR program. */
 typedef IrStaticField = {final name:String; final type:IrType;}
 
+/**
+ * The value a call that leaves out an optional parameter passes for it, when it is a literal (`IrProgram.parameterDefaults`).
+ * Callers fill in defaults, so the function itself never sees whether an argument was given.
+ */
+enum IrDefault {
+	NullDefault;
+	IntDefault(value:Int);
+	FloatDefault(value:Float);
+	BoolDefault(value:Bool);
+}
+
 /** Complete register-independent program assembled into a HashLink module. */
 class IrProgram {
 	public var natives:Array<IrNative> = [];
@@ -242,6 +253,13 @@ class IrProgram {
 	 * the build records them.
 	 */
 	public var positionalFingerprints:Map<String, String> = [];
+
+	/**
+	 * For a live build: the literal defaults of each function's optional parameters, by function and parameter name. A function
+	 * whose signature changes leaves an adapter in its old slot for the closures that hold it (`HlModuleAssembler`), and the
+	 * adapter passes these for the parameters the old calls lack.
+	 */
+	public var parameterDefaults:Map<String, Map<String, IrDefault>> = [];
 
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;

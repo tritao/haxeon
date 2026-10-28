@@ -19,6 +19,7 @@ class HlPatchWriter {
 	static inline final GLOBALS = 6;
 	static inline final OBJECT_FIELDS:Int = 7;
 	static inline final MIGRATIONS:Int = 8;
+	static inline final GUARDS:Int = 9;
 
 	/**
 	 * `addedFunctions` are the changed slots the running module does not have yet, with their names; they must be the
@@ -30,7 +31,7 @@ class HlPatchWriter {
 			tag:Int,
 			bytes:HaxeBytes
 		}>, ?addedFunctions:Array<{slot:Int, name:String}>,
-			baseGlobals:Int = -1, ?layout:HlObjectLayout):HaxeBytes {
+			baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -104,7 +105,8 @@ class HlPatchWriter {
 				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot),
 			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals),
 			objectFields = layout == null || layout.fields.length == 0 ? null : encodeObjectFields(layout),
-			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot);
+			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot),
+			guarded = guards == null || guards.length == 0 ? null : encodeGuards(guards);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -114,7 +116,8 @@ class HlPatchWriter {
 		var extensions = extensionSections == null ? [] : extensionSections;
 		for (section in extensions)
 			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS
-				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS || section.tag == MIGRATIONS)
+				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS || section.tag == MIGRATIONS
+				|| section.tag == GUARDS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
 		writeIndex(out, 2
 			+ (debug == null ? 0 : 1)
@@ -123,6 +126,7 @@ class HlPatchWriter {
 			+ (globals == null ? 0 : 1)
 			+ (objectFields == null ? 0 : 1)
 			+ (migrations == null ? 0 : 1)
+			+ (guarded == null ? 0 : 1)
 			+ extensions.length);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
@@ -138,6 +142,8 @@ class HlPatchWriter {
 			writeSection(out, OBJECT_FIELDS, objectFields);
 		if (migrations != null)
 			writeSection(out, MIGRATIONS, migrations);
+		if (guarded != null)
+			writeSection(out, GUARDS, guarded);
 		for (section in extensions)
 			writeSection(out, section.tag, section.bytes);
 		return out.getBytes();
@@ -169,6 +175,23 @@ class HlPatchWriter {
 	}
 
 	/** Each migration: the class whose instances it initializes, and the stable ID of the function it runs on each. */
+	/**
+	 * The functions the patch drops that stored closures may still reach (`HlAssemblyResult.guards`): each a stable ID and what
+	 * happened to it. The module refuses the patch while a live closure refers to one.
+	 */
+	static function encodeGuards(guards:Array<{stableId:Int, description:String}>):HaxeBytes {
+		var out = new BytesOutput();
+		out.bigEndian = false;
+		writeIndex(out, guards.length);
+		for (guard in guards) {
+			var text = HaxeBytes.ofString(guard.description);
+			writeIndex(out, guard.stableId);
+			writeIndex(out, text.length);
+			out.write(text);
+		}
+		return out.getBytes();
+	}
+
 	static function encodeMigrations(layout:HlObjectLayout, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;

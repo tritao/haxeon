@@ -95,7 +95,10 @@ class BackendAssembly {
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
 				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals,
-				assembly.objectLayout);
+				assembly.objectLayout, [
+					for (guard in assembly.guards)
+						{stableId: candidateAssembler.cache.stableIds.get(guard.name), description: guard.description}
+				]);
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
 			assembly: assembly,

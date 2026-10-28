@@ -195,6 +195,15 @@ class HlFunctionCache {
 		}
 	}
 
+	/** Gives function `name`, which the cache has, the code `fn`, with the same signature (an adapter, say). */
+	public function replaceBody(name:String, fn:IrFunction):Void {
+		if (!functions.exists(name))
+			throw 'Cannot replace the code of unknown function $name';
+		if (signature(fn) != signatures.get(name))
+			throw 'The new code of $name has another signature';
+		functions.set(name, fn);
+	}
+
 	/**
 	 * Forgets the functions `isRetired` names: their slots, code and stable IDs. Only a fresh module may drop them, since the
 	 * slots of the functions after them move. Returns whether any went.

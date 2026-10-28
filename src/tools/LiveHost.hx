@@ -89,7 +89,7 @@ class LiveHost {
 						rejectedPublication = refuse(path, description, revision, candidate,
 							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision', true);
 					else if (patchable) {
-						var failure:Null<String> = null, applied = false, readAt = describedAt;
+						var failure:Null<String> = null, applied = false, held = false, readAt = describedAt;
 						ProfileSpan.begin("live.patch");
 						try {
 							var patchBytes = File.getBytes(path + ".hlp");
@@ -99,6 +99,8 @@ class LiveHost {
 						} catch (error:RuntimeError) {
 							failure = error.message;
 							applied = error.status == RuntimeStatus.MigrationFailed;
+							// Closures the app stored still reach a function the edit drops; the message names it and what holds them.
+							held = error.status == RuntimeStatus.ClosuresHeld;
 						} catch (error:Dynamic) {
 							failure = Std.string(error);
 						}
@@ -119,7 +121,7 @@ class LiveHost {
 								'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
 							]);
 						else if (strict)
-							rejectedPublication = refuse(path, description, revision, candidate, 'the runtime rejected its patch: $failure', true);
+							rejectedPublication = refuse(path, description, revision, candidate, held ? failure : 'the runtime rejected its patch: $failure', true);
 						else {
 							report(applied ? 'haxeon: patch incomplete; reloading module: $failure' : 'haxeon: patch rejected; reloading module: $failure');
 							var full = completeDescription(path, candidate);

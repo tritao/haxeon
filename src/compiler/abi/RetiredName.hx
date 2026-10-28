@@ -19,4 +19,18 @@ class RetiredName {
 
 	public static function is(name:String):Bool
 		return name.indexOf(MARK) >= 0;
+
+	/** The function `name` was moved away from (`movedFunction`), or null when `name` is not such a name. */
+	public static function movedFrom(name:String):Null<String> {
+		var at = name.lastIndexOf(MARK);
+		if (at <= 0)
+			return null;
+		var tag = name.substr(at + MARK.length);
+		if (tag.length == 0)
+			return null;
+		for (index in 0...tag.length)
+			if (tag.charCodeAt(index) < "0".code || tag.charCodeAt(index) > "9".code)
+				return null;
+		return name.substr(0, at);
+	}
 }

@@ -284,6 +284,8 @@ class Runtime {
 		});
 		if (status == RuntimeStatus.MigrationFailed)
 			throw new RuntimeError(status, 'revision ${patch.revision} applied, but ' + (message == null ? "initializers of the fields it added threw" : message));
+		if (status == RuntimeStatus.ClosuresHeld)
+			throw new RuntimeError(status, message == null ? "stored closures still reach a function the patch drops" : message);
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)' + (message == null ? "" : ': $message'));

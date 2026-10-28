@@ -1,5 +1,11 @@
 package compiler.hl.incremental;
 
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
+import compiler.ir.Ir.IrDefault;
+import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrValue;
+import compiler.semantic.LambdaName;
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
@@ -50,6 +56,13 @@ private typedef ObjectPlan = {
 }
 
 /** Module plus identity and delta metadata produced by one assembly transaction. */
+/** What `HlModuleAssembler.moveChangedSignatures` did: the functions it moved, the retired slots it gave adapters, and those it could not. */
+typedef SignatureMoves = {
+	final moved:Array<String>;
+	final adapted:Array<String>;
+	final guards:Array<{name:String, description:String}>;
+}
+
 typedef HlAssemblyResult = {
 	final module:HlCode;
 	final changedFunctions:Array<Int>;
@@ -57,6 +70,12 @@ typedef HlAssemblyResult = {
 
 	/** Slots this build gives functions the published module does not have, in slot order, with their names. */
 	final addedFunctions:Array<{slot:Int, name:String}>;
+
+	/**
+	 * Functions this build drops that closures the running program stored may still reach, with what happened to each: the
+	 * patch applies only when no live closure refers to them (`HlPatchWriter`, guards).
+	 */
+	final guards:Array<{name:String, description:String}>;
 
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
@@ -129,6 +148,12 @@ class HlModuleAssembler {
 	 */
 	var retiredFields:Map<String, Bool> = [];
 
+	/**
+	 * The functions of the program the last build assembled, so the next one knows which it drops (see `dropGuards`); null
+	 * when unknown, after a restore, when every function no build has is treated as dropped.
+	 */
+	var programNames:Null<Map<String, Bool>> = null;
+
 	final debugMetadata:HlDebugMetadataCache;
 
 	/**
@@ -165,6 +190,7 @@ class HlModuleAssembler {
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
+		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
 	}
 
@@ -262,6 +288,8 @@ class HlModuleAssembler {
 			cache.rename(names);
 			renameLowered(names);
 			symbols.renameTypes(step);
+			if (programNames != null)
+				programNames = step.keys(programNames);
 		}
 
 	function renameLowered(names:Map<String, String>):Void {
@@ -280,7 +308,7 @@ class HlModuleAssembler {
 	 * dispatches to (`dispatched`, see `PatchPlanner.dispatchedFunctions`) keeps its slot; the plan reloads for those
 	 * (`PatchPlanner.plan`). Returns the moved names.
 	 */
-	function moveChangedSignatures(program:IrProgram, tag:String, dispatched:Map<String, Bool>):Array<String> {
+	function moveChangedSignatures(program:IrProgram, tag:String, dispatched:Map<String, Bool>):SignatureMoves {
 		var renames:Map<String, String> = [], moved:Array<String> = [];
 		for (fn in program.functions) {
 			var known = cache.signatures.get(fn.name);
@@ -293,11 +321,120 @@ class HlModuleAssembler {
 			renames.set(fn.name, RetiredName.movedFunction(fn.name, tag));
 			moved.push(fn.name);
 		}
-		if (moved.length > 0) {
-			cache.rename(renames);
-			renameLowered(renames);
+		var adapted:Array<String> = [], guards:Array<{name:String, description:String}> = [];
+		if (moved.length == 0)
+			return {moved: moved, adapted: adapted, guards: guards};
+		cache.rename(renames);
+		renameLowered(renames);
+		// The old slot, and the slots earlier moves left, keep closures the running program made. Each takes an adapter that
+		// calls the function's new code with the old arguments (`signatureAdapter`), so they all reach the latest code in one
+		// step. A slot no adapter can bridge keeps its old code, and the patch applies only when no stored closure is left to
+		// call it.
+		var byName:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn];
+		for (name in cache.slots) {
+			var from = RetiredName.movedFrom(name);
+			if (from == null || !renames.exists(from))
+				continue;
+			var old = cache.functions.get(name), target = byName.get(from);
+			var adapter = old == null ? null : signatureAdapter(name, old, target, program.parameterDefaults.get(from));
+			if (adapter != null) {
+				cache.replaceBody(name, adapter);
+				adapted.push(name);
+			} else
+				guards.push({name: name, description: '$from changed signature incompatibly'});
 		}
-		return moved;
+		return {moved: moved, adapted: adapted, guards: guards};
+	}
+
+	/**
+	 * A function named `name` with the arguments and result of `old` that calls `target`: an argument `target` still takes,
+	 * matched by name, is passed on, converted when its type widened (`T` to `Null<T>` or Dynamic); a parameter `target`
+	 * added is given its literal default (`defaults`); one it removed is dropped. Null when some argument has no safe value,
+	 * a parameter whose type narrowed or that has no literal default, or when the result cannot be converted back.
+	 */
+	static function signatureAdapter(name:String, old:IrFunction, target:IrFunction, defaults:Null<Map<String, IrDefault>>):Null<IrFunction> {
+		var builder = new IrBuilder(), given:Map<String, IrValue> = [];
+		for (argument in old.arguments)
+			given.set(argument.name, builder.argument(argument.name, argument.type));
+		var passed:Array<IrValue> = [];
+		for (parameter in target.arguments) {
+			var value = given.get(parameter.name);
+			var converted = value != null ? widen(builder, value, parameter.type) : defaults == null
+				|| !defaults.exists(parameter.name) ? null : defaultValue(builder, defaults.get(parameter.name), parameter.type);
+			if (converted == null)
+				return null;
+			passed.push(converted);
+		}
+		var result = builder.call(target.name, passed, target.result);
+		var returned = sameType(old.result, Void) ? builder.constVoid() : widen(builder, result, old.result);
+		if (returned == null)
+			return null;
+		builder.returnValue(returned);
+		return new IrFunction(name, builder.arguments, old.result, builder.blocks, null, false, old.retention);
+	}
+
+	static function sameType(a:IrType, b:IrType):Bool
+		return IrTypeCodec.withoutOrdinals(Std.string(a)) == IrTypeCodec.withoutOrdinals(Std.string(b));
+
+	/** `value` as a `type` that holds every value of its own, or null when `type` does not. */
+	static function widen(builder:IrBuilder, value:IrValue, type:IrType):Null<IrValue> {
+		if (sameType(value.type, type))
+			return value;
+		return switch type {
+			case Nullable(element) if (sameType(element, value.type)): builder.toDyn(value, type);
+			case Dyn if (!sameType(value.type, Void)): builder.toDyn(value);
+			default: null;
+		};
+	}
+
+	/** The literal `value` as a `type` argument, or null when it is not one. */
+	static function defaultValue(builder:IrBuilder, value:IrDefault, type:IrType):Null<IrValue> {
+		var plain = switch type {
+			case Nullable(element): element;
+			default: type;
+		};
+		var made:Null<IrValue> = switch value {
+			case NullDefault: switch type {
+					case Nullable(_), Dyn, Obj(_): return builder.constNull(type);
+					default: null;
+				};
+			case IntDefault(number): sameType(plain, I32) ? builder.constInt(number) : sameType(plain, F64) ? builder.constFloat(number) : null;
+			case FloatDefault(number): sameType(plain, F64) ? builder.constFloat(number) : null;
+			case BoolDefault(flag): sameType(plain, Bool) ? builder.constBool(flag) : null;
+		};
+		return made == null ? null : widen(builder, made, type);
+	}
+
+	/**
+	 * The functions the running module has that this build drops, which closures it stored may still call: those the last
+	 * program had and `program` lacks, lambdas retired by a rename among them. Retired functions an adapter now serves, and
+	 * functions moved for a changed signature (`moveChangedSignatures` guards those), are left out.
+	 */
+	function dropGuards(program:IrProgram, skip:Map<String, Bool>):Array<{name:String, description:String}> {
+		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true], guards:Array<{name:String, description:String}> = [];
+		for (name in cache.slots) {
+			if (present.exists(name) || skip.exists(name) || RetiredName.movedFrom(name) != null || name == "__init"
+				|| StringTools.endsWith(name, "." + LIVE_INITIALIZER))
+				continue;
+			// After a restore nothing says what the last program had, so every function no build has counts as dropped.
+			if (programNames != null && !programNames.exists(name))
+				continue;
+			guards.push({name: name, description: describeDropped(name, cache.functions.get(name))});
+		}
+		return guards;
+	}
+
+	static function describeDropped(name:String, fn:Null<IrFunction>):String {
+		if (!LambdaName.is(name))
+			return '$name was deleted';
+		if (fn != null)
+			for (block in fn.blocks)
+				for (instruction in block.instructions) {
+					var location = instruction.provenance.location;
+					if (location != null)
+						return 'a deleted lambda at ${location.path}:${location.line}';
+				}
+		return 'a deleted lambda in ${LambdaName.outermost(name)}';
 	}
 
 	/**
@@ -563,21 +700,26 @@ class HlModuleAssembler {
 			case ReloadDomain(_): true;
 			case Reject(diagnostics): throw diagnostics.join("; ");
 		};
+		var guards:Array<{name:String, description:String}> = [];
 		if (initialized && !reload) {
 			var tag = Std.string(lastRevision() + 1);
-			var moved = moveChangedSignatures(program, tag,
+			var moves = moveChangedSignatures(program, tag,
 				dispatched != null ? dispatched : PatchPlanner.dispatchedFunctions(null, compiler.abi.RuntimeAbi.describe(program)));
-			if (moved.length > 0) {
-				var listed:Map<String, Bool> = [for (name in regenerated) name => true];
-				regenerated = regenerated.concat([for (name in moved) if (!listed.exists(name)) name]);
-				for (name in moved)
+			var listed:Map<String, Bool> = [for (name in regenerated) name => true];
+			function regenerate(name:String):Void
+				if (!listed.exists(name)) {
 					listed.set(name, true);
-				for (name in callersOfMoved(moved, tag))
-					if (!listed.exists(name)) {
-						listed.set(name, true);
-						regenerated.push(name);
-					}
-			}
+					regenerated.push(name);
+				}
+			regenerated = regenerated.copy();
+			for (name in moves.moved)
+				regenerate(name);
+			for (name in moves.adapted)
+				regenerate(name);
+			if (moves.moved.length > 0)
+				for (name in callersOfMoved(moves.moved, tag))
+					regenerate(name);
+			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true]));
 		}
 		var publishedSlots = cache.slots.length;
 		cache.update(program.functions);
@@ -708,6 +850,7 @@ class HlModuleAssembler {
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
 		var baseRevision = revision;
+		programNames = [for (fn in program.functions) fn.name => true];
 		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && objectLayout == null && baseInts == publishedInts
 			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
 		if (!unchanged)
@@ -718,6 +861,7 @@ class HlModuleAssembler {
 			changedFunctions: changed,
 			changedSlots: changedSlots,
 			addedFunctions: addedFunctions,
+			guards: reload ? [] : guards,
 			functionIndices: layout,
 			requiresReload: reload,
 			baseRevision: baseRevision,

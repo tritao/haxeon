@@ -535,6 +535,9 @@ class FrontendCompilation {
 				ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
 		context.inlineCache().finishPositionalFingerprints();
 		ir.positionalFingerprints = PositionalName.nested(ownPrints);
+		var semantic = context.cachedSemanticProgram;
+		if (context.livePatching && !context.isWasmTarget() && semantic != null)
+			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
 		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
@@ -742,6 +745,32 @@ class FrontendCompilation {
 				resolved;
 			default: true;
 		};
+
+	/** The literal defaults of the optional parameters of `ir`'s functions (`IrProgram.parameterDefaults`). */
+	static function parameterDefaults(ir:IrProgram, signatures:Map<String, compiler.syntax.Ast.AstFunction>):Map<String, Map<String, compiler.ir.Ir.IrDefault>> {
+		var result:Map<String, Map<String, compiler.ir.Ir.IrDefault>> = [];
+		for (fn in ir.functions) {
+			var signature = signatures.get(fn.name);
+			if (signature == null)
+				continue;
+			var defaults:Map<String, compiler.ir.Ir.IrDefault> = [];
+			for (argument in signature.arguments) {
+				var value = argument.defaultValue;
+				var literal:Null<compiler.ir.Ir.IrDefault> = value == null ? (argument.optional == true ? NullDefault : null) : switch value {
+					case IntegerLiteral(number, _): IntDefault(number);
+					case FloatLiteral(number, _): FloatDefault(number);
+					case BoolLiteral(flag, _): BoolDefault(flag);
+					case NullLiteral(_): NullDefault;
+					default: null;
+				};
+				if (literal != null)
+					defaults.set(argument.name, literal);
+			}
+			if (defaults.keys().hasNext())
+				result.set(fn.name, defaults);
+		}
+		return result;
+	}
 
 	static function selectedSignaturesExplicit(program:AstProgram, selected:Map<String, Bool>):Bool {
 		for (fn in program.functions)

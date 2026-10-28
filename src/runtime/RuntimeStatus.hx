@@ -14,4 +14,7 @@ enum abstract RuntimeStatus(Int) from Int to Int {
 
 	/** The patch applied, but initializers of the fields it added threw: the module runs the new revision with zero values in them. */
 	var MigrationFailed = 9;
+
+	/** Nothing applied: closures the program stored still reach a function the patch drops; the message says which. */
+	var ClosuresHeld = 10;
 }
