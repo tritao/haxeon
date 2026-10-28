@@ -52,12 +52,15 @@ class PatchPlanner {
 	 * call it. A removed constructor still reloads, since it goes with a class. Positionally named functions are still checked
 	 * for renumbering, which an addition or removal can cause.
 	 *
-	 * Such a module can also take an object's added, removed and reordered fields and its added methods, so an object
-	 * whose kind, base and interfaces stayed the same is left to the assembler, which checks its fields and methods against
+	 * `checksObjectMembers`: the assembler holds the layout the running module has, so it can take an object's added,
+	 * removed and reordered fields and its added methods. An object whose kind, base and interfaces stayed the same is then
+	 * left to the assembler, which checks its fields and methods against
 	 * the layout the running module has (`HlModuleAssembler.planObjects`). Value objects and closure environments are not:
-	 * other objects hold value objects inline, and closures already made hold their environments.
+	 * other objects hold value objects inline, and closures already made hold their environments. A compiler resumed from
+	 * saved identity state has the running module's ABI but not its layout, and passes false.
 	 */
-	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false):PatchDecision {
+	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false,
+			checksObjectMembers:Bool = false):PatchDecision {
 		if (previous == null)
 			return Patch;
 		var reasons:Array<AbiChange> = [];
@@ -78,7 +81,7 @@ class PatchPlanner {
 		}, objectReasons);
 		for (reason in objectReasons)
 			switch reason {
-				case ObjectLayoutChanged(name) if (addsFunctions && keepsFrame(previous.objects.get(name), next.objects.get(name))):
+				case ObjectLayoutChanged(name) if (checksObjectMembers && keepsFrame(previous.objects.get(name), next.objects.get(name))):
 				default:
 					reasons.push(reason);
 			}

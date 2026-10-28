@@ -127,6 +127,13 @@ class AbiMatrixMain {
 		];
 		for (fixture in fixtures)
 			assertDecision(fixture);
+		// Without the running layout (a compiler resumed from identity state) a field addition still reloads.
+		switch PatchPlanner.plan(abi(null, ["Editor" => "kind=object;base=null;fields=value:I32"]),
+			abi(null, ["Editor" => "kind=object;base=null;fields=value:I32,generation:I32"]), true, false) {
+			case ReloadDomain([ObjectLayoutChanged("Editor")]):
+			case other:
+				throw 'field added without the running layout: expected a reload, got $other';
+		}
 		assertReasonSchema(fixtures);
 		Sys.println('PASS: ${fixtures.length} ABI compatibility policy fixtures');
 		var sourceFixtures:Array<SourceFixture> = [
@@ -272,7 +279,7 @@ class AbiMatrixMain {
 		};
 
 	static function assertDecision(fixture:AbiFixture):Void {
-		var actual = PatchPlanner.plan(fixture.previous, fixture.next, fixture.addsFunctions);
+		var actual = PatchPlanner.plan(fixture.previous, fixture.next, fixture.addsFunctions, fixture.addsFunctions);
 		switch [fixture.expected, actual] {
 			case [Patch, Patch]:
 			case [Reload(expected), ReloadDomain(reasons)] if (reasons.length == 1 && Type.enumEq(expected, reasons[0])):

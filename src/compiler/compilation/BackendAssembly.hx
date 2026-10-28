@@ -43,7 +43,8 @@ class BackendAssembly {
 		var allocationAtStart = AllocationMeter.sample();
 		var nextAbi = RuntimeAbi.describe(ir), // Patch planning describes what a running module must do to adopt this build. Without live patching
 		// there is no running module, and the plan would only mix session history into the build.
-			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi, !context.isWasmTarget()) : PatchDecision.Patch,
+			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi, !context.isWasmTarget(),
+				!context.isWasmTarget() && context.assembler.isPublished()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;

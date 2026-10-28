@@ -269,7 +269,9 @@ class HlModuleAssembler {
 			migrations:Array<{type:Int, functionName:String}> = [],
 			byName:Map<String, IrObject> = [],
 			valueObjects:Map<String, Bool> = [],
-			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true];
+			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
+			// Runtime natives only reach standard library objects, so the program's own natives name the user's.
+			nativeVisible = compiler.ir.hl.HlLower.nativeVisibleObjects(program.objects, [program.natives]);
 		for (object in program.objects) {
 			byName.set(object.name, object);
 			if (object.isValue)
@@ -298,7 +300,7 @@ class HlModuleAssembler {
 				default:
 					continue;
 			}
-			var native = object.nativeLayout != null, exhausted = false;
+			var native = object.nativeLayout != null || nativeVisible.exists(object.name), exhausted = false;
 			for (field in object.fields)
 				if (field.nativeLayout != null)
 					native = true;

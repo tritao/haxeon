@@ -50,7 +50,8 @@ Nothing moves, which is what makes this safe:
 
 The cost is a pointer per slot per instance in live builds; builds without `--live` reserve nothing. Classes get no
 slots when a patch could not use them: value objects (other objects hold them inline), objects or fields natives lay
-out, and closure environments.
+out, closure environments, and classes a native's signature reaches through its arguments, result, fields or bases
+(HashLink compares the whole layout with the library's declared signature when it loads the module).
 
 Reflection sees an added field once it has a name: the runtime adds it to the class's field lookup at commit
 (`Reflect.field`, `Reflect.setField`, `Reflect.fields`, `Reflect.copy` and dynamic access). Unnamed slots stay hidden,
@@ -97,7 +98,7 @@ position in the IR, so a patched function finds every field where the running mo
 | `object_field_type_changed` | A field's type changed: its slot holds values of the old type. |
 | `object_field_reserve_exhausted` | The class's reserved slots are taken. A reload lays the class out afresh with new slots. |
 | `object_method_dispatch_changed` | An added method overrides one or is overridden, an override was removed, or the method is one the runtime finds by name in the prototype (`toString`, `__compare`, `__cast`, `__get_field`). Prototype tables would need new or changed entries in every subclass. |
-| `object_layout_changed` | The base or the interfaces changed, the object is a value object, or an added field is stored inline (a value object) or laid out for natives. |
+| `object_layout_changed` | The base or the interfaces changed, the object is a value object, an added field is stored inline (a value object) or laid out for natives, or a native's signature reaches the class. |
 | `closure_layout_changed` | A closure's captures changed; closures already made hold the old environment. |
 | `object_added`, `object_removed` | A class appeared or went: type-table growth (above). |
 

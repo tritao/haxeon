@@ -113,6 +113,9 @@ class HlLower {
 
 	/** HashLink field indices by `object.field`, resolved against the types this build publishes. */
 	final fieldIndices:Map<String, Int> = [];
+
+	/** Objects a native signature reaches, which keep the layout the natives were built against (see `reservedSlots`). */
+	var nativeVisible:Map<String, Bool> = [];
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
 
@@ -275,6 +278,8 @@ class HlLower {
 		}
 		for (object in program.objects)
 			symbols.reserveObject(object.name);
+		if (fieldReserve > 0)
+			nativeVisible = nativeVisibleObjects(program.objects, [runtimeNatives, cDispatchNatives]);
 		var valueObjects:Map<String, Bool> = [];
 		for (object in program.objects)
 			if (object.isValue)
@@ -1477,12 +1482,51 @@ class HlLower {
 	 * inline, not objects natives lay out, and not closure environments, whose captures a patch cannot change.
 	 */
 	function reservedSlots(object:IrObject):Int {
-		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, "$lambda-env:"))
+		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, "$lambda-env:")
+			|| nativeVisible.exists(object.name))
 			return 0;
 		for (field in object.fields)
 			if (field.nativeLayout != null)
 				return 0;
 		return fieldReserve;
+	}
+
+	/**
+	 * The objects a native's arguments or result reach. HashLink checks a native's signature when it loads a module, and
+	 * the signature spells out every field of an object it reaches, through bases, fields, nullables and functions
+	 * (`append_type` in module.c), so reserved slots there would not match the library's declared signature.
+	 */
+	public static function nativeVisibleObjects(objects:Array<IrObject>, natives:Array<Array<IrNative>>):Map<String, Bool> {
+		var byName:Map<String, IrObject> = [], visible:Map<String, Bool> = [], pending:Array<IrType> = [];
+		for (object in objects)
+			byName.set(object.name, object);
+		for (group in natives)
+			for (native in group) {
+				for (argument in native.arguments)
+					pending.push(argument);
+				pending.push(native.result);
+			}
+		while (pending.length > 0) {
+			var type = pending.pop();
+			switch type {
+				case Obj(name):
+					var object = byName.get(name);
+					while (object != null && !visible.exists(object.name)) {
+						visible.set(object.name, true);
+						for (field in object.fields)
+							pending.push(field.type);
+						object = object.base == null ? null : byName.get(Std.string(object.base));
+					}
+				case Nullable(element):
+					pending.push(element);
+				case Function(arguments, result):
+					for (argument in arguments)
+						pending.push(argument);
+					pending.push(result);
+				default:
+			}
+		}
+		return visible;
 	}
 
 	function objectFieldNativeLayout(object:IrValue, name:String):Null<IrObjectFieldNativeLayout> {
