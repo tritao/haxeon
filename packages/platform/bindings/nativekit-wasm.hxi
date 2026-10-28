@@ -4014,6 +4014,16 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 */
 	extern fn nk_transport_event_data(event: ptr<const<nk_event>>, out_data: ptr<nk_transport_data_event> @out) -> nk_result;
 	/**
+	 * The process id at the other end of a connected local transport: the client for an
+	 * accepted transport, the server for a connected one. It comes from the OS (named-pipe
+	 * process id, SO_PEERCRED or LOCAL_PEERPID), not from anything the peer sent. On Windows
+	 * a connecting client also refuses a server that does not run as the current user, and a
+	 * listener fails with NK_TRANSPORT_ERROR_ADDRESS_IN_USE when another process already
+	 * holds the pipe name. Returns NK_ERROR_UNSUPPORTED for other kinds or when the OS does
+	 * not report it. Thread-safe.
+	 */
+	extern fn nk_transport_get_peer_process(transport: nk_transport, out_process_id: ptr<u64> @out) -> nk_result;
+	/**
 	 * Returns queued application send bytes and the configured send capacity. Thread-safe.
 	 */
 	extern fn nk_transport_get_send_queue(transport: nk_transport, out_queued_bytes: ptr<u64> @out, out_capacity: ptr<u64> @out) -> nk_result;

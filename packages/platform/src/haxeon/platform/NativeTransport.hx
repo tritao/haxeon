@@ -97,6 +97,15 @@ class NativeTransport {
 		return new TransportSendQueue(result.out_queued_bytes, result.out_capacity);
 	}
 
+	/**
+		The process at the other end of a local transport, as the OS reports it (0 when unknown or not
+		local). On Windows a connected client has already checked that the server runs as this user.
+	**/
+	public static function peerProcess(transport:TransportHandle):Int {
+		var result = NativeKit.nk_transport_get_peer_process(transport);
+		return result.status == Result.Ok ? Int64.toInt(result.out_process_id) : 0;
+	}
+
 	public static function receive(transport:TransportHandle, ?capacity:Int = 64 * 1024):Bytes {
 		if (capacity <= 0)
 			throw "NativeKit transport receive capacity must be positive";
