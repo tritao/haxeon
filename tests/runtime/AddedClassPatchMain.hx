@@ -112,9 +112,9 @@ class AddedClassPatchMain {
 		var fresh = Runtime.load(HlWriter.encode(edited.module), edited.runtimeIdentity);
 		var clean = Runtime.callInt(fresh, edited.functionIds.get("main"));
 		Runtime.dispose(fresh);
-		// A fresh module makes its stored closure from the new lambda: 10 * 2 + 5.
-		if (clean != expected + 100)
-			throw 'The full module returned $clean instead of ${expected + 100}';
+		// A fresh module runs the same code: the stored lambda did not change.
+		if (clean != expected)
+			throw 'The full module returned $clean instead of $expected';
 		Runtime.dispose(live);
 		Sys.println("PASS: adding classes and closure environments patches the running module");
 	}
