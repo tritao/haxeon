@@ -7,8 +7,9 @@ import runtime.Runtime;
  * A lambda is named by its position among the lambdas written at the same place, so inserting one before a sibling, deleting
  * one or reordering them renames the siblings after it (`register#into.push(1)#0` becomes `#1`). Such an edit patches: the
  * running module's lambdas are matched with the new build's by their code and renamed (`LambdaAlignment`), so each keeps its
- * slot and every closure the program stored keeps running its own function, or the edited version of it. An edit that
- * cannot be matched still reloads, because the generated functions were renumbered. Deleting a lambda the program stored
+ * slot and every closure the program stored keeps running its own function, or the edited version of it. Edited lambdas,
+ * whose code no longer matches, are followed through the edit's text diff. An edit that cannot be matched still reloads,
+ * because the generated functions were renumbered. Deleting a lambda the program stored
  * would strand that closure, so the runtime refuses that patch and says what holds the closure.
  */
 class LambdaRenumberPatchMain {
@@ -19,7 +20,11 @@ class LambdaRenumberPatchMain {
 		"plusForty" => "x + 40",
 		// The same outer code; only the lambdas written in them differ.
 		"nestedOne" => "apply(y -> 1, x)",
-		"nestedTwo" => "apply(y -> 2, x)"
+		"nestedTwo" => "apply(y -> 2, x)",
+		"plusTwo" => "x + 2",
+		"timesEleven" => "x * 11",
+		"plusFortyOne" => "x + 41",
+		"squareLessSeven" => "(x - 7) * (x - 7)"
 	];
 
 	/** The same handlers, each capturing `scale` (3), so every one has an environment named after the lambda. */
@@ -59,13 +64,19 @@ class LambdaRenumberPatchMain {
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
 			stranded('$label: one inserted, one deleted', session, source(["plusForty", "plusOne"]));
 			Runtime.dispose(session.live);
-			// Both siblings changed: each could be an edit, or one inserted and the other deleted. Nothing tells which.
+			// Both siblings changed. Their code tells nothing, but the text diff shows each line edited in place.
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
-			refuse('$label: both edited', session, source(["plusForty", "timesTwenty"]));
+			patch('$label: both edited', session, source(["plusForty", "timesTwenty"]), plusForty * 100 + timesTwenty, plusForty * 100 + timesTwenty);
 			Runtime.dispose(session.live);
-			// One inserted before a sibling that was edited too: the edited sibling could be either new lambda.
+			// One inserted before a sibling that was left alone, beside one edited: the diff pairs the edited line with the
+			// inserted line most like it.
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
-			refuse('$label: one inserted beside an edited one', session, source(["plusForty", "timesTwenty", "timesTen"]));
+			patch('$label: one inserted beside an edited one', session, source(["plusForty", "timesTwenty", "timesTen"]), plusForty * 100 + timesTen,
+				plusForty * 10000 + timesTwenty * 100 + timesTen);
+			Runtime.dispose(session.live);
+			// Both edited into the same code: the diff pairs them, but either could be a copy of the other, so nothing is matched.
+			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
+			refuse('$label: both edited into copies of one another', session, source(["timesTwenty", "timesTwenty"]));
 			Runtime.dispose(session.live);
 		}
 		// A lambda with a lambda in it: the inner one and its environment are named after the outer one, and move with it.
@@ -76,6 +87,12 @@ class LambdaRenumberPatchMain {
 		// The inner lambda moved with the outer one: editing it now reaches the stored outer closure, which makes it on each call.
 		patch("nested: the moved inner lambda edited afterwards", session, source(["plusForty", "nestedTwice", "timesTen"]), 8 * 100 + 30,
 			44 * 10000 + 8 * 100 + 30);
+		Runtime.dispose(session.live);
+		// Every sibling edited, and one inserted before the second, which moves to the third place: the text diff follows each
+		// edited line, and the stored closures run their edited code.
+		session = start(program(plain, ["plusOne", "timesTen", "plusForty"]), (2 * 100 + 10) * 100 + 41);
+		patch("plain: an edited lambda moved between edited siblings", session, program(plain, ["plusTwo", "squareLessSeven", "timesEleven", "plusFortyOne"]),
+			(3 * 100 + 11) * 100 + 42, ((3 * 100 + 36) * 100 + 11) * 100 + 42);
 		Runtime.dispose(session.live);
 		// Two lambdas whose own code is the same and whose nested lambdas differ: swapping them must swap their names too,
 		// so the fingerprint that matches them covers the lambdas written in them.
