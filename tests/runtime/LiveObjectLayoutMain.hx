@@ -184,34 +184,18 @@ class LiveObjectLayoutMain {
 
 	/** The program of `readdsFields`: `Box.items` and `Box.bad` are what its edits remove and add. */
 	static function boxes(items:Bool, bad:Bool, main:String, later:String):String
-		return "class Box {
-"
-			+ (items ? "  public var items:Array<Int> = [1];
-" : "")
-			+ (bad ? "  public var bad:Int = Box.fail();
-" : "")
-			+ "  static function fail():Int throw \"no value for bad\";
-"
-			+ "  public function new() {}
-"
-			+ "}
-"
-			+ "class Boxes {
-"
-			+ "  public static var first:Null<Box> = null;
-"
-			+ "  public static var second:Null<Box> = null;
-"
-			+ "}
-"
-			+ "function main():Int {
-  if (Boxes.first == null) Boxes.first = new Box();
-  var box:Box = Boxes.first;
-" + main + "}
-"
-			+ "function later():Int {
-" + later + "}
-";
+		return "class Box {\n"
+			+ (items ? "  public var items:Array<Int> = [1];\n" : "")
+			+ (bad ? "  public var bad:Int = Box.fail();\n" : "")
+			+ "  static function fail():Int throw \"no value for bad\";\n"
+			+ "  public function new() {}\n"
+			+ "}\n"
+			+ "class Boxes {\n"
+			+ "  public static var first:Null<Box> = null;\n"
+			+ "  public static var second:Null<Box> = null;\n"
+			+ "}\n"
+			+ "function main():Int {\n  if (Boxes.first == null) Boxes.first = new Box();\n  var box:Box = Boxes.first;\n" + main + "}\n"
+			+ "function later():Int {\n" + later + "}\n";
 
 	/**
 	 * A field removed and added back keeps its slot, but runs its initializer again on every instance: the ones made while it
@@ -219,15 +203,10 @@ class LiveObjectLayoutMain {
 	 * patch applied and says so.
 	 */
 	static function readdsFields():Void {
-		var withItems = "  box.items.push(0);
-  return box.items.length;
-",
-			reading = "  var box:Null<Box> = Boxes.second;
-  return box == null ? -1 : box.items == null ? -2 : box.items.length;
-";
+		var withItems = "  box.items.push(0);\n  return box.items.length;\n",
+			reading = "  var box:Null<Box> = Boxes.second;\n  return box == null ? -1 : box.items == null ? -2 : box.items.length;\n";
 		var compiler = compiler();
-		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;
-"));
+		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;\n"));
 		var build = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
 			main = build.functionIds.get("main"),
@@ -235,10 +214,7 @@ class LiveObjectLayoutMain {
 		expect("the first push", Runtime.callInt(live, main), 2);
 		expect("the second push", Runtime.callInt(live, main), 3);
 		var revision = patch(compiler, live, build.revision,
-			boxes(false, false, "  return 0;
-", "  if (Boxes.second == null) Boxes.second = new Box();
-  return 0;
-"), "removing a field");
+			boxes(false, false, "  return 0;\n", "  if (Boxes.second == null) Boxes.second = new Box();\n  return 0;\n"), "removing a field");
 		expect("making a box without the field", Runtime.callInt(live, later), 0);
 		revision = patch(compiler, live, revision, boxes(true, false, withItems, reading), "adding the field back");
 		expect("the old box after its field came back", Runtime.callInt(live, main), 2);
@@ -268,57 +244,31 @@ class LiveObjectLayoutMain {
 	 */
 	static function migratesWhileThreadsRun():Void {
 		function source(field:String, check:String):String
-			return "import sys.thread.Thread;
-"
-				+ "class Item {
-  public var value:Int;
-" + field + "  public function new(value:Int) this.value = value;
-"
-				+ "  public function check():Int " + check + "
-}
-"
-				+ "class Work {
-  public static var stop = false;
-  public static var done = false;
-  public static var unset = 0;
-"
+			return "import sys.thread.Thread;\n"
+				+ "class Item {\n  public var value:Int;\n" + field + "  public function new(value:Int) this.value = value;\n"
+				+ "  public function check():Int " + check + "\n}\n"
+				+ "class Work {\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n"
 				// The Int array literal makes the module import what the added field's initializer needs.
-				+ "  public static var rounds = 0;
-  public static var kept:Array<Item> = [];
-  public static var sample:Array<Int> = [7];
-}
-"
-				+ "function start():Int {
-  Thread.create(function() {
-    while (!Work.stop) {
-"
-				+ "      var fresh = [for (i in 0...256) new Item(i)];
-"
-				+ "      for (item in Work.kept) Work.unset += item.check();
-"
-				+ "      Work.kept = fresh;
-      Work.rounds++;
-    }
-    Work.done = true;
-  });
-"
-				+ "  while (Work.rounds < 10) Sys.sleep(0.001);
-  return 0;
-}
-"
-				+ "function rounds():Int return Work.rounds;
-"
-				+ "function finish():Int {
-  Work.stop = true;
-  while (!Work.done) Sys.sleep(0.001);
-  return Work.unset;
-}
-"
-				+ "function main():Int return 0;
-";
+				+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n"
+				// The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
+				+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n}\n"
+				// `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
+				// `kept` is replaced every round, so collections free objects the migration found.
+				+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n"
+				+ "  Thread.create(function() {\n    while (!Work.stop) {\n"
+				+ "      var checkOf:Item->Int = Work.check;\n      var fresh = [for (i in 0...2000) new Item(i)];\n"
+				+ "      for (item in Work.kept) Work.unset += checkOf(item);\n"
+				+ "      for (item in Work.lasting) Work.unset += checkOf(item);\n"
+				+ "      Work.kept = fresh;\n      Work.rounds++;\n    }\n    Work.done = true;\n  });\n"
+				+ "  while (Work.rounds < 10) Sys.sleep(0.001);\n  return 0;\n}\n"
+				+ "function rounds():Int return Work.rounds;\n"
+				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.done) Sys.sleep(0.001);\n  return Work.unset;\n}\n"
+				+ "function main():Int return 0;\n";
 		var without = source("", "return 0;"),
-			with = source("  var tags:Array<Int> = [7];
-", "return tags == null || tags.length != 1 ? 1 : 0;");
+			// A slow initializer on many objects keeps the migration long enough for an unsynchronized worker to see it.
+			with = source("  var tags:Array<Int> = Item.tagsFor();\n  static function tagsFor():Array<Int> {\n"
+				+ "    var tags = [];\n    for (i in 0...300) tags.push(i);\n    return tags;\n  }\n",
+				"return tags == null || tags.length != 300 ? 1 : 0;");
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),
