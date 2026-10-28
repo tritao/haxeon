@@ -98,6 +98,14 @@ class AbiMatrixMain {
 			},
 				abi(null, null, null, null, null, ["$lambda:main:main#0" => "a"]), Reload(GeneratedFunctionsRenumbered("$lambda:main:main"))),
 			fixture("function added to a module that takes added functions", empty, abi(["helper" => "()->I32"]), Patch, true),
+			fixture("function signature changed in a module that takes added functions", abi(["main" => "()->I32"]), abi(["main" => "(I32)->I32"]),
+				Patch, true),
+			fixture("constructor signature changed in a module that takes added functions", abi(["Editor.new" => "(Editor)->Void"]),
+				abi(["Editor.new" => "(Editor,I32)->Void"]), Patch, true),
+			fixture("method signature changed in a module that takes added functions",
+				abi(["Editor.read" => "(Editor)->I32"], ["Editor" => "kind=object;methods=read:Editor.read"]),
+				abi(["Editor.read" => "(Editor,I32)->I32"], ["Editor" => "kind=object;methods=read:Editor.read"]),
+				Reload(FunctionSignatureChanged("Editor.read")), true),
 			fixture("function removed from a module that takes added functions", abi(["helper" => "()->I32"]), empty, Patch, true),
 			fixture("constructor removed from a module that takes added functions", abi(["Editor.new" => "(Editor)->Void"]), empty,
 				Reload(FunctionRemoved("Editor.new")), true),
@@ -140,6 +148,7 @@ class AbiMatrixMain {
 		}
 		assertReasonSchema(fixtures);
 		Sys.println('PASS: ${fixtures.length} ABI compatibility policy fixtures');
+		assertAlignment();
 		var sourceFixtures:Array<SourceFixture> = [
 			sourceFixture("no-op", "function main():Int { return 40; }", "function main():Int { return 40; }", NoOp),
 			sourceFixture("body edit", "function main():Int { return 40; }", "function main():Int { return 42; }", BodyPatch),
@@ -151,8 +160,18 @@ class AbiMatrixMain {
 				BodyPatch),
 			sourceFixture("function removal with its caller",
 				"function helper():Int { return 2; } function main():Int { return helper(); }", "function main():Int { return 2; }", BodyPatch),
+			// A function whose signature changed takes a new slot; the old one keeps its code for closures made before the edit.
 			sourceFixture("function signature", "function helper(value:Int):Int { return value; } function main():Int { return 40; }",
-				"function helper(value:Float):Int { return 2; } function main():Int { return 40; }", ReloadFor(FunctionSignatureChanged("Main.helper"))),
+				"function helper(value:Float):Int { return 2; } function main():Int { return 40; }", BodyPatch),
+			sourceFixture("constructor signature",
+				"class Editor { public var value:Int; public function new(value:Int):Void { this.value = value; } } function main():Int { return new Editor(40).value; }",
+				"class Editor { public var value:Int; public function new(value:Int, more:Int):Void { this.value = value + more; } } function main():Int { return new Editor(40, 2).value; }",
+				BodyPatch),
+			// A prototype entry names the method's slot, so a method cannot move to a new one.
+			sourceFixture("method signature",
+				"class Editor { public function new():Void {} public function read():Int { return 40; } } function main():Int { return new Editor().read(); }",
+				"class Editor { public function new():Void {} public function read(more:Int):Int { return 40 + more; } } function main():Int { return new Editor().read(2); }",
+				ReloadFor(FunctionSignatureChanged("Editor.read"))),
 			sourceFixture("instance field addition",
 				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
 				"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 40; this.generation = 1; } } function main():Int { return new Editor().value; }",
@@ -183,7 +202,7 @@ class AbiMatrixMain {
 			sourceFixture("generic abstract representation change",
 				"abstract Value<T>(T) from T to T {} function read(value:Value<Int>):Int return 40; function main():Int return read(1);",
 				"abstract Value<T>(T) from T to T {} function read(value:Value<String>):Int return 40; function main():Int return read(\"one\");",
-				ReloadFor(FunctionSignatureChanged("Main.read"))),
+				BodyPatch),
 			sourceFixture("alias-equivalent generic abstract argument",
 				"typedef Score = Int; abstract Value<T>(T) from T to T {} function read(value:Value<Int>):Int return 40; function main():Int return read(1);",
 				"typedef Score = Int; abstract Value<T>(T) from T to T {} function read(value:Value<Score>):Int return 40; function main():Int return read(1);",
@@ -340,6 +359,62 @@ class AbiMatrixMain {
 					throw error;
 			}
 		}
+	}
+
+	/** `LambdaAlignment` renames the running lambdas to the names their functions have after the edit, or refuses the group. */
+	static function assertAlignment():Void {
+		var group = "$lambda:main:main#push(0)";
+		function prints(values:Array<String>):Map<String, String>
+			return [for (index in 0...values.length) group + "#" + index => values[index]];
+		function renames(before:Array<String>, after:Array<String>):String {
+			var result = compiler.abi.LambdaAlignment.align(prints(before), prints(after), "7");
+			if (result.refused.length > 0)
+				return "refused";
+			var parts:Array<String> = [];
+			for (step in result.steps)
+				for (from => to in step.lambdas)
+					parts.push(from.substr(group.length) + ">" + to.substr(group.length));
+			parts.sort(Reflect.compare);
+			return parts.join(" ");
+		}
+		var cases = [
+			{name: "unchanged", before: ["a", "b"], after: ["a", "b"], expected: ""},
+			{name: "edited in place", before: ["a", "b"], after: ["a", "c"], expected: ""},
+			{name: "appended", before: ["a"], after: ["a", "b"], expected: ""},
+			{name: "inserted first", before: ["a", "b"], after: ["c", "a", "b"], expected: "#0>#1 #1>#2"},
+			{name: "inserted first, last edited", before: ["a", "b"], after: ["c", "a", "d"], expected: "#0>#1 #1>#2"},
+			{name: "first deleted", before: ["a", "b"], after: ["b"], expected: "#0>~retired7#0 #1>#0"},
+			{name: "swapped", before: ["a", "b"], after: ["b", "a"], expected: "#0>#1 #1>#0"},
+			{name: "both edited", before: ["a", "b"], after: ["c", "d"], expected: "refused"},
+			{name: "edited into a copy of its neighbour", before: ["a", "b"], after: ["a", "a"], expected: "refused"},
+			{name: "inserted beside an edited one", before: ["a", "b"], after: ["c", "d", "b"], expected: "refused"},
+			{name: "reordered and edited", before: ["a", "b", "c"], after: ["b", "a", "d"], expected: "refused"}
+		];
+		for (entry in cases) {
+			var actual = renames(entry.before, entry.after);
+			if (actual != entry.expected)
+				throw 'lambda alignment, ${entry.name}: expected "${entry.expected}", got "$actual"';
+		}
+		// Every name a lambda's name is part of moves with it, and only whole names do.
+		var rewrite = new compiler.abi.LambdaAlignment.NameRewrite([group + "#1" => group + "#2", group + "#0" => group + "#1"]);
+		var renamed = [
+			"fun(obj:$lambda-env:main:main#push(0)#0,i32)->i32",
+			"$lambda:$lambda:main:main#push(0)#1:inner#0",
+			"$cell:$lambda:main:main#push(0)#0:x",
+			"(Obj($lambda-env:main:main#push(0)#1),I32)->I32",
+			"$lambda:main:main#push(0)#10"
+		].map(rewrite.apply);
+		var expected = [
+			"fun(obj:$lambda-env:main:main#push(0)#1,i32)->i32",
+			"$lambda:$lambda:main:main#push(0)#2:inner#0",
+			"$cell:$lambda:main:main#push(0)#1:x",
+			"(Obj($lambda-env:main:main#push(0)#2),I32)->I32",
+			"$lambda:main:main#push(0)#10"
+		];
+		for (index in 0...expected.length)
+			if (renamed[index] != expected[index])
+				throw 'lambda rename: expected ${expected[index]}, got ${renamed[index]}';
+		Sys.println('PASS: ${cases.length} lambda alignment fixtures');
 	}
 
 	static function containsReason(reasons:Array<AbiChange>, expected:AbiChange):Bool {
