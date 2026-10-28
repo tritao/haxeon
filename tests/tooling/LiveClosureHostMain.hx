@@ -51,7 +51,7 @@ class LiveClosureHostMain {
 		var main = root + "/Main.hx",
 			output = root + "/live.hl",
 			host = root + "/live-host.hl",
-			stop = StringTools.replace(root + "/stop", "\", "/");
+			stop = StringTools.replace(root + "/stop", "\\", "/");
 		function write(handlers:Array<String>):Void
 			File.saveContent(main,
 				"class Main {\n"
