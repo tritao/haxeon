@@ -137,6 +137,7 @@ class TestCatalog {
 	static final toolingMains = [
 		"FormatterMain",
 		"FormatterGoldenMain",
+		"UnusedImportsMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",
 		"ProtocolMain",
