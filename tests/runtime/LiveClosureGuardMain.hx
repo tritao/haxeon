@@ -21,6 +21,7 @@ class LiveClosureGuardMain {
 		patchesIncompatibleSignatureWithoutStoredClosure();
 		refusesDeletedStoredHandler();
 		patchesDeletedHandlerNobodyStores();
+		patchesDeletedHandlerTheUiRebuilds();
 		Sys.println("PASS: stored closures run adapted code, and a patch that would strand them is refused with what holds them");
 	}
 
@@ -79,6 +80,34 @@ class LiveClosureGuardMain {
 		expect(Runtime.callInt(session.live, session.mainId), 2 * 100 + 10, "the handlers before the edit");
 		patch(session, handlers(["x -> x * 10"], false), "a handler nobody stores deleted");
 		expect(Runtime.callInt(session.live, session.mainId), 10, "the handlers after the edit");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * A handler only the UI holds, which the app rebuilds around a patch (`liveRelease`, `liveRebuild`): deleting it patches,
+	 * and the rebuilt UI runs the new handlers. The same edit without letting go first is refused.
+	 */
+	static function patchesDeletedHandlerTheUiRebuilds():Void {
+		var ui = (bodies:Array<String>) -> "class Ui {\n  public static var handlers:Array<Int->Int> = [];\n"
+			+ "  public static function build():Void {\n" + [for (body in bodies) '    handlers.push($body);\n'].join("") + "  }\n}\n"
+			+ "function liveRelease():Void Ui.handlers = [];\n" + "function liveRebuild():Void Ui.build();\n" + "function main():Int {\n"
+			+ "  if (Ui.handlers.length == 0) Ui.build();\n" + "  var value = 0;\n" + "  for (handler in Ui.handlers) value = value * 100 + handler(1);\n"
+			+ "  return value;\n}\n";
+		var session = start(ui(["x -> x + 1", "x -> x * 10"]));
+		expect(Runtime.callInt(session.live, session.mainId), 2 * 100 + 10, "the UI's handlers before the edit");
+		var changed = compileEdit(session, ui(["x -> x * 10"]), "a handler the UI holds deleted");
+		var patch = new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions);
+		// Without letting go first, the UI's closure strands the patch.
+		try {
+			Runtime.patchSet(session.live, patch);
+			throw 'the patch applied though the UI still held the deleted handler';
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.ClosuresHeld)
+				throw 'the patch was refused for another reason: ${error.message}';
+			mention(error.message, "Ui.handlers[0]", "the refusal without the rebuild hooks");
+		}
+		Runtime.patchSetRebuilding(session.live, patch, changed.functionIds.get("Main.liveRelease"), changed.functionIds.get("Main.liveRebuild"));
+		expect(Runtime.callInt(session.live, session.mainId), 10, "the rebuilt UI's handlers after the edit");
 		Runtime.dispose(session.live);
 	}
 

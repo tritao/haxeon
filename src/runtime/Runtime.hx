@@ -272,6 +272,28 @@ class Runtime {
 	 * Applies `patch`. A `RuntimeError` with status `MigrationFailed` means the patch applied but initializers of the fields
 	 * it added threw on existing objects, which hold zero values in those fields; its message says which.
 	 */
+	/**
+	 * Applies `patch` to an app that rebuilds what holds its callbacks, its UI say. A patch that drops a function is refused
+	 * while a stored closure still reaches it (`RuntimeStatus.ClosuresHeld`), and closures the UI holds would refuse every
+	 * such patch, though the UI is about to be rebuilt from the new code anyway. So `release` (a function of the app, by
+	 * stable index, or null) runs first and lets go of what the app will rebuild; the patch then checks only what the app
+	 * still holds; and `rebuild` runs after, whether the patch applied or not, so the app rebuilds from whichever code now
+	 * runs. Nothing has to be rolled back: a refused patch changed nothing, and the app rebuilds from the code it had.
+	 */
+	public static function patchSetRebuilding(module:LoadedModule, patch:PatchSet, release:Null<Int>, rebuild:Null<Int>):Void {
+		if (release != null)
+			callVoid(module, release);
+		var failure:Null<RuntimeError> = null;
+		try
+			patchSet(module, patch)
+		catch (error:RuntimeError)
+			failure = error;
+		if (rebuild != null)
+			callVoid(module, rebuild);
+		if (failure != null)
+			throw failure;
+	}
+
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
 		var message:Null<String> = null;
 		var status:RuntimeStatus = module.access(function(handle) {

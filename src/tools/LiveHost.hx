@@ -94,7 +94,9 @@ class LiveHost {
 						try {
 							var patchBytes = File.getBytes(path + ".hlp");
 							readAt = Sys.time();
-							Runtime.patchSet(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions));
+							// An app that rebuilds its UI from its code lets go of it around the patch (`Runtime.patchSetRebuilding`).
+							Runtime.patchSetRebuilding(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
+								optionalFunctionId(description, entry + "." + LIVE_RELEASE), optionalFunctionId(description, entry + "." + LIVE_REBUILD));
 							applied = true;
 						} catch (error:RuntimeError) {
 							failure = error.message;
@@ -360,6 +362,22 @@ class LiveHost {
 	static function completeDescription(path:String, summary:LiveDescription):Null<LiveDescription> {
 		var full = try readDescription(path) catch (_:Dynamic) null;
 		return full != null && publicationKey(full) == publicationKey(summary) ? full : null;
+	}
+
+	/**
+	 * Optional functions of the app's entry class a host calls around each patch (`Runtime.patchSetRebuilding`):
+	 * `liveRelease()` lets go of what the app rebuilds from its code, its UI and the callbacks it holds, and `liveRebuild()`
+	 * builds it again, from the patched code when the patch applied.
+	 */
+	public static inline final LIVE_RELEASE:String = "liveRelease";
+
+	public static inline final LIVE_REBUILD:String = "liveRebuild";
+
+	static function optionalFunctionId(description:LiveDescription, name:String):Null<Int> {
+		for (item in description.identities)
+			if (item.name == name)
+				return item.id;
+		return null;
 	}
 
 	static function functionId(description:LiveDescription, name:String):Int {
