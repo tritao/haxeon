@@ -119,9 +119,14 @@ class BackendAssembly {
 	/**
 	 * A fresh layout for the same module identity. It keeps the stable function ids and continues the revision count: the
 	 * module it replaces is still running, and a revision number that starts over would look like an older build of it.
+	 * Retired functions (`LambdaAlignment.isRetired`) are left behind: only closures of the running module call them, and the
+	 * fresh module replaces it, so keeping their IDs would only let them pile up across reloads.
 	 */
 	static function freshLayout(previous:HlModuleAssembler):HlModuleAssembler {
-		var fresh = new HlModuleAssembler(CompilationContext.copyIndices(previous.cache.stableIds));
+		var ids = CompilationContext.copyIndices(previous.cache.stableIds);
+		for (name in [for (name in ids.keys()) if (LambdaAlignment.isRetired(name)) name])
+			ids.remove(name);
+		var fresh = new HlModuleAssembler(ids);
 		fresh.continueRevisions(previous.lastRevision());
 		return fresh;
 	}

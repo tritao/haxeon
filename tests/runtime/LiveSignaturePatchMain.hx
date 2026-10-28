@@ -77,6 +77,19 @@ class LiveSignaturePatchMain {
 		expect(runFresh(third), 608205, "the full module after the parameters were removed again");
 		Runtime.dispose(live);
 
+		// A reload lays the module out afresh, and the functions the moves above retired go with the old module.
+		compiler.update("Main.hx", StringTools.replace(program(3), "class Holder {", "enum Shape { Dot; }\nclass Holder {"));
+		var reloaded = compiler.compile("Main");
+		if (!reloaded.requiresReload)
+			throw 'Adding an enum must reload';
+		var retired = [for (name in (reloaded.functionIds : Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+		if (retired.length > 0)
+			throw 'A reload kept the retired functions ${retired.join(", ")}';
+		var again = compiler.compile("Main");
+		var kept = [for (name in (again.functionIds : Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+		if (kept.length > 0)
+			throw 'The build after a reload still names the retired functions ${kept.join(", ")}';
+
 		// A method's prototype entry names its slot, so a method signature change still reloads, and says why.
 		var methods = new Compiler();
 		methods.update("Main.hx", program(1));
