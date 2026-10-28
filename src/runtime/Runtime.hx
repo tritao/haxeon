@@ -40,6 +40,9 @@ private class RuntimeNative {
 	public static function patch(module:hl.Abstract<"realtime_module">, bytes:hl.Bytes, length:Int):Int
 		return -1;
 
+	public static function patch_message(module:hl.Abstract<"realtime_module">):hl.Bytes
+		return null;
+
 	public static function allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -265,8 +268,22 @@ class Runtime {
 					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
 		});
 
+	/**
+	 * Applies `patch`. A `RuntimeError` with status `MigrationFailed` means the patch applied but initializers of the fields
+	 * it added threw on existing objects, which hold zero values in those fields; its message says which.
+	 */
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
-		var status:RuntimeStatus = module.access(function(handle) return RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length));
+		var message:Null<String> = null;
+		var status:RuntimeStatus = module.access(function(handle) {
+			var result:RuntimeStatus = RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length);
+			if (result == RuntimeStatus.MigrationFailed) {
+				var bytes = RuntimeNative.patch_message(handle);
+				message = bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
+			}
+			return result;
+		});
+		if (status == RuntimeStatus.MigrationFailed)
+			throw new RuntimeError(status, 'revision ${patch.revision} applied, but ' + (message == null ? "initializers of the fields it added threw" : message));
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
 			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');

@@ -90,6 +90,18 @@ HL_PRIM int HL_NAME(patch)( hl_runtime_module *runtime, vbyte *bytes, int length
 	return hl_runtime_module_apply_hlp(runtime,bytes,length);
 }
 
+/* Why the last patch's migrations failed, as a managed copy, or NULL. */
+HL_PRIM vbyte *HL_NAME(patch_message)( hl_runtime_module *runtime ) {
+	const uchar *message = hl_runtime_module_patch_message(runtime);
+	int length;
+	vbyte *bytes;
+	if( message == NULL ) return NULL;
+	length = ustrlen(message);
+	bytes = (vbyte*)hl_gc_alloc_noptr((length + 1) * sizeof(uchar));
+	memcpy(bytes,message,(length + 1) * sizeof(uchar));
+	return bytes;
+}
+
 HL_PRIM int HL_NAME(allocation_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_allocation_count(runtime);
 }
