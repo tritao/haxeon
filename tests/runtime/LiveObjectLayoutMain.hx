@@ -239,29 +239,34 @@ class LiveObjectLayoutMain {
 
 	/**
 	 * A worker thread allocates objects of a class, drops them and calls a method that reads the field a patch adds to it,
-	 * while the patch applies and migrates. The worker never sees the field unset: the patch commits and migrates with
-	 * every other thread stopped, and the objects the migration found stay allocated until it reaches them.
+	 * while the patch applies and migrates. The worker never sees the field unset on an object made before a patch: the patch
+	 * commits and migrates with every other thread stopped, the objects the migration found stay allocated until it reaches
+	 * them, and code the stopped worker is inside stays allocated too.
 	 */
 	static function migratesWhileThreadsRun():Void {
 		function source(field:String, check:String):String
 			return "import sys.thread.Thread;\n"
 				+ "class Item {\n  public var value:Int;\n" + field + "  public function new(value:Int) this.value = value;\n"
 				+ "  public function check():Int " + check + "\n}\n"
-				+ "class Work {\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n"
+				+ "class Work {\n  public static var failure = \"\";\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n  public static var unsetMade = 0;\n"
 				// The Int array literal makes the module import what the added field's initializer needs.
 				+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n"
 				// The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
-				+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n}\n"
+				+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n  public static var make:Int->Item = i -> new Item(i);\n}\n"
 				// `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
 				// `kept` is replaced every round, so collections free objects the migration found.
 				+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n"
-				+ "  Thread.create(function() {\n    while (!Work.stop) {\n"
-				+ "      var checkOf:Item->Int = Work.check;\n      var fresh = [for (i in 0...2000) new Item(i)];\n"
-				+ "      for (item in Work.kept) Work.unset += checkOf(item);\n"
+				// A worker that throws records why and stops, so the test reports it instead of waiting for rounds that never come.
+				+ "  Thread.create(function() {\n    try {\n    while (!Work.stop) {\n"
+				+ "      var checkOf:Item->Int = Work.check;\n      var makeOf:Int->Item = Work.make;\n      var fresh = [for (i in 0...2000) makeOf(i)];\n"
+				+ "      for (item in Work.kept) Work.unsetMade += checkOf(item);\n"
 				+ "      for (item in Work.lasting) Work.unset += checkOf(item);\n"
-				+ "      Work.kept = fresh;\n      Work.rounds++;\n    }\n    Work.done = true;\n  });\n"
+				+ "      Work.kept = fresh;\n      Work.rounds++;\n    }\n    } catch (error:Dynamic) {\n      Work.failure = Std.string(error);\n    }\n"
+				+ "    Work.done = true;\n  });\n"
 				+ "  while (Work.rounds < 10) Sys.sleep(0.001);\n  return 0;\n}\n"
-				+ "function rounds():Int return Work.rounds;\n"
+				+ "function rounds():Int return Work.done ? -1 : Work.rounds;\n"
+				+ "function failure():String return Work.failure;\n"
+				+ "function unsetMade():Int return Work.unsetMade;\n"
 				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.done) Sys.sleep(0.001);\n  return Work.unset;\n}\n"
 				+ "function main():Int return 0;\n";
 		var without = source("", "return 0;"),
@@ -280,12 +285,32 @@ class LiveObjectLayoutMain {
 			var before = Runtime.callInt(live, rounds);
 			revision = patch(compiler, live, revision, with, 'adding a field while a thread runs (cycle $cycle)');
 			// Let the worker check objects the migration reached and ones the new constructor made.
-			while (Runtime.callInt(live, rounds) < before + 20)
-				Sys.sleep(0.001);
+			waitForRounds(live, build.functionIds, before + 20);
 			revision = patch(compiler, live, revision, without, 'removing the field while a thread runs (cycle $cycle)');
 		}
-		expect("checks that found the added field unset", Runtime.callInt(live, build.functionIds.get("Main.finish")), 0);
+		var unsetMade = Runtime.callInt(live, build.functionIds.get("Main.unsetMade"));
+		expect("checks of objects made before a patch that found the added field unset", Runtime.callInt(live, build.functionIds.get("Main.finish")),
+			0);
+		// A thread stopped inside old code finishes it after the commit: a construction it was in the middle of makes an object
+		// without the added field, one per patch at most for this worker (see LIVE_PATCHING.md, "Threads").
+		if (unsetMade > 5)
+			throw '$unsetMade objects made while the patches applied lack the added field; at most one per patch may';
 		Runtime.dispose(live);
+	}
+
+	/** Waits until the worker of `migratesWhileThreadsRun` has done `count` rounds, failing if it stops or takes over 10 s. */
+	static function waitForRounds(live:LoadedModule, ids:Map<String, Int>, count:Int):Void {
+		var startedAt = Sys.time();
+		while (true) {
+			var done = Runtime.callInt(live, ids.get("Main.rounds"));
+			if (done < 0)
+				throw 'the worker stopped: ' + Runtime.callString(live, ids.get("Main.failure"));
+			if (done >= count)
+				return;
+			if (Sys.time() - startedAt > 10)
+				throw 'the worker did $done rounds in 10 s, not $count';
+			Sys.sleep(0.001);
+		}
 	}
 
 	static function patch(compiler:Compiler, live:LoadedModule, revision:Int, source:String, label:String):Int {
