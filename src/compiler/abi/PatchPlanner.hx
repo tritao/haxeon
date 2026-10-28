@@ -54,8 +54,10 @@ class PatchPlanner {
 	 * is not a reason to reload, and neither is a removed one: its slot and last body stay in the module, and the new code does
 	 * not call it. A removed constructor still reloads, since it goes with a class. A new class or closure environment is a type
 	 * the patch appends to the module's type table. A removed closure environment or capture cell stays in the table for the
-	 * closures that still hold one, as their code does. Positionally named functions are still checked for renumbering, which
-	 * an addition or removal can cause.
+	 * closures that still hold one, as their code does. A function whose signature changed is the old function removed and a
+	 * new one added under its name (`HlModuleAssembler` gives it a new slot), unless an object's prototype dispatches to it:
+	 * the prototype keeps the old slot. Positionally named functions are still checked for renumbering, which an addition or
+	 * removal can cause.
 	 *
 	 * `checksObjectMembers`: the assembler holds the layout the running module has, so it can take an object's added,
 	 * removed and reordered fields and its added methods. An object whose kind, base and interfaces stayed the same is then
@@ -96,11 +98,15 @@ class PatchPlanner {
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
 		for (group in renumberedGroups(previous.positional, next.positional))
 			reasons.push(GeneratedFunctionsRenumbered(group));
-		if (addsFunctions)
+		if (addsFunctions) {
+			var dispatched = methodFunctions(previous.objects);
+			for (name => _ in methodFunctions(next.objects))
+				dispatched.set(name, true);
 			reasons = [
 				for (reason in reasons)
-					if (!keepsLayout(reason)) reason
+					if (!keepsLayout(reason, dispatched)) reason
 			];
+		}
 		reasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		return reasons.length == 0 ? Patch : ReloadDomain(reasons);
 	}
@@ -127,9 +133,31 @@ class PatchPlanner {
 		return parts.join(";");
 	}
 
-	static function keepsLayout(reason:AbiChange):Bool
+	/**
+	 * The functions objects dispatch to through their prototypes (`methods=<name>:<function>` in `RuntimeAbi.describe`). A
+	 * prototype entry names a slot, so such a function cannot move to a new one.
+	 */
+	static function methodFunctions(objects:Map<String, String>):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (description in objects)
+			for (part in description.split(";"))
+				if (StringTools.startsWith(part, "methods="))
+					for (method in part.substr("methods=".length).split(",")) {
+						var separator = method.indexOf(":");
+						if (separator > 0)
+							result.set(method.substr(separator + 1), true);
+					}
+		return result;
+	}
+
+	/** Whether a function whose signature changed can be given a new slot, the old one keeping its code (see `plan`). */
+	public static function movesOnSignatureChange(name:String, dispatched:Map<String, Bool>):Bool
+		return name != "__init" && !dispatched.exists(name);
+
+	static function keepsLayout(reason:AbiChange, dispatched:Map<String, Bool>):Bool
 		return switch reason {
 			case FunctionAdded(_): true;
+			case FunctionSignatureChanged(name): movesOnSignatureChange(name, dispatched);
 			case FunctionRemoved(name): !StringTools.endsWith(name, ".new");
 			case ObjectAdded(_), InterfaceAdded(_): true;
 			case ObjectRemoved(name): isGeneratedType(name);
@@ -167,47 +195,32 @@ class PatchPlanner {
 	 * program already made call the code under their name. That is right only while every name stands for the function it
 	 * stood for before. Inserting, deleting or reordering siblings shifts names onto other functions, and when the shifted
 	 * functions have the same signature and captures nothing else notices: stored callbacks would silently run another
-	 * function's code. So a group may patch only when its functions are provably the same, by their code fingerprints:
+	 * function's code.
+	 *
+	 * `LambdaAlignment` matches lambdas by their code and says how to rename the running module's lambdas so every name stands
+	 * for its function again; a HashLink build applies those renames before it plans (`BackendAssembly`), so it gets here
+	 * with nothing left to rename. A group is reported when it cannot be matched, or when it would need renaming: a module that
+	 * cannot take the renames (a Wasm module, or one the compiler resumed without its layout) reloads instead. Function adapter
+	 * groups are never renamed; they must keep every name's function (`sameFunctions`).
+	 *
+	 * Groups that only appear in one build are new or deleted functions, which have their own reasons.
+	 */
+	public static function renumberedGroups(previous:Null<Map<String, String>>, next:Null<Map<String, String>>):Array<String> {
+		var alignment = LambdaAlignment.align(previous, next, ""),
+			result = alignment.refused.concat(alignment.renamed);
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	/**
+	 * Whether a group's functions provably keep their names, by their code fingerprints:
 	 *
 	 * - None changed, or functions were only added or removed after the last one that is kept: every kept name runs its old code.
 	 * - Exactly one changed, the count is the same, and neither its old nor its new code appears elsewhere in the group: that is
 	 *   an edit of that function. (A sibling inserted above and a later one deleted changes every name in between, unless those
 	 *   siblings have identical code, which the uniqueness check rules out.)
-	 *
-	 * Anything else reloads. Groups that only appear in one build are new or deleted functions, which have their own reasons.
 	 */
-	public static function renumberedGroups(previous:Null<Map<String, String>>, next:Null<Map<String, String>>):Array<String> {
-		var before = groups(previous),
-			after = groups(next),
-			renumbered:Array<String> = [];
-		for (group => nextCode in after) {
-			var previousCode = before.get(group);
-			if (previous == null || previousCode != null && !sameFunctions(previousCode, nextCode))
-				renumbered.push(group);
-		}
-		renumbered.sort(Reflect.compare);
-		return renumbered;
-	}
-
-	static function groups(fingerprints:Null<Map<String, String>>):Map<String, Array<Null<String>>> {
-		var result:Map<String, Array<Null<String>>> = [];
-		if (fingerprints == null)
-			return result;
-		for (name => fingerprint in fingerprints) {
-			var group = PositionalName.group(name),
-				members:Array<Null<String>>;
-			if (result.exists(group))
-				members = result.get(group);
-			else {
-				members = [];
-				result.set(group, members);
-			}
-			members[PositionalName.ordinal(name)] = fingerprint;
-		}
-		return result;
-	}
-
-	static function sameFunctions(previous:Array<Null<String>>, next:Array<Null<String>>):Bool {
+	public static function sameFunctions(previous:Array<Null<String>>, next:Array<Null<String>>):Bool {
 		var changed:Array<Int> = [];
 		for (ordinal in 0...(previous.length < next.length ? previous.length : next.length))
 			if (previous[ordinal] == null || previous[ordinal] != next[ordinal])
