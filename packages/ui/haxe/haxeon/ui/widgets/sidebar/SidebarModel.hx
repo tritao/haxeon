@@ -117,7 +117,7 @@ class SidebarModel {
 	function get_customDestinations():Bool {
 		if (savedOrder.length > 0) return true;
 		for (mode in modes) if (!mode.visible) return true;
-		for (id in savedVisible.keys()) if (find(id) == null && !savedVisible.get(id)) return true;
+		for (id in savedVisible.keys()) if (find(id) == null && savedVisible.get(id) == false) return true;
 		return false;
 	}
 	/** The user's own destination choices alone, which destinations show and their order, without the selection, width
