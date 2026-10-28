@@ -495,6 +495,31 @@ class UiContext {
 		return next;
 	}
 
+	/**
+	 * Lets go of the retained render tree and everything that holds its nodes or their handler closures: the root, the
+	 * node maps, the hit-test picker, hover paths, focus order, in-flight gestures and self-updating builders. Interaction
+	 * state that holds no code stays: focus by ID, pointer presses and captures by ID, widget state, the key caches and the
+	 * native paint lists (repainted, not reused, by the next frame). Until the next submit, input finds no target and the
+	 * context must not be rendered; the next submit builds the whole tree afresh. A live host calls this before a patch that
+	 * drops functions, so stored closures only the old tree held no longer reach them.
+	 */
+	public function releaseRetained():Void {
+		ensureLive();
+		root = null;
+		inspectionNode = null;
+		submittedBuildKey = null;
+		previousNodesById.clear();
+		currentNodesById.clear();
+		resolvedById.clear();
+		events.releaseTree();
+		focus.releaseTree();
+		gestures.setRoot(null);
+		buildContext.releaseRetained();
+		// The painters may be new code: paint every node again instead of reusing its list by key.
+		customPaintKeys.clear();
+		customCompositeKeys.clear();
+	}
+
 	public function getDiagnosticStage():Int
 		return diagnosticStage;
 
@@ -805,7 +830,11 @@ class UiContext {
 		focusBeforeWindowBlur = null;
 		// A background change may have selected another widget or opened a modal.
 		// focusWidget also rejects removed, hidden, disabled and trapped-out nodes.
-		if (focus.focusedId == null && restore != null) focusWidget(restore);
+		// With the tree released, the next submit restores it.
+		if (focus.focusedId == null && restore != null) {
+			if (root == null) pendingFocus = restore;
+			else focusWidget(restore);
+		}
 	}
 
 	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,

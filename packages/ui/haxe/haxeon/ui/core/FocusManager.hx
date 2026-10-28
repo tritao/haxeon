@@ -56,6 +56,13 @@ class FocusManager {
 			focusedId = null;
 	}
 
+	/** Lets go of the render tree but keeps focus by ID, so the next rebuild restores it if the widget is still there. */
+	public function releaseTree():Void {
+		root = null;
+		order.resize(0);
+		eligible.clear();
+	}
+
 	public function focus(id:Null<WidgetId>):Bool {
 		if (id == null) {
 			focusedId = null;
