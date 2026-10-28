@@ -365,7 +365,8 @@ class LiveHost {
 	}
 
 	/**
-	 * Optional functions of the app's entry class a host calls around each patch (`Runtime.patchSetRebuilding`):
+	 * Optional functions of the app's entry class a host calls around a patch that drops functions, one with guards
+	 * (`Runtime.patchSetRebuilding`); other patches apply without them:
 	 * `liveRelease()` lets go of what the app rebuilds from its code, its UI and the callbacks it holds, and `liveRebuild()`
 	 * builds it again, from the patched code when the patch applied.
 	 */

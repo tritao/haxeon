@@ -96,7 +96,8 @@ patch never does that silently:
 
 Apps rebuild some of what holds their callbacks, their UI above all, from their code. Nothing in Haxeon or exosuit did
 that after a patch, so a handler only the UI held would have stopped every patch that deleted it. A live host now calls
-two optional functions of the app's entry class around each patch (`Runtime.patchSetRebuilding`): `liveRelease()` before
+two optional functions of the app's entry class around each patch that carries guards (`Runtime.patchSetRebuilding`; a patch
+that drops nothing applies without them): `liveRelease()` before
 it, to let go of what the app rebuilds, and `liveRebuild()` after it, applied or refused, to build it again. The guard
 check then sees only what the app still holds. Nothing ever has to be rolled back: a refused patch changed nothing, and
 the app rebuilds from the code it had. (Applying first and scanning after would need a rollback, which is unsound once a

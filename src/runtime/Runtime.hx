@@ -281,6 +281,11 @@ class Runtime {
 	 * runs. Nothing has to be rolled back: a refused patch changed nothing, and the app rebuilds from the code it had.
 	 */
 	public static function patchSetRebuilding(module:LoadedModule, patch:PatchSet, release:Null<Int>, rebuild:Null<Int>):Void {
+		// Only a patch that drops functions checks for closures, so only it needs the app to let go of its UI first.
+		if (!patch.hasGuards()) {
+			patchSet(module, patch);
+			return;
+		}
 		if (release != null)
 			callVoid(module, release);
 		var failure:Null<RuntimeError> = null;
