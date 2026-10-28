@@ -6,15 +6,20 @@ import compiler.runtime.CompilerIntrinsics;
 import runtime.LoadedModule;
 import runtime.PatchSet;
 import runtime.Runtime;
+import runtime.RuntimeError;
+import runtime.RuntimeStatus;
 
 /**
  * Edits that add fields to running classes patch the module: objects made before the patch get the fields, with their
  * declaration initializers, through a base class too and in a singleton a closure holds. Removing a field patches as well,
- * and the edits a patch cannot make say why they reload.
+ * a field added back runs its initializer again, an initializer that throws is reported, other threads never see an
+ * object the migration has not reached, and the edits a patch cannot make say why they reload.
  */
 class LiveObjectLayoutMain {
 	static function main():Void {
 		addsFields();
+		readdsFields();
+		migratesWhileThreadsRun();
 		refuses("a field changes type", edited(), edit("ticks:Int = 100", "ticks:Float = 100.0", "ticks++;", "ticks += 1.0;", "return total + ticks;",
 			"return total + Std.int(ticks);"), ObjectFieldTypeChanged("App.ticks"));
 		refuses("an added method overrides another added one", original(), added("Base", "public function label():Int return 1;")
@@ -174,6 +179,160 @@ class LiveObjectLayoutMain {
 		// The class the last patch appended has reserved slots too.
 		revision = patch(compiler, live, revision, counted("  var step:Int = 5;\n"), "adding a field to an appended class");
 		expect("the tick after the appended class gained a field", Runtime.callInt(live, main), 8 + 4 + 50 + 113 + 106 + 6);
+		Runtime.dispose(live);
+	}
+
+	/** The program of `readdsFields`: `Box.items` and `Box.bad` are what its edits remove and add. */
+	static function boxes(items:Bool, bad:Bool, main:String, later:String):String
+		return "class Box {
+"
+			+ (items ? "  public var items:Array<Int> = [1];
+" : "")
+			+ (bad ? "  public var bad:Int = Box.fail();
+" : "")
+			+ "  static function fail():Int throw \"no value for bad\";
+"
+			+ "  public function new() {}
+"
+			+ "}
+"
+			+ "class Boxes {
+"
+			+ "  public static var first:Null<Box> = null;
+"
+			+ "  public static var second:Null<Box> = null;
+"
+			+ "}
+"
+			+ "function main():Int {
+  if (Boxes.first == null) Boxes.first = new Box();
+  var box:Box = Boxes.first;
+" + main + "}
+"
+			+ "function later():Int {
+" + later + "}
+";
+
+	/**
+	 * A field removed and added back keeps its slot, but runs its initializer again on every instance: the ones made while it
+	 * was gone, which never ran it, and the older ones, which hold a value from before. An initializer that throws leaves the
+	 * patch applied and says so.
+	 */
+	static function readdsFields():Void {
+		var withItems = "  box.items.push(0);
+  return box.items.length;
+",
+			reading = "  var box:Null<Box> = Boxes.second;
+  return box == null ? -1 : box.items == null ? -2 : box.items.length;
+";
+		var compiler = compiler();
+		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;
+"));
+		var build = compiler.compile("Main"),
+			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			main = build.functionIds.get("main"),
+			later = build.functionIds.get("Main.later");
+		expect("the first push", Runtime.callInt(live, main), 2);
+		expect("the second push", Runtime.callInt(live, main), 3);
+		var revision = patch(compiler, live, build.revision,
+			boxes(false, false, "  return 0;
+", "  if (Boxes.second == null) Boxes.second = new Box();
+  return 0;
+"), "removing a field");
+		expect("making a box without the field", Runtime.callInt(live, later), 0);
+		revision = patch(compiler, live, revision, boxes(true, false, withItems, reading), "adding the field back");
+		expect("the old box after its field came back", Runtime.callInt(live, main), 2);
+		expect("the box made while the field was gone", Runtime.callInt(live, later), 1);
+		compiler.update("Main.hx", boxes(true, true, withItems, reading));
+		var failing = compiler.compile("Main"), status:Null<RuntimeStatus> = null, message = "";
+		if (failing.requiresReload || failing.patchBytes == null)
+			throw "adding a field whose initializer throws required a reload";
+		try
+			Runtime.patchSet(live, new PatchSet(revision, failing.revision, failing.patchBytes, failing.changedFunctions))
+		catch (error:RuntimeError) {
+			status = error.status;
+			message = error.message;
+		}
+		if (status != RuntimeStatus.MigrationFailed)
+			throw 'a throwing initializer must report MigrationFailed, not $status';
+		if (message.indexOf("Box") < 0 || message.indexOf("no value for bad") < 0 || message.indexOf("2 of 2") < 0)
+			throw 'the failure must name the class, the exception and the instances: $message';
+		expect("the module after the failed initializer", Runtime.liveRevision(live), failing.revision);
+		Runtime.dispose(live);
+	}
+
+	/**
+	 * A worker thread allocates objects of a class, drops them and calls a method that reads the field a patch adds to it,
+	 * while the patch applies and migrates. The worker never sees the field unset: the patch commits and migrates with
+	 * every other thread stopped, and the objects the migration found stay allocated until it reaches them.
+	 */
+	static function migratesWhileThreadsRun():Void {
+		function source(field:String, check:String):String
+			return "import sys.thread.Thread;
+"
+				+ "class Item {
+  public var value:Int;
+" + field + "  public function new(value:Int) this.value = value;
+"
+				+ "  public function check():Int " + check + "
+}
+"
+				+ "class Work {
+  public static var stop = false;
+  public static var done = false;
+  public static var unset = 0;
+"
+				+ "  public static var rounds = 0;
+  public static var kept:Array<Item> = [];
+}
+"
+				+ "function start():Int {
+  Thread.create(function() {
+    while (!Work.stop) {
+"
+				+ "      var fresh = [for (i in 0...256) new Item(i)];
+"
+				+ "      for (item in Work.kept) Work.unset += item.check();
+"
+				+ "      Work.kept = fresh;
+      Work.rounds++;
+    }
+    Work.done = true;
+  });
+"
+				+ "  while (Work.rounds < 10) Sys.sleep(0.001);
+  return 0;
+}
+"
+				+ "function rounds():Int return Work.rounds;
+"
+				+ "function finish():Int {
+  Work.stop = true;
+  while (!Work.done) Sys.sleep(0.001);
+  return Work.unset;
+}
+"
+				+ "function main():Int return 0;
+";
+		var without = source("", "return 0;"),
+			with = source("  var tags:Array<Int> = [7];
+", "return tags == null || tags.length != 1 ? 1 : 0;");
+		var compiler = compiler();
+		compiler.update("Main.hx", without);
+		var build = compiler.compile("Main"),
+			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			rounds = build.functionIds.get("Main.rounds");
+		expect("starting the worker", Runtime.callInt(live, build.functionIds.get("Main.start")), 0);
+		var revision = build.revision;
+		for (cycle in 0...5) {
+			var before = Runtime.callInt(live, rounds);
+			revision = patch(compiler, live, revision, with, 'adding a field while a thread runs (cycle $cycle)');
+			// Let the worker check objects the migration reached and ones the new constructor made.
+			while (Runtime.callInt(live, rounds) < before + 20)
+				Sys.sleep(0.001);
+			revision = patch(compiler, live, revision, without, 'removing the field while a thread runs (cycle $cycle)');
+		}
+		expect("checks that found the added field unset", Runtime.callInt(live, build.functionIds.get("Main.finish")), 0);
 		Runtime.dispose(live);
 	}
 
