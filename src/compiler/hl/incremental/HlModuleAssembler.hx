@@ -355,12 +355,12 @@ class HlModuleAssembler {
 	static function signatureAdapter(name:String, old:IrFunction, target:IrFunction, defaults:Null<Map<String, IrDefault>>):Null<IrFunction> {
 		var builder = new IrBuilder(), given:Map<String, IrValue> = [];
 		for (argument in old.arguments)
-			given.set(argument.name, builder.argument(argument.name, argument.type));
+			given.set(parameterName(argument), builder.argument(argument.name, argument.type));
 		var passed:Array<IrValue> = [];
 		for (parameter in target.arguments) {
-			var value = given.get(parameter.name);
+			var name = parameterName(parameter), value = given.get(name);
 			var converted = value != null ? widen(builder, value, parameter.type) : defaults == null
-				|| !defaults.exists(parameter.name) ? null : defaultValue(builder, defaults.get(parameter.name), parameter.type);
+				|| !defaults.exists(name) ? null : defaultValue(builder, defaults.get(name), parameter.type);
 			if (converted == null)
 				return null;
 			passed.push(converted);
@@ -371,6 +371,12 @@ class HlModuleAssembler {
 			return null;
 		builder.returnValue(returned);
 		return new IrFunction(name, builder.arguments, old.result, builder.blocks, null, false, old.retention);
+	}
+
+	/** The source name of a function's argument: IR names locals `$l<number>:<name>`. */
+	static function parameterName(argument:IrValue):String {
+		var name = argument.name;
+		return StringTools.startsWith(name, "$l") && name.indexOf(":") > 0 ? name.substr(name.indexOf(":") + 1) : name;
 	}
 
 	static function sameType(a:IrType, b:IrType):Bool
