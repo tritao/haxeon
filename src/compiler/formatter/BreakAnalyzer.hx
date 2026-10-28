@@ -18,10 +18,12 @@ private typedef DelimiterGroup = {
 /** Classifies token boundaries and turns overlong delimited groups into constraints. */
 class BreakAnalyzer {
 	public static function analyze(line:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):Array<Boundary> {
-		var tokens = line.tokens, groups = findGroups(tokens, syntax), expanded = [];
+		var tokens = line.tokens, groups = findGroups(tokens, syntax), expanded:Array<DelimiterGroup> = [];
+		// Outermost first: a group inside an expanded one starts its own line, so only the part of the line before it counts.
+		groups.sort((left, right) -> left.open - right.open);
 		for (group in groups)
 			if (group.commas.length > 0
-				&& groupPrefixWidth(tokens, group.open, line.indent, config, syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
+				&& groupPrefixWidth(tokens, group.open, expanded, line.indent, config, syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
 				expanded.push(group);
 
 		var result:Array<Boundary> = [];
@@ -328,10 +330,29 @@ class BreakAnalyzer {
 		return width;
 	}
 
-	static function groupPrefixWidth(tokens:Array<FormatToken>, open:Int, indent:Int, config:FormatConfig, syntax:SyntaxInfo):Int
-		return indent * config.indentWidth
-			+ (open == 0 ? 0 : rangeWidth(tokens, 0, open - 1, syntax))
-			+ (open == 0 ? 0 : spacing(tokens, open - 1, FormatTokenTools.syntaxKind(tokens[open - 1]), FormatTokenTools.syntaxKind(tokens[open]), syntax));
+	/** The width of the line before the group's opening token, given which enclosing groups are already split one element per line. */
+	static function groupPrefixWidth(tokens:Array<FormatToken>, open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig,
+			syntax:SyntaxInfo):Int {
+		var start = lineStart(open, expanded, indent, config);
+		return start.indent * config.indentWidth
+			+ (open == start.token ? 0 : rangeWidth(tokens, start.token, open - 1, syntax)
+				+ spacing(tokens, open - 1, FormatTokenTools.syntaxKind(tokens[open - 1]), FormatTokenTools.syntaxKind(tokens[open]), syntax));
+	}
+
+	/** The first token of the line holding `open` and that line's indent: the element of the innermost expanded group around it. */
+	static function lineStart(open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig):{token:Int, indent:Int} {
+		var parent:Null<DelimiterGroup> = null;
+		for (group in expanded)
+			if (group.open < open && open < group.close && (parent == null || group.open > parent.open))
+				parent = group;
+		if (parent == null)
+			return {token: 0, indent: indent};
+		var token = parent.open + 1;
+		for (comma in parent.commas)
+			if (comma < open)
+				token = comma + 1;
+		return {token: token, indent: lineStart(parent.open, expanded, indent, config).indent + FormatConfigTools.continuationLevels(config)};
+	}
 
 	static function rangeWidth(tokens:Array<FormatToken>, start:Int, end:Int, syntax:SyntaxInfo):Int {
 		if (start > end)

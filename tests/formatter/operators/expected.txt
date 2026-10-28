@@ -15,4 +15,22 @@ class Operators {
     for (key => value in map) trace(key);
     return -radius;
   }
+  function rows():Array<Dynamic> {
+    return [
+      {
+        name: "flat",
+        profile: Profile.flat(2 * radius, 0.02),
+        depth: 0.002,
+        corners: [radius, 1.5 * radius],
+        weight: 9.4
+      },
+      {
+        name: "ball",
+        profile: Profile.ball(2 * radius, 0.02),
+        depth: 0.004,
+        corners: [1.01 * radius, 1.5 * radius],
+        weight: 7.5
+      }
+    ];
+  }
 }
