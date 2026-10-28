@@ -265,7 +265,8 @@ class LambdaAlignment {
 				continue;
 			var list = waiting.get(print);
 			if (list != null && list.length > 0) {
-				mapping.set(list.shift(), ordinal);
+				var from:Int = list.shift();
+				mapping.set(from, ordinal);
 				matchedNew.set(ordinal, true);
 			}
 		}
