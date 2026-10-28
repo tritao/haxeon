@@ -48,9 +48,6 @@ class HlLower {
 	final objects:Map<String, IrObject> = [];
 	final interfaceBases:Map<String, Array<String>> = [];
 
-	/** Interface cache slots appended to each object's own fields (see `interfaceSlotsFor`). */
-	final objectSlotCounts:Map<String, Int> = [];
-
 	final enumTypeIndices:Map<String, Int> = [];
 	final cNatives:Map<String, IrCNative> = [];
 	final cDispatchNatives:Array<IrNative> = [];
@@ -67,13 +64,14 @@ class HlLower {
 	}
 
 	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache):HlCode {
-		return lowerStableMeasured(program, symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache).code;
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
+			fieldReserve:Int = 0):HlCode {
+		return lowerStableMeasured(program, symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache, fieldReserve).code;
 	}
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
-			?debugCache:HlDebugMetadataCache):MeasuredHlCode {
+			?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -90,7 +88,7 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache),
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -109,6 +107,12 @@ class HlLower {
 
 	final stableIds:Null<Map<String, Int>>;
 	final cachedFunctions:Null<Map<String, HlFunction>>;
+
+	/** Reserved slots a live build gives each object that can take fields later (see `reservedSlots`). */
+	final fieldReserve:Int;
+
+	/** HashLink field indices by `object.field`, resolved against the types this build publishes. */
+	final fieldIndices:Map<String, Int> = [];
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
 
@@ -119,8 +123,9 @@ class HlLower {
 	var allocationPhases:Array<PhaseAllocation> = [];
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache) {
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0) {
 		this.symbols = symbols;
+		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
 		this.preparedRuntimeNatives = runtimeNatives;
@@ -312,8 +317,7 @@ class HlLower {
 				if (ready && fieldsReady) {
 					objects.set(object.name, object);
 					var slots = interfaceSlotsFor(object);
-					objectSlotCounts.set(object.name, slots.length);
-					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots));
+					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object)));
 					progressed = true;
 				} else
 					remaining.push(object);
@@ -894,8 +898,11 @@ class HlLower {
 						var receiver = requireRegister(object, registers),
 							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
 							valueMethod = valueMethodFunction(object, methodName);
+						if (valueMethod == null)
+							valueMethod = addedMethodFunction(object, methodName);
 						if (valueMethod != null) {
-							// A value class has no prototype to dispatch through and cannot be subclassed, so its methods are direct calls.
+							// A value class has no prototype to dispatch through and cannot be subclassed, so its methods are direct calls,
+							// as are methods a live patch added.
 							var destination = defineRegister(output, registers, registerTypes),
 								functionIndex = requireFunction(valueMethod);
 							switch methodArguments.length {
@@ -1430,31 +1437,52 @@ class HlLower {
 			case Obj(value): value;
 			default: throw 'IR value ${object.id} is not an object';
 		};
-		if (!objects.exists(typeName))
-			throw 'Unknown IR object "$typeName"';
-		var descriptor = objects.get(typeName);
-		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
-		var offset = baseName.length == 0 ? 0 : objectFieldCount(baseName);
-		for (index in 0...descriptor.fields.length)
-			if (descriptor.fields[index].name == name)
-				return offset + index;
-		if (baseName.length > 0)
-			return requireObjectFieldByType(baseName, name);
-		throw 'Unknown IR field "$typeName.$name"';
+		return requireObjectFieldByType(typeName, name);
 	}
 
+	/**
+	 * The field's index in the type this build publishes. A live patch keeps every field where the running module has it,
+	 * moves none, and gives added ones reserved slots, so the index comes from the type, not from the field's position in
+	 * the IR: the IR declares the field's owner, the type its slot.
+	 */
 	function requireObjectFieldByType(typeName:String, name:String):Int {
-		if (!objects.exists(typeName))
-			throw 'Unknown IR object "$typeName"';
-		var descriptor = objects.get(typeName);
-		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base);
-		var offset = baseName.length == 0 ? 0 : objectFieldCount(baseName);
-		for (index in 0...descriptor.fields.length)
-			if (descriptor.fields[index].name == name)
-				return offset + index;
-		if (baseName.length > 0)
-			return requireObjectFieldByType(baseName, name);
-		throw 'Unknown IR field "$typeName.$name"';
+		var key = typeName + "." + name, cached = fieldIndices.get(key);
+		if (cached != null)
+			return cached;
+		var owner = typeName;
+		while (true) {
+			var descriptor = objects.get(owner);
+			if (descriptor == null)
+				throw 'Unknown IR object "$owner"';
+			var declares = false;
+			for (field in descriptor.fields)
+				if (field.name == name)
+					declares = true;
+			if (declares)
+				break;
+			if (descriptor.base == null)
+				throw 'Unknown IR field "$typeName.$name"';
+			owner = Std.string(descriptor.base);
+		}
+		var index = symbols.objectFieldIndex(owner, name);
+		if (index == null)
+			throw 'IR field "$owner.$name" has no slot in its HashLink type';
+		var resolved:Int = index;
+		fieldIndices.set(key, resolved);
+		return resolved;
+	}
+
+	/**
+	 * A live build reserves slots in every object a patch can add fields to: not value objects, which other objects hold
+	 * inline, not objects natives lay out, and not closure environments, whose captures a patch cannot change.
+	 */
+	function reservedSlots(object:IrObject):Int {
+		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, "$lambda-env:"))
+			return 0;
+		for (field in object.fields)
+			if (field.nativeLayout != null)
+				return 0;
+		return fieldReserve;
 	}
 
 	function objectFieldNativeLayout(object:IrValue, name:String):Null<IrObjectFieldNativeLayout> {
@@ -1490,6 +1518,32 @@ class HlLower {
 		return null;
 	}
 
+	/**
+	 * The implementing function of `name` on `value`'s object type when the published prototype has no slot for it: a
+	 * method a live patch added. The patch planner lets one in only when nothing overrides it and it overrides nothing, so
+	 * a direct call reaches the method every receiver has.
+	 */
+	function addedMethodFunction(value:IrValue, name:String):Null<String> {
+		var typeName = switch value.type {
+			case Obj(objectName): objectName;
+			default: return null;
+		};
+		var slots = symbols.objectMethodSlots(typeName);
+		if (slots == null || slots.exists(name))
+			return null;
+		var owner:Null<String> = typeName;
+		while (owner != null) {
+			var descriptor = objects.get(owner);
+			if (descriptor == null)
+				return null;
+			for (method in descriptor.methods)
+				if (method.name == name)
+					return method.functionName;
+			owner = descriptor.base == null ? null : Std.string(descriptor.base);
+		}
+		return null;
+	}
+
 	function requireObjectMethod(value:IrValue, name:String):Int {
 		var typeName = switch value.type {
 			case Obj(value): value;
@@ -1498,17 +1552,6 @@ class HlLower {
 			default: throw 'IR value ${value.id} is not an object';
 		};
 		return symbols.requireObjectMethodIndex(typeName, name);
-	}
-
-	function objectFieldCount(typeName:String):Int {
-		if (!objects.exists(typeName))
-			throw 'Unknown IR object "$typeName"';
-		var descriptor = objects.get(typeName);
-		var baseName = descriptor.base == null ? "" : Std.string(descriptor.base),
-			slotCount = objectSlotCounts.get(typeName);
-		if (slotCount == null)
-			throw 'Missing interface slot count for IR object "$typeName"';
-		return descriptor.fields.length + slotCount + (baseName.length == 0 ? 0 : objectFieldCount(baseName));
 	}
 
 	/** Every interface `object` implements, directly or through interface bases, that its base class does not already provide.

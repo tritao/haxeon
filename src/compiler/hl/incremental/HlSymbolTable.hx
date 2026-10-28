@@ -423,7 +423,12 @@ class HlSymbolTable {
 		return index;
 	}
 
-	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>):Int {
+	/**
+	 * `reserve` unnamed Dynamic fields go after the object's own fields and interface caches: room a live patch can give
+	 * fields added later, in instances that already exist (see `assignReservedField`).
+	 */
+	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>,
+			reserve:Int = 0):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
@@ -441,6 +446,11 @@ class HlSymbolTable {
 				var virtualType = typeIndices.get(virtualKey);
 				fields.push({name: internString(""), type: virtualType});
 			}
+		if (reserve > 0 && !object.isValue) {
+			var dynamic = internType(IrType.Dyn), unnamed = internString("");
+			for (_ in 0...reserve)
+				fields.push({name: unnamed, type: dynamic});
+		}
 		var key = 'obj:${object.name}',
 			index = typeIndices.exists(key) ? typeIndices.get(key) : types.length,
 			global = globals.length + 1;
@@ -487,7 +497,83 @@ class HlSymbolTable {
 		return index;
 	}
 
-	function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
+	/** The published definition of object `name`, or null when no published type has that name. */
+	public function objectDefinition(name:String):Null<{index:Int, definition:HlTypeDef}> {
+		var index = objectIndices.get(name);
+		return index == null ? null : {index: index, definition: types[index]};
+	}
+
+	/** Slot indices of the methods `name` dispatches through its prototype, its own and inherited, or null for an unknown object. */
+	public function objectMethodSlots(name:String):Null<Map<String, Int>>
+		return objectMethodIndices.get(name);
+
+	/** Whether `field` is a reserved slot no field has taken yet. */
+	public function isReservedField(field:HlObjectField):Bool
+		return strings[field.name] == "" && switch types[field.type] {
+			case Simple(kind): kind == HlType.Dyn;
+			default: false;
+		};
+
+	/**
+	 * Gives field `fieldName` of type `fieldType` the first free reserved slot among object `objectName`'s own fields,
+	 * returning its index there, or -1 when every slot is taken. The definition is replaced, never changed in place:
+	 * forked tables share definitions.
+	 */
+	public function assignReservedField(objectName:String, fieldName:String, fieldType:Int):Int {
+		var found = objectDefinition(objectName);
+		if (found == null)
+			return -1;
+		switch found.definition {
+			case Object(name, base, global, fields, methods, bindings):
+				for (index in 0...fields.length)
+					if (isReservedField(fields[index])) {
+						ensureWritable();
+						var next = fields.copy();
+						next[index] = {name: internString(fieldName), type: fieldType};
+						types[found.index] = Object(name, base, global, next, methods, bindings);
+						return index;
+					}
+			default:
+		}
+		return -1;
+	}
+
+	/**
+	 * HashLink's index of field `fieldName` declared by object `objectName`: the fields of its bases come first. Null when
+	 * the object's published type has no field of that name.
+	 */
+	public function objectFieldIndex(objectName:String, fieldName:String):Null<Int> {
+		var found = objectDefinition(objectName);
+		if (found == null)
+			return null;
+		var fields:Array<HlObjectField> = [];
+		switch found.definition {
+			case Object(_, _, _, own, _, _):
+				fields = own;
+			case Structure(_, _, own, _, _):
+				fields = own;
+			default:
+		}
+		for (index in 0...fields.length)
+			if (strings[fields[index].name] == fieldName)
+				return inheritedFieldCount(found.definition) + index;
+		return null;
+	}
+
+	function inheritedFieldCount(definition:HlTypeDef):Int
+		return switch definition {
+			case Object(_, base, _, _, _, _) if (base >= 0): totalFieldCount(types[base]);
+			default: 0;
+		};
+
+	function totalFieldCount(definition:HlTypeDef):Int
+		return switch definition {
+			case Object(_, _, _, fields, _, _): inheritedFieldCount(definition) + fields.length;
+			case Structure(_, _, fields, _, _): fields.length;
+			default: 0;
+		};
+
+	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';

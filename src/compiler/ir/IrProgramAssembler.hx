@@ -6,6 +6,8 @@ import compiler.types.Type.NominalKind;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.ir.Ir.IrProgram;
@@ -116,6 +118,45 @@ class IrProgramAssembler {
 			lastCall = boot.call(functions[index].name, [], Void);
 		boot.returnValue(lastCall);
 		functions.unshift(new IrFunction("__init", [], Void, boot.blocks));
+		return functions;
+	}
+
+	/**
+	 * For a live build: a function per class that runs the declaration initializers of the class's fields the running module
+	 * does not have yet, on an instance made before they existed. A patch that adds those fields runs it on every live
+	 * instance of the class and its subclasses (`hl_module_patch_migrate`); instances made later run the initializers in
+	 * their constructor as usual. Like Dart's hot reload, existing instances get the initializer, never a constructor rerun:
+	 * a field a constructor assigns keeps its zero value. `published(class)` tells whether the running module has the class,
+	 * `publishedField(class, field)` whether it has the field; a class it lacks needs no migration.
+	 */
+	public static function liveInitializersFrom(typed:TypedProgram, published:String->Bool, publishedField:(String, String)->Bool):Array<IrFunction> {
+		var functions:Array<IrFunction> = [];
+		for (classDecl in typed.classes) {
+			if (classDecl.isValue || classDecl.isNativeValue || !published(classDecl.name))
+				continue;
+			var statements:Array<TypedStatement> = [];
+			for (field in classDecl.fields) {
+				var initializer = field.initializer;
+				if (field.isStatic || initializer == null || !hasPhysicalStorage(field) || publishedField(classDecl.name, field.name))
+					continue;
+				statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, classDecl.name, []), field.span), field.name,
+					initializer, field.span));
+			}
+			if (statements.length > 0)
+				functions.push(IrGenerator.generateFunction({
+					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
+					owner: classDecl.name,
+					isStatic: false,
+					// Gives it a receiver without a prototype slot, as a constructor has.
+					isConstructor: true,
+					arguments: [],
+					result: TVoid,
+					statements: statements,
+					cells: [],
+					cellCaptures: [],
+					span: classDecl.span
+				}));
+		}
 		return functions;
 	}
 

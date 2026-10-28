@@ -521,9 +521,13 @@ class FrontendCompilation {
 		for (native in IrProgramAssembler.cNativesFrom(typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
+		// A live HashLink build initializes the fields it adds to running objects (see `IrProgramAssembler.liveInitializersFrom`).
+		var published = context.assembler,
+			liveInitializers = context.livePatching && !context.isWasmTarget() && published.isPublished() ? IrProgramAssembler.liveInitializersFrom(typedNew,
+				name -> published.publishedObject(name), (name, field) -> published.publishedField(name, field)) : [];
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
-			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
+			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
 		var cNativeNames = [for (native in irCNatives) native.name].join(",");
 		for (fn in cached)

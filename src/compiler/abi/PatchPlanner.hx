@@ -10,6 +10,18 @@ enum AbiChange {
 	ObjectAdded(name:String);
 	ObjectRemoved(name:String);
 	ObjectLayoutChanged(name:String);
+
+	/** A field of a running object changed type (`name` is `Class.field`); its slot holds values of the old type. */
+	ObjectFieldTypeChanged(name:String);
+
+	/** The edit adds fields to an object whose reserved slots are all taken (see `HlModuleAssembler.planObjects`). */
+	ObjectFieldReserveExhausted(name:String);
+
+	/**
+	 * A method the prototype must dispatch to changed (`name` is `Class.method`): an added method that overrides or is
+	 * overridden, a removed override, or one the runtime calls by name.
+	 */
+	ObjectMethodDispatchChanged(name:String);
 	ClosureLayoutChanged(name:String);
 	InterfaceChanged(name:String);
 	EnumChanged(name:String);
@@ -39,6 +51,11 @@ class PatchPlanner {
 	 * reason to reload, and neither is a removed one: its slot and last body stay in the module, and the new code does not
 	 * call it. A removed constructor still reloads, since it goes with a class. Positionally named functions are still checked
 	 * for renumbering, which an addition or removal can cause.
+	 *
+	 * Such a module can also take an object's added, removed and reordered fields and its added methods, so an object
+	 * whose kind, base and interfaces stayed the same is left to the assembler, which checks its fields and methods against
+	 * the layout the running module has (`HlModuleAssembler.planObjects`). Value objects and closure environments are not:
+	 * other objects hold value objects inline, and closures already made hold their environments.
 	 */
 	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false):PatchDecision {
 		if (previous == null)
@@ -51,13 +68,20 @@ class PatchPlanner {
 				return FunctionRemoved(name);
 			return FunctionSignatureChanged(name);
 		}, reasons);
+		var objectReasons:Array<AbiChange> = [];
 		compare(previous.objects, next.objects, function(name, oldValue, newValue) {
 			if (oldValue == null)
 				return ObjectAdded(name);
 			if (newValue == null)
 				return ObjectRemoved(name);
 			return StringTools.startsWith(name, "$lambda-env:") ? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
-		}, reasons);
+		}, objectReasons);
+		for (reason in objectReasons)
+			switch reason {
+				case ObjectLayoutChanged(name) if (addsFunctions && keepsFrame(previous.objects.get(name), next.objects.get(name))):
+				default:
+					reasons.push(reason);
+			}
 		compare(previous.interfaces, next.interfaces, function(name, _, _) return InterfaceChanged(name), reasons);
 		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
@@ -70,6 +94,28 @@ class PatchPlanner {
 			];
 		reasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		return reasons.length == 0 ? Patch : ReloadDomain(reasons);
+	}
+
+	/**
+	 * Whether two descriptions of an object (`RuntimeAbi.describe`) differ only in fields and methods, for an object that is
+	 * not a value object.
+	 */
+	public static function keepsFrame(previous:Null<String>, next:Null<String>):Bool {
+		if (previous == null || next == null)
+			return false;
+		var before = frame(previous), after = frame(next);
+		return before != null && before == after;
+	}
+
+	static function frame(description:String):Null<String> {
+		var parts:Array<String> = [];
+		for (part in description.split(";")) {
+			if (part == "kind=value")
+				return null;
+			if (!StringTools.startsWith(part, "fields=") && !StringTools.startsWith(part, "methods="))
+				parts.push(part);
+		}
+		return parts.join(";");
 	}
 
 	static function keepsLayout(reason:AbiChange):Bool

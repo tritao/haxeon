@@ -14,12 +14,10 @@ HL_PRIM vdynamic *HL_NAME(__reflect_copy)(vdynamic *object) {
 	vdynamic *copy = (vdynamic *)hl_alloc_obj(object->t);
 	for (hl_type *type = object->t; type; type = type->obj->super) {
 		for (int index = 0; index < type->obj->nfields; index++) {
-			hl_runtime_obj *layout = type->obj->rt;
-			bool cached_interface = false;
-			for (int slot = 0; slot < layout->ninterfaces; slot++)
-				if (layout->interfaces[slot] == index) cached_interface = true;
-			if (cached_interface) continue;
 			hl_obj_field *field = &type->obj->fields[index];
+			// Unnamed fields hold no value of the object's: interface caches, and the slots a live build reserves for
+			// fields a patch adds, which are named once a patch gives them a field.
+			if (field->hashed_name == 0) continue;
 			int name = field->hashed_name;
 			hl_type *value_type = field->t;
 			switch (value_type->kind) {

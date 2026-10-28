@@ -8,6 +8,7 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult;
 import compiler.hl.patch.HlPatchWriter;
+import compiler.hl.patch.HlPatchWriter.HlLayoutPatch;
 import compiler.ir.Ir.IrProgram;
 import compiler.service.CancellationToken;
 import haxe.io.Bytes;
@@ -31,6 +32,12 @@ typedef BackendAssemblyResult = {
 
 /** Plans and assembles one IR candidate for the HashLink backend. */
 class BackendAssembly {
+	/**
+	 * Reserved slots a live HashLink build gives each object (see `HlLower.reservedSlots`): how many fields a session can
+	 * add to one class before the edit needs a reload, which lays the slots out afresh. Each costs a pointer per instance.
+	 */
+	public static var liveFieldReserve:Int = 4;
+
 	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
@@ -51,11 +58,14 @@ class BackendAssembly {
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
+		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
+		for (reason in assembly.objectReasons)
+			reloadReasons.push(reason);
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		attachSourceSnapshots(context, assembly.module);
@@ -69,7 +79,8 @@ class BackendAssembly {
 			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
 				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
-				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals);
+				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals,
+				layoutPatch(candidateAssembler, assembly));
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
 			assembly: assembly,
@@ -90,6 +101,21 @@ class BackendAssembly {
 				AllocationMeter.delta("patch", allocationAfterSnapshots, allocationAfterPatch)
 			].concat(assembly.allocationPhases)
 		};
+	}
+
+	/** The object fields and migrations of a patch, with each migration's function by its stable ID. */
+	static function layoutPatch(assembler:HlModuleAssembler, assembly:HlAssemblyResult):Null<HlLayoutPatch> {
+		var layout = assembly.objectLayout;
+		if (layout == null)
+			return null;
+		var migrations:Array<{type:Int, stableId:Int}> = [];
+		for (migration in layout.migrations) {
+			var stableId = assembler.cache.stableIds.get(migration.functionName);
+			if (stableId == null)
+				throw 'Migration function ${migration.functionName} has no stable ID';
+			migrations.push({type: migration.type, stableId: stableId});
+		}
+		return {fields: layout.fields, previousTypes: layout.previousTypes, migrations: migrations};
 	}
 
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {

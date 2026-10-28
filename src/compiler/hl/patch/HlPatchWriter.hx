@@ -8,6 +8,17 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlType as HashLinkType;
 
+/**
+ * Fields a patch gives existing classes, in their reserved slots, and the initializers to run on the instances made
+ * before it (see `HlModuleAssembler`). `previousTypes` holds the definitions the running module has for the types the
+ * patch rewrites, which its type prefix is checked against.
+ */
+typedef HlLayoutPatch = {
+	final fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>;
+	final previousTypes:Map<Int, HlTypeDef>;
+	final migrations:Array<{type:Int, stableId:Int}>;
+}
+
 /** Encodes versioned, transactional HLP deltas from an assembled module. */
 class HlPatchWriter {
 	static inline final SYMBOLS = 1;
@@ -16,6 +27,8 @@ class HlPatchWriter {
 	static inline final SOURCE_SNAPSHOTS = 4;
 	static inline final ADDED_FUNCTIONS = 5;
 	static inline final GLOBALS = 6;
+	static inline final OBJECT_FIELDS = 7;
+	static inline final MIGRATIONS = 8;
 
 	/**
 	 * `addedFunctions` are the changed slots the running module does not have yet, with their names; they must be the
@@ -27,7 +40,7 @@ class HlPatchWriter {
 			tag:Int,
 			bytes:HaxeBytes
 		}>, ?addedFunctions:Array<{slot:Int, name:String}>,
-			baseGlobals:Int = -1):HaxeBytes {
+			baseGlobals:Int = -1, ?layout:HlLayoutPatch):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -68,7 +81,7 @@ class HlPatchWriter {
 			symbols.write(b);
 		}
 		checkBase(baseTypes, code.types.length);
-		symbols.writeInt32(hashTypes(code.types, baseTypes));
+		symbols.writeInt32(hashTypes(baseTypeDefinitions(code.types, baseTypes, layout), baseTypes));
 		writeIndex(symbols, baseTypes);
 		writeIndex(symbols, code.types.length - baseTypes);
 		for (i in baseTypes...code.types.length)
@@ -99,7 +112,9 @@ class HlPatchWriter {
 			snapshots = encodeSourceSnapshots(code, selected),
 			added = addedFunctions == null
 				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot),
-			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals);
+			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals),
+			objectFields = layout == null || layout.fields.length == 0 ? null : encodeObjectFields(layout),
+			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
 		out.writeByte(HlPatchFormat.VERSION);
@@ -109,13 +124,15 @@ class HlPatchWriter {
 		var extensions = extensionSections == null ? [] : extensionSections;
 		for (section in extensions)
 			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS
-				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS)
+				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS || section.tag == MIGRATIONS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
 		writeIndex(out, 2
 			+ (debug == null ? 0 : 1)
 			+ (snapshots == null ? 0 : 1)
 			+ (added == null ? 0 : 1)
 			+ (globals == null ? 0 : 1)
+			+ (objectFields == null ? 0 : 1)
+			+ (migrations == null ? 0 : 1)
 			+ extensions.length);
 		writeSection(out, SYMBOLS, symbols.getBytes());
 		writeSection(out, FUNCTIONS, functions.getBytes());
@@ -127,8 +144,49 @@ class HlPatchWriter {
 			writeSection(out, ADDED_FUNCTIONS, added);
 		if (globals != null)
 			writeSection(out, GLOBALS, globals);
+		if (objectFields != null)
+			writeSection(out, OBJECT_FIELDS, objectFields);
+		if (migrations != null)
+			writeSection(out, MIGRATIONS, migrations);
 		for (section in extensions)
 			writeSection(out, section.tag, section.bytes);
+		return out.getBytes();
+	}
+
+	/** The running module's view of the first `count` types: the definitions it has for the ones the patch rewrites. */
+	static function baseTypeDefinitions(types:Array<HlTypeDef>, count:Int, layout:Null<HlLayoutPatch>):Array<HlTypeDef> {
+		if (layout == null || !layout.previousTypes.keys().hasNext())
+			return types;
+		var result = types.slice(0, count);
+		for (index => definition in layout.previousTypes)
+			if (index < count)
+				result[index] = definition;
+		return result;
+	}
+
+	/** Each field: its class's type, its index among the class's own fields, its name and its type. */
+	static function encodeObjectFields(layout:HlLayoutPatch):HaxeBytes {
+		var out = new BytesOutput();
+		out.bigEndian = false;
+		writeIndex(out, layout.fields.length);
+		for (field in layout.fields) {
+			writeIndex(out, field.type);
+			writeIndex(out, field.field);
+			writeIndex(out, field.name);
+			writeIndex(out, field.fieldType);
+		}
+		return out.getBytes();
+	}
+
+	/** Each migration: the class whose instances it initializes, and the stable ID of the function it runs on each. */
+	static function encodeMigrations(layout:HlLayoutPatch):HaxeBytes {
+		var out = new BytesOutput();
+		out.bigEndian = false;
+		writeIndex(out, layout.migrations.length);
+		for (migration in layout.migrations) {
+			writeIndex(out, migration.type);
+			writeIndex(out, migration.stableId);
+		}
 		return out.getBytes();
 	}
 

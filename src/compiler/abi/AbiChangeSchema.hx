@@ -21,6 +21,9 @@ class AbiChangeSchema {
 			case ObjectAdded(name): record("object_added", "object", name);
 			case ObjectRemoved(name): record("object_removed", "object", name);
 			case ObjectLayoutChanged(name): record("object_layout_changed", "object", name);
+			case ObjectFieldTypeChanged(name): record("object_field_type_changed", "object_field", name);
+			case ObjectFieldReserveExhausted(name): record("object_field_reserve_exhausted", "object", name);
+			case ObjectMethodDispatchChanged(name): record("object_method_dispatch_changed", "object_method", name);
 			case ClosureLayoutChanged(name): record("closure_layout_changed", "closure_environment", name);
 			case InterfaceChanged(name): record("interface_changed", "interface", name);
 			case EnumChanged(name): record("enum_changed", "enum", name);
@@ -41,6 +44,9 @@ class AbiChangeSchema {
 			case "object_added": requireKind(record, "object", ObjectAdded(record.entityId));
 			case "object_removed": requireKind(record, "object", ObjectRemoved(record.entityId));
 			case "object_layout_changed": requireKind(record, "object", ObjectLayoutChanged(record.entityId));
+			case "object_field_type_changed": requireKind(record, "object_field", ObjectFieldTypeChanged(record.entityId));
+			case "object_field_reserve_exhausted": requireKind(record, "object", ObjectFieldReserveExhausted(record.entityId));
+			case "object_method_dispatch_changed": requireKind(record, "object_method", ObjectMethodDispatchChanged(record.entityId));
 			case "closure_layout_changed": requireKind(record, "closure_environment", ClosureLayoutChanged(record.entityId));
 			case "interface_changed": requireKind(record, "interface", InterfaceChanged(record.entityId));
 			case "enum_changed": requireKind(record, "enum", EnumChanged(record.entityId));

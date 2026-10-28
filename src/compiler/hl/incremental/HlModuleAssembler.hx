@@ -2,7 +2,11 @@ package compiler.hl.incremental;
 
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
+import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.patch.HlPatchWriter.HlLayoutPatch;
+import compiler.ir.Ir.IrObject;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
@@ -45,6 +49,19 @@ typedef HlAssemblyResult = {
 	final requiresReload:Bool;
 	/** Why the assembler published a fresh module on its own, beyond the ABI plan's reasons. */
 	final layoutReasons:Array<String>;
+
+	/** Object changes the running module cannot take, which made the assembler publish a fresh module. */
+	final objectReasons:Array<AbiChange>;
+
+	/**
+	 * Fields this build gives existing objects in their reserved slots, with the definitions the running module has for
+	 * those objects; `migrations` name the function that initializes each object's added fields. Null without any.
+	 */
+	final objectLayout:Null<{
+		fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
+		previousTypes:Map<Int, HlTypeDef>,
+		migrations:Array<{type:Int, functionName:String}>
+	}>;
 	final revision:Int;
 	final baseInts:Int;
 	final baseFloats:Int;
@@ -88,6 +105,18 @@ class HlModuleAssembler {
 
 	final debugMetadata:HlDebugMetadataCache;
 
+	/**
+	 * Reserved slots each object gets when this assembler lays out a fresh module (see `HlLower.reservedSlots`): the
+	 * fields live patches can add to it. Zero without live patching.
+	 */
+	public var fieldReserve:Int = 0;
+
+	/** The function a live build adds to initialize an object's added fields on existing instances (see `IrProgramAssembler`). */
+	public static inline final LIVE_INITIALIZER = "__liveinit";
+
+	/** Methods HashLink's runtime finds by name in the prototype, which a direct call cannot stand in for. */
+	static final runtimeMethods:Array<String> = ["__string", "__compare", "__cast", "__get_field"];
+
 	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache) {
 		cache = new HlFunctionCache(stableIds);
 		debugMetadata = sharedDebugMetadata == null ? new HlDebugMetadataCache() : sharedDebugMetadata;
@@ -107,8 +136,23 @@ class HlModuleAssembler {
 		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
+		result.fieldReserve = fieldReserve;
 		return result;
 	}
+
+	/** Whether this assembler has published a module, so an object it published can take added fields. */
+	public function isPublished():Bool
+		return initialized;
+
+	/**
+	 * Whether object `objectName` has a field `fieldName` in the module this assembler published. False for an object it
+	 * has not published: the object is new, and nothing needs its fields initialized.
+	 */
+	public function publishedField(objectName:String, fieldName:String):Bool
+		return initialized && symbols.objectFieldIndex(objectName, fieldName) != null;
+
+	public function publishedObject(objectName:String):Bool
+		return initialized && symbols.objectDefinition(objectName) != null;
 
 	public function exportState():HlAssemblerState
 		return {
@@ -195,6 +239,150 @@ class HlModuleAssembler {
 		return true;
 	}
 
+	/**
+	 * Checks the published objects' fields and methods against `program` for a patch, and gives fields added to an object
+	 * the object's reserved slots. A patch keeps every published field where it is: one the program no longer has keeps
+	 * its slot and is no longer read, and a reordered one keeps its slot, so neither needs anything. Each reason is a
+	 * change a patch cannot make, for which the assembler publishes a fresh module:
+	 *
+	 * - a field whose type changed, or an added field when every reserved slot is taken, or one stored inline (a value
+	 *   object) or laid out for natives;
+	 * - a method the prototype must dispatch to: an added method that overrides one or is overridden, a removed one that
+	 *   overrode one, or one the runtime calls by name (`toString` and its kind). An added method that nothing overrides
+	 *   gets no prototype slot; calls reach it directly (`HlLower.addedMethodFunction`).
+	 *
+	 * The ABI plan catches the rest: objects added or removed, changed bases, interfaces or kinds, value objects and
+	 * closure environments.
+	 */
+	function planObjects(program:IrProgram):{
+		reasons:Array<AbiChange>,
+		fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
+		previousTypes:Map<Int, HlTypeDef>,
+		migrations:Array<{type:Int, functionName:String}>
+	} {
+		var reasons:Array<AbiChange> = [],
+			fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}> = [],
+			previousTypes:Map<Int, HlTypeDef> = [],
+			migrations:Array<{type:Int, functionName:String}> = [],
+			byName:Map<String, IrObject> = [],
+			valueObjects:Map<String, Bool> = [],
+			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true];
+		for (object in program.objects) {
+			byName.set(object.name, object);
+			if (object.isValue)
+				valueObjects.set(object.name, true);
+		}
+		function extendsObject(name:String, base:String):Bool {
+			var current = byName.get(name);
+			while (current != null && current.base != null) {
+				var parent = Std.string(current.base);
+				if (parent == base)
+					return true;
+				current = byName.get(parent);
+			}
+			return false;
+		}
+		for (object in program.objects) {
+			var published = symbols.objectDefinition(object.name);
+			if (published == null || object.isValue || StringTools.startsWith(object.name, "$lambda-env:"))
+				continue;
+			var ownFields:Array<compiler.hl.HlCode.HlObjectField> = [], ownMethods:Array<String> = [];
+			switch published.definition {
+				case Object(_, _, _, own, methods, _):
+					ownFields = own;
+					for (method in methods)
+						ownMethods.push(symbols.strings[method.name]);
+				default:
+					continue;
+			}
+			var native = object.nativeLayout != null, exhausted = false;
+			for (field in object.fields)
+				if (field.nativeLayout != null)
+					native = true;
+			for (field in object.fields) {
+				var type = symbols.internObjectFieldType(field.type, valueObjects, field.nativeLayout), slot = -1;
+				for (index in 0...ownFields.length)
+					if (symbols.strings[ownFields[index].name] == field.name)
+						slot = index;
+				if (slot >= 0) {
+					if (ownFields[slot].type != type)
+						reasons.push(ObjectFieldTypeChanged(object.name + "." + field.name));
+					continue;
+				}
+				var stored = switch symbols.types[type] {
+					case Parameterized(kind, _): kind == compiler.hl.HlType.Packed;
+					default: false;
+				};
+				if (native || stored) {
+					reasons.push(ObjectLayoutChanged(object.name));
+					continue;
+				}
+				if (exhausted)
+					continue;
+				var previous = symbols.types[published.index];
+				var assigned = symbols.assignReservedField(object.name, field.name, type);
+				if (assigned < 0) {
+					exhausted = true;
+					reasons.push(ObjectFieldReserveExhausted(object.name));
+					continue;
+				}
+				if (!previousTypes.exists(published.index))
+					previousTypes.set(published.index, previous);
+				fields.push({type: published.index, field: assigned, name: symbols.internString(field.name), fieldType: type});
+				// The definition changed, so read the slots again for the next added field.
+				switch symbols.types[published.index] {
+					case Object(_, _, _, own, _, _):
+						ownFields = own;
+					default:
+				}
+			}
+			var inherited = object.base == null ? null : symbols.objectMethodSlots(Std.string(object.base));
+			for (method in object.methods) {
+				if (ownMethods.indexOf(method.name) >= 0)
+					continue;
+				var dispatched = runtimeMethods.indexOf(method.name) >= 0 || inherited != null && inherited.exists(method.name);
+				if (!dispatched)
+					for (other in program.objects)
+						if (other != object && extendsObject(other.name, object.name))
+							for (overriding in other.methods)
+								if (overriding.name == method.name)
+									dispatched = true;
+				if (dispatched)
+					reasons.push(ObjectMethodDispatchChanged(object.name + "." + method.name));
+			}
+			for (name in ownMethods) {
+				var kept = false;
+				for (method in object.methods)
+					if (method.name == name)
+						kept = true;
+				if (!kept && inherited != null && inherited.exists(name))
+					reasons.push(ObjectMethodDispatchChanged(object.name + "." + name));
+			}
+			var initializer = object.name + "." + LIVE_INITIALIZER;
+			if (functions.exists(initializer))
+				migrations.push({type: published.index, functionName: initializer});
+		}
+		// Bases first, so a subclass's initializers see the fields of its base initialized.
+		function depth(type:Int):Int {
+			var result = 0, current = type, searching = true;
+			while (searching) {
+				searching = false;
+				switch symbols.types[current] {
+					case Object(_, base, _, _, _, _):
+						if (base >= 0) {
+							result++;
+							current = base;
+							searching = true;
+						}
+					default:
+				}
+			}
+			return result;
+		}
+		migrations.sort(function(a, b) return depth(a.type) - depth(b.type));
+		return {reasons: reasons, fields: fields, previousTypes: previousTypes, migrations: migrations};
+	}
+
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0,
 			publishedSlots = cache.slots.length;
@@ -260,6 +448,17 @@ class HlModuleAssembler {
 					break;
 				}
 			}
+		var objectReasons:Array<AbiChange> = [], objectLayout = null;
+		if (reuseLowered) {
+			var planned = planObjects(ordered);
+			if (planned.reasons.length > 0) {
+				reload = true;
+				objectReasons = planned.reasons;
+				reuseLowered = false;
+				discardPublishedSymbols();
+			} else if (planned.fields.length > 0 || planned.migrations.length > 0)
+				objectLayout = {fields: planned.fields, previousTypes: planned.previousTypes, migrations: planned.migrations};
+		}
 		var changed:Array<Int> = [], changedSlots:Array<Int> = [];
 		if (initialized)
 			for (name in regenerated) {
@@ -281,7 +480,7 @@ class HlModuleAssembler {
 				addedFunctions.push({slot: slot, name: name});
 			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
-			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata),
+			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
 		// A running module can take new String constants but no other global, so a build that adds any other publishes a
@@ -306,7 +505,7 @@ class HlModuleAssembler {
 		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
-		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && baseInts == publishedInts
+		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && objectLayout == null && baseInts == publishedInts
 			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
 		if (!unchanged)
 			revision++;
@@ -319,6 +518,8 @@ class HlModuleAssembler {
 			functionIndices: layout,
 			requiresReload: reload,
 			layoutReasons: layoutReasons,
+			objectReasons: objectReasons,
+			objectLayout: reload ? null : objectLayout,
 			revision: revision,
 			baseInts: baseInts,
 			baseFloats: baseFloats,
