@@ -22,6 +22,47 @@ class PositionalName {
 	public static function ordinal(name:String):Int
 		return Std.parseInt(name.substring(separator(name) + 1));
 
+	/** A function's place in its source, `<path>|<line>|<offset>`, as `place` gives it. */
+	public static function place(path:String, line:Int, offset:Int):String
+		return path + "|" + line + "|" + offset;
+
+	/** The parts of a `place`, or null when `text` is not one. */
+	public static function parsePlace(text:Null<String>):Null<{path:String, line:Int, offset:Int}> {
+		if (text == null)
+			return null;
+		var second = text.lastIndexOf("|"), first = second <= 0 ? -1 : text.lastIndexOf("|", second - 1);
+		if (first <= 0)
+			return null;
+		var line = Std.parseInt(text.substring(first + 1, second)), offset = Std.parseInt(text.substr(second + 1));
+		return line == null || offset == null ? null : {path: text.substr(0, first), line: line, offset: offset};
+	}
+
+	/**
+	 * Where `fn`'s code starts: the earliest source location among its instructions, in the file most of them come from (code
+	 * inlined from elsewhere aside); null when it has none.
+	 */
+	public static function placeOf(fn:compiler.ir.IrFunction):Null<String> {
+		var counts:Map<String, Int> = [], earliest:Map<String, compiler.ir.SourceProvenance.SourceLocation> = [];
+		for (block in fn.blocks)
+			for (instruction in block.instructions) {
+				var location = instruction.provenance.location;
+				if (location == null)
+					continue;
+				counts.set(location.path, (counts.exists(location.path) ? counts.get(location.path) : 0) + 1);
+				var known = earliest.get(location.path);
+				if (known == null || location.start < known.start)
+					earliest.set(location.path, location);
+			}
+		var path:Null<String> = null;
+		for (candidate => count in counts)
+			if (path == null || count > counts.get(path) || count == counts.get(path) && candidate < path)
+				path = candidate;
+		if (path == null)
+			return null;
+		var location = earliest.get(path);
+		return place(path, location.line, location.start);
+	}
+
 	static function separator(name:String):Int
 		return LambdaName.is(name) ? name.lastIndexOf("#") : name.lastIndexOf(":");
 

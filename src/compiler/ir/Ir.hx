@@ -261,6 +261,14 @@ class IrProgram {
 	 */
 	public var parameterDefaults:Map<String, Map<String, IrDefault>> = [];
 
+	/**
+	 * Where each positionally named function's code starts in its source (`PositionalName.place`), and the text of each file
+	 * named there, by path: an edit's text diff then tells which edited lambda is which (`LambdaAlignment`).
+	 */
+	public var positionalPlaces:Map<String, String> = [];
+
+	public var positionalSources:Map<String, String> = [];
+
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;
 }

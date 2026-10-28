@@ -96,7 +96,7 @@ class PatchPlanner {
 			reasons);
 		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
-		for (group in renumberedGroups(previous.positional, next.positional))
+		for (group in renumberedGroups(previous.positional, next.positional, LambdaAlignment.placesOf(previous, next)))
 			reasons.push(GeneratedFunctionsRenumbered(group));
 		if (addsFunctions) {
 			var dispatched = dispatchedFunctions(previous, next);
@@ -211,8 +211,9 @@ class PatchPlanner {
 	 *
 	 * Groups that only appear in one build are new or deleted functions, which have their own reasons.
 	 */
-	public static function renumberedGroups(previous:Null<Map<String, String>>, next:Null<Map<String, String>>):Array<String> {
-		var alignment = LambdaAlignment.align(previous, next, LambdaAlignment.PLANNING),
+	public static function renumberedGroups(previous:Null<Map<String, String>>, next:Null<Map<String, String>>,
+			?places:LambdaAlignment.LambdaPlaces):Array<String> {
+		var alignment = LambdaAlignment.align(previous, next, LambdaAlignment.PLANNING, places),
 			result = alignment.refused.concat(alignment.renamed);
 		result.sort(Reflect.compare);
 		return result;

@@ -47,7 +47,8 @@ class BackendAssembly {
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
 		if (context.livePatching && !context.isWasmTarget() && baseAssembler.isPublished() && previousAbi != null) {
-			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional, Std.string(baseAssembler.lastRevision() + 1));
+			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional, Std.string(baseAssembler.lastRevision() + 1),
+				LambdaAlignment.placesOf(previousAbi, nextAbi));
 			if (alignment.steps.length > 0) {
 				baseAssembler = baseAssembler.copy();
 				baseAssembler.renameLambdas(alignment.steps);

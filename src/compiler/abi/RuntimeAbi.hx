@@ -15,6 +15,15 @@ typedef RuntimeAbiDescriptor = {
 	 * other functions (see `PatchPlanner.renumberedGroups`); null when the descriptor was persisted before builds recorded them.
 	 */
 	final positional:Null<Map<String, String>>;
+
+	/**
+	 * Where each positionally named function starts (`PositionalName.place`) and the text of the files they are in, so an
+	 * edit's text diff can tell edited lambdas apart (`LambdaAlignment`). Kept in memory only: a resumed session matches by
+	 * code alone.
+	 */
+	final ?places:Null<Map<String, String>>;
+
+	final ?sources:Null<Map<String, String>>;
 }
 
 /** Canonical description of the runtime-visible ABI emitted to HashLink. */
@@ -46,7 +55,9 @@ class RuntimeAbi {
 			interfaces: interfaces,
 			enums: enums,
 			globals: globals,
-			positional: [for (name => fingerprint in program.positionalFingerprints) name => fingerprint]
+			positional: [for (name => fingerprint in program.positionalFingerprints) name => fingerprint],
+			places: [for (name => place in program.positionalPlaces) name => place],
+			sources: program.positionalSources
 		};
 	}
 

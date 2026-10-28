@@ -535,6 +535,17 @@ class FrontendCompilation {
 				ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
 		context.inlineCache().finishPositionalFingerprints();
 		ir.positionalFingerprints = PositionalName.nested(ownPrints);
+		if (context.livePatching) {
+			var texts:Map<String, String> = [for (state in context.modules) state.source.path => state.source.text];
+			for (fn in cached)
+				if (PositionalName.is(fn.name)) {
+					var place = PositionalName.placeOf(fn), parsed = PositionalName.parsePlace(place);
+					if (place == null || parsed == null || !texts.exists(parsed.path))
+						continue;
+					ir.positionalPlaces.set(fn.name, place);
+					ir.positionalSources.set(parsed.path, texts.get(parsed.path));
+				}
+		}
 		var semantic = context.cachedSemanticProgram;
 		if (context.livePatching && !context.isWasmTarget() && semantic != null)
 			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);

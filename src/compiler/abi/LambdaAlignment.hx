@@ -18,6 +18,17 @@ typedef LambdaAlignmentResult = {
 	final refused:Array<String>;
 }
 
+/**
+ * Where the lambdas of both builds start in their sources, and the texts of those sources (`RuntimeAbiDescriptor.places`):
+ * what lets `LambdaAlignment` follow an edited lambda through the edit's text diff.
+ */
+typedef LambdaPlaces = {
+	final before:Map<String, String>;
+	final after:Map<String, String>;
+	final beforeSources:Map<String, String>;
+	final afterSources:Map<String, String>;
+}
+
 /** How one group's running siblings stand for its new ones (`LambdaAlignment.alignGroup`). */
 typedef GroupAlignment = {
 	/** The new ordinal each matched running ordinal stands for. */
@@ -59,7 +70,8 @@ class LambdaAlignment {
 	 * How to rename the running module's lambdas (`previous` fingerprints, by name) so that each stands for its function in
 	 * the new build (`next`). `tag` goes into the names of lambdas retired by this build (`RetiredName.lambda`).
 	 */
-	public static function align(previous:Null<Map<String, String>>, next:Null<Map<String, String>>, tag:String):LambdaAlignmentResult {
+	public static function align(previous:Null<Map<String, String>>, next:Null<Map<String, String>>, tag:String,
+			?places:LambdaPlaces):LambdaAlignmentResult {
 		var steps:Array<NameRewrite> = [], renamed:Array<String> = [], refused:Array<String> = [], after = groups(next);
 		var names = [for (group in after.keys()) group];
 		// A group nested in a lambda has that lambda's name in its own, so it comes after it and sees it renamed.
@@ -67,6 +79,7 @@ class LambdaAlignment {
 		if (previous == null)
 			return {steps: steps, renamed: renamed, refused: names};
 		var current = [for (name => print in previous) name => print], before = groups(current);
+		var beforePlaces = places == null ? null : [for (name => place in places.before) name => place], lineMaps:Map<String, Map<Int, Int>> = [];
 		for (group in names) {
 			var old = before.get(group), now = after.get(group);
 			if (old == null)
@@ -76,7 +89,8 @@ class LambdaAlignment {
 					refused.push(group);
 				continue;
 			}
-			var aligned = alignGroup(old, now);
+			var known = beforePlaces, given = places;
+			var aligned = alignGroup(old, now, known == null || given == null ? null : (ordinal:Int) -> followEdit(group, known, given, lineMaps, ordinal));
 			if (aligned == null) {
 				refused.push(group);
 				continue;
@@ -89,9 +103,59 @@ class LambdaAlignment {
 			renamed.push(group);
 			current = step.keys(current);
 			before = groups(current);
+			if (beforePlaces != null)
+				beforePlaces = step.keys(beforePlaces);
 		}
 		refused.sort(Reflect.compare);
 		return {steps: steps, renamed: renamed, refused: refused};
+	}
+
+	/**
+	 * The new ordinal of `group` the running lambda at `ordinal` became, by the edit's text diff (`SourceLineMap`): the line its
+	 * code started on, carried through the diff, is the line the new lambda starts on, and among the group's lambdas that
+	 * start on one line they keep their order. Null when the diff does not carry the line over or no lambda starts there.
+	 */
+	static function followEdit(group:String, beforePlaces:Map<String, String>, places:LambdaPlaces, lineMaps:Map<String, Map<Int, Int>>,
+			ordinal:Int):Null<Int> {
+		var from = PositionalName.parsePlace(beforePlaces.get(member(group, ordinal)));
+		if (from == null)
+			return null;
+		var lines = lineMaps.get(from.path);
+		if (lines == null) {
+			var oldText = places.beforeSources.get(from.path), newText = places.afterSources.get(from.path);
+			lines = oldText == null || newText == null ? [] : SourceLineMap.map(oldText, newText);
+			lineMaps.set(from.path, lines);
+		}
+		var line = lines.get(from.line);
+		if (line == null)
+			return null;
+		// Its rank among the group's lambdas starting on its old line picks it out among those on the new line.
+		var rank = 0;
+		for (name => text in beforePlaces) {
+			var other = PositionalName.parsePlace(text);
+			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group && other.path == from.path && other.line == from.line
+				&& other.offset < from.offset)
+				rank++;
+		}
+		var candidates:Array<{ordinal:Int, offset:Int}> = [];
+		for (name => text in places.after) {
+			var other = PositionalName.parsePlace(text);
+			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group && other.path == from.path && other.line == line)
+				candidates.push({ordinal: PositionalName.ordinal(name), offset: other.offset});
+		}
+		candidates.sort((a, b) -> a.offset - b.offset);
+		return rank < candidates.length ? candidates[rank].ordinal : null;
+	}
+
+	/** The places of the lambdas of `previous` and `next`, when both builds recorded them. */
+	public static function placesOf(previous:RuntimeAbi.RuntimeAbiDescriptor, next:RuntimeAbi.RuntimeAbiDescriptor):Null<LambdaPlaces> {
+		var before = previous.places, after = next.places, beforeSources = previous.sources, afterSources = next.sources;
+		return before == null || after == null || beforeSources == null || afterSources == null ? null : {
+			before: before,
+			after: after,
+			beforeSources: beforeSources,
+			afterSources: afterSources
+		};
 	}
 
 	/** The renames that carry out `aligned` for `group`, by full lambda name. */
@@ -116,12 +180,14 @@ class LambdaAlignment {
 
 	/** `abi` with the running module's names renamed as `steps` say. */
 	public static function renameAbi(abi:RuntimeAbi.RuntimeAbiDescriptor, steps:Array<NameRewrite>):RuntimeAbi.RuntimeAbiDescriptor {
-		var functions = abi.functions, objects = abi.objects, positional = abi.positional;
+		var functions = abi.functions, objects = abi.objects, positional = abi.positional, places = abi.places;
 		for (step in steps) {
 			functions = step.entries(functions);
 			objects = step.entries(objects);
 			if (positional != null)
 				positional = step.keys(positional);
+			if (places != null)
+				places = step.keys(places);
 		}
 		return {
 			functions: functions,
@@ -129,7 +195,9 @@ class LambdaAlignment {
 			interfaces: abi.interfaces,
 			enums: abi.enums,
 			globals: abi.globals,
-			positional: positional
+			positional: positional,
+			places: places,
+			sources: abi.sources
 		};
 	}
 
@@ -158,11 +226,25 @@ class LambdaAlignment {
 	 * The running ordinal each new ordinal stands for (`mapping`, from running to new), and the running ordinals whose names
 	 * the new build gives to another function (`retired`); null when the group cannot be matched.
 	 */
-	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>):Null<GroupAlignment> {
+	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>, ?followEdit:Int->Null<Int>):Null<GroupAlignment> {
 		var mapping = matchSameCode(before, after);
 		var matchedNew:Map<Int, Bool> = [for (_ => to in mapping) to => true];
 		var unmatchedOld = [for (ordinal in 0...before.length) if (before[ordinal] != null && !mapping.exists(ordinal)) ordinal],
 			unmatchedNew = [for (ordinal in 0...after.length) if (after[ordinal] != null && !matchedNew.exists(ordinal)) ordinal];
+		// The edit's text diff tells which edited lambda each running one became. The fingerprints keep it honest: a pair is
+		// taken only when neither's code appears elsewhere in its group, where a copy could be taken for an edit.
+		if (followEdit != null && unmatchedOld.length > 0 && unmatchedNew.length > 0) {
+			var open:Map<Int, Bool> = [for (ordinal in unmatchedNew) ordinal => true];
+			for (from in unmatchedOld) {
+				var to = followEdit(from);
+				if (to != null && open.exists(to) && occurrences(before, before[from]) == 1 && occurrences(after, after[to]) == 1) {
+					mapping.set(from, to);
+					open.remove(to);
+				}
+			}
+			unmatchedOld = [for (ordinal in unmatchedOld) if (!mapping.exists(ordinal)) ordinal];
+			unmatchedNew = [for (ordinal in unmatchedNew) if (open.exists(ordinal)) ordinal];
+		}
 		if (unmatchedOld.length > 0 && unmatchedNew.length > 0 && !pairEdits(before, after, mapping, unmatchedOld, unmatchedNew))
 			return null;
 		// A running sibling nothing stands for keeps its name, unless the new build gives that name to another function.
