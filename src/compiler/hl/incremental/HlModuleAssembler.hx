@@ -253,6 +253,9 @@ class HlModuleAssembler {
 	 *
 	 * The ABI plan catches the rest: objects added or removed, changed bases, interfaces or kinds, value objects and
 	 * closure environments.
+	 *
+	 * `program` is this build's IR, not the cache's ordered functions: those keep functions the program no longer has,
+	 * such as the initializer of fields an earlier patch added.
 	 */
 	function planObjects(program:IrProgram):{
 		reasons:Array<AbiChange>,
@@ -450,7 +453,7 @@ class HlModuleAssembler {
 			}
 		var objectReasons:Array<AbiChange> = [], objectLayout = null;
 		if (reuseLowered) {
-			var planned = planObjects(ordered);
+			var planned = planObjects(program);
 			if (planned.reasons.length > 0) {
 				reload = true;
 				objectReasons = planned.reasons;

@@ -283,6 +283,8 @@ class TestCatalog {
 				"edits that add functions patch the running module"),
 			hxmlCase("runtime", "added-static-caller", "tests/hxml/added-static-caller-test.hxml", "added-static-caller-test.hl", 0,
 				"an added static function that existing methods start calling patches the running module"),
+			hxmlCase("runtime", "live-object-layout", "tests/hxml/live-object-layout-test.hxml", "live-object-layout-test.hl", 0,
+				"fields added to running classes patch existing objects, and edits a patch cannot make reload with reasons"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,

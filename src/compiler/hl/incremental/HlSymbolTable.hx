@@ -447,9 +447,9 @@ class HlSymbolTable {
 				fields.push({name: internString(""), type: virtualType});
 			}
 		if (reserve > 0 && !object.isValue) {
-			var dynamic = internType(IrType.Dyn), unnamed = internString("");
+			var reserved = internType(IrType.Dyn), unnamed = internString("");
 			for (_ in 0...reserve)
-				fields.push({name: unnamed, type: dynamic});
+				fields.push({name: unnamed, type: reserved});
 		}
 		var key = 'obj:${object.name}',
 			index = typeIndices.exists(key) ? typeIndices.get(key) : types.length,

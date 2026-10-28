@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main LiveObjectLayoutMain
+-hl out/live-object-layout-test.hl
