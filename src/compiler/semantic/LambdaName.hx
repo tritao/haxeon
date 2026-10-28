@@ -20,7 +20,10 @@ package compiler.semantic;
  * prefix and the last colon. An identity contains no colon.
  */
 class LambdaName {
-	static inline final PREFIX = "$lambda:";
+	public static inline final PREFIX:String = "$lambda:";
+
+	/** The prefix of the object name of a lambda's closure environment: `$lambda-env:<enclosing>:<identity>` (`ClosureTyper`). */
+	public static inline final ENVIRONMENT_PREFIX:String = "$lambda-env:";
 
 	public static function of(enclosing:String, identity:String):String
 		return PREFIX + enclosing + ":" + identity;

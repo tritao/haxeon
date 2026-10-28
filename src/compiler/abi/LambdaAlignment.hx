@@ -14,9 +14,8 @@ class NameRewrite {
 
 	final pairs:Array<{from:String, to:String}> = [];
 
-	static inline final LAMBDA:String = "$lambda:";
-	/** The prefix of a closure environment's object name (`ClosureTyper`). */
-	public static inline final ENVIRONMENT:String = "$lambda-env:";
+	static inline final LAMBDA:String = LambdaName.PREFIX;
+	static inline final ENVIRONMENT:String = LambdaName.ENVIRONMENT_PREFIX;
 
 	public function new(lambdas:Map<String, String>) {
 		this.lambdas = lambdas;

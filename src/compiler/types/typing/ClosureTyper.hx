@@ -207,7 +207,7 @@ class ClosureTyper {
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = '$' + 'lambda-env:${session.currentContext.name}:$capturedIdentity';
+			environment = compiler.semantic.LambdaName.ENVIRONMENT_PREFIX + '${session.currentContext.name}:$capturedIdentity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({

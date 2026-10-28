@@ -372,7 +372,7 @@ class HlModuleAssembler {
 		reserveProgramTypes(program);
 		for (object in program.objects) {
 			var published = symbols.objectDefinition(object.name);
-			if (published == null || object.isValue || StringTools.startsWith(object.name, LambdaAlignment.ENVIRONMENT))
+			if (published == null || object.isValue || StringTools.startsWith(object.name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX))
 				continue;
 			switch published.definition {
 				case Object(_, _, _, _, methods, _):
