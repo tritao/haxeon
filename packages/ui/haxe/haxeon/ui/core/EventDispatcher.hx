@@ -78,6 +78,20 @@ class EventDispatcher {
 		syncPlatformPointerCapture();
 	}
 
+	/**
+	 * Lets go of the render tree without dispatching to it: drops the root, the picker and the hover paths, and clears the
+	 * hover state those nodes held. Pointer locations, presses and captures stay by ID, so the next setRoot settles them
+	 * against the rebuilt tree.
+	 */
+	public function releaseTree():Void {
+		for (path in hoverPaths)
+			for (node in path)
+				setState(node, StyleState.Hovered, false);
+		hoverPaths.clear();
+		root = null;
+		hitTestProvider = null;
+	}
+
 	public function setRoot(root:Null<RenderNode>):Void {
 		this.root = root;
 		var stale:Array<Int> = [];

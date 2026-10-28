@@ -426,6 +426,17 @@ class BuildContext {
 		prunedScopeEntries = rootScope.cachedEntries();
 	}
 
+	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
+	public function releaseRetained():Void {
+		for (entry in selfUpdatingBuilds) {
+			entry.root = null;
+			entry.pending = false;
+		}
+		selfUpdatingBuilds.clear();
+		pendingPatches = [];
+		patchPriors.clear();
+	}
+
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
 		selfUpdatingBuilds.clear();

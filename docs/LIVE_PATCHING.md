@@ -102,6 +102,9 @@ it, to let go of what the app rebuilds, and `liveRebuild()` after it, applied or
 check then sees only what the app still holds. Nothing ever has to be rolled back: a refused patch changed nothing, and
 the app rebuilds from the code it had. (Applying first and scanning after would need a rollback, which is unsound once a
 patch has migrated objects or run initializers; see "Existing instances get the declaration initializer".)
+A Haxeon UI app's `liveRelease()` calls `UiContext.releaseRetained()`, which drops the render tree with its handlers, the
+hit-test picker, hover paths, focus order, in-flight gestures and self-updating builders, keeping focus, presses and widget
+state by ID; its `liveRebuild()` requests a frame, whose submit builds the whole tree afresh.
 
 ### Lambda names
 
