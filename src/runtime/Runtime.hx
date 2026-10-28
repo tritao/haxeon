@@ -276,7 +276,7 @@ class Runtime {
 		var message:Null<String> = null;
 		var status:RuntimeStatus = module.access(function(handle) {
 			var result:RuntimeStatus = RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length);
-			if (result == RuntimeStatus.MigrationFailed) {
+			if (result != RuntimeStatus.Ok) {
 				var bytes = RuntimeNative.patch_message(handle);
 				message = bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
 			}
@@ -286,7 +286,7 @@ class Runtime {
 			throw new RuntimeError(status, 'revision ${patch.revision} applied, but ' + (message == null ? "initializers of the fields it added threw" : message));
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
-			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)');
+			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)' + (message == null ? "" : ': $message'));
 		}
 	}
 
