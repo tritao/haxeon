@@ -62,6 +62,8 @@ class PositionalName {
 		if (path == null)
 			return null;
 		var location = earliest.get(path);
+		if (location == null)
+			return null;
 		return place(path, location.line, location.start);
 	}
 
