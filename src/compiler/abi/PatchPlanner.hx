@@ -12,6 +12,9 @@ enum AbiChange {
 	ObjectLayoutChanged(name:String);
 	ClosureLayoutChanged(name:String);
 	InterfaceChanged(name:String);
+
+	/** An interface the previous build did not have. Only new classes can implement it, so no loaded layout changes. */
+	InterfaceAdded(name:String);
 	EnumChanged(name:String);
 	GlobalLayoutChanged(name:String);
 
@@ -60,7 +63,8 @@ class PatchPlanner {
 				return ObjectRemoved(name);
 			return StringTools.startsWith(name, "$lambda-env:") ? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
 		}, reasons);
-		compare(previous.interfaces, next.interfaces, function(name, _, _) return InterfaceChanged(name), reasons);
+		compare(previous.interfaces, next.interfaces, function(name, oldValue, _) return oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
+			reasons);
 		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
 		for (group in renumberedGroups(previous.positional, next.positional))
@@ -78,7 +82,7 @@ class PatchPlanner {
 		return switch reason {
 			case FunctionAdded(_): true;
 			case FunctionRemoved(name): !StringTools.endsWith(name, ".new");
-			case ObjectAdded(_): true;
+			case ObjectAdded(_), InterfaceAdded(_): true;
 			case ObjectRemoved(name): isGeneratedType(name);
 			default: false;
 		};
