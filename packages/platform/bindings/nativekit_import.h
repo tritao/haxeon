@@ -21,6 +21,7 @@
 #include "nativekit_webview.h"
 #include "nativekit_view.h"
 #include "nativekit_notification.h"
+#include "nativekit_tray.h"
 #include "nativekit_time.h"
 #include "nativekit_transport.h"
 #include "nativekit_pty.h"
