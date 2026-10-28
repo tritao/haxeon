@@ -82,7 +82,7 @@ class UnwrappedLineBuilder {
 					}
 					if (pendingNewlines > 0
 						&& current.length > 0
-						&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.Semicolon)
+						&& endsDeclaration(current[current.length - 1], syntax))
 						flush();
 					begin(token);
 					if (token.kind == FormatTokenKind.LineComment || current.length == 1)
@@ -96,7 +96,7 @@ class UnwrappedLineBuilder {
 						closesSwitch = isCloseBlock
 							&& switchBases.length > 0
 							&& (depth == switchBases[switchBases.length - 1] + 1 || depth == switchBases[switchBases.length - 1] + 2);
-					if (current.length > 0 && FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.Semicolon)
+					if (current.length > 0 && endsDeclaration(current[current.length - 1], syntax))
 						flush();
 					if (kind == TokenKind.Case || kind == TokenKind.Default) {
 						if (switchBases.length > 0) {
@@ -116,7 +116,8 @@ class UnwrappedLineBuilder {
 						&& kind != TokenKind.While
 						&& kind != TokenKind.Semicolon
 						&& kind != TokenKind.Comma
-						&& kind != TokenKind.Dot)
+						&& kind != TokenKind.Dot
+						&& kind != TokenKind.Greater)
 						flush();
 					if (isCloseBlock) {
 						flush();
@@ -149,6 +150,14 @@ class UnwrappedLineBuilder {
 		flush();
 		return result;
 	}
+
+	/** A semicolon ends a statement, and a comma ends a field of a declaration list such as a typedef body. */
+	static function endsDeclaration(token:FormatToken, syntax:SyntaxInfo):Bool
+		return switch FormatTokenTools.syntaxKind(token) {
+			case TokenKind.Semicolon: true;
+			case TokenKind.Comma: syntax.declarationCommas.exists(token.start);
+			default: false;
+		};
 
 	static function startsDeclaration(kind:TokenKind):Bool
 		return switch kind {

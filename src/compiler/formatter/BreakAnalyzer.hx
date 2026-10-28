@@ -222,8 +222,14 @@ class BreakAnalyzer {
 			return false;
 		if (index == 0)
 			return false;
-		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
-		return previous != TokenKind.LeftParen && previous != TokenKind.Comma && previous != TokenKind.Assign && previous != TokenKind.Colon;
+		// `?` is the conditional operator only after an operand; elsewhere it marks an optional parameter or field.
+		return switch FormatTokenTools.syntaxKind(tokens[index - 1]) {
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.Integer, TokenKind.Float,
+				TokenKind.StringLiteral, TokenKind.RegexLiteral, TokenKind.BoolTrue, TokenKind.BoolFalse, TokenKind.This, TokenKind.Increment,
+				TokenKind.Decrement, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString:
+				true;
+			default: false;
+		};
 	}
 
 	static function opensTypeArguments(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
@@ -308,7 +314,7 @@ class BreakAnalyzer {
 
 	static function isArithmeticOperator(kind:TokenKind):Bool
 		return kind == TokenKind.Plus || kind == TokenKind.Minus || kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent
-			|| kind == TokenKind.Ampersand || kind == TokenKind.Pipe || kind == TokenKind.Caret;
+			|| kind == TokenKind.Ampersand || kind == TokenKind.Pipe || kind == TokenKind.Caret || kind == TokenKind.NullCoalesce;
 
 	static function flatWidth(tokens:Array<FormatToken>, indent:Int, config:FormatConfig, syntax:SyntaxInfo):Int {
 		var width = indent * config.indentWidth;

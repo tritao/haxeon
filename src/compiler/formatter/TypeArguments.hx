@@ -80,6 +80,10 @@ class TypeArguments {
 					if (groups == 0)
 						return;
 					groups--;
+				case TokenKind.Var, TokenKind.Final, TokenKind.Semicolon:
+					// Field declarations of a structure type: `{var x:Float; var y:Float;}`.
+					if (groups == 0)
+						return;
 				case TokenKind.Arrow, TokenKind.Ampersand, TokenKind.LeftBracket, TokenKind.RightBracket:
 				default:
 					return;
@@ -98,7 +102,10 @@ class TypeArguments {
 		return kind == null || kind == TokenKind.LeftParen || kind == TokenKind.LeftBracket || kind == TokenKind.LeftBrace || kind == TokenKind.Dot
 			|| kind == TokenKind.Comma || kind == TokenKind.RightParen || kind == TokenKind.RightBracket || kind == TokenKind.RightBrace
 			|| kind == TokenKind.Assign || kind == TokenKind.Colon || kind == TokenKind.Semicolon || kind == TokenKind.Arrow || kind == TokenKind.Return
-			|| kind == TokenKind.Extends || kind == TokenKind.Implements;
+			|| kind == TokenKind.Extends || kind == TokenKind.Implements
+			// The body of `function f():Array<Int> throw ...` is an expression.
+			|| kind == TokenKind.Throw || kind == TokenKind.If || kind == TokenKind.Switch || kind == TokenKind.Try || kind == TokenKind.New
+			|| kind == TokenKind.This || kind == TokenKind.Function;
 
 	/** Splits each `>=` that closes a type argument list into `>` and `=`, so both are spaced as ordinary tokens. */
 	public static function splitAssignments(tokens:Array<FormatToken>):Array<FormatToken> {

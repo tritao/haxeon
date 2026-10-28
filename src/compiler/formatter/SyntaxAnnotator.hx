@@ -37,12 +37,15 @@ typedef SyntaxInfo = {
 	/** Source offsets of the `<` that open type argument lists, and of the `>` that close them. */
 	final typeArgumentOpens:Map<Int, Bool>;
 	final typeArgumentCloses:Map<Int, Bool>;
+	/** Source offsets of the commas that separate the fields of a declaration list. */
+	final declarationCommas:Map<Int, Bool>;
 }
 
 private typedef OpenNode = {
 	final tokenIndex:Int;
 	final kind:FormatNodeKind;
 	final block:Bool;
+	final declarations:Bool;
 }
 
 /** Adds just enough CST-like structure for formatting decisions. */
@@ -51,7 +54,7 @@ class SyntaxAnnotator {
 		var nodes:Array<FormatNode> = [], matching:Map<Int, Int> = [], blockOpens:Map<Int, Bool> = [], blockCloses:Map<Int, Bool> = [],
 			blockDepth:Map<Int, Int> = [], stack:Array<OpenNode> = [], syntaxIndexes:Array<Int> = [], depth = 0,
 			typeArguments = TypeArguments.find(tokens);
-		var typeArgumentOpens:Map<Int, Bool> = [], typeArgumentCloses:Map<Int, Bool> = [];
+		var typeArgumentOpens:Map<Int, Bool> = [], typeArgumentCloses:Map<Int, Bool> = [], declarationCommas:Map<Int, Bool> = [];
 
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
@@ -69,17 +72,17 @@ class SyntaxAnnotator {
 					var block = isBlockOpen(tokens, syntaxIndexes, position),
 						nodeKind = block ? FormatNodeKind.Block : FormatNodeKind.ObjectLiteral;
 					blockOpens.set(token.start, block);
-					stack.push({tokenIndex: index, kind: nodeKind, block: block});
+					stack.push({tokenIndex: index, kind: nodeKind, block: block, declarations: block && isDeclarationList(tokens, syntaxIndexes, position)});
 					if (block)
 						depth++;
 				case TokenKind.LeftParen:
 					var parenthesisKind = parenthesisKind(tokens, syntaxIndexes, position);
-					stack.push({tokenIndex: index, kind: parenthesisKind, block: false});
+					stack.push({tokenIndex: index, kind: parenthesisKind, block: false, declarations: false});
 				case TokenKind.LeftBracket:
 					var previous = previousKind(tokens, syntaxIndexes, position),
 						array = previous == null || previous == TokenKind.Assign || previous == TokenKind.Return || previous == TokenKind.Comma
 							|| previous == TokenKind.LeftParen || previous == TokenKind.LeftBracket;
-					stack.push({tokenIndex: index, kind: array ? FormatNodeKind.ArrayLiteral : FormatNodeKind.Parenthesized, block: false});
+					stack.push({tokenIndex: index, kind: array ? FormatNodeKind.ArrayLiteral : FormatNodeKind.Parenthesized, block: false, declarations: false});
 				case TokenKind.Less:
 					if (typeArguments.opens.exists(index)) {
 						var close = typeArguments.opens.get(index);
@@ -94,6 +97,9 @@ class SyntaxAnnotator {
 						typeArgumentOpens.set(token.start, true);
 						typeArgumentCloses.set(tokens[close].start, true);
 					}
+				case TokenKind.Comma:
+					if (stack.length > 0 && stack[stack.length - 1].declarations)
+						declarationCommas.set(token.start, true);
 				case TokenKind.RightBrace, TokenKind.RightParen, TokenKind.RightBracket:
 					closeNode(tokens, stack, nodes, matching, blockCloses, index);
 				default:
@@ -115,7 +121,8 @@ class SyntaxAnnotator {
 			blockCloses: blockCloses,
 			blockDepth: blockDepth,
 			typeArgumentOpens: typeArgumentOpens,
-			typeArgumentCloses: typeArgumentCloses
+			typeArgumentCloses: typeArgumentCloses,
+			declarationCommas: declarationCommas
 		};
 	}
 
@@ -159,7 +166,56 @@ class SyntaxAnnotator {
 			blockCloses.set(tokens[closeIndex].start, true);
 	}
 
+	/**
+		A `{` after `=` or `<` is normally an object literal, but one whose own body holds `;` is a list of field
+		declarations, as in `typedef T = {var x:Int; var y:Int;}` or `Array<{var x:Int;}>`, and lays out like a block.
+	**/
+	static function isDeclarationList(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, position:Int):Bool {
+		var previous = previousKind(tokens, syntaxIndexes, position);
+		if (previous != TokenKind.Assign && previous != TokenKind.Less)
+			return false;
+		var inTypedef = false;
+		if (previous == TokenKind.Assign) {
+			var cursor = position - 1;
+			while (cursor >= 0) {
+				var kind = FormatTokenTools.syntaxKind(tokens[syntaxIndexes[cursor]]);
+				if (kind == TokenKind.Typedef) {
+					inTypedef = true;
+					break;
+				}
+				if (kind == TokenKind.Semicolon || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
+					break;
+				cursor--;
+			}
+			if (!inTypedef)
+				return false;
+		}
+		// Walk every token, comments included, to the matching brace.
+		var depth = 0;
+		for (cursor in syntaxIndexes[position]...tokens.length) {
+			var token = tokens[cursor];
+			switch FormatTokenTools.syntaxKind(token) {
+				case TokenKind.LeftBrace, TokenKind.LeftParen, TokenKind.LeftBracket:
+					depth++;
+				case TokenKind.RightBrace, TokenKind.RightParen, TokenKind.RightBracket:
+					depth--;
+					if (depth == 0)
+						return false;
+				case TokenKind.Semicolon:
+					if (depth == 1)
+						return true;
+				default:
+					// A comment between the fields of a typedef body can only be kept by laying the fields out one per line.
+					if (inTypedef && depth == 1 && (token.kind == FormatTokenKind.DocComment || token.kind == FormatTokenKind.LineComment))
+						return true;
+			}
+		}
+		return false;
+	}
+
 	static function isBlockOpen(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, position:Int):Bool {
+		if (isDeclarationList(tokens, syntaxIndexes, position))
+			return true;
 		var previous = previousKind(tokens, syntaxIndexes, position);
 		if (previous == null || previous == TokenKind.RightParen || previous == TokenKind.Else || previous == TokenKind.Try || previous == TokenKind.Catch
 			|| previous == TokenKind.Final)
@@ -316,5 +372,5 @@ class SyntaxAnnotator {
 		return kind == TokenKind.AndAnd || kind == TokenKind.OrOr || kind == TokenKind.EqualEqual || kind == TokenKind.NotEqual || kind == TokenKind.Less
 			|| kind == TokenKind.Greater || kind == TokenKind.LessEqual || kind == TokenKind.GreaterEqual || kind == TokenKind.Plus
 			|| kind == TokenKind.Minus || kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent || kind == TokenKind.Ampersand
-			|| kind == TokenKind.Pipe || kind == TokenKind.Caret;
+			|| kind == TokenKind.Pipe || kind == TokenKind.Caret || kind == TokenKind.NullCoalesce;
 }

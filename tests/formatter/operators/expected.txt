@@ -10,6 +10,7 @@ class Operators {
     foo(a, (b), [1, 2], [for (i in 0...3) i]);
     var index = items[0] + [1, 2][1] + (a + b);
     var compare = index < 0 || index >= items.length;
+    var fallback = optional ?? name ?? "none";
     return -radius;
   }
 }
