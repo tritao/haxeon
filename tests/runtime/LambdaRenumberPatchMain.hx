@@ -8,7 +8,8 @@ import runtime.Runtime;
  * one or reordering them renames the siblings after it (`register#into.push(1)#0` becomes `#1`). Such an edit patches: the
  * running module's lambdas are matched with the new build's by their code and renamed (`LambdaAlignment`), so each keeps its
  * slot and every closure the program stored keeps running its own function, or the edited version of it. An edit that
- * cannot be matched still reloads, because the generated functions were renumbered.
+ * cannot be matched still reloads, because the generated functions were renumbered. Deleting a lambda the program stored
+ * would strand that closure, so the runtime refuses that patch and says what holds the closure.
  */
 class LambdaRenumberPatchMain {
 	static final plain = [
@@ -49,14 +50,14 @@ class LambdaRenumberPatchMain {
 				plusOne * 100 + timesTwenty, plusForty * 10000 + plusOne * 100 + timesTwenty);
 			Runtime.dispose(session.live);
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
-			patch('$label: the first one deleted', session, source(["timesTen"]), plusOne * 100 + timesTen, timesTen);
+			// A deleted lambda the program stored: the patch would strand that closure, so the runtime refuses it.
+			stranded('$label: the first one deleted', session, source(["timesTen"]));
 			Runtime.dispose(session.live);
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
 			patch('$label: two swapped', session, source(["timesTen", "plusOne"]), plusOne * 100 + timesTen, timesTen * 100 + plusOne);
 			Runtime.dispose(session.live);
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
-			patch('$label: one inserted, one deleted', session, source(["plusForty", "plusOne"]), plusOne * 100 + timesTen,
-				plusForty * 100 + plusOne);
+			stranded('$label: one inserted, one deleted', session, source(["plusForty", "plusOne"]));
 			Runtime.dispose(session.live);
 			// Both siblings changed: each could be an edit, or one inserted and the other deleted. Nothing tells which.
 			session = start(source(["plusOne", "timesTen"]), plusOne * 100 + timesTen);
@@ -139,6 +140,23 @@ class LambdaRenumberPatchMain {
 			throw '$label: the full module returned $value instead of $fresh';
 		session.build = changed;
 		Sys.println('$label: patched');
+	}
+
+	/** The edit compiles to a patch, which the runtime refuses: a stored closure still reaches a lambda the edit deleted. */
+	static function stranded(label:String, session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int}, after:String):Void {
+		session.compiler.update("Main.hx", after);
+		var changed = session.compiler.compile("Main");
+		if (changed.requiresReload || changed.patchBytes == null)
+			throw '$label: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
+		try {
+			Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		} catch (error:runtime.RuntimeError) {
+			if (error.status != runtime.RuntimeStatus.ClosuresHeld || error.message.indexOf("Ui.stored[") < 0)
+				throw '$label: refused, but not for the stored closure: ${error.message}';
+			Sys.println('$label: refused, ${error.message}');
+			return;
+		}
+		throw '$label: patched, stranding a stored closure to a deleted lambda';
 	}
 
 	static function refuse(label:String, session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int}, after:String):Void {

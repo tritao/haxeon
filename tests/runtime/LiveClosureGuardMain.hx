@@ -31,11 +31,13 @@ class LiveClosureGuardMain {
 			"function scale(v:Int, by:Int = 3):Int return v * by;\n",
 			"function scale(v:Int, by:Int = 3, ?plus:Null<Int>):Int return v * by + (plus == null ? 1000 : plus);\n"
 		];
+		// Once `scale` has optional parameters it is no `Int->Int`: the edited source stores a lambda instead, but the closure
+		// stored at the start is the one that keeps running.
 		var session = start(storedScale(versions[0]));
 		expect(Runtime.callInt(session.live, session.mainId), 8, "the stored closure before the edits");
-		patch(session, storedScale(versions[1]), "a defaulted parameter added");
+		patch(session, storedScale(versions[1], "v -> scale(v)"), "a defaulted parameter added");
 		expect(Runtime.callInt(session.live, session.mainId), 12, "the stored closure after a defaulted parameter was added");
-		patch(session, storedScale(versions[2]), "a second defaulted parameter added");
+		patch(session, storedScale(versions[2], "v -> scale(v)"), "a second defaulted parameter added");
 		expect(Runtime.callInt(session.live, session.mainId), 1012, "the stored closure after two edits, through one adapter");
 		Runtime.dispose(session.live);
 	}
@@ -43,7 +45,8 @@ class LiveClosureGuardMain {
 	static function refusesIncompatibleSignatureWithStoredClosure():Void {
 		var session = start(storedScale("function scale(v:Int):Int return v * 2;\n"));
 		expect(Runtime.callInt(session.live, session.mainId), 8, "the stored closure before the edit");
-		var message = refused(session, storedScale("function scale(v:Int, by:Int):Int return v * by;\n", "scale(4, 2)"), "a required parameter added");
+		var message = refused(session, storedScale("function scale(v:Int, by:Int):Int return v * by;\n", "v -> scale(v, 2)"),
+			"a required parameter added");
 		mention(message, "Main.scale changed signature incompatibly", "the refusal");
 		mention(message, "1 stored closure still references it", "the refusal");
 		mention(message, "Holder.scaler", "the refusal");
@@ -79,11 +82,11 @@ class LiveClosureGuardMain {
 		Runtime.dispose(session.live);
 	}
 
-	/** A program that stores a closure to `scale` once and calls it with 4. */
-	static function storedScale(scale:String, ?direct:String):String
+	/** A program that stores `store`, a closure to `scale` by default, once and calls it with 4. */
+	static function storedScale(scale:String, store:String = "scale"):String
 		return scale + "class Holder {\n  public static var scaler:Null<Int->Int> = null;\n}\n" + "function main():Int {\n"
-			+ "  if (Holder.scaler == null) Holder.scaler = scale;\n" + "  var stored:Int->Int = Holder.scaler;\n"
-			+ (direct == null ? "  return stored(4);\n" : "  return stored(4) + 0 * " + direct + ";\n") + "}\n";
+			+ "  if (Holder.scaler == null) Holder.scaler = " + store + ";\n" + "  var stored:Int->Int = Holder.scaler;\n" + "  return stored(4);\n"
+			+ "}\n";
 
 	/** Handlers registered on each call (`stored` false) or once, kept in `Ui.handlers`, each run with 1. */
 	static function handlers(bodies:Array<String>, stored:Bool):String {
