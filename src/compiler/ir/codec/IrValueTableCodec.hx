@@ -17,7 +17,7 @@ class IrValueTableCodec {
 		output.bigEndian = false;
 		output.writeString("IRV");
 		output.writeByte(VERSION);
-		write(output, values, named);
+		write(output, values, named, erase);
 		return output.getBytes();
 	}
 
