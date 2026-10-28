@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main LiveClosureGuardMain
+-hl out/live-closure-guard-test.hl

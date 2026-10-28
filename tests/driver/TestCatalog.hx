@@ -297,6 +297,8 @@ class TestCatalog {
 				"changed constructor and function signatures patch, and a changed method signature reloads"),
 			hxmlCase("runtime", "live-caller-patch", "tests/hxml/live-caller-patch-test.hxml", "live-caller-patch-test.hl", 0,
 				"callers of a function whose signature changed call its new code, from files the edit did not touch too"),
+			hxmlCase("runtime", "live-closure-guard", "tests/hxml/live-closure-guard-test.hxml", "live-closure-guard-test.hl", 0,
+				"stored closures run adapted code, and a patch that would strand them is refused with what holds them"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,

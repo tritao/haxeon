@@ -5,9 +5,9 @@ import runtime.Runtime;
 
 /**
  * An edit that changes a function's signature, a parameter added to a constructor say, patches: the function takes a new slot
- * and the old one keeps its code. Callers the patch compiles again call the new function; closures made before the edit keep
- * calling the old one, as do objects it made. A method an object's prototype dispatches to keeps its slot, so changing its
- * signature still reloads.
+ * and the old one takes an adapter to it. Callers the patch compiles again call the new function; a closure made before the
+ * edit calls the adapter, which runs the new code with the parameter's default (`scale`). A method an object's prototype
+ * dispatches to keeps its slot, so changing its signature still reloads.
  */
 class LiveSignaturePatchMain {
 	static function program(version:Int):String {
@@ -19,7 +19,7 @@ class LiveSignaturePatchMain {
 		};
 		var scale = switch version {
 			case 1: "function scale(v:Int):Int return v * 2;\n";
-			case 2: "function scale(v:Int, by:Int):Int return v * by;\n";
+			case 2: "function scale(v:Int, by:Int = 2):Int return v * by;\n";
 			default: "function scale(v:Int):Int return v * 5;\n";
 		};
 		var made = switch version {
@@ -65,7 +65,7 @@ class LiveSignaturePatchMain {
 		compiler.update("Main.hx", program(2));
 		var second = compiler.compile("Main");
 		build = apply(live, build, second, "parameters added");
-		// The kept point is the one made before (3); a new one is (5 + 1) + 7; the stored closure still runs the old scale.
+		// The kept point is the one made before (3); a new one is (5 + 1) + 7; the stored closure runs the new scale, by 2.
 		expect(Runtime.callInt(live, mainId), 313083, "after the parameters were added");
 		expect(runFresh(second), 413083, "the full module after the parameters were added");
 
@@ -73,7 +73,8 @@ class LiveSignaturePatchMain {
 		compiler.update("Main.hx", program(3));
 		var third = compiler.compile("Main");
 		build = apply(live, build, third, "parameters removed again");
-		expect(Runtime.callInt(live, mainId), 308085, "after the parameters were removed again");
+		// The closure stored at the start reaches the latest scale, times 5, through the adapter its slot took.
+		expect(Runtime.callInt(live, mainId), 308205, "after the parameters were removed again");
 		expect(runFresh(third), 608205, "the full module after the parameters were removed again");
 		Runtime.dispose(live);
 
