@@ -11,6 +11,8 @@ class Generics {
   var d:Array<{z:Float, base:Int}> = [];
   var e:Null<(Int, Int) -> Void> = null;
   var f:Array<Array<Null<haxe.io.Bytes>>> = [];
+  var g:Array<Int>=[];
+  var h:Map<String,Array<Int>>=new Map();
   public function radii():Array<Float> return [for (i in 0...count) grid.radius(i)];
   public function first(items:Array<Item>):Null<Item> {
     return items.length > 0 ? items[0] : null;

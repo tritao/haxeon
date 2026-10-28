@@ -1,12 +1,15 @@
 package compiler.formatter;
 
 import compiler.syntax.Token.TokenKind;
+import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
 
 /** Matched `<` and `>` token indexes of every type argument list in a token array. */
 typedef TypeArgumentPairs = {
 	final opens:Map<Int, Int>;
 	final closes:Map<Int, Int>;
+	/** Indexes of `>=` tokens that really close a list and start an assignment: `Array<Int>= []`. */
+	final splits:Array<Int>;
 }
 
 /**
@@ -20,7 +23,7 @@ typedef TypeArgumentPairs = {
 **/
 class TypeArguments {
 	public static function find(tokens:Array<FormatToken>):TypeArgumentPairs {
-		var opens:Map<Int, Int> = [], closes:Map<Int, Int> = [], syntax:Array<Int> = [];
+		var opens:Map<Int, Int> = [], closes:Map<Int, Int> = [], splits:Array<Int> = [], syntax:Array<Int> = [];
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
 				syntax.push(index);
@@ -28,11 +31,11 @@ class TypeArguments {
 			if (kindAt(tokens, syntax, position) == TokenKind.Less
 				&& !opens.exists(syntax[position])
 				&& isTypeName(position == 0 ? null : kindAt(tokens, syntax, position - 1)))
-				scan(tokens, syntax, position, opens, closes);
-		return {opens: opens, closes: closes};
+				scan(tokens, syntax, position, opens, closes, splits);
+		return {opens: opens, closes: closes, splits: splits};
 	}
 
-	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>, closes:Map<Int, Int>):Void {
+	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>, closes:Map<Int, Int>, splits:Array<Int>):Void {
 		var open:Array<Int> = [], hasContent:Array<Bool> = [], found:Array<{open:Int, close:Int}> = [], groups = 0;
 		for (position in start...syntax.length) {
 			var kind = kindAt(tokens, syntax, position);
@@ -42,8 +45,9 @@ class TypeArguments {
 						return;
 					open.push(position);
 					hasContent.push(false);
-				case TokenKind.Greater:
-					if (open.length == 0)
+				case TokenKind.Greater, TokenKind.GreaterEqual:
+					var combined = kind == TokenKind.GreaterEqual;
+					if (open.length == 0 || (combined && open.length > 1))
 						return;
 					var opener = open.pop();
 					if (!hasContent.pop())
@@ -53,8 +57,10 @@ class TypeArguments {
 						hasContent[hasContent.length - 1] = true;
 					else {
 						var after = position + 1 < syntax.length ? kindAt(tokens, syntax, position + 1) : null;
-						if (!mayFollowType(after))
+						if (!combined && !mayFollowType(after))
 							return;
+						if (combined)
+							splits.push(syntax[position]);
 						for (pair in found) {
 							opens.set(pair.open, pair.close);
 							closes.set(pair.close, pair.open);
@@ -93,4 +99,22 @@ class TypeArguments {
 			|| kind == TokenKind.Comma || kind == TokenKind.RightParen || kind == TokenKind.RightBracket || kind == TokenKind.RightBrace
 			|| kind == TokenKind.Assign || kind == TokenKind.Colon || kind == TokenKind.Semicolon || kind == TokenKind.Arrow || kind == TokenKind.Return
 			|| kind == TokenKind.Extends || kind == TokenKind.Implements;
+
+	/** Splits each `>=` that closes a type argument list into `>` and `=`, so both are spaced as ordinary tokens. */
+	public static function splitAssignments(tokens:Array<FormatToken>):Array<FormatToken> {
+		var splits = find(tokens).splits;
+		if (splits.length == 0)
+			return tokens;
+		var result:Array<FormatToken> = [];
+		for (index in 0...tokens.length) {
+			var token = tokens[index];
+			if (splits.indexOf(index) < 0) {
+				result.push(token);
+				continue;
+			}
+			result.push({kind: FormatTokenKind.Syntax(TokenKind.Greater), text: ">", start: token.start, end: token.start + 1});
+			result.push({kind: FormatTokenKind.Syntax(TokenKind.Assign), text: "=", start: token.start + 1, end: token.end});
+		}
+		return result;
+	}
 }
