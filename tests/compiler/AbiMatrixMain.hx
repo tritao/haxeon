@@ -106,7 +106,24 @@ class AbiMatrixMain {
 				abi(["$lambda:main:main#0" => "()->I32"], null, null, null, null, ["$lambda:main:main#0" => "a"]),
 				abi(["$lambda:main:main#0" => "()->I32", "$lambda:main:main#1" => "()->I32"], null, null, null, null,
 					["$lambda:main:main#0" => "b", "$lambda:main:main#1" => "a"]),
-				Reload(GeneratedFunctionsRenumbered("$lambda:main:main")), true)
+				Reload(GeneratedFunctionsRenumbered("$lambda:main:main")), true),
+			// Such a module takes field and method changes of an object that keeps its kind, base and interfaces; the assembler
+			// checks them against the running layout (HlModuleAssembler.planObjects).
+			fixture("instance field added in a module that takes added functions", abi(null, ["Editor" => "kind=object;base=null;fields=value:I32"]),
+				abi(null, ["Editor" => "kind=object;base=null;fields=value:I32,generation:I32"]), Patch, true),
+			fixture("instance field reordered in a module that takes added functions",
+				abi(null, ["Editor" => "kind=object;base=null;fields=left:I32,right:I32"]),
+				abi(null, ["Editor" => "kind=object;base=null;fields=right:I32,left:I32"]), Patch, true),
+			fixture("method added in a module that takes added functions", abi(null, ["Editor" => "kind=object;methods=read:Editor.read"]),
+				abi(null, ["Editor" => "kind=object;methods=read:Editor.read,write:Editor.write"]), Patch, true),
+			fixture("base class changed in a module that takes added functions", abi(null, ["Editor" => "kind=object;base=Node;fields=value:I32"]),
+				abi(null, ["Editor" => "kind=object;base=Widget;fields=value:I32"]), Reload(ObjectLayoutChanged("Editor")), true),
+			fixture("interfaces changed in a module that takes added functions", abi(null, ["Editor" => "kind=object;interfaces=;fields=value:I32"]),
+				abi(null, ["Editor" => "kind=object;interfaces=Readable;fields=value:I32"]), Reload(ObjectLayoutChanged("Editor")), true),
+			fixture("value object field added in a module that takes added functions", abi(null, ["Point" => "kind=value;base=null;fields=x:F64"]),
+				abi(null, ["Point" => "kind=value;base=null;fields=x:F64,y:F64"]), Reload(ObjectLayoutChanged("Point")), true),
+			fixture("closure capture changed in a module that takes added functions", abi(null, ["$lambda-env:main:1" => "fields=value:I32"]),
+				abi(null, ["$lambda-env:main:1" => "fields=value:I32,more:I32"]), Reload(ClosureLayoutChanged("$lambda-env:main:1")), true)
 		];
 		for (fixture in fixtures)
 			assertDecision(fixture);
@@ -128,14 +145,26 @@ class AbiMatrixMain {
 			sourceFixture("instance field addition",
 				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
 				"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 40; this.generation = 1; } } function main():Int { return new Editor().value; }",
-				ReloadFor(ObjectLayoutChanged("Editor"))),
+				BodyPatch),
+			sourceFixture("instance field removal",
+				"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 40; this.generation = 1; } } function main():Int { return new Editor().value; }",
+				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
+				BodyPatch),
+			sourceFixture("instance field type",
+				"class Editor { public var value:Int; public function new():Void { this.value = 40; } } function main():Int { return new Editor().value; }",
+				"class Editor { public var value:Float; public function new():Void { this.value = 40.0; } } function main():Int { new Editor(); return 40; }",
+				ReloadFor(ObjectFieldTypeChanged("Editor.value"))),
 			sourceFixture("instance field order",
 				"class Pair { public var left:Int; public var right:Int; public function new():Void { this.left = 1; this.right = 2; } } function main():Int { return 40; }",
 				"class Pair { public var right:Int; public var left:Int; public function new():Void { this.left = 1; this.right = 2; } } function main():Int { return 40; }",
-				ReloadFor(ObjectLayoutChanged("Pair"))),
+				NoOp),
 			sourceFixture("method addition", "class Editor { public function read():Int { return 40; } } function main():Int { return new Editor().read(); }",
 				"class Editor { public function read():Int { return 40; } public function reset():Void {} } function main():Int { return new Editor().read(); }",
-				ReloadFor(ObjectLayoutChanged("Editor"))),
+				BodyPatch),
+			sourceFixture("override addition",
+				"class Base { public function new():Void {} public function read():Int { return 40; } } class Editor extends Base { public function new():Void { super(); } } function main():Int { return new Editor().read(); }",
+				"class Base { public function new():Void {} public function read():Int { return 40; } } class Editor extends Base { public function new():Void { super(); } override public function read():Int { return 42; } } function main():Int { return new Editor().read(); }",
+				ReloadFor(ObjectMethodDispatchChanged("Editor.read"))),
 			sourceFixture("base class change", "class Node {} class Widget {} class Editor extends Node {} function main():Int { return 40; }",
 				"class Node {} class Widget {} class Editor extends Widget {} function main():Int { return 40; }", ReloadFor(ObjectLayoutChanged("Editor"))),
 			sourceFixture("erased generic base argument change", "class Base<T> {} class Editor extends Base<Int> {} function main():Int { return 40; }",
@@ -190,6 +219,14 @@ class AbiMatrixMain {
 	}
 
 	static function assertReasonSchema(fixtures:Array<AbiFixture>):Void {
+		// Reasons only the assembler gives, which no planner fixture produces.
+		for (reason in [
+			ObjectFieldTypeChanged("Editor.value"),
+			ObjectFieldReserveExhausted("Editor"),
+			ObjectMethodDispatchChanged("Editor.read")
+		])
+			if (!Type.enumEq(reason, AbiChangeSchema.decode(AbiChangeSchema.VERSION, AbiChangeSchema.encode(reason))))
+				throw '$reason did not round trip';
 		for (fixture in fixtures)
 			switch fixture.expected {
 				case Patch:
