@@ -82,7 +82,10 @@ class GeneratedFunctionRenumberingMain {
 		};
 	}
 
-	/** Either the patch keeps every stored closure's behaviour, or the edit reloads because generated functions were renumbered. */
+	/**
+	 * Either the patch keeps every stored closure's behaviour, or the runtime refuses it because a stored closure reaches a
+	 * function it drops, or the edit reloads because generated functions were renumbered.
+	 */
 	static function expectStoredBehaviour(label:String, before:String, after:String, stored:Int):Void {
 		var session = start(before);
 		if (Runtime.callInt(session.live, session.mainId) != stored)
@@ -90,11 +93,18 @@ class GeneratedFunctionRenumberingMain {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
 		if (!changed.requiresReload && changed.patchBytes != null) {
-			Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			var refusal:Null<String> = null;
+			try
+				Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions))
+			catch (error:runtime.RuntimeError) {
+				if (error.status != runtime.RuntimeStatus.ClosuresHeld)
+					throw error;
+				refusal = error.message;
+			}
 			var now = Runtime.callInt(session.live, session.mainId);
 			if (now != stored)
 				throw '$label: the edit was offered as a patch, and stored handlers now return $now instead of $stored';
-			Sys.println('$label: patched; stored handlers kept their behaviour');
+			Sys.println(refusal == null ? '$label: patched; stored handlers kept their behaviour' : '$label: refused; $refusal');
 		} else {
 			var reasons = [for (reason in changed.reloadReasons) Std.string(reason)];
 			if (reasons.filter(reason -> StringTools.startsWith(reason, "GeneratedFunctionsRenumbered(")).length == 0)

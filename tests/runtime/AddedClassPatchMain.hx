@@ -9,8 +9,8 @@ import runtime.Runtime;
  * An edit that adds classes and closure environments patches the running module: the patch appends their types to the module's
  * type table. The new classes here are a plain one, a subclass of a loaded class, an implementation of a loaded interface and
  * one of a new interface.
- * A lambda whose captures change becomes a new function with a new environment, and a closure made before the edit keeps the
- * code and environment it was made with.
+ * A lambda whose captures change becomes a new function with a new environment; the old one, which nothing stores, is dropped.
+ * A closure stored before the edit keeps running.
  */
 class AddedClassPatchMain {
 	static function main():Void {
@@ -28,7 +28,7 @@ class AddedClassPatchMain {
 			+ "  var offset = 5;\n"
 			+ "  var scale = 2;\n"
 			+ "  var f = " + lambda + ";\n"
-			+ "  if (Holder.stored == null) Holder.stored = f;\n"
+			+ "  if (Holder.stored == null) Holder.stored = x -> x + offset;\n"
 			+ "  var stored = Holder.stored;\n"
 			+ "  return total(panel) * 1000 + (stored == null ? 0 : stored(10)) * 10 + f(1)" + extra + ";\n"
 			+ "}\n";
