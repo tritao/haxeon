@@ -111,6 +111,16 @@ class LiveObjectLayoutMain {
 			.split("    return total;\n  }\n}\n")
 			.join("    return total + ticks;\n  }\n}\n");
 
+	/** The edited program with a `Counter` class, holding `members`, that App keeps one of and counts each tick with. */
+	static function counted(members:String):String
+		return edited().split("class App {\n")
+			.join("class Counter {\n  var n:Int = 0;\n" + members + "  public function new() {}\n"
+				+ "  public function next():Int {\n    n += " + (members == "" ? "1" : "step") + ";\n    return n;\n  }\n}\nclass App {\n")
+			.split("  var ticks:Int = 100;\n")
+			.join("  var ticks:Int = 100;\n  var counter:Counter = new Counter();\n")
+			.split("    return total + ticks;\n")
+			.join("    return total + ticks + counter.next();\n");
+
 	static function edit(from1:String, to1:String, from2:String, to2:String, from3:String, to3:String):String
 		return edited().split(from1).join(to1).split(from2).join(to2).split(from3).join(to3);
 
@@ -157,6 +167,13 @@ class LiveObjectLayoutMain {
 		// The field comes back in the slot it had, with the value it had there.
 		revision = patch(compiler, live, revision, edited(), "adding the field back");
 		expect("the tick after the field came back", Runtime.callInt(live, main), 6 + 4 + 30 + 113 + 104);
+
+		// A patch adds a class and a field of it, whose initializer makes one for the running App.
+		revision = patch(compiler, live, revision, counted(""), "adding a class and a field holding one");
+		expect("the tick with the added class", Runtime.callInt(live, main), 7 + 4 + 40 + 113 + 105 + 1);
+		// The class the last patch appended has reserved slots too.
+		revision = patch(compiler, live, revision, counted("  var step:Int = 5;\n"), "adding a field to an appended class");
+		expect("the tick after the appended class gained a field", Runtime.callInt(live, main), 8 + 4 + 50 + 113 + 106 + 6);
 		Runtime.dispose(live);
 	}
 
@@ -165,7 +182,7 @@ class LiveObjectLayoutMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw '$label required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
-				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
+				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ") + ' revision ${changed.revision} base ${changed.baseRevision} changed ${changed.changedFunctions.length} regenerated ${changed.regenerated.length}';
 		Runtime.patchSet(live, new PatchSet(revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		return changed.revision;
 	}

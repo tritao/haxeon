@@ -300,6 +300,14 @@ class HlModuleAssembler {
 			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			// Runtime natives only reach standard library objects, so the program's own natives name the user's.
 			nativeVisible = compiler.ir.hl.HlLower.nativeVisibleObjects(program.objects, [program.natives]);
+		// An added field can have a type the same patch adds (a new class); reserve the new types as lowering does, in its
+		// order, so the field's type has an index before the type is laid out.
+		for (enumDecl in program.enums)
+			symbols.reserveEnum(enumDecl.name);
+		for (interfaceDecl in program.interfaces)
+			symbols.reserveInterface(interfaceDecl.name);
+		for (object in program.objects)
+			symbols.reserveObject(object.name);
 		for (object in program.objects) {
 			byName.set(object.name, object);
 			if (object.isValue)

@@ -39,8 +39,8 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 
 Still a reload: new runtime natives (they sit before every function slot),
 changed C dispatch natives, moved slots, other new globals (an added static
-variable), changed layouts of existing objects (instances of the old layout are
-alive), enum changes, changes to existing interfaces, removed classes and changed function
+variable), layout changes of existing objects that reserved slots cannot take
+(see "Object layout changes" below), enum changes, changes to existing interfaces, removed classes and changed function
 signatures.
 
 ### Lambda names
@@ -137,6 +137,8 @@ checks its fields and methods against the running layout before lowering (`HlMod
 | Field removed | Patches. The slot keeps its name and last value; no code reads it. |
 | Fields reordered | Patches; nothing moves |
 | Removed field added back with the same type | Patches into the slot it had, with the value it had |
+| Field added whose type is a class the same patch adds | Patches; the initializer can construct the new class |
+| Field added to a class an earlier patch appended | Patches; appended classes get reserved slots too |
 | Method added that overrides nothing and that nothing overrides | Patches; calls reach it directly (`HlLower.addedMethodFunction`) |
 | Method removed that overrode nothing | Patches |
 
@@ -152,7 +154,7 @@ position in the IR, so a patched function finds every field where the running mo
 | `object_method_dispatch_changed` | An added method overrides one or is overridden, an override was removed, or the method is one the runtime finds by name in the prototype (`toString`, `__compare`, `__cast`, `__get_field`). Prototype tables would need new or changed entries in every subclass. |
 | `object_layout_changed` | The base or the interfaces changed, the object is a value object, an added field is stored inline (a value object) or laid out for natives, or a native's signature reaches the class. |
 | `closure_layout_changed` | A closure's captures changed; closures already made hold the old environment. |
-| `object_added`, `object_removed` | A class appeared or went: type-table growth (above). |
+| `object_removed` | A class went (a removed closure environment or capture cell patches; see "What a patch can add"). |
 
 Added methods have no prototype slot, so reflection and dynamic calls do not find them until the next reload.
 
