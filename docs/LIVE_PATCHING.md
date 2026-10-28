@@ -40,8 +40,24 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 Still a reload: new runtime natives (they sit before every function slot),
 changed C dispatch natives, moved slots, other new globals (an added static
 variable), layout changes of existing objects that reserved slots cannot take
-(see "Object layout changes" below), enum changes, changes to existing interfaces, removed classes and changed function
-signatures.
+(see "Object layout changes" below), enum changes, changes to existing interfaces, removed classes and changed
+signatures of methods an object dispatches to (see "Changed signatures" below).
+
+### Changed signatures
+
+An edit that changes a function's signature, such as a parameter added to a constructor or a static function, patches.
+It is the old function removed and a new one added under the same name: the assembler moves the old function out of
+its slot under a retired name (`<name>~retired<revision>`, `HlModuleAssembler.moveChangedSignatures`), where it keeps its
+code, and the function takes a new slot with a new stable ID. Callers the patch compiles again call the new function.
+Closures made before the edit (a stored `scale`), objects made before the edit, and callers the patch
+does not recompile keep calling the old function with the arguments it takes, so nothing calls a function with the wrong
+arguments. A subclass constructor that calls a changed `super(...)` is recompiled with it.
+
+A method an object dispatches to through its prototype keeps its slot: the prototype entry names the slot, and the
+running module's types never change. A changed signature of such a method (`Point.sum()` given a parameter, an
+override, an interface implementation) still reloads with `function_signature_changed` (`PatchPlanner.plan`).
+
+A fresh module (a reload) drops the retired functions, since only closures of the module it replaces call them.
 
 ### Lambda names
 
@@ -51,10 +67,42 @@ function it is assigned to, the calls it is an argument of, `return`; for
 example `build#hover=/resourceState(1)#0`. The ordinal counts the lambdas before
 it at the same anchor only, so adding or removing a lambda renames nothing at
 other anchors. A lambda with no anchor is `<member>#<ordinal>`; an anchor longer
-than 48 characters keeps its last step and a hash. The planner still checks each
-group of same-anchor siblings for renumbering (`PatchPlanner.renumberedGroups`):
-inserting a lambda before a sibling at the same anchor (two `items.push(...)`
-callbacks, say) reloads.
+than 48 characters keeps its last step and a hash.
+
+Inserting a lambda before a sibling at the same anchor (two `items.push(...)`
+callbacks, say), deleting one or reordering them still renumbers the siblings
+after it: `build#hover=/resourceState(1)#0` becomes `#1`. Such an edit patches.
+Before planning, a live HashLink build matches each group of same-anchor
+siblings with the running module's by their code (`LambdaAlignment`), and
+renames the running module's lambdas to the names their functions have now
+(`HlModuleAssembler.renameLambdas`). A renamed lambda keeps its slot, stable ID
+and lowered code, and its environment, the cells of its captured variables and
+the lambdas written in it move with it, keeping their types. So each closure the
+program stored keeps running its own function, or the edited version of it, and
+the inserted lambda is an added function in a new slot. The code fingerprint
+leaves lambda ordinals out of the names it mentions
+(`IrFunctionStateCodec.codeFingerprint`), so a lambda that only moved, with its
+environment and nested lambdas, keeps its fingerprint.
+
+Matching within a group:
+
+- Siblings with the same code are matched in order. Their code is the same, so
+  which takes which slot cannot be observed.
+- A new sibling nothing matches is added. A running one nothing matches is
+  removed and keeps its slot and code; if the new build gives its name to
+  another function, it moves to a retired name (`<group>~retired<revision>#<ordinal>`).
+- Between two matched siblings, one unmatched running sibling and one unmatched
+  new sibling are the same function edited, provided neither's code appears
+  elsewhere in the group.
+
+Anything else reloads with `generated_functions_renumbered`, because nothing
+tells which function each name stands for: two or more unmatched siblings on
+both sides of the same gap (both siblings edited, or one inserted beside an
+edited one), an edited sibling whose new code copies a neighbour's, and siblings
+both reordered and edited. Function adapter groups (`$function-adapter:`) are
+not renamed; they patch only while every name keeps its function. A Wasm module,
+or a compiler resumed without the running layout, cannot take the renames and
+reloads too.
 
 A lambda that captures is named after its captures too (a hash before the
 ordinal). An edit that keeps the captures is the same function with a new
