@@ -17,6 +17,11 @@ The current subset includes:
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
+Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
+parameters or a result type that breaks the inherited contract, or explicitly make a public method private.
+Use a different name for an unrelated helper. Compatible overrides may omit an explicit visibility modifier
+and inherit the base method's visibility. These checks also apply after an incremental base-class edit.
+
 String addition, equality, `.length`, `indexOf`, and `substring` use the
 compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
 `concat`, `slice`, `indexOf`, `exists`, `push`, and `pop`. Capacity-aware array growth

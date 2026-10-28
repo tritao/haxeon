@@ -258,6 +258,7 @@ class SemanticProgram {
 		return {
 			name: method.name,
 			isStatic: method.isStatic,
+			isPublic: method.isPublic,
 			typeParameters: parameters.length == 0 ? null : parameters,
 			typeConstraints: method.typeConstraints,
 			arguments: method.arguments,

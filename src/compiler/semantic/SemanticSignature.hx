@@ -74,6 +74,7 @@ class SemanticSignature {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
 			typeParameters = fn.typeParameters;
 		return fn.name
+			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")
 			+ (typeParameters == null
 				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
 			+ "(" // Whether an argument may be omitted is part of the signature: callers are checked against the arity range.

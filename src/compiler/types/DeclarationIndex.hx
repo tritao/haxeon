@@ -147,6 +147,7 @@ class DeclarationIndex {
 
 	public function validateProgramSignatures(program:AstProgram):Void {
 		validateSignatures(program);
+		validateInheritedMethods(program);
 		conversions.validate();
 	}
 
@@ -841,6 +842,96 @@ class DeclarationIndex {
 		}
 		for (fn in program.functions)
 			resolveFunction(fn, fn.name);
+	}
+
+	/** A method occupies the inherited virtual slot by name; incompatible redeclarations cannot hide it safely. */
+	function validateInheritedMethods(program:AstProgram):Void {
+		for (decl in program.classes) {
+			var own = declarationSubstitutions(decl.name, decl.typeParameters);
+			var base = decl.base == null ? null : resolve(decl.base, decl.span, own);
+			while (base != null) {
+				var baseName = NominalInheritance.name(base);
+				if (baseName == null || !classes.exists(baseName))
+					break;
+				var parent = classes.get(baseName),
+					inherited = inheritance.substitutions(base);
+				for (method in decl.methods) {
+					if (method.name == "new")
+						continue;
+					for (original in parent.methods) {
+						if (method.name != original.name || method.isStatic && original.isStatic)
+							continue;
+						var member = decl.name + "." + method.name,
+							ancestor = baseName + "." + original.name;
+						if (method.isStatic != original.isStatic)
+							fail('Method "$member" conflicts with inherited "$ancestor": static and instance methods cannot share a slot', method.span);
+						if (!compatibleInheritedSignature(method, original, own, inherited, member))
+							fail('Method "$member" has an incompatible signature with inherited "$ancestor"', method.span);
+						if (method.isPublic == false && original.isPublic == true)
+							fail('Method "$member" cannot reduce the public visibility of inherited "$ancestor"', method.span);
+					}
+				}
+				base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
+			}
+		}
+	}
+
+	function compatibleInheritedSignature(method:AstFunction, original:AstFunction, own:Map<String, CompilerType>, inherited:Map<String, CompilerType>,
+			methodOwner:String):Bool {
+		var parameters = method.typeParameters == null ? [] : method.typeParameters;
+		var baseParameters = original.typeParameters == null ? [] : original.typeParameters;
+		if (method.arguments.length != original.arguments.length || parameters.length != baseParameters.length)
+			return false;
+		var left = [for (name => type in own) name => type],
+			right = [for (name => type in inherited) name => type];
+		for (index in 0...parameters.length) {
+			var parameter = TTypeParameter(methodOwner, parameters[index]);
+			left.set(parameters[index], parameter);
+			right.set(baseParameters[index], parameter);
+		}
+		for (index in 0...parameters.length)
+			if (inheritedMethodConstraints(method, parameters[index], left) != inheritedMethodConstraints(original, baseParameters[index], right))
+				return false;
+		for (index in 0...method.arguments.length) {
+			var argument = method.arguments[index],
+				baseArgument = original.arguments[index];
+			if (!TypeRelations.equals(inheritedArgumentType(argument, left), inheritedArgumentType(baseArgument, right)))
+				return false;
+			if ((baseArgument.optional == true || baseArgument.defaultValue != null)
+				&& argument.optional != true
+				&& argument.defaultValue == null)
+				return false;
+		}
+		var result = resolve(method.result, method.span, left),
+			expected = resolve(original.result, original.span, right);
+		if (TypeRelations.equals(result, expected))
+			return true;
+		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
+		return switch [result, expected] {
+			case [TInstance(Class, _, _), TInstance(Class, _, _)]: var relations = new TypeRelations(this); !relations.isValueClass(result) && !relations.isValueClass(expected) && inheritance.reaches(result,
+					expected);
+			default: false;
+		};
+	}
+
+	function inheritedArgumentType(argument:AstArgument, substitutions:Map<String, CompilerType>):CompilerType {
+		var type = resolve(argument.type, argument.span, substitutions);
+		if (argument.optional == true && compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
+			return switch type {
+				case TNullable(_): type;
+				default: TNullable(type);
+			};
+		return type;
+	}
+
+	function inheritedMethodConstraints(method:AstFunction, parameter:String, substitutions:Map<String, CompilerType>):String {
+		var bounds:Array<String> = [], constraints = method.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints)
+				if (constraint.parameter == parameter)
+					bounds.push(typeKey(resolve(constraint.type, constraint.span, substitutions)));
+		bounds.sort(Reflect.compare);
+		return bounds.join("&");
 	}
 
 	function validateAbstractConversion(name:String, direction:String, type:CompilerType, seen:Map<String, Bool>, span:SourceSpan):Void {

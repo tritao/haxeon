@@ -20,6 +20,7 @@ class ModuleCanonicalizer {
 		return {
 			name: name,
 			isStatic: fn.isStatic,
+			isPublic: fn.isPublic,
 			isExtern: fn.isExtern,
 			isInline: fn.isInline,
 			metadata: fn.metadata,
@@ -246,6 +247,7 @@ class ModuleCanonicalizer {
 		return {
 			name: name,
 			isStatic: method.isStatic,
+			isPublic: method.isPublic,
 			isExtern: method.isExtern,
 			isInline: method.isInline,
 			metadata: method.metadata,

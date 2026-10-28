@@ -278,6 +278,10 @@ typedef AstSwitchCase = {
 typedef AstFunction = {
 	final name:String;
 	final isStatic:Bool;
+
+	/** Explicit method visibility; absent visibility is inherited when overriding. */
+	final ?isPublic:Bool;
+
 	final ?isExtern:Bool;
 
 	/** Declared `inline`; the inliner treats it as a strong hint. */

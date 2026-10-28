@@ -465,12 +465,12 @@ class Parser {
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
-			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false):AstFunction {
+			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
-			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline);
+			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline, isPublic);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -480,7 +480,7 @@ class Parser {
 	}
 
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool, isExtern:Bool,
-			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool):AstFunction {
+			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -531,6 +531,7 @@ class Parser {
 		return {
 			name: name,
 			isStatic: isStatic,
+			isPublic: isPublic,
 			isExtern: isExtern,
 			isInline: isInline,
 			metadata: metadata == null ? [] : metadata,
@@ -643,6 +644,7 @@ class Parser {
 					continue;
 				}
 				var isStatic = false, isInline = false, isFinal = false;
+				var isPublic:Null<Bool> = null;
 				while (true) {
 					if (current().kind == TokenKind.Identifier && current().text == "override") {
 						advance();
@@ -650,6 +652,7 @@ class Parser {
 					}
 					switch current().kind {
 						case TokenKind.Public, TokenKind.Private:
+							isPublic = current().kind == TokenKind.Public;
 							advance();
 						case TokenKind.Static:
 							advance();
@@ -667,7 +670,7 @@ class Parser {
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,
 						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata, isInline));
+					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata, isInline, isPublic));
 				} else {
 					var fieldStart = current().span;
 					match(TokenKind.Var);
@@ -867,6 +870,7 @@ class Parser {
 			methods.push({
 				name: methodName,
 				isStatic: false,
+				isPublic: true,
 				isExtern: false,
 				isInline: false,
 				metadata: methodMetadata,
