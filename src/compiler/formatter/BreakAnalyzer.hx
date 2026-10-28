@@ -42,7 +42,7 @@ class BreakAnalyzer {
 				penalty = 20;
 			} else if (rightKind != null
 				&& isComparisonOperator(rightKind)
-				&& !(rightKind == TokenKind.Less && isGenericOpen(tokens, index + 1))) {
+				&& !(rightKind == TokenKind.Less && opensTypeArguments(tokens, index + 1, syntax))) {
 				canBreak = true;
 				penalty = 25;
 			} else if (rightKind == TokenKind.Question && isTernaryQuestion(tokens, index + 1)) {
@@ -128,7 +128,7 @@ class BreakAnalyzer {
 				case TokenKind.LeftBrace:
 					stack.push({open: index, closeKind: TokenKind.RightBrace, commas: []});
 				case TokenKind.Less:
-					if (isGenericOpen(tokens, index))
+					if (opensTypeArguments(tokens, index, syntax))
 						stack.push({open: index, closeKind: TokenKind.Greater, commas: []});
 				case TokenKind.Comma:
 					if (stack.length > 0)
@@ -173,24 +173,24 @@ class BreakAnalyzer {
 			return 0;
 		if (left == TokenKind.LeftParen || left == TokenKind.LeftBracket || left == TokenKind.Dot)
 			return 0;
-		if (right == TokenKind.LeftParen)
-			return left == TokenKind.If || left == TokenKind.While || left == TokenKind.For || left == TokenKind.Switch || left == TokenKind.Catch ? 1 : 0;
-		if (right == TokenKind.Less && isGenericOpen(tokens, index + 1))
+		if (right == TokenKind.Less && opensTypeArguments(tokens, index + 1, syntax))
 			return 0;
-		if (left == TokenKind.Less && isGenericOpen(tokens, index))
+		if (left == TokenKind.Less && opensTypeArguments(tokens, index, syntax))
 			return 0;
-		if (right == TokenKind.Greater && isGenericClose(tokens, index + 1))
+		if (right == TokenKind.Greater && closesTypeArguments(tokens, index + 1, syntax))
 			return 0;
+		if (right == TokenKind.LeftParen && left != TokenKind.Colon && left != TokenKind.Comma && left != TokenKind.LeftBrace)
+			return endsOperand(tokens, index, left, syntax) || isPrefixOperator(tokens, index, left) ? 0 : 1;
+		if (right == TokenKind.LeftBracket && left != TokenKind.Colon && left != TokenKind.Comma && left != TokenKind.LeftBrace)
+			return endsOperand(tokens, index, left, syntax) || isPrefixOperator(tokens, index, left) ? 0 : 1;
 		if (left == TokenKind.Greater
-			&& isGenericClose(tokens, index)
+			&& closesTypeArguments(tokens, index, syntax)
 			&& (right == TokenKind.LeftParen || right == TokenKind.LeftBracket || right == TokenKind.Dot || right == TokenKind.Comma
 				|| right == TokenKind.Semicolon || right == TokenKind.RightParen || right == TokenKind.RightBracket || right == TokenKind.RightBrace
 				|| right == TokenKind.Greater))
 			return 0;
 		if (left == TokenKind.LeftBrace)
 			return 0;
-		if (right == TokenKind.LeftBracket)
-			return left == TokenKind.Assign || left == TokenKind.Return || left == TokenKind.Comma ? 1 : 0;
 		if (right == TokenKind.LeftBrace)
 			return 1;
 		if (left == TokenKind.Comma)
@@ -200,6 +200,8 @@ class BreakAnalyzer {
 		if (right == TokenKind.Colon)
 			return ternaryColon(tokens, index) ? 1 : 0;
 		if (left == TokenKind.At)
+			return 0;
+		if (left == TokenKind.Question && !isTernaryQuestion(tokens, index))
 			return 0;
 		if (right == TokenKind.Increment || right == TokenKind.Decrement || left == TokenKind.Not || left == TokenKind.BitNot)
 			return 0;
@@ -224,60 +226,43 @@ class BreakAnalyzer {
 		return previous != TokenKind.LeftParen && previous != TokenKind.Comma && previous != TokenKind.Assign && previous != TokenKind.Colon;
 	}
 
-	static function isGenericOpen(tokens:Array<FormatToken>, index:Int):Bool {
-		if (index <= 0 || FormatTokenTools.syntaxKind(tokens[index]) != TokenKind.Less)
-			return false;
-		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
-		if (!isTypeName(previous))
-			return false;
-		var depth = 0, hasContent = false;
-		for (cursor in index...tokens.length) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == null)
-				continue;
-			switch kind {
-				case TokenKind.Less:
-					depth++;
-				case TokenKind.Greater:
-					depth--;
-					if (depth == 0) {
-						if (!hasContent)
-							return false;
-						var after = cursor + 1 < tokens.length ? FormatTokenTools.syntaxKind(tokens[cursor + 1]) : null;
-						return after == null || after == TokenKind.LeftParen || after == TokenKind.LeftBracket || after == TokenKind.Dot
-							|| after == TokenKind.Comma || after == TokenKind.RightParen || after == TokenKind.RightBracket || after == TokenKind.RightBrace
-							|| after == TokenKind.Assign || after == TokenKind.Colon || after == TokenKind.Semicolon || after == TokenKind.Arrow;
-					}
-				case TokenKind.Comma:
-					hasContent = true;
-				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void:
-					hasContent = true;
-				case TokenKind.LeftBracket, TokenKind.RightBracket, TokenKind.Dot:
-				default:
-					return false;
-			}
-		}
-		return false;
-	}
+	static function opensTypeArguments(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length && syntax.typeArgumentOpens.exists(tokens[index].start);
 
-	static function isGenericClose(tokens:Array<FormatToken>, index:Int):Bool {
-		var cursor = index - 1;
-		while (cursor >= 0) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == TokenKind.Less && isGenericOpen(tokens, cursor))
-				return true;
-			if (kind == TokenKind.Semicolon || kind == TokenKind.Assign || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
-				break;
-			cursor--;
-		}
-		return false;
-	}
+	static function closesTypeArguments(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length && syntax.typeArgumentCloses.exists(tokens[index].start);
 
-	static function isTypeName(kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Identifier || kind == TokenKind.TypeInt || kind == TokenKind.TypeBool || kind == TokenKind.TypeFloat
-			|| kind == TokenKind.TypeString || kind == TokenKind.Void || kind == TokenKind.RightBracket || kind == TokenKind.Greater;
+	/** Can this token end an operand, so that a following `(` or `[` is a call or an index rather than a new expression? */
+	static function endsOperand(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>, syntax:SyntaxInfo):Bool
+		return switch kind {
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.This, TokenKind.New,
+				TokenKind.Function, TokenKind.StringLiteral, TokenKind.Integer, TokenKind.Float, TokenKind.BoolTrue, TokenKind.BoolFalse,
+				TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Dollar:
+				true;
+			case TokenKind.Greater: closesTypeArguments(tokens, index, syntax);
+			default: false;
+		};
+
+	/** A prefix operator binds to what follows it without a space: `!(a)`, `-(a)`, `@:meta`. */
+	static function isPrefixOperator(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>):Bool
+		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At
+			|| isUnary(tokens, index, kind);
 
 	static function colonNeedsSpace(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool {
+		// A structure type inside type arguments, `Array<{a:Int}>`, is annotated like any other type.
+		var typeDepth = 0;
+		for (cursor in 0...index) {
+			if (syntax.typeArgumentOpens.exists(tokens[cursor].start))
+				typeDepth++;
+			else if (syntax.typeArgumentCloses.exists(tokens[cursor].start))
+				typeDepth--;
+		}
+		if (typeDepth > 0)
+			return false;
+		// The body of a typedef declares field types, like `{a:Int}` above.
+		for (cursor in 0...index)
+			if (FormatTokenTools.syntaxKind(tokens[cursor]) == TokenKind.Typedef)
+				return false;
 		var objectDepth = 0;
 		for (cursor in 0...index + 1) {
 			var token = tokens[cursor],
@@ -302,7 +287,11 @@ class BreakAnalyzer {
 			return true;
 		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
 		return previous == TokenKind.LeftParen || previous == TokenKind.LeftBracket || previous == TokenKind.Comma || previous == TokenKind.Assign
-			|| previous == TokenKind.Colon || previous == TokenKind.Question || isBinaryOperator(previous);
+			|| previous == TokenKind.Colon || previous == TokenKind.Question || previous == TokenKind.Return || previous == TokenKind.Throw
+			|| previous == TokenKind.Case || previous == TokenKind.In || previous == TokenKind.Arrow || previous == TokenKind.Else
+			|| previous == TokenKind.Do || previous == TokenKind.PlusAssign || previous == TokenKind.MinusAssign || previous == TokenKind.StarAssign
+			|| previous == TokenKind.SlashAssign || previous == TokenKind.PercentAssign || previous == TokenKind.AndAssign
+			|| previous == TokenKind.OrAssign || previous == TokenKind.XorAssign || isBinaryOperator(previous);
 	}
 
 	static function isBinaryOperator(kind:Null<TokenKind>):Bool

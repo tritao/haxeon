@@ -1,0 +1,23 @@
+typedef Probe = {radius:Float, source:String};
+typedef Wide = {
+  radius:Float,
+  expected:Array<{lo:Float, hi:Float, loPass:Int, hiPass:Int, another:Float, yetAnother:Float, more:Float, evenMore:Float}>,
+  source:String
+}
+class Generics {
+  var a:Array<Float> = [];
+  var b:Null<Array<Float>> = null;
+  var c:Map<String, Array<Int>> = new Map<String, Array<Int>>();
+  var d:Array<{z:Float, base:Int}> = [];
+  var e:Null<(Int, Int) -> Void> = null;
+  var f:Array<Array<Null<haxe.io.Bytes>>> = [];
+  public function radii():Array<Float> return [for (i in 0...count) grid.radius(i)];
+  public function first(items:Array<Item>):Null<Item> {
+    return items.length > 0 ? items[0] : null;
+  }
+  function compare(a:Int, b:Int, c:Int, d:Int):Bool {
+    if (a<b || c> d) return true;
+    var shifted = a<b>>c;
+    return a<b && b> c;
+  }
+}

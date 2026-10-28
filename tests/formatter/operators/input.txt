@@ -1,0 +1,15 @@
+class Operators {
+  function f(a:Float, b:Float, radius:Float, items:Array<Float>, ?optional:Int, ?name:String = "x"):Float {
+    var z = a *(b + 1) /(radius * 2) -(a + b) +(radius);
+    for (v in[a, b]) trace(v);
+    for (v in [a, b]) trace(v);
+    var neg = -1;
+    var spaced = a -(b);
+    var group = -(a + b) * !(a < b ? 1 : 0);
+    var ternary = a<0 ? -1 : a> b ? 1 : 0;
+    foo(a, (b), [1, 2], [for (i in 0...3) i]);
+    var index = items[0] + [1, 2][1] +(a + b);
+    var compare = index<0 || index>= items.length;
+    return -radius;
+  }
+}

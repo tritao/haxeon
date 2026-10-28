@@ -19,7 +19,7 @@ typedef UnwrappedLine = {
 class UnwrappedLineBuilder {
 	public static function build(tokens:Array<FormatToken>, syntax:SyntaxInfo, ?comments:CommentAttachments):Array<UnwrappedLine> {
 		var result:Array<UnwrappedLine> = [], current:Array<FormatToken> = [], depth = 0, blankBefore = 0, pendingNewlines = 0,
-			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0;
+			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false;
 
 		function begin(token:FormatToken):Void {
 			if (current.length == 0) {
@@ -106,8 +106,11 @@ class UnwrappedLineBuilder {
 						begin(token);
 						continue;
 					}
+					// A block's closing brace ends the statement. The `}` of an object literal or a structure type continues it,
+					// unless a declaration follows: `typedef T = {...}` needs no semicolon.
 					if (current.length > 0
 						&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.RightBrace
+						&& (lastClosedBlock || startsDeclaration(kind))
 						&& kind != TokenKind.Else
 						&& kind != TokenKind.Catch
 						&& kind != TokenKind.While
@@ -140,11 +143,20 @@ class UnwrappedLineBuilder {
 					}
 					if (closesSwitch && switchBases.length > 0)
 						switchBases.pop();
+					lastClosedBlock = isCloseBlock;
 			}
 		}
 		flush();
 		return result;
 	}
+
+	static function startsDeclaration(kind:TokenKind):Bool
+		return switch kind {
+			case TokenKind.Class, TokenKind.Typedef, TokenKind.Enum, TokenKind.Interface, TokenKind.Struct, TokenKind.Public, TokenKind.Private,
+				TokenKind.Static, TokenKind.Function, TokenKind.Var, TokenKind.Final, TokenKind.Inline, TokenKind.Import, TokenKind.Package, TokenKind.At:
+				true;
+			default: false;
+		};
 
 	static function containsKind(tokens:Array<FormatToken>, wanted:TokenKind):Bool {
 		for (token in tokens)

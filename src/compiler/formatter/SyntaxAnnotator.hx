@@ -34,6 +34,9 @@ typedef SyntaxInfo = {
 	final blockOpens:Map<Int, Bool>;
 	final blockCloses:Map<Int, Bool>;
 	final blockDepth:Map<Int, Int>;
+	/** Source offsets of the `<` that open type argument lists, and of the `>` that close them. */
+	final typeArgumentOpens:Map<Int, Bool>;
+	final typeArgumentCloses:Map<Int, Bool>;
 }
 
 private typedef OpenNode = {
@@ -46,7 +49,9 @@ private typedef OpenNode = {
 class SyntaxAnnotator {
 	public static function annotate(tokens:Array<FormatToken>):SyntaxInfo {
 		var nodes:Array<FormatNode> = [], matching:Map<Int, Int> = [], blockOpens:Map<Int, Bool> = [], blockCloses:Map<Int, Bool> = [],
-			blockDepth:Map<Int, Int> = [], stack:Array<OpenNode> = [], genericStack:Array<Int> = [], syntaxIndexes:Array<Int> = [], depth = 0;
+			blockDepth:Map<Int, Int> = [], stack:Array<OpenNode> = [], syntaxIndexes:Array<Int> = [], depth = 0,
+			typeArguments = TypeArguments.find(tokens);
+		var typeArgumentOpens:Map<Int, Bool> = [], typeArgumentCloses:Map<Int, Bool> = [];
 
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
@@ -76,19 +81,18 @@ class SyntaxAnnotator {
 							|| previous == TokenKind.LeftParen || previous == TokenKind.LeftBracket;
 					stack.push({tokenIndex: index, kind: array ? FormatNodeKind.ArrayLiteral : FormatNodeKind.Parenthesized, block: false});
 				case TokenKind.Less:
-					if (isGenericOpen(tokens, syntaxIndexes, position))
-						genericStack.push(index);
-				case TokenKind.Greater:
-					if (genericStack.length > 0) {
-						var genericStart = genericStack.pop();
+					if (typeArguments.opens.exists(index)) {
+						var close = typeArguments.opens.get(index);
 						nodes.push({
 							kind: FormatNodeKind.TypeArgumentList,
-							start: genericStart,
-							end: index,
+							start: index,
+							end: close,
 							parent: null
 						});
-						matching.set(genericStart, index);
-						matching.set(index, genericStart);
+						matching.set(index, close);
+						matching.set(close, index);
+						typeArgumentOpens.set(token.start, true);
+						typeArgumentCloses.set(tokens[close].start, true);
 					}
 				case TokenKind.RightBrace, TokenKind.RightParen, TokenKind.RightBracket:
 					closeNode(tokens, stack, nodes, matching, blockCloses, index);
@@ -109,7 +113,9 @@ class SyntaxAnnotator {
 			matching: matching,
 			blockOpens: blockOpens,
 			blockCloses: blockCloses,
-			blockDepth: blockDepth
+			blockDepth: blockDepth,
+			typeArgumentOpens: typeArgumentOpens,
+			typeArgumentCloses: typeArgumentCloses
 		};
 	}
 
@@ -159,7 +165,8 @@ class SyntaxAnnotator {
 			|| previous == TokenKind.Final)
 			return true;
 		return switch previous {
-			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.Arrow, TokenKind.Return: false;
+			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.Arrow, TokenKind.Return,
+				TokenKind.Less: false;
 			default: true;
 		};
 	}
@@ -310,36 +317,4 @@ class SyntaxAnnotator {
 			|| kind == TokenKind.Greater || kind == TokenKind.LessEqual || kind == TokenKind.GreaterEqual || kind == TokenKind.Plus
 			|| kind == TokenKind.Minus || kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent || kind == TokenKind.Ampersand
 			|| kind == TokenKind.Pipe || kind == TokenKind.Caret;
-
-	static function isGenericOpen(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, position:Int):Bool {
-		if (position <= 0 || FormatTokenTools.syntaxKind(tokens[syntaxIndexes[position]]) != TokenKind.Less)
-			return false;
-		var previous = previousKind(tokens, syntaxIndexes, position);
-		if (previous != TokenKind.Identifier && previous != TokenKind.TypeInt && previous != TokenKind.TypeBool && previous != TokenKind.TypeFloat
-			&& previous != TokenKind.TypeString && previous != TokenKind.Void && previous != TokenKind.Greater && previous != TokenKind.RightBracket)
-			return false;
-		var depth = 0, hasContent = false;
-		for (cursor in position...syntaxIndexes.length) {
-			var kind = FormatTokenTools.syntaxKind(tokens[syntaxIndexes[cursor]]);
-			switch kind {
-				case TokenKind.Less:
-					depth++;
-				case TokenKind.Greater:
-					depth--;
-					if (depth == 0) {
-						var after = cursor + 1 < syntaxIndexes.length ? FormatTokenTools.syntaxKind(tokens[syntaxIndexes[cursor + 1]]) : null;
-						return hasContent
-							&& (after == null || after == TokenKind.LeftParen || after == TokenKind.LeftBracket || after == TokenKind.Dot
-								|| after == TokenKind.Comma || after == TokenKind.RightParen || after == TokenKind.RightBracket
-								|| after == TokenKind.RightBrace || after == TokenKind.Assign || after == TokenKind.Colon || after == TokenKind.Semicolon
-								|| after == TokenKind.Arrow);
-					}
-				case TokenKind.Comma, TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void:
-					hasContent = true;
-				default:
-					return false;
-			}
-		}
-		return false;
-	}
 }
