@@ -336,7 +336,7 @@ class HlModuleAssembler {
 			if (from == null || !renames.exists(from))
 				continue;
 			var old = cache.functions.get(name), target = byName.get(from);
-			var adapter = old == null ? null : signatureAdapter(name, old, target, program.parameterDefaults.get(from));
+			var adapter = old == null || target == null ? null : signatureAdapter(name, old, target, program.parameterDefaults.get(from));
 			if (adapter != null) {
 				cache.replaceBody(name, adapter);
 				adapted.push(name);
@@ -358,9 +358,9 @@ class HlModuleAssembler {
 			given.set(parameterName(argument), builder.argument(argument.name, argument.type));
 		var passed:Array<IrValue> = [];
 		for (parameter in target.arguments) {
-			var name = parameterName(parameter), value = given.get(name);
-			var converted = value != null ? widen(builder, value, parameter.type) : defaults == null
-				|| !defaults.exists(name) ? null : defaultValue(builder, defaults.get(name), parameter.type);
+			var name = parameterName(parameter), value = given.get(name), literal = defaults == null ? null : defaults.get(name);
+			var converted = value != null ? widen(builder, value, parameter.type) : literal == null ? null : defaultValue(builder, literal,
+				parameter.type);
 			if (converted == null)
 				return null;
 			passed.push(converted);

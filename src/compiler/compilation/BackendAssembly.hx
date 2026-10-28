@@ -98,7 +98,8 @@ class BackendAssembly {
 				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals,
 				assembly.objectLayout, [
 					for (guard in assembly.guards)
-						{stableId: candidateAssembler.cache.stableIds.get(guard.name), description: guard.description}
+						if (candidateAssembler.cache.stableIds.exists(guard.name))
+							{stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0, description: guard.description}
 				], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {

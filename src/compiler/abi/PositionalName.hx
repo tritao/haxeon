@@ -95,7 +95,8 @@ class PositionalName {
 			var known = result.get(name);
 			if (known != null)
 				return known;
-			var own = prints.get(name), inner = children.get(name);
+			var found = prints.get(name), inner = children.get(name);
+			var own:String = found == null ? "" : found;
 			if (inner == null) {
 				result.set(name, own);
 				return own;

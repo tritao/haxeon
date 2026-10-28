@@ -189,11 +189,13 @@ class HlPatchWriter {
 			writeIndex(out, guard.stableId);
 			writeText(out, guard.description);
 		}
-		var names = globalNames == null ? [] : [for (name in globalNames.keys()) name];
+		var globals:Map<String, Int> = globalNames == null ? [] : globalNames;
+		var names = [for (name in globals.keys()) name];
 		names.sort(Reflect.compare);
 		writeIndex(out, names.length);
 		for (name in names) {
-			writeIndex(out, globalNames.get(name));
+			var index = globals.get(name);
+			writeIndex(out, index == null ? 0 : index);
 			writeText(out, name);
 		}
 		return out.getBytes();
