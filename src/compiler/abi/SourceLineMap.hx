@@ -52,9 +52,7 @@ class SourceLineMap {
 
 	/** The longest common subsequence of the lines `a[aFrom...aFrom+aCount]` and `b[bFrom...bFrom+bCount]`, as index pairs. */
 	static function commonLines(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int):Array<{old:Int, now:Int}> {
-		var width = bCount + 1, table = new haxe.ds.Vector<Int>((aCount + 1) * width);
-		for (index in 0...table.length)
-			table[index] = 0;
+		var width = bCount + 1, table:Array<Int> = [for (_ in 0...(aCount + 1) * width) 0];
 		var i = aCount - 1;
 		while (i >= 0) {
 			var j = bCount - 1;
@@ -83,12 +81,10 @@ class SourceLineMap {
 	static function pairSimilar(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int, result:Map<Int, Int>):Void {
 		if (aCount <= 0 || bCount <= 0 || aCount > MAX_GAP_LINES || bCount > MAX_GAP_LINES)
 			return;
-		var width = bCount + 1, best = new haxe.ds.Vector<Float>((aCount + 1) * width), likeness = new haxe.ds.Vector<Float>(aCount * bCount);
+		var width = bCount + 1, best:Array<Float> = [for (_ in 0...(aCount + 1) * width) 0.0], likeness:Array<Float> = [for (_ in 0...aCount * bCount) 0.0];
 		for (i in 0...aCount)
 			for (j in 0...bCount)
 				likeness[i * bCount + j] = similarity(a[aFrom + i], b[bFrom + j]);
-		for (index in 0...best.length)
-			best[index] = 0.0;
 		var i = aCount - 1;
 		while (i >= 0) {
 			var j = bCount - 1;
@@ -120,9 +116,7 @@ class SourceLineMap {
 			return 1.0;
 		if (a.length == 0 || b.length == 0 || a.length > MAX_LINE_LENGTH || b.length > MAX_LINE_LENGTH)
 			return 0.0;
-		var previous = new haxe.ds.Vector<Int>(b.length + 1), current = new haxe.ds.Vector<Int>(b.length + 1);
-		for (j in 0...b.length + 1)
-			previous[j] = 0;
+		var previous:Array<Int> = [for (_ in 0...b.length + 1) 0], current:Array<Int> = [for (_ in 0...b.length + 1) 0];
 		for (i in 0...a.length) {
 			current[0] = 0;
 			for (j in 0...b.length)
