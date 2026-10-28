@@ -53,10 +53,12 @@ class PositionalName {
 				if (known == null || location.start < known.start)
 					earliest.set(location.path, location);
 			}
-		var path:Null<String> = null;
+		var path:Null<String> = null, most = 0;
 		for (candidate => count in counts)
-			if (path == null || count > counts.get(path) || count == counts.get(path) && candidate < path)
+			if (path == null || count > most || count == most && Reflect.compare(candidate, path) < 0) {
 				path = candidate;
+				most = count;
+			}
 		if (path == null)
 			return null;
 		var location = earliest.get(path);
