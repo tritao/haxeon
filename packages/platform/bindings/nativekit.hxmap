@@ -24,6 +24,9 @@
     "nk_transport": "TransportHandle",
     "nk_pty": "PtyHandle",
     "nk_listener": "ListenerHandle",
+    "nk_menu": "MenuHandle",
+    "nk_menu_item": "MenuItemHandle",
+    "nk_tray": "TrayHandle",
     "nk_resource_cache": "ResourceCacheHandle",
     "nk_resource_asset": "ResourceAssetHandle",
     "nk_resource": "ResourceValue"
