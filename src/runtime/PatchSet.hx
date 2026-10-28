@@ -26,38 +26,58 @@ class PatchSet {
 	 * section headers alone; an artifact it cannot read counts as guarded, the safe answer.
 	 */
 	public function hasGuards():Bool {
-		var input = new haxe.io.BytesInput(bytes);
-		input.bigEndian = false;
-		try {
-			if (input.readString(3) != "HLP")
-				return true;
-			input.position += 1 + 16; // version, module ID
-			readIndex(input); // base revision
-			readIndex(input); // revision
-			for (_ in 0...readIndex(input)) {
-				var tag = input.readByte(), length = readIndex(input);
-				if (tag == GUARDS)
-					return true;
-				input.position += length;
-			}
-			return false;
-		} catch (_:Dynamic) {
+		var length:Int = bytes.length;
+		// Magic "HLP", version, 16-byte module ID.
+		if (length < 20 || bytes.get(0) != "H".code || bytes.get(1) != "L".code || bytes.get(2) != "P".code)
 			return true;
+		var cursor:Array<Int> = [20];
+		readIndex(cursor); // base revision
+		readIndex(cursor); // revision
+		var sections:Int = readIndex(cursor);
+		for (_ in 0...sections) {
+			if (cursor[0] < 0 || cursor[0] >= length)
+				return true;
+			var tag:Int = bytes.get(cursor[0]);
+			cursor[0]++;
+			var size:Int = readIndex(cursor);
+			if (tag == GUARDS)
+				return true;
+			if (size < 0)
+				return true;
+			cursor[0] += size;
 		}
+		return cursor[0] < 0 || cursor[0] > length;
 	}
 
 	static inline final GUARDS:Int = 9;
 
-	/** HLP's variable-length index (`HlPatchReader.readIndex`). */
-	static function readIndex(input:haxe.io.BytesInput):Int {
-		var first = input.readByte();
-		if ((first & 0x80) == 0)
+	/** HLP's variable-length index (`HlPatchReader.readIndex`), read at `cursor[0]`, which it advances; -1 past the end. */
+	function readIndex(cursor:Array<Int>):Int {
+		var at:Int = cursor[0];
+		if (at < 0 || at >= bytes.length) {
+			cursor[0] = -1;
+			return -1;
+		}
+		var first:Int = bytes.get(at);
+		if ((first & 0x80) == 0) {
+			cursor[0] = at + 1;
 			return first & 0x7F;
+		}
 		if ((first & 0x40) == 0) {
-			var v = input.readByte() | ((first & 31) << 8);
+			if (at + 1 >= bytes.length) {
+				cursor[0] = -1;
+				return -1;
+			}
+			cursor[0] = at + 2;
+			var v:Int = bytes.get(at + 1) | ((first & 31) << 8);
 			return (first & 0x20) == 0 ? v : -v;
 		}
-		var v = ((first & 31) << 24) | (input.readByte() << 16) | (input.readByte() << 8) | input.readByte();
+		if (at + 3 >= bytes.length) {
+			cursor[0] = -1;
+			return -1;
+		}
+		cursor[0] = at + 4;
+		var v:Int = ((first & 31) << 24) | (bytes.get(at + 1) << 16) | (bytes.get(at + 2) << 8) | bytes.get(at + 3);
 		return (first & 0x20) == 0 ? v : -v;
 	}
 }

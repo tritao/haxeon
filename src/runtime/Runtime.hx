@@ -299,13 +299,20 @@ class Runtime {
 			throw failure;
 	}
 
+	/** A copy of the runtime's patch message in GC memory: the runtime frees its own buffer at the next patch. */
+	static function copiedMessage(bytes:hl.Bytes):String {
+		var length:Int = bytes.ucs2Length(0);
+		var borrowed:String = @:privateAccess String.__alloc__(bytes, length);
+		return borrowed.substr(0, length); // substr allocates and copies
+	}
+
 	public static function patchSet(module:LoadedModule, patch:PatchSet):Void {
 		var message:Null<String> = null;
 		var status:RuntimeStatus = module.access(function(handle) {
 			var result:RuntimeStatus = RuntimeNative.patch(handle, patch.bytes.getData(), patch.bytes.length);
 			if (result != RuntimeStatus.Ok) {
 				var bytes = RuntimeNative.patch_message(handle);
-				message = bytes == null ? null : @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
+				message = bytes == null ? null : copiedMessage(bytes);
 			}
 			return result;
 		});
