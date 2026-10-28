@@ -30,7 +30,7 @@ class LiveStrictRefusalMain {
 				// The app stops once it runs revision 3 and the test is done; a host that never applies the edit stops after about
 				// 30 s, so the test fails instead of hanging.
 				+ "  @:keep public static function tick():Int { Sys.sleep(0.01); " + (extraGlobal ? "counted++; " : "")
-				+ "return value() == 3 && sys.FileSystem.exists(\"" + stop + "\") || ++ticks > 3000 ? 0 : 1; }\n"
+				+ "return value() == 3 && sys.FileSystem.exists(\"" + StringTools.replace(stop, "\\", "/") + "\") || ++ticks > 3000 ? 0 : 1; }\n"
 				+ "  @:keep public static function close():Int return 0;\n"
 				+ "  @:keep public static function saveState():String return \"\";\n"
 				+ "  @:keep public static function restoreState(state:String):Void {}\n"
