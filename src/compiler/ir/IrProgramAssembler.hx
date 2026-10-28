@@ -125,7 +125,7 @@ class IrProgramAssembler {
 	 * For a live build: a function per class that runs the declaration initializers of the class's fields the running module
 	 * does not have yet, on an instance made before they existed. A patch that adds those fields runs it on every live
 	 * instance of the class and its subclasses (`hl_module_patch_migrate`); instances made later run the initializers in
-	 * their constructor as usual. Like Dart's hot reload, existing instances get the initializer, never a constructor rerun:
+	 * their constructor as usual. Existing instances get the initializer, never a constructor rerun:
 	 * a field a constructor assigns keeps its zero value. `published(class)` tells whether the running module has the class,
 	 * `publishedField(class, field)` whether it has the field; a class it lacks needs no migration.
 	 */
