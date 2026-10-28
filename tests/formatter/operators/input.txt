@@ -11,6 +11,8 @@ class Operators {
     var index = items[0] + [1, 2][1] +(a + b);
     var compare = index<0 || index>= items.length;
     var fallback = optional??name??"none";
+    var map = ["a"=>1, "b" => 2];
+    for (key=>value in map) trace(key);
     return -radius;
   }
 }

@@ -150,12 +150,14 @@ class BreakAnalyzer {
 		return result;
 	}
 
+	/** Adjacent token pieces that are one operator in source: `<<`, `>>=`, and the map arrow `=>`. */
 	static function adjacentShiftParts(left:FormatToken, right:FormatToken):Bool {
 		if (left.end != right.start)
 			return false;
 		var leftKind = FormatTokenTools.syntaxKind(left),
 			rightKind = FormatTokenTools.syntaxKind(right);
-		return (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
+		return (leftKind == TokenKind.Assign && rightKind == TokenKind.Greater)
+			|| (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
 			|| (leftKind == TokenKind.Greater && (rightKind == TokenKind.Greater || rightKind == TokenKind.GreaterEqual));
 	}
 
