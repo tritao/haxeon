@@ -83,12 +83,16 @@ program stored keeps running its own function, or the edited version of it, and
 the inserted lambda is an added function in a new slot. The code fingerprint
 leaves lambda ordinals out of the names it mentions
 (`IrFunctionStateCodec.codeFingerprint`), so a lambda that only moved, with its
-environment and nested lambdas, keeps its fingerprint.
+environment and nested lambdas, keeps its fingerprint. Because those names lose
+their ordinals, a lambda's own code does not tell `() -> () -> 1` from
+`() -> () -> 2`; so each lambda's fingerprint is folded with the fingerprints of
+the lambdas written in it, in order, all the way down (`PositionalName.nested`).
 
 Matching within a group:
 
-- Siblings with the same code are matched in order. Their code is the same, so
-  which takes which slot cannot be observed.
+- Siblings with the same fingerprint are matched in order. They and every lambda
+  written in them run the same code, so which takes which slot cannot be
+  observed.
 - A new sibling nothing matches is added. A running one nothing matches is
   removed and keeps its slot and code; if the new build gives its name to
   another function, it moves to a retired name (`<group>~retired<revision>#<ordinal>`).

@@ -120,10 +120,11 @@ typedef LambdaAlignmentResult = {
  * the code under their name: a shifted name would make a stored callback silently run another function's code.
  *
  * So within each group of siblings the lambdas are matched by their code fingerprint (`IrFunctionStateCodec.codeFingerprint`,
- * which leaves out lambda ordinals, so a lambda that only moved keeps its fingerprint):
+ * which leaves out lambda ordinals, so a lambda that only moved keeps its fingerprint), folded with the fingerprints of the
+ * lambdas written in it all the way down (`PositionalName.nested`):
  *
- * - Siblings with the same fingerprint are matched in order. Their code is the same, so which of them takes which slot cannot
- *   be observed.
+ * - Siblings with the same fingerprint are matched in order. They and every lambda written in them run the same code, so
+ *   which of them takes which slot cannot be observed.
  * - A new sibling nothing matches is added; a running one nothing matches is removed and keeps its slot and code.
  * - Between two matched siblings, one unmatched running sibling and one unmatched new sibling are the same function edited,
  *   provided neither's code appears elsewhere in its group (else nothing tells an edit from a copy inserted beside a

@@ -15,7 +15,10 @@ class LambdaRenumberPatchMain {
 		"plusOne" => "x + 1",
 		"timesTen" => "x * 10",
 		"timesTwenty" => "x * 20",
-		"plusForty" => "x + 40"
+		"plusForty" => "x + 40",
+		// The same outer code; only the lambdas written in them differ.
+		"nestedOne" => "apply(y -> 1, x)",
+		"nestedTwo" => "apply(y -> 2, x)"
 	];
 
 	/** The same handlers, each capturing `scale` (3), so every one has an environment named after the lambda. */
@@ -72,6 +75,12 @@ class LambdaRenumberPatchMain {
 		// The inner lambda moved with the outer one: editing it now reaches the stored outer closure, which makes it on each call.
 		patch("nested: the moved inner lambda edited afterwards", session, source(["plusForty", "nestedTwice", "timesTen"]), 8 * 100 + 30,
 			44 * 10000 + 8 * 100 + 30);
+		Runtime.dispose(session.live);
+		// Two lambdas whose own code is the same and whose nested lambdas differ: swapping them must swap their names too,
+		// so the fingerprint that matches them covers the lambdas written in them.
+		source = (handlers:Array<String>) -> program(plain, handlers);
+		session = start(source(["nestedOne", "nestedTwo"]), 102);
+		patch("nested: two swapped whose code differs only in their nested lambdas", session, source(["nestedTwo", "nestedOne"]), 102, 201);
 		Runtime.dispose(session.live);
 		Sys.println("PASS: inserting, deleting and reordering lambdas at one anchor patches, and stored closures keep their functions");
 	}

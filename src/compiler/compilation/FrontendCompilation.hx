@@ -529,11 +529,12 @@ class FrontendCompilation {
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
-		var cNativeNames = [for (native in irCNatives) native.name].join(",");
+		var cNativeNames = [for (native in irCNatives) native.name].join(","), ownPrints:Map<String, String> = [];
 		for (fn in cached)
 			if (PositionalName.is(fn.name))
-				ir.positionalFingerprints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
+				ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
 		context.inlineCache().finishPositionalFingerprints();
+		ir.positionalFingerprints = PositionalName.nested(ownPrints);
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
 		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
