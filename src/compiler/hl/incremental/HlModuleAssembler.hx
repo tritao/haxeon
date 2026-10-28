@@ -555,9 +555,9 @@ class HlModuleAssembler {
 				default:
 					continue;
 			}
-			var initializer = object.name + "." + LIVE_INITIALIZER;
-			if (functions.exists(initializer))
-				layout.migrations.push({type: published.index, slot: slots.get(initializer)});
+			var initializer = object.name + "." + LIVE_INITIALIZER, slot = slots.get(initializer);
+			if (functions.exists(initializer) && slot != null)
+				layout.migrations.push({type: published.index, slot: slot});
 		}
 		// Bases first, so a subclass's initializers see the fields of its base initialized.
 		layout.migrations.sort(function(a, b) return baseDepth(a.type) - baseDepth(b.type));
