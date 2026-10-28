@@ -237,9 +237,9 @@ class PatchOpcodeTests {
 			if (!rejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 				throw 'Invalid ${HaxeType.enumConstructor(op)} changed live state';
 		}
-		// A patch cannot describe a struct's layout or a method's signature, so appending either type must be rejected:
-		// staged, a struct would have no object data, which the next patch's type hash dereferences.
-		for (kind in [HashLinkType.Struct, HashLinkType.Method]) {
+		// A patch cannot describe a method's signature, so appending that type must be rejected. (Structs travel with their
+		// layout, as `Structure`, since HLP 10.)
+		for (kind in [HashLinkType.Method]) {
 			code.types.push(Simple(kind));
 			code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
 			var typeBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),

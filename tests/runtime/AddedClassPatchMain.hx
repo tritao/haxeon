@@ -1,4 +1,6 @@
+import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlWriter;
+import compiler.hl.patch.HlPatchReader;
 import compiler.Compiler;
 import runtime.PatchSet;
 import runtime.Runtime;
@@ -57,6 +59,16 @@ class AddedClassPatchMain {
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw 'Adding classes required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
+		var appended = [
+			for (type in HlPatchReader.decode(changed.patchBytes).types)
+				switch type {
+					case Object(_, _, _, _, _, _): 1;
+					default: continue;
+				}
+		];
+		// Counter, Wide, Fixed and the new lambda's environment.
+		if (appended.length < 4)
+			throw 'The patch appends ${appended.length} object types instead of at least 4';
 		Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		// Panel: Counter(3).bump() = 13. The stored closure is the one made before the edit: 10 + 5. The new f: 1 * 2 + 5.
 		// Wide: Counter(4).bump() + 100 = 114. Fixed: 7.

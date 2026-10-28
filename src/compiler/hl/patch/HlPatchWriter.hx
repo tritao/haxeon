@@ -421,8 +421,10 @@ class HlPatchWriter {
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
-				if (kind == HashLinkType.Ref || kind == HashLinkType.Null)
+				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed)
 					throw 'HashLink type $kind requires a parameter';
+				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual || kind == HashLinkType.Enum)
+					throw 'HashLink type $kind requires its layout';
 				out.writeByte(kind);
 			case Parameterized(kind, parameter):
 				if (kind != HashLinkType.Ref && kind != HashLinkType.Null && kind != HashLinkType.Packed)
