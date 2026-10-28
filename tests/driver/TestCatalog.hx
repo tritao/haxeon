@@ -146,6 +146,7 @@ class TestCatalog {
 		"LiveRestartMain",
 		"LiveHostPatchMain",
 		"LiveStrictRefusalMain",
+		"LiveClosureHostMain",
 		"LiveStrictSignatureLambdaMain",
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
