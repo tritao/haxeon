@@ -36,6 +36,16 @@ typedef HlAssemblerState = {
 	@:optional final dispatchNatives:Array<String>;
 }
 
+/**
+ * Fields a build gives existing objects in their reserved slots, with the definitions the running module has for those
+ * objects; `migrations` name the function that initializes each object's added fields.
+ */
+typedef HlObjectLayout = {
+	fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
+	previousTypes:Map<Int, HlTypeDef>,
+	migrations:Array<{type:Int, functionName:String}>
+}
+
 /** Module plus identity and delta metadata produced by one assembly transaction. */
 typedef HlAssemblyResult = {
 	final module:HlCode;
@@ -57,15 +67,8 @@ typedef HlAssemblyResult = {
 	/** Object changes the running module cannot take, which made the assembler publish a fresh module. */
 	final objectReasons:Array<AbiChange>;
 
-	/**
-	 * Fields this build gives existing objects in their reserved slots, with the definitions the running module has for
-	 * those objects; `migrations` name the function that initializes each object's added fields. Null without any.
-	 */
-	final objectLayout:Null<{
-		fields:Array<{type:Int, field:Int, name:Int, fieldType:Int}>,
-		previousTypes:Map<Int, HlTypeDef>,
-		migrations:Array<{type:Int, functionName:String}>
-	}>;
+	/** The object fields this build adds to the running module, null without any. */
+	final objectLayout:Null<HlObjectLayout>;
 	final revision:Int;
 	final baseInts:Int;
 	final baseFloats:Int;
@@ -489,7 +492,7 @@ class HlModuleAssembler {
 					break;
 				}
 			}
-		var objectReasons:Array<AbiChange> = [], objectLayout = null;
+		var objectReasons:Array<AbiChange> = [], objectLayout:Null<HlObjectLayout> = null;
 		if (reuseLowered) {
 			var planned = planObjects(program);
 			if (planned.reasons.length > 0) {
