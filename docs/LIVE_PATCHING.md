@@ -30,7 +30,7 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 - **Types** (HLP 10): function, abstract, reference, null and packed types, and
   object, struct and virtual types with their layout. So an edit that adds a
   class (plain, a subclass of a loaded class, or an implementation of a loaded
-  interface) or a closure environment patches. The runtime builds the entries in
+  interface), a new interface or a closure environment patches. The runtime builds the entries in
   place (`stage_patch_object_type`), links them to the module and their value
   slot once the patch's globals are staged (`link_patch_object_types`), and
   publishes them with the patch. Types the module already has never change.
@@ -40,7 +40,7 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 Still a reload: new runtime natives (they sit before every function slot),
 changed C dispatch natives, moved slots, other new globals (an added static
 variable), changed layouts of existing objects (instances of the old layout are
-alive), enum and interface changes, removed classes and changed function
+alive), enum changes, changes to existing interfaces, removed classes and changed function
 signatures.
 
 ### Lambda names
