@@ -123,7 +123,8 @@ class ProtocolMain {
 			|| mismatched.result.reason.code != "runtime_revision_mismatch"
 			|| mismatched.result.reason.acknowledgedRevision != 2)
 			throw "protocol reconnect accepted a stale runtime revision";
-		var structuralSource = StringTools.replace(editedSource, "public var active:Int;", "public var active:Int; public var generation:Int;");
+		// An added field patches into a reserved slot; a field whose type changes cannot reuse its slot.
+		var structuralSource = StringTools.replace(editedSource, "public var active:Int;", "public var active:Float;");
 		assertOk(protocol.handle('{"id":81,"method":"update","path":"Main.hx","source":' + Json.stringify(structuralSource) + '}'));
 		var reload:Dynamic = Json.parse(protocol.handle('{"id":82,"method":"compile","entry":"Main"}'));
 		if (!reload.ok
@@ -133,9 +134,9 @@ class ProtocolMain {
 			|| reload.result.compatibility.targetRevision != 3
 			|| reload.result.compatibility.artifactKind != "module"
 			|| reload.result.compatibility.reasons.length == 0
-			|| reload.result.compatibility.reasons[0].code != "object_layout_changed"
-			|| reload.result.compatibility.reasons[0].entityKind != "object"
-			|| reload.result.compatibility.reasons[0].entityId != "Editor")
+			|| reload.result.compatibility.reasons[0].code != "object_field_type_changed"
+			|| reload.result.compatibility.reasons[0].entityKind != "object_field"
+			|| reload.result.compatibility.reasons[0].entityId != "Editor.active")
 			throw "protocol compile did not return a structured reload decision";
 		assertOk(protocol.handle('{"id":84,"method":"acknowledge","revision":3}'));
 		var invalid:Dynamic = Json.parse(protocol.handle('{"id":9,"method":"update","path":"Main.hx","source":"function main(:Int { return 0; }"}'));

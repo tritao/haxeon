@@ -96,6 +96,10 @@ class PluginMain {
 			"public var documents:Array<Document>; public var generation:Int;");
 		structuralEditor = StringTools.replace(structuralEditor, "this.documents = new Array<pragtical.api.Document>(0);",
 			"this.documents = new Array<pragtical.api.Document>(0); this.generation = 2;");
+		// An added field alone patches into a reserved slot; a new base class changes the layout every subclass field sits at.
+		structuralEditor = StringTools.replace(structuralEditor, "class Editor {", "class EditorBase {}
+
+class Editor extends EditorBase {");
 		compiler.update("pragtical/api/Editor.hx", structuralEditor);
 		var activationFailureSource = StringTools.replace(mainSource, "searchPlugin.activate();", "throw \"activation failed\";");
 		compiler.update("Main.hx", activationFailureSource);
