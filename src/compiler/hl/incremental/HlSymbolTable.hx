@@ -500,25 +500,23 @@ class HlSymbolTable {
 
 	/**
 	 * Gives types new names as `rewrite` says (see `compiler.abi.LambdaAlignment`): the keys of objects, and of the types made
-	 * from them (`fun(obj:...)`, `null:obj:...`), move to the new names and keep their indices, and each renamed object's
-	 * definition is replaced by one that carries its new name, so a module written from this table names every type the way
-	 * the build that uses it does. The running module keeps the names it loaded with: a patch only appends types, and HashLink
-	 * looks types up by index, never by these names. A name the rewrite frees is interned afresh when a build uses it.
+	 * from them (`fun(obj:...)`, `null:obj:...`), move to the new names and keep their indices. A name the rewrite frees is
+	 * interned afresh when a build uses it.
+	 *
+	 * The definitions keep the names they were published with, on purpose. This table mirrors the types the running module
+	 * holds, and every patch carries a hash of the published type prefix, names included, which the module checks
+	 * (`hash_type_prefix` in hlpatch.c: "Patch symbol prefix hash does not match module"); a patch cannot rename a loaded
+	 * type either, it only appends. So a renamed object's definition still carries its old name, and once a build interns
+	 * the freed name afresh, a module written from this table has two types with that name. Nothing resolves these types by
+	 * name: HashLink addresses types by index, the program never looks a closure environment up by its name, and a reload
+	 * discards the table (`HlModuleAssembler.discardPublishedSymbols`), so the stale names only show in tools that print
+	 * type names.
 	 */
 	public function renameTypes(rewrite:NameRewrite):Void {
 		if (rewrite.isEmpty())
 			return;
 		ensureWritable();
 		typeIndices = rewrite.keys(typeIndices);
-		for (name => index in objectIndices) {
-			var renamed = rewrite.apply(name);
-			if (renamed != name)
-				types[index] = switch types[index] {
-					case Object(_, base, global, fields, methods, bindings): Object(internString(renamed), base, global, fields, methods, bindings);
-					case Structure(_, global, fields, methods, bindings): Structure(internString(renamed), global, fields, methods, bindings);
-					case other: other;
-				};
-		}
 		objectIndices = rewrite.keys(objectIndices);
 		var methods:Map<String, Map<String, Int>> = [];
 		for (name => slots in objectMethodIndices)
