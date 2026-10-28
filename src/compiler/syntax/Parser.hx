@@ -24,6 +24,21 @@ typedef RecoveredParse = {
 	final diagnostics:Array<compiler.Diagnostic>;
 }
 
+/** The lambda numbering of a declaration, restored when the parser leaves it. */
+private typedef LambdaNumbering = {
+	final member:String;
+	final counts:Array<Map<String, Int>>;
+	final path:Array<String>;
+	final paths:Array<Array<String>>;
+}
+
+/** Where to resume lambda numbering after a parse is thrown away. */
+private typedef LambdaMark = {
+	final counts:Array<Map<String, Int>>;
+	final path:Array<String>;
+	final paths:Int;
+}
+
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
@@ -39,8 +54,17 @@ class Parser {
 	/** The declaration whose lambdas are being numbered (see `LambdaName`). */
 	var lambdaMember:String = "";
 
-	/** Lambdas seen so far in each body open at the cursor, outermost first: the declaration, then each enclosing lambda. */
-	var lambdaCounts:Array<Int> = [0];
+	/**
+	 * Lambdas seen so far in each body open at the cursor, by anchor (see `openLambda`), outermost first: the declaration, then
+	 * each enclosing lambda.
+	 */
+	var lambdaCounts:Array<Map<String, Int>> = [[]];
+
+	/** Where the cursor is in the body it is in: the declarations, assignments and call arguments around it, outermost first. */
+	var lambdaPath:Array<String> = [];
+
+	/** `lambdaPath` of each body that encloses the lambda being parsed. */
+	var lambdaPaths:Array<Array<String>> = [];
 
 	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
 
@@ -426,36 +450,111 @@ class Parser {
 	}
 
 	/** Numbers the lambdas of the declaration `name` from zero; returns the numbering to resume with `leaveLambdaMember`. */
-	function enterLambdaMember(name:String):{member:String, counts:Array<Int>} {
-		var outer = {member: lambdaMember, counts: lambdaCounts};
+	function enterLambdaMember(name:String):LambdaNumbering {
+		var outer:LambdaNumbering = {
+			member: lambdaMember,
+			counts: lambdaCounts,
+			path: lambdaPath,
+			paths: lambdaPaths
+		};
 		lambdaMember = name;
-		lambdaCounts = [0];
+		lambdaCounts = [[]];
+		lambdaPath = [];
+		lambdaPaths = [];
 		return outer;
 	}
 
-	function leaveLambdaMember(outer:{member:String, counts:Array<Int>}):Void {
+	function leaveLambdaMember(outer:LambdaNumbering):Void {
 		lambdaMember = outer.member;
 		lambdaCounts = outer.counts;
+		lambdaPath = outer.path;
+		lambdaPaths = outer.paths;
 	}
 
-	/** Takes the identity of a lambda whose body is parsed next, in source order; `closeLambda` ends the body. */
+	/**
+	 * Takes the identity of a lambda whose body is parsed next, in source order; `closeLambda` ends the body. The identity is
+	 * `<member>#<anchor>#<ordinal>`: the anchor is where the lambda is written in its body (`lambdaPath`: the variable, field or
+	 * local function it is assigned to, the calls it is an argument of, `return`), and the ordinal counts the lambdas before it
+	 * with the same anchor. So adding, removing or moving a lambda leaves the names of the lambdas around it alone unless they
+	 * share its anchor, and the patch planner checks those groups for renumbering (`PositionalName`). A lambda with no anchor
+	 * keeps the plain `<member>#<ordinal>`. A long anchor keeps its last step and a hash of the whole.
+	 */
 	function openLambda():String {
-		var last = lambdaCounts.length - 1,
-			identity = lambdaMember + "#" + lambdaCounts[last];
-		lambdaCounts[last]++;
-		lambdaCounts.push(0);
+		var counts = lambdaCounts[lambdaCounts.length - 1],
+			anchor = lambdaAnchor(),
+			ordinal = counts.exists(anchor) ? counts.get(anchor) : 0,
+			identity = lambdaMember + "#" + (anchor == "" ? "" : anchor + "#") + ordinal;
+		counts.set(anchor, ordinal + 1);
+		lambdaCounts.push([]);
+		lambdaPaths.push(lambdaPath);
+		lambdaPath = [];
 		return identity;
 	}
 
-	inline function closeLambda():Void
+	function closeLambda():Void {
 		lambdaCounts.pop();
+		var outer = lambdaPaths.pop();
+		lambdaPath = outer == null ? [] : outer;
+	}
+
+	static inline final LAMBDA_ANCHOR_LIMIT = 48;
+
+	function lambdaAnchor():String {
+		var anchor = lambdaPath.join("/");
+		if (anchor.length <= LAMBDA_ANCHOR_LIMIT)
+			return anchor;
+		var hash:Int = cast 0x811C9DC5;
+		for (index in 0...anchor.length)
+			hash = (hash ^ anchor.charCodeAt(index)) * 16777619;
+		return lambdaPath[lambdaPath.length - 1] + "~" + StringTools.hex(hash & 0x7FFFFFFF, 8);
+	}
+
+	/** Parses an expression written at `step` of the path that anchors lambdas (see `openLambda`). */
+	function parseAnchoredExpression(step:String):AstExpression {
+		lambdaPath.push(step);
+		var expression = parseExpression();
+		lambdaPath.pop();
+		return expression;
+	}
+
+	/** Parses call arguments up to the closing parenthesis, each anchored at its position in a call of `callee`. */
+	function parseCallArguments(callee:String):Array<AstExpression> {
+		var arguments:Array<AstExpression> = [], name = callee.substring(callee.lastIndexOf(".") + 1);
+		if (!check(TokenKind.RightParen)) {
+			do
+				arguments.push(parseAnchoredExpression(name + "(" + arguments.length + ")")) while (match(TokenKind.Comma));
+		}
+		return arguments;
+	}
+
+	/** The step an assignment to `target` adds to the lambda path. */
+	static function assignedStep(target:AstExpression):String
+		return switch target {
+			case Variable(name, _): name.substring(name.lastIndexOf(".") + 1) + "=";
+			case Member(_, field, _): field + "=";
+			default: "[]=";
+		};
 
 	/** A rewind point: parsing that is thrown away must not consume lambda numbers. */
-	inline function lambdaMark():Array<Int>
-		return lambdaCounts.copy();
+	function lambdaMark():LambdaMark
+		return {
+			counts: [for (counts in lambdaCounts) copyCounts(counts)],
+			path: lambdaPath.copy(),
+			paths: lambdaPaths.length
+		};
 
-	inline function rewindLambdas(mark:Array<Int>):Void
-		lambdaCounts = mark.copy();
+	function rewindLambdas(mark:LambdaMark):Void {
+		lambdaCounts = [for (counts in mark.counts) copyCounts(counts)];
+		lambdaPaths.splice(mark.paths, lambdaPaths.length - mark.paths);
+		lambdaPath = mark.path.copy();
+	}
+
+	static function copyCounts(counts:Map<String, Int>):Map<String, Int> {
+		var copy:Map<String, Int> = [];
+		for (anchor => count in counts)
+			copy.set(anchor, count);
+		return copy;
+	}
 
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isInline:Bool = false):AstFunction {
@@ -896,8 +995,11 @@ class Parser {
 			advance();
 		if (match(TokenKind.Function)) {
 			var start = inlined ? tokens[position - 2].span : previous().span,
-				name = consume(TokenKind.Identifier).text,
-				identity = openLambda();
+				name = consume(TokenKind.Identifier).text;
+			// A local function is anchored at its name.
+			lambdaPath.push(name);
+			var identity = openLambda();
+			lambdaPaths[lambdaPaths.length - 1].pop();
 			consume(TokenKind.LeftParen);
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
@@ -939,7 +1041,7 @@ class Parser {
 			var name = consume(TokenKind.Identifier).text;
 			var type = match(TokenKind.Colon) ? parseType() : null;
 			consume(TokenKind.Assign);
-			var initializer = parseExpression();
+			var initializer = parseAnchoredExpression(name + "=");
 			var end = expressionEnd(initializer);
 			return VarDeclaration(name, type, initializer, start.merge(end));
 		}
@@ -947,7 +1049,7 @@ class Parser {
 			var start = previous().span;
 			if (check(TokenKind.Semicolon))
 				return ReturnVoid(start.merge(consume(TokenKind.Semicolon).span));
-			var expression = parseExpression();
+			var expression = parseAnchoredExpression("return");
 			var end = expressionEnd(expression);
 			return Return(expression, start.merge(end));
 		}
@@ -1042,7 +1144,7 @@ class Parser {
 			}
 			var assignmentKind = shiftKind > 0 ? shiftKind : match(TokenKind.Assign) ? 0 : match(TokenKind.PlusAssign) ? 1 : match(TokenKind.MinusAssign) ? 2 : match(TokenKind.StarAssign) ? 3 : match(TokenKind.SlashAssign) ? 4 : match(TokenKind.PercentAssign) ? 5 : match(TokenKind.AndAssign) ? 6 : match(TokenKind.OrAssign) ? 7 : match(TokenKind.XorAssign) ? 8 : -1;
 			if (assignmentKind >= 0) {
-				var value = parseExpression(), end = expressionEnd(value);
+				var value = parseAnchoredExpression(assignedStep(target)), end = expressionEnd(value);
 				// Normalize compound lvalues before duplicating their read and write.
 				// The generated bindings cannot collide with source identifiers.
 				var span = expressionSpan(target).merge(end),
@@ -1220,7 +1322,7 @@ class Parser {
 			var nameToken = consume(TokenKind.Identifier),
 				type = match(TokenKind.Colon) ? parseType() : null;
 			if (match(TokenKind.Assign)) {
-				var initializer = parseExpression();
+				var initializer = parseAnchoredExpression(nameToken.text + "=");
 				declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
 			} else {
 				// Without an annotation, the typer takes the type from the first assignment, as Haxe does.
@@ -1703,11 +1805,7 @@ class Parser {
 			var typeName = parseQualifiedName();
 			var typeArguments = parseTypeArguments();
 			consume(TokenKind.LeftParen);
-			var arguments = [];
-			if (!check(TokenKind.RightParen)) {
-				do
-					arguments.push(parseExpression()) while (match(TokenKind.Comma));
-			}
+			var arguments = parseCallArguments(typeName);
 			var end = consume(TokenKind.RightParen).span;
 			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
 				start.merge(end)) : NewGeneric(typeName, typeArguments, arguments, start.merge(end)));
@@ -1780,7 +1878,7 @@ class Parser {
 				while (true) {
 					var name = consume(TokenKind.Identifier);
 					consume(TokenKind.Colon);
-					var value = parseExpression();
+					var value = parseAnchoredExpression("{" + name.text + "}");
 					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
 					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
 						break;
@@ -1807,11 +1905,7 @@ class Parser {
 			var referenceSpan = new SourceSpan(start.file, start.start, end.end, name.indexOf(".") < 0);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
-				var arguments = [];
-				if (!check(TokenKind.RightParen)) {
-					do
-						arguments.push(parseExpression()) while (match(TokenKind.Comma));
-				}
+				var arguments = parseCallArguments(name);
 				var end = consume(TokenKind.RightParen).span;
 				expression = Call(name, arguments, new SourceSpan(referenceSpan.file, referenceSpan.start, end.end, referenceSpan.isBareReference));
 			}
@@ -2245,11 +2339,10 @@ class Parser {
 			if (check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot)
 				break;
 			if (match(TokenKind.LeftParen)) {
-				var arguments = [];
-				if (!check(TokenKind.RightParen)) {
-					do
-						arguments.push(parseExpression()) while (match(TokenKind.Comma));
-				}
+				var arguments = parseCallArguments(switch expression {
+					case Variable(name, _): name;
+					default: "";
+				});
 				var end = consume(TokenKind.RightParen).span;
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments, new SourceSpan(start.file, start.start, end.end, start.isBareReference));
@@ -2271,11 +2364,7 @@ class Parser {
 				}
 				var nameToken = consumeName(), name = nameToken.text;
 				if (match(TokenKind.LeftParen)) {
-					var arguments = [];
-					if (!check(TokenKind.RightParen)) {
-						do
-							arguments.push(parseExpression()) while (match(TokenKind.Comma));
-					}
+					var arguments = parseCallArguments(name);
 					var end = consume(TokenKind.RightParen).span;
 					expression = MethodCall(expression, name, arguments, expressionSpan(expression).merge(end));
 				} else
@@ -2843,6 +2932,7 @@ class Parser {
 		var parser = new Parser(shifted);
 		parser.lambdaMember = lambdaMember;
 		parser.lambdaCounts = lambdaCounts;
+		parser.lambdaPath = lambdaPath.copy();
 		var expression = parser.parseExpression();
 		parser.consume(TokenKind.Eof);
 		lambdaCounts = parser.lambdaCounts;

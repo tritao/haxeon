@@ -284,6 +284,8 @@ class TestCatalog {
 				"edits that add functions patch the running module"),
 			hxmlCase("runtime", "added-static-caller", "tests/hxml/added-static-caller-test.hxml", "added-static-caller-test.hl", 0,
 				"an added static function that existing methods start calling patches the running module"),
+			hxmlCase("runtime", "added-lambda-patch", "tests/hxml/added-lambda-patch-test.hxml", "added-lambda-patch-test.hl", 0,
+				"adding a lambda beside others patches the running module and keeps stored closures"),
 			hxmlCase("runtime", "direct-call-patch", "tests/hxml/direct-call-patch-test.hxml", "direct-call-patch-test.hl", 0,
 				"direct calls in a patchable module follow patches of their callees"),
 			hxmlCase("runtime", "live-string-constants-patch", "tests/hxml/live-string-constants-patch-test.hxml", "live-string-constants-patch-test.hl", 0,
