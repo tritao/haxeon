@@ -199,13 +199,19 @@ class HlModuleAssembler {
 		publishedGlobals = 0;
 	}
 
-	function addsOnlyConstantGlobals(total:Int):Bool {
-		var constants = symbols.stringConstantGlobals(), added = 0, index = constants.length - 1;
-		while (index >= 0 && constants[index].global >= publishedGlobals) {
-			added++;
-			index--;
-		}
-		return added == total - publishedGlobals;
+	/**
+	 * Whether every global `module` has past the published ones is a String constant or the value slot of an object type the
+	 * build adds, which are the globals a patch can carry.
+	 */
+	function addsOnlyPatchableGlobals(module:HlCode):Bool {
+		var constants:Map<Int, Bool> = [];
+		for (constant in symbols.stringConstantGlobals())
+			if (constant.global >= publishedGlobals)
+				constants.set(constant.global, true);
+		for (global in publishedGlobals...module.globals.length)
+			if (!constants.exists(global) && !(module.globals[global] >= publishedTypes && HlPatchWriter.isObjectValueGlobal(module, global)))
+				return false;
+		return true;
 	}
 
 	static function sameNames(previous:Null<Array<String>>, next:Array<String>):Bool {
@@ -306,11 +312,11 @@ class HlModuleAssembler {
 			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
-		// A running module can take new String constants but no other global, so a build that adds any other publishes a
-		// fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
-		if (initialized && !reload && !addsOnlyConstantGlobals(module.globals.length)) {
+		// A running module can take new String constants and the value slots of new object types but no other global, so a
+		// build that adds any other publishes a fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
+		if (initialized && !reload && !addsOnlyPatchableGlobals(module)) {
 			reload = true;
-			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants');
+			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants and new types');
 		}
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)

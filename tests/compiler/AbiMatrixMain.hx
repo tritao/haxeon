@@ -166,11 +166,16 @@ class AbiMatrixMain {
 				"interface Plugin { function read():Int; } class Editor implements Plugin { public function read():Int { return 40; } } function main():Int { return new Editor().read(); }",
 				"interface Plugin { function read():Int; function reset():Void; } class Editor implements Plugin { public function read():Int { return 40; } public function reset():Void {} } function main():Int { return new Editor().read(); }",
 				ReloadFor(InterfaceChanged("Plugin"))),
-			// A lambda is named after its captures, so new captures make a new function with a new environment type.
+			// A lambda is named after its captures, so new captures make a new function with a new environment type, which a patch
+			// appends to the module's type table.
 			sourceFixture("closure capture change",
 				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + offset; }; return f(38); }",
 				"function main():Int { var offset = 2; var more = 3; var f = (value:Int) -> { return value + more; }; return f(39); }",
-				ReloadFor(ObjectRemoved("$lambda-env:main:main#f=@3ECEEE01#0"))),
+				BodyPatch),
+			sourceFixture("class added",
+				"class Panel { public function new() {} public function size():Int return 2; } function main():Int { return new Panel().size(); }",
+				"class Panel { public function new() {} public function size():Int return new Counter(2).next(); } class Counter { var value:Int; public function new(value:Int) this.value = value; public function next():Int return ++value; } function main():Int { return new Panel().size(); }",
+				BodyPatch),
 			sourceFixture("capturing lambda body edit",
 				"function main():Int { var offset = 2; var f = (value:Int) -> { return value + offset; }; return f(38); }",
 				"function main():Int { var offset = 2; var f = (value:Int) -> { return value * offset; }; return f(20); }", BodyPatch),

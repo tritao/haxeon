@@ -148,8 +148,15 @@ class HlPatchReader {
 						haveGlobals = true;
 						globalPrefixHash = input.readInt32();
 						baseGlobals = readUnsigned(input);
-						for (_ in 0...readUnsigned(input))
-							globals.push({type: readUnsigned(input), fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]});
+						for (_ in 0...readUnsigned(input)) {
+							var kind = input.readByte();
+							if (kind == 0)
+								globals.push({type: readUnsigned(input), constant: false, fields: []});
+							else if (kind == 1)
+								globals.push({type: readUnsigned(input), constant: true, fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]});
+							else
+								throw "Invalid HLP global kind";
+						}
 					default:
 						input.position = end;
 				}
@@ -201,15 +208,24 @@ class HlPatchReader {
 
 	static function readType(input:BytesInput):HlTypeDef {
 		var tag = input.readByte();
-		if (tag == HlType.Obj)
-			throw "Object type patches require a structural reload";
-		if (tag == HlType.Virtual)
-			throw "Virtual type patches require a structural reload";
 		if (tag == HlType.Enum)
 			throw "Enum type patches require a structural reload";
+		if (tag == HlType.Obj || tag == HlType.Struct) {
+			var name = readIndex(input), base = readIndex(input), global = readUnsigned(input), fieldCount = readUnsigned(input),
+				methodCount = readUnsigned(input), bindingCount = readUnsigned(input);
+			var fields = [for (_ in 0...fieldCount) {name: readIndex(input), type: readIndex(input)}],
+				methods = [
+					for (_ in 0...methodCount)
+						{name: readIndex(input), functionIndex: readIndex(input), prototype: readIndex(input)}
+				],
+				bindings = [for (_ in 0...bindingCount * 2) readIndex(input)];
+			return tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global, fields, methods, bindings);
+		}
+		if (tag == HlType.Virtual)
+			return Virtual([for (_ in 0...readUnsigned(input)) {name: readIndex(input), type: readIndex(input)}]);
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
-		if (tag == HlType.Ref || tag == HlType.Null)
+		if (tag == HlType.Ref || tag == HlType.Null || tag == HlType.Packed)
 			return Parameterized(cast tag, readIndex(input));
 		return if (tag == HlType.Fun) {
 			var n = input.readByte();
