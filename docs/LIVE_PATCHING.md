@@ -86,12 +86,17 @@ patch never does that silently:
   `HlModuleAssembler.dropGuards`): functions and lambdas the last build had and this one lacks, lambdas a rename retires
   among them. With every other thread stopped and before anything commits, the runtime looks for live closures to each
   guard in one heap scan (`check_patch_guards` in hlpatch.c): GC closures by their code address, and the closures the
-  module made at load (`OStaticClosure`, module memory the module lists) when something stores them. If any is left the
+  module made at load (`OStaticClosure`, module memory the module lists, `hl_emit_final`) when something holds them: a
+  heap block, a global, a native root (`hl_add_root`, as a native UI callback or thread-local storage keeps one) or a
+  running thread's stack or registers (`hl_gc_root_holder`), as a GC closure would be kept alive. Patch code makes GC
+  closures, never static ones. The module's list only grows with the code it lists: when the list cannot grow the code is
+  not made (a load or a patch fails) rather than left unlisted, and a refused patch's code adds nothing. If any is left the
   patch is refused (`ClosuresHeld`), nothing applied, with a message that names the function, the count and what holds
   them, walked back from the closure through arrays and fields to a static field, for example
   `a deleted lambda at Keys.hx:42; 1 stored closure still references it (held by App.keyHandlers[3])` or
   `Main.scale changed signature incompatibly; 2 stored closures still reference it (held by Holder.scaler, ...)`. The
-  patch carries the names of the module's globals for that (HashLink has none).
+  patch carries the names of the module's globals for that (HashLink has none). A closure nothing on the heap holds is
+  `held by a native root` or `held by a running thread`.
 - A strict live host shows the refusal on its banner; the default host reloads.
 
 Apps rebuild some of what holds their callbacks, their UI above all, from their code. Nothing in Haxeon or exosuit did
@@ -102,6 +107,11 @@ it, to let go of what the app rebuilds, and `liveRebuild()` after it, applied or
 check then sees only what the app still holds. Nothing ever has to be rolled back: a refused patch changed nothing, and
 the app rebuilds from the code it had. (Applying first and scanning after would need a rollback, which is unsound once a
 patch has migrated objects or run initializers; see "Existing instances get the declaration initializer".)
+
+A hook that throws is the app's error, not the patch's. The patch's outcome (applied, refused) is what the runtime did,
+and the host prints the hook's exception as `haxeon: warning: Main.liveRebuild() threw: ...`. Once `liveRelease()` ran,
+`liveRebuild()` runs too, whether `liveRelease()` or the patch threw, so the app is never left released; a `liveRelease()`
+that threw before letting go of everything leaves the guard check to refuse what the app still holds.
 
 ### Lambda names
 
