@@ -179,10 +179,10 @@ class IrInstructionCodec {
 			case GlobalGet(value, name):
 				begin(output, "GlobalGet", 2);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 			case GlobalSet(name, value):
 				begin(output, "GlobalSet", 2);
-				writeText(output, name);
+				writeName(output, name);
 				writeValue(output, value);
 			case Add(value, left, right):
 				writeThreeValues(output, "Add", value, left, right);
@@ -215,21 +215,21 @@ class IrInstructionCodec {
 			case Call(value, name, arguments):
 				begin(output, "Call", 3);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 				writeValues(output, arguments);
 			case CNativeCall(value, name, arguments):
 				begin(output, "CNativeCall", 3);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 				writeValues(output, arguments);
 			case StaticClosure(value, name):
 				begin(output, "StaticClosure", 2);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 			case InstanceClosure(value, name, receiver):
 				begin(output, "InstanceClosure", 3);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 				writeValue(output, receiver);
 			case CallClosure(value, closure, arguments):
 				begin(output, "CallClosure", 3);
@@ -242,21 +242,21 @@ class IrInstructionCodec {
 				begin(output, "MethodCall", 4);
 				writeValue(output, value);
 				writeValue(output, object);
-				writeText(output, name);
+				writeName(output, name);
 				writeValues(output, arguments);
 			case NewObject(value, name):
 				begin(output, "NewObject", 2);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 			case FieldGet(value, object, name):
 				begin(output, "FieldGet", 3);
 				writeValue(output, value);
 				writeValue(output, object);
-				writeText(output, name);
+				writeName(output, name);
 			case FieldSet(object, name, value):
 				begin(output, "FieldSet", 3);
 				writeValue(output, object);
-				writeText(output, name);
+				writeName(output, name);
 				writeValue(output, value);
 			case ArrayGet(value, array, index):
 				writeThreeValues(output, "ArrayGet", value, array, index);
@@ -273,7 +273,7 @@ class IrInstructionCodec {
 			case MakeEnum(value, name, constructor, arguments):
 				begin(output, "MakeEnum", 4);
 				writeValue(output, value);
-				writeText(output, name);
+				writeName(output, name);
 				writeInt(output, constructor);
 				writeValues(output, arguments);
 			case EnumIndex(outputValue, value):
@@ -561,6 +561,10 @@ class IrInstructionCodec {
 		output.writeByte(3);
 		output.writeByte(value ? 1 : 0);
 	}
+
+	/** A function, object, global, field or enum name: written like text, its lambda ordinals left out in a fingerprint. */
+	static function writeName(output:BytesOutput, value:String):Void
+		writeText(output, IrTypeCodec.erasingOrdinals ? IrTypeCodec.withoutOrdinals(value) : value);
 
 	static function writeText(output:BytesOutput, value:String):Void {
 		output.writeByte(4);

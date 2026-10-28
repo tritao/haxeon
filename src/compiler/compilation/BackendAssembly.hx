@@ -1,5 +1,6 @@
 package compiler.compilation;
 
+import compiler.abi.LambdaAlignment;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -41,10 +42,22 @@ class BackendAssembly {
 	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
-		var nextAbi = RuntimeAbi.describe(ir), // Patch planning describes what a running module must do to adopt this build. Without live patching
-		// there is no running module, and the plan would only mix session history into the build.
-			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi, !context.isWasmTarget(),
-				!context.isWasmTarget() && context.assembler.isPublished()) : PatchDecision.Patch,
+		var nextAbi = RuntimeAbi.describe(ir), previousAbi = context.publishedAbi, baseAssembler = context.assembler;
+		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
+		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
+		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
+		if (context.livePatching && !context.isWasmTarget() && baseAssembler.isPublished() && previousAbi != null) {
+			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional, Std.string(baseAssembler.lastRevision() + 1));
+			if (alignment.steps.length > 0) {
+				baseAssembler = baseAssembler.copy();
+				baseAssembler.renameLambdas(alignment.steps);
+				previousAbi = LambdaAlignment.renameAbi(previousAbi, alignment.steps);
+			}
+		}
+		// Patch planning describes what a running module must do to adopt this build. Without live patching there is no
+		// running module, and the plan would only mix session history into the build.
+		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi, !context.isWasmTarget(),
+				!context.isWasmTarget() && baseAssembler.isPublished()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -58,7 +71,7 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
-			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(context.assembler) : context.assembler.copy();
+			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();

@@ -127,7 +127,37 @@ class IrTypeCodec {
 		if (name.length == 0)
 			throw "IR named type cannot be empty";
 		output.writeByte(tag);
-		writeString(output, name);
+		writeString(output, erasingOrdinals ? withoutOrdinals(name) : name);
+	}
+
+	/**
+	 * While set, names are written without their lambda ordinals (`IrFunctionStateCodec.codeFingerprint`): a lambda's
+	 * environment and the lambdas written in it are named after it, so without this a lambda that only moved among its
+	 * siblings would look like different code.
+	 */
+	public static var erasingOrdinals:Bool = false;
+
+	/**
+	 * `name` with every lambda ordinal (`#<digits>` ending a name or a step of one, see `LambdaName`) reduced to `#`.
+	 * Haxe identifiers cannot contain `#`, so only the compiler's own separators are touched.
+	 */
+	public static function withoutOrdinals(name:String):String {
+		if (name.indexOf("#") < 0)
+			return name;
+		var result = new StringBuf(), index = 0;
+		while (index < name.length) {
+			var code = name.charCodeAt(index);
+			result.addChar(code);
+			index++;
+			if (code != "#".code)
+				continue;
+			var end = index;
+			while (end < name.length && name.charCodeAt(end) >= "0".code && name.charCodeAt(end) <= "9".code)
+				end++;
+			if (end > index && (end == name.length || name.charCodeAt(end) == ":".code))
+				index = end;
+		}
+		return result.toString();
 	}
 
 	public static function writeString(output:BytesOutput, value:String):Void {

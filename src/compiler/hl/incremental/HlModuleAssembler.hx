@@ -2,6 +2,9 @@ package compiler.hl.incremental;
 
 import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
+import compiler.abi.LambdaAlignment;
+import compiler.abi.LambdaAlignment.NameRewrite;
+import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlCode.HlTypeDef;
@@ -232,6 +235,58 @@ class HlModuleAssembler {
 			revisionFloor = revision;
 
 	/**
+	 * Renames the running module's lambdas, with their environments, cells and nested lambdas, as `steps` say (see
+	 * `LambdaAlignment`): each keeps its slot, stable ID, lowered code and types under its new name, so the build that uses the
+	 * new names patches them in place and appends what the names it frees now stand for.
+	 */
+	public function renameLambdas(steps:Array<NameRewrite>):Void
+		for (step in steps) {
+			var names:Map<String, String> = [];
+			for (name in cache.slots)
+				names.set(name, step.apply(name));
+			for (name in cache.stableIds.keys())
+				names.set(name, step.apply(name));
+			cache.rename(names);
+			renameLowered(names);
+			symbols.renameTypes(step);
+		}
+
+	function renameLowered(names:Map<String, String>):Void {
+		var renamed:Map<String, HlFunction> = [];
+		for (name => fn in loweredFunctions) {
+			var next = names.get(name);
+			renamed.set(next == null ? name : next, fn);
+		}
+		loweredFunctions = renamed;
+	}
+
+	/**
+	 * A function whose signature changed cannot take its slot's new code: closures, and callers this build does not lower
+	 * again, call the slot with the old arguments. So it leaves the slot under a retired name, keeping its code for them, and
+	 * the function takes a new slot (`LambdaAlignment.retiredFunctionName`). Prototype entries name slots too, so a method an
+	 * object dispatches to keeps its slot; the plan reloads for those (`PatchPlanner.plan`). Returns the moved names.
+	 */
+	function moveChangedSignatures(program:IrProgram, tag:String):Array<String> {
+		var dispatched:Map<String, Bool> = [], renames:Map<String, String> = [], moved:Array<String> = [];
+		for (object in program.objects)
+			for (method in object.methods)
+				dispatched.set(method.functionName, true);
+		for (fn in program.functions) {
+			var known = cache.signatures.get(fn.name);
+			if (known == null || !cache.userSlots.exists(fn.name) || known == HlFunctionCache.signature(fn)
+				|| !PatchPlanner.movesOnSignatureChange(fn.name, dispatched))
+				continue;
+			renames.set(fn.name, LambdaAlignment.retiredFunctionName(fn.name, tag));
+			moved.push(fn.name);
+		}
+		if (moved.length > 0) {
+			cache.rename(renames);
+			renameLowered(renames);
+		}
+		return moved;
+	}
+
+	/**
 	 * Forgets every published symbol index. Interned object types record the slot of each method, so once
 	 * the slot layout has moved they would point every method table at a neighbouring function; a module
 	 * that cannot be patched must intern its types afresh against the new layout.
@@ -428,8 +483,20 @@ class HlModuleAssembler {
 	}
 
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
-		var startedAt = Sys.time() * 1000.0,
-			publishedSlots = cache.slots.length;
+		var startedAt = Sys.time() * 1000.0;
+		var reload = switch decision {
+			case Patch: false;
+			case ReloadDomain(_): true;
+			case Reject(diagnostics): throw diagnostics.join("; ");
+		};
+		if (initialized && !reload) {
+			var moved = moveChangedSignatures(program, Std.string(lastRevision() + 1));
+			if (moved.length > 0) {
+				var listed:Map<String, Bool> = [for (name in regenerated) name => true];
+				regenerated = regenerated.concat([for (name in moved) if (!listed.exists(name)) name]);
+			}
+		}
+		var publishedSlots = cache.slots.length;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -439,17 +506,19 @@ class HlModuleAssembler {
 		ordered.enums = program.enums;
 		ordered.staticFields = program.staticFields;
 		ordered.functions = cache.ordered();
-		var reload = switch decision {
-			case Patch: false;
-			case ReloadDomain(_): true;
-			case Reject(diagnostics): throw diagnostics.join("; ");
-		};
+		// A fresh module needs no retired function (see `moveChangedSignatures` and `renameLambdas`): only closures of the
+		// running module call them. Lowering their stale code again could fail, as it names functions whose signatures changed.
+		function startFresh():Void {
+			discardPublishedSymbols();
+			if (cache.dropRetired(LambdaAlignment.isRetired))
+				ordered.functions = cache.ordered();
+		}
 		var reuseLowered = initialized && !reload;
 		var layoutReasons:Array<String> = [];
 		// A domain reload rediscovers native imports without preserving their old slots.
 		// Cached object prototypes contain absolute function indices, just like opcodes.
 		if (initialized && reload)
-			discardPublishedSymbols();
+			startFresh();
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
@@ -460,7 +529,7 @@ class HlModuleAssembler {
 			var known = [for (native in previousNatives) native.name => true];
 			layoutReasons.push('runtime natives added: ' + [for (native in runtimeNatives) if (!known.exists(native.name)) native.name].join(", "));
 			reuseLowered = false;
-			discardPublishedSymbols();
+			startFresh();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
 		}
 		// C dispatch natives sit with the runtime natives, before every function slot. When they change, every function slot
@@ -470,17 +539,21 @@ class HlModuleAssembler {
 			reload = true;
 			layoutReasons.push("dispatch natives");
 			reuseLowered = false;
-			discardPublishedSymbols();
+			startFresh();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
 		}
 		dispatchNatives = nextDispatch;
-		var layout:Map<String, Int> = [], next = 0;
-		for (native in runtimeNatives)
-			layout.set(native.name, next++);
-		for (name in nextDispatch)
-			layout.set(name, next++);
-		for (name in cache.slots)
-			layout.set(name, next++);
+		function slotLayout():Map<String, Int> {
+			var result:Map<String, Int> = [], next = 0;
+			for (native in runtimeNatives)
+				result.set(native.name, next++);
+			for (name in nextDispatch)
+				result.set(name, next++);
+			for (name in cache.slots)
+				result.set(name, next++);
+			return result;
+		}
+		var layout = slotLayout();
 		if (reuseLowered)
 			for (fn in ordered.functions) {
 				var previous = loweredFunctions.get(fn.name);
@@ -488,7 +561,8 @@ class HlModuleAssembler {
 					reload = true;
 					layoutReasons.push('slot of ${fn.name} moved from ${previous.functionIndex} to ${layout.get(fn.name)}');
 					reuseLowered = false;
-					discardPublishedSymbols();
+					startFresh();
+					layout = slotLayout();
 					break;
 				}
 			}
@@ -499,7 +573,8 @@ class HlModuleAssembler {
 				reload = true;
 				objectReasons = planned.reasons;
 				reuseLowered = false;
-				discardPublishedSymbols();
+				startFresh();
+				layout = slotLayout();
 			} else if (planned.fields.length > 0 || planned.migrations.length > 0)
 				objectLayout = {fields: planned.fields, previousTypes: planned.previousTypes, migrations: planned.migrations};
 		}
