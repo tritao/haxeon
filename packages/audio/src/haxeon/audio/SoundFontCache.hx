@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import haxeon.audio.SoundFont.SoundFontPresetInfo;
 import sys.FileSystem;
 import sys.io.File;
@@ -49,21 +51,21 @@ class SoundFontCache {
 
     public function new(maxBanks:Int=4,maxSourceBytes:Int=8*1024*1024) {
         if (maxBanks<1 || maxBanks>64 || maxSourceBytes<1 || maxSourceBytes>512*1024*1024)
-            throw "Invalid SoundFont cache limits";
+            throw BindingError.invalidArgument("SoundFontCache.new", "Invalid SoundFont cache limits");
         this.maxBanks=maxBanks; this.maxSourceBytes=maxSourceBytes;
     }
 
     /** Acquire on a preparation thread. A lease owns access to definitions, not playback state. */
     public function acquire(path:String):SoundFontLease {
-        if (path==null || path.length==0) throw "SoundFont path must not be empty";
+        if (path==null || path.length==0) throw BindingError.invalidArgument("SoundFontCache.acquire", "SoundFont path must not be empty");
         var key=FileSystem.fullPath(path);
         var metadata=FileSystem.metadata(key);
-        if (metadata==null) throw "SoundFont file is unavailable: "+key;
+        if (metadata==null) throw BindingError.invalidArgument("SoundFontCache.acquire", "SoundFont file is unavailable: "+key);
         var bytes=metadata.size;
-        if (bytes<=0 || bytes>maxSourceBytes) throw "SoundFont exceeds cache source-byte budget";
+        if (bytes<=0 || bytes>maxSourceBytes) throw BindingError.invalidArgument("SoundFontCache.acquire", "SoundFont exceeds cache source-byte budget");
         var victims:Array<SoundFont> = [];
         condition.acquire();
-        if (closed) { condition.release(); throw "SoundFont cache disposed"; }
+        if (closed) { condition.release(); throw BindingError.disposed("SoundFontCache.acquire", "SoundFont cache disposed"); }
         var existing=entries.get(key);
         if (existing!=null) {
             // Pin before waiting: the first caller may release/evict immediately after loading.
@@ -73,7 +75,8 @@ class SoundFontCache {
                 existing.users--;
                 var close=closed && !existing.loading && existing.error==null && existing.users==0;
                 if (close) remove(existing);
-                var failure:Dynamic=existing.error==null ? "SoundFont cache disposed" : existing.error;
+                var failure:Dynamic=existing.error==null
+                    ? BindingError.disposed("SoundFontCache.acquire", "SoundFont cache disposed") : existing.error;
                 condition.release();
                 if (close) existing.font.dispose();
                 throw failure;
@@ -88,7 +91,7 @@ class SoundFontCache {
             var oldest:Null<CachedBank> = null;
             for (entry in entries) if (!entry.loading && entry.users==0 && selected.indexOf(entry)<0
                 && (oldest==null || entry.stamp<oldest.stamp)) oldest=entry;
-            if (oldest==null) { condition.release(); throw "SoundFont cache budget is pinned by active leases"; }
+            if (oldest==null) { condition.release(); throw BindingError.invalidState("SoundFontCache.acquire", "SoundFont cache budget is pinned by active leases"); }
             selected.push(oldest); remainingBanks--; remainingBytes-=oldest.sourceBytes;
         }
         for (entry in selected) {
@@ -103,12 +106,12 @@ class SoundFontCache {
         try {
             closeFonts(victims);
             var data=File.getBytes(key);
-            if (data.length!=bytes) throw "SoundFont changed during cache loading";
+            if (data.length!=bytes) throw BindingError.invalidData("SoundFontCache.acquire", "SoundFont changed during cache loading");
             font=SoundFont.fromMemory(data);
             var inventory=font.presets();
             var lease=new SoundFontLease(this,entry);
             condition.acquire();
-            if (closed) { condition.release(); throw "SoundFont cache disposed during loading"; }
+            if (closed) { condition.release(); throw BindingError.disposed("SoundFontCache.acquire", "SoundFont cache disposed during loading"); }
             entry.font=font; entry.inventory=inventory; entry.loading=false;
             loads++; condition.broadcast(); condition.release();
             return lease;
@@ -169,7 +172,7 @@ class SoundFontLease {
     var disposed=false;
     @:allow(haxeon.audio.SoundFontCache)
     private function new(cache:SoundFontCache,entry:CachedBank) { this.cache=cache; this.entry=entry; }
-    function ensureLive():Void { if (disposed) throw "SoundFont lease disposed"; }
+    function ensureLive():Void { if (disposed) throw BindingError.disposed("SoundFontLease.ensureLive", "SoundFont lease disposed"); }
     public function presets():Array<SoundFontPresetInfo> {
         ensureLive();
         return [for (info in entry.inventory) {index:info.index,bank:info.bank,program:info.program,name:info.name}];
@@ -177,7 +180,7 @@ class SoundFontLease {
     public function preset(index:Int,gain:Float=1):InstrumentDefinition {
         ensureLive();
         if (index<0 || index>=entry.inventory.length || !Math.isFinite(gain) || gain<0 || gain>4)
-            throw "Invalid cached SoundFont preset";
+            throw BindingError.invalidArgument("SoundFontLease.preset", "Invalid cached SoundFont preset");
         return new LeasedPreset(this,index,gain);
     }
     public function createInstrument(engine:DspEngine,index:Int,gain:Float=1):DspInstrument {

@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
@@ -22,25 +24,25 @@ class DspModulationRoute {
 		this.amount = amount;
 		this.polarity = polarity == null ? DspModulationPolarity.Bipolar : polarity;
 		if (oscillatorIndex < 0 || oscillatorIndex > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
-			throw "DSP modulation oscillator target is invalid";
+			throw BindingError.invalidArgument("DspModulationRoute.new", "DSP modulation oscillator target is invalid");
 		if (oscillatorIndex != 0 && destination != DspModulationDestination.PitchSemitones &&
 			destination != DspModulationDestination.OscillatorLevel &&
 			destination != DspModulationDestination.OscillatorPhase &&
 			destination != DspModulationDestination.OscillatorFrequencyHz)
-			throw "DSP modulation oscillator target is only valid for oscillator destinations";
+			throw BindingError.invalidArgument("DspModulationRoute.new", "DSP modulation oscillator target is only valid for oscillator destinations");
 		if (source == DspModulationSource.Oscillator) {
 			if (sourceOscillatorIndex <= 0 ||
 				sourceOscillatorIndex > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
-				throw "DSP modulation oscillator source is invalid";
+				throw BindingError.invalidArgument("DspModulationRoute.new", "DSP modulation oscillator source is invalid");
 			if (oscillatorIndex == 0)
-				throw "DSP operator route requires an oscillator target";
+				throw BindingError.invalidArgument("DspModulationRoute.new", "DSP operator route requires an oscillator target");
 			if (sourceOscillatorIndex == oscillatorIndex)
-				throw "DSP operator route cannot target its source oscillator";
+				throw BindingError.invalidArgument("DspModulationRoute.new", "DSP operator route cannot target its source oscillator");
 			if (destination != DspModulationDestination.OscillatorPhase &&
 				destination != DspModulationDestination.OscillatorFrequencyHz)
-				throw "DSP operator route destination is invalid";
+				throw BindingError.invalidArgument("DspModulationRoute.new", "DSP operator route destination is invalid");
 		} else if (sourceOscillatorIndex != 0)
-			throw "DSP oscillator source index is only valid for oscillator sources";
+			throw BindingError.invalidArgument("DspModulationRoute.new", "DSP oscillator source index is only valid for oscillator sources");
 		this.oscillatorIndex = oscillatorIndex;
 		this.sourceOscillatorIndex = sourceOscillatorIndex;
 	}

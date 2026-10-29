@@ -1,9 +1,12 @@
 package haxeon.ui.host;
 
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
+
 import haxeon.ui.FontCollection;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 import haxe.io.Bytes;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
@@ -22,8 +25,8 @@ class BrowserUiHost {
 	var frameRequested:Bool = true;
 	var window:WindowHandle = WindowHandle.invalid();
 	var surface:SurfaceHandle = SurfaceHandle.invalid();
-	var events:Null<NativeKitEvents> = null;
-	var eventSubscription:Null<NativeKitEventSubscription> = null;
+	var events:Null<EventPump> = null;
+	var eventSubscription:Null<EventSubscription> = null;
 	var fonts:Null<FontCollection> = null;
 	var hostContext:Null<UiHostContext> = null;
 	var runtime:Null<UiHostRuntime> = null;
@@ -65,7 +68,7 @@ class BrowserUiHost {
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
 
-			var windowOptions = new WindowOptions();
+			var windowOptions = new NativeWindowOptions();
 			windowOptions.set_width(options.width);
 			windowOptions.set_height(options.height);
 			windowOptions.set_title(options.title);
@@ -76,7 +79,7 @@ class BrowserUiHost {
 			if (createdWindow.status != Result.Ok) throw "Browser window creation failed";
 			window = createdWindow.out_window.borrow();
 
-			var surfaceOptions = new SurfaceOptions();
+			var surfaceOptions = new NativeSurfaceOptions();
 			surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
 			surfaceOptions.set_api(GraphicsApi.OpenglEs);
 			surfaceOptions.set_major_version(3);
@@ -86,7 +89,7 @@ class BrowserUiHost {
 			if (createdSurface.status != Result.Ok) throw "Browser surface creation failed";
 			surface = createdSurface.out_surface.borrow();
 
-			events = new NativeKitEvents();
+			events = new EventPump();
 			eventSubscription = events.listen(handleEvent);
 			fonts = FontCollection.create();
 			if (options.fonts.length == 0) finishResources();
@@ -131,7 +134,7 @@ class BrowserUiHost {
 				fonts.addData(font.name, bytes, font.family);
 			}
 		#end
-		var activeEvents:NativeKitEvents = cast events;
+		var activeEvents:EventPump = cast events;
 		var activeFonts:FontCollection = cast fonts;
 		// The page's canvas is this host's window and surface, so applications written against the desktop
 		// context (native dialogs, auxiliary renderers) receive the same handles here.
@@ -152,7 +155,7 @@ class BrowserUiHost {
 		frameRequested = true;
 	}
 
-	function handleEvent(value:NativeKitEventValue):Void {
+	function handleEvent(value:PlatformEvent):Void {
 		if (stopped || stopping) return;
 		frameRequested = true;
 		try {

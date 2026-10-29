@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 
@@ -14,13 +16,14 @@ import haxeon.gpu.Enums.Wrap;
 /** Renderer-owned texture sampler with typed filter and wrap modes. */
 class Sampler {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_sampler;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_sampler) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function create(renderer:Renderer, minFilter:Filter = Filter.Nearest,
@@ -41,7 +44,7 @@ class Sampler {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0)
-			throw "GPU sampler slot must be non-negative";
+			throw BindingError.invalidArgument("Sampler.apply", "GPU sampler slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_sampler(renderer.nativeHandle(), slot, value), "sampler.apply");
 	}
 
@@ -51,6 +54,7 @@ class Sampler {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_sampler_destroy(renderer.nativeHandle(), value), "sampler.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -61,12 +65,14 @@ class Sampler {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU sampler has been disposed";
+			throw BindingError.disposed("Sampler.ensureLive", "GPU sampler has been disposed");
 		renderer.ensureLive();
 	}
 }

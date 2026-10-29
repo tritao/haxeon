@@ -38,7 +38,7 @@ class ImageDesc {
 	@:allow(Image)
 	function nativeValue():nkgpu_image_desc {
 		var value = new nkgpu_image_desc();
-		value.set_struct_size(56);
+		value.set_struct_size(nkgpu_image_desc.size());
 		value.set_width(width);
 		value.set_height(height);
 		value.set_format(format);

@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Enums;
 
 import haxeon.gpu.Renderer;
@@ -12,13 +14,14 @@ import haxeon.gpu.Enums.TimestampState;
 /** Owns one asynchronous GPU timestamp interval. */
 class Timestamp {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_timestamp;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_timestamp) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Begins timing work in the active render or compute pass. */
@@ -32,10 +35,10 @@ class Timestamp {
 	/** Begins a named timing scope in the active render or compute pass. */
 	public static function beginNamed(renderer:Renderer, label:String):Timestamp {
 		if (label == null)
-			throw "GPU timestamp label must not be null";
+			throw BindingError.invalidArgument("Timestamp.beginNamed", "GPU timestamp label must not be null");
 		renderer.ensureFrame();
 		var desc = new nkgpu_timestamp_desc();
-		desc.set_struct_size(16);
+		desc.set_struct_size(nkgpu_timestamp_desc.size());
 		desc.set_label(label);
 		var made = NativeKitGpu.nkgpu_timestamp_begin_desc(renderer.nativeHandle(), desc);
 		GpuResult.check(made.status, "timestamp.beginNamed");
@@ -71,18 +74,21 @@ class Timestamp {
 		GpuResult.check(NativeKitGpu.nkgpu_timestamp_destroy(renderer.nativeHandle(), value),
 			"timestamp.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU timestamp has been disposed";
+			throw BindingError.disposed("Timestamp.ensureLive", "GPU timestamp has been disposed");
 		renderer.ensureLive();
 	}
 }

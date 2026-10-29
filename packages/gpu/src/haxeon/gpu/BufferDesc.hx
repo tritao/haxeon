@@ -23,7 +23,7 @@ class BufferDesc {
 	@:allow(Buffer)
 	function nativeValue():nkgpu_buffer_desc {
 		var value = new nkgpu_buffer_desc();
-		value.set_struct_size(40);
+		value.set_struct_size(nkgpu_buffer_desc.size());
 		value.set_size(size);
 		value.set_usage(usage);
 		value.set_data_size(0);

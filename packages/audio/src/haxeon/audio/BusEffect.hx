@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -41,7 +43,7 @@ class BusEffect {
     /** Native clock binding; tempo continues to follow music during UI stalls. */
     public function followTransportTempo(engine:DspEngine, beats:Float = 0.5):Void {
         ensureLive();
-        if (engine == null) throw "Transport tempo requires a DSP engine";
+        if (engine == null) throw BindingError.invalidArgument("BusEffect.followTransportTempo", "Transport tempo requires a DSP engine");
         AudioResult.check(NativeKitAudio.nk_audio_bus_effect_bind_dsp_tempo(value,
             engine.nativeHandle(), beats), "audio.busEffect.followTransportTempo");
     }
@@ -199,6 +201,6 @@ class BusEffect {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio bus effect has been disposed";
+			throw BindingError.disposed("BusEffect.ensureLive", "Audio bus effect has been disposed");
 	}
 }

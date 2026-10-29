@@ -1,8 +1,9 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.Window;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitRuntime;
-import haxeon.platform.NativeKitWindow;
 import nativekit.ffi.NativeKitGpu;
 import haxeon.platform.GraphicsImageRef;
 import haxeon.gpu.Buffer;
@@ -42,6 +43,19 @@ class Triangle {
 		var intUniform:UniformType = UniformType.Int;
 		if (vertexFormat != VertexFormat.Float || floatUniform != UniformType.Float || intUniform != UniformType.Int)
 			throw "generated GPU enum members changed values";
+	}
+
+	static function verifyStructuredErrors():Void {
+		var caught = false;
+		try haxeon.gpu.GpuResult.check(-3, "test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
+			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
+		}
+		if (!caught) throw "GPU errors must expose their domain, status, and operation";
+		var argument = false;
+		try Surface.create(null, 0, 0) catch (error:haxeon.platform.BindingError) {
+			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument && error.operation == "Surface.create";
+		}
+		if (!argument) throw "GPU argument errors must use BindingError";
 	}
 
 	static function createVertexBuffer(renderer:Renderer):Buffer {
@@ -247,15 +261,16 @@ class Triangle {
 
 	static function main():Int {
 		verifyGeneratedEnumMembers();
-		var runtime = NativeKitRuntime.start();
-		var windowOptions = new WindowOptions();
+		verifyStructuredErrors();
+		var runtime = Runtime.start();
+		var windowOptions = new NativeWindowOptions();
 		windowOptions.set_width(800);
 		windowOptions.set_height(600);
 		windowOptions.set_title("Haxeon: GPU over NativeKit");
 		windowOptions.set_flags(WindowFlags.Resizable);
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
-		var window:NativeKitWindow = runtime.createWindow(windowOptions);
+		var window:Window = runtime.createWindowNative(windowOptions);
 		var surface = Surface.create(window, 800, 600);
 		var renderer:Null<Renderer> = null;
 		var buffer:Null<Buffer> = null;

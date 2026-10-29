@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -22,7 +24,7 @@ class Voice {
 
 	public static function fromClip(clip:Clip, ?options:VoiceOptions):Voice {
 		if (clip == null)
-			throw "Audio voice clip must not be null";
+			throw BindingError.invalidArgument("Voice.fromClip", "Audio voice clip must not be null");
 		if (options == null)
 			options = new VoiceOptions();
 		var made = NativeKitAudio.nk_audio_voice_create(clip.nativeHandle(), options.nativeValue());
@@ -132,7 +134,7 @@ class Voice {
 	public function setPriority(priority:Int):Void {
 		ensureLive();
 		if (priority < 0)
-			throw "Audio voice priority must be non-negative";
+			throw BindingError.invalidArgument("Voice.setPriority", "Audio voice priority must be non-negative");
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_priority(value, priority),
 			"audio.voice.setPriority");
 	}
@@ -210,7 +212,7 @@ class Voice {
 	public function setPosition(position:Vector3):Void {
 		ensureLive();
 		if (position == null)
-			throw "Audio voice position must not be null";
+			throw BindingError.invalidArgument("Voice.setPosition", "Audio voice position must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_position(value, position.nativeValue()),
 			"audio.voice.setPosition");
 	}
@@ -227,7 +229,7 @@ class Voice {
 	public function setDirection(direction:Vector3):Void {
 		ensureLive();
 		if (direction == null)
-			throw "Audio voice direction must not be null";
+			throw BindingError.invalidArgument("Voice.setDirection", "Audio voice direction must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_direction(value, direction.nativeValue()),
 			"audio.voice.setDirection");
 	}
@@ -244,7 +246,7 @@ class Voice {
 	public function setVelocity(velocity:Vector3):Void {
 		ensureLive();
 		if (velocity == null)
-			throw "Audio voice velocity must not be null";
+			throw BindingError.invalidArgument("Voice.setVelocity", "Audio voice velocity must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_velocity(value, velocity.nativeValue()),
 			"audio.voice.setVelocity");
 	}
@@ -352,7 +354,7 @@ class Voice {
 	public function setCone(cone:Cone):Void {
 		ensureLive();
 		if (cone == null)
-			throw "Audio voice cone must not be null";
+			throw BindingError.invalidArgument("Voice.setCone", "Audio voice cone must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_voice_set_cone(value, cone.innerAngleRadians,
 			cone.outerAngleRadians, cone.outerGain), "audio.voice.setCone");
 	}
@@ -424,6 +426,6 @@ class Voice {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio voice has been disposed";
+			throw BindingError.disposed("Voice.ensureLive", "Audio voice has been disposed");
 	}
 }

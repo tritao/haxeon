@@ -1,5 +1,13 @@
 package haxeon.ui.host;
 
+import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
+
 import hl.Gc;
 import haxeon.ProfileFrame;
 import haxeon.ProfileNativeTrace;
@@ -8,12 +16,7 @@ import haxeon.ProfileSpan;
 import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 import nativekit.ffi.NativeKitGpu;
-import haxeon.platform.NativeKitSurface;
-import haxeon.platform.NativeKitSurface.NativeKitSurfaceFrameSubscription;
 import haxeon.ui.Renderer;
 import haxe.Json;
 import haxe.io.Bytes;
@@ -37,13 +40,13 @@ class DesktopUiHost {
 		var initialized = false;
 		var window = WindowHandle.invalid();
 		var surface = SurfaceHandle.invalid();
-		var events:Null<NativeKitEvents> = null;
-		var eventSubscription:Null<NativeKitEventSubscription> = null;
-		var recordSubscription:Null<NativeKitEventSubscription> = null;
-		var inputTraceSubscription:Null<NativeKitEventSubscription> = null;
+		var events:Null<EventPump> = null;
+		var eventSubscription:Null<EventSubscription> = null;
+		var recordSubscription:Null<EventSubscription> = null;
+		var inputTraceSubscription:Null<EventSubscription> = null;
 		var recordPath:Null<String> = null;
-		var nativeSurface:Null<NativeKitSurface> = null;
-		var frameSubscription:Null<NativeKitSurfaceFrameSubscription> = null;
+		var nativeSurface:Null<Surface> = null;
+		var frameSubscription:Null<SurfaceFrameSubscription> = null;
 		var fonts:Null<FontCollection> = null;
 		var runtime:Null<UiHostRuntime> = null;
 		var session:Null<UiHostSession> = null;
@@ -100,7 +103,7 @@ class DesktopUiHost {
 
 			var initialWidth = Std.int(Math.max(options.width, options.minimumWidth));
 			var initialHeight = Std.int(Math.max(options.height, options.minimumHeight));
-			var windowOptions = new WindowOptions();
+			var windowOptions = new NativeWindowOptions();
 			windowOptions.set_width(initialWidth);
 			windowOptions.set_height(initialHeight);
 			windowOptions.set_title(options.title);
@@ -158,7 +161,7 @@ class DesktopUiHost {
 				throw "Window show failed: " + NativeKit.nk_last_error();
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
-			var surfaceOptions = new SurfaceOptions();
+			var surfaceOptions = new NativeSurfaceOptions();
 			var surfaceFlags = SurfaceFlags.Stencil;
 			if (graphicsApi == GraphicsApi.Opengl) {
 				surfaceFlags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
@@ -174,7 +177,7 @@ class DesktopUiHost {
 				throw "Surface creation failed: " + NativeKit.nk_last_error();
 			surface = createdSurface.out_surface.borrow();
 
-			var pump = new NativeKitEvents();
+			var pump = new EventPump();
 			events = pump;
 			if (options.recordPath != null) {
 				var path:String = cast options.recordPath;
@@ -258,7 +261,7 @@ class DesktopUiHost {
 			if (session.state == UiHostLifecycle.Failed) throw session.error;
 			if (liveRuntime.app() != null)
 				liveRuntime.app().context().onAnimationFrameRequested = scheduleFrame;
-			var borrowedSurface = NativeKitSurface.borrowNativeHandle(surface);
+			var borrowedSurface = Surface.borrowNativeHandle(surface);
 			nativeSurface = borrowedSurface;
 
 			// The Win32 sizing loop blocks this pump for the whole drag. Every intermediate size is
@@ -754,7 +757,7 @@ class DesktopUiHost {
 		return result;
 	}
 
-	static function eventKind(value:NativeKitEventValue):String {
+	static function eventKind(value:PlatformEvent):String {
 		return switch (value) {
 			case WindowClose(_): "WindowClose";
 			case WindowResize(_, _, _): "WindowResize";
@@ -784,7 +787,7 @@ class DesktopUiHost {
 	/** Background I/O (transports, terminals, tasks, HTTP) is for the code that started it, not the window: a redraw
 		for each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests
 		a frame when its state changes. Other raw events (menus, file watches, application lifecycle) still redraw. */
-	static function isBackgroundIo(value:NativeKitEventValue):Bool {
+	static function isBackgroundIo(value:PlatformEvent):Bool {
 		return switch (value) {
 			case Raw(kind, _, _, _, _, _, _):
 				kind == EventKind.TransportConnected || kind == EventKind.TransportAccepted

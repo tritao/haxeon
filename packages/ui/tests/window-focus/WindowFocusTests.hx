@@ -1,4 +1,4 @@
-import haxeon.platform.NativeKitEventValue;
+import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 import haxeon.ui.LayoutAxis;

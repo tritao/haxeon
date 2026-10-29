@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudioTypes;
 
 /** Immutable PCM definition with pitch, optional loop and amplitude envelope.
@@ -12,7 +14,7 @@ class SampleInstrument implements InstrumentDefinition {
     public function new(samples:Array<Float>, sampleRate:Int, channels:Int = 1,
         rootNote:Int = 60, gain:Float = 1, loopStartFrame:Int = 0,
         loopEndFrame:Int = 0, ?envelope:DspEnvelopeOptions) {
-        if (samples == null || samples.length == 0) throw "PCM samples must not be empty";
+        if (samples == null || samples.length == 0) throw BindingError.invalidArgument("SampleInstrument.new", "PCM samples must not be empty");
         this.samples = samples.copy();
         var env = envelope == null ? new DspEnvelopeOptions() : envelope;
         options = new NativeDspSampleOptions();
@@ -23,7 +25,7 @@ class SampleInstrument implements InstrumentDefinition {
         options.set_envelope(env.nativeValue());
     }
     public function createInstrument(engine:DspEngine):DspInstrument {
-        if (engine == null) throw "Sample instrument engine must not be null";
+        if (engine == null) throw BindingError.invalidArgument("SampleInstrument.createInstrument", "Sample instrument engine must not be null");
         return engine.createSampleInstrument(options, samples);
     }
 }

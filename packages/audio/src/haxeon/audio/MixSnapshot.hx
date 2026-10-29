@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -33,7 +35,7 @@ class MixSnapshot {
 	public function captureBus(bus:Bus):Void {
 		ensureLive();
 		if (bus == null)
-			throw "Audio mix snapshot bus must not be null";
+			throw BindingError.invalidArgument("MixSnapshot.captureBus", "Audio mix snapshot bus must not be null");
 		AudioResult.check(
 			NativeKitAudio.nk_audio_mix_snapshot_capture_bus(value, bus.nativeHandle()),
 			"audio.mixSnapshot.captureBus");
@@ -43,7 +45,7 @@ class MixSnapshot {
 	public function setBus(bus:Bus, volume:Float, muted:Bool = false):Void {
 		ensureLive();
 		if (bus == null)
-			throw "Audio mix snapshot bus must not be null";
+			throw BindingError.invalidArgument("MixSnapshot.setBus", "Audio mix snapshot bus must not be null");
 		AudioResult.check(
 			NativeKitAudio.nk_audio_mix_snapshot_set_bus(value, bus.nativeHandle(), volume, muted),
 			"audio.mixSnapshot.setBus");
@@ -53,7 +55,7 @@ class MixSnapshot {
 	public function removeBus(bus:Bus):Void {
 		ensureLive();
 		if (bus == null)
-			throw "Audio mix snapshot bus must not be null";
+			throw BindingError.invalidArgument("MixSnapshot.removeBus", "Audio mix snapshot bus must not be null");
 		AudioResult.check(
 			NativeKitAudio.nk_audio_mix_snapshot_remove_bus(value, bus.nativeHandle()),
 			"audio.mixSnapshot.removeBus");
@@ -105,6 +107,6 @@ class MixSnapshot {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio mix snapshot has been disposed";
+			throw BindingError.disposed("MixSnapshot.ensureLive", "Audio mix snapshot has been disposed");
 	}
 }

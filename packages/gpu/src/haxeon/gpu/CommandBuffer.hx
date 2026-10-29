@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Buffer;
 import haxeon.gpu.Image;
 import haxeon.gpu.Pipeline;
@@ -17,7 +19,7 @@ class CommandBuffer {
 	@:allow(Renderer)
 	private function new(renderer:Renderer, capacity:Int) {
 		if (capacity <= 0)
-			throw "command buffer capacity must be positive";
+			throw BindingError.invalidArgument("CommandBuffer.new", "command buffer capacity must be positive");
 		this.renderer = renderer;
 		bytes = Bytes.alloc(capacity);
 		length = 0;
@@ -35,7 +37,7 @@ class CommandBuffer {
 	@:allow(Renderer)
 	function ensureRenderer(owner:Renderer):Void {
 		if (renderer != owner)
-			throw "GPU command buffer belongs to a different renderer";
+			throw BindingError.invalidArgument("CommandBuffer.ensureRenderer", "GPU command buffer belongs to a different renderer");
 	}
 
 	public function applyPipeline(pipeline:Pipeline):Void {
@@ -47,7 +49,7 @@ class CommandBuffer {
 	public function applyVertexBuffer(slot:Int, buffer:Buffer, offset:Int):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (slot < 0 || offset < 0)
-			throw "GPU vertex-buffer slot and offset must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyVertexBuffer", "GPU vertex-buffer slot and offset must be non-negative");
 		header(2, 20);
 		word(slot);
 		word(buffer.nativeHandle().rawValue());
@@ -57,7 +59,7 @@ class CommandBuffer {
 	public function applyIndexBuffer(buffer:Buffer, offset:Int):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (offset < 0)
-			throw "GPU index-buffer offset must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyIndexBuffer", "GPU index-buffer offset must be non-negative");
 		header(3, 16);
 		word(buffer.nativeHandle().rawValue());
 		word(offset);
@@ -66,7 +68,7 @@ class CommandBuffer {
 	public function applyImage(slot:Int, image:Image):Void {
 		ensureRenderer(image.rendererOwner());
 		if (slot < 0)
-			throw "GPU image slot must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyImage", "GPU image slot must be non-negative");
 		header(4, 16);
 		word(slot);
 		word(image.nativeHandle().rawValue());
@@ -75,7 +77,7 @@ class CommandBuffer {
 	public function applySampler(slot:Int, sampler:Sampler):Void {
 		ensureRenderer(sampler.rendererOwner());
 		if (slot < 0)
-			throw "GPU sampler slot must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applySampler", "GPU sampler slot must be non-negative");
 		header(5, 16);
 		word(slot);
 		word(sampler.nativeHandle().rawValue());
@@ -84,7 +86,7 @@ class CommandBuffer {
 	public function applyStorageBuffer(slot:Int, buffer:Buffer):Void {
 		ensureRenderer(buffer.rendererOwner());
 		if (slot < 0)
-			throw "GPU storage-buffer slot must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyStorageBuffer", "GPU storage-buffer slot must be non-negative");
 		header(11, 16);
 		word(slot);
 		word(buffer.nativeHandle().rawValue());
@@ -93,7 +95,7 @@ class CommandBuffer {
 	public function applyStorageImage(slot:Int, image:Image):Void {
 		ensureRenderer(image.rendererOwner());
 		if (slot < 0)
-			throw "GPU storage-image slot must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyStorageImage", "GPU storage-image slot must be non-negative");
 		header(12, 16);
 		word(slot);
 		word(image.nativeHandle().rawValue());
@@ -101,7 +103,7 @@ class CommandBuffer {
 
 	public function applyUniforms(slot:Int, data:Bytes):Void {
 		if (slot < 0 || data == null)
-			throw "GPU uniform slot and data are invalid";
+			throw BindingError.invalidArgument("CommandBuffer.applyUniforms", "GPU uniform slot and data are invalid");
 		header(6, 16 + data.length);
 		word(slot);
 		word(data.length);
@@ -113,7 +115,7 @@ class CommandBuffer {
 
 	public function applyUniform2f(slot:Int, x:Float, y:Float):Void {
 		if (slot < 0)
-			throw "GPU uniform slot must be non-negative";
+			throw BindingError.invalidArgument("CommandBuffer.applyUniform2f", "GPU uniform slot must be non-negative");
 		header(6, 32);
 		word(slot);
 		word(16);
@@ -126,7 +128,7 @@ class CommandBuffer {
 
 	public function draw(baseElement:Int, elementCount:Int, instanceCount:Int):Void {
 		if (baseElement < 0 || elementCount <= 0 || instanceCount <= 0)
-			throw "GPU draw range and instance count must be positive";
+			throw BindingError.invalidArgument("CommandBuffer.draw", "GPU draw range and instance count must be positive");
 		header(7, 20);
 		word(baseElement);
 		word(elementCount);
@@ -136,7 +138,7 @@ class CommandBuffer {
 	public function scissor(enabled:Bool, x:Int = 0, y:Int = 0, width:Int = 0,
 		height:Int = 0):Void {
 		if (enabled && (width <= 0 || height <= 0))
-			throw "GPU scissor dimensions must be positive when enabled";
+			throw BindingError.invalidArgument("CommandBuffer.scissor", "GPU scissor dimensions must be positive when enabled");
 		header(8, 28);
 		word(enabled ? 1 : 0);
 		word(x);
@@ -147,7 +149,7 @@ class CommandBuffer {
 
 	public function viewport(x:Int, y:Int, width:Int, height:Int):Void {
 		if (width <= 0 || height <= 0)
-			throw "GPU viewport dimensions must be positive";
+			throw BindingError.invalidArgument("CommandBuffer.viewport", "GPU viewport dimensions must be positive");
 		header(10, 24);
 		word(x);
 		word(y);
@@ -157,7 +159,7 @@ class CommandBuffer {
 
 	public function dispatch(x:Int, y:Int = 1, z:Int = 1):Void {
 		if (x <= 0 || y <= 0 || z <= 0)
-			throw "GPU dispatch dimensions must be positive";
+			throw BindingError.invalidArgument("CommandBuffer.dispatch", "GPU dispatch dimensions must be positive");
 		header(13, 20);
 		word(x);
 		word(y);
@@ -169,7 +171,7 @@ class CommandBuffer {
 		ensureRenderer(source.rendererOwner());
 		ensureRenderer(destination.rendererOwner());
 		if (size <= 0 || sourceOffset < 0 || destinationOffset < 0)
-			throw "GPU buffer-copy arguments are invalid";
+			throw BindingError.invalidArgument("CommandBuffer.copyBuffer", "GPU buffer-copy arguments are invalid");
 		header(14, 28);
 		word(source.nativeHandle().rawValue());
 		word(sourceOffset);
@@ -187,7 +189,7 @@ class CommandBuffer {
 		if (width <= 0 || height <= 0 || sourceX < 0 || sourceY < 0 || destinationX < 0 ||
 			destinationY < 0 || sourceMip < 0 || sourceLayer < 0 || destinationMip < 0 ||
 			destinationLayer < 0)
-			throw "GPU image-copy arguments are invalid";
+			throw BindingError.invalidArgument("CommandBuffer.copyImage", "GPU image-copy arguments are invalid");
 		header(15, 56);
 		word(source.nativeHandle().rawValue());
 		word(sourceMip);
@@ -210,7 +212,7 @@ class CommandBuffer {
 		ensureRenderer(destination.rendererOwner());
 		if (width <= 0 || height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU buffer-to-image arguments are invalid";
+			throw BindingError.invalidArgument("CommandBuffer.copyBufferToImage", "GPU buffer-to-image arguments are invalid");
 		header(16, 48);
 		word(source.nativeHandle().rawValue());
 		word(bufferOffset);
@@ -231,7 +233,7 @@ class CommandBuffer {
 		ensureRenderer(destination.rendererOwner());
 		if (width <= 0 || height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU image-to-buffer arguments are invalid";
+			throw BindingError.invalidArgument("CommandBuffer.copyImageToBuffer", "GPU image-to-buffer arguments are invalid");
 		header(17, 48);
 		word(destination.nativeHandle().rawValue());
 		word(bufferOffset);
@@ -261,7 +263,7 @@ class CommandBuffer {
 
 	function require(count:Int):Void {
 		if (count < 0)
-			throw "negative command size";
+			throw BindingError.invalidArgument("CommandBuffer.require", "negative command size");
 		if (length <= bytes.length - count)
 			return;
 		var capacity = bytes.length;

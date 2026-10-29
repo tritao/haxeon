@@ -66,7 +66,7 @@ In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag
   name). The other threads follow by tid.
 - **Spans.** Slices from `haxeon.ProfileSpan`, nested on the thread that
   emitted them.
-- **NativeKit.** In apps that start `NativeKitRuntime`, `nk.wait` slices for
+- **NativeKit.** In apps that start `Runtime`, `nk.wait` slices for
   each wait for events and `nk.frame` slices for each on-demand frame, an
   `input move`, `input button` or `input key` instant each time the UI thread
   takes an OS input off its queue (with its screen position or key), and an

@@ -1,3 +1,9 @@
+import haxeon.platform.Surface;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.UiResult.UiError;
 
 import haxeon.ui.FontCollection;
@@ -6,10 +12,6 @@ import haxeon.ui.FontFamily;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
-import haxeon.platform.NativeKitSurface;
 import haxe.io.Bytes;
 import haxeon.ui.core.NativeInputAdapter;
 import haxe.CallStack;
@@ -51,8 +53,8 @@ class ShowcaseWeb {
     static var graphics:Null<Showcase>;
     static var explorer:Null<UiExplorer>;
     static var explorerInput:Null<NativeInputAdapter>;
-    static var events:Null<NativeKitEvents>;
-    static var eventSubscription:Null<NativeKitEventSubscription>;
+    static var events:Null<EventPump>;
+    static var eventSubscription:Null<EventSubscription>;
     static var webFontBytes:Null<Map<String, Bytes>>;
     static var pendingWebFonts:Null<Map<String, ShowcaseWebFont>>;
     static var pendingWebFontCount = 0;
@@ -135,7 +137,7 @@ class ShowcaseWeb {
             initialized = true;
 
             graphicsMode = requestedMode == 1;
-            var windowOptions = new WindowOptions();
+            var windowOptions = new NativeWindowOptions();
             windowOptions.set_width(requestedWidth);
             windowOptions.set_height(requestedHeight);
             windowOptions.set_title("Haxeon UI Explorer");
@@ -147,7 +149,7 @@ class ShowcaseWeb {
                 return fail(11);
             window = createdWindow.out_window.borrow();
 
-            var surfaceOptions = new SurfaceOptions();
+            var surfaceOptions = new NativeSurfaceOptions();
             surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
             surfaceOptions.set_api(GraphicsApi.OpenglEs);
             surfaceOptions.set_major_version(3);
@@ -157,7 +159,7 @@ class ShowcaseWeb {
             if (createdSurface.status != Result.Ok)
                 return fail(12);
             surface = createdSurface.out_surface.borrow();
-            var activePump = new NativeKitEvents();
+            var activePump = new EventPump();
             events = activePump;
             eventSubscription = activePump.listen(handleEvent);
             running = true;
@@ -429,7 +431,7 @@ class ShowcaseWeb {
             explorer = new UiExplorer(fonts, "WEBGL2 · WASM", function() {
                 openGraphicsRequested = true;
             });
-            explorer.attachSurface(NativeKitSurface.borrowNativeHandle(surface));
+            explorer.attachSurface(Surface.borrowNativeHandle(surface));
             explorer.setViewport(logicalWidth, logicalHeight, requestedWidth,
                 requestedHeight, scale);
             if (requestedUiVisualCase >= 0 && !explorer.setVisualCase(requestedUiVisualCase))
@@ -464,7 +466,7 @@ class ShowcaseWeb {
         }
     }
 
-    static function handleEvent(value:NativeKitEventValue):Void {
+    static function handleEvent(value:PlatformEvent):Void {
         switch (value) {
             case Raw(kind, _, request, loadResult, _, _, data)
                 if (kind == EventKind.ResourceDataComplete):

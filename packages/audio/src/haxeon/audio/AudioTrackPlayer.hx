@@ -1,24 +1,25 @@
 package haxeon.audio;
 
-import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.BindingError;
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 
 /**
  * Generic coordinator for one long-running audio track and one queued track.
  *
  * The player borrows tracks, the optional bus, and the event pump. Call
- * update() once per frame after polling NativeKitRuntime.events so scheduled
+ * update() once per frame after polling Runtime.events so scheduled
  * transition and stop voices can be retired on the Haxe side.
  */
 class AudioTrackPlayer {
-	final events:NativeKitEvents;
+	final events:EventPump;
 	final bus:Null<Bus>;
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var currentTrackValue:Null<AudioTrack>;
 	var currentVoiceValue:Null<Voice>;
 	var outgoingTrackValue:Null<AudioTrack>;
@@ -44,11 +45,11 @@ class AudioTrackPlayer {
 	/** Called when a pending crossfade is superseded before completion. */
 	public var onTransitionCancelled:AudioTrack->Void = null;
 
-	public function new(events:NativeKitEvents, ?bus:Bus) {
+	public function new(events:EventPump, ?bus:Bus) {
 		if (events == null)
-			throw "Audio track player event pump must not be null";
+			throw BindingError.invalidArgument("AudioTrackPlayer.new", "Audio track player event pump must not be null");
 		if (bus != null && bus.isDisposed())
-			throw "Audio track player bus must be live";
+			throw BindingError.invalidArgument("AudioTrackPlayer.new", "Audio track player bus must be live");
 		this.events = events;
 		this.bus = bus;
 		this.subscription = events.listen(onNativeEvent);
@@ -58,7 +59,7 @@ class AudioTrackPlayer {
 	public function play(track:AudioTrack, ?options:AudioTransitionOptions):Voice {
 		ensureLive();
 		if (track == null)
-			throw "Audio track player track must not be null";
+			throw BindingError.invalidArgument("AudioTrackPlayer.play", "Audio track player track must not be null");
 		var timing = copyOptions(options);
 		validateOptions(timing);
 		if (options != null && currentVoiceValue != null)
@@ -86,7 +87,7 @@ class AudioTrackPlayer {
 	public function transitionTo(track:AudioTrack, ?options:AudioTransitionOptions):Voice {
 		ensureLive();
 		if (track == null)
-			throw "Audio track player track must not be null";
+			throw BindingError.invalidArgument("AudioTrackPlayer.transitionTo", "Audio track player track must not be null");
 		var timing = copyOptions(options);
 		validateOptions(timing);
 		update();
@@ -137,7 +138,7 @@ class AudioTrackPlayer {
 	public function queue(track:AudioTrack, ?options:AudioTransitionOptions):Void {
 		ensureLive();
 		if (track == null)
-			throw "Audio track player queued track must not be null";
+			throw BindingError.invalidArgument("AudioTrackPlayer.queue", "Audio track player queued track must not be null");
 		var timing = copyOptions(options);
 		validateOptions(timing);
 		if (currentVoiceValue == null) {
@@ -152,7 +153,7 @@ class AudioTrackPlayer {
 	public function stop(fadeOutSeconds:Float = 0.0):Void {
 		ensureLive();
 		if (!finite(fadeOutSeconds) || fadeOutSeconds < 0.0)
-			throw "Audio track player fade-out must be finite and non-negative";
+			throw BindingError.invalidArgument("AudioTrackPlayer.stop", "Audio track player fade-out must be finite and non-negative");
 		update();
 		settleTransitionForReplacement();
 		clearQueued();
@@ -240,7 +241,7 @@ class AudioTrackPlayer {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onNativeEvent(value:NativeKitEventValue):Void {
+	function onNativeEvent(value:PlatformEvent):Void {
 		switch value {
 			case AudioVoiceComplete(source): handleVoiceEnded(source);
 			case AudioVoiceStolen(source): handleVoiceEnded(source);
@@ -473,7 +474,7 @@ class AudioTrackPlayer {
 		if (!finite(options.fadeInSeconds) || options.fadeInSeconds < 0.0 ||
 			!finite(options.fadeOutSeconds) || options.fadeOutSeconds < 0.0 ||
 			!finite(options.delaySeconds) || options.delaySeconds < 0.0)
-			throw "Audio transition timing must be finite and non-negative";
+			throw BindingError.invalidArgument("AudioTrackPlayer.validateOptions", "Audio transition timing must be finite and non-negative");
 	}
 
 	static function secondsToFrames(seconds:Float):haxe.Int64 {
@@ -497,6 +498,6 @@ class AudioTrackPlayer {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio track player has been disposed";
+			throw BindingError.disposed("AudioTrackPlayer.ensureLive", "Audio track player has been disposed");
 	}
 }

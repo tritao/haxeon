@@ -29,15 +29,15 @@ can parse them.
 
 ## Typed events
 
-`NativeKitRuntime.events` is the managed owner of the native event queue. Each
+`Runtime.events` is the managed owner of the native event queue. Each
 `events.poll()` performs one native poll, decodes and releases that event, routes
 request completions, then notifies event listeners. It returns `false` when the
 queue is empty, so an application can drain events with `while (events.poll())`.
-The low-level `NativeKitEvent` wrapper still provides `release()`, `take()`,
+The low-level `NativeEvent` wrapper still provides `release()`, `take()`,
 `payload()`, and `snapshot()` for code that already owns a raw event value.
 
 Known WebView, notification, dialog, clipboard, and drop payloads project to typed
-`NativeKitEventValue` cases. Unknown kinds project to `Raw`, preserving metadata
+`PlatformEvent` cases. Unknown kinds project to `Raw`, preserving metadata
 and copied payload data for forward compatibility. Malformed packed payloads
 throw instead of allowing out-of-bounds reads.
 
@@ -56,7 +56,7 @@ UTF-8 inputs are marked in the authoritative C headers with `NK_UTF8` or
 `NK_NULLABLE_UTF8`. The importer projects these annotations to managed Haxe
 strings, so the binding import header does not redeclare public functions.
 
-`NativeKitRequests` is a request registry owned by the event pump; it never polls
+`Requests` is a request registry owned by the event pump; it never polls
 the native queue. Access it as `runtime.events.requests`. The Haxe UI
 `NativeInputAdapter` can attach to the same pump with `attach(events)` and stop
 receiving events with `detach()`.

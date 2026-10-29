@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Enums;
 import haxeon.gpu.Pipeline;
 
@@ -17,6 +19,7 @@ import haxeon.gpu.Enums.UniformType;
 /** Renderer-owned shader resource. */
 class Shader {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_shader;
 	var disposed:Bool = false;
 
@@ -24,7 +27,7 @@ class Shader {
 	private function new(renderer:Renderer, value:nkgpu_shader) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function create(renderer:Renderer, language:ShaderLanguage,
@@ -69,18 +72,21 @@ class Shader {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_shader_destroy(renderer.nativeHandle(), value), "shader.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU shader has been disposed";
+			throw BindingError.disposed("Shader.ensureLive", "GPU shader has been disposed");
 		renderer.ensureLive();
 	}
 }
@@ -88,6 +94,7 @@ class Shader {
 /** Configures shader bindings before creating the immutable shader resource. */
 class ShaderBuilder {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_shader_builder;
 	var consumed:Bool = false;
 
@@ -95,13 +102,13 @@ class ShaderBuilder {
 	private function new(renderer:Renderer, value:nkgpu_shader_builder) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public function uniformBlock(slot:Int, stage:ShaderStage, size:Int):ShaderBuilder {
 		ensureLive();
 		if (slot < 0 || size <= 0)
-			throw "GPU uniform block slot and size are invalid";
+			throw BindingError.invalidArgument("ShaderBuilder.uniformBlock", "GPU uniform block slot and size are invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_uniform_block(value, slot, stage, size), "shader.uniformBlock");
 		return this;
 	}
@@ -110,7 +117,7 @@ class ShaderBuilder {
 		semanticIndex:Int = 0):ShaderBuilder {
 		ensureLive();
 		if (location < 0 || semanticIndex < 0)
-			throw "GPU shader vertex attribute is invalid";
+			throw BindingError.invalidArgument("ShaderBuilder.attribute", "GPU shader vertex attribute is invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_attribute(value, location, glslName,
 			hlslSemantic, semanticIndex), "shader.attribute");
 		return this;
@@ -119,7 +126,7 @@ class ShaderBuilder {
 	public function uniform(slot:Int, memberIndex:Int, name:String, type:UniformType, arrayCount:Int = 1):ShaderBuilder {
 		ensureLive();
 		if (slot < 0 || memberIndex < 0 || arrayCount < 0)
-			throw "GPU uniform description is invalid";
+			throw BindingError.invalidArgument("ShaderBuilder.uniform", "GPU uniform description is invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_uniform(value, slot, memberIndex, name, type, arrayCount), "shader.uniform");
 		return this;
 	}
@@ -127,7 +134,7 @@ class ShaderBuilder {
 	public function texture(viewSlot:Int, samplerSlot:Int, stage:ShaderStage, name:String):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0 || samplerSlot < 0)
-			throw "GPU texture slots must be non-negative";
+			throw BindingError.invalidArgument("ShaderBuilder.texture", "GPU texture slots must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_texture(value, viewSlot, samplerSlot, stage, name), "shader.texture");
 		return this;
 	}
@@ -137,7 +144,7 @@ class ShaderBuilder {
 		imageType:ImageType, name:String):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0 || samplerSlot < 0)
-			throw "GPU texture slots must be non-negative";
+			throw BindingError.invalidArgument("ShaderBuilder.textureType", "GPU texture slots must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_texture_type(value, viewSlot, samplerSlot, stage,
 			imageType, name), "shader.textureType");
 		return this;
@@ -148,7 +155,7 @@ class ShaderBuilder {
 		readonly:Bool = false):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0)
-			throw "GPU storage-buffer slot must be non-negative";
+			throw BindingError.invalidArgument("ShaderBuilder.storageBuffer", "GPU storage-buffer slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_storage_buffer(value, viewSlot, stage,
 			readonly ? 1 : 0), "shader.storageBuffer");
 		return this;
@@ -159,7 +166,7 @@ class ShaderBuilder {
 		writeonly:Bool = false):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0)
-			throw "GPU storage-image slot must be non-negative";
+			throw BindingError.invalidArgument("ShaderBuilder.storageImage", "GPU storage-image slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_storage_image(value, viewSlot, format,
 			writeonly ? 1 : 0), "shader.storageImage");
 		return this;
@@ -169,17 +176,20 @@ class ShaderBuilder {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_shader_end(value);
 		consumed = true;
+		registration.detach();
 		GpuResult.check(made.status, "shader.end");
 		return new Shader(renderer, made.out_shader);
 	}
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		consumed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (consumed)
-			throw "GPU shader builder has been consumed";
+			throw BindingError.invalidState("ShaderBuilder.ensureLive", "GPU shader builder has been consumed");
 		renderer.ensureResourceOperation();
 	}
 }

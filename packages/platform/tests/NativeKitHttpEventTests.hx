@@ -1,5 +1,5 @@
+import haxeon.platform.event.EventPump;
 import haxe.io.Bytes;
-import haxeon.platform.NativeKitEvents;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
 import nativekit.ffi.NativeKitNetTypes.HttpHeader;
@@ -10,12 +10,12 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Loopback contract test for copied NativeKit HTTP events and byte-span headers. */
 class NativeKitHttpEventTests {
-	public static function run(events:NativeKitEvents):Bool {
+	public static function run(events:EventPump):Bool {
 		var fixturePort = Std.parseInt(Sys.getEnv("NATIVEKIT_HTTP_FIXTURE_PORT"));
 		if (fixturePort == null || fixturePort <= 0)
 			return true; // The test runner omits the optional loopback fixture when Node is unavailable.
 
-		var subscription:Null<haxeon.platform.NativeKitEvents.NativeKitEventSubscription> = null;
+		var subscription:Null<haxeon.platform.event.EventSubscription> = null;
 		var result = false;
 		var requestId:haxe.Int64 = haxe.Int64.ofInt(0);
 		try {

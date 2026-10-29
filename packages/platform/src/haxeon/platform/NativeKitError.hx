@@ -1,21 +1,14 @@
 package haxeon.platform;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import haxeon.platform.PlatformError;
+import nativekit.ffi.NativeKitTypes.Result;
 
-/** A failed NativeKit operation with its machine-readable result and native diagnostic. */
-class NativeKitError extends haxe.Exception {
+/** NativeKit failure with its typed platform result. */
+class NativeKitError extends PlatformError {
 	public final result:Result;
-	public final operation:String;
-	public final diagnostic:Null<String>;
 
 	public function new(result:Result, operation:String, diagnostic:Null<String>) {
-		super(messageFor(result, operation, diagnostic));
+		super("nativekit", result, operation, diagnostic);
 		this.result = result;
-		this.operation = operation;
-		this.diagnostic = diagnostic;
 	}
-
-	static function messageFor(result:Result, operation:String, diagnostic:Null<String>):String
-		return '$operation failed ($result)${diagnostic == null || diagnostic.length == 0 ? "" : ": " + diagnostic}';
 }

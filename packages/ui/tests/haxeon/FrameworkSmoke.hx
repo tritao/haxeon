@@ -1,3 +1,8 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.input.TextEdit as PlatformTextEdit;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 
@@ -31,7 +36,6 @@ import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.Rect;
@@ -45,10 +49,6 @@ import haxeon.ui.TextColorRange;
 import haxeon.ui.widgets.text.TextDecoration;
 import haxeon.ui.widgets.text.TextDecorationKind;
 import haxeon.ui.TextWrap;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitRuntime;
 import NativeKitEventDecoderTests;
 import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.CursorShape as UiCursorShape;
@@ -200,10 +200,8 @@ import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleImpact;
 import haxeon.ui.style.StyleSource;
-import haxeon.ui.style.StyleDiff;
 import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
-import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
@@ -943,7 +941,7 @@ class FrameworkSmoke {
 		if (!editor.deleteBackward() || editor.text != "")
 			return 37;
 		editor.insert("hi");
-		var composition = new NativeKitTextEdit(TextEditAction.Compose, "á", 2, 2,
+		var composition = new PlatformTextEdit(TextEditAction.Compose, "á", 2, 2,
 			4, 4, 2, 4, 1, 6);
 		if (!editor.applyTextEdit(composition) || editor.text != "hiá" ||
 			editor.selectionEnd != 4 || editor.selectionFocusAffinity != 1 ||
@@ -971,7 +969,7 @@ class FrameworkSmoke {
 		if (!haxeon.ui.core.TextInputBridge.matchesRects([], publishedRects))
 			throw "Empty input geometry should reuse its published snapshot";
 		var nativeDeleteEditor = new TextEditorState(fonts, "ab");
-		var nativeDelete = new NativeKitTextEdit(TextEditAction.Delete, null, 1, 2,
+		var nativeDelete = new PlatformTextEdit(TextEditAction.Delete, null, 1, 2,
 			1, 1, -1, -1, 1, 2);
 		if (!nativeDeleteEditor.applyTextEdit(nativeDelete) || nativeDeleteEditor.text != "a" ||
 			nativeDeleteEditor.selectionFocusAffinity != 1 ||
@@ -1192,7 +1190,7 @@ class FrameworkSmoke {
 			sharedSemantics.documentLength != 3)
 			return 294;
 		context.text(UiEventKind.TextEdit, null,
-			new NativeKitTextEdit(TextEditAction.Compose, "x", 2, 2, 3, 3, 2, 3));
+			new PlatformTextEdit(TextEditAction.Compose, "x", 2, 2, 3, 3, 2, 3));
 		if (sharedDocument.text != "áx🙂" || sharedEdit == null ||
 			sharedEdit.replacementStart != 2 || sharedEdit.replacementEnd != 2 ||
 			sharedEdit.replacementText != "x" || sharedEdit.replacedText != "" ||
@@ -1204,7 +1202,7 @@ class FrameworkSmoke {
 			sharedEditor.compositionStart != 2 || sharedEditor.compositionEnd != 3)
 			return 215;
 		context.text(UiEventKind.TextEdit, null,
-			new NativeKitTextEdit(TextEditAction.Commit, "x", 2, 3, 3, 3, -1, -1));
+			new PlatformTextEdit(TextEditAction.Commit, "x", 2, 3, 3, 3, -1, -1));
 		if (sharedDocument.text != "áx🙂" || sharedEditor.compositionStart != -1)
 			return 216;
 		sharedDocument.replace(0, sharedDocument.codepointCount, "external update");
@@ -1284,7 +1282,7 @@ class FrameworkSmoke {
 		context.key(UiEventKind.KeyDown, UiKey.Backspace);
 		if (field.value != "🙂" || fieldEditor.selectionEnd != 0)
 			return 43;
-		var compositionEdit = new NativeKitTextEdit(TextEditAction.Compose, "x", 1, 1,
+		var compositionEdit = new PlatformTextEdit(TextEditAction.Compose, "x", 1, 1,
 			2, 2, 1, 2);
 		context.text(UiEventKind.TextEdit, null, compositionEdit);
 		if (field.value != "🙂x" || fieldEditor.compositionStart != 1 ||
@@ -1295,16 +1293,16 @@ class FrameworkSmoke {
 			fieldDiagnostics.compositionStart != 1 || fieldDiagnostics.compositionEnd != 2 ||
 			fieldDiagnostics.compositionText != "x" || fieldDiagnostics.caretRect == null)
 			return 213;
-		var commitEdit = new NativeKitTextEdit(TextEditAction.Commit, "x", 1, 2,
+		var commitEdit = new PlatformTextEdit(TextEditAction.Commit, "x", 1, 2,
 			2, 2, -1, -1);
 		context.text(UiEventKind.TextEdit, null, commitEdit);
 		if (fieldEditor.compositionStart != -1 || field.value != "🙂x")
 			return 45;
-		var cancelEdit = new NativeKitTextEdit(TextEditAction.SetComposition, null, 0, 0,
+		var cancelEdit = new PlatformTextEdit(TextEditAction.SetComposition, null, 0, 0,
 			2, 2, 1, 2);
 		if (!fieldEditor.applyTextEdit(cancelEdit) || fieldEditor.compositionStart != 1 ||
 			fieldEditor.compositionRects().length == 0 ||
-			!fieldEditor.applyTextEdit(new NativeKitTextEdit(TextEditAction.FinishComposition,
+			!fieldEditor.applyTextEdit(new PlatformTextEdit(TextEditAction.FinishComposition,
 				null, 0, 0, 2, 2, -1, -1)) || fieldEditor.compositionStart != -1)
 			return 210;
 		if (!context.accessibilityAction(fieldRoot.id.value, AccessibilityRequest.SetSelection,
@@ -1554,9 +1552,14 @@ class FrameworkSmoke {
 		keyboardEditor.placeCaret(0, false);
 		for (_ in 0...12)
 			context.key(UiEventKind.KeyDown, UiKey.Down);
-		// Moving the caret requests a reveal, which the next frame's layout carries out.
-		context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
-		if (keyboardEditor.scrollOffsetY <= 0.0)
+		// Keyboard navigation requests reveal; the next layout resolves it with current geometry.
+		keyboardRoot = context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
+		var keyboardGeometry:ResolvedLayoutItem = cast keyboardRoot.children[0].resolved;
+		var keyboardViewport = keyboardGeometry.height;
+		var keyboardCaret = keyboardEditor.layout.caret(keyboardEditor.focusPosition());
+		var caretBottom = keyboardCaret.y + Math.max(keyboardCaret.ascender, keyboardCaret.descender);
+		if (keyboardEditor.scrollOffsetY <= 0.0 ||
+			caretBottom > keyboardEditor.scrollOffsetY + keyboardViewport + 0.01)
 			return 217;
 		context.key(UiEventKind.KeyDown, UiKey.Home, UiModifier.Control);
 		context.submit(keyboardArea, new LayoutFrame(256.0, 192.0));
@@ -2035,7 +2038,7 @@ class FrameworkSmoke {
 		var source = new Handle(17);
 		var surface = new Handle(19);
 		var input = new NativeInputAdapter(context, source, surface);
-		var eventRuntime = NativeKitRuntime.start();
+		var eventRuntime = Runtime.start();
 		var eventPump = eventRuntime.events;
 		var pumpEvents = 0;
 		var pumpSubscription = eventPump.listen(function(_) { pumpEvents++; });
@@ -2099,7 +2102,7 @@ class FrameworkSmoke {
 			return 24;
 		if (!input.consume(TextInput(source, 0x1f642)) || committedText != "🙂")
 			return 16;
-		var edit = new NativeKitTextEdit(TextEditAction.Compose, "compose", 0, 0,
+		var edit = new PlatformTextEdit(TextEditAction.Compose, "compose", 0, 0,
 			0, 0, 0, 7);
 		if (input.consume(TextEdit(new Handle(20), edit)) || editSeen ||
 			!input.consume(TextEdit(source, edit)) || !editSeen)
@@ -2237,7 +2240,7 @@ class FrameworkSmoke {
 		var scrollView = new ScrollView("demo-scroll", new Column("long-content", [
 			new KeyedView("message", new Button("Scrollable content"))
 		], longContentStyle), viewportStyle, ScrollAxis.Vertical);
-		// Geometry and capture checks need a hittable thumb without advancing the auto-hide clock.
+		// Interaction checks require a visible thumb without advancing the fade animation.
 		scrollView.scrollbarVisibility = haxeon.ui.widgets.scroll.ScrollbarVisibility.Always;
 		var scrollFrame = new LayoutFrame(256.0, 80.0);
 		var scrollRoot = context.submit(scrollView, scrollFrame);
@@ -3063,21 +3066,25 @@ class FrameworkSmoke {
 		var theme = new Theme();
 		if (theme.tokens.textPrimary != theme.text || theme.tokens.textSecondary != theme.mutedText ||
 			theme.tokens.surface != theme.panelBackground || theme.tokens.focusRing != theme.buttonFocused ||
+			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
 			theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0)
 			return 225;
 		var originalButton = theme.tokens.buttonBackground;
 		var originalControl = theme.tokens.controlUnselected;
 		theme.tokens.surfaceRaised = Color.rgba(0.31, 0.32, 0.33, 1.0);
 		theme.tokens.border = Color.rgba(0.41, 0.42, 0.43, 1.0);
-		theme.tokens.focusRing = Color.rgba(0.61, 0.42, 0.73, 1.0);
 		if (theme.tokens.buttonBackground != originalButton ||
 			theme.tokens.controlUnselected != originalControl)
 			return 225;
+		var customFocusRing = Color.rgba(0.51, 0.52, 0.53, 1.0);
+		theme.tokens.focusRing = customFocusRing;
 		theme.tokens.deriveComponents();
 		if (theme.tokens.navigationBackground != theme.tokens.surfaceRaised ||
-			theme.tokens.selectionBorder != theme.tokens.border ||
-			theme.tokens.buttonFocused != theme.tokens.focusRing)
-			throw "Derived component colors must follow semantic surface, border and focus tokens";
+			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
+			theme.tokens.buttonFocused != theme.tokens.focusRing ||
+			theme.tokens.focusRing != customFocusRing ||
+			theme.tokens.selectionBorder != theme.tokens.border)
+			return 225;
 		theme.body.color = Color.rgba(0.10, 0.14, 0.21, 1.0);
 		theme.button.color = Color.rgba(1.0, 1.0, 1.0, 1.0);
 		var styleTheme = new StyleSheet("StyleTheme");
@@ -4624,7 +4631,7 @@ class FrameworkSmoke {
 	}
 
 	static function testHostRuntime(session:UiHostSession, fonts:FontCollection):UiHostRuntime {
-		var context = new UiHostContext(fonts, new NativeKitEvents(),
+		var context = new UiHostContext(fonts, new EventPump(),
 			function() session.stop(), function() {});
 		return new UiHostRuntime(session, context, WindowHandle.invalid(), SurfaceHandle.invalid(),
 			800, 600);
@@ -4711,21 +4718,21 @@ class FrameworkSmoke {
 	}
 
 	static function checkWindowChrome(context:UiContext):Bool {
-		var runtime:Null<NativeKitRuntime> = null;
+		var runtime:Null<Runtime> = null;
 		var attached = false;
 		var result = false;
 		try {
 			var initOptions = new InitOptions();
 			initOptions.set_api_version(NativeKit.nk_api_version());
-			runtime = NativeKitRuntime.start(initOptions);
-			var windowOptions = new WindowOptions();
+			runtime = Runtime.startNative(initOptions);
+			var windowOptions = new NativeWindowOptions();
 			windowOptions.set_width(320);
 			windowOptions.set_height(192);
 			windowOptions.set_title("NativeKit UI chrome smoke");
 			windowOptions.set_flags(WindowFlags.Hidden | WindowFlags.Borderless);
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
-			var window = runtime.createWindow(windowOptions);
+			var window = runtime.createWindowNative(windowOptions);
 			context.attachPlatformWindow(window.nativeHandle());
 			attached = true;
 			var root = context.submit(new WindowChrome("chrome", WindowDecorationRegionKind.Drag,
@@ -5306,15 +5313,16 @@ class FrameworkSmoke {
 				node.semantics.role == AccessibilityRole.MenuItem)
 				firstItem = node;
 		});
-		if (firstItem == null ||
-			firstItem.computedStyle.get(StyleProperty.Background).red !=
+		var firstItemNode = firstItem;
+		if (firstItemNode == null ||
+			firstItemNode.computedStyle.get(StyleProperty.Background).red !=
 			uiContext.buildContext.theme.tokens.selectionField.red)
 			return false;
 		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
-		var settledFirst:Null<RenderNode> = settledMenu.find(firstItem.id);
+		var settledFirst:Null<RenderNode> = settledMenu.find(firstItemNode.id);
 		if (settledFirst == null ||
 			settledFirst.computedStyle.get(StyleProperty.Background).red !=
-			firstItem.computedStyle.get(StyleProperty.Background).red)
+			firstItemNode.computedStyle.get(StyleProperty.Background).red)
 			return false;
 		var sceneNudges = 0;
 		uiContext.commands.register(new Command("scene.nudge", "Nudge scene", function() {
@@ -5908,6 +5916,7 @@ class FrameworkSmoke {
 			});
 		if (singletonTabs.length != 2 || singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		var singletonSourceId = singletonSourceTab.id;
 		var sourceBounds = singletonSourceTab.globalBounds(), targetBounds = singletonTargetTab.globalBounds();
 		var sourceX = sourceBounds.x + sourceBounds.width * 0.5;
 		var sourceY = sourceBounds.y + sourceBounds.height * 0.5;
@@ -5925,10 +5934,10 @@ class FrameworkSmoke {
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerUp(ownPaneX, ownPaneY, 0);
-		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceTab.id) ||
+		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId) ||
 			tabPlatformCaptureStates.length != 0)
 			return false;
 		switch (singletonDock.root) {
@@ -5936,16 +5945,16 @@ class FrameworkSmoke {
 			default: return false;
 		}
 		uiContext.pointerDown(sourceX, sourceY, 0);
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerUp(targetX, targetY, 0);
-		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
@@ -5982,6 +5991,7 @@ class FrameworkSmoke {
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
 		sourceX = sourceBounds.x + sourceBounds.width * 0.5;
@@ -5994,17 +6004,17 @@ class FrameworkSmoke {
 			return false;
 		uiContext.pointerLeave();
 		if (singletonWorkspace.interaction.preview != null ||
-			!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		uiContext.pointerUp(targetX, targetY, 0);
 		if (singletonWorkspace.interaction.preview != null ||
-			uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
@@ -6041,6 +6051,7 @@ class FrameworkSmoke {
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
 		sourceX = sourceBounds.x + sourceBounds.width * 0.5;
@@ -6050,12 +6061,12 @@ class FrameworkSmoke {
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null ||
-			!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (singletonWorkspace.interaction.draggingPanelId != null ||
 			singletonWorkspace.interaction.preview != null ||
-			uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.setPointerCaptureHandler(null);
 		var changes = 0;

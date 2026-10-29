@@ -5,9 +5,9 @@ import haxeon.agent.Cancelable;
 import haxeon.agent.HttpStreamRequest;
 import haxeon.agent.HttpStreamSink;
 import haxeon.agent.HttpTransport;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
+import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
 import nativekit.ffi.NativeKitNetTypes.HttpHeader;
@@ -25,13 +25,13 @@ class NativeKitHttpTransport implements HttpTransport {
 	static inline var ReadChunk = 16384;
 
 	final owner:OwnedHttpClientHandle;
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	final active:Map<String, NativeKitStreamRequest> = [];
 	final scratch:Bytes = Bytes.alloc(ReadChunk);
 	var disposed = false;
 
 	/** `allowHttp` admits plain HTTP so tests and local gateways can run without TLS. */
-	public function new(events:NativeKitEvents, allowHttp:Bool = false) {
+	public function new(events:EventPump, allowHttp:Bool = false) {
 		if (events == null)
 			throw "Streaming HTTP transport requires the shared NativeKit event pump";
 		var options = new HttpClientOptions();
@@ -87,7 +87,7 @@ class NativeKitHttpTransport implements HttpTransport {
 			}
 	}
 
-	function onEvent(value:NativeKitEventValue):Void {
+	function onEvent(value:PlatformEvent):Void {
 		switch value {
 			case HttpHeaders(_, id, result, response):
 				var handle = active.get(Std.string(id));

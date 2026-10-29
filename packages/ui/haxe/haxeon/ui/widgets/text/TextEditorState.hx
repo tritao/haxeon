@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.text;
 
+import haxeon.platform.input.TextEdit;
+
 import haxeon.ui.TextLayout.TextCaret;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
@@ -15,7 +17,6 @@ import haxeon.ui.LayoutMeasureConstraints;
 import haxeon.ui.LayoutMeasureResult;
 import haxeon.ui.LayoutMeasuredContent;
 import haxeon.ui.LayoutRenderableContent;
-import haxeon.platform.NativeKitEventValue.NativeKitTextEdit;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.TextStyle;
@@ -140,7 +141,6 @@ class TextEditorState implements SemanticsValueSource {
 			}, edit, bytes));
 		lastHistoryEdit = join ? previous : edit;
 	}
-
 
 	public function new(fonts:FontCollection, text:String, ?textStyle:TextStyle,
 			?paragraphStyle:ParagraphStyle, ?document:TextDocument) {
@@ -448,7 +448,7 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	/** Applies one transactional NativeKit composition/edit update. */
-	public function applyTextEdit(edit:NativeKitTextEdit):Bool {
+	public function applyTextEdit(edit:TextEdit):Bool {
 		ensureLive();
 		if (edit == null)
 			return false;
