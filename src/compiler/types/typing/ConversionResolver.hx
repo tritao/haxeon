@@ -44,6 +44,12 @@ class ConversionResolver {
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
+		// A nullable converts through the abstract's @:from function for its element, so unwrap it first, as Haxe does.
+		switch [value.type, expected] {
+			case [TNullable(element), TAbstract(_, _, _)] if (session.relations.conversion(element, expected) == AbstractCast):
+				return coerce(new TypedExpression(TCast(value), element, value.span), expected, context, code);
+			default:
+		}
 		return switch session.relations.conversion(value.type, expected) {
 			case Identity: ValueCopy.bind(session, value, expected);
 			case IntToFloat:
