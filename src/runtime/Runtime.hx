@@ -283,16 +283,15 @@ class Runtime {
 	 * What this throws is the patch's outcome alone, as `patchSet` throws it. A hook that throws is the app's error, not the
 	 * patch's: `hookFailed` gets it (`rebuilding` false for `release`) and the patch goes on. Once `release` ran, `rebuild`
 	 * runs whatever `release` or the patch threw, so the app never stays released.
+	 *
+	 * Only a patch with guards (one that drops functions) calls `release`; every patch calls `rebuild`, so the app shows
+	 * the new code at once instead of at its next input.
 	 */
 	public static function patchSetRebuilding(module:LoadedModule, patch:PatchSet, release:Null<Int>, rebuild:Null<Int>,
 			hookFailed:(rebuilding:Bool, error:String) -> Void):Void {
 		// Only a patch that drops functions checks for closures, so only it needs the app to let go of its UI first.
-		if (!patch.hasGuards()) {
-			patchSet(module, patch);
-			return;
-		}
 		// Whatever `release` let go of before it threw stays let go; the guard check sees what the app still holds.
-		if (release != null)
+		if (release != null && patch.hasGuards())
 			try
 				callVoid(module, release)
 			catch (error:Dynamic)

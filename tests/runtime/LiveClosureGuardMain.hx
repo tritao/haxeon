@@ -24,6 +24,7 @@ class LiveClosureGuardMain {
 		patchesDeletedHandlerNobodyStores();
 		patchesDeletedHandlerTheUiRebuilds();
 		rebuildsAfterAThrowingRelease();
+		rebuildsWithoutReleasingAfterAnUnguardedPatch();
 		refusesDeletingAHandlerAPatchStored();
 		refusesDeletingManyStoredHandlers();
 		refusesDeletingAHandlerANativeRootHolds();
@@ -147,6 +148,50 @@ class LiveClosureGuardMain {
 			throw 'the throwing release was not reported once as a hook error: $hookErrors';
 		// The old code still runs, and `liveRebuild` ran once: the UI holds both handlers again.
 		expect(Runtime.callInt(session.live, session.mainId), (1 * 100 + 2) * 100 + 10, "the UI after the refused patch");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * A patch that drops nothing (a handler's body edited) has no guards: the app is not asked to let go of its UI, but it
+	 * is asked to rebuild, so the new code shows without waiting for input.
+	 */
+	static function rebuildsWithoutReleasingAfterAnUnguardedPatch():Void {
+		var ui = (body:String) -> "class Ui {
+  public static var handlers:Array<Int->Int> = [];
+"
+			+ "  public static var releases = 0;
+  public static var rebuilds = 0;
+"
+			+ "  public static function build():Void {
+    handlers = [];
+" + '    handlers.push($body);
+' + "  }
+}
+"
+			+ "function liveRelease():Void {
+  Ui.releases++;
+  Ui.handlers = [];
+}
+"
+			+ "function liveRebuild():Void {
+  Ui.rebuilds++;
+  Ui.build();
+}
+" + "function main():Int {
+"
+			+ "  if (Ui.handlers.length == 0) Ui.build();
+" + "  return Ui.releases * 1000 + Ui.rebuilds * 100 + Ui.handlers[0](1);
+}
+";
+		var session = start(ui("x -> x + 1"));
+		expect(Runtime.callInt(session.live, session.mainId), 2, "the UI before the edit");
+		var changed = compileEdit(session, ui("x -> x + 5"), "a handler's body edited");
+		var patch = new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions);
+		if (patch.hasGuards())
+			throw 'editing a handler body produced a patch with guards';
+		Runtime.patchSetRebuilding(session.live, patch, changed.functionIds.get("Main.liveRelease"), changed.functionIds.get("Main.liveRebuild"),
+			(_, error) -> throw 'a rebuild hook threw: $error');
+		expect(Runtime.callInt(session.live, session.mainId), 100 + 6, "no release, one rebuild, and the new body");
 		Runtime.dispose(session.live);
 	}
 
