@@ -677,8 +677,8 @@ class RenderNode {
 			beforeStyle.transformOriginY != afterStyle.transformOriginY) {
 			flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
 		}
-		if (!sameTextStyle(before.textStyle, after.textStyle) ||
-			!sameParagraphStyle(before.paragraphStyle, after.paragraphStyle))
+		if (!sameTextStyle(before.peekTextStyle(), after.peekTextStyle()) ||
+			!sameParagraphStyle(before.peekParagraphStyle(), after.peekParagraphStyle()))
 			flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
 		return flags;
 	}

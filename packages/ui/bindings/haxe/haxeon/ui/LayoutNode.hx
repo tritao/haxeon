@@ -7,8 +7,18 @@ class LayoutNode {
 	public final style:LayoutStyle;
 	public var text:String;
 	public var textColor:Color;
-	public final textStyle:TextStyle;
-	public final paragraphStyle:ParagraphStyle;
+	/**
+	 * Most nodes never show text, so a node allocates its own text and paragraph style on first use. Anything that reads
+	 * these for every node must use `peekTextStyle` and `peekParagraphStyle`, which allocate nothing.
+	 */
+	public var textStyle(get, never):TextStyle;
+	public var paragraphStyle(get, never):ParagraphStyle;
+	var ownTextStyle:Null<TextStyle> = null;
+	var ownParagraphStyle:Null<ParagraphStyle> = null;
+	/** Color is immutable, and the styles below are only ever read: every node without its own starts from these. */
+	static final DefaultTextColor:Color = Color.rgba(1.0, 1.0, 1.0, 1.0);
+	static final DefaultTextStyle:TextStyle = new TextStyle();
+	static final DefaultParagraphStyle:ParagraphStyle = new ParagraphStyle();
 	/** Whether this node's own resolved bounds participate in geometric picking. */
 	public var hitSelf:Bool;
 	/** Whether descendants participate in geometric picking below this node. */
@@ -38,9 +48,7 @@ class LayoutNode {
 		this.visualKind = visualKind;
 		this.style = style == null ? new LayoutStyle() : style;
 		text = "";
-		textColor = Color.rgba(1.0, 1.0, 1.0, 1.0);
-		textStyle = new TextStyle();
-		paragraphStyle = new ParagraphStyle();
+		textColor = DefaultTextColor;
 		hitSelf = true;
 		hitChildren = true;
 		intrinsicContent = null;
@@ -50,6 +58,36 @@ class LayoutNode {
 		compositeRevision = 0;
 		encodeStamp = 0;
 		children = NoChildren;
+	}
+
+	function get_textStyle():TextStyle {
+		var own = ownTextStyle;
+		if (own == null) {
+			own = new TextStyle();
+			ownTextStyle = own;
+		}
+		return own;
+	}
+
+	function get_paragraphStyle():ParagraphStyle {
+		var own = ownParagraphStyle;
+		if (own == null) {
+			own = new ParagraphStyle();
+			ownParagraphStyle = own;
+		}
+		return own;
+	}
+
+	/** Read-only view of the text style: the node's own, or a shared default that must never be changed. Allocates nothing. */
+	public function peekTextStyle():TextStyle {
+		var own = ownTextStyle;
+		return own == null ? DefaultTextStyle : own;
+	}
+
+	/** Read-only view of the paragraph style: the node's own, or a shared default that must never be changed. Allocates nothing. */
+	public function peekParagraphStyle():ParagraphStyle {
+		var own = ownParagraphStyle;
+		return own == null ? DefaultParagraphStyle : own;
 	}
 
 	public function add(child:LayoutNode):LayoutNode {

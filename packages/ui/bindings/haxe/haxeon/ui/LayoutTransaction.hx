@@ -57,17 +57,18 @@ class LayoutTransaction {
 		for (index in 0...nodeCount) {
 			var node = nodes[index];
 			var style = node.style;
+			var nodeTextStyle = node.peekTextStyle(), nodeParagraphStyle = node.peekParagraphStyle();
 			var record = headerBytes + index * recordBytes;
 			var measureVersion = node.measureVersion;
 			if (node.intrinsicContent != null)
 				measureVersion = node.intrinsicContent.getVersion();
-			var lineHeight:Float = node.paragraphStyle.lineHeight == null ? 0.0 : node.paragraphStyle.lineHeight;
+			var lineHeight:Float = nodeParagraphStyle.lineHeight == null ? 0.0 : nodeParagraphStyle.lineHeight;
 			if (node.id <= 0 || node.id == 0x80000000)
 				throw "Layout node ID is out of range";
 			if (measureVersion < 0 || node.contentRevision < 0 || node.geometryRevision < 0 ||
 				node.compositeRevision < 0)
 				throw "Layout revisions must be non-negative";
-			if (!finitePositive(node.textStyle.fontSize) || !finite(node.textStyle.letterSpacing) ||
+			if (!finitePositive(nodeTextStyle.fontSize) || !finite(nodeTextStyle.letterSpacing) ||
 				!finite(lineHeight) || lineHeight < 0.0)
 				throw "Layout text style values are invalid";
 			if (!finite(style.transformOriginX) || style.transformOriginX < 0.0 ||
@@ -134,16 +135,16 @@ class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, textOffset);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, this.stringBytes[index].length);
 			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.textColor);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, cast node.textStyle.font);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, node.textStyle.fontSize);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, node.textStyle.letterSpacing);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, cast nodeTextStyle.font);
+			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
+			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, nodeTextStyle.letterSpacing);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
 				lineHeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, cast node.paragraphStyle.wrap);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, cast node.paragraphStyle.alignment);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, cast node.paragraphStyle.direction);
-			if (node.paragraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, node.paragraphStyle.tabWidth);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, cast nodeParagraphStyle.wrap);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, cast nodeParagraphStyle.alignment);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, cast nodeParagraphStyle.direction);
+			if (nodeParagraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, nodeParagraphStyle.tabWidth);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, 0);
 			var transform = style.transform;
 			if (!finite(transform.a) || !finite(transform.b) || !finite(transform.c) ||
