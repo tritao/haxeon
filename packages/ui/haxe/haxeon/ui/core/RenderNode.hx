@@ -159,8 +159,8 @@ class RenderNode {
 		styleType = type;
 		styleKey = key;
 		styleId = id;
-		styleClasses = classes == null || classes.length == 0 ? NoStrings : classes.copy();
-		styleTags = tags == null || tags.length == 0 ? NoStrings : tags.copy();
+		styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
+		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 		return this;
 	}
 
