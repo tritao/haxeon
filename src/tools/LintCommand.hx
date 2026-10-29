@@ -48,7 +48,7 @@ class LintCommand {
 		for (manifest in manifests)
 			command.addManifest(manifest);
 		var config = FormatConfigTools.defaults(2, true), found = 0;
-		for (path in paths) {
+		for (path in SourceFiles.expand(paths)) {
 			var source = File.getContent(path), file = new SourceFile(path, source), tokens;
 			try
 				tokens = new Lexer(file).tokenize()
@@ -77,7 +77,7 @@ class LintCommand {
 	}
 
 	function addManifest(path:String):Void {
-		var raw:Dynamic = Json.parse(File.getContent(path)), directory = Path.directory(path);
+		var raw:Dynamic = Json.parse(File.getContent(SourceFiles.requireFile(path))), directory = Path.directory(path);
 		var sourceRoots:Array<String> = raw.sourceRoots == null ? ["src"] : raw.sourceRoots;
 		for (sourceRoot in sourceRoots)
 			addRoot(Path.join([directory == "" ? "." : directory, sourceRoot]));
@@ -126,7 +126,7 @@ class LintCommand {
 		if (programs.exists(path))
 			return programs.get(path);
 		var program:Null<AstProgram> = null;
-		if (FileSystem.exists(path))
+		if (FileSystem.exists(path) && !FileSystem.isDirectory(path))
 			try
 				program = new Parser(new Lexer(new SourceFile(path, File.getContent(path))).tokenize()).parseProgram()
 			catch (_:Dynamic) {}

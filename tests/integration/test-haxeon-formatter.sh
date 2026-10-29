@@ -62,4 +62,29 @@ printf 'struct Vec2 { public var x:Int; }\n' > "$struct_path"
 grep -q '^struct Vec2 {' "$struct_path"
 "$cli" fmt --check "$struct_path"
 
-echo "PASS: built-in formatter CLI stdin, check, file, and struct modes"
+# A directory stands for the .hx files under it; reading one as a file used to crash HashLink.
+tree_dir="$project_dir/tree"
+mkdir -p "$tree_dir/nested"
+printf '%s\n' "$source" > "$tree_dir/nested/Deep.hx"
+printf 'not haxe\n' > "$tree_dir/notes.txt"
+set +e
+"$cli" fmt --check "$tree_dir" >/dev/null
+directory_check_status=$?
+set -e
+if [[ $directory_check_status -ne 1 ]]; then
+	echo "expected fmt --check to reject an unformatted file under a directory, got $directory_check_status" >&2
+	exit 1
+fi
+"$cli" fmt --line-width 40 "$tree_dir"
+"$cli" fmt --line-width 40 --check "$tree_dir"
+"$cli" lint "$tree_dir" >/dev/null
+set +e
+"$cli" lint --manifest "$tree_dir" "$source_path" >/dev/null 2>&1
+manifest_status=$?
+set -e
+if [[ $manifest_status -ne 1 ]]; then
+	echo "expected lint to refuse a directory as a manifest, got $manifest_status" >&2
+	exit 1
+fi
+
+echo "PASS: built-in formatter CLI stdin, check, file, directory, and struct modes"

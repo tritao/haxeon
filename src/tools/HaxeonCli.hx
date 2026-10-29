@@ -200,19 +200,6 @@ class HaxeonCli {
 		return 0;
 	}
 
-	/** Every `.hx` file under `directory`, in name order. */
-	static function collectHaxeSources(directory:String, into:Array<String>):Void {
-		var names = FileSystem.readDirectory(directory);
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var path = Path.join([directory, name]);
-			if (FileSystem.isDirectory(path))
-				collectHaxeSources(path, into);
-			else if (StringTools.endsWith(name, ".hx"))
-				into.push(path);
-		}
-	}
-
 	static function fmt(arguments:Array<String>):Int {
 		var check = false, stdin = false, lineWidth = 120, indentWidth = 2, useTabs = false, paths:Array<String> = [], index = 0;
 		while (index < arguments.length) {
@@ -269,15 +256,7 @@ class HaxeonCli {
 			return 0;
 		}
 		var status = 0;
-		var files:Array<String> = [];
-		for (path in options.paths) {
-			if (!FileSystem.exists(path))
-				throw 'Source file not found: $path';
-			if (FileSystem.isDirectory(path))
-				collectHaxeSources(path, files);
-			else
-				files.push(path);
-		}
+		var files = SourceFiles.expand(options.paths);
 		for (path in files) {
 			var source = File.getContent(path),
 				formatted = Formatter.format(source, config);
