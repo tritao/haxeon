@@ -16,6 +16,7 @@ extern varray *hl_sys_read_dir( vbyte *path );
 extern varray *hl_sys_stat( vbyte *path );
 
 #ifdef HL_WIN
+#include <windows.h>
 #include <wchar.h>
 #else
 #include <dirent.h>
@@ -256,17 +257,39 @@ HL_PRIM void HL_NAME(__file_save_content)( vstring *path, vstring *content ) {
 extern void hl_gc_dump_memory( const char *filename );
 extern void hl_gc_census_dump( const char *filename );
 
-/* The collector reads a NUL-terminated UTF-8 path; taking a String here keeps that conversion out of every caller. */
+/*
+ * The collector opens its output with fopen(const char *). Elsewhere that takes UTF-8; on Windows it takes the ANSI code
+ * page, so the path is converted to that and refused when it has characters the code page cannot hold (a lossy name would
+ * silently create a different file). Either way the result is NUL-terminated, which Bytes.ofString does not provide.
+ */
+static char *realtime_collector_path( vstring *path ) {
+#ifdef HL_WIN
+	const wchar_t *wide = path == NULL ? L"" : (const wchar_t *)realtime_string_data(path);
+	BOOL lossy = FALSE;
+	int size = WideCharToMultiByte(CP_ACP,WC_NO_BEST_FIT_CHARS,wide,-1,NULL,0,NULL,&lossy);
+	char *result = size > 0 ? (char *)malloc((size_t)size) : NULL;
+	if( result == NULL ) hl_error("Could not convert the dump path");
+	lossy = FALSE;
+	if( WideCharToMultiByte(CP_ACP,WC_NO_BEST_FIT_CHARS,wide,-1,result,size,NULL,&lossy) <= 0 || lossy ) {
+		free(result);
+		hl_error("The dump path has characters the system code page cannot represent");
+	}
+	return result;
+#else
+	return realtime_utf8_copy(path);
+#endif
+}
+
 HL_PRIM void HL_NAME(__gc_dump_memory)( vstring *path ) {
-	char *path_utf8 = realtime_utf8_copy(path);
-	hl_gc_dump_memory(path_utf8);
-	free(path_utf8);
+	char *native_path = realtime_collector_path(path);
+	hl_gc_dump_memory(native_path);
+	free(native_path);
 }
 
 HL_PRIM void HL_NAME(__gc_census_dump)( vstring *path ) {
-	char *path_utf8 = realtime_utf8_copy(path);
-	hl_gc_census_dump(path_utf8);
-	free(path_utf8);
+	char *native_path = realtime_collector_path(path);
+	hl_gc_census_dump(native_path);
+	free(native_path);
 }
 
 HL_PRIM void HL_NAME(__file_append_content)( vstring *path, vstring *content ) {
