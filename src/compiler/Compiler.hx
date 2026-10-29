@@ -115,7 +115,6 @@ typedef CompileResult = {
 	/** No runtime publication is required; revision stays at the acknowledged baseline. */
 	final unchanged:Bool;
 
-	final baseRevision:Int;
 	final revision:Int;
 
 	/** The revision `patchBytes` applies to. */
@@ -749,7 +748,6 @@ class Compiler {
 				unchanged: true,
 				baseRevision: cached.revision,
 				revision: cached.revision,
-				baseRevision: cached.revision,
 				patchBytes: null,
 				metrics: {
 					allocationPhases: [],

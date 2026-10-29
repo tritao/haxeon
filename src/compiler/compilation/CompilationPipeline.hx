@@ -149,7 +149,6 @@ class CompilationPipeline {
 				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == assembly.revision)),
 			baseRevision: publicationBaseline == null ? assembly.baseRevision : publicationBaseline.revision,
 			revision: assembly.revision,
-			baseRevision: assembly.baseRevision,
 			patchBytes: patchBytes,
 			metrics: {
 				allocationPhases: allocationPhases,
