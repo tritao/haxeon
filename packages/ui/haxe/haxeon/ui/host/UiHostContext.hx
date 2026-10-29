@@ -1,7 +1,8 @@
 package haxeon.ui.host;
 
+import haxeon.platform.event.EventPump;
+
 import haxeon.ui.FontCollection;
-import haxeon.platform.NativeKitEvents;
 import haxe.Int64;
 import nativekit.ffi.NativeKit;
 
@@ -15,7 +16,7 @@ class UiHostContext {
 	var applicationZoom:Float = 1.0;
 	@:allow(haxeon.ui.host.UiHostRuntime)
 	var onZoomChanged:Null<Float->Void>;
-	public final events:NativeKitEvents;
+	public final events:EventPump;
 	/** An application may defer closing while it asks to save or confirm. */
 	public var onCloseRequested:Null<(Void->Void)->Void> = null;
 	final close:Void->Void;
@@ -27,7 +28,7 @@ class UiHostContext {
 	public var repaintOnly(default, null):Bool = false;
 	public var gpuRendererId(default, null):Int = 0;
 
-	public function new(fonts:FontCollection, events:NativeKitEvents,
+	public function new(fonts:FontCollection, events:EventPump,
 			close:Void->Void, scheduleFrame:Void->Void) {
 		this.fonts = fonts;
 		this.events = events;

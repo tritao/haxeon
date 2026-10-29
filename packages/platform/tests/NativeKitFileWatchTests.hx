@@ -1,23 +1,24 @@
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitFileWatch;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.FileWatch;
+import haxeon.platform.FileWatchEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import sys.FileSystem;
 import sys.io.File;
 
-/** NativeKitFileWatch on the real backend: readiness, deep changes, exclusions, lost registrations and removal. */
+/** FileWatch on the real backend: readiness, deep changes, exclusions, lost registrations and removal. */
 class NativeKitFileWatchTests {
-	public static function run(events:NativeKitEvents):Bool {
+	public static function run(events:EventPump):Bool {
 		var capabilities:Capabilities = NativeKit.nk_get_capabilities();
 		if (!capabilities.contains(Capabilities.fileWatch()))
 			return true;
 		var root = temporaryRoot();
-		var watch:Null<NativeKitFileWatch> = null;
+		var watch:Null<FileWatch> = null;
 		try {
 			for (directory in ["a", "a/b", "build", "build/inner", "gone"])
 				FileSystem.createDirectory(root + "/" + directory);
 			var received:Array<FileWatchEvent> = [];
-			watch = NativeKitFileWatch.create(events, event -> received.push(event));
+			watch = FileWatch.create(events, event -> received.push(event));
 			watch.exclude(root + "/build");
 			watch.add(root, true);
 			watch.add(root + "/gone", false);
@@ -34,7 +35,7 @@ class NativeKitFileWatchTests {
 
 			FileSystem.deleteDirectory(root + "/gone");
 			await(events, () -> any(received, event -> switch event {
-				case Lost(path): NativeKitFileWatch.pathKey(path) == NativeKitFileWatch.pathKey(root + "/gone");
+				case Lost(path): FileWatch.pathKey(path) == FileWatch.pathKey(root + "/gone");
 				case _: false;
 			}), "a deleted registration was not reported lost");
 			if (watch.directories().length != 1)
@@ -50,7 +51,7 @@ class NativeKitFileWatchTests {
 			deleteTree(root);
 			return true;
 		} catch (error:Dynamic) {
-			Sys.println("FAIL: NativeKitFileWatch: " + error);
+			Sys.println("FAIL: FileWatch: " + error);
 			if (watch != null)
 				watch.dispose();
 			deleteTree(root);
@@ -66,14 +67,14 @@ class NativeKitFileWatchTests {
 	}
 
 	static function changed(received:Array<FileWatchEvent>, path:String):Bool {
-		var key = NativeKitFileWatch.pathKey(path);
+		var key = FileWatch.pathKey(path);
 		return any(received, event -> switch event {
-			case Changed(change): NativeKitFileWatch.pathKey(change.path) == key;
+			case Changed(change): FileWatch.pathKey(change.path) == key;
 			case _: false;
 		});
 	}
 
-	static function await(events:NativeKitEvents, done:Void->Bool, message:String):Void {
+	static function await(events:EventPump, done:Void->Bool, message:String):Void {
 		var deadline = Sys.time() + 5.0;
 		while (!done()) {
 			if (Sys.time() > deadline)

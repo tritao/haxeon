@@ -1,10 +1,10 @@
 package haxeon.ui.core;
+
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
-
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 
 /** Routes decoded NativeKit window input into one Haxe UiContext. */
 class NativeInputAdapter {
@@ -14,9 +14,9 @@ class NativeInputAdapter {
 	final accessibilitySource:Handle;
 	final cursor:NativeCursorController;
 	final window:WindowHandle;
-	var attachedEvents:Null<NativeKitEvents>;
-	var eventSubscription:Null<NativeKitEventSubscription>;
-	final eventListener:NativeKitEventValue->Void;
+	var attachedEvents:Null<EventPump>;
+	var eventSubscription:Null<EventSubscription>;
+	final eventListener:PlatformEvent->Void;
 	/** Converts window logical coordinates into application layout coordinates. */
 	public var coordinateScale:Float = 1.0;
 	var pointerX:Float;
@@ -40,7 +40,7 @@ class NativeInputAdapter {
 	}
 
 	/** Subscribes this adapter to the runtime's shared event pump. */
-	public function attach(events:NativeKitEvents):Void {
+	public function attach(events:EventPump):Void {
 		if (events == null)
 			throw "Native input requires a NativeKit event pump";
 		if (events.isDisposed())
@@ -79,7 +79,7 @@ class NativeInputAdapter {
 	}
 
 	/** Consumes recognized input for this window; other event kinds/sources pass through. */
-	public function consume(event:NativeKitEventValue):Bool {
+	public function consume(event:PlatformEvent):Bool {
 		if (event == null)
 			return false;
 		return switch (event) {
@@ -124,7 +124,7 @@ class NativeInputAdapter {
 					context.windowFocusLost();
 				} else context.windowFocusGained();
 				true;
-			case NativeKitEventValue.Key(eventSource, key, scancode, action, modifiers)
+			case PlatformEvent.Key(eventSource, key, scancode, action, modifiers)
 				if (matches(eventSource)):
 				var kind = keyKind(action);
 				if (kind == null)

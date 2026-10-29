@@ -6,6 +6,6 @@ import nativekit.ffi.NativeKitGpu;
 class GpuResult {
 	public static function check(status:Int, operation:String):Void {
 		if (status != 0)
-			throw '$operation failed with NativeKit-GPU status $status: ${NativeKitGpu.nkgpu_last_error()}';
+			throw new GpuError(status, operation, NativeKitGpu.nkgpu_last_error());
 	}
 }

@@ -53,6 +53,10 @@ enum HlInstruction {
 	ToSFloat(destination:Int, source:Int);
 	ToInt(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);
+	UnsafeCast(destination:Int, source:Int);
+	Unref(destination:Int, reference:Int);
+	Setref(reference:Int, source:Int);
+	RefOffset(destination:Int, reference:Int, index:Int);
 	Trap(destination:Int, target:String);
 	EndTrap(destination:Int);
 	GlobalGet(destination:Int, global:Int);

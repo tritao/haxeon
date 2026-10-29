@@ -1,3 +1,8 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.Paint.SolidPaint;
 
 import haxeon.ui.Canvas;
@@ -26,18 +31,15 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKit;
 import haxe.io.Bytes;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitRuntime;
 
 class Transaction {
 	static function main():Int {
 		var init = new InitOptions();
 		init.set_api_version(NativeKitConstants.NK_API_VERSION);
 		init.set_event_queue_capacity(32);
-		var runtime = NativeKitRuntime.start(init);
+		var runtime = Runtime.startNative(init);
 
-		var windowOptions = new WindowOptions();
+		var windowOptions = new NativeWindowOptions();
 		windowOptions.set_flags(WindowFlags.Resizable);
 		windowOptions.set_width(256);
 		windowOptions.set_height(192);
@@ -48,7 +50,7 @@ class Transaction {
 			return 11;
 		}
 		var window = createdWindow.out_window.borrow();
-		var surfaceOptions = new SurfaceOptions();
+		var surfaceOptions = new NativeSurfaceOptions();
 		surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
 		surfaceOptions.set_api(GraphicsApi.Opengl);
 		surfaceOptions.set_major_version(3);

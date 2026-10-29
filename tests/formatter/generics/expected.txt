@@ -1,0 +1,65 @@
+typedef Probe = {radius:Float, source:String};
+typedef Wide = {
+  radius:Float,
+  expected:Array<{
+    lo:Float,
+    hi:Float,
+    loPass:Int,
+    hiPass:Int,
+    another:Float,
+    yetAnother:Float,
+    more:Float,
+    evenMore:Float
+  }>,
+  source:String
+}
+class Generics {
+  var a:Array<Float> = [];
+  var b:Null<Array<Float>> = null;
+  var c:Map<String, Array<Int>> = new Map<String, Array<Int>>();
+  var d:Array<{z:Float, base:Int}> = [];
+  var e:Null<(Int, Int) -> Void> = null;
+  var f:Array<Array<Null<haxe.io.Bytes>>> = [];
+  var g:Array<Int> = [];
+  var h:Map<String, Array<Int>> = new Map();
+  public function radii():Array<Float> return [for (i in 0...count) grid.radius(i)];
+  public function first(items:Array<Item>):Null<Item> {
+    return items.length > 0 ? items[0] : null;
+  }
+  function compare(a:Int, b:Int, c:Int, d:Int):Bool {
+    if (a < b || c > d) return true;
+    var shifted = a < b >> c;
+    return a < b && b > c;
+  }
+}
+typedef Declared = {
+  var x:Float;
+  final y:Float;
+  var ?label:String;
+}
+typedef Optional = {?first:Float, ?second:Int};
+typedef Fields = {
+  ?yTravel:Float;
+  ?baseWidth:Float;
+}
+class Bodies {
+  var shape:Null<{
+    var x:Float;
+    var y:Float;
+  }> = null;
+  function fail():Null<Array<Float>> throw "unsupported";
+  function parameters(?first:Int, ?second:String = "x"):Void {
+    var c = ready ? 1 : 2;
+    var d = compute(c) ? [1] : null;
+  }
+}
+/** Fields kept one per line because a comment sits between them. */
+typedef Observed = {
+  q:Array<Float>,
+  dq:Array<Float>,
+  /** Base angular velocity. */
+  angularVelocity:Array<Float>,
+  down:Array<Float>,
+  /** Seconds on the gait clock. */
+  gaitTime:Float
+};

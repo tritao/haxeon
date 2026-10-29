@@ -33,13 +33,23 @@ class ComputedStyle {
 	static final NullValue:Dynamic = new InheritedKeyCache();
 	public var matchingRules(default, null):Array<StyleSource>;
 	var shared:Bool;
+	/** The rule list is shared with a fork until either side records a match; `recordMatch` detaches it. */
+	var rulesShared:Bool;
 	var inheritedKeyCache:Null<InheritedKeyCache>;
 
-	public function new() {
-		values = [];
-		sources = [];
-		matchingRules = [];
-		shared = false;
+	/** With `from`, the new style reads `from`'s storage and detaches it on the first mutation, as `fork` does. */
+	public function new(?from:ComputedStyle) {
+		if (from == null) {
+			values = [];
+			sources = [];
+			matchingRules = [];
+		} else {
+			values = from.values;
+			sources = from.sources;
+			matchingRules = from.matchingRules;
+		}
+		shared = from != null;
+		rulesShared = from != null;
 		inheritedKeyCache = null;
 	}
 
@@ -105,7 +115,10 @@ class ComputedStyle {
 	/** Records every matching rule, including rules whose declarations were overridden. */
 	public function recordMatch(source:StyleSource):Void {
 		if (source != null) {
-			ensureWritable();
+			if (rulesShared) {
+				matchingRules = matchingRules.copy();
+				rulesShared = false;
+			}
 			matchingRules.push(source);
 		}
 	}
@@ -147,6 +160,7 @@ class ComputedStyle {
 		if (isSet(StyleProperty.PositionX.slot)) result.positionX = cast valueAt(StyleProperty.PositionX.slot);
 		if (isSet(StyleProperty.PositionY.slot)) result.positionY = cast valueAt(StyleProperty.PositionY.slot);
 		if (isSet(StyleProperty.ZIndex.slot)) result.zIndex = cast valueAt(StyleProperty.ZIndex.slot);
+		if (isSet(StyleProperty.Overlay.slot)) result.overlay = cast valueAt(StyleProperty.Overlay.slot);
 		if (isSet(StyleProperty.ClipToParent.slot)) result.clipToParent = cast valueAt(StyleProperty.ClipToParent.slot);
 		if (isSet(StyleProperty.Padding.slot)) {
 			var padding:Insets = cast valueAt(StyleProperty.Padding.slot);
@@ -187,15 +201,12 @@ class ComputedStyle {
 
 	/** Fast copy used by style caches; map storage is detached only on mutation. */
 	public function fork():ComputedStyle {
-		var result = new ComputedStyle();
 		if (inheritedKeyCache == null)
 			inheritedKeyCache = new InheritedKeyCache();
+		var result = new ComputedStyle(this);
 		result.inheritedKeyCache = inheritedKeyCache;
-		result.values = values;
-		result.sources = sources;
-		result.matchingRules = matchingRules.copy();
 		shared = true;
-		result.shared = true;
+		rulesShared = true;
 		return result;
 	}
 

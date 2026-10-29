@@ -89,31 +89,31 @@ fi
         "$platform_dir/tests/Smoke.hx" \
         "$platform_dir/tests/NativeKitHttpEventTests.hx" \
         "$platform_dir/tests/NativeKitFileWatchTests.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitFileWatch.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitEvent.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitEventValue.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitHttpEvents.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitHttpResponse.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitEventContext.hx" \
-		"$platform_dir/src/haxeon/platform/NativeKitEventBytes.hx" \
+        "$platform_dir/src/haxeon/platform/FileWatch.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/NativeEvent.hx" \
+        "$platform_dir/src/haxeon/platform/event/PlatformEvent.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/HttpEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/http/HttpResponse.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/EventSnapshot.hx" \
+		"$platform_dir/src/haxeon/platform/internal/event/EventBytes.hx" \
 		"$platform_dir/tests/NativeKitEventDecoderTests.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitWindowEvents.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitInputEvents.hx" \
-		"$platform_dir/src/haxeon/platform/NativeKitTextInput.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitRuntime.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitWindow.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitSurface.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitWebView.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/WindowEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/InputEventDecoder.hx" \
+		"$platform_dir/src/haxeon/platform/input/TextInput.hx" \
+        "$platform_dir/src/haxeon/platform/Runtime.hx" \
+        "$platform_dir/src/haxeon/platform/Window.hx" \
+        "$platform_dir/src/haxeon/platform/Surface.hx" \
+        "$platform_dir/src/haxeon/platform/WebView.hx" \
         "$platform_dir/src/haxeon/platform/NativeKitError.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitVulkanExtensions.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitServiceEvents.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitResourceEvents.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitRequestOutcome.hx" \
-        "$platform_dir/src/haxeon/platform/NativeFuture.hx" \
-        "$platform_dir/src/haxeon/platform/NativePromise.hx" \
-        "$platform_dir/src/haxeon/platform/NativeTask.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitRequests.hx" \
-        "$platform_dir/src/haxeon/platform/NativeKitEvents.hx"
+        "$platform_dir/src/haxeon/platform/interop/VulkanExtensions.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
+        "$platform_dir/src/haxeon/platform/async/Outcome.hx" \
+        "$platform_dir/src/haxeon/platform/async/Future.hx" \
+        "$platform_dir/src/haxeon/platform/async/Promise.hx" \
+        "$platform_dir/src/haxeon/platform/async/Task.hx" \
+        "$platform_dir/src/haxeon/platform/async/Requests.hx" \
+        "$platform_dir/src/haxeon/platform/event/EventPump.hx"
 )
 
 set +e

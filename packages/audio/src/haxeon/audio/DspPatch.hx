@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -31,7 +33,7 @@ class DspPatch implements InstrumentDefinition {
 	public function createInstrument(engine:DspEngine):DspInstrument {
 		ensureLive();
 		if (engine == null)
-			throw "DSP patch engine must not be null";
+			throw BindingError.invalidArgument("DspPatch.createInstrument", "DSP patch engine must not be null");
 		return engine.createInstrument(this);
 	}
 
@@ -50,6 +52,6 @@ class DspPatch implements InstrumentDefinition {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "DSP patch has been disposed";
+			throw BindingError.disposed("DspPatch.ensureLive", "DSP patch has been disposed");
 	}
 }

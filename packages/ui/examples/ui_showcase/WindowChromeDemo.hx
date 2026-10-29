@@ -1,4 +1,9 @@
-import haxeon.platform.NativeKitSurface.NativeKitSurfaceFrameSubscription;
+import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.UiResult.UiError;
 
 import nativekit.ffi.NativeKitTypes;
@@ -13,9 +18,6 @@ import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitGpu;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitSurface;
 import haxeon.platform.NativeKitError;
 import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
@@ -38,14 +40,14 @@ import haxeon.ui.widgets.WindowChrome;
 class WindowChromeDemo {
 	var window:WindowHandle;
 	var surface:SurfaceHandle;
-	var nativeSurface:Null<NativeKitSurface>;
+	var nativeSurface:Null<PlatformSurface>;
 	var fonts:Null<FontCollection>;
 	var context:Null<UiContext>;
 	var renderer:Null<Renderer>;
 	var input:Null<NativeInputAdapter>;
 	var frame:Null<LayoutFrame>;
 	var frameInfo:Null<FrameInfo>;
-	var frameSubscription:Null<NativeKitSurfaceFrameSubscription>;
+	var frameSubscription:Null<SurfaceFrameSubscription>;
 	var width:Int = 640;
 	var height:Int = 420;
 	var scale:Float = 1.0;
@@ -61,7 +63,7 @@ class WindowChromeDemo {
 	static inline var MIN_WIDTH:Int = 480;
 	static inline var MIN_HEIGHT:Int = 300;
 
-	public static function open(events:NativeKitEvents, graphicsApi:GraphicsApi,
+	public static function open(events:EventPump, graphicsApi:GraphicsApi,
 			owner:WindowHandle, theme:Theme):WindowChromeDemo {
 		var demo = new WindowChromeDemo();
 		try {
@@ -78,12 +80,12 @@ class WindowChromeDemo {
 		surface = SurfaceHandle.invalid();
 	}
 
-	function initialize(events:NativeKitEvents, graphicsApi:GraphicsApi,
+	function initialize(events:EventPump, graphicsApi:GraphicsApi,
 		owner:WindowHandle, theme:Theme):Void {
 		if (events == null || owner == null || !owner.isValid())
 			throw "Window chrome demo requires a live event pump and owner window";
 
-		var windowOptions = new WindowOptions();
+		var windowOptions = new NativeWindowOptions();
 		windowOptions.set_width(width);
 		windowOptions.set_height(height);
 		windowOptions.set_title("NativeKit Window Chrome Demo");
@@ -97,7 +99,7 @@ class WindowChromeDemo {
 		applySizeLimits();
 		placeNear(owner);
 
-		var surfaceOptions = new SurfaceOptions();
+		var surfaceOptions = new NativeSurfaceOptions();
 		var surfaceFlags = SurfaceFlags.Stencil;
 		if (graphicsApi == GraphicsApi.Opengl) {
 			surfaceFlags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
@@ -112,7 +114,7 @@ class WindowChromeDemo {
 		if (createdSurface.status != Result.Ok)
 			throw new NativeKitError(createdSurface.status, "surface.create", NativeKit.nk_last_error());
 		surface = createdSurface.out_surface.borrow();
-		nativeSurface = NativeKitSurface.borrowNativeHandle(surface);
+		nativeSurface = PlatformSurface.borrowNativeHandle(surface);
 
 		fonts = FontCollection.create();
 		fonts.addSystemFallbacks();
@@ -128,7 +130,7 @@ class WindowChromeDemo {
 	}
 
 	/** Handles window and surface lifecycle events; input is routed by NativeInputAdapter. */
-	public function handleEvent(value:NativeKitEventValue):Void {
+	public function handleEvent(value:PlatformEvent):Void {
 		if (disposed || value == null)
 			return;
 		switch (value) {

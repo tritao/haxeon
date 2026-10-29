@@ -7,6 +7,8 @@ class StateStore {
 	final valueRevisions:Map<Int, Int> = new Map();
 	final disposers:Map<Int, Void->Void>;
 	final paths:Map<Int, String>;
+	/** The IDs in `paths`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
+	final pathIds:Array<Int> = [];
 	final managed:Map<Int, Bool>;
 	final frameUsed:IdSet;
 	/** Scratch for usedIdsSince, reused so collecting a subtree's states allocates only the result. */
@@ -38,14 +40,29 @@ class StateStore {
 
 	/** Records the scoped key path used to make a widget ID for diagnostics. */
 	public function rememberPath(id:WidgetId, path:String):Void {
-		if (id != null && path != null && paths.get(id.value) != path)
-			paths.set(id.value, path);
+		if (id != null && path != null) {
+			var known = paths.get(id.value);
+			if (known != path) {
+				if (known == null)
+					pathIds.push(id.value);
+				paths.set(id.value, path);
+			}
+		}
 	}
 
 	/** Keep diagnostic paths only for mounted nodes or retained application state. */
 	public function prunePaths(mounted:Map<Int, RenderNode>):Void {
-		var stale = [for (id in paths.keys()) if (!mounted.exists(id) && !values.exists(id)) id];
-		for (id in stale) paths.remove(id);
+		var read = 0, write = 0;
+		while (read < pathIds.length) {
+			var id = pathIds[read++];
+			if (!paths.exists(id))
+				continue;
+			if (!mounted.exists(id) && !values.exists(id))
+				paths.remove(id);
+			else
+				pathIds[write++] = id;
+		}
+		pathIds.resize(write);
 	}
 
 	public function initialize(id:WidgetId, initial:Dynamic):Void {
@@ -223,6 +240,7 @@ class StateStore {
 		values.clear();
 		valueRevisions.clear();
 		paths.clear();
+		pathIds.resize(0);
 		revision++;
 		if (failure != null)
 			throw failure;

@@ -305,6 +305,23 @@ class ModuleMain {
 				throw error;
 		}
 		publicationCompiler.acknowledgePublication(publicationInitial.revision);
+		for (_ in 0...2) {
+			var unchangedPublication = publicationCompiler.compile("Main");
+			if (!unchangedPublication.unchanged
+				|| unchangedPublication.revision != publicationInitial.revision
+				|| unchangedPublication.baseRevision != publicationInitial.revision
+				|| unchangedPublication.patchBytes != null
+				|| publicationCompiler.publicationStatus().hasPendingRevision)
+				throw "Unchanged build advanced the runtime revision or left publication pending";
+			try {
+				publicationCompiler.acknowledgePublication(unchangedPublication.revision);
+				throw "Unchanged build incorrectly accepted an acknowledgement";
+			} catch (error:String) {
+				if (error != "No publication is pending")
+					throw error;
+			}
+		}
+
 		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
@@ -326,6 +343,9 @@ class ModuleMain {
 		}
 		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
 		var rejectedPublication = publicationCompiler.compile("Main");
+		if (rejectedPublication.baseRevision != publicationInitial.revision
+			|| rejectedPublication.revision != publicationInitial.revision + 1)
+			throw "Changed publication did not start at the last runtime revision";
 		try {
 			publicationCompiler.exportIdentityState();
 			throw "Compiler persisted an unacknowledged candidate";

@@ -158,6 +158,7 @@ class SignatureInference {
 		return {
 			name: method.name,
 			isStatic: method.isStatic,
+			isPublic: method.isPublic,
 			isExtern: method.isExtern,
 			isInline: method.isInline,
 			metadata: method.metadata,
@@ -376,6 +377,7 @@ class SignatureInference {
 		return {
 			name: fn.name,
 			isStatic: fn.isStatic,
+			isPublic: fn.isPublic,
 			typeParameters: fn.typeParameters,
 			typeConstraints: fn.typeConstraints,
 			arguments: fn.arguments,
@@ -652,6 +654,7 @@ class SignatureInference {
 		return changed ? {
 			name: fn.name,
 			isStatic: fn.isStatic,
+			isPublic: fn.isPublic,
 			typeParameters: fn.typeParameters,
 			typeConstraints: fn.typeConstraints,
 			arguments: arguments,

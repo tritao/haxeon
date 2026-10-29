@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
@@ -34,6 +36,6 @@ class BusSend {
 	}
 	public function isDisposed():Bool return disposed;
 	function ensureLive():Void {
-		if (disposed) throw "Audio send has been disposed";
+		if (disposed) throw BindingError.disposed("BusSend.ensureLive", "Audio send has been disposed");
 	}
 }

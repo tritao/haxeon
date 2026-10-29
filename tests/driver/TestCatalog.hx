@@ -31,6 +31,10 @@ typedef ExecutableCase = {
 
 class TestCatalog {
 	static final compilerMains = [
+		"InheritedMethodContractMain",
+		"CompilerGapsMain",
+		"RuntimeFastPathsMain",
+		"NullReassignmentMain",
 		"MixedArrayLiteralMain",
 		"EnumTypedefConstructorMain",
 		"AbstractTypeDependencyMain",
@@ -44,6 +48,8 @@ class TestCatalog {
 		"InlineConfigurationMain",
 		"LoopBoundsMain",
 		"OpportunityCensusMain",
+		"AllocationReportMain",
+		"GenericDynamicArgumentMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",
@@ -133,6 +139,7 @@ class TestCatalog {
 	static final toolingMains = [
 		"FormatterMain",
 		"FormatterGoldenMain",
+		"UnusedImportsMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",
 		"ProtocolMain",
@@ -257,6 +264,7 @@ class TestCatalog {
 				"program replacement rebuilds object method slots after runtime imports shrink", ["{output}", "--replace-program"]),
 			mainCase("runtime", "string", "StringMain", "string.hl", 42, "compiler-owned string concatenation executed"),
 			mainCase("runtime", "string-constants", "StringConstantsMain", "string-constants.hl", 42, "literals are created once in a build nothing patches"),
+			mainCase("runtime", "enum-constants", "EnumConstantsMain", "enum-constants.hl", 42, "a constructor without fields is made once"),
 			mainCase("runtime", "import", "ImportMain", "import.hl", 42, "package-qualified import executed"),
 			mainCase("runtime", "import-class", "ImportClassMain", "import-class.hl", 42, "imported nominal class executed"),
 			mainCase("runtime", "static-import", "StaticImportMain", "static-import.hl", 42, "imports of static members and module functions executed"),

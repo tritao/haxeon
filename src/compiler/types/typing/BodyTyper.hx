@@ -266,6 +266,8 @@ class BodyTyper {
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		for (binding in lexicalStorage.closureWrites.keys())
+			context.storage.closureWrites.set(binding, true);
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
@@ -1726,6 +1728,56 @@ class BodyTyper {
 			|| sameType(field.type, refined) ? field : new TypedExpression(TCast(field), refined, field.span, field.stableFlowValue);
 	}
 
+	/**
+	 * A null check only holds until something may change the value. Say which, instead of the bare "requires an object":
+	 * a local assigned by a closure loses its check at any call that may run an escaped closure, and a field loses it at
+	 * any assignment or call. Copying the checked value into a fresh local pins it.
+	 */
+	function explainNullableReceiver(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):Void {
+		switch object.type {
+			case TNullable(_):
+			default:
+				return;
+		}
+		var reason = switch unwrappedCast(object).expression {
+			case TLocal(id), TCellLocal(id, _), TCaptured(id), TCellCaptured(id, _) if (session.closureWritableNames(scope).indexOf(sourceName(id)) >= 0):
+				var local = sourceName(id);
+				'"$local" is assigned by a closure, so a call that may run an escaped closure clears its null check';
+			case TField(_, _):
+				var described = describeAccess(unwrappedCast(object));
+				described == null ? null : 'the null check on "$described" no longer holds after an assignment or call that may have changed it';
+			default:
+				null;
+		};
+		if (reason != null)
+			fail("E1005",
+				'Field "$name" requires an object: $reason. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.',
+				span);
+	}
+
+	/** A local's binding id reads "$l0:name"; the source name is what the reader wrote. */
+	function sourceName(id:String):String {
+		var colon = StringTools.startsWith(id, "$l") ? id.indexOf(":") : -1;
+		return colon < 0 ? id : id.substr(colon + 1);
+	}
+
+	function unwrappedCast(expression:TypedExpression):TypedExpression {
+		return switch expression.expression {
+			case TCast(inner): inner;
+			default: expression;
+		};
+	}
+
+	function describeAccess(expression:TypedExpression):Null<String> {
+		return switch expression.expression {
+			case TLocal(id), TCellLocal(id, _), TCaptured(id), TCellCaptured(id, _): sourceName(id);
+			case TField(object, field):
+				var parent = describeAccess(object);
+				parent == null ? null : parent + "." + field;
+			default: null;
+		};
+	}
+
 	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
 		var objectPath = FlowAnalysis.accessPath(object);
 		if (objectPath != null) {
@@ -1733,6 +1785,7 @@ class BodyTyper {
 			if (refinedObject != null && !sameType(object.type, refinedObject))
 				object = new TypedExpression(TCast(object), refinedObject, object.span);
 		}
+		explainNullableReceiver(object, name, span, scope);
 		var member = typedMember(object, name, span),
 			path = FlowAnalysis.accessPath(member);
 		if (path == null)

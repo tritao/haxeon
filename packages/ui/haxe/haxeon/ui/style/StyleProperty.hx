@@ -155,6 +155,9 @@ class StyleProperty<T> {
 	public static final ZIndex:StyleProperty<Int> = new StyleProperty(
 		"zIndex", 0, false, StyleImpact.Paint | StyleImpact.HitGeometry, null,
 		function(style) return style.zIndex, function(style, value) style.zIndex = value);
+	public static final Overlay:StyleProperty<Bool> = new StyleProperty(
+		"overlay", false, false, StyleImpact.Paint | StyleImpact.HitGeometry, null,
+		function(style) return style.overlay, function(style, value) style.overlay = value);
 	public static final ClipToParent:StyleProperty<Bool> = new StyleProperty(
 		"clipToParent", true, false, StyleImpact.Paint | StyleImpact.HitGeometry, null,
 		function(style) return style.clipToParent, function(style, value) style.clipToParent = value);
@@ -276,7 +279,7 @@ class StyleProperty<T> {
 				dynamicProperty(Positioning), dynamicProperty(AspectRatio), dynamicProperty(WrapMode),
 				dynamicProperty(RowGap), dynamicProperty(ColumnGap), dynamicProperty(AlignSelf),
 				dynamicProperty(PositionX), dynamicProperty(PositionY), dynamicProperty(ZIndex),
-				dynamicProperty(ClipToParent), dynamicProperty(Padding), dynamicProperty(ChildGap),
+				dynamicProperty(Overlay), dynamicProperty(ClipToParent), dynamicProperty(Padding), dynamicProperty(ChildGap),
 				dynamicProperty(Background), dynamicProperty(RadiusTopLeft), dynamicProperty(RadiusTopRight),
 				dynamicProperty(RadiusBottomRight), dynamicProperty(RadiusBottomLeft),
 				dynamicProperty(ClipHorizontal), dynamicProperty(ClipVertical), dynamicProperty(Visible),

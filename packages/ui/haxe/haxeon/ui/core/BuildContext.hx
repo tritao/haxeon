@@ -1,7 +1,8 @@
 package haxeon.ui.core;
 
+import haxeon.platform.Surface;
+
 import haxeon.ui.FontCollection;
-import haxeon.platform.NativeKitSurface;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.theme.TextRole;
@@ -17,7 +18,7 @@ import haxeon.ui.animation.AnimationScheduler;
 class BuildContext {
 	public final stateStore:StateStore;
 	public var fonts(default, null):Null<FontCollection>;
-	public var platformSurface(default, null):Null<NativeKitSurface>;
+	public var platformSurface(default, null):Null<Surface>;
 	public final textInput:TextInputBridge;
 	public final clipboard:ClipboardService;
 	public final gestures:GestureArena;
@@ -45,6 +46,8 @@ class BuildContext {
 	var deferredFocusRequester:WidgetId->Void;
 	final claimed:IdSet;
 	final idsByPath:Map<String, WidgetId>;
+	/** The paths in `idsByPath`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
+	final pathOrder:Array<String> = [];
 	var cachedIdCount:Int;
 	static inline var SCOPE_GROWTH_PRUNE = 256;
 
@@ -205,7 +208,7 @@ class BuildContext {
 	}
 
 	/** Provides the NativeKit surface used for IME and other platform services. */
-	public function setPlatformSurface(surface:NativeKitSurface):Void {
+	public function setPlatformSurface(surface:Surface):Void {
 		if (surface == null || surface.isDisposed())
 			throw "Build context requires a live NativeKit surface";
 		platformSurface = surface;
@@ -292,10 +295,12 @@ class BuildContext {
 		if (id == null) {
 			if (cachedIdCount >= 8192) {
 				idsByPath.clear();
+				pathOrder.resize(0);
 				cachedIdCount = 0;
 			}
 			id = stateStore.resolveWidgetId(path);
 			idsByPath.set(path, id);
+			pathOrder.push(path);
 			cachedIdCount++;
 		}
 		if (!patching && !claimed.add(id.value))
@@ -410,16 +415,19 @@ class BuildContext {
 			&& scopeEntries - prunedScopeEntries < SCOPE_GROWTH_PRUNE)
 			return;
 		keyCachePrunes++;
-		var stale:Array<String> = null;
-		for (path => id in idsByPath)
+		var read = 0, write = 0;
+		while (read < pathOrder.length) {
+			var path = pathOrder[read++];
+			var id = idsByPath.get(path);
+			if (id == null)
+				continue;
 			if (!mounted.exists(id.value) && !stateStore.contains(id)) {
-				if (stale == null) stale = [];
-				stale.push(path);
-			}
-		if (stale != null) for (path in stale) {
-			idsByPath.remove(path);
-			cachedIdCount--;
+				idsByPath.remove(path);
+				cachedIdCount--;
+			} else
+				pathOrder[write++] = path;
 		}
+		pathOrder.resize(write);
 		rootScope.prune(function(path) return idsByPath.exists(path));
 		prunedMountedHash = mountedHash;
 		prunedIdCount = cachedIdCount;

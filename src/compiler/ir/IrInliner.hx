@@ -327,6 +327,7 @@ class IrInliner {
 		}
 		program.functions = functions;
 		IrOpportunityCensus.report(program, inliner.allowInline);
+		IrAllocationReport.report(program);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
 		// Only functions that were compared have bytes; an entry for a function that is gone or unchanged-but-uncompared stays out.

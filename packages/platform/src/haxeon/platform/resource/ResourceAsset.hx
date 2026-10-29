@@ -1,9 +1,13 @@
 package haxeon.platform.resource;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 import haxe.io.Bytes;
+import haxeon.platform.BindingError;
+import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.OwnedResourceAssetHandle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetHandle;
+import nativekit.ffi.NativeKitTypes.ResourceAssetLoadState;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** One independently owned view of complete bytes retained by a resource cache. */
 class ResourceAsset {
@@ -27,7 +31,7 @@ class ResourceAsset {
 		ensureLive();
 		var buffer = NativeKit.nk_resource_asset_get_uri_checked(value);
 		if (buffer == null)
-			throw "NativeKit resource asset returned no URI";
+			throw BindingError.invalidArgument("ResourceAsset.uri", "NativeKit resource asset returned no URI");
 		return buffer.sub(0, buffer.length - 1).toString();
 	}
 
@@ -54,7 +58,7 @@ class ResourceAsset {
 		ensureLive();
 		var byteCount = size();
 		if (haxe.Int64.compare(byteCount, haxe.Int64.ofInt(0x7fffffff)) > 0)
-			throw "NativeKit resource asset is too large for a Haxe byte buffer";
+			throw BindingError.invalidArgument("ResourceAsset.copyData", "NativeKit resource asset is too large for a Haxe byte buffer");
 		var bytes = Bytes.alloc(haxe.Int64.toInt(byteCount));
 		NativeKit.nk_resource_asset_copy_data_checked(value, bytes, byteCount);
 		return bytes;
@@ -67,7 +71,7 @@ class ResourceAsset {
 		var status = owned.close();
 		disposed = true;
 		if (status != null && status != Result.Ok)
-			throw new haxeon.platform.NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
+			throw new NativeKitError(status, "resource.asset.dispose", NativeKit.nk_last_error());
 	}
 
 	public function isDisposed():Bool
@@ -75,6 +79,6 @@ class ResourceAsset {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Resource asset has been disposed";
+			throw BindingError.disposed("ResourceAsset.ensureLive", "Resource asset has been disposed");
 	}
 }

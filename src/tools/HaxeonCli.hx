@@ -120,6 +120,7 @@ class HaxeonCli {
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
 				case "fmt": fmt(arguments);
+				case "lint": LintCommand.run(arguments);
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
 				case "workspace": workspaceCommand(arguments);
@@ -257,9 +258,8 @@ class HaxeonCli {
 			return 0;
 		}
 		var status = 0;
-		for (path in options.paths) {
-			if (!FileSystem.exists(path))
-				throw 'Source file not found: $path';
+		var files = SourceFiles.expand(options.paths);
+		for (path in files) {
 			var source = File.getContent(path),
 				formatted = Formatter.format(source, config);
 			if (formatted == null)
@@ -1494,6 +1494,7 @@ class HaxeonCli {
 		Sys.println("  fmt [options] PATH...          Format Haxe source files");
 		Sys.println("       [--check] [--stdin]      Check files or format stdin");
 		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
+		Sys.println("  lint [--fix] [--manifest FILE]... FILE...  Report (or remove) unused imports");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");

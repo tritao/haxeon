@@ -5,6 +5,8 @@ class RetainedView implements View {
 	final builder:BuildContext->View;
 	final key:String;
 	final revision:Null<Void->String>;
+	/** Single-threaded scratch: filled and read within one `build`, before the view's own children build. */
+	static final scratchKey:KeyHash = new KeyHash();
 
 	public function new(key:String, builder:BuildContext->View,
 		?revision:Void->String) {
@@ -22,11 +24,11 @@ class RetainedView implements View {
 			context.id("retained-view-cache:" + key), factory, disposer);
 		var cache = cacheState.value;
 		var revisionBuilder:Null<Void->String> = revision;
-		var cacheKey = revisionBuilder == null ? "" : revisionBuilder();
-		cacheKey += "|style=" + context.styleRevision +
-			"|viewport=" + context.viewportWidth + "x" + context.viewportHeight;
+		var hash = scratchKey.reset().addString(revisionBuilder == null ? "" : revisionBuilder())
+			.addInt(context.styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight);
+		var keyA = hash.a, keyB = hash.b;
 		var cached = cache.entry;
-		if (cached != null && cached.key == cacheKey && cached.statesMatch(context)) {
+		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
@@ -42,7 +44,7 @@ class RetainedView implements View {
 			throw 'Retained view "$key" returned no view';
 		var root = view.build(context);
 		var usedStates = context.stateIdsUsedSince(marker);
-		cache.replace(cacheKey, root, usedStates, context.stateRevisions(usedStates),
+		cache.replace(keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
 			new InteractionStateSnapshot(context.currentRoot(root)));
 		return root;
 	}
@@ -54,11 +56,11 @@ private class RetainedViewCache {
 	public function new()
 		entry = null;
 
-	public function replace(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+	public function replace(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
 			interactions:InteractionStateSnapshot):Void {
 		if (entry != null && entry.root != root)
 			entry.root.detach();
-		entry = new RetainedViewEntry(key, root, stateIds, stateRevisions, interactions);
+		entry = new RetainedViewEntry(keyA, keyB, root, stateIds, stateRevisions, interactions);
 	}
 
 	public function dispose():Void {
@@ -69,20 +71,25 @@ private class RetainedViewCache {
 }
 
 private class RetainedViewEntry {
-	public final key:String;
+	final keyA:Int;
+	final keyB:Int;
 	public var root(default, null):RenderNode;
 	public final stateIds:Array<Int>;
 	final stateRevisions:Array<Int>;
 	final interactions:InteractionStateSnapshot;
 
-	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
 		interactions:InteractionStateSnapshot) {
-		this.key = key;
+		this.keyA = keyA;
+		this.keyB = keyB;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
 		this.interactions = interactions;
 	}
+
+	public function matches(otherA:Int, otherB:Int):Bool
+		return keyA == otherA && keyB == otherB;
 
 	/** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
 	public function replaceRoot(next:RenderNode):Void

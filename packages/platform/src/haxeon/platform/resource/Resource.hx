@@ -1,8 +1,11 @@
 package haxeon.platform.resource;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
+import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.ResourceFlags;
+import nativekit.ffi.NativeKitTypes.ResourceValue;
+import nativekit.ffi.NativeKitTypes.Result;
 
 /** Describes a URI-backed NativeKit resource for NativeKit APIs. */
 class Resource {
@@ -14,7 +17,7 @@ class Resource {
 	public function new(uri:String, ?mimeType:String, ?displayName:String,
 		?flags:ResourceFlags) {
 		if (uri == null || uri.length == 0)
-			throw "NativeKit resource URI must not be empty";
+			throw BindingError.invalidArgument("Resource.new", "NativeKit resource URI must not be empty");
 		this.flags = flags == null ? ResourceFlags.Readable : flags;
 		this.uri = uri;
 		this.mimeType = mimeType;
@@ -36,6 +39,6 @@ class Resource {
 	public static function cancelLoad(request:haxe.Int64):Void {
 		var status = NativeKit.nk_resource_load_cancel(request);
 		if (status != Result.Ok)
-			throw new haxeon.platform.NativeKitError(status, "resource.cancelLoad", NativeKit.nk_last_error());
+			throw new NativeKitError(status, "resource.cancelLoad", NativeKit.nk_last_error());
 	}
 }

@@ -1,10 +1,12 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitEvents;
-import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 
 /**
  * Associates an AudioCue with an entity-style spatial transform.
@@ -16,17 +18,17 @@ import haxeon.platform.NativeKitEvents.NativeKitEventSubscription;
 class AudioEmitter {
 	final cue:AudioCue;
 	final voices:Array<Voice> = [];
-	final subscription:NativeKitEventSubscription;
+	final subscription:EventSubscription;
 	var position:Vector3 = Vector3.zero();
 	var direction:Vector3 = new Vector3(0.0, 0.0, -1.0);
 	var velocity:Vector3 = Vector3.zero();
 	var disposed:Bool = false;
 
-	public function new(cue:AudioCue, events:NativeKitEvents) {
+	public function new(cue:AudioCue, events:EventPump) {
 		if (cue == null)
-			throw "Audio emitter cue must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter cue must not be null");
 		if (events == null)
-			throw "Audio emitter event pump must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.new", "Audio emitter event pump must not be null");
 		this.cue = cue;
 		this.subscription = events.listen(onEvent);
 	}
@@ -52,7 +54,7 @@ class AudioEmitter {
 	public function setPosition(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter position must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setPosition", "Audio emitter position must not be null");
 		position = value;
 		forEachVoice(function(voice) voice.setPosition(position));
 	}
@@ -61,7 +63,7 @@ class AudioEmitter {
 	public function setDirection(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter direction must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setDirection", "Audio emitter direction must not be null");
 		direction = value;
 		forEachVoice(function(voice) voice.setDirection(direction));
 	}
@@ -70,7 +72,7 @@ class AudioEmitter {
 	public function setVelocity(value:Vector3):Void {
 		ensureLive();
 		if (value == null)
-			throw "Audio emitter velocity must not be null";
+			throw BindingError.invalidArgument("AudioEmitter.setVelocity", "Audio emitter velocity must not be null");
 		velocity = value;
 		forEachVoice(function(voice) voice.setVelocity(velocity));
 	}
@@ -148,7 +150,7 @@ class AudioEmitter {
 	public function isDisposed():Bool
 		return disposed;
 
-	function onEvent(value:NativeKitEventValue):Void {
+	function onEvent(value:PlatformEvent):Void {
 		switch value {
 			case AudioVoiceComplete(source): release(source);
 			case AudioVoiceStolen(source): release(source);
@@ -191,6 +193,6 @@ class AudioEmitter {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio emitter has been disposed";
+			throw BindingError.disposed("AudioEmitter.ensureLive", "Audio emitter has been disposed");
 	}
 }

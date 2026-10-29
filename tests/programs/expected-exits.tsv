@@ -397,3 +397,6 @@ known-null-field	42
 final-field-branch-flow	42
 structural-iteration	42
 string-concat-null	42
+abstract-from-nullable	42
+generic-dynamic-argument	42
+enum-equality	42

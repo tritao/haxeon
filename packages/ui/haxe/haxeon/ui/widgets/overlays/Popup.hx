@@ -78,6 +78,9 @@ class Popup implements View {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();
 			rootStyle.height = LayoutAxis.grow();
+			rootStyle.positioning = LayoutPositioning.Absolute;
+			rootStyle.overlay = true;
+			rootStyle.zIndex = layerZIndex;
 			var rootId = context.id("popup-layer");
 			var rootComputed = context.resolveStyle(
 				new StyleTarget("popup", key.value, key.value, null, ["popup"],

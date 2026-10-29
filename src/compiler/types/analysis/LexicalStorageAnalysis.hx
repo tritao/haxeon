@@ -10,6 +10,7 @@ import compiler.types.analysis.BindingWalker.BindingKind;
 typedef LexicalStorageRequirements = {
 	final mutableCaptures:Map<String, Bool>;
 	final exceptionCells:Map<String, Bool>;
+	final closureWrites:Map<String, Bool>;
 }
 
 /**
@@ -27,7 +28,7 @@ class LexicalStorageAnalysis extends BindingWalker {
 		first.walkFunction(arguments, statements);
 		var storage = new LexicalStorageAnalysis(first.writtenDeclarations);
 		storage.walkFunction(arguments, statements);
-		return {mutableCaptures: storage.captures, exceptionCells: storage.exceptions};
+		return {mutableCaptures: storage.captures, exceptionCells: storage.exceptions, closureWrites: storage.closureWrites};
 	}
 
 	/** Declarations assigned anywhere, found by the first pass. Null during that pass. */
@@ -35,6 +36,7 @@ class LexicalStorageAnalysis extends BindingWalker {
 
 	final writtenDeclarations:Map<String, Bool> = [];
 	final captures:Map<String, Bool> = [];
+	final closureWrites:Map<String, Bool> = [];
 	final exceptions:Map<String, Bool> = [];
 	final declaredInLambda:Map<String, Int> = [];
 	final declaredInTry:Map<String, Int> = [];
@@ -87,8 +89,10 @@ class LexicalStorageAnalysis extends BindingWalker {
 		if (declaration == null || name.indexOf(".") >= 0)
 			return;
 		writtenDeclarations.set(declaration, true);
-		if (knownWrites != null && isCaptured(declaration))
+		if (knownWrites != null && isCaptured(declaration)) {
 			captures.set(declaration, true);
+			closureWrites.set(declaration, true);
+		}
 		if (knownWrites != null && tryDepth > tryDepthOf(declaration))
 			exceptions.set(declaration, true);
 	}

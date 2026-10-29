@@ -12,6 +12,33 @@ class StyleTarget {
 	public final selectorHash:Int;
 	/** Shared by every target without classes or tags; never mutated. */
 	static final NoStrings:Array<String> = [];
+	static final interned:Map<String, Array<String>> = new Map();
+	static var internedCount = 0;
+	static inline var MaxInterned = 512;
+
+	/**
+	 * An array of class or tag names that nobody will mutate. The common one-name array is shared by every node that uses
+	 * it, so a widget's `["row"]` costs no copy per node; anything else is copied. Style identity arrays are only ever read.
+	 */
+	public static function shared(values:Null<Array<String>>):Array<String> {
+		if (values == null || values.length == 0)
+			return NoStrings;
+		if (values.length == 1) {
+			var name = values[0];
+			if (name != null) {
+				var known = interned.get(name);
+				if (known != null)
+					return known;
+				if (internedCount < MaxInterned) {
+					var copy = values.copy();
+					interned.set(name, copy);
+					internedCount++;
+					return copy;
+				}
+			}
+		}
+		return values.copy();
+	}
 
 	public function new(widgetType:String, ?key:String, ?id:String,
 			?classes:Array<String>, ?tags:Array<String>, states:Int = 0) {
@@ -20,8 +47,8 @@ class StyleTarget {
 		this.widgetType = widgetType;
 		this.key = key;
 		this.id = id;
-		this.classes = classes == null || classes.length == 0 ? NoStrings : classes.copy();
-		this.tags = tags == null || tags.length == 0 ? NoStrings : tags.copy();
+		this.classes = shared(classes);
+		this.tags = shared(tags);
 		this.states = states;
 		var hash = hashString(widgetType, -2128831035);
 		hash = hashString(key, hash * 31 + 1);
@@ -47,7 +74,7 @@ class StyleTarget {
 			return seed * 16777619 + 0x9e3779b;
 		var hash = seed;
 		for (index in 0...value.length)
-			hash = (hash ^ value.charCodeAt(index)) * 16777619;
+			hash = (hash ^ StringTools.fastCodeAt(value, index)) * 16777619;
 		return hash ^ value.length;
 	}
 

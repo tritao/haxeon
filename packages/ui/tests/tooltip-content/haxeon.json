@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"ui-tooltip-content-tests"},"entry":"TooltipContentTests","sourceRoots":["."],"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}

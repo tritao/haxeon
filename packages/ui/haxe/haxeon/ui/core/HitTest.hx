@@ -1,7 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.Rect;
-
 import haxeon.ui.LayoutPositioning;
 
 /** Hit testing and target paths derived from the resolved Haxe render tree. */
@@ -31,7 +29,8 @@ class HitTest {
 
 /**
  * Mirrors native nested floating contexts. Descendants stay inside their
- * owner's layer; candidates in each layer retain declaration/DFS order.
+ * owner's layer, while overlays escape ordinary contexts but stay within
+ * their nearest enclosing overlay. Candidates retain declaration/DFS order.
  */
 private class HitTestState {
 	final layers:Map<Int, Int> = new Map();
@@ -61,16 +60,20 @@ private class HitTestState {
 	/** Mirror the native layout backend's nested floating-context ranks. */
 	function assignLayers(root:RenderNode):Void {
 		var children:Map<Int, Array<RenderNode>> = new Map();
-		function collect(node:RenderNode, owner:RenderNode):Void {
+		var overlays:Map<Int, Array<RenderNode>> = new Map();
+		function collect(node:RenderNode, owner:RenderNode, overlayOwner:RenderNode):Void {
 			if (node != root && node.layout.style.positioning == LayoutPositioning.Absolute) {
-				var siblings = children.get(owner.id.value);
-				if (siblings == null) { siblings = []; children.set(owner.id.value, siblings); }
+				var target = node.layout.style.overlay ? overlays : children;
+				var parent = node.layout.style.overlay ? overlayOwner : owner;
+				var siblings = target.get(parent.id.value);
+				if (siblings == null) { siblings = []; target.set(parent.id.value, siblings); }
 				siblings.push(node);
+				if (node.layout.style.overlay) overlayOwner = node;
 				owner = node;
 			}
-			for (child in node.children) collect(child, owner);
+			for (child in node.children) collect(child, owner, overlayOwner);
 		}
-		collect(root, root);
+		collect(root, root, root);
 		var rank = 0;
 		function order(owner:RenderNode):Void {
 			var siblings = children.get(owner.id.value);
@@ -80,6 +83,10 @@ private class HitTestState {
 			for (child in siblings) if (child.layout.style.zIndex < 0) order(child);
 			layers.set(owner.id.value, rank++);
 			for (child in siblings) if (child.layout.style.zIndex >= 0) order(child);
+			var popups = overlays.get(owner.id.value);
+			if (popups == null) popups = [];
+			haxe.ds.ArraySort.sort(popups, function(a, b) return a.layout.style.zIndex - b.layout.style.zIndex);
+			for (child in popups) order(child);
 		}
 		order(root);
 	}
@@ -88,7 +95,9 @@ private class HitTestState {
 			stackingOwnerOrder:Int):Void {
 		var nodeOrder = sequence++;
 		var geometry = node.resolved;
-		if (geometry == null || !geometry.visible || !inside(geometry.clipBounds, x, y))
+		// Floating descendants can escape ancestor clips; their own geometry
+		// still enforces clipping when considering a hit.
+		if (geometry == null || !geometry.visible)
 			return;
 		var behavior = node.hitTestBehavior;
 		if (behavior == HitTestBehavior.None)
@@ -130,7 +139,4 @@ private class HitTestState {
 			bestCandidateOrder = candidateOrder;
 		}
 	}
-
-	static inline function inside(rect:Rect, x:Float, y:Float):Bool
-		return x >= rect.x && y >= rect.y && x <= rect.x + rect.width && y <= rect.y + rect.height;
 }

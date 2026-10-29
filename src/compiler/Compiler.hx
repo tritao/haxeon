@@ -111,6 +111,11 @@ typedef CompileResult = {
 	final functionIndices:Map<String, Int>;
 	final functionIds:Map<String, Int>;
 	final runtimeIdentity:Bytes;
+
+	/** No runtime publication is required; revision stays at the acknowledged baseline. */
+	final unchanged:Bool;
+
+	final baseRevision:Int;
 	final revision:Int;
 
 	/** The revision `patchBytes` applies to. */
@@ -741,6 +746,8 @@ class Compiler {
 				functionIndices: cached.functionIndices,
 				functionIds: cached.functionIds,
 				runtimeIdentity: cached.runtimeIdentity,
+				unchanged: true,
+				baseRevision: cached.revision,
 				revision: cached.revision,
 				baseRevision: cached.revision,
 				patchBytes: null,

@@ -415,6 +415,55 @@ int main(int argc, char **argv) {
         caret_draw <= panel_draw)
         return 59;
 
+    // Popups escape ordinary dock contexts, but not a later modal overlay.
+    LayoutNode dock_root = box(500, -1);
+    dock_root.style.width = {LayoutSizing::Fixed, 100.0f};
+    dock_root.style.height = {LayoutSizing::Fixed, 100.0f};
+    LayoutNode dock = box(501, 0);
+    dock.style.positioning = LayoutPositioning::Absolute;
+    dock.style.width = {LayoutSizing::Fixed, 100.0f};
+    dock.style.height = {LayoutSizing::Fixed, 30.0f};
+    dock.style.clip_vertical = true;
+    LayoutNode dropdown = box(502, 1);
+    dropdown.style.positioning = LayoutPositioning::Absolute;
+    dropdown.style.position_y = 40.0f;
+    dropdown.style.width = {LayoutSizing::Fixed, 100.0f};
+    dropdown.style.height = {LayoutSizing::Fixed, 30.0f};
+    dropdown.style.clip_to_parent = false;
+    dropdown.style.z_index = 10;
+    dropdown.style.background = {1.0f, 0.0f, 0.0f, 1.0f};
+    LayoutNode console = box(503, 0);
+    console.style.positioning = LayoutPositioning::Absolute;
+    console.style.position_y = 40.0f;
+    console.style.width = {LayoutSizing::Fixed, 100.0f};
+    console.style.height = {LayoutSizing::Fixed, 30.0f};
+    console.style.z_index = 1000;
+    console.style.background = {0.0f, 0.0f, 1.0f, 1.0f};
+    std::vector<LayoutNode> dock_nodes{dock_root, dock, dropdown, console};
+    if (!engine.layout(dock_nodes, 100.0f, 100.0f, 1.0f / 60.0f, snapshot, &error) ||
+        snapshot.find(502)->paint_order >= snapshot.find(503)->paint_order)
+        return 80;
+    dock_nodes[2].style.overlay = true;
+    if (!engine.layout(dock_nodes, 100.0f, 100.0f, 1.0f / 60.0f, snapshot, &error) ||
+        snapshot.find(502)->paint_order <= snapshot.find(503)->paint_order ||
+        snapshot.find(502)->clip_bounds.height != 100.0f)
+        return 81;
+    LayoutNode modal = console;
+    modal.id = 504;
+    modal.style.overlay = true;
+    modal.style.z_index = 20;
+    dock_nodes.push_back(modal);
+    LayoutNode nested_popup = dropdown;
+    nested_popup.id = 505;
+    nested_popup.parent = 2;
+    nested_popup.style.overlay = true;
+    nested_popup.style.z_index = 30000;
+    dock_nodes.push_back(nested_popup);
+    if (!engine.layout(dock_nodes, 100.0f, 100.0f, 1.0f / 60.0f, snapshot, &error) ||
+        snapshot.find(505)->paint_order <= snapshot.find(502)->paint_order ||
+        snapshot.find(505)->paint_order >= snapshot.find(504)->paint_order)
+        return 82;
+
     // A nested decoration must also stay below a later sibling context,
     // regardless of how large its local z-index is.
     LayoutNode later_popup = box(415, 0);

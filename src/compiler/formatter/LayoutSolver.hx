@@ -98,7 +98,7 @@ class LayoutSolver {
 		if (nextKind == TokenKind.RightParen || nextKind == TokenKind.RightBracket || nextKind == TokenKind.RightBrace)
 			return currentIndent > line.indent ? currentIndent - 1 : boundary.continuationIndent;
 		if (boundary.mustBreak
-			&& (leftKind == TokenKind.LeftParen || leftKind == TokenKind.LeftBracket || leftKind == TokenKind.Less)
+			&& (leftKind == TokenKind.LeftParen || leftKind == TokenKind.LeftBracket || leftKind == TokenKind.LeftBrace || leftKind == TokenKind.Less)
 			&& currentIndent > line.indent)
 			return currentIndent + FormatConfigTools.continuationLevels(config);
 		if (boundary.mustBreak && leftKind == TokenKind.Comma && currentIndent > line.indent)

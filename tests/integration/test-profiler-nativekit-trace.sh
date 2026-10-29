@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NativeKit's trace sink: an app that starts NativeKitRuntime and draws frames records nk.wait and nk.frame spans, and
+# NativeKit's trace sink: an app that starts Runtime and draws frames records nk.wait and nk.frame spans, and
 # the OS input it dequeues as input events with an age, in a profiler capture. Input comes from xdotool inside Xvfb,
 # so the test is skipped where either is missing or the platform is not Linux.
 set -euo pipefail
@@ -17,13 +17,13 @@ trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/src"
 
 cat > "$scratch/src/TraceProbe.hx" <<'HAXE'
-import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.Runtime;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
 class TraceProbe {
 	static function main():Int {
-		var runtime = NativeKitRuntime.start();
+		var runtime = Runtime.start();
 		if (!haxeon.ProfileNativeTrace.install("nativekit"))
 			return 3;
 		var options = new WindowOptions();
@@ -32,7 +32,7 @@ class TraceProbe {
 		options.set_title("trace probe");
 		options.set_owner(WindowHandle.invalid());
 		options.set_kind(WindowKind.Normal);
-		var window = runtime.createWindow(options);
+		var window = runtime.createWindowNative(options);
 		var surfaceOptions = new SurfaceOptions();
 		surfaceOptions.set_api(GraphicsApi.Opengl);
 		surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible);
@@ -40,7 +40,7 @@ class TraceProbe {
 		surfaceOptions.set_minor_version(3);
 		surfaceOptions.set_width(400);
 		surfaceOptions.set_height(300);
-		var surface = window.createSurface(surfaceOptions);
+		var surface = window.createSurfaceNative(surfaceOptions);
 		var frames = 0;
 		var subscription = surface.onFrame(function(width, height) {
 			frames++;

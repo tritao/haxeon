@@ -52,6 +52,8 @@ class Dialog implements View {
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = LayoutAxis.grow();
 			rootStyle.height = LayoutAxis.grow();
+			rootStyle.positioning = LayoutPositioning.Absolute;
+			rootStyle.overlay = true;
 			var rootId = context.id("dialog");
 			var rootComputed = context.resolveStyle(
 				new StyleTarget("dialog", key.value, key.value, null, ["dialog"],

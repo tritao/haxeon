@@ -159,8 +159,8 @@ class RenderNode {
 		styleType = type;
 		styleKey = key;
 		styleId = id;
-		styleClasses = classes == null || classes.length == 0 ? NoStrings : classes.copy();
-		styleTags = tags == null || tags.length == 0 ? NoStrings : tags.copy();
+		styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
+		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 		return this;
 	}
 
@@ -654,6 +654,7 @@ class RenderNode {
 			flags |= UiDirtyFlag.NeedsLayout;
 		if (beforeStyle.zIndex != afterStyle.zIndex ||
 			beforeStyle.clipToParent != afterStyle.clipToParent ||
+			beforeStyle.overlay != afterStyle.overlay ||
 			!sameColor(beforeStyle.background, afterStyle.background) ||
 			beforeStyle.radiusTopLeft != afterStyle.radiusTopLeft ||
 			beforeStyle.radiusTopRight != afterStyle.radiusTopRight ||
@@ -666,6 +667,7 @@ class RenderNode {
 			flags |= UiDirtyFlag.NeedsPaint;
 		if (beforeStyle.zIndex != afterStyle.zIndex ||
 			beforeStyle.clipToParent != afterStyle.clipToParent ||
+			beforeStyle.overlay != afterStyle.overlay ||
 			beforeStyle.clipHorizontal != afterStyle.clipHorizontal ||
 			beforeStyle.clipVertical != afterStyle.clipVertical ||
 			beforeStyle.visible != afterStyle.visible)
@@ -675,8 +677,8 @@ class RenderNode {
 			beforeStyle.transformOriginY != afterStyle.transformOriginY) {
 			flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
 		}
-		if (!sameTextStyle(before.textStyle, after.textStyle) ||
-			!sameParagraphStyle(before.paragraphStyle, after.paragraphStyle))
+		if (!sameTextStyle(before.peekTextStyle(), after.peekTextStyle()) ||
+			!sameParagraphStyle(before.peekParagraphStyle(), after.peekParagraphStyle()))
 			flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
 		return flags;
 	}

@@ -14,14 +14,39 @@ The current subset includes:
 - Exceptions
 - Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
   (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
+- A generic class or interface with a concrete type argument is accepted where the same type with `Dynamic` is expected
+  (`Box<Int>` as `Box<Dynamic>`), as in Haxe, including through a base class or an implemented interface. Every instantiation
+  of a generic class shares one erased layout. Only a whole `Dynamic` argument on the expected side widens: the other direction,
+  differing concrete arguments, and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
+- `==` on enums follows Haxe. A constructor without fields denotes one value, so `Dot == Dot` is true however the two values
+  came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately
+  built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For a structural
+  comparison use `haxeon.Equality.equals`. An enum with no constructor that has fields compares by
+  constructor, and so does an abstract over an enum. A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
+Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
+parameters or a result type that breaks the inherited contract, or explicitly make a public method private.
+Use a different name for an unrelated helper. Compatible overrides may omit an explicit visibility modifier
+and inherit the base method's visibility. These checks also apply after an incremental base-class edit.
+
 String addition, equality, `.length`, `indexOf`, and `substring` use the
 compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
-`concat`, `slice`, `indexOf`, `push`, and `pop`. Capacity-aware array growth
+`concat`, `slice`, `indexOf`, `exists`, `push`, and `pop`. Capacity-aware array growth
 preserves object identity so aliases and fields continue to observe the same
-array.
+array. `exists(predicate)` short-circuits at the first match and evaluates its receiver and predicate once.
+
+Converting `Dynamic` to an anonymous structure checks required fields and field types, then copies them into
+compiler-owned record storage. Nested records and record fields containing arrays of records are copied recursively. Direct array casts
+remain checked storage views and preserve their identity. Optional missing
+fields remain null, and malformed fields raise a Haxe exception identifying the field. Recursive structural
+copy targets are rejected with E1016; convert their recursive fields explicitly. Typed recursive structures
+remain supported. These conversions, dynamic object literals, and field reflection are tested on HashLink,
+Wasm32, and Wasm GC.
+
+On HashLink, an in-capacity typed array push and in-range `Bytes.get`/`set` use inline instructions. Growth and
+byte-access errors use the existing runtime functions. Reference pushes retain the managed write barrier.
 
 HashLink strings use HashLink's standard `String` object layout: zero
 terminated UTF-16 data plus its length in code units, so `.length` and

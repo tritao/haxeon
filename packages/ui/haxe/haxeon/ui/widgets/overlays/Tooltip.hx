@@ -62,12 +62,12 @@ class Tooltip implements View {
 			}
 			var tooltipStyle = new LayoutStyle();
 			tooltipStyle.positioning = LayoutPositioning.Absolute;
+			tooltipStyle.overlay = true;
 			tooltipStyle.positionX = x;
 			tooltipStyle.positionY = y;
-			tooltipStyle.zIndex = 10;
 			tooltipStyle.clipToParent = false;
 			tooltipStyle.visible = cast state.value;
-			var tooltip = new AnonymousTooltipContent(content, tooltipStyle);
+			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, state.value);
 			var rootStyle = new LayoutStyle();
 			rootStyle.width = fillAnchor ? LayoutAxis.grow() : LayoutAxis.fit();
 			rootStyle.height = LayoutAxis.fit();
@@ -163,8 +163,8 @@ class Tooltip implements View {
 			root.add(header);
 			var tipStyle = new LayoutStyle();
 			tipStyle.positioning = LayoutPositioning.Absolute;
+			tipStyle.overlay = true;
 			tipStyle.positionY = 44;
-			tipStyle.zIndex = 10;
 			tipStyle.clipToParent = false;
 			tipStyle.visible = hoverGroup == null ? state.value : groupVisible;
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
@@ -174,9 +174,13 @@ class Tooltip implements View {
 			var tip = new RenderNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			tip.computedStyle = computed;
 			tip.setStyleIdentity("tooltip", key.value, key.value, null, ["tooltip"]);
-			var label = context.withStyleParent(computed, function() return
-				context.withScope(new Key("content"), function() return content.build(context)));
-			tip.add(label);
+			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
+			var label:Null<RenderNode> = null;
+			if (tipStyle.visible) {
+				label = context.withStyleParent(computed, function() return
+					context.withScope(new Key("content"), function() return content.build(context)));
+				tip.add(label);
+			}
 			// The tooltip resolves after its anchor sibling; the parent callback
 			// runs before either child has geometry on a freshly built tree.
 			tip.onResolved(function(_) {
@@ -201,10 +205,13 @@ class Tooltip implements View {
 					placement.x += anchorBounds.x - parentBounds.x;
 					placement.y += anchorBounds.y - parentBounds.y;
 				}
-				if (tip.layout.style.positionX != placement.x || tip.layout.style.positionY != placement.y || label.layout.style.width.max != placement.width) {
+				var shownLabel = label;
+				var labelWidth = shownLabel == null ? placement.width : shownLabel.layout.style.width.max;
+				if (tip.layout.style.positionX != placement.x || tip.layout.style.positionY != placement.y || labelWidth != placement.width) {
 					tip.layout.style.positionX = placement.x;
 					tip.layout.style.positionY = placement.y;
-					label.layout.style.width = LayoutAxis.fit(0, placement.width);
+					if (shownLabel != null)
+						shownLabel.layout.style.width = LayoutAxis.fit(0, placement.width);
 					context.requestLayoutFeedback();
 				}
 			});
@@ -228,10 +235,13 @@ class Tooltip implements View {
 private class AnonymousTooltipContent implements View {
 	final content:View;
 	final style:LayoutStyle;
+	/** A hidden tooltip keeps its node, so it can show and be positioned, but builds no content until it is shown. */
+	final showContent:Bool;
 
-	public function new(content:View, style:LayoutStyle) {
+	public function new(content:View, style:LayoutStyle, showContent:Bool) {
 		this.content = content;
 		this.style = style;
+		this.showContent = showContent;
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -243,9 +253,11 @@ private class AnonymousTooltipContent implements View {
 		node.setStyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]);
 		node.states = context.interactionStates.get(nodeId);
 		node.computedStyle = computed;
-		var child = context.withStyleParent(computed, function() return
-			context.withScope(new Key("content"), function() return content.build(context)));
-		node.add(child);
+		if (showContent) {
+			var child = context.withStyleParent(computed, function() return
+				context.withScope(new Key("content"), function() return content.build(context)));
+			node.add(child);
+		}
 		return node;
 	}
 }

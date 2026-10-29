@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
 
@@ -23,7 +25,7 @@ class DspEvent {
 		?parameter:DspParameter, value:Float = 0.0, oscillatorIndex:Int = 0,
 		endValue:Float = 0.0, durationFrames:Int = 0) {
 		if (frameOffset < 0)
-			throw "DSP event frame offset must not be negative";
+			throw BindingError.invalidArgument("DspEvent.new", "DSP event frame offset must not be negative");
 		this.kind = kind;
 		this.frameOffset = frameOffset;
 		this.instrument = instrument;
@@ -45,7 +47,7 @@ class DspEvent {
 	public static function noteOn(instrument:DspInstrument, voiceId:Int, note:Int,
 		velocity:Float = 1.0, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
-			throw "DSP note-on instrument must not be null";
+			throw BindingError.invalidArgument("DspEvent.noteOn", "DSP note-on instrument must not be null");
 		return new DspEvent(DspEventKind.NoteOn, frameOffset, instrument,
 			voiceId, note, velocity);
 	}
@@ -59,9 +61,9 @@ class DspEvent {
 	public static function parameter(instrument:DspInstrument, parameter:DspParameter,
 		value:Float, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
-			throw "DSP parameter instrument must not be null";
+			throw BindingError.invalidArgument("DspEvent.parameter", "DSP parameter instrument must not be null");
 		if (parameter >= DspParameter.OscillatorWaveform)
-			throw "DSP oscillator parameters require oscillatorParameter()";
+			throw BindingError.invalidArgument("DspEvent.parameter", "DSP oscillator parameters require oscillatorParameter()");
 		return new DspEvent(DspEventKind.Parameter, frameOffset, instrument,
 			0, 0, 0.0, parameter, value);
 	}
@@ -70,11 +72,11 @@ class DspEvent {
 	public static function oscillatorParameter(instrument:DspInstrument, oscillatorIndex:Int,
 		parameter:DspParameter, value:Float, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
-			throw "DSP oscillator parameter instrument must not be null";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter instrument must not be null");
 		if (oscillatorIndex < 0)
-			throw "DSP oscillator parameter index must not be negative";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter index must not be negative");
 		if (parameter < DspParameter.OscillatorWaveform || parameter > DspParameter.OscillatorPhase)
-			throw "DSP oscillator parameter kind is invalid";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter kind is invalid");
 		return new DspEvent(DspEventKind.Parameter, frameOffset, instrument,
 			0, 0, 0.0, parameter, value, oscillatorIndex);
 	}
@@ -83,12 +85,12 @@ class DspEvent {
 	public static function parameterRamp(instrument:DspInstrument, parameter:DspParameter,
 		startValue:Float, endValue:Float, durationFrames:Int, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
-			throw "DSP parameter ramp instrument must not be null";
+			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP parameter ramp instrument must not be null");
 		if (parameter >= DspParameter.OscillatorWaveform)
-			throw "DSP oscillator parameters require oscillatorParameterRamp()";
+			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP oscillator parameters require oscillatorParameterRamp()");
 		validateRampDuration(durationFrames);
 		if (parameter == DspParameter.Waveform)
-			throw "DSP parameter ramp cannot target a waveform";
+			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP parameter ramp cannot target a waveform");
 		return new DspEvent(DspEventKind.ParameterRamp, frameOffset, instrument,
 			0, 0, 0.0, parameter, startValue, 0, endValue, durationFrames);
 	}
@@ -98,13 +100,13 @@ class DspEvent {
 		parameter:DspParameter, startValue:Float, endValue:Float, durationFrames:Int,
 		frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
-			throw "DSP oscillator parameter ramp instrument must not be null";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp instrument must not be null");
 		if (oscillatorIndex < 0)
-			throw "DSP oscillator parameter ramp index must not be negative";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp index must not be negative");
 		if (parameter < DspParameter.OscillatorWaveform || parameter > DspParameter.OscillatorPhase)
-			throw "DSP oscillator parameter ramp kind is invalid";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp kind is invalid");
 		if (parameter == DspParameter.OscillatorWaveform)
-			throw "DSP parameter ramp cannot target a waveform";
+			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP parameter ramp cannot target a waveform");
 		validateRampDuration(durationFrames);
 		return new DspEvent(DspEventKind.ParameterRamp, frameOffset, instrument,
 			0, 0, 0.0, parameter, startValue, oscillatorIndex, endValue, durationFrames);
@@ -112,7 +114,7 @@ class DspEvent {
 
 	static function validateRampDuration(durationFrames:Int):Void {
 		if (durationFrames <= 0)
-			throw "DSP parameter ramp duration must be positive";
+			throw BindingError.invalidArgument("DspEvent.validateRampDuration", "DSP parameter ramp duration must be positive");
 	}
 
 	@:allow(haxeon.audio.DspEngine)

@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.RenderPassDesc;
@@ -15,6 +17,7 @@ import haxeon.gpu.Enums.BatchPassKind;
 /** Reusable sealed submission batch owned by one renderer. */
 class Batch {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_batch;
 	var sealed:Bool = false;
 	var disposed:Bool = false;
@@ -22,7 +25,7 @@ class Batch {
 	private function new(renderer:Renderer, value:nkgpu_batch) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function begin(renderer:Renderer):Batch {
@@ -48,7 +51,7 @@ class Batch {
 	public function renderPass(desc:RenderPassDesc):Batch {
 		ensureMutable();
 		if (desc == null)
-			throw "GPU batch render-pass descriptor must not be null";
+			throw BindingError.invalidArgument("Batch.renderPass", "GPU batch render-pass descriptor must not be null");
 		GpuResult.check(NativeKitGpu.nkgpu_batch_append_render_pass(value, desc.nativeValue()),
 			"batch.renderPass");
 		return this;
@@ -64,7 +67,7 @@ class Batch {
 	public function commands(commands:CommandBuffer):Batch {
 		ensureMutable();
 		if (commands == null || commands.size() <= 0)
-			throw "GPU batch command buffer must not be empty";
+			throw BindingError.invalidArgument("Batch.commands", "GPU batch command buffer must not be empty");
 		commands.ensureRenderer(renderer);
 		GpuResult.check(NativeKitGpu.nkgpu_batch_append_command(value, commands.data(), commands.size()),
 			"batch.commands");
@@ -83,7 +86,7 @@ class Batch {
 	public function submit(?frame:SurfaceFrame):Void {
 		ensureLive();
 		if (!sealed)
-			throw "GPU batch must be sealed before submission";
+			throw BindingError.invalidState("Batch.submit", "GPU batch must be sealed before submission");
 		renderer.ensureResourceOperation();
 		if (frame == null)
 			GpuResult.check(NativeKitGpu.nkgpu_batch_submit(renderer.nativeHandle(), value, null),
@@ -100,21 +103,24 @@ class Batch {
 			return;
 		GpuResult.check(NativeKitGpu.nkgpu_batch_destroy(value), "batch.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function appendPass(kind:BatchPassKind, width:Int, height:Int, clear:Bool):Void {
 		ensureMutable();
 		if (kind == BatchPassKind.Window && (width <= 0 || height <= 0))
-			throw "GPU batch window-pass dimensions must be positive";
+			throw BindingError.invalidArgument("Batch.appendPass", "GPU batch window-pass dimensions must be positive");
 		var pass = new nkgpu_batch_pass();
-		pass.set_struct_size(32);
+		pass.set_struct_size(nkgpu_batch_pass.size());
 		pass.set_kind(kind);
 		pass.set_clear(clear ? 1 : 0);
 		pass.set_width(width);
@@ -125,12 +131,12 @@ class Batch {
 	function ensureMutable():Void {
 		ensureLive();
 		if (sealed)
-			throw "GPU batch has been sealed";
+			throw BindingError.invalidState("Batch.ensureMutable", "GPU batch has been sealed");
 	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU batch has been disposed";
+			throw BindingError.disposed("Batch.ensureLive", "GPU batch has been disposed");
 		renderer.ensureLive();
 	}
 }

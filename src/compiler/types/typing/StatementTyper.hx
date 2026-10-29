@@ -421,7 +421,9 @@ class StatementTyper {
 			scope.markAssigned(name);
 			scope.setMapKeySource(name, value.mapKeySource);
 			scope.invalidateExpressionsForLocal(name);
-			scope.refine(name, assignmentFlowType(assignedValue.type, value.type));
+			var flowType = assignmentFlowType(assignedValue.type, value.type);
+			scope.recordAssignment(name, flowType);
+			scope.refine(name, flowType);
 			return statement;
 		}
 
@@ -566,6 +568,7 @@ class StatementTyper {
 		var typedCatches:Array<TypedCatch> = [],
 			catchScopes:Array<Scope> = [],
 			tryScope = new Scope(scope),
+			exceptionalInvalidations = tryScope.trackInvalidations(),
 			typedTry = typeStatements(tryBranch, tryScope, result);
 		for (i in 0...catches.length) {
 			var catchClause = catches[i],
@@ -584,6 +587,8 @@ class StatementTyper {
 					fail("E1022", "Unsupported catch binding type", catchClause.span);
 			}
 			var catchScope = new Scope(scope);
+			// A handler can run after any prefix of the try body, not just after its final state.
+			catchScope.applyInvalidations(exceptionalInvalidations);
 			catchScopes.push(catchScope);
 			catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 			bindCell(catchClause.name, catchClause.span, catchScope, loweredCatchType);

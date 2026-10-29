@@ -11,6 +11,7 @@ import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.Source.SourceSpan;
+import compiler.types.analysis.Scope;
 
 typedef ResolvedInlineConstant = {
 	final initializer:TypedExpression;
@@ -46,6 +47,10 @@ class TypingSession {
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
 	public final lambdaCache:Map<String, TypedExpression> = [];
+
+	/** Structural conversion helpers already emitted for each origin and target shape. */
+	public final dynamicStructureConversions:Map<String, Bool> = [];
+
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	public final genericSpecializations:GenericSpecializationRegistry;
@@ -100,7 +105,7 @@ class TypingSession {
 	}
 
 	/** `@:pure` on a function, or on the class of a static method, promises no observable writes.
-	 * Calls to annotated or inferred-pure functions keep flow facts about mutable fields and map entries.
+	 * Calls to annotated or inferred-pure functions keep flow facts about captured locals, mutable fields and map entries.
 	 *
 	 * Records the answer against the function currently being typed: typed bodies are cached
 	 * between incremental compiles, so a later compile whose fresh purity answer for `name`
@@ -111,6 +116,26 @@ class TypingSession {
 		var answer = inferredPureFunctions.exists(name) || isDeclaredPure(name);
 		recordQuery(purityQueries, name, answer);
 		return answer;
+	}
+
+	/** Only closure-written declarations can change during a call; respect local shadowing. */
+	public function closureWritableNames(scope:Scope):Array<String> {
+		return [
+			for (name => declaration in scope.visibleDeclarations())
+				if (currentContext.storage.closureWrites.exists(declaration)) name
+		];
+	}
+
+	/** An impure call may invoke an escaped closure, including one forwarded through a named function. */
+	public function invalidateUnknownCall(scope:Scope):Void {
+		for (captured in closureWritableNames(scope))
+			scope.invalidate(captured);
+		scope.invalidateAllExpressions();
+	}
+
+	public function invalidateCallEffects(name:String, scope:Scope):Void {
+		if (!isPureCall(name))
+			invalidateUnknownCall(scope);
 	}
 
 	/** Annotated functions and read-only compiler intrinsics; the inference seeds from these. */

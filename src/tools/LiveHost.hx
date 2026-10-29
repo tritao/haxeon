@@ -10,22 +10,10 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import sys.FileSystem;
 import sys.io.File;
+import tools.LivePublication.LiveDescription;
+import tools.LivePublication.LiveFunction;
 
-private typedef LiveFunction = {final name:String; final id:Int;}
 private typedef FullModule = {final module:haxe.io.Bytes; final identity:haxe.io.Bytes;}
-
-private typedef LiveDescription = {
-	final revision:Int;
-	/** The revision the build's patch applies to; -1 from a compiler that does not say. */
-	final baseRevision:Int;
-	final moduleIdentity:String;
-	final requiresReload:Bool;
-	/** Why the compiler could not publish a patch, as "code entity" lines. */
-	final reloadReasons:Array<String>;
-	final patchAvailable:Bool;
-	final changedFunctions:Array<Int>;
-	final identities:Array<LiveFunction>;
-}
 
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
@@ -78,14 +66,15 @@ class LiveHost {
 					// The same module numbered from scratch is a history the running module never had, like a new session.
 					var restarted = candidate.moduleIdentity == description.moduleIdentity && candidate.revision < revision,
 						sameHistory = candidate.moduleIdentity == description.moduleIdentity && !restarted,
-						patchable = sameHistory && candidate.patchAvailable && !candidate.requiresReload;
+						patchable = LivePublication.canPatch(description, candidate);
 					if (strict && !sameHistory && lostHistory == null)
 						lostHistory = reloadCause(description, candidate);
 					if (strict && lostHistory != null)
 						rejectedPublication = refuse(path, description, revision, candidate,
 							'the compiler no longer has the history of the running module ($lostHistory), so none of its builds can patch it; restart the app to load revision ${candidate.revision}',
 							false);
-					else if (strict && patchable && candidate.baseRevision >= 0 && candidate.baseRevision != revision)
+					else if (strict && sameHistory && candidate.patchAvailable && !candidate.requiresReload && candidate.baseRevision >= 0
+						&& candidate.baseRevision != revision)
 						rejectedPublication = refuse(path, description, revision, candidate,
 							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision', true);
 					else if (patchable) {
@@ -244,6 +233,8 @@ class LiveHost {
 			return 'module identity changed from ${current.moduleIdentity} to ${candidate.moduleIdentity}';
 		if (candidate.revision < current.revision)
 			return 'the compiler numbered the module from scratch';
+		if (candidate.baseRevision != current.revision)
+			return 'patch base revision ${candidate.baseRevision} does not match runtime revision ${current.revision}';
 		if (candidate.requiresReload)
 			return 'the build requires a reload'
 				+ (candidate.reloadReasons.length == 0 ? '' : ': ' + candidate.reloadReasons.join(", "));
@@ -331,7 +322,7 @@ class LiveHost {
 			return null;
 	}
 
-	/** Built field by field: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
+	/** Built field by field, and validated before the host attempts a patch: Haxeon cannot yet cast a parsed Dynamic object to a structure type. */
 	static function readDescription(path:String, file:String = ".live.json"):LiveDescription {
 		var value:Dynamic = Json.parse(File.getContent(path + file));
 		var changed:Array<Dynamic> = value.changedFunctions,

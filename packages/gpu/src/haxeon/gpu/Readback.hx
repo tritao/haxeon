@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Buffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Image;
@@ -15,13 +17,14 @@ import haxeon.gpu.Enums.ReadbackState;
 /** Owns one asynchronous image or buffer readback request. */
 class Readback {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_readback;
 	var disposed:Bool = false;
 
 	private function new(renderer:Renderer, value:nkgpu_readback) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Starts a tightly packed readback of an image rectangle. */
@@ -29,11 +32,11 @@ class Readback {
 		mipLevel:Int = 0, layer:Int = 0):Readback {
 		if (image == null || width <= 0 || height <= 0 || x < 0 || y < 0 ||
 			mipLevel < 0 || layer < 0)
-			throw "GPU readback region is invalid";
+			throw BindingError.invalidArgument("Readback.begin", "GPU readback region is invalid");
 		var renderer = image.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_image_readback_desc();
-		desc.set_struct_size(32);
+		desc.set_struct_size(nkgpu_image_readback_desc.size());
 		desc.set_image(image.nativeHandle());
 		desc.set_mip_level(mipLevel);
 		desc.set_layer(layer);
@@ -49,11 +52,11 @@ class Readback {
 	/** Starts a tightly packed readback of an arbitrary buffer range. */
 	public static function beginBuffer(buffer:Buffer, offset:Int, size:Int):Readback {
 		if (buffer == null || offset < 0 || size <= 0)
-			throw "GPU buffer readback range is invalid";
+			throw BindingError.invalidArgument("Readback.beginBuffer", "GPU buffer readback range is invalid");
 		var renderer = buffer.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_buffer_readback_desc();
-		desc.set_struct_size(16);
+		desc.set_struct_size(nkgpu_buffer_readback_desc.size());
 		desc.set_buffer(buffer.nativeHandle());
 		desc.set_offset(offset);
 		desc.set_size(size);
@@ -73,7 +76,7 @@ class Readback {
 	public function read(data:Bytes):Int {
 		ensureLive();
 		if (data == null || data.length == 0)
-			throw "GPU readback destination must not be empty";
+			throw BindingError.invalidArgument("Readback.read", "GPU readback destination must not be empty");
 		renderer.ensureResourceOperation();
 		var result = NativeKitGpu.nkgpu_readback_read(renderer.nativeHandle(), value, data, data.length);
 		GpuResult.check(result.status, "readback.read");
@@ -86,18 +89,21 @@ class Readback {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_readback_destroy(renderer.nativeHandle(), value), "readback.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
 		return disposed;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU readback has been disposed";
+			throw BindingError.disposed("Readback.ensureLive", "GPU readback has been disposed");
 		renderer.ensureLive();
 	}
 }

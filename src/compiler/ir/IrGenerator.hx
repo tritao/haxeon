@@ -1395,6 +1395,9 @@ class IrGenerator {
 					right) : lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
 					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
 				|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+			case TCall("$enum.equal", arguments):
+				var operands = lowerOperands([arguments[0], arguments[1]], builder, localTypes);
+				return lowerEnumIdentityEquality(arguments, operands[0], operands[1], builder, localTypes);
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
@@ -2370,6 +2373,59 @@ class IrGenerator {
 			case TCast(value), TAbiCast(value): isNullableEnumExpression(value);
 			default: false;
 		};
+
+	/**
+	 * `$enum.equal(left, right, nullary indices...)`: equal when it is the same value, or when both are the same constructor
+	 * and that constructor has no fields. The second case is what makes `Dot == Dot` true on a target that builds a fresh
+	 * value for each `Dot`. A null operand equals only another null.
+	 */
+	static function lowerEnumIdentityEquality(arguments:Array<TypedExpression>, left:CfgValue, right:CfgValue, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var leftName = '$' + 'enum-identity-left:${left.id}',
+			rightName = '$' + 'enum-identity-right:${right.id}',
+			resultName = '$' + 'enum-identity-result:${left.id}:${right.id}',
+			nullable = isNullableEnumExpression(arguments[0]) || isNullableEnumExpression(arguments[1]);
+		localTypes.set(leftName, left.type);
+		localTypes.set(rightName, right.type);
+		localTypes.set(resultName, Bool);
+		builder.store(leftName, left);
+		builder.store(rightName, right);
+		var yes = builder.createBlock(), no = builder.createBlock(), join = builder.createBlock(), compare = builder.createBlock();
+		builder.branch(builder.equal(builder.load(leftName, left.type), builder.load(rightName, right.type)), yes, compare);
+		builder.select(compare);
+		if (nullable)
+			for (name in [leftName, rightName]) {
+				var type = name == leftName ? left.type : right.type, present = builder.createBlock();
+				builder.branch(builder.equal(builder.load(name, type), builder.constNull(type)), no, present);
+				builder.select(present);
+			}
+		var leftIndex = builder.enumIndex(builder.load(leftName, left.type)),
+			rightIndex = builder.enumIndex(builder.load(rightName, right.type)),
+			sameConstructor = builder.createBlock();
+		builder.branch(builder.equal(leftIndex, rightIndex), sameConstructor, no);
+		builder.select(sameConstructor);
+		// Same constructor: equal only if it has no fields.
+		var index = builder.enumIndex(builder.load(leftName, left.type));
+		for (position in 2...arguments.length) {
+			var constructor = switch arguments[position].expression {
+				case TIntLiteral(value): value;
+				default: throw "Enum equality needs constant constructor indices";
+			};
+			var next = builder.createBlock();
+			builder.branch(builder.equal(index, builder.constInt(constructor)), yes, next);
+			builder.select(next);
+			index = builder.enumIndex(builder.load(leftName, left.type));
+		}
+		builder.jump(no);
+		builder.select(yes);
+		builder.store(resultName, builder.constBool(true));
+		builder.jump(join);
+		builder.select(no);
+		builder.store(resultName, builder.constBool(false));
+		builder.jump(join);
+		builder.select(join);
+		return builder.load(resultName, Bool);
+	}
 
 	static function lowerNullableEnumEquality(a:TypedExpression, b:TypedExpression, left:CfgValue, right:CfgValue, builder:CfgBuilder,
 			localTypes:Map<String, IrType>):CfgValue {

@@ -89,7 +89,7 @@ from the OS's stamp to the dequeue, all ones when unknown), then `a:i64,
 b:i64` (screen position, or key code and pressed). NativeKit writes these, and
 its `nk.wait` and `nk.frame` spans, through the sink in
 `native/runtime/native_trace.c`, which `haxeon.ProfileNativeTrace.install`
-hands to the library (`nativekit_trace.h`); `NativeKitRuntime.start` installs
+hands to the library (`nativekit_trace.h`); `Runtime.start` installs
 it. NativeKit depends on nothing in Haxeon: the sink is a table of C callbacks
 gated on `hl_prof_on`. The age is taken on NativeKit's clock, because on Linux
 the profiler's (`CLOCK_MONOTONIC_RAW`) is not the one input is stamped on.

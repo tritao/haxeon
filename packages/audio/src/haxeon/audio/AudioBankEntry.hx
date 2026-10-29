@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.resource.Resource;
@@ -53,7 +55,7 @@ class AudioBankEntry {
 	public function createClip():Clip {
 		ensureLive();
 		if (!isReady())
-			throw "Audio bank entry is not ready: " + name;
+			throw BindingError.invalidArgument("AudioBankEntry.createClip", "Audio bank entry is not ready: " + name);
 		return Clip.fromAsset(asset);
 	}
 
@@ -93,6 +95,6 @@ class AudioBankEntry {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "Audio bank entry has been unloaded: " + name;
+			throw BindingError.invalidArgument("AudioBankEntry.ensureLive", "Audio bank entry has been unloaded: " + name);
 	}
 }

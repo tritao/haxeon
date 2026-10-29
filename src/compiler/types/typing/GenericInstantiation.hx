@@ -134,6 +134,7 @@ class GenericInstantiation {
 			fn = {
 				name: fn.name,
 				isStatic: fn.isStatic,
+				isPublic: fn.isPublic,
 				isExtern: fn.isExtern,
 				isInline: fn.isInline,
 				metadata: fn.metadata,
@@ -169,6 +170,7 @@ class GenericInstantiation {
 			typed.unshift(session.representation.boundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
+		session.invalidateCallEffects(baseName, scope);
 		return session.representation.boundaryCast(call, result);
 	}
 

@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.docking;
 import haxeon.ui.widgets.controls.TabsSelectionMode;
+import haxeon.ui.core.KeyHash;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.widgets.layout.Column;
@@ -62,6 +63,8 @@ class DockWorkspace implements View {
 	public var hiddenPanels:Array<String> = [];
 	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
+	/** Scratch for `fillPaneCacheKey`; read straight after it fills, before any other pane's key is built. */
+	final paneKeyHash:KeyHash = new KeyHash();
 	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
 	var panelScope:Null<KeyScope> = null;
 
@@ -313,28 +316,40 @@ class DockWorkspace implements View {
 	 * focus or state inside it, changed. The view is created lazily so a hit skips measuring labels and building tab items.
 	 */
 	function paneView(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
-			availableWidth:Float, paneCache:DockPanelCache, create:Void->View):View
-		return new DockPaneView(nodeKey, paneCacheKey(panelIds, activePanelId, context, nodeKey, availableWidth), create, paneCache,
-			interaction);
+			availableWidth:Float, paneCache:DockPanelCache, create:Void->View):View {
+		var retainable = fillPaneCacheKey(panelIds, activePanelId, context, nodeKey, availableWidth);
+		return new DockPaneView(nodeKey, retainable, paneKeyHash.a, paneKeyHash.b, create, paneCache, interaction);
+	}
 
-	/** Null when the pane cannot be retained: its active panel has no cache key, so building it has effects the cache cannot see. */
-	function paneCacheKey(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
-			availableWidth:Float):Null<String> {
+	/**
+	 * Fills `paneKeyHash` with everything the pane shows. False when the pane cannot be retained: its active panel has no
+	 * cache key, so building it has effects the cache cannot see.
+	 */
+	function fillPaneCacheKey(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
+			availableWidth:Float):Bool {
 		if (panelIds == null || panelIds.length == 0)
-			return null;
+			return false;
 		var selected = activePanelId == null ? panelIds[0] : activePanelId;
 		var content = panelContents.get(selected);
+		var contentHasher:Null<DockPanelCacheKeyHasher> = content == null ? null : content.cacheKeyHash;
 		var contentKey:Null<DockPanelCacheKeyBuilder> = content == null ? null : content.cacheKey;
-		if (contentKey == null)
-			return null;
-		var text = nodeKey + "|actions=" + headerActionsRevision + "|width=" + availableWidth + "|style=" + context.styleRevision + "|viewport=" + context.viewportWidth + "x" +
-			context.viewportHeight + "|drag=" + interaction.revision + "|active=" + selected;
+		if (contentHasher == null && contentKey == null)
+			return false;
+		var hash = paneKeyHash.reset();
+		hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
+			.addFloat(context.viewportWidth).addFloat(context.viewportHeight).addInt(interaction.revision).addString(selected);
 		for (panelId in panelIds) {
 			var descriptor = model.get(panelId);
 			if (descriptor != null)
-				text += "|" + panelId + ":" + descriptor.title + ":" + descriptor.badgeCount + ":" + Std.string(descriptor.icon) + ":" + descriptor.enabled + ":" + Std.string(descriptor.headerMode);
+				hash.addString(panelId).addString(descriptor.title).addInt(descriptor.badgeCount)
+					.addInt(descriptor.icon == null ? -1 : cast descriptor.icon).addBool(descriptor.enabled)
+					.addInt(cast descriptor.headerMode);
 		}
-		return text + "|content=" + contentKey();
+		if (contentHasher != null)
+			contentHasher(hash);
+		else if (contentKey != null)
+			hash.addString(contentKey());
+		return true;
 	}
 
 	function panelView(panelId:String, availableWidth:Float, panelCache:DockPanelCache):View {
@@ -404,6 +419,8 @@ private class DockWorkspaceMount {
 }
 
 private class DockPanelView implements View {
+	/** Single-threaded scratch: filled and read within one `build` before any child builds. */
+	static final scratchKey:KeyHash = new KeyHash();
 	final descriptor:DockPanelDescriptor;
 	final content:DockPanelContent;
 	final availableWidth:Float;
@@ -421,13 +438,24 @@ private class DockPanelView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var cacheKeyBuilder:Null<DockPanelCacheKeyBuilder> = content.cacheKey;
-		var cacheKey = cacheKeyBuilder == null ? null :
-			cacheKeyBuilder() + "|style=" + context.styleRevision +
-			"|viewport=" + context.viewportWidth + "x" + context.viewportHeight +
-			"|width=" + availableWidth;
-		var cached = cacheKey == null ? null : panelCache.entry(descriptor.id);
+		var cacheKeyHasher:Null<DockPanelCacheKeyHasher> = content.cacheKeyHash;
+		var keyed = false;
+		var keyA = 0, keyB = 0;
+		if (cacheKeyHasher != null || cacheKeyBuilder != null) {
+			keyed = true;
+			var hash = scratchKey.reset();
+			if (cacheKeyHasher != null)
+				cacheKeyHasher(hash);
+			else if (cacheKeyBuilder != null)
+				hash.addString(cacheKeyBuilder());
+			hash.addInt(context.styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight)
+				.addFloat(availableWidth);
+			keyA = hash.a;
+			keyB = hash.b;
+		}
+		var cached = keyed ? panelCache.entry(descriptor.id) : null;
 		var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
-		if (cached != null && cached.key == cacheKey && cached.statesMatch(context)) {
+		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
@@ -457,9 +485,9 @@ private class DockPanelView implements View {
 		if (observed)
 			context.reportBuild("panel:" + descriptor.id, buildStarted - preparationStarted,
 				Sys.time() - buildStarted, root);
-		if (cacheKey != null) {
+		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
-			panelCache.put(descriptor.id, cacheKey, root, usedStates, context.stateRevisions(usedStates),
+			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
 				new InteractionStateSnapshot(context.currentRoot(root)));
 		}
 		return root;
@@ -469,22 +497,27 @@ private class DockPanelView implements View {
 /** A retained pane: reuses the built tab strip and panel while its key and the interaction state inside it are unchanged. */
 private class DockPaneView implements View {
 	final key:String;
-	final cacheKey:Null<String>;
+	final retainable:Bool;
+	final keyA:Int;
+	final keyB:Int;
 	final create:Void->View;
 	final cache:DockPanelCache;
 	final interaction:DockWorkspaceInteraction;
 
-	public function new(key:String, cacheKey:Null<String>, create:Void->View, cache:DockPanelCache, interaction:DockWorkspaceInteraction) {
+	public function new(key:String, retainable:Bool, keyA:Int, keyB:Int, create:Void->View, cache:DockPanelCache,
+			interaction:DockWorkspaceInteraction) {
 		this.key = key;
-		this.cacheKey = cacheKey;
+		this.retainable = retainable;
+		this.keyA = keyA;
+		this.keyB = keyB;
 		this.create = create;
 		this.cache = cache;
 		this.interaction = interaction;
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var cached = cacheKey == null ? null : cache.entry(key);
-		if (cached != null && cached.key == cacheKey && cached.statesMatch(context)) {
+		var cached = retainable ? cache.entry(key) : null;
+		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
@@ -498,9 +531,9 @@ private class DockPaneView implements View {
 		var stateMarker = context.stateUsageMarker();
 		var targetMark = interaction.targetCount(), tabMark = interaction.tabTargetCount();
 		var root = create().build(context);
-		if (cacheKey != null) {
+		if (retainable) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
-			cache.put(key, cacheKey, root, usedStates, context.stateRevisions(usedStates),
+			cache.put(key, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
 				new InteractionStateSnapshot(context.currentRoot(root)), interaction.targetsSince(targetMark),
 				interaction.tabTargetsSince(tabMark));
 		}
@@ -517,13 +550,13 @@ private class DockPanelCache {
 	public function entry(panelId:String):Null<DockPanelCacheEntry>
 		return entries.get(panelId);
 
-	public function put(panelId:String, key:String, root:RenderNode, stateIds:Array<Int>,
+	public function put(panelId:String, keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>,
 			stateRevisions:Array<Int>, interactions:InteractionStateSnapshot,
 			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>):Void {
 		var previous = entries.get(panelId);
 		if (previous != null && previous.root != root)
 			previous.root.detach();
-		entries.set(panelId, new DockPanelCacheEntry(key, root, stateIds, stateRevisions,
+		entries.set(panelId, new DockPanelCacheEntry(keyA, keyB, root, stateIds, stateRevisions,
 			interactions, targets, tabTargets));
 	}
 
@@ -534,7 +567,8 @@ private class DockPanelCache {
 }
 
 private class DockPanelCacheEntry {
-	public final key:String;
+	final keyA:Int;
+	final keyB:Int;
 	public var root(default, null):RenderNode;
 	public final stateIds:Array<Int>;
 	/** Drop targets the build registered; a hit replays them because the interaction forgets them every frame. */
@@ -543,10 +577,11 @@ private class DockPanelCacheEntry {
 	final stateRevisions:Array<Int>;
 	final interactions:InteractionStateSnapshot;
 
-	public function new(key:String, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
+	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
 			interactions:InteractionStateSnapshot, ?targets:Array<DockDropTarget>,
 			?tabTargets:Array<DockTabDropTarget>) {
-		this.key = key;
+		this.keyA = keyA;
+		this.keyB = keyB;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
@@ -554,6 +589,9 @@ private class DockPanelCacheEntry {
 		this.targets = targets == null ? [] : targets;
 		this.tabTargets = tabTargets == null ? [] : tabTargets;
 	}
+
+	public function matches(otherA:Int, otherB:Int):Bool
+		return keyA == otherA && keyB == otherB;
 
 	/** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
 	public function replaceRoot(next:RenderNode):Void

@@ -292,6 +292,7 @@ class SemanticAssembly {
 						canonicalMethod:AstFunction = {
 							name: qualified,
 							isStatic: method.isStatic,
+							isPublic: method.isPublic,
 							typeParameters: method.typeParameters,
 							typeConstraints: method.typeConstraints,
 							arguments: method.arguments,
@@ -376,6 +377,7 @@ class SemanticAssembly {
 					classMethods.push({
 						name: method.name,
 						isStatic: method.isStatic,
+						isPublic: method.isPublic,
 						isExtern: method.isExtern,
 						metadata: method.metadata,
 						typeParameters: method.typeParameters,

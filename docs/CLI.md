@@ -26,12 +26,21 @@ diagnostic commands.
 ./scripts/haxeon fmt src/Main.hx
 ./scripts/haxeon fmt --check src/Main.hx
 cat src/Main.hx | ./scripts/haxeon fmt --stdin --line-width 100
+./scripts/haxeon lint --manifest haxeon.json src/Main.hx
+./scripts/haxeon lint --fix --manifest haxeon.json src/Main.hx
 ```
 
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
 default, while `--check` reports files that would change. Use `--stdin` for
 editor or pipeline integration, `--line-width` to set the column limit, and
 `--tab-size` with `--use-tabs` to control indentation.
+
+`haxeon lint` reports imports a file never uses and exits with 1 when it finds any;
+`--fix` removes them and reformats a file that was formatted before. Imports resolve
+against the `sourceRoots` of each `--manifest`. A wildcard, a module that does not
+resolve, an alias of another type and an abstract with implicit conversions are
+never reported, since removing them could change what the file means. Enum imports
+are used through their constructors.
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:

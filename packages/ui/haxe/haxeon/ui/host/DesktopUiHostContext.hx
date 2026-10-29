@@ -1,7 +1,8 @@
 package haxeon.ui.host;
 
+import haxeon.platform.event.EventPump;
+
 import haxeon.ui.FontCollection;
-import haxeon.platform.NativeKitEvents;
 import nativekit.ffi.NativeKitTypes;
 
 /** Live services, with the window and surface, available while constructing a hosted desktop or browser application. */
@@ -13,7 +14,7 @@ class DesktopUiHostContext extends UiHostContext {
 	/** An application may defer closing while it asks to save a document. */
 	@:allow(haxeon.ui.host.DesktopUiHost)
 	@:allow(haxeon.ui.host.BrowserUiHost)
-	private function new(fonts:FontCollection, events:NativeKitEvents, window:WindowHandle, surface:SurfaceHandle,
+	private function new(fonts:FontCollection, events:EventPump, window:WindowHandle, surface:SurfaceHandle,
 			close:Void->Void, scheduleFrame:Void->Void) {
 		super(fonts, events, close, scheduleFrame);
 		this.window = window;

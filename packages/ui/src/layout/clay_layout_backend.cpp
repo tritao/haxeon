@@ -724,6 +724,13 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
             }
             return false;
         }
+        if (node.style.overlay && node.style.positioning != LayoutPositioning::Absolute) {
+            if (error) {
+                error->node_index = index;
+                error->message = "layout overlays require absolute positioning";
+            }
+            return false;
+        }
         state.element_ids[index] = element_id(node.id);
         state.measure_node_ids[state.element_ids[index].id] = {node.id, node.measure_version};
         if (node.parent < 0) {
@@ -771,32 +778,43 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
         return false;
     }
 
-    // Clay has one global floating z-index space. Assign ranks to nested
-    // floating contexts so every child stays within its parent's layer and
-    // sibling contexts retain their local z-index and declaration order.
+    // Ordinary floating contexts preserve nested z-order. Overlays escape those
+    // contexts, but remain inside the nearest enclosing overlay (e.g. a dialog).
     std::vector<std::vector<std::size_t>> floating_children(nodes.size());
+    std::vector<std::vector<std::size_t>> overlay_children(nodes.size());
     const auto collect_floating = [&](auto &&self, std::size_t index,
-                                      std::size_t owner) -> void {
+                                      std::size_t owner, std::size_t overlay_owner) -> void {
         if (index != root && nodes[index].style.positioning == LayoutPositioning::Absolute) {
-            floating_children[owner].push_back(index);
+            if (nodes[index].style.overlay) {
+                overlay_children[overlay_owner].push_back(index);
+                overlay_owner = index;
+            } else {
+                floating_children[owner].push_back(index);
+            }
             owner = index;
         }
         for (const std::size_t child : state.children[index])
-            self(self, child, owner);
+            self(self, child, owner, overlay_owner);
     };
-    collect_floating(collect_floating, root, root);
+    collect_floating(collect_floating, root, root, root);
     std::vector<std::size_t> context_order;
     const auto order_floating = [&](auto &&self, std::size_t owner) -> void {
+        const auto sort_children = [&](auto &children) {
+            std::stable_sort(children.begin(), children.end(), [&](std::size_t left,
+                                                                   std::size_t right) {
+                return nodes[left].style.z_index < nodes[right].style.z_index;
+            });
+        };
         auto &children = floating_children[owner];
-        std::stable_sort(children.begin(), children.end(), [&](std::size_t left,
-                                                               std::size_t right) {
-            return nodes[left].style.z_index < nodes[right].style.z_index;
-        });
+        sort_children(children);
         for (const std::size_t child : children)
             if (nodes[child].style.z_index < 0) self(self, child);
         context_order.push_back(owner);
         for (const std::size_t child : children)
             if (nodes[child].style.z_index >= 0) self(self, child);
+        auto &overlays = overlay_children[owner];
+        sort_children(overlays);
+        for (const std::size_t child : overlays) self(self, child);
     };
     order_floating(order_floating, root);
     const auto root_order = std::find(context_order.begin(), context_order.end(), root);

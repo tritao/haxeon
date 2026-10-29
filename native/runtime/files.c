@@ -281,6 +281,14 @@ static vbyte *realtime_file_read( vstring *path, int *length ) {
 	free(path_utf8);
 #endif
 	if( file == NULL ) hl_error("Could not open source file");
+#ifndef HL_WIN
+	/* fopen succeeds on a directory, and its measured size is not a length. */
+	struct stat info;
+	if( fstat(fileno(file), &info) == 0 && S_ISDIR(info.st_mode) ) {
+		fclose(file);
+		hl_error("Source path is a directory");
+	}
+#endif
 	/* The measured size is only a first capacity: /proc files and pipes report 0, so read to the end. */
 	long hint = 0;
 	if( fseek(file, 0, SEEK_END) == 0 ) {

@@ -1,3 +1,6 @@
+import haxeon.platform.Runtime;
+import haxeon.platform.Window;
+import haxeon.platform.event.PlatformEvent;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -18,7 +21,7 @@ class HxiNativeKitSceneMain {
 		compiler.addSourceRoot(Sys.getCwd() + "/packages/gpu/src");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene/bindings/haxe");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene_render/bindings/haxe");
-		compiler.update("haxeon/platform/NativeKitWindow.hx", File.getContent(Sys.getCwd() + "/packages/platform/src/haxeon/platform/NativeKitWindow.hx"));
+		compiler.update("haxeon/platform/Window.hx", File.getContent(Sys.getCwd() + "/packages/platform/src/haxeon/platform/Window.hx"));
 		compiler.addFfiProjection("NativeKit.hxmap", File.getContent(Sys.getCwd() + "/packages/platform/bindings/nativekit.hxmap"));
 		compiler.addFfiProjection("NativeKitGpu.hxmap", File.getContent(Sys.getCwd() + "/packages/gpu/bindings/nativekit-gpu.hxmap"));
 		compiler.addFfiProjection("NativeKitSceneRender.hxmap", File.getContent(nativekitRoot
@@ -38,8 +41,6 @@ import NativeKitSceneRender;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitEventValue;
-import haxeon.platform.NativeKitRuntime;
 import nativekit.scene.Scene;
 import nativekit.scene.SceneView;
 import nativekit.scene.SceneRenderer;
@@ -152,7 +153,7 @@ class Main {
 			|| haxe.Int64.toInt(update.get_updated_geometry_resources()) != 0
 			|| haxe.Int64.toInt(movedExecution.get_commands()) != 1) return 17;
 
-		var realRuntime = NativeKitRuntime.start(),
+		var realRuntime = Runtime.start(),
 			windowOptions = new WindowOptions();
 		windowOptions.set_width(64);
 		windowOptions.set_height(64);
@@ -160,7 +161,7 @@ class Main {
 		windowOptions.set_flags(WindowFlags.Resizable);
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
-		var window = realRuntime.createWindow(windowOptions),
+		var window = realRuntime.createWindowNative(windowOptions),
 			surface = Surface.create(window, 64, 64),
 			ready = false,
 			subscription = realRuntime.events.listen(function(value) switch value {

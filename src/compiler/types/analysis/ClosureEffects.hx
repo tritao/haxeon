@@ -19,9 +19,9 @@ import compiler.types.analysis.Scope.LocalFunction;
  * can change, so only those need forgetting. Anything else it might run leaves the effect `unknown`: a call through
  * a value of function type, a method or field call that may hold a closure, or a function-typed local it hands on.
  *
- * Only closures created in this function can assign its locals, so a function-typed parameter or a call of a
- * top-level function adds nothing. Closures that escape through objects are as invisible here as they are to any
- * other call the typer makes.
+ * Only closures created in this function can assign its locals, so a function-typed parameter adds nothing
+ * directly. Impure top-level calls may invoke an escaped closure. Closures that escape through objects are as
+ * invisible here as they are to any other call the typer makes.
  */
 class ClosureEffects extends BindingWalker {
 	/** Source names of the outer variables the closure may assign. */
@@ -32,23 +32,26 @@ class ClosureEffects extends BindingWalker {
 
 	final scope:Scope;
 	final visited:Array<LocalFunction>;
+	final isPureCall:Null<String->Bool>;
 	final lambdaDeclarations:Map<String, Bool> = [];
 
 	/**
 	 * `scope` is where the closure's free names resolve: the scope it was created in. `visited` holds the local
 	 * functions already analysed, so a recursive one is analysed once.
 	 */
-	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>, scope:Scope, ?visited:Array<LocalFunction>):ClosureEffects {
-		var effects = new ClosureEffects(scope, visited == null ? [] : visited);
+	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>, scope:Scope, ?visited:Array<LocalFunction>,
+			?isPureCall:String->Bool):ClosureEffects {
+		var effects = new ClosureEffects(scope, visited == null ? [] : visited, isPureCall);
 		effects.lambdaDepth = 1;
 		effects.walkFunction(arguments, body);
 		return effects;
 	}
 
-	function new(scope:Scope, visited:Array<LocalFunction>) {
+	function new(scope:Scope, visited:Array<LocalFunction>, isPureCall:Null<String->Bool>) {
 		super();
 		this.scope = scope;
 		this.visited = visited;
+		this.isPureCall = isPureCall;
 	}
 
 	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
@@ -67,7 +70,7 @@ class ClosureEffects extends BindingWalker {
 			unknown = true;
 	}
 
-	/** A call of a plain name: a local function value, or a top-level function that cannot touch locals. */
+	/** A call of a plain name: a local function value, or a top-level function that may invoke an escaped closure. */
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void {
 		if (declaration != null) {
 			// Declared inside the closure: its own lambda body is walked where it is declared, and anything
@@ -78,11 +81,13 @@ class ClosureEffects extends BindingWalker {
 		}
 		if (scope.resolve(name) != null)
 			followLocal(name);
+		else if (isPureCall != null && !isPureCall(name))
+			unknown = true;
 	}
 
 	/** `local.member(...)` is a method call or a call of a function stored in a field; either may run a closure. */
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
-		if (declaration != null || scope.resolve(local) != null)
+		if (declaration != null || scope.resolve(local) != null || isPureCall != null && !isPureCall(local + "." + method))
 			unknown = true;
 	}
 
@@ -124,7 +129,7 @@ class ClosureEffects extends BindingWalker {
 		if (visited.indexOf(known) >= 0)
 			return;
 		visited.push(known);
-		var inner = ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn, visited);
+		var inner = ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn, visited, isPureCall);
 		for (written in inner.writes.keys())
 			writes.set(written, true);
 		if (inner.unknown)

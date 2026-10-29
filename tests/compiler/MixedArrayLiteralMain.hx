@@ -8,6 +8,8 @@ import sys.io.File;
 class MixedArrayLiteralMain {
 	static final prefix = 'class Base { public var value:Int=42; public function new() {} } class Child extends Base { public function new() super(); } ';
 	static final cases = [
+		'var d:Dynamic=[new Child()];var accepted=false;try {var a:Array<Base>=d;accepted=true;}catch(e:Dynamic){}return !accepted?42:1;',
+		'var d:Dynamic=[1,2.5];var a:Array<Float>=d;return a[0]+a[1]==3.5?42:1;',
 		'var a:Array<Dynamic>=[1,"hello",true,null]; return a[0]==1 && a[1]=="hello" && a[2]==true && a[3]==null ? 42 : 1;',
 		'var d:Dynamic=[1,"hello",true]; var a:Array<Dynamic>=d; return a[0]==1 && a[1]=="hello" && a[2]==true ? 42 : 1;',
 		'var a=[1,2.5]; return a[0]+a[1]==3.5 ? 42 : 1;',

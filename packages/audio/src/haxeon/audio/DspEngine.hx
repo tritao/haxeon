@@ -1,5 +1,7 @@
 package haxeon.audio;
 
+import haxeon.platform.BindingError;
+
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
@@ -38,7 +40,7 @@ class DspEngine {
 	public function createInstrument(patch:DspPatch):DspInstrument {
 		ensureLive();
 		if (patch == null)
-			throw "DSP patch must not be null";
+			throw BindingError.invalidArgument("DspEngine.createInstrument", "DSP patch must not be null");
 		var made = NativeKitAudio.nk_audio_dsp_instrument_create_from_patch(value,
 			patch.nativeHandle());
 		AudioResult.check(made.status, "audio.dsp.instrument.create");
@@ -59,7 +61,7 @@ class DspEngine {
 
     public function createSoundFontInstrument(font:SoundFont, preset:Int, gain:Float = 1.0):DspInstrument {
         ensureLive();
-        if (font == null) throw "SoundFont must not be null";
+        if (font == null) throw BindingError.invalidArgument("DspEngine.createSoundFontInstrument", "SoundFont must not be null");
         var made = NativeKitAudio.nk_audio_dsp_instrument_create_from_soundfont(value,
             font.nativeHandle(), preset, gain);
         AudioResult.check(made.status, "audio.dsp.instrument.soundfont");
@@ -90,7 +92,7 @@ class DspEngine {
     public function tryNoteOn(instrument:DspInstrument, note:Int, velocity:Float,
         startFrame:Int64, holdFrames:Int64, priority:Int = 0):Null<Int64> {
         ensureLive();
-        if (instrument == null) throw "DSP note instrument must not be null";
+        if (instrument == null) throw BindingError.invalidArgument("DspEngine.tryNoteOn", "DSP note instrument must not be null");
         var options = new NativeDspNoteOptions();
         options.set_struct_size(NativeDspNoteOptions.size()); options.set_note(note);
         options.set_velocity(velocity); options.set_start_frame(startFrame);
@@ -214,9 +216,9 @@ class DspEngine {
 			var previousFrame = 0;
 			for (event in events) {
 				if (event == null)
-					throw "DSP scheduled event must not be null";
+					throw BindingError.invalidArgument("DspEngine.schedule", "DSP scheduled event must not be null");
 				if (event.frameOffset < previousFrame)
-					throw "DSP scheduled events must be sorted by frame offset";
+					throw BindingError.invalidArgument("DspEngine.schedule", "DSP scheduled events must be sorted by frame offset");
 				previousFrame = event.frameOffset;
 				nativeEvents.push(event.nativeValue());
 			}
@@ -243,15 +245,15 @@ class DspEngine {
 	public function render(target:DspRenderTarget, ?events:Array<DspEvent>):Bytes {
 		ensureLive();
 		if (target == null)
-			throw "DSP render target must not be null";
+			throw BindingError.invalidArgument("DspEngine.render", "DSP render target must not be null");
 		var nativeEvents:Array<NativeDspEvent> = [];
 		if (events != null) {
 			var previousFrame = 0;
 			for (event in events) {
 				if (event == null)
-					throw "DSP render event must not be null";
+					throw BindingError.invalidArgument("DspEngine.render", "DSP render event must not be null");
 				if (event.frameOffset < previousFrame)
-					throw "DSP render events must be sorted by frame offset";
+					throw BindingError.invalidArgument("DspEngine.render", "DSP render events must be sorted by frame offset");
 				previousFrame = event.frameOffset;
 				nativeEvents.push(event.nativeValue());
 			}
@@ -300,6 +302,6 @@ class DspEngine {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "DSP engine has been disposed";
+			throw BindingError.disposed("DspEngine.ensureLive", "DSP engine has been disposed");
 	}
 }

@@ -1,4 +1,4 @@
-import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.Runtime;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
@@ -59,7 +59,7 @@ class SearchPickerTests {
 		scheduler.advance(0.41); check(visible, "Shared tooltip delay never completed"); delay.dispose();
 		var placement = haxeon.ui.widgets.overlays.Tooltip.place(390, 40, 0, 400);
 		check(390 + placement.x + placement.width + 20 <= 394, "Shared tooltip escaped its bounds");
-		var runtime = new NativeKitRuntime();
+		var runtime = Runtime.start();
 		var fonts = FontCollection.create(); fonts.addSystemFallbacks();
 		var ui = new UiContext(null, fonts);
 		var model = new Results(), built = 0;

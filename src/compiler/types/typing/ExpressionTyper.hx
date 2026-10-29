@@ -1117,7 +1117,7 @@ class ExpressionTyper {
 		if (isDynamic)
 			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
-		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), resolvedResult, span);
+		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), isDynamic ? TDynamic : resolvedResult, span);
 	}
 
 	static function isDynamicExpectation(type:Null<CompilerType>):Bool
@@ -1141,7 +1141,7 @@ class ExpressionTyper {
 			expectedElement = TDynamic;
 		}
 		var typedValues:Array<TypedExpression> = [],
-			elementType = expectedElement;
+			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;
 		for (value in values) {
 			var typedValue = typeExpressionCallback(value, scope, elementType == TNull || dynamicContext ? null : elementType, false);
 			if (expectedElement == null) {
@@ -1150,7 +1150,8 @@ class ExpressionTyper {
 					joined = TDynamic;
 				if (joined == null)
 					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
-				elementType = joined;
+				// Dynamic permits mixed storage, but homogeneous arrays keep their exact element contract.
+				elementType = joined == null ? TDynamic : joined;
 			}
 			typedValues.push(typedValue);
 		}
@@ -1972,6 +1973,57 @@ class ExpressionTyper {
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		var result = compareOperands(left, right, operation, span, reversed);
+		return operation == 2 ? enumIdentityComparison(result) : result;
+	}
+
+	/**
+	 * `==` on two values of an enum with payload constructors compares by identity, as in Haxe: `Circle(1) == Circle(1)` is
+	 * false for two separately built values. A constructor without fields denotes one value, so `Dot == Dot` is true however
+	 * the two came about. The comparison becomes `$enum.equal(left, right, nullary constructor indices...)` for the IR
+	 * generator. An enum with no payload constructor keeps the plain constructor comparison, which is the same thing.
+	 */
+	function enumIdentityComparison(comparison:TypedExpression):TypedExpression {
+		switch comparison.expression {
+			case TEqual(left, right):
+				if (isNullOperand(left) || isNullOperand(right))
+					return comparison;
+				var name = enumNameOf(left.type);
+				if (name == null || name != enumNameOf(right.type) || !session.enumDecls.exists(name))
+					return comparison;
+				var declaration = session.enumDecls.get(name), nullary = [], payload = false;
+				for (index in 0...declaration.cases.length)
+					if (declaration.cases[index].params.length == 0)
+						nullary.push(index);
+					else
+						payload = true;
+				if (!payload)
+					return comparison;
+				var arguments = [left, right];
+				for (index in nullary)
+					arguments.push(new TypedExpression(TIntLiteral(index), TInt, comparison.span));
+				return new TypedExpression(TCall("$enum.equal", arguments), TBool, comparison.span);
+			default:
+				return comparison;
+		}
+	}
+
+	/** The enum a plain or nullable enum type names, or null for any other type (an abstract over an enum included). */
+	static function enumNameOf(type:CompilerType):Null<String>
+		return switch type {
+			case TInstance(NominalKind.Enum, name, _): Std.string(name);
+			case TNullable(TInstance(NominalKind.Enum, name, _)): Std.string(name);
+			default: null;
+		};
+
+	static function isNullOperand(expression:TypedExpression):Bool
+		return expression.type == TNull || switch expression.expression {
+			case TNullLiteral: true;
+			case TNullableWrap(value), TCast(value): isNullOperand(value);
+			default: false;
+		};
+
+	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
 		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
 			// Compare content in source operand order; reversing the numeric result
 			// must not reverse evaluation of side-effecting string expressions.

@@ -41,7 +41,9 @@ enum NK_FLAGS(nkui_layout_node_flags) {
     /** Excludes this node's own bounds from geometric hit testing. */
     NKUI_LAYOUT_NODE_HIT_SELF_DISABLED = 1u << 3,
     /** Excludes this node's descendants from geometric hit testing. */
-    NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 1u << 4
+    NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 1u << 4,
+    /** Floating overlay above ordinary content, scoped to the nearest enclosing overlay. */
+    NKUI_LAYOUT_NODE_OVERLAY = 1u << 5
 };
 
 /** Persistent rendering policy for a retained custom-paint plane. */

@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.ImageDesc;
 import haxeon.gpu.Readback;
@@ -16,6 +18,7 @@ import haxeon.platform.GraphicsImageRef;
 /** Renderer-owned RGBA8 sampled image. */
 class Image {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_image;
 	public final width:Int;
 	public final height:Int;
@@ -26,14 +29,14 @@ class Image {
 		this.value = value;
 		this.width = width;
 		this.height = height;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	/** Creates an image from the current generic image descriptor. */
 	public static function create(renderer:Renderer, desc:ImageDesc):Image {
 		if (desc == null || desc.width <= 0 || desc.height <= 0 || desc.mipCount <= 0 ||
 			desc.sampleCount <= 0 || desc.layerCount <= 0)
-			throw "GPU image descriptor dimensions and counts must be positive";
+			throw BindingError.invalidArgument("Image.create", "GPU image descriptor dimensions and counts must be positive");
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_image_create_desc(renderer.nativeHandle(), desc.nativeValue());
 		GpuResult.check(made.status, "image.create");
@@ -44,7 +47,7 @@ class Image {
 	public static function fromRgba8(renderer:Renderer, width:Int, height:Int, pixels:Bytes):Image {
 		if (width <= 0 || height <= 0 || pixels == null || width > Std.int(536870911 / height)
 			|| pixels.length != width * height * 4)
-			throw "GPU RGBA8 image dimensions or pixel storage are invalid";
+			throw BindingError.invalidArgument("Image.fromRgba8", "GPU RGBA8 image dimensions or pixel storage are invalid");
 		renderer.ensureResourceOperation();
 		var madeBuilder = NativeKitGpu.nkgpu_image_begin(renderer.nativeHandle(), width, height);
 		GpuResult.check(madeBuilder.status, "image.begin");
@@ -69,7 +72,7 @@ class Image {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0)
-			throw "GPU image slot must be non-negative";
+			throw BindingError.invalidArgument("Image.apply", "GPU image slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_image(renderer.nativeHandle(), slot, value), "image.apply");
 	}
 
@@ -78,7 +81,7 @@ class Image {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0)
-			throw "GPU storage-image slot must be non-negative";
+			throw BindingError.invalidArgument("Image.applyStorage", "GPU storage-image slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_storage_image(renderer.nativeHandle(), slot, value),
 			"image.applyStorage");
 	}
@@ -96,7 +99,7 @@ class Image {
 	public function update(x:Int, y:Int, width:Int, height:Int, pixels:Bytes, rowPitch:Int):Void {
 		ensureLive();
 		if (x < 0 || y < 0 || width <= 0 || height <= 0 || pixels == null || rowPitch <= 0)
-			throw "GPU image update arguments are invalid";
+			throw BindingError.invalidArgument("Image.update", "GPU image update arguments are invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_image_update(renderer.nativeHandle(), value, x, y, width,
 			height, pixels, rowPitch), "image.update");
 	}
@@ -107,6 +110,7 @@ class Image {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_image_destroy(renderer.nativeHandle(), value), "image.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -117,13 +121,15 @@ class Image {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	@:allow(Renderer)
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU image has been disposed";
+			throw BindingError.disposed("Image.ensureLive", "GPU image has been disposed");
 		renderer.ensureLive();
 	}
 }

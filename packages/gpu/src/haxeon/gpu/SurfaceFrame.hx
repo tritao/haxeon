@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.Batch;
 import haxeon.gpu.Surface;
 
@@ -58,12 +60,12 @@ class SurfaceFrame {
 	function ensureRenderer(renderer:Renderer):Void {
 		ensureOpen();
 		if (!renderer.ownsSurface(surface))
-			throw "GPU surface frame belongs to another renderer";
+			throw BindingError.invalidArgument("SurfaceFrame.ensureRenderer", "GPU surface frame belongs to another renderer");
 	}
 
 	function ensureOpen():Void {
 		if (finished)
-			throw "GPU surface frame has already finished";
+			throw BindingError.invalidState("SurfaceFrame.ensureOpen", "GPU surface frame has already finished");
 		surface.ensureLive();
 	}
 }

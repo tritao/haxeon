@@ -1,5 +1,7 @@
 package haxeon.gpu;
 
+import haxeon.platform.BindingError;
+
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Shader;
@@ -15,6 +17,7 @@ import haxeon.gpu.Enums.VertexFormat;
 /** Renderer-owned pipeline resource. */
 class Pipeline {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_pipeline;
 	var disposed:Bool = false;
 
@@ -22,15 +25,15 @@ class Pipeline {
 	private function new(renderer:Renderer, value:nkgpu_pipeline) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public static function begin(renderer:Renderer, shader:Shader, stride:Int):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
-			throw "GPU pipeline shader belongs to a different renderer";
+			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline shader belongs to a different renderer");
 		if (stride <= 0)
-			throw "GPU pipeline vertex stride must be positive";
+			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline vertex stride must be positive");
 		var made = NativeKitGpu.nkgpu_pipeline_begin(renderer.nativeHandle(), shader.nativeHandle(), stride);
 		GpuResult.check(made.status, "pipeline.begin");
 		return new PipelineBuilder(renderer, made.out_builder);
@@ -40,7 +43,7 @@ class Pipeline {
 	public static function beginCompute(renderer:Renderer, shader:Shader):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
-			throw "GPU compute pipeline shader belongs to a different renderer";
+			throw BindingError.invalidArgument("Pipeline.beginCompute", "GPU compute pipeline shader belongs to a different renderer");
 		var made = NativeKitGpu.nkgpu_pipeline_begin_compute(renderer.nativeHandle(), shader.nativeHandle());
 		GpuResult.check(made.status, "pipeline.beginCompute");
 		return new PipelineBuilder(renderer, made.out_builder);
@@ -63,6 +66,7 @@ class Pipeline {
 		renderer.ensureResourceOperation();
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_destroy(renderer.nativeHandle(), value), "pipeline.dispose");
 		disposed = true;
+		registration.detach();
 	}
 
 	public function isDisposed():Bool
@@ -73,12 +77,14 @@ class Pipeline {
 		return renderer;
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		disposed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (disposed)
-			throw "GPU pipeline has been disposed";
+			throw BindingError.disposed("Pipeline.ensureLive", "GPU pipeline has been disposed");
 		renderer.ensureLive();
 	}
 }
@@ -86,6 +92,7 @@ class Pipeline {
 /** Configures one vertex/index layout before creating an immutable pipeline. */
 class PipelineBuilder {
 	final renderer:Renderer;
+	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_pipeline_builder;
 	var consumed:Bool = false;
 
@@ -93,13 +100,13 @@ class PipelineBuilder {
 	private function new(renderer:Renderer, value:nkgpu_pipeline_builder) {
 		this.renderer = renderer;
 		this.value = value;
-		renderer.registerResource(rendererClosed);
+		registration = renderer.registerResource(rendererClosed);
 	}
 
 	public function attribute(location:Int, bufferIndex:Int, offset:Int, format:VertexFormat):PipelineBuilder {
 		ensureLive();
 		if (location < 0 || bufferIndex < 0 || offset < 0)
-			throw "GPU vertex attribute indices and offset must be non-negative";
+			throw BindingError.invalidArgument("PipelineBuilder.attribute", "GPU vertex attribute indices and offset must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_pipeline_attribute(value, location, bufferIndex, offset, format), "pipeline.attribute");
 		return this;
 	}
@@ -127,17 +134,20 @@ class PipelineBuilder {
 		ensureLive();
 		var made = NativeKitGpu.nkgpu_pipeline_end(value);
 		consumed = true;
+		registration.detach();
 		GpuResult.check(made.status, "pipeline.end");
 		return new Pipeline(renderer, made.out_pipeline);
 	}
 
 	@:allow(Renderer)
-	function rendererClosed():Void
+	function rendererClosed():Void {
 		consumed = true;
+		registration.detach();
+	}
 
 	function ensureLive():Void {
 		if (consumed)
-			throw "GPU pipeline builder has been consumed";
+			throw BindingError.invalidState("PipelineBuilder.ensureLive", "GPU pipeline builder has been consumed");
 		renderer.ensureResourceOperation();
 	}
 }

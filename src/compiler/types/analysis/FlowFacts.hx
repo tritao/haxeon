@@ -1,10 +1,13 @@
 package compiler.types.analysis;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
 
 /** Branch-local facts keyed by resolved binding identity. */
 class FlowFacts {
 	final parent:Null<FlowFacts>;
+	var invalidationSink:Null<FlowFacts>;
+	final assignmentTypes:Map<String, Null<CompilerType>> = [];
 	final refinedTypes:Map<String, CompilerType> = [];
 	final stableRefinedTypes:Map<String, CompilerType> = [];
 	final invalidated:Map<String, Bool> = [];
@@ -14,8 +17,69 @@ class FlowFacts {
 	final erasedMentions:Array<String> = [];
 	final invalidatedFields:Array<String> = [];
 
-	public function new(?parent:FlowFacts)
+	public function new(?parent:FlowFacts) {
 		this.parent = parent;
+		invalidationSink = parent == null ? null : parent.invalidationSink;
+	}
+
+	/** Keep all invalidations, including those later hidden by a new refinement, for exceptional exits. */
+	public function trackInvalidations():FlowFacts {
+		var summary = new FlowFacts();
+		summary.invalidationSink = invalidationSink;
+		invalidationSink = summary;
+		return summary;
+	}
+
+	/** Retain the type guaranteed by every assignment; null denotes an unknown write. */
+	function captureWrite(bindingId:String, type:Null<CompilerType>):Void {
+		invalidated.set(bindingId, true);
+		if (!assignmentTypes.exists(bindingId))
+			assignmentTypes.set(bindingId, type);
+		else {
+			var previous = assignmentTypes.get(bindingId);
+			if (previous == null || type == null || !TypeRelations.equals(previous, type))
+				assignmentTypes.set(bindingId, null);
+		}
+		if (invalidationSink != null)
+			invalidationSink.captureWrite(bindingId, type);
+	}
+
+	public function recordAssignment(bindingId:String, type:CompilerType):Void {
+		if (invalidationSink != null)
+			invalidationSink.captureWrite(bindingId, type);
+	}
+
+	public function applyInvalidations(summary:FlowFacts):Void {
+		var preserved:Map<String, CompilerType> = [];
+		for (key in summary.assignmentTypes.keys()) {
+			var assigned = summary.assignmentTypes.get(key),
+				entry = resolve(key);
+			// Replacing a non-null local with another non-null value keeps its type, but not its field facts.
+			if (!StringTools.startsWith(key, "$expression:")
+				&& assigned != null
+				&& entry != null
+				&& TypeRelations.equals(entry, assigned))
+				preserved.set(key, entry);
+		}
+		// These effects were already recorded in enclosing tries; replaying them is not a new unknown write.
+		var outerSink = invalidationSink;
+		invalidationSink = null;
+		for (key in summary.invalidated.keys())
+			invalidate(key);
+		for (prefix in summary.invalidatedPrefixes)
+			invalidatePrefix(prefix);
+		for (prefix in summary.invalidatedNamespaces)
+			invalidateNamespace(prefix);
+		for (prefix in summary.erasedNamespaces)
+			invalidateNamespaceCompletely(prefix);
+		for (fragment in summary.erasedMentions)
+			invalidateMentioning(fragment);
+		for (field in summary.invalidatedFields)
+			invalidateField(field);
+		for (key => type in preserved)
+			refine(key, type);
+		invalidationSink = outerSink;
+	}
 
 	public function refine(bindingId:String, type:CompilerType, stable:Bool = false):Void {
 		invalidated.remove(bindingId);
@@ -29,6 +93,8 @@ class FlowFacts {
 	}
 
 	public function invalidate(bindingId:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.captureWrite(bindingId, null);
 		refinedTypes.remove(bindingId);
 		stableRefinedTypes.remove(bindingId);
 		invalidated.set(bindingId, true);
@@ -116,6 +182,8 @@ class FlowFacts {
 	}
 
 	public function invalidatePrefix(prefix:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.invalidatePrefix(prefix);
 		for (bindingId in refinedTypes.keys())
 			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
 				refinedTypes.remove(bindingId);
@@ -126,6 +194,8 @@ class FlowFacts {
 	}
 
 	public function invalidateNamespace(prefix:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.invalidateNamespace(prefix);
 		for (bindingId in refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
 				refinedTypes.remove(bindingId);
@@ -134,6 +204,8 @@ class FlowFacts {
 
 	/** Forgets every fact under `prefix`, including stable ones, in this branch and the branches it extends. */
 	public function invalidateNamespaceCompletely(prefix:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.invalidateNamespaceCompletely(prefix);
 		for (bindingId in refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
 				refinedTypes.remove(bindingId);
@@ -145,6 +217,8 @@ class FlowFacts {
 
 	/** Forgets every expression fact whose path mentions `fragment`, such as a map entry keyed by a reassigned local. */
 	public function invalidateMentioning(fragment:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.invalidateMentioning(fragment);
 		var expressionPrefix = '$' + 'expression:';
 		for (bindingId in refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
@@ -173,6 +247,8 @@ class FlowFacts {
 	 * cannot change survive.
 	 */
 	public function invalidateField(field:String):Void {
+		if (invalidationSink != null)
+			invalidationSink.invalidateField(field);
 		for (bindingId in refinedTypes.keys())
 			if (mentionsField(bindingId, field))
 				refinedTypes.remove(bindingId);

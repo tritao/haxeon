@@ -184,9 +184,13 @@ class HlValidator {
 				case ToInt(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
-				case SafeCast(destination, source):
+				case SafeCast(destination, source), UnsafeCast(destination, source), Unref(destination, source), Setref(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
+				case RefOffset(destination, source, index):
+					requireRegister(fn, destination);
+					requireRegister(fn, source);
+					requireRegister(fn, index);
 				case Trap(destination, target):
 					requireRegister(fn, destination);
 					if (!labels.exists(target))
