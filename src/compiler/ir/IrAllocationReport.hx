@@ -167,11 +167,12 @@ private class Walker {
 	public function from(root:String):AllocationRootReport {
 		var parent:Map<String, Null<String>> = [root => null], queue = [root], findings:Array<AllocationFinding> = [], head = 0;
 		var chainTo = function(name:String):Array<String> {
-			var chain = [];
+			var chain:Array<String> = [];
 			var step:Null<String> = name;
 			while (step != null) {
-				chain.push(step);
-				step = parent.get(step);
+				var current:String = step;
+				chain.push(current);
+				step = parent.get(current);
 			}
 			chain.reverse();
 			return chain;
