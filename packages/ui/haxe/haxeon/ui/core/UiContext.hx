@@ -283,6 +283,7 @@ class UiContext {
 			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
 			reuse = hoverPaintNodes >= 0;
 		}
+		var patchOnly = !reuse && reconcileNewFocus && cacheKey != null && planInteractionPatches(cacheKey, frame);
 		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
@@ -294,16 +295,20 @@ class UiContext {
 			diagnosticStage = 0;
 			return cast root;
 		}
-		buildContext.beginFrame();
+		// A patch-only frame keeps the submitted tree and rebuilds just the widgets that read the pointer change.
+		if (!patchOnly) {
+			buildContext.beginFrame();
+			queueInteractionPatches();
+		}
 		buildContext.applyPatches();
 		diagnosticStage = 4;
 		var viewStartedAt = Sys.time();
 		var viewAllocatedAt = AllocationProbe.now();
-		var view = build();
+		var view = patchOnly ? null : build();
 		var viewBuiltAt = Sys.time();
 		var viewBuiltAllocatedAt = AllocationProbe.now();
-		var next = buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext));
-		if (next == null || next.parent != null)
+		var next = patchOnly ? root : buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext));
+		if (next == null || (!patchOnly && next.parent != null))
 			throw "A view must produce one unparented render tree root";
 		if (inspectionEnabled) appendInspectionOverlay(next, frame);
 		// Decorations may be assigned by view wrappers after widget construction.
@@ -314,6 +319,8 @@ class UiContext {
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
 			previousNodesById, currentNodesById, buildContext.patchedPriors());
 		buildContext.endPatchFrame();
+		// The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it.
+		if (patchOnly) for (node in patchFramePaintNodes) node.invalidatePaint();
 		var compareAllocatedAt = AllocationProbe.now();
 		next.walk(function(node) {
 			node.syncHitTestPolicy();
@@ -917,14 +924,19 @@ class UiContext {
 		events.text(kind, value, data);
 	}
 
+	/** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
+	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
+		return root != null && submittedBuildKey == cacheKey && submittedStateRevision == stateStore.revision &&
+			submittedStyleRevision == buildContext.styleRevision && submittedFrameWidth == frame.width &&
+			submittedFrameHeight == frame.height && animations.activeCount == 0 &&
+			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
+			commands.revision == submittedCommandRevision && buildContext.theme == submittedTheme &&
+			buildContext.styleSheet == submittedStyleSheet;
+	}
+
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
 	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
-		if (root == null || submittedBuildKey != cacheKey || submittedStateRevision != stateStore.revision ||
-			submittedStyleRevision != buildContext.styleRevision || submittedFrameWidth != frame.width ||
-			submittedFrameHeight != frame.height || animations.activeCount > 0 ||
-			animations.revision != submittedAnimationRevision || gestures.revision != submittedGestureRevision ||
-			commands.revision != submittedCommandRevision || buildContext.theme != submittedTheme ||
-			buildContext.styleSheet != submittedStyleSheet) return -1;
+		if (!steadyForInteractionReuse(cacheKey, frame)) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
@@ -939,6 +951,47 @@ class UiContext {
 		submittedInteractionRevision = interactionStates.revision;
 		interactionStates.acknowledge();
 		return painted;
+	}
+
+	/** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
+	final patchFramePaintNodes:Array<RenderNode> = [];
+	static final patchInteractionMask:Int = haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
+
+	/**
+	 * Decides whether the pending pointer changes can be met by rebuilding just the widgets that read them (self-updating
+	 * widgets, such as buttons), leaving every other node of the submitted tree as it is. Queues those rebuilds and returns true,
+	 * or returns false having changed nothing, in which case the whole view rebuilds.
+	 */
+	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
+		if (inspectionEnabled || !buildContext.restyleInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
+		var changes = interactionStates.changes();
+		var patches = 0;
+		for (change in changes) {
+			var bits = change.before ^ change.after;
+			if ((bits & ~patchInteractionMask) != 0) return false;
+			var node = currentNodesById.get(change.id);
+			if (node == null) return false;
+			if (buildContext.restylingOwner(node) != null) patches++;
+			else if (node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || !node.hoverPaintOnly || buildContext.hasHoverStyle(node))) return false;
+		}
+		if (patches == 0) return false;
+		patchFramePaintNodes.resize(0);
+		for (change in changes) {
+			var node:RenderNode = cast currentNodesById.get(change.id);
+			var owner = buildContext.restylingOwner(node);
+			if (owner != null) buildContext.queuePatch(owner.id);
+			else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+		}
+		return true;
+	}
+
+	/** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
+	function queueInteractionPatches():Void {
+		for (change in interactionStates.changes()) {
+			var node = currentNodesById.get(change.id);
+			var owner = node == null ? null : buildContext.restylingOwner(node);
+			if (owner != null) buildContext.queuePatch(owner.id);
+		}
 	}
 
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {

@@ -128,8 +128,15 @@ class TreeHoverTests {
       var buttonRoot = ui.submitCached(buildButton, frame, "button");
       var rect = buttonRoot.globalBounds();
       ui.pointerMove(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      // The first move also leaves the tree shown before, which rebuilds once; after that a button restyles itself.
       ui.submitCached(buildButton, frame, "button");
-      check(buttonBuilds > 1, "Unregistered widget hover bypassed rebuilding");
+      var settledBuilds = buttonBuilds;
+      ui.pointerMove(-20, -20);
+      ui.submitCached(buildButton, frame, "button");
+      ui.pointerMove(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      var hoveredRoot = ui.submitCached(buildButton, frame, "button");
+      check(buttonBuilds == settledBuilds && (hoveredRoot.states & haxeon.ui.style.StyleState.Hovered) != 0,
+        "A button restyles itself on hover without rebuilding the view (builds=" + (buttonBuilds - settledBuilds) + ")");
       ui.pointerDown(rect.x + rect.width / 2, rect.y + rect.height / 2, 0);
       ui.submitCached(buildButton, frame, "button");
       ui.pointerUp(rect.x + rect.width / 2, rect.y + rect.height / 2, 0);

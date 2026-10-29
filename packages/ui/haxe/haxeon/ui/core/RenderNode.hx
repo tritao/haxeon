@@ -224,6 +224,77 @@ class RenderNode {
 		return next;
 	}
 
+	/**
+	 * Applies a rebuild of this node's own appearance without replacing it, so what other code attached to it since it was built
+	 * (listeners, style changes, references to the node) stays. `before` and `after` are the layout styles the builder produced
+	 * for the previous and for this build; a property is changed only where they differ, so a property that something else set
+	 * and the builder did not change is left alone. `fresh` is the node the builder just made: its computed style, state and
+	 * children move here. Returns a stand-in for the node as it was, for the frame comparison.
+	 */
+	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle):RenderNode {
+		var prior = new RenderNode(id, layout.visualKind, layout.style.copy());
+		prior.computedStyle = computedStyle;
+		prior.states = states;
+		prior.layout.text = layout.text;
+		prior.layout.textColor = layout.textColor;
+		prior.layout.measureVersion = layout.measureVersion;
+		prior.layout.intrinsicContent = layout.intrinsicContent;
+		prior.parent = parent;
+		prior.children = children.copy();
+		prior.contentRevision = contentRevision;
+		prior.geometryRevision = geometryRevision;
+		prior.compositeRevision = compositeRevision;
+		prior.hitTestSelf = hitTestSelf;
+		prior.hitTestBehavior = hitTestBehavior;
+		prior.semantics = semantics;
+		prior.enabled = enabled;
+		prior.focusable = focusable;
+		prior.focusTrap = focusTrap;
+		prior.tabIndex = tabIndex;
+		prior.resolved = resolved;
+		computedStyle = fresh.computedStyle;
+		states = fresh.states;
+		applyStyleChange(layout.style, before, after);
+		for (child in children.copy())
+			child.detach();
+		for (child in fresh.children.copy())
+			add(child.detach());
+		return prior;
+	}
+
+	static function applyStyleChange(target:LayoutStyle, before:LayoutStyle, after:LayoutStyle):Void {
+		if (!sameAxis(before.width, after.width)) target.width = after.width;
+		if (!sameAxis(before.height, after.height)) target.height = after.height;
+		if (before.aspectRatio != after.aspectRatio) target.aspectRatio = after.aspectRatio;
+		if (before.direction != after.direction) target.direction = after.direction;
+		if (before.childAlignX != after.childAlignX) target.childAlignX = after.childAlignX;
+		if (before.childAlignY != after.childAlignY) target.childAlignY = after.childAlignY;
+		if (before.childDistribution != after.childDistribution) target.childDistribution = after.childDistribution;
+		if (before.positioning != after.positioning) target.positioning = after.positioning;
+		if (before.wrapMode != after.wrapMode) target.wrapMode = after.wrapMode;
+		if (before.rowGap != after.rowGap) target.rowGap = after.rowGap;
+		if (before.columnGap != after.columnGap) target.columnGap = after.columnGap;
+		if (before.alignSelf != after.alignSelf) target.alignSelf = after.alignSelf;
+		if (before.positionX != after.positionX) target.positionX = after.positionX;
+		if (before.positionY != after.positionY) target.positionY = after.positionY;
+		if (before.zIndex != after.zIndex) target.zIndex = after.zIndex;
+		if (before.clipToParent != after.clipToParent) target.clipToParent = after.clipToParent;
+		if (before.overlay != after.overlay) target.overlay = after.overlay;
+		if (!sameInsets(before.padding, after.padding)) target.padding = after.padding;
+		if (before.childGap != after.childGap) target.childGap = after.childGap;
+		if (!sameColor(before.background, after.background)) target.background = after.background;
+		if (before.radiusTopLeft != after.radiusTopLeft) target.radiusTopLeft = after.radiusTopLeft;
+		if (before.radiusTopRight != after.radiusTopRight) target.radiusTopRight = after.radiusTopRight;
+		if (before.radiusBottomLeft != after.radiusBottomLeft) target.radiusBottomLeft = after.radiusBottomLeft;
+		if (before.radiusBottomRight != after.radiusBottomRight) target.radiusBottomRight = after.radiusBottomRight;
+		if (before.clipHorizontal != after.clipHorizontal) target.clipHorizontal = after.clipHorizontal;
+		if (before.clipVertical != after.clipVertical) target.clipVertical = after.clipVertical;
+		if (before.visible != after.visible) target.visible = after.visible;
+		if (!sameTransform(before.transform, after.transform)) target.transform = after.transform;
+		if (before.transformOriginX != after.transformOriginX) target.transformOriginX = after.transformOriginX;
+		if (before.transformOriginY != after.transformOriginY) target.transformOriginY = after.transformOriginY;
+	}
+
 	/** Converts a point in this node's local space into viewport/global space. */
 	public function localToGlobal(point:Point):Point
 		return requireResolved().localToViewport(point);

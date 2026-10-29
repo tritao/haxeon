@@ -488,7 +488,7 @@ private class DockPanelView implements View {
 		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-				new InteractionStateSnapshot(context.currentRoot(root)));
+				new InteractionStateSnapshot(context.currentRoot(root), context));
 		}
 		return root;
 	}
@@ -534,7 +534,7 @@ private class DockPaneView implements View {
 		if (retainable) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			cache.put(key, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-				new InteractionStateSnapshot(context.currentRoot(root)), interaction.targetsSince(targetMark),
+				new InteractionStateSnapshot(context.currentRoot(root), context), interaction.targetsSince(targetMark),
 				interaction.tabTargetsSince(tabMark));
 		}
 		return root;

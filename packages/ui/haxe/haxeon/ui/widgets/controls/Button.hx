@@ -88,6 +88,12 @@ class Button implements View {
 
 	function buildScoped(context:BuildContext):RenderNode {
 		var id = context.id("button");
+		// Hover and press change only how the button looks, so it restyles itself and the panel around it stays cached.
+		// The node is kept, because callers attach listeners and change its style after build.
+		return context.selfRestyling(id, function() return buildButton(context, id));
+	}
+
+	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var flags:Int = context.interactionStates.get(id);
 		flags = StyleStateUtil.withState(flags, StyleState.Selected, selected);
 		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);

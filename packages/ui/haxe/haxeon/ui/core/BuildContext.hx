@@ -61,6 +61,13 @@ class BuildContext {
 	var rootScope:KeyScope;
 	var scope:KeyScope;
 	var textStyleStack:Array<ResolvedTextStyle>;
+	/**
+	 * When false, pointer and focus changes rebuild every cache that holds the widget, as before restyling in place existed.
+	 * Tests turn it off to build a reference tree to compare the patched one against.
+	 */
+	public var restyleInPlace:Bool = true;
+	/** Bumped when the retained tree is released, so restyling builds made before it are not registered again. */
+	var restylingEpoch:Int = 0;
 	/** Widgets that rebuild themselves in place, by widget ID; see selfUpdating. */
 	final selfUpdatingBuilds:Map<Int, SelfUpdatingBuild> = new Map();
 	var pendingPatches:Array<SelfUpdatingBuild> = [];
@@ -322,10 +329,35 @@ class BuildContext {
 	}
 
 	/**
+	 * Builds a widget that follows pointer and focus changes without being replaced. Like selfUpdating, `build` must be
+	 * re-runnable. Unlike it, the node stays the same object when the widget rebuilds: its new style, state and children are
+	 * applied to it (RenderNode.restyleFrom), so listeners and changes callers made to the returned node after `build` survive.
+	 * That requires `build` to produce the same kind of node every time, with the same listeners.
+	 */
+	public function selfRestyling(id:WidgetId, build:Void->RenderNode):RenderNode {
+		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.copy());
+		entry.inPlace = true;
+		entry.epoch = restylingEpoch;
+		selfUpdatingBuilds.set(id.value, entry);
+		entry.root = build();
+		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
+		entry.built = entry.root.layout.style.copy();
+		return entry.root;
+	}
+
+	/**
 	 * Asks for the widget to be rebuilt in place at the start of the next frame and for that frame to run. Returns false when
 	 * the widget was never built as self-updating, so the caller falls back to an ordinary state update.
 	 */
 	public function requestPatch(id:WidgetId):Bool {
+		if (!queuePatch(id))
+			return false;
+		commands.refresh();
+		return true;
+	}
+
+	/** Queues the patch without asking for a frame; the caller already has one running. False when the widget is not self-updating. */
+	public function queuePatch(id:WidgetId):Bool {
 		var entry = selfUpdatingBuilds.get(id.value);
 		if (entry == null || entry.root == null)
 			return false;
@@ -333,8 +365,50 @@ class BuildContext {
 			entry.pending = true;
 			pendingPatches.push(entry);
 		}
-		commands.refresh();
 		return true;
+	}
+
+	/** Whether this mounted node is a widget that restyles in place, so a pointer change can be met by rebuilding just it. */
+	public function canPatch(node:RenderNode):Bool {
+		if (!restyleInPlace) return false;
+		var entry = selfUpdatingBuilds.get(node.id.value);
+		return entry != null && entry.inPlace && entry.root == node;
+	}
+
+	/** The node itself or its nearest ancestor that restyles in place: the one to rebuild when this node's pointer state changes. */
+	public function restylingOwner(node:RenderNode):Null<RenderNode> {
+		var current:Null<RenderNode> = node;
+		while (current != null) {
+			if (canPatch(current)) return current;
+			current = current.parent;
+		}
+		return null;
+	}
+
+	/** The restyling build for a node, while it is registered and current. */
+	public function restylingBuild(node:RenderNode):Null<SelfUpdatingBuild> {
+		var entry = selfUpdatingBuilds.get(node.id.value);
+		return entry != null && entry.inPlace && entry.root == node ? entry : null;
+	}
+
+	/**
+	 * Registers a restyling build again when a retained cache brings its subtree back: unmounted widgets are pruned, but the cache
+	 * kept their nodes. False when the build was released with the tree, in which case the cache must rebuild.
+	 */
+	public function rearmRestyling(id:WidgetId, entry:SelfUpdatingBuild):Bool {
+		if (!restyleInPlace || entry.root == null || entry.epoch != restylingEpoch) return false;
+		var current = selfUpdatingBuilds.get(id.value);
+		if (current == entry) return true;
+		if (current != null && current.root != entry.root) return false;
+		selfUpdatingBuilds.set(id.value, entry);
+		return true;
+	}
+
+	/** Widgets that restyle in place follow pointer changes themselves, so retained caches around them need not. */
+	public function isSelfUpdating(id:WidgetId):Bool {
+		if (!restyleInPlace) return false;
+		var entry = selfUpdatingBuilds.get(id.value);
+		return entry != null && entry.inPlace;
 	}
 
 	/** Rebuilds the pending self-updating widgets and swaps them into the retained tree; runs after beginFrame, before the root builds. */
@@ -347,13 +421,14 @@ class BuildContext {
 			entry.pending = false;
 			var old = entry.root;
 			// Not in a tree any more: whatever now owns it builds a fresh one.
-			if (old == null || old.parent == null)
+			if (old == null || (old.parent == null && !entry.inPlace))
 				continue;
 			// The frame comparison walks the tree it is given, which now holds the replacement, so hand it the replaced nodes.
-			old.walk(function(node) {
-				if (!patchPriors.exists(node.id.value))
-					patchPriors.set(node.id.value, node);
-			});
+			if (!entry.inPlace)
+				old.walk(function(node) {
+					if (!patchPriors.exists(node.id.value))
+						patchPriors.set(node.id.value, node);
+				});
 			var savedScope = scope, savedParent = styleParent, savedStack = textStyleStack;
 			scope = entry.scope;
 			styleParent = entry.styleParent;
@@ -361,8 +436,20 @@ class BuildContext {
 			patching = true;
 			try {
 				var next = entry.build();
-				old.replaceWith(next);
-				entry.root = next;
+				if (entry.inPlace) {
+					// The node stays; its children are replaced, so they are the priors, and it gets a stand-in of how it was.
+					old.walk(function(node) {
+						if (node != old && !patchPriors.exists(node.id.value))
+							patchPriors.set(node.id.value, node);
+					});
+					var before = old.restyleFrom(next, entry.built, next.layout.style);
+					entry.built = next.layout.style.copy();
+					if (!patchPriors.exists(old.id.value))
+						patchPriors.set(old.id.value, before);
+				} else {
+					old.replaceWith(next);
+					entry.root = next;
+				}
 			} catch (error:Dynamic) {
 				patching = false;
 				scope = savedScope;
@@ -390,13 +477,15 @@ class BuildContext {
 		for (id in selfUpdatingBuilds.keys())
 			if (!mounted.exists(id)) stale.push(id);
 		for (id in stale) {
-			var entry = selfUpdatingBuilds.get(id);
-			entry.root = null;
+			var entry:SelfUpdatingBuild = cast selfUpdatingBuilds.get(id);
 			entry.pending = false;
+			// A restyling widget's node may still be held by a retained cache, which registers it again on reuse.
+			if (!entry.inPlace)
+				entry.root = null;
 			selfUpdatingBuilds.remove(id);
 		}
 		if (stale.length > 0)
-			pendingPatches = [for (entry in pendingPatches) if (entry.root != null) entry];
+			pendingPatches = [for (entry in pendingPatches) if (entry.pending) entry];
 	}
 
 	/** Cache identities only for the committed tree and retained application state. */
@@ -436,6 +525,8 @@ class BuildContext {
 
 	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
 	public function releaseRetained():Void {
+		// Builds that retained caches still hold were made by the code being released; they must not come back.
+		restylingEpoch++;
 		for (entry in selfUpdatingBuilds) {
 			entry.root = null;
 			entry.pending = false;
@@ -541,13 +632,19 @@ class BuildContext {
 }
 
 /** A self-updating widget's builder and the build context it needs to run again. */
-private class SelfUpdatingBuild {
+/** How a self-updating widget rebuilds; retained caches hold the ones in their subtree (see InteractionStateSnapshot). */
+class SelfUpdatingBuild {
 	public final build:Void->RenderNode;
 	public final scope:KeyScope;
 	public final styleParent:Null<ComputedStyle>;
 	public final textStyleStack:Array<ResolvedTextStyle>;
 	public var root:Null<RenderNode> = null;
 	public var pending:Bool = false;
+	/** Rebuilds apply to `root` instead of replacing it; see BuildContext.selfRestyling. */
+	public var inPlace:Bool = false;
+	public var epoch:Int = 0;
+	/** The style the builder last produced, before callers changed the node; the base for the next rebuild's difference. */
+	public var built:Null<haxeon.ui.LayoutStyle> = null;
 
 	public function new(build:Void->RenderNode, scope:KeyScope, styleParent:Null<ComputedStyle>, textStyleStack:Array<ResolvedTextStyle>) {
 		this.build = build;

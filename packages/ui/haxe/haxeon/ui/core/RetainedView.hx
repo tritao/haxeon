@@ -45,7 +45,7 @@ class RetainedView implements View {
 		var root = view.build(context);
 		var usedStates = context.stateIdsUsedSince(marker);
 		cache.replace(keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-			new InteractionStateSnapshot(context.currentRoot(root)));
+			new InteractionStateSnapshot(context.currentRoot(root), context));
 		return root;
 	}
 }

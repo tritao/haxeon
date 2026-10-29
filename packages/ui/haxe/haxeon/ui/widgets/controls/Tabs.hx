@@ -233,6 +233,8 @@ class Tabs implements View {
 			var header = new RenderNode(context.id("tab-header:" + item.key),
 				LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
+			// Hover lands on the header too, but only the button inside reads it.
+			header.hoverPaintOnly = true;
 			if (item.enabled && item.onClose != null) header.on(UiEventKind.Click, function(event) {
 				if (event.button != 2) return;
 				event.preventDefault();
