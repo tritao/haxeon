@@ -581,6 +581,12 @@ class HlSymbolTable {
 	/** Globals named after a string literal hold that literal's String object, created once when the module loads. */
 	public static inline final STRING_CONSTANT_PREFIX = "$string:";
 
+	/** Globals named after an enum constructor without fields hold the one value it denotes, made the first time it is used. */
+	public static inline final ENUM_CONSTANT_PREFIX = "$enum:";
+
+	public function internEnumConstant(enumName:String, constructor:Int):Int
+		return internGlobal(ENUM_CONSTANT_PREFIX + enumName + ":" + constructor, IrType.Enum(enumName));
+
 	public function internStringConstant(value:String):Int
 		return internGlobal(STRING_CONSTANT_PREFIX + value, IrType.Bytes);
 

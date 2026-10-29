@@ -959,7 +959,10 @@ class HlLower {
 						var destination = defineRegister(output, registers, registerTypes),
 							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
 							args = [for (argument in arguments) requireRegister(argument, registers)];
-						instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+						if (args.length == 0)
+							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
+						else
+							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
 					case EnumIndex(output, value):
 						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case EnumField(output, value, constructor, field):
@@ -1248,6 +1251,27 @@ class HlLower {
 	 */
 	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void
 		instructions.push(HlInstruction.GlobalGet(destination, symbols.internStringConstant(value)));
+
+	var enumConstantUses = 0;
+
+	/**
+	 * A constructor without fields denotes one value, so it is made the first time it is evaluated and kept in a global;
+	 * every later evaluation is a global load. Making it on first use needs no initialization order, and a global a patch
+	 * adds simply starts out null.
+	 */
+	function lowerEnumConstant(destination:Int, typeName:String, constructor:Int, instructions:Array<HlInstruction>):Void {
+		var global = symbols.internEnumConstant(typeName, constructor),
+			id = enumConstantUses++,
+			make = "__enum_make_" + id,
+			done = "__enum_done_" + id;
+		instructions.push(HlInstruction.GlobalGet(destination, global));
+		instructions.push(HlInstruction.JumpNull(destination, make));
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(make));
+		instructions.push(HlInstruction.MakeEnum(destination, constructor, []));
+		instructions.push(HlInstruction.GlobalSet(global, destination));
+		instructions.push(HlInstruction.Label(done));
+	}
 
 	var rawArrayAccesses = 0;
 
