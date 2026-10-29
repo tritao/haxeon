@@ -49,6 +49,7 @@ class TestCatalog {
 		"LoopBoundsMain",
 		"OpportunityCensusMain",
 		"AllocationReportMain",
+		"GenericDynamicArgumentMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",

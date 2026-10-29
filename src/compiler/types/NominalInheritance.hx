@@ -54,7 +54,7 @@ class NominalInheritance {
 	}
 
 	public function reaches(actual:CompilerType, expected:CompilerType):Bool {
-		if (TypeRelations.equals(actual, expected))
+		if (TypeRelations.equals(actual, expected) || TypeRelations.equalsWithDynamicArguments(actual, expected))
 			return true;
 		for (parent in parents(actual))
 			if (reaches(parent, expected))

@@ -209,6 +209,36 @@ class TypeRelations {
 		return equalsWithin(left, right, null);
 
 	/**
+	 * `G<A>` is accepted where `G<Dynamic>` is expected, as in Haxe. Every instantiation of a generic class or interface shares
+	 * one erased layout, so a `Dynamic` type argument stands for any argument; only the expected side may be `Dynamic`, and only
+	 * as a whole argument. The other direction (`G<Dynamic>` where `G<A>` is expected) still needs a cast.
+	 */
+	public static function equalsWithDynamicArguments(actual:CompilerType, expected:CompilerType):Bool {
+		switch actual {
+			case TInstance(kind, name, arguments):
+				switch expected {
+					case TInstance(expectedKind, expectedName, expectedArguments):
+						if (Std.string(kind) != Std.string(expectedKind) || Std.string(name) != Std.string(expectedName)
+							|| arguments.length != expectedArguments.length)
+							return false;
+						var sawDynamic = false;
+						for (index in 0...arguments.length) {
+							if (expectedArguments[index] == TDynamic) {
+								sawDynamic = true;
+								continue;
+							}
+							if (!equals(arguments[index], expectedArguments[index]))
+								return false;
+						}
+						return sawDynamic;
+					default:
+				}
+			default:
+		}
+		return false;
+	}
+
+	/**
 	 * `visiting` lists the pairs of anonymous structures being compared. A structure can contain itself, so meeting
 	 * a pair again on the way down means the comparison has come full circle without finding a difference: it holds.
 	 * The list is allocated only when the first anonymous structure is reached.

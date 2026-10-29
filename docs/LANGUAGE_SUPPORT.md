@@ -14,6 +14,10 @@ The current subset includes:
 - Exceptions
 - Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
   (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
+- A generic class or interface with a concrete type argument is accepted where the same type with `Dynamic` is expected
+  (`Box<Int>` as `Box<Dynamic>`), as in Haxe, including through a base class or an implemented interface. Every instantiation
+  of a generic class shares one erased layout. Only a whole `Dynamic` argument on the expected side widens: the other direction,
+  differing concrete arguments, and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
