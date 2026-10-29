@@ -76,6 +76,8 @@ class GestureArena {
 
 	/** Drops in-flight recognizers whose keyed detector left the rebuilt tree. */
 	public function setRoot(root:Null<RenderNode>):Void {
+		if (active.size() == 0)
+			return;
 		var stale:Array<Int> = [];
 		for (pointerId in active.keys()) {
 			var sequence = active.get(pointerId);
@@ -165,13 +167,9 @@ class GestureArena {
 	public function advance(deltaSeconds:Float):Void {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Gesture time must be finite and non-negative";
-		var hadActive = false;
-		for (_ in active.keys()) {
-			hadActive = true;
-			break;
-		}
+		var hadActive = active.size() > 0;
 		elapsedSeconds += deltaSeconds;
-		for (sequence in active) {
+		if (hadActive) for (sequence in active) {
 			sequence.elapsed += deltaSeconds;
 			if (sequence.longPressed || sequence.moved)
 				continue;
@@ -188,17 +186,7 @@ class GestureArena {
 	}
 
 	public function cancelAll():Void {
-		var hasState = false;
-		for (_ in active.keys()) {
-			hasState = true;
-			break;
-		}
-		if (!hasState)
-			for (_ in lastTaps.keys()) {
-				hasState = true;
-				break;
-			}
-		if (hasState) {
+		if (active.size() > 0 || lastTaps.size() > 0) {
 			active.clear();
 			lastTaps.clear();
 			revision++;

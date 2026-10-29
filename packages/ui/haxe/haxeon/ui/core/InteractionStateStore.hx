@@ -5,6 +5,7 @@ class InteractionStateStore {
 	final values:Map<Int, Int>;
 	final pending:Map<Int, Int> = [];
 	public var revision(default, null):Int;
+	static final NoChanges:Array<{id:Int, before:Int, after:Int}> = [];
 
 	public function new() {
 		values = new Map();
@@ -27,6 +28,9 @@ class InteractionStateStore {
 
 	/** Net state changes since the last submitted frame, bounded by touched widget IDs. */
 	public function changes():Array<{id:Int, before:Int, after:Int}> {
+		// Shared and empty: callers only read the result.
+		if (pending.size() == 0)
+			return NoChanges;
 		var result = [];
 		for (id in pending.keys()) {
 			var before:Int = cast pending.get(id), after:Int = cast values.get(id);

@@ -80,25 +80,29 @@ class EventDispatcher {
 
 	public function setRoot(root:Null<RenderNode>):Void {
 		this.root = root;
-		var stale:Array<Int> = [];
-		for (pointerId in capturedIds.keys()) {
-			var id = capturedIds.get(pointerId);
-			if (root == null || id == null || root.find(id) == null)
-				stale.push(pointerId);
+		if (capturedIds.size() > 0) {
+			var stale:Array<Int> = [];
+			for (pointerId in capturedIds.keys()) {
+				var id = capturedIds.get(pointerId);
+				if (root == null || id == null || root.find(id) == null)
+					stale.push(pointerId);
+			}
+			for (pointerId in stale)
+				clearPointerCapture(pointerId);
 		}
-		for (pointerId in stale)
-			clearPointerCapture(pointerId);
-		stale = [];
-		for (pointerId in pressedIds.keys()) {
-			var id = pressedIds.get(pointerId);
-			if (root == null || id == null || root.find(id) == null)
-				stale.push(pointerId);
+		if (pressedIds.size() > 0) {
+			var stale:Array<Int> = [];
+			for (pointerId in pressedIds.keys()) {
+				var id = pressedIds.get(pointerId);
+				if (root == null || id == null || root.find(id) == null)
+					stale.push(pointerId);
+			}
+			for (pointerId in stale) {
+				pressedIds.remove(pointerId);
+				pressedButtons.remove(pointerId);
+			}
 		}
-		for (pointerId in stale) {
-			pressedIds.remove(pointerId);
-			pressedButtons.remove(pointerId);
-		}
-		for (pointerId in pointerLocations.keys()) {
+		if (pointerLocations.size() > 0) for (pointerId in pointerLocations.keys()) {
 			var location = pointerLocations.get(pointerId);
 			if (location == null)
 				continue;
