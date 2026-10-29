@@ -340,7 +340,7 @@ class TestMain {
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function main():Int { var value:Null<Value> = new Value(); if (value != null && value.number == 42) return value.number; return 0; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) return holder.value.number; return 0; }');
 		expectCompileError('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) { holder.value = null; return holder.value.number; } return 0; }',
-			'Field "number" requires an object');
+			'Field "number" requires an object: the null check on "holder.value" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function main():Int { var values = [3, 1, 2]; values.sort(function(left, right) return left - right); return values[0] + values[1] + values[2] + 36; }');
@@ -1504,7 +1504,7 @@ class TestMain {
 			throw "Final-field facts must survive continuing branch joins and later calls";
 		Sys.println("PASS: final-field facts preserve stability across guards, if, switch and loop joins");
 		expectCompileError('class Part { public var value:Int = 7; public function new() {} } class Machine { public var part:Null<Part>; var count:Int = 0; public function new() part = new Part(); function change():Void part = null; public function check(flag:Bool):Int { if (part == null) return 0; if (flag) count++ else count += 2; change(); return part.value; } } function main():Int return new Machine().check(true);',
-			'Field "value" requires an object');
+			'Field "value" requires an object: the null check on "this.part" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		Sys.println("PASS: branch joins do not promote mutable-field facts to call-stable facts");
 		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower) || limits.lower < 0); function main():Int return valid({lower: 1.0}) ? 1 : 0;',
 			"Comparison requires matching numeric operands");
@@ -1869,7 +1869,7 @@ class TestMain {
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
 		Frontend.compile("function main():Int { var convert:(Int) -> Int = (value) -> { return value; }; return convert(42); }");
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); var clear = () -> { box = null; }; if (box != null) { clear(); return box.value; } return 0; }",
-			'Field "value" requires an object');
+			'Field "value" requires an object: "box" is assigned by a closure, so a call that may run an escaped closure clears its null check. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');
 		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",
