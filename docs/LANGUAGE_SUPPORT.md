@@ -18,6 +18,11 @@ The current subset includes:
   (`Box<Int>` as `Box<Dynamic>`), as in Haxe, including through a base class or an implemented interface. Every instantiation
   of a generic class shares one erased layout. Only a whole `Dynamic` argument on the expected side widens: the other direction,
   differing concrete arguments, and `Dynamic` nested inside an argument (`Box<Array<Dynamic>>`) are still type errors.
+- `==` on enums follows Haxe. A constructor without fields denotes one value, so `Dot == Dot` is true however the two values
+  came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately
+  built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For a structural
+  comparison use `haxeon.Equality.equals`. An enum with no constructor that has fields compares by
+  constructor, and so does an abstract over an enum. A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
