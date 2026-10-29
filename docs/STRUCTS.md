@@ -1,8 +1,25 @@
 # Structs
 
-Status: design. Nothing here is implemented yet. `struct` is meant to replace
+Status: design, with the basic form implemented (see "Implemented so far"). `struct` is meant to replace
 both `@:value class` and `@:value @:repr("C") class`; those forms keep
 compiling while code migrates.
+
+## Implemented so far
+
+Checked on 2026-10-29: a `struct` with fields, a constructor and non-virtual methods compiles and runs with copy semantics
+(`var w = v; w.x = 6` leaves `v` alone). Measured per 1,000 operations, against a `class` of the same shape:
+
+| pattern | struct | class |
+|---|---|---|
+| local temporaries | ~0 | 49 KB |
+| returned from a small function (the inliner may have inlined it) | ~0 | 23 KB |
+| field of a holder object | 25 KB | 41 KB |
+| pushed into an `Array` | 42 KB | 51 KB |
+
+So a struct costs nothing as a temporary and sits inline in its holder, but still allocates in an `Array` or `Map`. It saves
+the object header and not the data: converting a small immutable class such as `Rect` mostly helps temporaries, not storage.
+The rest of this design (interface conformance, attributes, native layout, fieldwise `==`) was not checked here and may not
+be implemented.
 
 ## Why
 
