@@ -331,8 +331,9 @@ class DockWorkspace implements View {
 			return false;
 		var selected = activePanelId == null ? panelIds[0] : activePanelId;
 		var content = panelContents.get(selected);
+		var contentHasher:Null<DockPanelCacheKeyHasher> = content == null ? null : content.cacheKeyHash;
 		var contentKey:Null<DockPanelCacheKeyBuilder> = content == null ? null : content.cacheKey;
-		if (contentKey == null)
+		if (contentHasher == null && contentKey == null)
 			return false;
 		var hash = paneKeyHash.reset();
 		hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
@@ -344,7 +345,10 @@ class DockWorkspace implements View {
 					.addInt(descriptor.icon == null ? -1 : cast descriptor.icon).addBool(descriptor.enabled)
 					.addInt(cast descriptor.headerMode);
 		}
-		hash.addString(contentKey());
+		if (contentHasher != null)
+			contentHasher(hash);
+		else if (contentKey != null)
+			hash.addString(contentKey());
 		return true;
 	}
 
@@ -434,12 +438,18 @@ private class DockPanelView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var cacheKeyBuilder:Null<DockPanelCacheKeyBuilder> = content.cacheKey;
+		var cacheKeyHasher:Null<DockPanelCacheKeyHasher> = content.cacheKeyHash;
 		var keyed = false;
 		var keyA = 0, keyB = 0;
-		if (cacheKeyBuilder != null) {
+		if (cacheKeyHasher != null || cacheKeyBuilder != null) {
 			keyed = true;
-			var hash = scratchKey.reset().addString(cacheKeyBuilder()).addInt(context.styleRevision)
-				.addFloat(context.viewportWidth).addFloat(context.viewportHeight).addFloat(availableWidth);
+			var hash = scratchKey.reset();
+			if (cacheKeyHasher != null)
+				cacheKeyHasher(hash);
+			else if (cacheKeyBuilder != null)
+				hash.addString(cacheKeyBuilder());
+			hash.addInt(context.styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight)
+				.addFloat(availableWidth);
 			keyA = hash.a;
 			keyB = hash.b;
 		}
