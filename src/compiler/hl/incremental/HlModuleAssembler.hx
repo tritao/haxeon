@@ -82,9 +82,6 @@ typedef HlAssemblyResult = {
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
 
-	/** The revision a patch of this build applies to: the one the assembler's published state had before it. */
-	final baseRevision:Int;
-
 	/** Why the assembler published a fresh module on its own, beyond the ABI plan's reasons. */
 	final layoutReasons:Array<String>;
 
@@ -854,7 +851,6 @@ class HlModuleAssembler {
 		publishedStrings = module.strings.length;
 		publishedTypes = module.types.length;
 		publishedGlobals = module.globals.length;
-		var baseRevision = revision;
 		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
 		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
 		// can only reach a revision without a patch by reloading.
@@ -875,7 +871,6 @@ class HlModuleAssembler {
 			guards: reload ? [] : guards,
 			functionIndices: layout,
 			requiresReload: reload,
-			baseRevision: baseRevision,
 			layoutReasons: layoutReasons,
 			objectReasons: objectReasons,
 			objectLayout: reload ? null : objectLayout,
