@@ -45,6 +45,8 @@ class BuildContext {
 	var deferredFocusRequester:WidgetId->Void;
 	final claimed:IdSet;
 	final idsByPath:Map<String, WidgetId>;
+	/** The paths in `idsByPath`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
+	final pathOrder:Array<String> = [];
 	var cachedIdCount:Int;
 	static inline var SCOPE_GROWTH_PRUNE = 256;
 
@@ -292,10 +294,12 @@ class BuildContext {
 		if (id == null) {
 			if (cachedIdCount >= 8192) {
 				idsByPath.clear();
+				pathOrder.resize(0);
 				cachedIdCount = 0;
 			}
 			id = stateStore.resolveWidgetId(path);
 			idsByPath.set(path, id);
+			pathOrder.push(path);
 			cachedIdCount++;
 		}
 		if (!patching && !claimed.add(id.value))
@@ -410,16 +414,19 @@ class BuildContext {
 			&& scopeEntries - prunedScopeEntries < SCOPE_GROWTH_PRUNE)
 			return;
 		keyCachePrunes++;
-		var stale:Array<String> = null;
-		for (path => id in idsByPath)
+		var read = 0, write = 0;
+		while (read < pathOrder.length) {
+			var path = pathOrder[read++];
+			var id = idsByPath.get(path);
+			if (id == null)
+				continue;
 			if (!mounted.exists(id.value) && !stateStore.contains(id)) {
-				if (stale == null) stale = [];
-				stale.push(path);
-			}
-		if (stale != null) for (path in stale) {
-			idsByPath.remove(path);
-			cachedIdCount--;
+				idsByPath.remove(path);
+				cachedIdCount--;
+			} else
+				pathOrder[write++] = path;
 		}
+		pathOrder.resize(write);
 		rootScope.prune(function(path) return idsByPath.exists(path));
 		prunedMountedHash = mountedHash;
 		prunedIdCount = cachedIdCount;

@@ -13,7 +13,7 @@ class LayoutSession {
 	final transaction:LayoutTransaction;
 	final resolved:Array<ResolvedLayoutItem>;
 	final previousResolvedItems:Array<ResolvedLayoutItem> = [];
-	final previousResolvedIndexById:Map<Int, Int> = new Map();
+	final previousResolvedIndexById:IntIndex = new IntIndex();
 	var previousResolvedBytes:Null<Bytes> = null;
 	var hitPathBytes:Bytes;
 	var measureCallback:Null<nkui_layout_measure_callbackCallback>;
@@ -93,7 +93,7 @@ class LayoutSession {
 		var before = previousResolvedBytes;
 		var reusable = before != null && before != bytes;
 		var previousCount = previousResolvedItems.length;
-		var indexById:Null<Map<Int, Int>> = null;
+		var indexById:Null<IntIndex> = null;
 		for (index in 0...count) {
 			var offset = index * recordBytes;
 			var item:Null<ResolvedLayoutItem> = null;
@@ -109,11 +109,9 @@ class LayoutSession {
 							indexById.set(previousResolvedItems[position].id, position);
 					}
 					var id = bytes.getInt32(offset + 4);
-					if (indexById.exists(id)) {
-						var position:Int = cast indexById.get(id);
-						if (sameRecord(before, position * recordBytes, bytes, offset, recordBytes))
-							item = previousResolvedItems[position];
-					}
+					var position = indexById.get(id);
+					if (position >= 0 && sameRecord(before, position * recordBytes, bytes, offset, recordBytes))
+						item = previousResolvedItems[position];
 				}
 			}
 			resolved.push(item == null ? ResolvedLayoutItem.decode(bytes, offset) : item);
