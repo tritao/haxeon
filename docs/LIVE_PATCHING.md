@@ -89,7 +89,7 @@ patch never does that silently:
   module made at load (`OStaticClosure`, module memory the module lists, `hl_emit_final`) when something holds them: a
   heap block, a global, a native root (`hl_add_root`, as a native UI callback or thread-local storage keeps one) or a
   running thread's stack or registers (`hl_gc_root_holder`), as a GC closure would be kept alive. Patch code makes GC
-  closures, never static ones. The module's list only grows with the code it lists: when the list cannot grow the code is
+  closures, never static ones: without a value (`hl_alloc_closure_void`), on pages of raw data, which the scan reads too. The module's list only grows with the code it lists: when the list cannot grow the code is
   not made (a load or a patch fails) rather than left unlisted, and a refused patch's code adds nothing. If any is left the
   patch is refused (`ClosuresHeld`), nothing applied, with a message that names the function, the count and what holds
   them, walked back from the closure through arrays and fields to a static field, for example
