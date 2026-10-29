@@ -1,5 +1,6 @@
 import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;
 import runtime.RuntimeError;
@@ -22,6 +23,11 @@ class LiveClosureGuardMain {
 		refusesDeletedStoredHandler();
 		patchesDeletedHandlerNobodyStores();
 		patchesDeletedHandlerTheUiRebuilds();
+		rebuildsAfterAThrowingRelease();
+		refusesDeletingAHandlerAPatchStored();
+		refusesDeletingManyStoredHandlers();
+		refusesDeletingAHandlerANativeRootHolds();
+		refusesDeletingAHandlerAThreadHolds();
 		Sys.println("PASS: stored closures run adapted code, and a patch that would strand them is refused with what holds them");
 	}
 
@@ -106,8 +112,189 @@ class LiveClosureGuardMain {
 				throw 'the patch was refused for another reason: ${error.message}';
 			mention(error.message, "Ui.handlers[0]", "the refusal without the rebuild hooks");
 		}
-		Runtime.patchSetRebuilding(session.live, patch, changed.functionIds.get("Main.liveRelease"), changed.functionIds.get("Main.liveRebuild"));
+		Runtime.patchSetRebuilding(session.live, patch, changed.functionIds.get("Main.liveRelease"), changed.functionIds.get("Main.liveRebuild"),
+			(_, error) -> throw 'a rebuild hook threw: $error');
 		expect(Runtime.callInt(session.live, session.mainId), 10, "the rebuilt UI's handlers after the edit");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * A `liveRelease` that throws before letting go of anything: the patch is still tried, and refused, since the UI still
+	 * holds the deleted handler; `liveRebuild` runs anyway, so the UI is not left released. What is thrown is the patch's
+	 * refusal; the hook's error goes to `hookFailed`.
+	 */
+	static function rebuildsAfterAThrowingRelease():Void {
+		var ui = (bodies:Array<String>) -> "class Ui {\n  public static var handlers:Array<Int->Int> = [];\n  public static var rebuilds = 0;\n"
+			+ "  public static function build():Void {\n    handlers = [];\n" + [for (body in bodies) '    handlers.push($body);\n'].join("")
+			+ "  }\n}\n" + "function liveRelease():Void throw \"release failed\";\n"
+			+ "function liveRebuild():Void {\n  Ui.rebuilds++;\n  Ui.build();\n}\n" + "function main():Int {\n"
+			+ "  if (Ui.handlers.length == 0) Ui.build();\n" + "  var value = Ui.rebuilds;\n"
+			+ "  for (handler in Ui.handlers) value = value * 100 + handler(1);\n" + "  return value;\n}\n";
+		var session = start(ui(["x -> x + 1", "x -> x * 10"]));
+		expect(Runtime.callInt(session.live, session.mainId), 2 * 100 + 10, "the UI's handlers before the edit");
+		var changed = compileEdit(session, ui(["x -> x * 10"]), "a handler the UI holds deleted");
+		var hookErrors:Array<String> = [];
+		try {
+			Runtime.patchSetRebuilding(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions),
+				changed.functionIds.get("Main.liveRelease"), changed.functionIds.get("Main.liveRebuild"),
+				(rebuilding, error) -> hookErrors.push((rebuilding ? "rebuild: " : "release: ") + error));
+			throw 'the patch applied though the UI still held the deleted handler';
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.ClosuresHeld)
+				throw 'the patch was refused for another reason: ${error.message}';
+		}
+		if (hookErrors.length != 1 || hookErrors[0].indexOf("release: ") != 0)
+			throw 'the throwing release was not reported once as a hook error: $hookErrors';
+		// The old code still runs, and `liveRebuild` ran once: the UI holds both handlers again.
+		expect(Runtime.callInt(session.live, session.mainId), (1 * 100 + 2) * 100 + 10, "the UI after the refused patch");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * A handler a patch starts storing (`Button.onClick = handleClick` added by an edit), which a later edit deletes: the
+	 * patch is refused while the field holds it.
+	 */
+	static function refusesDeletingAHandlerAPatchStored():Void {
+		var button = "class Button {\n  public static var onClick:Null<Int->Int> = null;\n}\n",
+			click = "function click():Int {\n  var handler = Button.onClick;\n  return handler == null ? -1 : handler(1);\n}\n";
+		var session = start(button + click + "function main():Int return click();\n");
+		expect(Runtime.callInt(session.live, session.mainId), -1, "before any handler");
+		patch(session, button + click + "function handleClick(x:Int):Int return x + 41;\n"
+			+ "function main():Int {\n  if (Button.onClick == null) Button.onClick = handleClick;\n  return click();\n}\n", "a stored handler added");
+		expect(Runtime.callInt(session.live, session.mainId), 42, "the handler the patch stored");
+		var message = refused(session, button + click + "function main():Int return click();\n", "the stored handler deleted");
+		mention(message, "handleClick", "the refusal");
+		mention(message, "Button.onClick", "the refusal");
+		expect(Runtime.callInt(session.live, session.mainId), 42, "the stored handler after the refused patch");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * More stored handlers than the module's first list of static closures holds (64): 70 the module stores from its first
+	 * code, 40 more a patch stores. Deleting either kind is refused; deleting one nobody stores patches.
+	 */
+	static function refusesDeletingManyStoredHandlers():Void {
+		// h0...h69 stored by the module's first code, h70...h109 by a patch's; `deleted` is left out, and pushed nowhere.
+		function program(count:Int, deleted:Int, unused:Bool):String {
+			var source = "class Ui {
+  public static var handlers:Array<Int->Int> = [];
+  public static var extra:Array<Int->Int> = [];
+}
+";
+			for (i in 0...count)
+				if (i != deleted)
+					source += 'function h$i(x:Int):Int return x + $i;
+';
+			if (unused)
+				source += "function unused(x:Int):Int return x;
+";
+			source += "function main():Int {
+  if (Ui.handlers.length == 0) {
+";
+			for (i in 0...70)
+				if (i != deleted)
+					source += '    Ui.handlers.push(h$i);
+';
+			source += "  }
+";
+			if (count > 70) {
+				source += "  if (Ui.extra.length == 0) {
+";
+				for (i in 70...count)
+					if (i != deleted)
+						source += '    Ui.extra.push(h$i);
+';
+				source += "  }
+";
+			}
+			return source + "  var total = 0;
+  for (handler in Ui.handlers) total += handler(1);
+"
+				+ "  for (handler in Ui.extra) total += handler(1);
+  return total;
+}
+";
+		}
+		function sum(count:Int):Int {
+			var total = 0;
+			for (i in 0...count)
+				total += i + 1;
+			return total;
+		}
+		// A refused edit stays the compiler's last build, so each refusal gets a session of its own.
+		function stored():{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
+			var session = start(program(70, -1, true));
+			expect(Runtime.callInt(session.live, session.mainId), sum(70), "the 70 handlers the module stores");
+			patch(session, program(110, -1, true), "40 stored handlers added");
+			expect(Runtime.callInt(session.live, session.mainId), sum(110), "the 110 stored handlers");
+			return session;
+		}
+		var session = stored();
+		var message = refused(session, program(110, 69, true), "the last handler the module stored deleted");
+		mention(message, "h69", "the refusal");
+		mention(message, "Ui.handlers[69]", "the refusal");
+		Runtime.dispose(session.live);
+		session = stored();
+		patch(session, program(110, -1, false), "a handler nobody stores deleted");
+		expect(Runtime.callInt(session.live, session.mainId), sum(110), "the stored handlers after the edit");
+		message = refused(session, program(110, 109, false), "the last handler the patch stored deleted");
+		mention(message, "h109", "the refusal");
+		mention(message, "Ui.extra[39]", "the refusal");
+		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * A handler only a native root holds: deleting it is refused. HashLink's thread-local storage keeps its value in a root
+	 * (`hl_tls_set`), as a native UI callback would.
+	 */
+	static function refusesDeletingAHandlerANativeRootHolds():Void {
+		var holder = "@:hlNative(\"std\", \"tls_alloc\") extern function tlsAlloc(gcValue:Bool):hl.Abstract<\"hl_tls\">;\n"
+			+ "@:hlNative(\"std\", \"tls_get\") extern function tlsGet(tls:hl.Abstract<\"hl_tls\">):Dynamic;\n"
+			+ "@:hlNative(\"std\", \"tls_set\") extern function tlsSet(tls:hl.Abstract<\"hl_tls\">, value:Dynamic):Void;\n"
+			+ "class Holder {\n  public static var local:hl.Abstract<\"hl_tls\"> = tlsAlloc(true);\n}\n";
+		var session = start(holder + "function handleKey(x:Int):Int return x * 3;\n" + "function main():Int {\n"
+			+ "  if (tlsGet(Holder.local) == null) tlsSet(Holder.local, handleKey);\n  var handler:Int->Int = tlsGet(Holder.local);\n"
+			+ "  return handler(2);\n}\n");
+		expect(Runtime.callInt(session.live, session.mainId), 6, "the handler thread-local storage holds");
+		var message = refused(session, holder + "function main():Int return tlsGet(Holder.local) == null ? -1 : 0;\n", "the handler deleted");
+		mention(message, "handleKey", "the refusal");
+		mention(message, "held by a native root", "the refusal");
+		expect(Runtime.callInt(session.live, session.mainId), 6, "the handler after the refused patch");
+		Runtime.dispose(session.live);
+	}
+
+	/** A handler only a waiting thread's local holds: deleting it is refused while the thread runs, and patches once it ended. */
+	static function refusesDeletingAHandlerAThreadHolds():Void {
+		function program(handler:Bool):String
+			return "import sys.thread.Thread;\n" + "class Work {\n  public static var ready = false;\n  public static var stop = false;\n"
+				+ "  public static var finished = false;\n  public static var result = 0;\n}\n"
+				+ (handler ? "function handleTick(x:Int):Int return x + 5;\n" : "")
+				+ "function start():Int {\n  Thread.create(function() {\n"
+				+ (handler ? "    var held:Int->Int = handleTick;\n" : "")
+				+ "    Work.ready = true;\n    while (!Work.stop) Sys.sleep(0.001);\n"
+				+ (handler ? "    Work.result = held(1);\n" : "")
+				+ "    Work.finished = true;\n  });\n  while (!Work.ready) Sys.sleep(0.001);\n  return 0;\n}\n"
+				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.finished) Sys.sleep(0.001);\n  return Work.result;\n}\n"
+				+ "function main():Int return 0;\n";
+		var session = start(program(true), true);
+		var finish:Int = session.build.functionIds.get("Main.finish");
+		expect(Runtime.callInt(session.live, session.build.functionIds.get("Main.start")), 0, "starting the thread");
+		var changed = compileEdit(session, program(false), "the handler a thread holds deleted");
+		var edit = new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions);
+		try {
+			Runtime.patchSet(session.live, edit);
+			throw 'the patch applied though a running thread held the deleted handler';
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.ClosuresHeld)
+				throw 'the patch was refused for another reason: ${error.message}';
+			mention(error.message, "handleTick", "the refusal");
+			mention(error.message, "held by a running thread", "the refusal");
+		}
+		expect(Runtime.callInt(session.live, finish), 6, "the thread's handler after the refused patch");
+		try
+			Runtime.patchSet(session.live, edit)
+		catch (error:RuntimeError)
+			throw 'the patch was refused once the thread ended: ${error.message}';
 		Runtime.dispose(session.live);
 	}
 
@@ -126,8 +313,13 @@ class LiveClosureGuardMain {
 			+ "  var value = 0;\n" + "  for (handler in list) value = value * 100 + handler(1);\n" + "  return value;\n" + "}\n";
 	}
 
-	static function start(source:String):{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
+	/** The program `source` compiled and loaded; `stdlib` lets it use the standard library (`Sys`, threads). */
+	static function start(source:String, stdlib:Bool = false):{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
 		var compiler = new Compiler();
+		if (stdlib) {
+			CompilerIntrinsics.register(compiler);
+			compiler.addSourceRoot("stdlib");
+		}
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");
 		return {

@@ -90,13 +90,16 @@ class LiveHost {
 							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision', true);
 					else if (patchable) {
 						var failure:Null<String> = null, applied = false, held = false, readAt = describedAt;
+						// The app's hooks that threw: its errors, reported apart. The patch's outcome is what the runtime did.
+						var hookErrors:Array<String> = [];
 						ProfileSpan.begin("live.patch");
 						try {
 							var patchBytes = File.getBytes(path + ".hlp");
 							readAt = Sys.time();
 							// An app that rebuilds its UI from its code lets go of it around the patch (`Runtime.patchSetRebuilding`).
 							Runtime.patchSetRebuilding(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
-								optionalFunctionId(description, entry + "." + LIVE_RELEASE), optionalFunctionId(description, entry + "." + LIVE_REBUILD));
+								optionalFunctionId(description, entry + "." + LIVE_RELEASE), optionalFunctionId(description, entry + "." + LIVE_REBUILD),
+								(rebuilding, error) -> hookErrors.push('$entry.${rebuilding ? LIVE_REBUILD : LIVE_RELEASE}() threw: $error'));
 							applied = true;
 						} catch (error:RuntimeError) {
 							failure = error.message;
@@ -107,6 +110,8 @@ class LiveHost {
 							failure = Std.string(error);
 						}
 						ProfileSpan.end("live.patch");
+						for (error in hookErrors)
+							report('haxeon: warning: $error');
 						if (applied) {
 							// The summary stands in for the 1 MB full description.
 							description = patchedDescription(description, candidate);

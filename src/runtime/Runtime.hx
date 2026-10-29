@@ -279,23 +279,37 @@ class Runtime {
 	 * stable index, or null) runs first and lets go of what the app will rebuild; the patch then checks only what the app
 	 * still holds; and `rebuild` runs after, whether the patch applied or not, so the app rebuilds from whichever code now
 	 * runs. Nothing has to be rolled back: a refused patch changed nothing, and the app rebuilds from the code it had.
+	 *
+	 * What this throws is the patch's outcome alone, as `patchSet` throws it. A hook that throws is the app's error, not the
+	 * patch's: `hookFailed` gets it (`rebuilding` false for `release`) and the patch goes on. Once `release` ran, `rebuild`
+	 * runs whatever `release` or the patch threw, so the app never stays released.
 	 */
-	public static function patchSetRebuilding(module:LoadedModule, patch:PatchSet, release:Null<Int>, rebuild:Null<Int>):Void {
+	public static function patchSetRebuilding(module:LoadedModule, patch:PatchSet, release:Null<Int>, rebuild:Null<Int>,
+			hookFailed:(rebuilding:Bool, error:String) -> Void):Void {
 		// Only a patch that drops functions checks for closures, so only it needs the app to let go of its UI first.
 		if (!patch.hasGuards()) {
 			patchSet(module, patch);
 			return;
 		}
+		// Whatever `release` let go of before it threw stays let go; the guard check sees what the app still holds.
 		if (release != null)
-			callVoid(module, release);
-		var failure:Null<RuntimeError> = null;
+			try
+				callVoid(module, release)
+			catch (error:Dynamic)
+				hookFailed(false, Std.string(error));
+		var failed = false, failure:Dynamic = null;
 		try
 			patchSet(module, patch)
-		catch (error:RuntimeError)
+		catch (error:Dynamic) {
+			failed = true;
 			failure = error;
+		}
 		if (rebuild != null)
-			callVoid(module, rebuild);
-		if (failure != null)
+			try
+				callVoid(module, rebuild)
+			catch (error:Dynamic)
+				hookFailed(true, Std.string(error));
+		if (failed)
 			throw failure;
 	}
 
