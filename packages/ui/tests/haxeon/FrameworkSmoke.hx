@@ -5313,15 +5313,16 @@ class FrameworkSmoke {
 				node.semantics.role == AccessibilityRole.MenuItem)
 				firstItem = node;
 		});
-		if (firstItem == null ||
-			firstItem.computedStyle.get(StyleProperty.Background).red !=
+		var firstItemNode = firstItem;
+		if (firstItemNode == null ||
+			firstItemNode.computedStyle.get(StyleProperty.Background).red !=
 			uiContext.buildContext.theme.tokens.selectionField.red)
 			return false;
 		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
-		var settledFirst:Null<RenderNode> = settledMenu.find(firstItem.id);
+		var settledFirst:Null<RenderNode> = settledMenu.find(firstItemNode.id);
 		if (settledFirst == null ||
 			settledFirst.computedStyle.get(StyleProperty.Background).red !=
-			firstItem.computedStyle.get(StyleProperty.Background).red)
+			firstItemNode.computedStyle.get(StyleProperty.Background).red)
 			return false;
 		var sceneNudges = 0;
 		uiContext.commands.register(new Command("scene.nudge", "Nudge scene", function() {
@@ -5915,6 +5916,7 @@ class FrameworkSmoke {
 			});
 		if (singletonTabs.length != 2 || singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		var singletonSourceId = singletonSourceTab.id;
 		var sourceBounds = singletonSourceTab.globalBounds(), targetBounds = singletonTargetTab.globalBounds();
 		var sourceX = sourceBounds.x + sourceBounds.width * 0.5;
 		var sourceY = sourceBounds.y + sourceBounds.height * 0.5;
@@ -5932,10 +5934,10 @@ class FrameworkSmoke {
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerUp(ownPaneX, ownPaneY, 0);
-		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceTab.id) ||
+		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId) ||
 			tabPlatformCaptureStates.length != 0)
 			return false;
 		switch (singletonDock.root) {
@@ -5943,16 +5945,16 @@ class FrameworkSmoke {
 			default: return false;
 		}
 		uiContext.pointerDown(sourceX, sourceY, 0);
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerUp(targetX, targetY, 0);
-		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
@@ -5989,6 +5991,7 @@ class FrameworkSmoke {
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
 		sourceX = sourceBounds.x + sourceBounds.width * 0.5;
@@ -6001,17 +6004,17 @@ class FrameworkSmoke {
 			return false;
 		uiContext.pointerLeave();
 		if (singletonWorkspace.interaction.preview != null ||
-			!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
-		if (!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+		if (!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
 			return false;
 		uiContext.pointerUp(targetX, targetY, 0);
 		if (singletonWorkspace.interaction.preview != null ||
-			uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
@@ -6048,6 +6051,7 @@ class FrameworkSmoke {
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
 			return false;
+		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
 		sourceX = sourceBounds.x + sourceBounds.width * 0.5;
@@ -6057,12 +6061,12 @@ class FrameworkSmoke {
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null ||
-			!uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (singletonWorkspace.interaction.draggingPanelId != null ||
 			singletonWorkspace.interaction.preview != null ||
-			uiContext.events.hasPointerCapture(singletonSourceTab.id))
+			uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
 		uiContext.setPointerCaptureHandler(null);
 		var changes = 0;
