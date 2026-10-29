@@ -147,6 +147,7 @@ class ComputedStyle {
 		if (isSet(StyleProperty.PositionX.slot)) result.positionX = cast valueAt(StyleProperty.PositionX.slot);
 		if (isSet(StyleProperty.PositionY.slot)) result.positionY = cast valueAt(StyleProperty.PositionY.slot);
 		if (isSet(StyleProperty.ZIndex.slot)) result.zIndex = cast valueAt(StyleProperty.ZIndex.slot);
+		if (isSet(StyleProperty.Overlay.slot)) result.overlay = cast valueAt(StyleProperty.Overlay.slot);
 		if (isSet(StyleProperty.ClipToParent.slot)) result.clipToParent = cast valueAt(StyleProperty.ClipToParent.slot);
 		if (isSet(StyleProperty.Padding.slot)) {
 			var padding:Insets = cast valueAt(StyleProperty.Padding.slot);

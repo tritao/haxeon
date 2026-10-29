@@ -134,6 +134,18 @@ visibility, transform, baseline, and content extents; rendering consumes the
 same submitted frame. Absolute children report the same parent clipping used by
 rendering, so Haxe hit testing and accessibility geometry agree with pixels.
 
+Floating nodes normally form nested stacking contexts: a child's `zIndex`
+never lifts it above a later sibling of its owner. `LayoutStyle.overlay` is an
+explicit exception for absolute popup roots. Overlays paint after ordinary
+content within their nearest enclosing overlay, ordered by their local
+`zIndex` and stable declaration order. This lets a dropdown cross dock panels
+without escaping a later modal dialog. The flag changes stacking only;
+parent-relative positioning, clipping (`clipToParent`), visibility, focus and
+event ancestry remain independent. Native and Haxe hit testing use the same
+ordering and test each descendant's resolved clip rather than rejecting an
+escaped floating subtree at an ancestor clip.
+
+
 The Haxe framework lives separately from the low-level generated bindings in
 `haxe/haxeon/ui/`. Its current foundation includes:
 

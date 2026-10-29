@@ -478,6 +478,16 @@ int main() {
         !(text_item.flags & NKUI_LAYOUT_RESOLVED_VISIBLE))
         return 19;
 
+    auto overlay_transaction = floating;
+    write_u32(overlay_transaction, text_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET,
+              NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING | NKUI_LAYOUT_NODE_OVERLAY);
+    if (nkui_layout_session_submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_OK)
+        return 90;
+    write_u32(overlay_transaction, text_record + NKUI_LAYOUT_NODE_FLAGS_OFFSET,
+              NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_OVERLAY);
+    if (nkui_layout_session_submit(session, overlay_transaction.data(), overlay_transaction.size(), &frame) != NKUI_ERROR_INVALID_TRANSACTION)
+        return 91;
+
     auto baseline = bytes;
     write_u32(baseline, panel_record + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
               NKUI_LAYOUT_DIRECTION_LEFT_TO_RIGHT);

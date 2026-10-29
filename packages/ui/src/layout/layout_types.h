@@ -163,6 +163,7 @@ struct LayoutStyle {
     float position_y = 0.0f;
     int32_t z_index = 0;
     bool clip_to_parent = true;
+    bool overlay = false;
     LayoutColor background{};
     float radius_top_left = 0.0f;
     float radius_top_right = 0.0f;

@@ -84,7 +84,9 @@ class ComboBoxTests {
   check(!open() && combo.value == "two" && changes == 1, "Enter did not select the filtered option exactly once");
   combo.enabled = false; build(); click(arrow());
   check(!open() && !arrow().enabled && !arrow().focusable && changes == 1, "Disabled arrow activated");
-  ui.dispose(); fonts.dispose();
+  ui.dispose();
+  PopupOverlayTests.run(fonts);
+  fonts.dispose();
   Sys.println("PASS: ComboBox arrow toggle, accessible activation, query/selection preservation, filtering, dismissal and disabled state");
  }
 }

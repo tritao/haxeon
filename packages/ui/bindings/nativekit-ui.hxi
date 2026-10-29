@@ -367,6 +367,10 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 		 * Excludes this node's descendants from geometric hit testing.
 		 */
 		NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED = 16;
+		/**
+		 * Floating overlay above ordinary content, scoped to the nearest enclosing overlay.
+		 */
+		NKUI_LAYOUT_NODE_OVERLAY = 32;
 	}
 	/**
 	 * Flags returned with each resolved item.

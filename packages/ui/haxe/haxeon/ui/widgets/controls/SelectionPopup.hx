@@ -129,7 +129,7 @@ class SelectionPopup {
 		dropdownStyle.positioning = LayoutPositioning.Absolute;
 		dropdownStyle.positionX = popupX - rootX;
 		dropdownStyle.positionY = popupGlobalY - rootY;
-		dropdownStyle.zIndex = 10;
+		dropdownStyle.overlay = true;
 		dropdownStyle.clipToParent = false;
 		dropdownStyle.padding = new Insets(4.0, 4.0, 4.0, 4.0);
 		dropdownStyle.childGap = 2.0;
@@ -183,6 +183,7 @@ class SelectionPopup {
 			contentStyle.width = LayoutAxis.grow();
 			contentStyle.height = LayoutAxis.fit();
 			contentStyle.direction = LayoutDirection.TopToBottom;
+			contentStyle.childGap = 2.0;
 			contentStyle.transform = Transform2D.identity().translated(0.0,
 				-scrollController.offsetY);
 			var optionContent = new RenderNode(context.id("option-content"),

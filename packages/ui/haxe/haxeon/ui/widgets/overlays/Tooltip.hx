@@ -62,9 +62,9 @@ class Tooltip implements View {
 			}
 			var tooltipStyle = new LayoutStyle();
 			tooltipStyle.positioning = LayoutPositioning.Absolute;
+			tooltipStyle.overlay = true;
 			tooltipStyle.positionX = x;
 			tooltipStyle.positionY = y;
-			tooltipStyle.zIndex = 10;
 			tooltipStyle.clipToParent = false;
 			tooltipStyle.visible = cast state.value;
 			var tooltip = new AnonymousTooltipContent(content, tooltipStyle);
@@ -163,8 +163,8 @@ class Tooltip implements View {
 			root.add(header);
 			var tipStyle = new LayoutStyle();
 			tipStyle.positioning = LayoutPositioning.Absolute;
+			tipStyle.overlay = true;
 			tipStyle.positionY = 44;
-			tipStyle.zIndex = 10;
 			tipStyle.clipToParent = false;
 			tipStyle.visible = hoverGroup == null ? state.value : groupVisible;
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);

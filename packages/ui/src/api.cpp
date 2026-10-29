@@ -1075,6 +1075,7 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             const uint32_t child_align_y = (child_alignment >> 8u) & 0xffu;
             const bool floating = (node_flags & NKUI_LAYOUT_NODE_FLOATING) != 0;
             const bool clip_to_parent = (node_flags & NKUI_LAYOUT_NODE_CLIP_TO_PARENT) != 0;
+            const bool overlay = (node_flags & NKUI_LAYOUT_NODE_OVERLAY) != 0;
             if (visual_kind < NKUI_LAYOUT_VISUAL_BOX || visual_kind > NKUI_LAYOUT_VISUAL_CUSTOM ||
                 (child_alignment & 0xffff0000u) != 0 ||
                 child_align_x > NKUI_LAYOUT_ALIGNMENT_CENTER ||
@@ -1085,7 +1086,8 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                 (node_flags &
                  ~(NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING |
                    NKUI_LAYOUT_NODE_CLIP_TO_PARENT | NKUI_LAYOUT_NODE_HIT_SELF_DISABLED |
-                   NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED)) != 0 ||
+                   NKUI_LAYOUT_NODE_HIT_CHILDREN_DISABLED | NKUI_LAYOUT_NODE_OVERLAY)) != 0 ||
+                (overlay && !floating) ||
                 (clip_to_parent && !floating) || z_index < std::numeric_limits<int16_t>::min() ||
                 z_index > std::numeric_limits<int16_t>::max() || !std::isfinite(position_x) ||
                 !std::isfinite(position_y) || width_sizing > NKUI_LAYOUT_SIZING_PERCENT)
@@ -1142,6 +1144,7 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             node.style.position_y = position_y;
             node.style.z_index = z_index;
             node.style.clip_to_parent = clip_to_parent;
+            node.style.overlay = overlay;
             node.text_style.family = static_cast<nkui::FontFamily>(font_family);
             node.paragraph_style.wrap = static_cast<nkui::TextWrapMode>(text_wrap);
             node.paragraph_style.alignment = static_cast<nkui::TextAlignment>(text_alignment);
@@ -2358,8 +2361,9 @@ void visit_hit_test(const nkui::LayoutSnapshot &snapshot, uint32_t index, float 
     }
     ++stats.nodes_visited;
     const auto &item = snapshot.items[index];
-    if (!item.visible || !point_in_rect(item.subtree_hit_bounds, x, y) ||
-        !point_in_rect(item.clip_bounds, x, y)) {
+    // Descendant floating roots can escape this item's clip. The subtree
+    // bounds already union each descendant's independently clipped hit area.
+    if (!item.visible || !point_in_rect(item.subtree_hit_bounds, x, y)) {
         ++stats.subtrees_rejected;
         return;
     }

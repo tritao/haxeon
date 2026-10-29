@@ -156,7 +156,10 @@ class LayoutTransaction {
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, transform.d);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, transform.tx);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, transform.ty);
+			if (style.overlay && positioning != LayoutPositioning.Absolute)
+				throw "Layout overlays require absolute positioning";
 			var nodeFlags = style.visible ? 1 : 0;
+			if (style.overlay) nodeFlags |= 1 << 5;
 			if (!node.hitSelf)
 				nodeFlags |= 1 << 3;
 			if (!node.hitChildren)

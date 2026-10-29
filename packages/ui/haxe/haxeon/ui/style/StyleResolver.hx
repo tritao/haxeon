@@ -263,6 +263,7 @@ class StyleResolver {
 		result = mix(result, floatFingerprint(local.positionY));
 		result = mix(result, local.zIndex);
 		result = mix(result, local.clipToParent ? 1 : 0);
+		result = mix(result, local.overlay ? 1 : 0);
 		result = mix(result, floatFingerprint(local.padding.left));
 		result = mix(result, floatFingerprint(local.padding.top));
 		result = mix(result, floatFingerprint(local.padding.right));
@@ -335,7 +336,7 @@ class StyleResolver {
 			left.wrapMode == right.wrapMode && left.rowGap == right.rowGap &&
 			left.columnGap == right.columnGap && left.alignSelf == right.alignSelf &&
 			left.positionX == right.positionX && left.positionY == right.positionY &&
-			left.zIndex == right.zIndex && left.clipToParent == right.clipToParent &&
+			left.zIndex == right.zIndex && left.clipToParent == right.clipToParent && left.overlay == right.overlay &&
 			left.padding.left == right.padding.left && left.padding.top == right.padding.top &&
 			left.padding.right == right.padding.right && left.padding.bottom == right.padding.bottom &&
 			left.childGap == right.childGap && sameColor(left.background, right.background) &&
@@ -446,6 +447,8 @@ class StyleResolver {
 			result.set(StyleProperty.PositionY, local.positionY, source);
 		if (local.zIndex != defaults.zIndex)
 			result.set(StyleProperty.ZIndex, local.zIndex, source);
+		if (local.overlay != defaults.overlay)
+			result.set(StyleProperty.Overlay, local.overlay, source);
 		if (local.clipToParent != defaults.clipToParent)
 			result.set(StyleProperty.ClipToParent, local.clipToParent, source);
 		if (local.padding.left != defaults.padding.left || local.padding.top != defaults.padding.top ||

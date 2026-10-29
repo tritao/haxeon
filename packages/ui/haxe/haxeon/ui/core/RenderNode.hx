@@ -654,6 +654,7 @@ class RenderNode {
 			flags |= UiDirtyFlag.NeedsLayout;
 		if (beforeStyle.zIndex != afterStyle.zIndex ||
 			beforeStyle.clipToParent != afterStyle.clipToParent ||
+			beforeStyle.overlay != afterStyle.overlay ||
 			!sameColor(beforeStyle.background, afterStyle.background) ||
 			beforeStyle.radiusTopLeft != afterStyle.radiusTopLeft ||
 			beforeStyle.radiusTopRight != afterStyle.radiusTopRight ||
@@ -666,6 +667,7 @@ class RenderNode {
 			flags |= UiDirtyFlag.NeedsPaint;
 		if (beforeStyle.zIndex != afterStyle.zIndex ||
 			beforeStyle.clipToParent != afterStyle.clipToParent ||
+			beforeStyle.overlay != afterStyle.overlay ||
 			beforeStyle.clipHorizontal != afterStyle.clipHorizontal ||
 			beforeStyle.clipVertical != afterStyle.clipVertical ||
 			beforeStyle.visible != afterStyle.visible)

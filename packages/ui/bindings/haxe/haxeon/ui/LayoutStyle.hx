@@ -24,6 +24,8 @@ class LayoutStyle {
 	public var positionY:Float;
 	public var zIndex:Int;
 	public var clipToParent:Bool;
+	/** Paint above ordinary content, scoped to the nearest enclosing overlay. Requires Absolute positioning. */
+	public var overlay:Bool;
 	public var padding:Insets;
 	public var childGap:Float;
 	public var background:Color;
@@ -64,6 +66,7 @@ class LayoutStyle {
 		positionY = 0.0;
 		zIndex = 0;
 		clipToParent = true;
+		overlay = false;
 		padding = DefaultPadding;
 		childGap = 0.0;
 		background = DefaultBackground;
@@ -98,6 +101,7 @@ class LayoutStyle {
 		result.positionY = positionY;
 		result.zIndex = zIndex;
 		result.clipToParent = clipToParent;
+		result.overlay = overlay;
 		result.padding = padding;
 		result.childGap = childGap;
 		result.background = background;
