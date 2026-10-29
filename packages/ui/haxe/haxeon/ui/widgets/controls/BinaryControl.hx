@@ -17,7 +17,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleStateUtil;
@@ -176,8 +175,7 @@ class BinaryControl implements View {
 				if (onChange != null)
 					onChange(checked);
 			};
-			node.on(UiEventKind.Click, activate);
-			node.on(UiEventKind.Activate, activate);
+			node.onActivate(activate);
 			return node;
 		});
 	}

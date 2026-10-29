@@ -48,10 +48,12 @@ class ProcessRunner {
 
 		var readers = new Lock();
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.process.stdout");
 			copyOutput(process.stdout, forwardOutput ? Sys.stdout() : null);
 			readers.release();
 		});
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.process.stderr");
 			copyOutput(process.stderr, forwardOutput ? Sys.stderr() : null);
 			readers.release();
 		});

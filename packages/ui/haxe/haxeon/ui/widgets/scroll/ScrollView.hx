@@ -132,11 +132,14 @@ class ScrollView implements View {
 
 			viewport.add(translatedContent);
 			var overlayHost = scrollbarOverlayHost == null ? viewport : scrollbarOverlayHost;
+			// The overlay host can differ from the viewport; the size it had at the last layout seeds a rebuilt scrollbar.
+			var overlaySize = context.resourceState(context.id("scrollbar-overlay-size"),
+				function() return {width: -1.0, height: -1.0}, function(_) {}).value;
 			var scrollbar = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Horizontal
-				? addScrollbar(context, overlayHost, visibility.value, visibilityChanged, true) : null;
+				? addScrollbar(context, overlayHost, visibility.value, visibilityChanged, true, overlaySize) : null;
 
 			var horizontal = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Vertical
-				? addScrollbar(context, overlayHost, horizontalVisibility.value, visibilityChanged, false) : null;
+				? addScrollbar(context, overlayHost, horizontalVisibility.value, visibilityChanged, false, overlaySize) : null;
 			translatedContent.onResolved(function(geometry) {
 				var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
 				// The viewport's content bounds include the overlay scrollbar. Its
@@ -161,11 +164,12 @@ class ScrollView implements View {
 					context.requestLayoutFeedback();
 				}
 				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0 && controller.viewportHeight > 0);
-				if (scrollbar != null && updateScrollbar(scrollbar, overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width, overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height, true))
+				overlaySize.width = overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width;
+				overlaySize.height = overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height;
+				if (scrollbar != null && updateScrollbar(scrollbar, overlaySize.width, overlaySize.height, true))
 					context.requestLayoutFeedback();
 				horizontalVisibility.value.setAvailable(horizontal != null && controller.maxScrollX > 0 && controller.viewportWidth > 0);
-				if (horizontal != null && updateScrollbar(horizontal, overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width,
-					overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height, false)) context.requestLayoutFeedback();
+				if (horizontal != null && updateScrollbar(horizontal, overlaySize.width, overlaySize.height, false)) context.requestLayoutFeedback();
 			});
 			viewport.on(UiEventKind.Scroll, function(event) {
 				if (onScroll != null)
@@ -220,7 +224,7 @@ class ScrollView implements View {
 
 	/** One scrollbar implementation shares painting, capture and accessibility for both axes. */
 	function addScrollbar(context:BuildContext, viewport:RenderNode, visibility:ScrollbarVisibilityController,
-			changed:Void->Void, vertical:Bool):RenderNode {
+			changed:Void->Void, vertical:Bool, overlaySize:{width:Float, height:Float}):RenderNode {
 		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();
 		trackStyle.positioning = LayoutPositioning.Absolute;
@@ -322,7 +326,8 @@ class ScrollView implements View {
 			jump(travel() <= 0 ? 0 : Math.max(0.0, Math.min(travel(), pointer - thumbExtent * 0.5)) / travel() * maximum());
 			event.preventDefault();
 		});
-		updateScrollbar(track, controller.viewportWidth, controller.viewportHeight, vertical);
+		updateScrollbar(track, overlaySize.width < 0.0 ? controller.viewportWidth : overlaySize.width,
+			overlaySize.height < 0.0 ? controller.viewportHeight : overlaySize.height, vertical);
 		return track;
 	}
 

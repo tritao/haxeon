@@ -24,25 +24,39 @@ class TextOffsetMap {
 	var utf8Bytes:Bytes;
 	var paragraphStarts:Array<Int>;
 	var paragraphEnds:Array<Int>;
-	var graphemeBoundaries:Array<Int>;
+	/** Computed on first use (see graphemes), so a document can be opened without a grapheme pass over its text. */
+	var graphemeBoundaries:Null<Array<Int>>;
 
 	public function new(value:String, ?boundaries:Array<Int>) {
 		text = value == null ? "" : value;
 		utf8Bytes = Bytes.ofString(text);
-		codepointToUtf8 = [0];
-		codepointToUtf16 = [0];
+		// Sized once for the most code points the bytes can hold and trimmed after: storing by index costs a fraction
+		// of a push per value, and a large document has millions.
+		var capacity = utf8Bytes.length;
 		codepoints = [];
+		codepoints.resize(capacity);
+		codepointToUtf8 = [];
+		codepointToUtf8.resize(capacity + 1);
+		codepointToUtf16 = [];
+		codepointToUtf16.resize(capacity + 1);
+		codepointToUtf8[0] = 0;
+		codepointToUtf16[0] = 0;
 		var byteOffset = 0;
 		var utf16Offset = 0;
+		var count = 0;
 		while (byteOffset < utf8Bytes.length) {
 			var codepoint = decodeCodepoint(utf8Bytes, byteOffset);
-			codepoints.push(codepoint);
+			codepoints[count] = codepoint;
 			byteOffset = nextOffset(utf8Bytes, byteOffset);
 			utf16Offset += codepoint > 0xffff ? 2 : 1;
-			codepointToUtf8.push(byteOffset);
-			codepointToUtf16.push(utf16Offset);
+			count++;
+			codepointToUtf8[count] = byteOffset;
+			codepointToUtf16[count] = utf16Offset;
 		}
-		codepointCount = codepoints.length;
+		codepoints.resize(count);
+		codepointToUtf8.resize(count + 1);
+		codepointToUtf16.resize(count + 1);
+		codepointCount = count;
 		utf8ByteLength = utf8Bytes.length;
 		utf16Length = utf16Offset;
 		paragraphStarts = [0];
@@ -53,9 +67,15 @@ class TextOffsetMap {
 				paragraphStarts.push(codepointOffset + 1);
 			}
 		paragraphEnds.push(codepointCount);
-		graphemeBoundaries = buildGraphemeBoundaries();
+		graphemeBoundaries = null;
 		if (boundaries != null)
 			setGraphemeBoundaries(boundaries);
+	}
+
+	function graphemes():Array<Int> {
+		if (graphemeBoundaries == null)
+			graphemeBoundaries = buildGraphemeBoundaries();
+		return graphemeBoundaries;
 	}
 
 	/** Counts Unicode scalar values without retaining a second mapping cache. */
@@ -164,6 +184,7 @@ class TextOffsetMap {
 	 */
 	public function graphemeBoundariesForRange(start:CodepointOffset,
 			end:CodepointOffset):Array<Int> {
+		var graphemeBoundaries = graphemes();
 		var first:Int = start;
 		var last:Int = end;
 		checkRange(first, last);
@@ -225,16 +246,21 @@ class TextOffsetMap {
 		var utf16Delta = inserted.utf16Length -
 			(codepointToUtf16[last] - codepointToUtf16[first]);
 
-		var oldGraphemeStart = previousBoundary(first);
-		if (oldGraphemeStart > 0)
-			oldGraphemeStart = previousBoundary(oldGraphemeStart - 1);
-		var oldGraphemeEnd = nextBoundary(last);
-		if (oldGraphemeEnd < oldCount)
-			oldGraphemeEnd = nextBoundary(oldGraphemeEnd);
-		while (oldGraphemeStart > 0 && isRegionalIndicator(codepoints[oldGraphemeStart - 1]))
-			oldGraphemeStart--;
-		while (oldGraphemeEnd < oldCount && isRegionalIndicator(codepoints[oldGraphemeEnd]))
-			oldGraphemeEnd++;
+		// Boundaries not computed yet stay that way, computed later from the edited text, so the edit needs no window.
+		var trackGraphemes = graphemeBoundaries != null;
+		var oldGraphemeStart = first, oldGraphemeEnd = last;
+		if (trackGraphemes) {
+			oldGraphemeStart = previousBoundary(first);
+			if (oldGraphemeStart > 0)
+				oldGraphemeStart = previousBoundary(oldGraphemeStart - 1);
+			oldGraphemeEnd = nextBoundary(last);
+			if (oldGraphemeEnd < oldCount)
+				oldGraphemeEnd = nextBoundary(oldGraphemeEnd);
+			while (oldGraphemeStart > 0 && isRegionalIndicator(codepoints[oldGraphemeStart - 1]))
+				oldGraphemeStart--;
+			while (oldGraphemeEnd < oldCount && isRegionalIndicator(codepoints[oldGraphemeEnd]))
+				oldGraphemeEnd++;
+		}
 
 		var startParagraph = paragraphIndexAt(first);
 		if (startParagraph > 0)
@@ -308,6 +334,20 @@ class TextOffsetMap {
 			paragraphEnds[index] += codepointDelta;
 		}
 
+		if (trackGraphemes) updateGraphemeBoundaries(oldGraphemeStart, oldGraphemeEnd, codepointDelta);
+
+		text = next;
+		utf8Bytes = Bytes.ofString(next);
+		codepointCount = oldCount + codepointDelta;
+		utf8ByteLength += byteDelta;
+		utf16Length += utf16Delta;
+		return next;
+	}
+
+	/** Recomputes the boundaries an edit can have changed, between the old grapheme window's start and its end moved by
+		`codepointDelta`, and moves the ones after it. */
+	function updateGraphemeBoundaries(oldGraphemeStart:Int, oldGraphemeEnd:Int, codepointDelta:Int):Void {
+		var graphemeBoundaries = graphemes();
 		var newGraphemeEnd = oldGraphemeEnd + codepointDelta;
 		var newGraphemeBoundaries:Array<Int> = [oldGraphemeStart];
 		var previous = oldGraphemeStart > 0 ? codepoints[oldGraphemeStart - 1] : -1;
@@ -336,13 +376,6 @@ class TextOffsetMap {
 		var graphemeSuffix = oldGraphemeBoundaryStart + newGraphemeBoundaries.length;
 		for (index in graphemeSuffix...graphemeBoundaries.length)
 			graphemeBoundaries[index] += codepointDelta;
-
-		text = next;
-		utf8Bytes = Bytes.ofString(next);
-		codepointCount = oldCount + codepointDelta;
-		utf8ByteLength += byteDelta;
-		utf16Length += utf16Delta;
-		return next;
 	}
 
 	/** Returns the paragraph containing a code-point position. */
@@ -407,17 +440,18 @@ class TextOffsetMap {
 		}
 		var boundaryStart = boundaryIndex(first);
 		var boundaryEnd = boundaryIndex(last);
-		replaceArrayRange(graphemeBoundaries, boundaryStart,
+		replaceArrayRange(graphemes(), boundaryStart,
 			boundaryEnd - boundaryStart + 1, boundaries);
 	}
 
 	public function graphemeBoundaryCount():Int
-		return graphemeBoundaries.length;
+		return graphemes().length;
 
 	public function graphemeCount():Int
-		return graphemeBoundaries.length - 1;
+		return graphemes().length - 1;
 
 	public function graphemeBoundaryAt(boundaryNumber:Int):GraphemePosition {
+		var graphemeBoundaries = graphemes();
 		if (boundaryNumber < 0 || boundaryNumber >= graphemeBoundaries.length)
 			throw "Grapheme boundary number is outside the string";
 		return graphemeBoundaries[boundaryNumber];
@@ -450,6 +484,7 @@ class TextOffsetMap {
 	}
 
 	function boundaryIndex(value:Int):Int {
+		var graphemeBoundaries = graphemes();
 		var low = 0;
 		var high = graphemeBoundaries.length - 1;
 		while (low <= high) {
@@ -493,6 +528,7 @@ class TextOffsetMap {
 		return value <= 0x7f ? 1 : value <= 0x7ff ? 2 : value <= 0xffff ? 3 : 4;
 
 	function isBoundary(value:Int):Bool {
+		var graphemeBoundaries = graphemes();
 		var low = 0;
 		var high = graphemeBoundaries.length - 1;
 		while (low <= high) {
@@ -509,6 +545,7 @@ class TextOffsetMap {
 	}
 
 	function previousBoundary(value:Int):Int {
+		var graphemeBoundaries = graphemes();
 		var low = 0;
 		var high = graphemeBoundaries.length - 1;
 		var result = 0;
@@ -525,6 +562,7 @@ class TextOffsetMap {
 	}
 
 	function nextBoundary(value:Int):Int {
+		var graphemeBoundaries = graphemes();
 		var low = 0;
 		var high = graphemeBoundaries.length - 1;
 		var result = codepointCount;

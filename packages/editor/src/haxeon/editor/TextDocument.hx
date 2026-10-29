@@ -18,6 +18,7 @@ class TextDocument {
 	var utf16Starts:Array<Int>;
 	var paragraphStarts:Array<Int>;
 	var cachedText:Null<String>;
+	var lastEdit:Null<TextDocumentEdit>;
 
 	public function new(value:String) {
 		revision = 0;
@@ -66,11 +67,20 @@ class TextDocument {
 			result.push(segment);
 		for (index in last + 1...segments.length)
 			result.push(segments[index]);
+		var previousCount = codepointCount;
 		segments = result;
 		cachedText = null;
 		revision++;
 		reindex();
+		lastEdit = new TextDocumentEdit(revision, start, end, start + TextOffsetMap.countCodepoints(inserted), previousCount);
 		return true;
+	}
+
+	/** The replacement that turned revision `previous` into the current one, or null when that took more than one
+		replacement (or none). Lets a view of the document update only what the edit touched. */
+	public function editSince(previous:Int):Null<TextDocumentEdit> {
+		var edit = lastEdit;
+		return edit != null && edit.revision == revision && previous == revision - 1 ? edit : null;
 	}
 
 	public function sliceCodepoints(start:Int, end:Int):String {
@@ -224,5 +234,24 @@ class TextDocument {
 	function checkRange(start:Int, end:Int):Void {
 		if (start < 0 || end < start || end > codepointCount)
 			throw "Code-point range is outside the document";
+	}
+}
+
+/** One replacement, in code points: `[start, oldEnd)` of the previous text became `[start, newEnd)`. */
+class TextDocumentEdit {
+	/** The revision the replacement produced. */
+	public final revision:Int;
+	public final start:Int;
+	public final oldEnd:Int;
+	public final newEnd:Int;
+	/** The document's length before the replacement. */
+	public final previousCodepointCount:Int;
+
+	public function new(revision:Int, start:Int, oldEnd:Int, newEnd:Int, previousCodepointCount:Int) {
+		this.revision = revision;
+		this.start = start;
+		this.oldEnd = oldEnd;
+		this.newEnd = newEnd;
+		this.previousCodepointCount = previousCodepointCount;
 	}
 }

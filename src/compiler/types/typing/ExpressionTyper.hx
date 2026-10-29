@@ -55,7 +55,7 @@ typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> Compi
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
 typedef LowerExpressionTypeCallback = AstType->CompilerType;
 typedef ExpressionVariableCallback = (String, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
-typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
+typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, String, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionMemberCallback = (AstExpression, String, SourceSpan, Scope) -> TypedExpression;
 typedef ExpressionBlockCallback = (Array<AstStatement>, AstExpression, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
 typedef ExpressionMethodCallCallback = (AstExpression, String, Array<AstExpression>, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
@@ -127,7 +127,7 @@ class ExpressionTyper {
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): dispatchRules.variable(name, span, scope, expectedType);
-			case Lambda(arguments, body, span): dispatchRules.lambda(arguments, body, span, scope, expectedType, inferDynamicLambdaResult);
+			case Lambda(arguments, body, identity, span): dispatchRules.lambda(arguments, body, identity, span, scope, expectedType, inferDynamicLambdaResult);
 			case Member(object, name, span): dispatchRules.member(object, name, span, scope);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span, expectedType);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span, expectedType);
@@ -1117,7 +1117,7 @@ class ExpressionTyper {
 		if (isDynamic)
 			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
-		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), resolvedResult, span);
+		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), isDynamic ? TDynamic : resolvedResult, span);
 	}
 
 	static function isDynamicExpectation(type:Null<CompilerType>):Bool
@@ -1131,23 +1131,34 @@ class ExpressionTyper {
 		var expectedMap = mapExpectation(expectedType);
 		if (values.length == 0 && expectedMap != null)
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
-		var expectedElement = arrayElementExpectation(expectedType);
-		if (values.length == 0 && expectedElement == null)
-			fail("E1003", "Empty array literal requires an expected element type", span);
+		// In a Dynamic context the elements still decide the type, as they would anywhere else ([new Child()] is an
+		// Array<Child>, which does not convert to Array<Base>); only elements with no common type, or none, make it Dynamic.
+		var dynamicContext = isDynamicExpectation(expectedType);
+		var expectedElement = dynamicContext ? null : arrayElementExpectation(expectedType);
+		if (values.length == 0 && expectedElement == null) {
+			if (!dynamicContext)
+				fail("E1003", "Empty array literal requires an expected element type", span);
+			expectedElement = TDynamic;
+		}
 		var typedValues:Array<TypedExpression> = [],
-			elementType = expectedElement;
+			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;
 		for (value in values) {
-			var typedValue = typeExpressionCallback(value, scope, elementType, false),
-				resolvedElement:CompilerType;
-			if (elementType == null) {
-				resolvedElement = typedValue.type;
-				elementType = resolvedElement;
-			} else
-				resolvedElement = elementType;
-			typedValues.push(coerce(typedValue, resolvedElement, "array element", "E1003"));
+			var typedValue = typeExpressionCallback(value, scope, elementType == TNull || dynamicContext ? null : elementType, false);
+			if (expectedElement == null) {
+				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType, typedValue.type);
+				if (joined == null && dynamicContext)
+					joined = TDynamic;
+				if (joined == null)
+					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
+				// Dynamic permits mixed storage, but homogeneous arrays keep their exact element contract.
+				elementType = joined == null ? TDynamic : joined;
+			}
+			typedValues.push(typedValue);
 		}
 		if (elementType == null)
 			throw "Array element type was not resolved";
+		// Decide storage before coercing any element: a later Float or nullable value can widen it.
+		typedValues = [for (value in typedValues) coerce(value, elementType, "array element", "E1003")];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
 
@@ -1794,6 +1805,10 @@ class ExpressionTyper {
 			return left;
 		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
 			return TFloat;
+		// Dynamic holds any value, so joining with it is Dynamic. Assignability alone would pick the other side, since
+		// Dynamic converts to anything implicitly, and the Dynamic values would then need a cast that can fail.
+		if (left == TDynamic || right == TDynamic)
+			return TDynamic;
 		switch left {
 			case TNull:
 				return right == TVoid ? null : (isNullable(right) ? right : TNullable(right));
@@ -1855,7 +1870,7 @@ class ExpressionTyper {
 			left = coerce(left, right.type, "arithmetic operand", "E1009");
 		if (right.type == TNever && isNumeric(left.type))
 			right = coerce(right, left.type, "arithmetic operand", "E1009");
-		if (add && (isStringConvertible(left.type) || isStringConvertible(right.type))) {
+		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
 			left = stringify(left);
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
@@ -2103,9 +2118,22 @@ class ExpressionTyper {
 			default: false;
 		};
 
+	/** A `+` with an operand of this type concatenates: a String, or a nullable one. */
+	function isStringOperand(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): isStringConvertible(inner);
+			default: isStringConvertible(type);
+		};
+
 	function stringify(value:TypedExpression):TypedExpression {
 		if (isStringConvertible(value.type))
 			return coerce(value, TString, "string concatenation", "E1010");
+		// A Null<String> is the same reference as a String, and concatenation itself writes null as "null".
+		switch value.type {
+			case TNullable(inner) if (sameType(inner, TString)):
+				return new TypedExpression(TCast(value), TString, value.span);
+			default:
+		}
 		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
 			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");

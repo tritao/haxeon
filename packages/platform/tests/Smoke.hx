@@ -20,6 +20,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import NativeKitEventDecoderTests;
 import NativeKitHttpEventTests;
+import NativeKitFileWatchTests;
 
 class Smoke {
 	static function main():Int {
@@ -40,6 +41,8 @@ class Smoke {
 		initOptions.set_api_version(NativeKitConstants.NK_API_VERSION);
 		initOptions.set_event_queue_capacity(32);
 		var runtime = Runtime.startNative(initOptions);
+		if (!haxeon.ProfileNativeTrace.install("nativekit"))
+			return 28;
 		if (runtime.isDisposed())
 			return 2;
 		// Counted inputs project their count from the managed array or buffer.
@@ -251,6 +254,7 @@ class Smoke {
 
 		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == -3 && NativeKit.nk_last_error() != null;
 		var httpEventOk = NativeKitHttpEventTests.run(events);
+		var fileWatchOk = NativeKitFileWatchTests.run(events);
 		var lifetimeOk = NativeKitLifetimeTests.run(events);
 		var shutdownObserverError = false;
 		try runtime.dispose() catch (error:Dynamic) shutdownObserverError = Std.string(error) == "shutdown observer";
@@ -278,6 +282,8 @@ class Smoke {
 			return 8;
 		if (!httpEventOk)
 			return 26;
+		if (!fileWatchOk)
+			return 27;
 		return 42;
 	}
 

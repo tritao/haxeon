@@ -32,6 +32,7 @@ class Runtime {
 			configured.set_api_version(NativeKit.nk_api_version());
 		}
 		NativeKit.nk_init_checked(configured);
+		haxeon.ProfileNativeTrace.install("nativekit");
 		return new Runtime();
 	}
 

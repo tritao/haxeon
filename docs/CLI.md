@@ -79,7 +79,19 @@ For function breakpoints during debugging, set `"inline": false` in `haxeon.json
 compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
 the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
 
-On Linux and macOS, `run --watch` rebuilds after edits to resolved package
+`run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
+capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
+`SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `instrument`, which
+runs the instrumented build. `--profile-output PATH` names the `.hlpc` file (with `--watch`, the directory that holds one
+capture per launch) and implies `--profile`. `--profile-start`, `--profile-duration`, `--profile-max-size`,
+`--profile-window` and `--profile-min-call` control what is recorded and exported; [PROFILING.md](PROFILING.md) lists
+them.
+
+```sh
+./scripts/haxeon run --profile=sampling -- --verbose
+```
+
+On Linux, macOS and Windows, `run --watch` rebuilds after edits to resolved package
 sources and relaunches the host app after a successful build. Haxe source edits
 use the compiler-only build path; FFI, manifest, and native source edits use the
 full project build. A failed build leaves the running app open. Runtime output
@@ -102,6 +114,14 @@ The output path must be separate from any ordinary app build output.
 ./scripts/haxeon run --watch --live --project path/to/live.json \
   --output build/host/live.hl -- --verbose
 ```
+
+> **Warning: a watch session keeps the compiler it started with.** `run --watch` picks its compiler worker
+> once, at the first build, and logs it as `haxeon: compiler worker version <hash> (kept for this watch
+> session)`. Later rebuilds reuse that worker even if Haxeon's own compiler sources (`src/`, `stdlib/`)
+> change, and nothing reports it. **After changing the compiler, restart the watch session** before you judge
+> whether the change worked. This is deliberate: a live app can only be patched by the worker that holds its
+> patch history, and not re-checking the compiler sources saves about 0.3 s per rebuild. See
+> [LIVE_PATCHING.md](LIVE_PATCHING.md#artifact-builds-and-live-sessions).
 
 Host builds resolve local path dependencies declared by package name. A
 dependency can provide Haxe sources and optional C sources; C sources are
@@ -170,16 +190,17 @@ Native implementation changes do not invalidate independently compiled bytecode;
 Haxe sources, FFI interfaces/projections, compiler sources, and the standard
 library still do. Failed native builds still block the project build and launch.
 
-On Linux and macOS, host builds reuse a private compiler worker between CLI
-invocations. Small source edits retain semantic compiler state; changes to the
+On Linux, macOS and Windows, host builds reuse a private compiler worker between
+CLI invocations (on Windows, only the compiled CLI; `scripts/haxeon.cmd` interprets
+the CLI and compiles one-shot). Small source edits retain semantic compiler state; changes to the
 source manifest, roots, defines, or FFI configuration reset it. Compiler or
 standard-library changes select a fresh worker. Workers exit after
 `HAXEON_COMPILER_IDLE_SECONDS` (default 90) without a request. Every build root
-shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`, or
-`HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
+shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`,
+`%LOCALAPPDATA%\haxeon\compiler` on Windows, or `HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
 logs, so the resident limits below apply to the whole machine. Set
 `HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
-as a HashLink program compiled once per compiler version (Windows interprets it). Windows, explicit `--self-hosted` builds, and unavailable workers
+as a HashLink program compiled once per compiler version (Windows interprets it). Explicit `--self-hosted` builds and unavailable workers
 retain the one-shot path. The normal CLI's local fingerprint checks run before
 contacting a worker, so unchanged bytecode is still skipped entirely.
 

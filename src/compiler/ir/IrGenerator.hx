@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
@@ -206,9 +207,9 @@ class IrGenerator {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
-			?reflectableObjects:Array<String>):IrProgram
+			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache):IrProgram
 		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives,
-			reflectableObjects);
+			reflectableObjects, staticChecks);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;

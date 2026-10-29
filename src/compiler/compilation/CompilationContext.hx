@@ -35,6 +35,9 @@ class CompilationContext {
 	public final moduleId:Bytes;
 	public final genericSpecializations:GenericSpecializationRegistry;
 
+	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
+	public final frontendRestarts:Array<String> = [];
+
 	public var assembler(get, set):HlModuleAssembler;
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;
@@ -106,6 +109,21 @@ class CompilationContext {
 		if (option != "0" && option != "1")
 			throw "haxeon-inline must be 0 or 1";
 		return option == "1";
+	}
+
+	/**
+	 * The functions an instrumented build probes, or null for an ordinary build. `haxeon-instrument=1` turns
+	 * instrumentation on; `haxeon-instrument-include` and `haxeon-instrument-exclude` hold comma-separated patterns.
+	 */
+	public function instrumentScope():Null<compiler.ir.IrInstrumentation.IrInstrumentationScope> {
+		var option = owner.defines.get("haxeon-instrument");
+		if (option == null || option == "0")
+			return null;
+		if (option != "1")
+			throw "haxeon-instrument must be 0 or 1";
+		return
+			new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-include")),
+			compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-exclude")));
 	}
 
 	public function irCNatives():Array<IrCNative>

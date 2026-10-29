@@ -55,6 +55,48 @@ class FfiManifest {
 	}
 }
 
+/**
+ * What an instrumented build (`haxeon run --profile=instrument`) probes, from the project's `"instrument"` object.
+ * Haxe patterns name functions (`Math`, `haxe.ds.*`); native patterns are globs over source paths relative to the
+ * project (`**` crosses directories). Boundary hooks time calls into code the build does not compile.
+ */
+class InstrumentManifest {
+	public final haxeInclude:Array<String>;
+	public final haxeExclude:Array<String>;
+	public final nativeInclude:Array<String>;
+	public final nativeExclude:Array<String>;
+
+	/** Which imported system calls are hooked: "blocking" (the curated set), "none", or that set plus `boundaryExtra`. */
+	public final boundaryImports:String;
+
+	/** Further imports to hook, as `module!function` (`kernel32.dll!Sleep`). */
+	public final boundaryExtra:Array<String>;
+
+	public final dxgi:Bool;
+	public final d3d11:Bool;
+	public final vulkan:Bool;
+
+	/** Calls shorter than this many microseconds are dropped as they exit unless a call inside them is kept; 0 keeps every call. */
+	public final minCallMicros:Float;
+
+	public static inline final DEFAULT_MIN_CALL_MICROS = 1.0;
+
+	public function new(?haxeInclude:Array<String>, ?haxeExclude:Array<String>, ?nativeInclude:Array<String>, ?nativeExclude:Array<String>,
+			boundaryImports:String = "blocking", ?boundaryExtra:Array<String>, dxgi:Bool = true, d3d11:Bool = true, vulkan:Bool = true,
+			minCallMicros:Float = DEFAULT_MIN_CALL_MICROS) {
+		this.haxeInclude = haxeInclude == null ? ["*"] : haxeInclude.copy();
+		this.haxeExclude = haxeExclude == null ? [] : haxeExclude.copy();
+		this.nativeInclude = nativeInclude == null ? ["**"] : nativeInclude.copy();
+		this.nativeExclude = nativeExclude == null ? [] : nativeExclude.copy();
+		this.boundaryImports = boundaryImports;
+		this.boundaryExtra = boundaryExtra == null ? [] : boundaryExtra.copy();
+		this.dxgi = dxgi;
+		this.d3d11 = d3d11;
+		this.vulkan = vulkan;
+		this.minCallMicros = minCallMicros;
+	}
+}
+
 /** Parsed package metadata. Paths remain package-relative until acquisition. */
 class PackageManifest {
 	public final version:Int;
@@ -83,10 +125,13 @@ class PackageManifest {
 	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
+	/** The instrumented build's scope; the defaults instrument everything. */
+	public final instrument:InstrumentManifest;
+
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>,
 			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String, defines:Array<String>, outputDir:String,
 			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String,
-			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>) {
+			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>, ?instrument:InstrumentManifest) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -106,6 +151,7 @@ class PackageManifest {
 		this.androidApplicationId = androidApplicationId;
 		this.androidAppLabel = androidAppLabel;
 		this.compatibility = compatibility;
+		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
 	}
 
 	public static function parse(path:String, content:String):PackageManifest {
@@ -226,7 +272,35 @@ class PackageManifest {
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots, scopeSourceRoots, workspace, target, defines,
-			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled);
+			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled, parseInstrument(raw, path));
+	}
+
+	static function parseInstrument(raw:Dynamic, path:String):Null<InstrumentManifest> {
+		var data:Dynamic = Reflect.field(raw, "instrument");
+		if (data == null)
+			return null;
+		if (!isObject(data))
+			throw '$path "instrument" must be an object';
+		function section(name:String):Dynamic {
+			var value:Dynamic = Reflect.field(data, name);
+			if (value != null && !isObject(value))
+				throw '$path "instrument.$name" must be an object';
+			return value == null ? {} : value;
+		}
+		var haxe = section("haxe"),
+			native = section("native"),
+			boundary = section("boundary"),
+			context = '$path instrument',
+			imports = optionalString(boundary, "imports", "blocking", context);
+		if (imports != "blocking" && imports != "none")
+			throw '$path "instrument.boundary.imports" must be "blocking" or "none"';
+		var minCall:Dynamic = Reflect.field(data, "minCallMicros");
+		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall : Float) < 0 || (minCall : Float) > 4000000))
+			throw '$path "instrument.minCallMicros" must be a number from 0 to 4000000';
+		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]), stringArray(haxe, "exclude", context, []),
+			stringArray(native, "include", context, ["**"]), stringArray(native, "exclude", context, []), imports,
+			stringArray(boundary, "extra", context, []), optionalBool(boundary, "dxgi", true, context), optionalBool(boundary, "d3d11", true, context),
+			optionalBool(boundary, "vulkan", true, context), minCall == null ? InstrumentManifest.DEFAULT_MIN_CALL_MICROS : (minCall : Float));
 	}
 
 	static function isObject(value:Dynamic):Bool

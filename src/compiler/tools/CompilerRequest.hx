@@ -28,6 +28,12 @@ typedef CompilerRequest = {
 	 */
 	final live:Bool;
 
+	/**
+	 * Where `output` is published when the compile server stages it under a temporary name. A live session that starts
+	 * without history resumes the module published there, not the staged copy.
+	 */
+	final ?publishedOutput:String;
+
 	final exports:Array<String>;
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;

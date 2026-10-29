@@ -31,11 +31,12 @@ typedef BackendAssemblyResult = {
 
 /** Plans and assembles one IR candidate for the HashLink backend. */
 class BackendAssembly {
-	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, token:Null<CancellationToken>):BackendAssemblyResult {
+	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
+			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var nextAbi = RuntimeAbi.describe(ir), // Patch planning describes what a running module must do to adopt this build. Without live patching
 		// there is no running module, and the plan would only mix session history into the build.
-			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi) : PatchDecision.Patch,
+			decision = context.livePatching ? PatchPlanner.plan(context.publishedAbi, nextAbi, !context.isWasmTarget()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -48,12 +49,11 @@ class BackendAssembly {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null, null,
-			true) : context.compiledOnce
+		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? new HlModuleAssembler(CompilationContext.copyIndices(context.assembler.cache.stableIds)) : context.assembler.copy();
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision);
+		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated);
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		attachSourceSnapshots(context, assembly.module);
@@ -66,8 +66,8 @@ class BackendAssembly {
 		var patchBytes = reloadReasons.length > 0
 			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
-				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.revision - 1, assembly.revision, assembly.baseInts,
-				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes);
+				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
+				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals);
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
 			assembly: assembly,

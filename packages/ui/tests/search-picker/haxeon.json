@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "package": { "name": "haxeon-ui-search-picker-tests" },
+  "entry": "SearchPickerTests",
+  "sourceRoots": ["."],
+  "dependencies": { "haxeon-ui": { "path": "../.." } },
+  "target": "host",
+  "outputDir": "build"
+}

@@ -1,0 +1,1 @@
+{"version":1,"package":{"name":"haxeon-combobox-tests"},"entry":"ComboBoxTests","sourceRoots":["."],"scopeSourceRoots":false,"dependencies":{"haxeon-ui":{"path":"../.."}},"target":"host","outputDir":"build"}

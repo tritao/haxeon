@@ -6,7 +6,9 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlOpcodeSchema;
 import compiler.hl.HlType;
+import compiler.hl.patch.HlPatch.HlPatchAddedFunction;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
+import compiler.hl.patch.HlPatch.HlPatchGlobal;
 import compiler.hl.patch.HlPatch.HlPatchInstruction;
 
 /** Strict HLP decoder used as the Haxe-side oracle for native patch validation. */
@@ -26,7 +28,8 @@ class HlPatchReader {
 				throw "Invalid patch revision range";
 			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
 				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [],
-				haveDebug = false, haveSnapshots = false;
+				haveDebug = false, haveSnapshots = false, haveAdded = false, addedFunctions:Array<HlPatchAddedFunction> = [], haveGlobals = false,
+				baseGlobals = 0, globalPrefixHash = 0, globals:Array<HlPatchGlobal> = [];
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -123,6 +126,30 @@ class HlPatchReader {
 							seenHashes.set(sourceHash, true);
 							sourceSnapshots.push({sourceHash: sourceHash, content: content});
 						}
+					case 5:
+						if (haveAdded)
+							throw "Duplicate HLP added functions section";
+						haveAdded = true;
+						for (_ in 0...readUnsigned(input)) {
+							var added:HlPatchAddedFunction = {
+								stableId: readUnsigned(input),
+								functionIndex: readUnsigned(input),
+								type: readIndex(input),
+								name: input.readString(readUnsigned(input))
+							};
+							for (other in addedFunctions)
+								if (other.stableId == added.stableId || other.functionIndex == added.functionIndex)
+									throw "Duplicate HLP added function";
+							addedFunctions.push(added);
+						}
+					case 6:
+						if (haveGlobals)
+							throw "Duplicate HLP globals section";
+						haveGlobals = true;
+						globalPrefixHash = input.readInt32();
+						baseGlobals = readUnsigned(input);
+						for (_ in 0...readUnsigned(input))
+							globals.push({type: readUnsigned(input), fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]});
 					default:
 						input.position = end;
 				}
@@ -131,6 +158,9 @@ class HlPatchReader {
 			}
 			if (baseInts < 0 || functions.length == 0)
 				throw "Missing required HLP section";
+			for (global in globals)
+				if (global.type >= baseTypes + types.length)
+					throw "Invalid HLP global type";
 			if (input.position != bytes.length)
 				throw "Trailing HLP data";
 			return {
@@ -141,15 +171,19 @@ class HlPatchReader {
 				baseFloats: baseFloats,
 				baseStrings: baseStrings,
 				baseTypes: baseTypes,
+				baseGlobals: baseGlobals,
 				intPrefixHash: intPrefixHash,
 				floatPrefixHash: floatPrefixHash,
 				stringPrefixHash: stringPrefixHash,
 				typePrefixHash: typePrefixHash,
+				globalPrefixHash: globalPrefixHash,
 				ints: ints,
 				floats: floats,
 				strings: strings,
 				types: types,
 				functions: functions,
+				addedFunctions: addedFunctions,
+				globals: globals,
 				debugFiles: debugFiles,
 				sourceSnapshots: sourceSnapshots
 			};

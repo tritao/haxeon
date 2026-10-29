@@ -122,7 +122,7 @@ class NativeInputAdapter {
 					pointerModifiers = 0;
 					heldModifierKeys = 0;
 					context.windowFocusLost();
-				}
+				} else context.windowFocusGained();
 				true;
 			case PlatformEvent.Key(eventSource, key, scancode, action, modifiers)
 				if (matches(eventSource)):

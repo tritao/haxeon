@@ -38,6 +38,7 @@ class SplitView implements View {
 	public final maximumExtent:Float;
 	public final dividerExtent:Float;
 	public final dividerVisualExtent:Float;
+	final dividerHairline:Bool;
 	public final onResize:Null<Float->Void>;
 	public final onCollapsedChanged:Null<Bool->Void>;
 	public final style:LayoutStyle;
@@ -72,6 +73,7 @@ class SplitView implements View {
 		this.dividerExtent = resolved.dividerExtent;
 		this.dividerVisualExtent = resolved.dividerVisualExtent == null ?
 			resolved.dividerExtent : resolved.dividerVisualExtent;
+		this.dividerHairline = resolved.dividerHairline;
 		this.extent = clamp(resolved.extent, minimumExtent, maximumExtent);
 		this.collapsed = resolved.collapsed;
 		this.onResize = resolved.onResize;
@@ -98,7 +100,7 @@ class SplitView implements View {
 			var leadingNode = context.withScope(new Key("leading"), function() {
 				return leading.build(context);
 			});
-			leadingPane.add(leadingNode);
+			leadingPane.add(paneContent(context, "leading-content", leadingNode));
 			root.add(leadingPane);
 
 			if (dividerExtent > 0.0) {
@@ -113,7 +115,34 @@ class SplitView implements View {
 					null, ["split-divider"]);
 				divider.states = dividerStates;
 				divider.computedStyle = dividerComputed;
-				if (dividerVisualExtent < dividerExtent) {
+				if (dividerHairline) {
+					var color = divider.layout.style.background;
+					divider.layout.style.background = Color.rgba(0, 0, 0, 0);
+					var lineStyle = new LayoutStyle();
+					lineStyle.width = horizontal ? LayoutAxis.fixed(dividerExtent) : LayoutAxis.stretch();
+					lineStyle.height = horizontal ? LayoutAxis.stretch() : LayoutAxis.fixed(dividerExtent);
+					var line = new RenderNode(context.id("divider-visual"), LayoutVisualKind.Custom, lineStyle);
+					line.hitTestSelf = false;
+					line.cachePolicy = haxeon.ui.core.CachePolicy.None;
+					line.onPaint(function(canvas, geometry) {
+						var density = context.environment.pixelDensity;
+						var transform = geometry.transform;
+						var scale = (horizontal ? transform.a : transform.d) * density;
+						if (scale == 0) return;
+						var center = horizontal ? geometry.width / 2 : geometry.height / 2;
+						var device = (horizontal ? transform.transformedX(geometry.x + center, geometry.y) :
+							transform.transformedY(geometry.x, geometry.y + center)) * density;
+						var start = center + (Math.round(device) - device) / scale;
+						var thickness = 1.0 / Math.abs(scale);
+						// The border primitive uses a solid device mesh, avoiding path-fill
+						// antialias fringes. A tiny outset survives float conversion before
+						// its inward pixel snap; the resulting narrow rectangle is one pixel.
+						var epsilon = thickness * 0.001;
+						canvas.drawRectBorder(horizontal ? new haxeon.ui.Rect(start - epsilon, 0, thickness + 2 * epsilon, geometry.height) :
+							new haxeon.ui.Rect(0, start - epsilon, geometry.width, thickness + 2 * epsilon), 0, color);
+					});
+					divider.add(line);
+				} else if (dividerVisualExtent < dividerExtent) {
 					var visualStyle = new LayoutStyle();
 					visualStyle.width = horizontal ? LayoutAxis.fixed(dividerVisualExtent) : LayoutAxis.grow();
 					visualStyle.height = horizontal ? LayoutAxis.grow() : LayoutAxis.fixed(dividerVisualExtent);
@@ -142,7 +171,22 @@ class SplitView implements View {
 				var dragState:State<SplitDragState> = context.state(divider.id,
 					new SplitDragState());
 				installDividerHandlers(divider, horizontal, dragState);
-				root.add(divider);
+				if (dividerHairline) {
+					// A zero-sized flow anchor marks the shared pane edge. Only the
+					// absolute hit target overlaps the panes; no resize gutter is reserved.
+					var anchorStyle = new LayoutStyle();
+					anchorStyle.width = horizontal ? LayoutAxis.percent(0) : LayoutAxis.grow();
+					anchorStyle.height = horizontal ? LayoutAxis.grow() : LayoutAxis.percent(0);
+					var anchor = new RenderNode(context.id("divider-anchor"), LayoutVisualKind.Box, anchorStyle);
+					anchor.hitTestSelf = false;
+					divider.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+					divider.layout.style.positionX = horizontal ? -dividerExtent / 2 : 0;
+					divider.layout.style.positionY = horizontal ? 0 : -dividerExtent / 2;
+					divider.layout.style.zIndex = 1;
+					divider.layout.style.clipToParent = false;
+					anchor.add(divider);
+					root.add(anchor);
+				} else root.add(divider);
 			}
 
 			var trailingPane = new RenderNode(context.id("trailing-pane"), LayoutVisualKind.Box,
@@ -151,7 +195,7 @@ class SplitView implements View {
 			var trailingNode = context.withScope(new Key("trailing"), function() {
 				return trailing.build(context);
 			});
-			trailingPane.add(trailingNode);
+			trailingPane.add(paneContent(context, "trailing-content", trailingNode));
 			root.add(trailingPane);
 			return root;
 		});
@@ -244,6 +288,19 @@ class SplitView implements View {
 	static function actionGranularity(event:UiEvent):Int {
 		var action:AccessibilityActionData = cast event.data;
 		return action != null && action.granularity > 1 ? action.granularity : 1;
+	}
+
+	/** Keep nested floating content in its pane's layer, below the resize chrome. */
+	function paneContent(context:BuildContext, key:String, content:RenderNode):RenderNode {
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.grow();
+		style.height = LayoutAxis.grow();
+		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.clipToParent = true;
+		var root = new RenderNode(context.id(key), LayoutVisualKind.Box, style);
+		root.hitTestSelf = false;
+		root.add(content);
+		return root;
 	}
 
 	function paneStyle(horizontal:Bool, resizable:Bool, paneExtent:Float):LayoutStyle {

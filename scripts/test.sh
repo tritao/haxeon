@@ -132,6 +132,10 @@ run_wasm_stages() {
 		run_timed static-init-order-wasm bash "$root_dir/tests/integration/test-static-init-order-wasm.sh"
 		run_timed structural-iteration-wasm bash "$root_dir/tests/integration/test-structural-iteration-wasm.sh"
 		run_timed dynamic-string-wasm bash "$root_dir/tests/integration/test-dynamic-string-wasm.sh"
+		run_timed compiler-gaps-wasm bash "$root_dir/tests/integration/test-compiler-gaps-wasm.sh"
+		run_timed null-reassignment-wasm bash "$root_dir/tests/integration/test-null-reassignment-wasm.sh"
+		run_timed mixed-array-wasm bash "$root_dir/tests/integration/test-mixed-array-wasm.sh"
+		run_timed enum-typedef-wasm bash "$root_dir/tests/integration/test-enum-typedef-wasm.sh"
 		run_timed nullable-enum-pattern-wasm bash "$root_dir/tests/integration/test-nullable-enum-pattern-wasm.sh"
 		run_timed wasm-gc-wasmtime bash "$root_dir/scripts/test-wasm-gc-wasmtime.sh"
 	else
@@ -179,8 +183,30 @@ run_isolated_integration_group \
 	tests/integration/test-cxx-span.sh \
 	tests/integration/test-cxx-msvc-profile.sh
 run_timed profiler-disconnect-integration "$root_dir/tests/integration/test-profiler-disconnect.sh"
+run_timed profile-capture-integration "$root_dir/tests/integration/test-profile-capture.sh"
+run_timed profiler-min-call-integration "$root_dir/tests/integration/test-profiler-min-call.sh"
+run_timed profiler-excluded-catch-integration "$root_dir/tests/integration/test-profiler-excluded-catch.sh"
+run_timed profiler-recording-integration "$root_dir/tests/integration/test-profiler-recording.sh"
+run_timed profiler-wait-integration "$root_dir/tests/integration/test-profiler-wait.sh"
+run_timed profiler-fork-integration "$root_dir/tests/integration/test-profiler-fork.sh"
+run_timed profiler-nativekit-trace-integration "$root_dir/tests/integration/test-profiler-nativekit-trace.sh"
+run_timed profiler-pool-stall-integration "$root_dir/tests/integration/test-profiler-pool-stall.sh"
+run_timed profiler-reconnect-integration "$root_dir/tests/integration/test-profiler-reconnect.sh"
+run_timed profiler-perfetto-integration "$root_dir/tests/integration/test-profiler-perfetto.sh"
+run_timed profiler-native-instrument-integration "$root_dir/tests/integration/test-profiler-native-instrument.sh"
+run_timed profiler-boundary-thunk-integration "$root_dir/tests/integration/test-profiler-boundary-thunk.sh"
+run_timed profiler-boundary-integration "$root_dir/tests/integration/test-profiler-boundary.sh"
+run_timed profiler-mixed-stack-integration "$root_dir/tests/integration/test-profiler-mixed-stack.sh"
+run_timed process-pipes-integration "$root_dir/tests/integration/test-process-pipes.sh"
+run_timed profiler-span-ids-integration python3 "$root_dir/tests/integration/test-profiler-span-ids.py"
+run_timed profiler-report-integration python3 "$root_dir/tests/integration/test-profiler-report.py"
+run_timed profiler-spans-integration python3 "$root_dir/tests/integration/test-profiler-spans.py"
+run_timed hldump-integration python3 "$root_dir/tests/integration/test-hldump.py"
+run_timed fatal-stack-integration python3 "$root_dir/tests/integration/test-fatal-stack.py"
 run_timed stdout-buffering-integration python3 "$root_dir/tests/integration/test-stdout-buffering.py"
 run_timed process-output-capture-integration bash "$root_dir/tests/integration/test-process-output-capture.sh"
+
+run_timed dependent-projects "$root_dir/scripts/check-dependents.sh"
 
 wasm_status=0
 wait "$wasm_stages" || wasm_status=$?

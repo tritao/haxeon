@@ -1,8 +1,12 @@
 package compiler.semantic;
 
 /**
- * The names of the functions a lambda is compiled to: `$lambda:<enclosing>:<offset>`, where `<enclosing>` is the name of the
- * function or lambda it is written in and `<offset>` the position of the lambda in its source.
+ * The names of the functions a lambda is compiled to: `$lambda:<enclosing>:<identity>`, where `<enclosing>` is the name of the
+ * function or lambda it is written in and `<identity>` the one the parser gave it, `<member>#<ordinal>`: the class member or module
+ * function it is written in, and its position among the lambdas written directly in the same body. Code that moves around a
+ * lambda leaves its name alone, so a running module can adopt the edit as a patch; only adding or removing an earlier lambda in
+ * the same body renames it. The member keeps lambdas from different declarations apart when they compile into one function
+ * (field initializers into the class initializer or constructor).
  *
  * A lambda is a function of its own, but it is typed, cached and invalidated with the function it is written in, and the
  * stored state that refers to it (call graphs, purity records) is keyed by name. This is the one place that knows the
@@ -13,8 +17,8 @@ package compiler.semantic;
 class LambdaName {
 	static inline final PREFIX = "$lambda:";
 
-	public static function of(enclosing:String, offset:Int):String
-		return PREFIX + enclosing + ":" + offset;
+	public static function of(enclosing:String, identity:String):String
+		return PREFIX + enclosing + ":" + identity;
 
 	public static inline function is(name:String):Bool
 		return StringTools.startsWith(name, PREFIX);

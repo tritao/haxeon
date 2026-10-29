@@ -20,6 +20,8 @@ typedef struct realtime_child_process {
 	HANDLE process, job;
 	DWORD pid, exit_status;
 	CRITICAL_SECTION write_mutex;
+	/* Signalled when the writer has work: bytes queued or stdin to close. */
+	CONDITION_VARIABLE write_ready;
 	unsigned char *write_queue;
 	size_t write_length, write_inflight, write_capacity;
 	bool write_close_requested, write_failed, write_mutex_ready;
@@ -103,6 +105,7 @@ static void realtime_child_cleanup(void *value) {
 	if (p->write_mutex_ready) {
 		EnterCriticalSection(&p->write_mutex);
 		p->write_close_requested = true;
+		WakeConditionVariable(&p->write_ready);
 		LeaveCriticalSection(&p->write_mutex);
 	}
 	if (p->writer_thread != NULL) {
@@ -123,6 +126,8 @@ static void realtime_child_cleanup(void *value) {
 static DWORD WINAPI realtime_child_writer(void *value) {
 	realtime_child_process *p = value;
 	unsigned char buffer[16384];
+	/* Through HashLink, so a profiling session records the name even if the writer exits before its next thread list. */
+	hl_thread_set_name(hl_thread_current(), "haxeon.child.stdin");
 	for (;;) {
 		EnterCriticalSection(&p->write_mutex);
 		size_t amount = p->write_length < sizeof(buffer) ? p->write_length : sizeof(buffer);
@@ -149,13 +154,15 @@ static DWORD WINAPI realtime_child_writer(void *value) {
 			LeaveCriticalSection(&p->write_mutex);
 			continue;
 		}
-		bool stop = p->write_close_requested;
-		LeaveCriticalSection(&p->write_mutex);
-		if (stop) {
-			realtime_child_handle_close(&p->stdin_pipe);
-			return 0;
+		if (!p->write_close_requested) {
+			/* Nothing queued: wait for bytes or a close rather than polling. */
+			SleepConditionVariableCS(&p->write_ready, &p->write_mutex, INFINITE);
+			LeaveCriticalSection(&p->write_mutex);
+			continue;
 		}
-		Sleep(2);
+		LeaveCriticalSection(&p->write_mutex);
+		realtime_child_handle_close(&p->stdin_pipe);
+		return 0;
 	}
 }
 
@@ -428,6 +435,7 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	if (p->write_queue == NULL || !InitializeCriticalSectionAndSpinCount(&p->write_mutex, 4000)) {
 		realtime_child_cleanup(p); hl_error("Could not initialize process streaming pipes");
 	}
+	InitializeConditionVariable(&p->write_ready);
 	p->write_mutex_ready = true;
 	p->writer_thread = CreateThread(NULL, 0, realtime_child_writer, p, 0, NULL);
 	if (p->writer_thread == NULL) {
@@ -577,6 +585,7 @@ HL_PRIM int HL_NAME(__child_write)(realtime_child_process *p, realtime_bytes *by
 	if (accepted != 0) {
 		memcpy(p->write_queue + p->write_length, bytes->data + offset, accepted);
 		p->write_length += accepted;
+		WakeConditionVariable(&p->write_ready);
 	}
 	LeaveCriticalSection(&p->write_mutex);
 	return (int)accepted;
@@ -612,6 +621,7 @@ HL_PRIM void HL_NAME(__child_close_stdin)(realtime_child_process *p) {
 	if (p->write_mutex_ready) {
 		EnterCriticalSection(&p->write_mutex);
 		p->write_close_requested = true;
+		WakeConditionVariable(&p->write_ready);
 		LeaveCriticalSection(&p->write_mutex);
 	}
 #else

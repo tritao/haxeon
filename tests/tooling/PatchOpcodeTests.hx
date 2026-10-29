@@ -22,6 +22,24 @@ class PatchOpcodeTests {
 		run();
 
 	public static function run():Void {
+		function publication(base:Int, revision:Int):tools.LivePublication.LiveDescription
+			return {
+				revision: revision,
+				baseRevision: base,
+				moduleIdentity: "module",
+				requiresReload: false,
+				patchAvailable: true,
+				changedFunctions: [],
+				identities: []
+			};
+		var current = publication(3, 4);
+		if (!tools.LivePublication.canPatch(current, publication(4, 5)))
+			throw "A matching publication base was rejected";
+		if (tools.LivePublication.canPatch(current, publication(5, 6)))
+			throw "A skipped runtime revision was allowed to patch";
+		if (tools.LivePublication.canPatch(current, publication(-1, 5)))
+			throw "An unversioned legacy publication was allowed to patch";
+
 		var fixtures:Array<{instruction:HlInstruction, opcode:Int, operands:Array<Int>}> = [
 			{instruction: Move(0, 1), opcode: 0, operands: [0, 1]},
 			{instruction: LoadInt(0, 128), opcode: 1, operands: [0, 128]},
@@ -63,6 +81,10 @@ class PatchOpcodeTests {
 			{instruction: ToSFloat(0, 1), opcode: 60, operands: [0, 1]},
 			{instruction: ToInt(0, 1), opcode: 62, operands: [0, 1]},
 			{instruction: SafeCast(0, 1), opcode: 63, operands: [0, 1]},
+			{instruction: UnsafeCast(0, 1), opcode: 64, operands: [0, 1]},
+			{instruction: Unref(0, 1), opcode: 88, operands: [0, 1]},
+			{instruction: Setref(0, 1), opcode: 89, operands: [0, 1]},
+			{instruction: RefOffset(0, 1, 2), opcode: 97, operands: [0, 1, 2]},
 			{instruction: ToVirtual(0, 1), opcode: 65, operands: [0, 1]},
 			{instruction: Label("other"), opcode: 66, operands: []},
 			{instruction: Return(0), opcode: 67, operands: [0]},
@@ -117,6 +139,7 @@ class PatchOpcodeTests {
 				throw 'Missing patch opcode fixture for $name';
 		testMalformed();
 		testRejectedTransactions();
+		testGlobalPatches();
 		Sys.println('PASS: ${HaxeType.getEnumConstructs(HlInstruction).length} instruction variants covered by both patch decoders; malformed patches rejected');
 	}
 
@@ -236,6 +259,47 @@ class PatchOpcodeTests {
 			if (!rejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 				throw 'Invalid ${HaxeType.enumConstructor(op)} changed live state';
 		}
+		// A patch cannot describe a struct's layout or a method's signature, so appending either type must be rejected:
+		// staged, a struct would have no object data, which the next patch's type hash dereferences.
+		for (kind in [HashLinkType.Struct, HashLinkType.Method]) {
+			code.types.push(Simple(kind));
+			code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
+			var typeBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),
+				typeRejected = false;
+			code.types.pop();
+			try {
+				Runtime.patchSet(loaded, new PatchSet(1, 2, typeBytes, [70000]));
+			} catch (error:RuntimeError) {
+				if (error.status != RuntimeStatus.Incompatible)
+					throw error;
+				typeRejected = true;
+			}
+			if (!typeRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
+				throw 'An appended type of kind $kind changed live state';
+		}
+		// Each path ends its trap, but the end-trap lies after the handler, outside the try region the JIT tracks in
+		// instruction order, where emitting it aborts the process.
+		var trapPastHandler:Array<HlInstruction> = [
+			Trap(0, "handler"),
+			Jump("after"),
+			Label("handler"),
+			Return(0),
+			Label("after"),
+			EndTrap(0),
+			Return(0)
+		];
+		code.functions = [new HlFunction(2, 0, [1], trapPastHandler)];
+		var trapBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),
+			trapRejected = false;
+		try {
+			Runtime.patchSet(loaded, new PatchSet(1, 2, trapBytes, [70000]));
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible)
+				throw error;
+			trapRejected = true;
+		}
+		if (!trapRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
+			throw "An end-trap outside its try region changed live state";
 		code.functions = [
 			new HlFunction(2, 0, [1], [LoadInt(0, 0), GlobalSet(0, 0), GlobalGet(0, 0), Return(0)])
 		];
@@ -244,5 +308,200 @@ class PatchOpcodeTests {
 		if (Runtime.liveRevision(loaded) != 2 || Runtime.callInt(loaded, 70000) != 42)
 			throw "Valid patch did not recover after rejected transactions";
 		Runtime.dispose(loaded);
+	}
+
+	// A module with one String-like constant global: an object of a bytes pointer and an int length, as HashLink's String is.
+	// Patches add further constants of that type, reading their strings and lengths from the tables they extend.
+	static function stringModule():HlCode {
+		var code = new HlCode();
+		code.ints = [42, 5];
+		code.strings = ["String", "bytes", "length", "hello"];
+		code.types = [
+			Simple(HashLinkType.Void),
+			Simple(HashLinkType.I32),
+			Function([], 1),
+			Simple(HashLinkType.Bytes),
+			Object(0, -1, 0, [{name: 1, type: 3}, {name: 2, type: 1}], [], [])
+		];
+		code.globals = [4];
+		code.constants = [{global: 0, fields: [3, 1]}];
+		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
+		return code;
+	}
+
+	/**
+	 * A patch to the module after `existing` earlier patches each added one String constant: it adds `added` more, whose
+	 * lengths are 100, 101, ... in order, and returns the length of global `read`.
+	 */
+	static function stringsPatch(existing:Int, added:Int, read:Int, ?customize:HlCode->Void, ?revision:Int):{code:HlCode, bytes:HaxeBytes} {
+		var code = stringModule();
+		for (i in 0...existing + added) {
+			code.ints.push(100 + i);
+			code.strings.push('literal$i');
+			code.globals.push(4);
+			code.constants.push({global: 1 + i, fields: [code.strings.length - 1, code.ints.length - 1]});
+		}
+		code.functions = [new HlFunction(2, 0, [1, 4], [GlobalGet(1, read), FieldGet(0, 1, 1), Return(0)])];
+		if (customize != null)
+			customize(code);
+		var baseRevision = revision != null ? revision : existing > 0 ? 2 : 1;
+		return {
+			code: code,
+			bytes: HlPatchWriter.encode(code, HaxeBytes.alloc(16), [0], [0 => 70000], baseRevision, baseRevision
+				+ 1, 2
+				+ existing, 0, 4
+				+ existing, 5, null,
+				null, 1
+				+ existing)
+		};
+	}
+
+	static function loadStrings():runtime.LoadedModule
+		return Runtime.load(HlWriter.encode(stringModule()), HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
+
+	static function readIndexAt(bytes:HaxeBytes, position:Int):{value:Int, next:Int} {
+		var first = bytes.get(position);
+		if (first & 0x80 == 0)
+			return {value: first, next: position + 1};
+		if (first & 0x40 == 0)
+			return {value: bytes.get(position + 1) | ((first & 31) << 8), next: position + 2};
+		return {
+			value: (bytes.get(position + 1) << 16) | (bytes.get(position + 2) << 8) | bytes.get(position + 3) | ((first & 31) << 24),
+			next: position + 4
+		};
+	}
+
+	/** The patch with its globals section (tag 6) written twice. */
+	static function withGlobalsTwice(bytes:HaxeBytes):HaxeBytes {
+		var base = readIndexAt(bytes, 20),
+			revision = readIndexAt(bytes, base.next),
+			count = readIndexAt(bytes, revision.next),
+			position = count.next,
+			sectionStart = -1,
+			sectionEnd = -1;
+		for (_ in 0...count.value) {
+			var start = position,
+				tag = bytes.get(position),
+				length = readIndexAt(bytes, position + 1);
+			position = length.next + length.value;
+			if (tag == 6) {
+				sectionStart = start;
+				sectionEnd = position;
+			}
+		}
+		var out = new BytesOutput();
+		out.write(bytes.sub(0, revision.next));
+		index(out, count.value + 1);
+		out.write(bytes.sub(count.next, bytes.length - count.next));
+		out.write(bytes.sub(sectionStart, sectionEnd - sectionStart));
+		return out.getBytes();
+	}
+
+	/** Applies the patch and reports whether the module turned it away; a module that did must be exactly as it was. */
+	static function turnedAway(loaded:runtime.LoadedModule, baseRevision:Int, bytes:HaxeBytes):Bool {
+		var revision = Runtime.liveRevision(loaded),
+			result = Runtime.callInt(loaded, 70000);
+		try {
+			Runtime.patchSet(loaded, new PatchSet(baseRevision, baseRevision + 1, bytes, [70000]));
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible)
+				throw error;
+			if (Runtime.liveRevision(loaded) != revision || Runtime.callInt(loaded, 70000) != result)
+				throw "A rejected patch changed the module";
+			return true;
+		}
+		return false;
+	}
+
+	static function testGlobalPatches():Void {
+		var valid = stringsPatch(0, 1, 1);
+		var decoded = HlPatchReader.decode(valid.bytes);
+		Runtime.inspectPatch(valid.bytes);
+		if (decoded.baseGlobals != 1
+			|| decoded.globals.length != 1
+			|| decoded.globals[0].type != 4
+			|| decoded.globals[0].fields.join(",") != "4,2")
+			throw "The globals section decoded to the wrong constants";
+		for (length in 0...valid.bytes.length)
+			rejectBytes(valid.bytes.sub(0, length), 'truncated globals patch at $length');
+		rejectBytes(withGlobalsTwice(valid.bytes), "duplicate globals section");
+
+		// The added global holds a String the patched function reads, built before the code can run.
+		var loaded = loadStrings();
+		Runtime.patchSet(loaded, new PatchSet(1, 2, valid.bytes, [70000]));
+		if (Runtime.liveRevision(loaded) != 2 || Runtime.callInt(loaded, 70000) != 100)
+			throw "A patch-added String constant was not readable by the patched function";
+		// Later patches see the added global as the module's own: this one reads past it into two more.
+		var stacked = stringsPatch(1, 2, 3);
+		Runtime.patchSet(loaded, new PatchSet(2, 3, stacked.bytes, [70000]));
+		if (Runtime.liveRevision(loaded) != 3 || Runtime.callInt(loaded, 70000) != 102)
+			throw "A patch building on an earlier patch's globals did not apply";
+		// A global a patch added holds a constant that code reads without a barrier, so code that assigns it is rejected.
+		var assigning = stringsPatch(3, 0, 0, code -> code.functions = [
+			new HlFunction(2, 0, [1, 4], [GlobalGet(1, 0), GlobalSet(1, 1), LoadInt(0, 0), Return(0)])
+		], 3);
+		if (!turnedAway(loaded, 3, assigning.bytes))
+			throw "Code assigning a global that a patch added should be rejected";
+		Runtime.dispose(loaded);
+
+		// Each defect is turned away without changing the module, which then takes the good patch.
+		var defects:Array<{name:String, bytes:HaxeBytes}> = [
+			{
+				name: "base globals that disagree with the module",
+				bytes: HlPatchWriter.encode(valid.code, HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2, 2, 0, 4, 5, null, null, 0)
+			},
+			{
+				name: "a prefix hash from other global types",
+				bytes: stringsPatch(0, 1, 1, code -> {
+					code.globals[0] = 1;
+					code.constants.shift();
+				}).bytes
+			},
+			{name: "a global of a type the module lacks", bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 99).bytes},
+			{name: "a global that is not an object", bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 1).bytes},
+			{name: "a string index past the strings", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [99, 2]}).bytes},
+			{name: "an int index past the ints", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [4, 99]}).bytes},
+			{name: "fewer fields than the object has", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [4]}).bytes},
+			{name: "a read past the added globals", bytes: stringsPatch(0, 1, 2).bytes},
+			{name: "more globals than were reserved", bytes: stringsPatch(0, 16385, 1).bytes}
+		];
+		for (defect in defects) {
+			var target = loadStrings();
+			if (!turnedAway(target, 1, defect.bytes))
+				throw '${defect.name}: the patch was not rejected';
+			Runtime.patchSet(target, new PatchSet(1, 2, valid.bytes, [70000]));
+			if (Runtime.callInt(target, 70000) != 100)
+				throw '${defect.name}: the module did not take a good patch after the rejection';
+			Runtime.dispose(target);
+		}
+
+		// The reserve is the most a patch can add.
+		var full = loadStrings(), reserve = stringsPatch(0, 16384, 16384);
+		Runtime.patchSet(full, new PatchSet(1, 2, reserve.bytes, [70000]));
+		if (Runtime.callInt(full, 70000) != 100 + 16383)
+			throw "A patch adding the whole reserve should apply";
+		Runtime.dispose(full);
+
+		// A failure after the constants exist leaves the module as it was.
+		var failing = loadStrings();
+		for (stage in [1, 2, 3]) {
+			Runtime.injectPatchFailure(failing, stage);
+			if (!turnedAway(failing, 1, valid.bytes))
+				throw 'An injected failure at stage $stage did not reject the patch';
+		}
+		Runtime.patchSet(failing, new PatchSet(1, 2, valid.bytes, [70000]));
+		if (Runtime.callInt(failing, 70000) != 100)
+			throw "A patch did not apply after injected failures";
+		Runtime.dispose(failing);
+
+		// The writer will not describe a global that has no constant to give it a value.
+		var bare = false;
+		try {
+			stringsPatch(0, 1, 1, code -> code.constants.pop());
+		} catch (error:String) {
+			bare = true;
+		}
+		if (!bare)
+			throw "A global without a constant cannot travel in a patch";
 	}
 }

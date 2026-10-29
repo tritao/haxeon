@@ -86,6 +86,18 @@ class TextLayout extends NativeKitUIResource {
 			"textLayout.setColorRanges");
 	}
 
+	/** Physical x positions per codepoint boundary for a single-row terminal grid.
+	 * Empty positions restore natural spacing; text updates clear the projection.
+	 */
+	public function setGridPositions(positions:Array<Float>):Void {
+		if (positions == null) throw "Text grid positions cannot be null";
+		var bytes = haxe.io.Bytes.alloc(positions.length * 4);
+		for (index in 0...positions.length) bytes.setFloat(index * 4, positions[index]);
+		UiResult.check(NativeKitUI.nkui_text_layout_set_grid_positions(nativeHandle(), bytes),
+			"textLayout.setGridPositions");
+		clearGraphemeGeometry();
+	}
+
 	/** Re-shapes this retained layout with new content, width, or semantic styles. */
 	public function update(value:String, newWidth:Float, style:TextStyle,
 			paragraph:ParagraphStyle):Void {

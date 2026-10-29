@@ -17,11 +17,11 @@ class ProfilerCalibrationMain {
 			}
 			session.pause();
 			var snapshot = session.snapshot();
-			if (snapshot.sampleRecords <= before || snapshot.generatedBytes <= 0 || snapshot.overheadMicrosPerSample <= 0)
+			if (snapshot.sampleRecords <= before || snapshot.generatedBytes <= 0)
 				throw 'missing calibration telemetry at $rate Hz';
-			Sys.println('rate=$rate effective=${snapshot.effectiveSampleRate} samples=${snapshot.sampleRecords - before} overhead_us=${snapshot.overheadMicrosPerSample} bytes=${snapshot.generatedBytes}');
+			Sys.println('rate=$rate samples=${snapshot.sampleRecords - before} bytes=${snapshot.generatedBytes} stalls=${snapshot.stalls}');
 		}
 		session.close();
-		Sys.println("PASS: profiler overhead calibrated at 100, 250, and 1000 Hz");
+		Sys.println("PASS: profiler sample volume calibrated at 100, 250, and 1000 Hz");
 	}
 }

@@ -16,6 +16,20 @@ import haxeon.ui.widgets.text.TextField;
  * Domain validation, model mutation and undo history remain application-owned.
  */
 class StructuredPropertyEditor implements PropertyEditorExtension {
+	/** Optional host chooser; selected paths join the staged list until Apply. */
+	public var chooseItems:Null<(Array<String>->Void)->Void>;
+	/** Keep drafts when an inspector is rebuilt or changes category. */
+	public var retainDrafts:Bool = false;
+	public var onDraftChanged:Null<Void->Void>;
+	final retainedDrafts:Map<String, StructuredPropertyDrafts> = new Map();
+	public function hasDrafts():Bool {
+		for (draft in retainedDrafts) if (draft.dirty) return true;
+		return false;
+	}
+	public function discardDrafts():Void {
+		retainedDrafts.clear();
+		if (onDraftChanged != null) onDraftChanged();
+	}
 	final id:String;
 	final vector:Bool;
 	final record:Bool;
@@ -51,11 +65,13 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		var root:Dynamic = switch value { case Custom(_, data): data; default: new Array<Dynamic>(); };
 		var base = display(root);
 		var draftState:State<StructuredPropertyDrafts> = context.state(context.id(key + ":drafts"), new StructuredPropertyDrafts(base));
-		var local = draftState.value;
+		var local = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
+		if (local == null) local = new StructuredPropertyDrafts(base);
 		if (local.base != base) {
 			local = new StructuredPropertyDrafts(base);
 			draftState.update(local);
 		}
+		if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 		var drafts = local.drafts;
 		if (!vector) root = local.current;
 		function candidate():Dynamic {
@@ -68,14 +84,29 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			}
 			return copy;
 		}
+		function changed():Void {
+			try { local.dirty = display(candidate()) != base; } catch (_:Dynamic) { local.dirty = true; }
+			draftState.update(local);
+			if (onDraftChanged != null) onDraftChanged();
+			context.commands.refresh();
+		}
 		function commit():Void {
-			try { apply(Custom(id, candidate())); }
+			try {
+				var next = candidate();
+				apply(Custom(id, next));
+				var saved = descriptor.readValue(context.commandContext);
+				if (switch saved { case Custom(_, data): same(data, next); default: false; }) {
+					local.dirty = false;
+					if (retainDrafts) retainedDrafts.remove(descriptor.id);
+				}
+				if (onDraftChanged != null) onDraftChanged();
+			}
 			catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
 		}
 		function stage(copy:Dynamic):Void {
 			if (vector) apply(Custom(id, copy));
 			else {
-				local.current = copy; drafts.clear(); draftState.update(local);
+				local.current = copy; drafts.clear(); changed();
 				context.commands.refresh();
 			}
 		}
@@ -87,7 +118,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			try { var copy = candidate(); var items:Array<Dynamic> = cast at(copy, path); edit(items); stage(copy); }
 			catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
 		}
-		function leaf(path:Array<String>, item:Dynamic, compact:Bool = false, component:String = null):View {
+		function leaf(path:Array<String>, item:Dynamic, compact:Bool = false, component:String = null, inlineField:Bool = false):View {
 			var address = haxe.Json.stringify(path), draftKey = address;
 			var label = component == null ? descriptor.label + " " + (vector && path.length == 1 ?
 				(Std.parseInt(path[0]) < 4 ? ["X", "Y", "Z", "W"][Std.parseInt(path[0])] : Std.string(path[0])) : "item " + path.join(".")) :
@@ -97,11 +128,12 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			}
 			var initial = Std.isOfType(item, String) ? (cast item:String) : haxe.Json.stringify(item);
 			var field = new TextField("item:" + address, drafts.exists(draftKey) ? drafts.get(draftKey) : initial,
-				text -> { drafts.set(draftKey, text); draftState.update(local); }, compact ? new LayoutStyle() : style(), label);
+				text -> { drafts.set(draftKey, text); changed(); }, compact ? new LayoutStyle() : style(), label);
 			field.enabled = enabled;
 			field.onSubmit = text -> {
-				drafts.set(draftKey, text); draftState.update(local); commit();
+				drafts.set(draftKey, text); changed(); commit();
 			};
+			if (inlineField) return field;
 			var displayLabel = compact ? component : label;
 			if (!compact && path.length > 0 && !~/^[0-9]+$/.match(path[path.length - 1])) displayLabel = path[path.length - 1];
 			return new Column("leaf:" + address, [new KeyedView("label", new Text(displayLabel)), new KeyedView("input", field)], style());
@@ -161,20 +193,39 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			var children:Array<KeyedView> = [];
 			for (index in 0...items.length) {
 				var childPath = path.concat([Std.string(index)]);
-				if (structure != null && !vector) children.push(new KeyedView("heading:" + index,
-					new Text(itemLabel.charAt(0).toUpperCase() + itemLabel.substr(1) + " " + (index + 1))));
-				children.push(new KeyedView("item:" + index, tree(childPath, items[index], itemStructure)));
+				var simple = !vector && (Std.isOfType(items[index], String) || Std.isOfType(items[index], Int) || Std.isOfType(items[index], Float));
+				var row:Array<KeyedView> = [];
+				if (simple) {
+					var numberStyle = new LayoutStyle(); numberStyle.width = LayoutAxis.fixed(24);
+					row.push(new KeyedView("number", new Text(Std.string(index + 1) + ".", numberStyle)));
+					row.push(new KeyedView("value", leaf(childPath, items[index], false, itemLabel + " " + (index + 1), true)));
+				} else {
+					if (structure != null && !vector) children.push(new KeyedView("heading:" + index,
+						new Text(itemLabel.charAt(0).toUpperCase() + itemLabel.substr(1) + " " + (index + 1))));
+					children.push(new KeyedView("item:" + index, tree(childPath, items[index], itemStructure)));
+				}
 				if (!vector) {
 					var actions:Array<KeyedView> = [];
-					function action(label:String, suffix:String, edit:Array<Dynamic>->Void, available:Bool):Void {
-						var button = new Button(label, null, () -> editList(path, edit),
+					function action(label:String, suffix:String, icon:haxeon.ui.icons.IconName, edit:Array<Dynamic>->Void, available:Bool):Void {
+						var buttonStyle = new LayoutStyle();
+						buttonStyle.width = LayoutAxis.fixed(28); buttonStyle.height = LayoutAxis.fixed(28);
+						buttonStyle.padding = new haxeon.ui.Insets(4, 4, 4, 4);
+						var button = new Button("", buttonStyle, () -> editList(path, edit),
 							"item:" + childPath.join(":") + ":" + suffix);
+						button.leadingIcon = icon; button.iconSize = 14;
 						button.accessibilityLabel = descriptor.label + " item " + childPath.join(".") + " " + label;
-						button.enabled = enabled && available; actions.push(new KeyedView(suffix, button));
+						button.enabled = enabled && available;
+						(simple ? row : actions).push(new KeyedView(suffix, button));
 					}
-					action("Remove", "remove", copy -> { copy.splice(index, 1); }, minimumLength == null || items.length > minimumLength);
-					action("Up", "up", copy -> { var previous = copy[index - 1]; copy[index - 1] = copy[index]; copy[index] = previous; }, index > 0);
-					children.push(new KeyedView("actions:" + index, new Row("actions", actions, style())));
+					action("Up", "up", haxeon.ui.icons.IconName.ArrowUp,
+						copy -> { var previous = copy[index - 1]; copy[index - 1] = copy[index]; copy[index] = previous; }, index > 0);
+					action("Remove", "remove", haxeon.ui.icons.IconName.Trash,
+						copy -> { copy.splice(index, 1); }, minimumLength == null || items.length > minimumLength);
+					if (!simple) children.push(new KeyedView("actions:" + index, new Row("actions", actions, style())));
+				}
+				if (simple) {
+					var rowStyle = style(); rowStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+					children.push(new KeyedView("item:" + index, new Row("item-row:" + index, row, rowStyle)));
 				}
 			}
 			if (!vector) {
@@ -189,16 +240,37 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		}
 		var children:Array<KeyedView> = [];
 		if (!vector) {
-			var applyButton = new Button("Apply " + descriptor.label, null, commit, "apply");
-			applyButton.enabled = enabled;
-			children.push(new KeyedView("apply", applyButton));
-			var revert = new Button(record ? "Revert record draft" : "Revert list draft", null, () -> {
-				draftState.update(new StructuredPropertyDrafts(base)); context.commands.refresh();
+			if (local.dirty) children.push(new KeyedView("unsaved", new Text("Unsaved changes")));
+			var applyButton = new Button("Apply", null, commit, "apply");
+			applyButton.accessibilityLabel = "Apply " + descriptor.label;
+			applyButton.enabled = enabled && local.dirty;
+			var revert = new Button("Revert", null, () -> {
+				local = new StructuredPropertyDrafts(base);
+				if (retainDrafts) retainedDrafts.set(descriptor.id, local);
+				draftState.update(local);
+				if (onDraftChanged != null) onDraftChanged();
+				context.commands.refresh();
 			}, "revert");
-			revert.enabled = enabled;
-			children.push(new KeyedView("revert", revert));
+			revert.accessibilityLabel = record ? "Revert record draft" : "Revert list draft";
+			revert.enabled = enabled && local.dirty;
+			children.push(new KeyedView("draft-actions", new Row("draft-actions", [
+				new KeyedView("apply", applyButton), new KeyedView("revert", revert)
+			], style())));
 		}
 		children.push(new KeyedView("items", tree(new Array<String>(), root, descriptor.structure)));
+		var choose = chooseItems;
+		if (!vector && choose != null) {
+			var browse = new Button("Choose files…", null, function() choose(function(paths) {
+				if (paths.length == 0) return;
+				try {
+					var copy:Array<Dynamic> = cast candidate();
+					for (path in paths) copy.push(path);
+					stage(copy);
+				} catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
+			}), "choose-files");
+			browse.enabled = enabled;
+			children.push(new KeyedView("choose-files", browse));
+		}
 		return new Column(key, children, style());
 	}
 	static function initial(structure:Null<PropertyStructure>):Dynamic {
@@ -231,6 +303,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 private class StructuredPropertyDrafts {
 	public final base:String;
 	public var current:Dynamic;
+	public var dirty:Bool = false;
 	public final drafts:Map<String, String> = new Map();
 	public function new(base:String) { this.base = base; current = haxe.Json.parse(base); }
 }

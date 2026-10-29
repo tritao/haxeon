@@ -111,6 +111,11 @@ typedef CompileResult = {
 	final functionIndices:Map<String, Int>;
 	final functionIds:Map<String, Int>;
 	final runtimeIdentity:Bytes;
+
+	/** No runtime publication is required; revision stays at the acknowledged baseline. */
+	final unchanged:Bool;
+
+	final baseRevision:Int;
 	final revision:Int;
 	final patchBytes:Null<Bytes>;
 	final metrics:CompileMetrics;
@@ -127,6 +132,7 @@ typedef CompileMetrics = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
+	final frontendRestarts:Array<String>;
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
 	final semanticCanonicalizationMs:Float;
@@ -720,6 +726,8 @@ class Compiler {
 				functionIndices: cached.functionIndices,
 				functionIds: cached.functionIds,
 				runtimeIdentity: cached.runtimeIdentity,
+				unchanged: true,
+				baseRevision: cached.revision,
 				revision: cached.revision,
 				patchBytes: null,
 				metrics: {
@@ -732,6 +740,7 @@ class Compiler {
 					graphParseMs: 0.0,
 					graphDependencyMs: 0.0,
 					graphInitializationMs: 0.0,
+					frontendRestarts: [],
 					semanticAssemblyMs: 0.0,
 					semanticAliasMs: 0.0,
 					semanticCanonicalizationMs: 0.0,

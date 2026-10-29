@@ -11,12 +11,13 @@ class IrValueTableCodec {
 	static inline final VERSION = 3;
 	public static inline final MAX_VALUES = 0x100000;
 
-	public static function encode(values:Array<IrValue>):HaxeBytes {
+	/** `named` false leaves out the names, which are for debugging and may record where a value's local was declared. */
+	public static function encode(values:Array<IrValue>, named:Bool = true):HaxeBytes {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRV");
 		output.writeByte(VERSION);
-		write(output, values);
+		write(output, values, named);
 		return output.getBytes();
 	}
 
@@ -38,7 +39,7 @@ class IrValueTableCodec {
 		}
 	}
 
-	public static function write(output:BytesOutput, values:Array<IrValue>):Void {
+	public static function write(output:BytesOutput, values:Array<IrValue>, named:Bool = true):Void {
 		if (values.length > MAX_VALUES)
 			throw "Too many IR values";
 		var ordered = values.copy();
@@ -51,7 +52,7 @@ class IrValueTableCodec {
 				throw "Duplicate or invalid IR value ID";
 			previous = id;
 			output.writeInt32(id);
-			writeString(output, value.name);
+			writeString(output, named ? value.name : "");
 			IrTypeCodec.writeType(output, value.type, 0);
 		}
 	}

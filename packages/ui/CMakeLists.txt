@@ -222,6 +222,19 @@ if(NK_BUILD_TESTS)
         NKUI_TEST_COLOR_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/NotoColorEmoji-Regular.ttf")
     target_link_libraries(nativekit_ui_text_engine_test PRIVATE nkui_skribidi nkui_sheenbidi)
     add_test(NAME nativekit_ui_text_engine COMMAND nativekit_ui_text_engine_test)
+    add_executable(nativekit_ui_system_fonts_test tests/system_fonts.cpp src/prepare/system_fonts.cpp)
+    target_include_directories(nativekit_ui_system_fonts_test PRIVATE src)
+    target_compile_definitions(nativekit_ui_system_fonts_test PRIVATE
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf"
+        NKUI_TEST_MONO_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexMono-Regular.ttf")
+    target_link_libraries(nativekit_ui_system_fonts_test PRIVATE nkui_skribidi nkui_sheenbidi)
+    if(TARGET PkgConfig::FONTCONFIG)
+        target_link_libraries(nativekit_ui_system_fonts_test PRIVATE PkgConfig::FONTCONFIG)
+        target_compile_definitions(nativekit_ui_system_fonts_test PRIVATE NKUI_HAS_FONTCONFIG=1)
+    elseif(APPLE)
+        target_link_libraries(nativekit_ui_system_fonts_test PRIVATE "-framework CoreText" "-framework CoreFoundation")
+    endif()
+    add_test(NAME nativekit_ui_system_fonts COMMAND nativekit_ui_system_fonts_test)
     add_executable(nativekit_ui_compositor_test
         tests/compositor.cpp
         src/compositor/compositor.cpp
@@ -413,6 +426,7 @@ if(NK_BUILD_TESTS)
         nativekit_ui_nanovg_recorder_test
         nativekit_ui_nanovg_path_test
         nativekit_ui_text_engine_test
+        nativekit_ui_system_fonts_test
         nativekit_ui_compositor_test
         nativekit_ui_frame_resources_test
         nativekit_ui_layout_engine_test
@@ -438,6 +452,13 @@ if(NK_BUILD_TESTS)
                 target_link_options(${target} PRIVATE -fsanitize=address,undefined)
             endif()
         endforeach()
+    endif()
+    # Windows finds DLLs on PATH, and NativeKit's DLLs build into their own directory; without it a test does not
+    # fail, it waits on a "nativekit.dll was not found" dialog.
+    if(WIN32 AND NK_BUILD_SHARED AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.22)
+        get_property(nkui_tests DIRECTORY PROPERTY TESTS)
+        set_tests_properties(${nkui_tests} PROPERTIES ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:NativeKit::nativekit>;PATH=path_list_prepend:$<TARGET_FILE_DIR:NativeKit::gpu>")
     endif()
 endif()
 
@@ -507,6 +528,12 @@ if(NK_BUILD_EXAMPLES)
                 COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-haxeon-framework.sh")
             set_tests_properties(nativekit_ui_framework_smoke PROPERTIES
                 LABELS "ui;haxe;framework"
+                TIMEOUT 120
+                ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
+            add_test(NAME nativekit_ui_tree_hover
+                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-tree-hover.sh")
+            set_tests_properties(nativekit_ui_tree_hover PROPERTIES
+                LABELS "ui;haxe;framework;performance"
                 TIMEOUT 120
                 ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
             if(NKUI_SHOWCASE_XVFB_RUN)

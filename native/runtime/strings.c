@@ -1,26 +1,26 @@
 HL_PRIM vstring *HL_NAME(__string_concat)( vstring *left, vstring *right ) {
-	int left_length = realtime_string_length(left);
-	int right_length = realtime_string_length(right);
+	int left_length = realtime_text_length(left);
+	int right_length = realtime_text_length(right);
 	uchar *output;
 	vstring *result = realtime_string_alloc(left_length + right_length,&output);
 	if( left_length > 0 )
-		memcpy(output, left->bytes, left_length * sizeof(uchar));
+		memcpy(output, realtime_text_data(left), left_length * sizeof(uchar));
 	if( right_length > 0 )
-		memcpy(output + left_length, right->bytes, right_length * sizeof(uchar));
+		memcpy(output + left_length, realtime_text_data(right), right_length * sizeof(uchar));
 	return result;
 }
 
-/* Concatenates `count` strings with a single allocation. NULL operands count as empty, like __string_concat. */
+/* Concatenates `count` strings with a single allocation. NULL operands are written as "null", like __string_concat. */
 static vstring *realtime_string_concat_many( vstring **parts, int count ) {
 	int total = 0;
 	for( int index = 0; index < count; index++ )
-		total += realtime_string_length(parts[index]);
+		total += realtime_text_length(parts[index]);
 	uchar *output;
 	vstring *result = realtime_string_alloc(total,&output);
 	for( int index = 0; index < count; index++ ) {
-		int length = realtime_string_length(parts[index]);
+		int length = realtime_text_length(parts[index]);
 		if( length > 0 ) {
-			memcpy(output,parts[index]->bytes,length * sizeof(uchar));
+			memcpy(output,realtime_text_data(parts[index]),length * sizeof(uchar));
 			output += length;
 		}
 	}

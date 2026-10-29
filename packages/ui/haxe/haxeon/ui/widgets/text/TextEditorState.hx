@@ -8,6 +8,7 @@ import haxeon.ui.TextLayout.TextRangeRect;
 
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 import haxeon.ui.FontCollection;
+import haxeon.ui.semantics.SemanticsValueSource;
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.editing.EditOperation;
 import haxeon.ui.Color;
@@ -23,7 +24,7 @@ import haxeon.editor.TextDocument;
 import haxeon.editor.TextOffsetMap;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
-class TextEditorState {
+class TextEditorState implements SemanticsValueSource {
 	static inline var caretBlinkHalfPeriod:Float = 0.5;
 	// Real width arrives during measurement. Avoid a one-pixel provisional
 	// layout that creates a visual line per character across large documents.
@@ -58,28 +59,22 @@ class TextEditorState {
 	public final paragraphStyle:ParagraphStyle;
 	/** Cached conversions between document code points, UTF-8 bytes and UTF-16 units. */
 	var offsets:TextDocument;
+	/** The document and its revision that `semanticsRevision` last counted. */
+	var semanticsDocument:Null<TextDocument>;
+	var semanticsDocumentRevision:Int;
+	var semanticsRevision:Int;
 	/** Measurement-only provider for widgets that place painting in separate layers. */
 	public final renderMeasurement:LayoutMeasuredContent;
 	var renderColor:Color;
 	var lastLayoutWidth:Float;
 	var lastLayoutRevision:Int;
-	var lastPointerClickTime:Float;
-	var lastPointerClickX:Float;
-	var lastPointerClickY:Float;
-	var lastPointerWordStart:Int;
-	var lastPointerWordEnd:Int;
-	var lastPointerClickCount:Int;
-	var lastPointerClickArmed:Bool;
-	var pointerClickPending:Bool;
+	final pointerGesture = new haxeon.ui.core.SelectionGesture();
 	var viewportHeight:Float;
 	var caretRevealPending:Bool = false;
 	var desiredVerticalX:Float;
 	var hasDesiredVerticalX:Bool;
 	var caretBlinkResetTime:Float;
 	var disposed:Bool;
-	var pointerGranularity:Int = 1;
-	var pointerRangeStart:Int = 0;
-	var pointerRangeEnd:Int = 0;
 	public var historyEnabled:Bool = true;
 	final history = new EditHistory(256, 2097152);
 	var replayingHistory:Bool = false;
@@ -186,18 +181,13 @@ class TextEditorState {
 		});
 		lastLayoutWidth = initialLayoutWidth;
 		lastLayoutRevision = offsets.revision;
-		lastPointerClickTime = -1.0;
-		lastPointerClickX = 0.0;
-		lastPointerClickY = 0.0;
-		lastPointerWordStart = -1;
-		lastPointerWordEnd = -1;
-		lastPointerClickCount = 0;
-		lastPointerClickArmed = false;
-		pointerClickPending = false;
 		viewportHeight = 0.0;
 		desiredVerticalX = 0.0;
 		hasDesiredVerticalX = false;
 		caretBlinkResetTime = 0.0;
+		semanticsDocument = null;
+		semanticsDocumentRevision = -1;
+		semanticsRevision = 0;
 		disposed = false;
 	}
 
@@ -247,6 +237,7 @@ class TextEditorState {
 			return false;
 		history.clear(); lastHistoryEdit = null;
 		cancelPointerClick();
+		var sameDocument = offsets == document;
 		if (offsets != document) {
 			offsets = document;
 			var caret = offsets.codepointCount;
@@ -257,7 +248,10 @@ class TextEditorState {
 				clamp(selectionEnd, 0, offsets.codepointCount));
 			clearComposition();
 		}
-		layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
+		if (sameDocument)
+			relayoutDocument(Math.max(1.0, lastLayoutWidth));
+		else
+			layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
 		renderMeasurement.invalidate();
 		lastLayoutRevision = offsets.revision;
 		clampScrollOffset();
@@ -268,12 +262,26 @@ class TextEditorState {
 		ensureLive();
 		var nextWidth = Math.max(1.0, width);
 		if (nextWidth != lastLayoutWidth || offsets.revision != lastLayoutRevision) {
-			layout.updateDocument(offsets, nextWidth, textStyle, paragraphStyle);
+			relayoutDocument(nextWidth);
 			renderMeasurement.invalidate();
 			lastLayoutWidth = nextWidth;
 			lastLayoutRevision = offsets.revision;
 		}
+		// Groups shaped above the viewport since the last frame moved what it shows; follow them, then anchor there.
+		scrollOffsetY += layout.takeScrollShift();
 		clampScrollOffset();
+		layout.scrollAnchorY = scrollOffsetY;
+	}
+
+	/** Brings the layout of the current document up to its revision at `width`. One edit since the last layout, at the
+		same width, is applied to the paragraphs it touched; anything else lays the document out again. A caller that
+		edits the document itself (an edit-intent handler) then costs what the edit touched, not the document's size. */
+	function relayoutDocument(width:Float):Void {
+		var edit = width == lastLayoutWidth ? offsets.editSince(lastLayoutRevision) : null;
+		if (edit != null)
+			layout.setTextAfterEdit(offsets, edit.start, edit.oldEnd, edit.start, edit.newEnd, edit.previousCodepointCount);
+		else
+			layout.updateDocument(offsets, width, textStyle, paragraphStyle);
 	}
 
 	/** Updates inherited typography without replacing the retained editor state. */
@@ -409,21 +417,33 @@ class TextEditorState {
 	}
 
 	/** Returns surrounding text while keeping selection and composition in the window. */
+	/**
+		The text around the caret for platform text input: up to `maxBefore` and `maxAfter` code points either side of the
+		selection's focus, widened to hold a composition. The window does not grow with the selection, so a large one is
+		reported clamped into it; a selection within the bounds is reported whole.
+	**/
 	public function surroundingText(maxBefore:Int, maxAfter:Int):TextInputWindow {
 		ensureLive();
-		var first = selectionStart;
-		var last = selectionEnd;
+		var first = selectionFocus;
+		var last = selectionFocus;
 		if (compositionStart >= 0 && compositionEnd >= compositionStart) {
 			first = Std.int(Math.min(first, compositionStart));
 			last = Std.int(Math.max(last, compositionEnd));
 		}
 		var start = Std.int(Math.max(0, first - Std.int(Math.max(0, maxBefore))));
 		var end = Std.int(Math.min(offsets.codepointCount, last + Std.int(Math.max(0, maxAfter))));
-		if (surroundingWindow != null && surroundingDocument == offsets && surroundingRevision == offsets.revision &&
-			surroundingWindow.start == start && surroundingWindow.end == end) return surroundingWindow;
+		var reportedStart = Std.int(Math.max(start, Math.min(end, selectionStart)));
+		var reportedEnd = Std.int(Math.max(start, Math.min(end, selectionEnd)));
+		var cached = surroundingWindow;
+		if (cached != null && surroundingDocument == offsets && surroundingRevision == offsets.revision &&
+			cached.start == start && cached.end == end) {
+			if (cached.selectionStart == reportedStart && cached.selectionEnd == reportedEnd) return cached;
+			surroundingWindow = new TextInputWindow(cached.text, start, end, reportedStart, reportedEnd);
+			return surroundingWindow;
+		}
 		surroundingDocument = offsets;
 		surroundingRevision = offsets.revision;
-		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end);
+		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end, reportedStart, reportedEnd);
 		return surroundingWindow;
 	}
 
@@ -936,28 +956,26 @@ class TextEditorState {
 
 	/** Retains the original word/line so dragging extends whole semantic units. */
 	public function beginPointerSelection(position:TextPosition, clicks:Int, extend:Bool):Bool {
-		pointerGranularity = extend ? 1 : clicks;
-		var changed = switch pointerGranularity {
+		pointerGesture.granularity = extend ? 1 : clicks;
+		var changed = switch pointerGesture.granularity {
 			case 2: selectWordAt(position);
 			case 3: selectLineAt(position);
 			case _: placeCaretAt(position, extend);
 		};
-		pointerRangeStart = selectionStart;
-		pointerRangeEnd = selectionEnd;
+		pointerGesture.anchor(selectionStart, selectionEnd);
 		return changed;
 	}
 
 	public function extendPointerSelection(position:TextPosition):Bool {
-		if (pointerGranularity == 1) return placeCaretAt(position, true);
+		if (pointerGesture.granularity == 1) return placeCaretAt(position, true);
 		var first:Int; var last:Int;
-		if (pointerGranularity == 2) {
+		if (pointerGesture.granularity == 2) {
 			var word = layout.wordRange(position); first = word[0]; last = word[1];
 		} else {
 			var line = layout.lineRangeAt(position.offset); first = line.start; last = line.end;
 		}
-		return setAnchoredSelection(first < pointerRangeStart
-			? new TextSelection(pointerRangeEnd, first)
-			: new TextSelection(pointerRangeStart, last));
+		var range = pointerGesture.extend(first, last);
+		return setAnchoredSelection(new TextSelection(range.anchor, range.focus));
 	}
 
 	/** Returns 1 for a single click, 2 for a double click, and 3 for a triple click. */
@@ -969,60 +987,12 @@ class TextEditorState {
 			return 1;
 		}
 		var range = layout.wordRange(position);
-		var dx = x - lastPointerClickX;
-		var dy = y - lastPointerClickY;
-		var sameSequence = lastPointerClickTime >= 0.0 && timestamp >= lastPointerClickTime &&
-			timestamp - lastPointerClickTime <= 0.5 && range[0] == lastPointerWordStart &&
-			range[1] == lastPointerWordEnd && dx * dx + dy * dy <= 36.0 && lastPointerClickArmed;
-		lastPointerClickCount = sameSequence
-			? (lastPointerClickCount >= 3 ? 1 : lastPointerClickCount + 1)
-			: 1;
-		lastPointerClickTime = timestamp;
-		lastPointerClickX = x;
-		lastPointerClickY = y;
-		lastPointerWordStart = range[0];
-		lastPointerWordEnd = range[1];
-		lastPointerClickArmed = false;
-		pointerClickPending = true;
-		return lastPointerClickCount;
+		return pointerGesture.register(range[0] + ":" + range[1], timestamp, x, y);
 	}
 
-	/** Arms a click for a possible double click only after a nearby pointer release. */
-	public function completePointerClick(x:Float, y:Float):Void {
-		if (!pointerClickPending || !finite(x) || !finite(y)) {
-			cancelPointerClick();
-			return;
-		}
-		var dx = x - lastPointerClickX;
-		var dy = y - lastPointerClickY;
-		if (dx * dx + dy * dy > 36.0) {
-			cancelPointerClick();
-			return;
-		}
-		pointerClickPending = false;
-		lastPointerClickArmed = true;
-	}
-
-	/** Cancels click recognition once movement exceeds the platform-independent slop. */
-	public function cancelPointerClickIfMoved(x:Float, y:Float):Void {
-		if (!pointerClickPending)
-			return;
-		var dx = x - lastPointerClickX;
-		var dy = y - lastPointerClickY;
-		if (dx * dx + dy * dy > 36.0)
-			cancelPointerClick();
-	}
-
-	public function cancelPointerClick():Void {
-		lastPointerClickTime = -1.0;
-		lastPointerClickX = 0.0;
-		lastPointerClickY = 0.0;
-		lastPointerWordStart = -1;
-		lastPointerWordEnd = -1;
-		lastPointerClickCount = 0;
-		lastPointerClickArmed = false;
-		pointerClickPending = false;
-	}
+	public function completePointerClick(x:Float,y:Float):Void pointerGesture.complete(x,y);
+	public function cancelPointerClickIfMoved(x:Float,y:Float):Void pointerGesture.cancelIfMoved(x,y);
+	public function cancelPointerClick():Void pointerGesture.cancel();
 
 	public function dispose():Void {
 		history.clear(); lastHistoryEdit = null;
@@ -1091,6 +1061,19 @@ class TextEditorState {
 
 	function get_text():String
 		return offsets.text;
+
+	public function semanticsValue():String
+		return offsets.text;
+
+	/** Advances when the text changes, including when the editor switches to another document. */
+	public function semanticsValueRevision():Int {
+		if (offsets != semanticsDocument || offsets.revision != semanticsDocumentRevision) {
+			semanticsDocument = offsets;
+			semanticsDocumentRevision = offsets.revision;
+			semanticsRevision++;
+		}
+		return semanticsRevision;
+	}
 
 	static function copyTextStyle(value:TextStyle):TextStyle
 		return new TextStyle(value.fontSize, value.font, value.letterSpacing);

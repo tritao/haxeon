@@ -31,6 +31,7 @@ class Row implements View {
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("row", key.value, key.value, null, ["row"]);
 			node.states = context.interactionStates.get(id);
+			node.hoverPaintOnly = true;
 			node.computedStyle = computed;
 			for (child in children)
 				node.add(context.withStyleParent(computed, function() return child.build(context)));

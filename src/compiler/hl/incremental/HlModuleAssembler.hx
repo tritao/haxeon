@@ -20,16 +20,29 @@ typedef HlAssemblerState = {
 	final publishedFloats:Int;
 	final publishedStrings:Int;
 	final publishedTypes:Int;
+
+	/** Globals the published module holds. Absent in older baselines, which published no literal globals. */
+	@:optional final publishedGlobals:Int;
+
 	final symbols:haxe.io.Bytes;
 	final cache:haxe.io.Bytes;
 	@:optional final runtimeNatives:Array<IrNative>;
+
+	/** Names of the C dispatch natives, which follow the runtime natives in the layout. Absent in older baselines. */
+	@:optional final dispatchNatives:Array<String>;
 }
 
 /** Module plus identity and delta metadata produced by one assembly transaction. */
 typedef HlAssemblyResult = {
 	final module:HlCode;
+	final unchanged:Bool;
+	final baseRevision:Int;
 	final changedFunctions:Array<Int>;
 	final changedSlots:Array<Int>;
+
+	/** Slots this build gives functions the published module does not have, in slot order, with their names. */
+	final addedFunctions:Array<{slot:Int, name:String}>;
+
 	final functionIndices:Map<String, Int>;
 	final requiresReload:Bool;
 	final revision:Int;
@@ -37,6 +50,10 @@ typedef HlAssemblyResult = {
 	final baseFloats:Int;
 	final baseStrings:Int;
 	final baseTypes:Int;
+
+	/** Globals the running module has, which a patch's new literal globals follow. */
+	final baseGlobals:Int;
+
 	final cachePreparationMs:Float;
 	final loweringMs:Float;
 	final publicationMs:Float;
@@ -62,21 +79,22 @@ class HlModuleAssembler {
 	var publishedFloats = 0;
 	var publishedStrings = 0;
 	var publishedTypes = 0;
+	var publishedGlobals = 0;
 	var loweredFunctions:Map<String, HlFunction> = [];
 	var runtimeNatives:Array<IrNative> = [];
+
+	/** Null when a restored baseline does not record them, so the next build cannot trust their slots. */
+	var dispatchNatives:Null<Array<String>> = [];
+
 	final debugMetadata:HlDebugMetadataCache;
 
-	/** Literals are created once when the module loads; only for a module that is never patched. */
-	final stringConstants:Bool;
-
-	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache, stringConstants:Bool = false) {
-		this.stringConstants = stringConstants;
+	public function new(?stableIds:Map<String, Int>, ?sharedDebugMetadata:HlDebugMetadataCache) {
 		cache = new HlFunctionCache(stableIds);
 		debugMetadata = sharedDebugMetadata == null ? new HlDebugMetadataCache() : sharedDebugMetadata;
 	}
 
 	public function copy():HlModuleAssembler {
-		var result = new HlModuleAssembler(null, debugMetadata, stringConstants);
+		var result = new HlModuleAssembler(null, debugMetadata);
 		result.symbols = symbols.fork();
 		result.cache = cache.copy();
 		result.initialized = initialized;
@@ -85,8 +103,10 @@ class HlModuleAssembler {
 		result.publishedFloats = publishedFloats;
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
+		result.publishedGlobals = publishedGlobals;
 		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
 		result.runtimeNatives = runtimeNatives.copy();
+		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		return result;
 	}
 
@@ -98,9 +118,11 @@ class HlModuleAssembler {
 			publishedFloats: publishedFloats,
 			publishedStrings: publishedStrings,
 			publishedTypes: publishedTypes,
+			publishedGlobals: publishedGlobals,
 			symbols: HlSymbolStateCodec.encode(symbols.exportState()),
 			cache: HlFunctionCacheStateCodec.encode(cache.exportState()),
-			runtimeNatives: runtimeNatives.copy()
+			runtimeNatives: runtimeNatives.copy(),
+			dispatchNatives: dispatchNatives == null ? null : dispatchNatives.copy()
 		};
 
 	public static function fromState(state:HlAssemblerState):HlModuleAssembler {
@@ -112,15 +134,20 @@ class HlModuleAssembler {
 		else if (state.initialized)
 			// Import indices are part of the published layout; guessing can patch the wrong slots.
 			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
+		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
 		if (state.revision < 0
 			|| state.publishedInts < 0
 			|| state.publishedFloats < 0
 			|| state.publishedStrings < 0
 			|| state.publishedTypes < 0
+			|| state.publishedGlobals != null
+			&& state.publishedGlobals < 0
 			|| state.publishedInts > result.symbols.ints.length
 			|| state.publishedFloats > result.symbols.floats.length
 			|| state.publishedStrings > result.symbols.strings.length
 			|| state.publishedTypes > result.symbols.types.length
+			|| state.publishedGlobals != null
+			&& state.publishedGlobals > result.symbols.globals.length
 			|| (!state.initialized && state.revision != 0)
 			|| (state.initialized && state.revision == 0))
 			throw "Invalid HashLink assembler baseline";
@@ -130,6 +157,8 @@ class HlModuleAssembler {
 		result.publishedFloats = state.publishedFloats;
 		result.publishedStrings = state.publishedStrings;
 		result.publishedTypes = state.publishedTypes;
+		// A baseline from before literals became globals published every global it had.
+		result.publishedGlobals = state.publishedGlobals == null ? result.symbols.globals.length : state.publishedGlobals;
 		return result;
 	}
 
@@ -145,10 +174,30 @@ class HlModuleAssembler {
 		publishedFloats = 0;
 		publishedStrings = 0;
 		publishedTypes = 0;
+		publishedGlobals = 0;
 	}
 
-	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision):HlAssemblyResult {
-		var startedAt = Sys.time() * 1000.0;
+	function addsOnlyConstantGlobals(total:Int):Bool {
+		var constants = symbols.stringConstantGlobals(), added = 0, index = constants.length - 1;
+		while (index >= 0 && constants[index].global >= publishedGlobals) {
+			added++;
+			index--;
+		}
+		return added == total - publishedGlobals;
+	}
+
+	static function sameNames(previous:Null<Array<String>>, next:Array<String>):Bool {
+		if (previous == null || previous.length != next.length)
+			return false;
+		for (index in 0...next.length)
+			if (previous[index] != next[index])
+				return false;
+		return true;
+	}
+
+	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>):HlAssemblyResult {
+		var startedAt = Sys.time() * 1000.0,
+			publishedSlots = cache.slots.length;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);
 		ordered.natives = program.natives;
@@ -179,9 +228,21 @@ class HlModuleAssembler {
 			discardPublishedSymbols();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
 		}
+		// C dispatch natives sit with the runtime natives, before every function slot. When they change, every function slot
+		// moves, so publish a fresh module.
+		var nextDispatch = [for (native in HlLower.discoverCDispatchNatives(ordered)) native.name];
+		if (reuseLowered && !sameNames(dispatchNatives, nextDispatch)) {
+			reload = true;
+			reuseLowered = false;
+			discardPublishedSymbols();
+			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
+		}
+		dispatchNatives = nextDispatch;
 		var layout:Map<String, Int> = [], next = 0;
 		for (native in runtimeNatives)
 			layout.set(native.name, next++);
+		for (name in nextDispatch)
+			layout.set(name, next++);
 		for (name in cache.slots)
 			layout.set(name, next++);
 		if (reuseLowered)
@@ -206,27 +267,51 @@ class HlModuleAssembler {
 			}
 		changed.sort(function(a, b) return a - b);
 		changedSlots.sort(function(a, b) return a - b);
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null, regenerated,
-			runtimeNatives, debugMetadata, stringConstants),
+		var addedFunctions:Array<{slot:Int, name:String}> = [];
+		if (initialized && !reload)
+			for (index in publishedSlots...cache.slots.length) {
+				var name = cache.slots[index], slot = layout.get(name);
+				if (slot == null)
+					throw 'Added function $name has no slot';
+				addedFunctions.push({slot: slot, name: name});
+			}
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
+			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
+		// A running module can take new String constants but no other global, so a build that adds any other publishes a
+		// fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.
+		if (initialized && !reload && !addsOnlyConstantGlobals(module.globals.length))
+			reload = true;
 		loweredFunctions = [];
 		for (index in 0...ordered.functions.length)
 			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
 			baseStrings = publishedStrings,
-			baseTypes = publishedTypes;
+			baseTypes = publishedTypes,
+			baseGlobals = publishedGlobals;
 		publishedInts = module.ints.length;
 		publishedFloats = module.floats.length;
 		publishedStrings = module.strings.length;
 		publishedTypes = module.types.length;
-		revision++;
+		publishedGlobals = module.globals.length;
+		var baseRevision = revision;
+		// A build that changes nothing the running module holds (a resumed session warming up, a save that only touched
+		// what lowering ignores) is the published revision again: a new revision would carry no patch, and the runtime
+		// can only reach a revision without a patch by reloading.
+		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && baseInts == publishedInts
+			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
+		if (!unchanged)
+			revision++;
 		initialized = true;
 		return {
 			module: module,
+			unchanged: unchanged,
+			baseRevision: baseRevision,
 			changedFunctions: changed,
 			changedSlots: changedSlots,
+			addedFunctions: addedFunctions,
 			functionIndices: layout,
 			requiresReload: reload,
 			revision: revision,
@@ -234,6 +319,7 @@ class HlModuleAssembler {
 			baseFloats: baseFloats,
 			baseStrings: baseStrings,
 			baseTypes: baseTypes,
+			baseGlobals: baseGlobals,
 			cachePreparationMs: cachePreparedAt - startedAt,
 			loweringMs: loweredAt - cachePreparedAt,
 			publicationMs: Sys.time() * 1000.0 - loweredAt,

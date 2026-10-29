@@ -4,6 +4,7 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
 import compiler.ir.IrInliner.InlineMemo;
 import compiler.ir.IrInliner.IrInlineCache;
+import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrVerifier;
 
 class InlinerMain {
@@ -121,6 +122,60 @@ class InlinerMain {
 		expect(allocations(programFunction(elisionProgram, "escapeCaller")) == 1, "a callee that stores its parameter must get a copy");
 		// Both arguments are copies: one is written by the callee, and the other could alias what the callee stores into.
 		expect(allocations(programFunction(elisionProgram, "storeCaller")) == 2, "a callee that stores elsewhere could alias the source, so it gets a copy");
+		// An edit elsewhere in the file changes its content hash but not a function's own code or positions, so the function is
+		// not reported as changed; one whose positions shift or whose code changes still is.
+		var editBase = "function stay(x:Int):Int return x + 1; function edit(x:Int):Int return x + 2; function main():Int return stay(1) + edit(1);";
+		var editCache = new IrInlineCache();
+		IrInliner.run(Frontend.compile(editBase), editCache);
+		var tailEdit = IrInliner.run(Frontend.compile(editBase + " function extra():Int return 5;"), editCache);
+		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0, "an edit after a function leaves it unchanged");
+		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
+		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache);
+		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
+		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
+		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3")
+			+ " function extra():Int return 5;"), editCache);
+		expect(shifted.indexOf("stay") >= 0, "a function whose positions shifted is reported as changed so its line information is refreshed");
+		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
+		var linesFor = (comment:String) -> comment + "
+function stay(x:Int):Int return x + 1;
+function main():Int return stay(1);
+";
+		var lineCache = new IrInlineCache();
+		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache);
+		var offsetProgram = Frontend.compile(linesFor("// a longer comment"));
+		var offsetEdit = IrInliner.run(offsetProgram, lineCache);
+		expect(offsetEdit.indexOf("stay") < 0, "a function whose lines and columns held is unchanged when only byte offsets moved");
+		expect(lineCache.relocated.indexOf("stay") >= 0, "a function that only moved within its file is lowered again");
+		// It keeps the new positions, so a warm build names the same source snapshot as a cold one.
+		var coldProgram = Frontend.compile(linesFor("// a longer comment"));
+		IrInliner.run(coldProgram, new IrInlineCache());
+		expect(IrFunctionStateCodec.encode(programFunction(offsetProgram, "stay"))
+			.compare(IrFunctionStateCodec.encode(programFunction(coldProgram, "stay"))) == 0,
+			"a function that only moved carries the positions a cold compile gives it");
+		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
+// b")), lineCache);
+		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
+		// A lambda's code fingerprint is remembered by its IR function, also in the copy a compile runs on, and taken again
+		// for a new function object or a different set of C natives.
+		var printProgram = Frontend.compile("function first(x:Int):Int return x * 3 + 1; function second(x:Int):Int return x * 5 - 2; "
+			+ "function main():Int return first(1) + second(2);"),
+			first = programFunction(printProgram, "first"),
+			second = programFunction(printProgram, "second"),
+			printCache = new IrInlineCache(),
+			firstPrint = IrFunctionStateCodec.codeFingerprint(first);
+		expect(printCache.positionalFingerprint(first, "") == firstPrint, "a remembered fingerprint is the function's fingerprint");
+		printCache.finishPositionalFingerprints();
+		var warmCache = printCache.copy(), block = first.blocks[0];
+		// Changing the function in place (which compiles never do) shows whether the fingerprint was recomputed.
+		block.instructions.reverse();
+		expect(IrFunctionStateCodec.codeFingerprint(first) != firstPrint, "reordered instructions change the fingerprint");
+		expect(warmCache.positionalFingerprint(first, "") == firstPrint, "the compile's copy of the cache remembers the fingerprint");
+		expect(warmCache.positionalFingerprint(first, "native") != firstPrint, "a different set of C natives takes the fingerprint again");
+		block.instructions.reverse();
+		var renamed = new IrFunction(first.name, second.arguments, second.result, second.blocks, second.debugBindings);
+		expect(warmCache.positionalFingerprint(renamed, "native") == IrFunctionStateCodec.codeFingerprint(second),
+			"a new function under the same name gets its own fingerprint");
 		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.
 		var hierarchy = Frontend.compile("class Base { public var n:Int; public function new(n:Int) this.n = n; public function get():Int return n; "
 			+ "public function twice():Int return n * 2; } class Derived extends Base { public function new(n:Int) super(n); "
@@ -193,6 +248,14 @@ class InlinerMain {
 		expect(names.indexOf("twice") >= 0, "the edited callee is reported as changed");
 		expect(names.indexOf("main") >= 0, "a caller that inlined the edited callee is reported as changed");
 		expect(names.indexOf("fib") < 0 && names.indexOf("loops") < 0, "functions that did not inline the callee are not reported");
+		// The published encodings are reused: the edited callee reaches the inlined caller, and a repeat reports nothing.
+		var editedMain = programFunction(program, "main");
+		expect(editedMain != inlinedMain
+			&& !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
+			"the inlined caller carries the edited callee");
+		program.functions = hybrid;
+		expect(IrInliner.run(program, cache).length == 0, "a repeated compile of the edit reports no changed functions");
+		expect(programFunction(program, "main") == editedMain, "the caller keeps the identity of the edited inlined form");
 		// A rolled-back candidate must not disturb the published cache.
 		var branch = cache.copy();
 		program.functions = originals.copy();

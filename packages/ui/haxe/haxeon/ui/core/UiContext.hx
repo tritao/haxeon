@@ -52,7 +52,15 @@ class UiContext {
 	/** Current document/selection context used by command-bound UI. */
 	public var commandContext(default, null):CommandContext;
 	public var root(default, null):Null<RenderNode>;
+	/** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
+	public var inspectionHighlight(default, set):Int = 0;
+	/** Optional detailed paint probe. Disabled unless an inspector explicitly subscribes. */
+	public var onInspectionPaint:Null<Int->Float->Void>;
+	var inspectionEnabled = false;
+	var inspectionNode:Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
+	var windowFocused:Bool = true;
+	var focusBeforeWindowBlur:Null<WidgetId> = null;
 	/** Called when an active animation needs another host frame. */
 	public var onAnimationFrameRequested:Null<Void->Void>;
 	/** Modifier observation independent of keyboard focus (for pointer affordances). */
@@ -269,13 +277,20 @@ class UiContext {
 			animations.advance(frame.deltaSeconds);
 		buildContext.setViewport(frame.width, frame.height);
 		buildContext.setEnvironmentViewport(frame.width, frame.height);
-		if (reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame)) {
+		var hoverPaintNodes = -1;
+		var reuse = reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame);
+		if (!reuse && reconcileNewFocus && cacheKey != null) {
+			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
+			reuse = hoverPaintNodes >= 0;
+		}
+		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
 				buildContext.styleResolver.cachedStyleCount, 0, submittedNodeCount, UiDirtyFlag.None,
 				0, 0, 0, 0, 0, 0, Sys.time() - submitStartedAt, false, true, 0,
 				submittedNodeCount);
 			lastFrameMetrics.markReusedSubmission();
+			if (hoverPaintNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = hoverPaintNodes;
 			diagnosticStage = 0;
 			return cast root;
 		}
@@ -290,6 +305,7 @@ class UiContext {
 		var next = buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext));
 		if (next == null || next.parent != null)
 			throw "A view must produce one unparented render tree root";
+		if (inspectionEnabled) appendInspectionOverlay(next, frame);
 		// Decorations may be assigned by view wrappers after widget construction.
 		// Promote those boxes before invalidation compares their native visual kind.
 		next.walk(function(node) node.syncPaintKind());
@@ -332,6 +348,8 @@ class UiContext {
 		var missing = false;
 		var missingNode:Null<RenderNode> = null;
 		var nodeCount = 0;
+		// Which nodes are mounted, in tree order, for the key caches' pruning.
+		var mountedHash = 0;
 		var resolvedGeometryChangedNodes = 0;
 		var resolvedGeometryReusedNodes = 0;
 		var layoutPass = 0;
@@ -342,11 +360,13 @@ class UiContext {
 			missing = false;
 			missingNode = null;
 			nodeCount = 0;
+			mountedHash = 0;
 			resolvedGeometryChangedNodes = 0;
 			resolvedGeometryReusedNodes = 0;
 			diagnosticStage = 7;
 			next.walk(function(node) {
 				nodeCount++;
+				mountedHash = mountedHash * 31 + node.id.value;
 				// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
 				var item = resolvedById.get(node.layout.id);
 				if (item == null) {
@@ -426,10 +446,11 @@ class UiContext {
 		// be able to access widget state while that event is being dispatched.
 		stateStore.endFrame();
 		buildContext.pruneSelfUpdatingBuilds(nodesById);
-		buildContext.pruneKeyCaches(nodesById);
+		buildContext.pruneKeyCaches(nodesById, mountedHash);
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedStateRevision = resolvedStateRevision;
 		submittedInteractionRevision = interactionStates.revision;
+		interactionStates.acknowledge();
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedGestureRevision = gestures.revision;
@@ -548,10 +569,12 @@ class UiContext {
 				var canvas = customCanvases.get(nodeId);
 				if (canvas == null) {
 					canvas = new Canvas();
+					canvas.retainRectangles = true;
 					customCanvases.set(nodeId, canvas);
 				}
 				canvas.reset();
 				var geometry:ResolvedLayoutItem = cast node.resolved;
+				var inspectionStarted = onInspectionPaint == null || node == inspectionNode ? 0.0 : Sys.time();
 				canvas.withState(function(target) {
 					target.resetTransform();
 					// Custom painters own only node-local pixels. Native layout and
@@ -565,6 +588,7 @@ class UiContext {
 					customLists.set(nodeId, displayList);
 				}
 				canvas.update(displayList);
+				if (onInspectionPaint != null && node != inspectionNode) onInspectionPaint(nodeId, Sys.time() - inspectionStarted);
 				var hasCommands = displayList.info().commandCount > 0;
 				customListHasCommands.set(nodeId, hasCommands);
 				if (hasCommands) {
@@ -627,8 +651,10 @@ class UiContext {
 		for (nodeId in stale) {
 			clearCustomPaintBindings(nodeId);
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 			var displayList = customLists.get(nodeId);
 			if (displayList != null)
 				displayList.dispose();
@@ -706,6 +732,7 @@ class UiContext {
 
 	public function clearFocus():Void {
 		ensureLive();
+		focusBeforeWindowBlur = null;
 		var previous = focus.focusedId;
 		focus.focus(null);
 		dispatchFocusChange(previous, null);
@@ -759,6 +786,8 @@ class UiContext {
 	/** Clears transient pointer state and reports loss of platform window focus. */
 	public function windowFocusLost():Void {
 		ensureLive();
+		if (windowFocused) focusBeforeWindowBlur = focus.focusedId;
+		windowFocused = false;
 		events.cancelPointers();
 		updateCursor();
 		gestures.cancelAll();
@@ -767,6 +796,18 @@ class UiContext {
 			events.focusEvent(previous, UiEventKind.FocusLost);
 		focus.focus(null);
 		dispatchFocusChange(previous, null);
+	}
+
+	/** Restore keyboard ownership after activation, subject to current focus eligibility. */
+	public function windowFocusGained():Void {
+		ensureLive();
+		if (windowFocused) return;
+		windowFocused = true;
+		var restore = focusBeforeWindowBlur;
+		focusBeforeWindowBlur = null;
+		// A background change may have selected another widget or opened a modal.
+		// focusWidget also rejects removed, hidden, disabled and trapped-out nodes.
+		if (focus.focusedId == null && restore != null) focusWidget(restore);
 	}
 
 	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,
@@ -847,6 +888,30 @@ class UiContext {
 		events.text(kind, value, data);
 	}
 
+	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
+	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
+		if (root == null || submittedBuildKey != cacheKey || submittedStateRevision != stateStore.revision ||
+			submittedStyleRevision != buildContext.styleRevision || submittedFrameWidth != frame.width ||
+			submittedFrameHeight != frame.height || animations.activeCount > 0 ||
+			animations.revision != submittedAnimationRevision || gestures.revision != submittedGestureRevision ||
+			commands.revision != submittedCommandRevision || buildContext.theme != submittedTheme ||
+			buildContext.styleSheet != submittedStyleSheet) return -1;
+		var changes = interactionStates.changes();
+		for (change in changes) {
+			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
+			var node = currentNodesById.get(change.id);
+			if (node == null || (node.recordsInteraction && (!node.hoverPaintOnly || buildContext.hasHoverStyle(node)))) return -1;
+		}
+		var painted = 0;
+		for (change in changes) {
+			var node:RenderNode = cast currentNodesById.get(change.id);
+			if (node.hasPaintHandler()) { node.invalidatePaint(); painted++; }
+		}
+		submittedInteractionRevision = interactionStates.revision;
+		interactionStates.acknowledge();
+		return painted;
+	}
+
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
 		return root != null && submittedBuildKey == cacheKey && dirtyFlags == UiDirtyFlag.None &&
 			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
@@ -914,7 +979,11 @@ class UiContext {
 
 	public var needsAnimationFrame(get, never):Bool;
 	inline function get_needsAnimationFrame():Bool
-		return animations.activeCount > 0;
+		return animations.needsFrame;
+
+	/** Seconds until animations that are only waiting next need a frame, or -1 for none. */
+	public function animationWaitSeconds():Float
+		return animations.waitSeconds();
 
 	/** Reports pending work categories without changing the current full-submit behavior. */
 	public var dirtyFlags(get, never):Int;
@@ -939,6 +1008,41 @@ class UiContext {
 		if (animations.activeCount > 0)
 			result |= UiDirtyFlag.NeedsComposite;
 		return result;
+	}
+
+	function set_inspectionHighlight(value:Int):Int {
+		if (value != inspectionHighlight) submittedBuildKey = null;
+		if (value > 0) inspectionEnabled = true;
+		return inspectionHighlight = value;
+	}
+
+	/** A final retained paint plane shares the application's frame acquisition and presentation. */
+	function appendInspectionOverlay(tree:RenderNode, frame:LayoutFrame):Void {
+		if (inspectionNode != null && inspectionNode.parent == tree) return;
+		var style = new haxeon.ui.LayoutStyle();
+		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+		style.width = haxeon.ui.LayoutAxis.fixed(frame.width);
+		style.height = haxeon.ui.LayoutAxis.fixed(frame.height);
+		style.zIndex = 32767;
+		style.clipToParent = false;
+		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"), function() return buildContext.id("overlay"));
+		var node = new RenderNode(id, haxeon.ui.LayoutVisualKind.Custom, style);
+		node.setStyleIdentity("devtools-overlay", null, null);
+		node.hitTestSelf = false;
+		node.onPaint(function(canvas, geometry) {
+			if (inspectionHighlight <= 0 || root == null) return;
+			var inspected = root.find(new WidgetId(inspectionHighlight));
+			if (inspected == null || inspected.resolved == null || !inspected.resolved.visible) return;
+			var bounds = inspected.resolved.clippedViewportBounds();
+			var x = bounds.x - geometry.x, y = bounds.y - geometry.y;
+			var color = haxeon.ui.Color.fromBytes(80, 180, 255, 220);
+			canvas.fillRectIfPositive(new Rect(x, y, bounds.width, 2), color);
+			canvas.fillRectIfPositive(new Rect(x, y + bounds.height - 2, bounds.width, 2), color);
+			canvas.fillRectIfPositive(new Rect(x, y, 2, bounds.height), color);
+			canvas.fillRectIfPositive(new Rect(x + bounds.width - 2, y, 2, bounds.height), color);
+		});
+		inspectionNode = node;
+		tree.add(node);
 	}
 
 	/** Returns a deterministic headless snapshot of the most recently submitted tree. */
@@ -973,11 +1077,14 @@ class UiContext {
 		if (disposed)
 			return;
 		pendingFocus = null;
+		focusBeforeWindowBlur = null;
 		session.clearCustomPaints();
 		for (nodeId in customCanvases.keys()) {
 			var canvas = customCanvases.get(nodeId);
-			if (canvas != null)
+			if (canvas != null) {
 				canvas.reset();
+				canvas.releaseRetained();
+			}
 		}
 		for (nodeId in customLists.keys()) {
 			var displayList = customLists.get(nodeId);

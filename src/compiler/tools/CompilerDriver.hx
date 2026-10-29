@@ -23,7 +23,8 @@ import compiler.types.NativeTypeDescriptorCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken):CompileResult {
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken,
+			?published:() -> Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress;
@@ -38,114 +39,198 @@ class CompilerDriver {
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, cancellation, false);
-		var compiledAt = Sys.time() * 1000.0;
-		var allocationAfterCompile = AllocationMeter.sample();
-		if (cancellation != null)
-			cancellation.check();
-		var backendStartedAt = Sys.time() * 1000.0;
-		if (request.dumpFunction >= 0)
-			dumpFunction(result, request.dumpFunction, report);
-		var isWasm = StringTools.startsWith(request.target, "wasm"),
-			wasmTarget = switch request.target {
-				case "wasm32": Wasm32;
-				case "wasm64": Wasm64;
-				case "wasmgc", "wasm-gc": WasmGc;
-				default: HashLink;
-			},
-			outputBytes:Null<Bytes> = null,
-			outputIndices:Null<Map<String, Int>> = null;
-		if (isWasm) {
-			var backend:Backend = new WasmBackend(),
-				backendResult = backend.compile(result.ir, {
-					target: wasmTarget,
-					debugNames: true,
-					importMemory: request.importMemory,
-					sharedMemory: request.sharedMemory == true,
-					memoryBase: request.memoryBase,
-					memoryContract: memoryContract,
-					wasmMemoryStats: request.wasmMemoryStats,
-					wasmGcStress: request.wasmGcStress,
-					wasmRuntimeNeutral: request.wasmRuntimeNeutral,
-					exports: request.exports
-				});
-			outputBytes = backendResult.bytes;
-		} else {
-			if (session == null)
-				HlWriter.writeFile(result.module, request.output);
-			else
-				session.writeHashLink(result.module, request.output);
-			outputIndices = result.functionIndices;
+		try {
+			var compiledAt = Sys.time() * 1000.0;
+			var allocationAfterCompile = AllocationMeter.sample();
+			if (cancellation != null)
+				cancellation.check();
+			var backendStartedAt = Sys.time() * 1000.0;
+			if (request.dumpFunction >= 0)
+				dumpFunction(result, request.dumpFunction, report);
+			var isWasm = StringTools.startsWith(request.target, "wasm"),
+				wasmTarget = switch request.target {
+					case "wasm32": Wasm32;
+					case "wasm64": Wasm64;
+					case "wasmgc", "wasm-gc": WasmGc;
+					default: HashLink;
+				},
+				outputBytes:Null<Bytes> = null,
+				outputIndices:Null<Map<String, Int>> = null;
+			// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
+			// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
+			var deferFullModule = !isWasm && request.live && result.patchBytes != null && !result.requiresReload;
+			// An unchanged build leaves a publication the host may not have polled yet exactly as it is.
+			var publishes = !isWasm && (!result.unchanged || !hasPublication(request.output, result));
+			if (!isWasm)
+				deleteIfExists(request.output + ".live.full");
+			if (isWasm) {
+				var backend:Backend = new WasmBackend(),
+					backendResult = backend.compile(result.ir, {
+						target: wasmTarget,
+						debugNames: true,
+						importMemory: request.importMemory,
+						sharedMemory: request.sharedMemory == true,
+						memoryBase: request.memoryBase,
+						memoryContract: memoryContract,
+						wasmMemoryStats: request.wasmMemoryStats,
+						wasmGcStress: request.wasmGcStress,
+						wasmRuntimeNeutral: request.wasmRuntimeNeutral,
+						exports: request.exports
+					});
+				outputBytes = backendResult.bytes;
+			} else {
+				outputIndices = result.functionIndices;
+				if (!deferFullModule)
+					writeModule(result, request.output, session);
+			}
+			if (cancellation != null && !deferFullModule)
+				cancellation.check();
+			var backendDoneAt = Sys.time() * 1000.0;
+			var allocationAfterEncode = AllocationMeter.sample();
+			var stampedAt = -1.0;
+			var publishPatch = function() {
+				var identities = [for (name => id in result.functionIds) {name: name, id: id}];
+				identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
+				if (result.patchBytes != null)
+					File.saveBytes(request.output + ".hlp", result.patchBytes);
+				else
+					deleteIfExists(request.output + ".hlp");
+				// The host applies a patch from this summary alone; the full description (every function id) is for reloads.
+				var summary = request.output + ".live.patch.json";
+				File.saveContent(summary + ".tmp", Json.stringify({
+					revision: result.revision,
+					baseRevision: result.baseRevision,
+					moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+					requiresReload: result.requiresReload,
+					patchAvailable: result.patchBytes != null,
+					changedFunctions: result.changedFunctions,
+					identities: ([] : Array<Dynamic>)
+				}));
+				replaceFile(summary + ".tmp", summary);
+				var manifest = request.output + ".live.json";
+				var temporary = manifest + ".tmp";
+				File.saveContent(temporary, Json.stringify({
+					revision: result.revision,
+					baseRevision: result.baseRevision,
+					unchanged: result.unchanged,
+					moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+					requiresReload: result.requiresReload,
+					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
+					patchAvailable: result.patchBytes != null,
+					changedFunctions: result.changedFunctions,
+					identities: identities
+				}));
+				replaceFile(temporary, manifest);
+				// The live host reads this small stamp every tick, and the description only when the stamp changes.
+				var stamp = request.output + ".live.stamp";
+				File.saveContent(stamp + ".tmp", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+				replaceFile(stamp + ".tmp", stamp);
+				stampedAt = Sys.time() * 1000.0;
+				if (published != null)
+					published();
+				// An unchanged build kept its revision and left nothing pending.
+				if (!result.unchanged)
+					compiler.acknowledgePublication(result.revision);
+			};
+			if (publishes && deferFullModule) {
+				publishPatch();
+				writeModule(result, request.output, session);
+			}
+			if (isWasm)
+				File.saveBytes(request.output, outputBytes);
+			if (isWasm)
+				File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
+			if (!isWasm)
+				File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
+			if (publishes) {
+				File.saveBytes(request.output + ".hli", result.runtimeIdentity);
+				if (!deferFullModule)
+					publishPatch();
+			}
+			File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
+			if (request.xmlOutput != null)
+				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
+			if (request.irOutput != null)
+				File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
+			if (request.ffiHeader != null && request.ffiLibrary != null)
+				File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
+			var typedProgram = compiler.lastTypedProgram;
+			if (typedProgram == null)
+				throw "Compiler completed without a typed program for descriptor emission";
+			File.saveBytes(request.output + ".descriptors", NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
+			File.saveContent(request.output + ".descriptors.json", NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
+			// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
+			if (!isWasm)
+				File.saveContent(request.output + ".live.full", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+			// The history this revision was assembled from is recorded beside it once the session is idle, so a session that
+			// starts after this one patches the module it published.
+			if (!isWasm && request.live && session != null)
+				session.recordLivePublication(request.publishedOutput == null ? request.output : request.publishedOutput,
+					File.getContent(request.output + ".live.full"));
+			var artifactsWrittenAt = Sys.time() * 1000.0;
+			var allocationAfterWrite = AllocationMeter.sample();
+			report("driver phases (ms): prepare="
+				+ milliseconds(preparedAt - requestStartedAt)
+				+ " compile="
+				+ milliseconds(compiledAt - preparedAt)
+				+ " encode="
+				+ milliseconds(backendDoneAt - backendStartedAt)
+				+ " write="
+				+ milliseconds(artifactsWrittenAt - backendDoneAt)
+				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
+			report(phaseReport(result, backendDoneAt - backendStartedAt));
+			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
+			report(allocationReport("driver allocation phases:", [
+				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
+				AllocationMeter.delta("compile", allocationAfterPrepare, allocationAfterCompile),
+				AllocationMeter.delta("encode", allocationAfterCompile, allocationAfterEncode),
+				AllocationMeter.delta("write", allocationAfterEncode, allocationAfterWrite)
+			]));
+			report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
+			return result;
+		} catch (error:Dynamic) {
+			var status = compiler.publicationStatus();
+			if (status.hasPendingRevision && status.pendingRevision == result.revision)
+				compiler.rejectPublication(result.revision);
+			throw error;
 		}
-		if (cancellation != null)
-			cancellation.check();
-		var backendDoneAt = Sys.time() * 1000.0;
-		var allocationAfterEncode = AllocationMeter.sample();
-		if (isWasm)
-			File.saveBytes(request.output, outputBytes);
-		if (isWasm)
-			File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
-		if (!isWasm)
-			File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
-		if (!isWasm) {
-			File.saveBytes(request.output + ".hli", result.runtimeIdentity);
-			var identities = [for (name => id in result.functionIds) {name: name, id: id}];
-			identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
-			if (result.patchBytes != null)
-				File.saveBytes(request.output + ".hlp", result.patchBytes);
-			else if (FileSystem.exists(request.output + ".hlp"))
-				FileSystem.deleteFile(request.output + ".hlp");
-			var manifest = request.output + ".live.json";
-			var temporary = manifest + ".tmp";
-			File.saveContent(temporary, Json.stringify({
-				revision: result.revision,
-				moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
-				requiresReload: result.requiresReload,
-				reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
-				patchAvailable: result.patchBytes != null,
-				changedFunctions: result.changedFunctions,
-				identities: identities
-			}));
-			FileSystem.rename(temporary, manifest);
-			compiler.acknowledgePublication(result.revision);
-		}
-		File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
-		if (request.xmlOutput != null)
-			File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
-		if (request.irOutput != null)
-			File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
-		if (request.ffiHeader != null && request.ffiLibrary != null)
-			File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
-		var typedProgram = compiler.lastTypedProgram;
-		if (typedProgram == null)
-			throw "Compiler completed without a typed program for descriptor emission";
-		File.saveBytes(request.output + ".descriptors", NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
-		File.saveContent(request.output + ".descriptors.json", NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
-		var artifactsWrittenAt = Sys.time() * 1000.0;
-		var allocationAfterWrite = AllocationMeter.sample();
-		report("driver phases (ms): prepare=" + milliseconds(preparedAt - requestStartedAt) + " compile=" + milliseconds(compiledAt - preparedAt)
-			+ " encode=" + milliseconds(backendDoneAt - backendStartedAt) + " write=" + milliseconds(artifactsWrittenAt - backendDoneAt));
-		report(phaseReport(result, backendDoneAt - backendStartedAt));
-		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
-		report(allocationReport("driver allocation phases:", [
-			AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
-			AllocationMeter.delta("compile", allocationAfterPrepare, allocationAfterCompile),
-			AllocationMeter.delta("encode", allocationAfterCompile, allocationAfterEncode),
-			AllocationMeter.delta("write", allocationAfterEncode, allocationAfterWrite)
-		]));
-		report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
-		return result;
 	}
+
+	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
+	static function hasPublication(output:String, result:CompileResult):Bool {
+		var stamp = output + ".live.stamp";
+		return FileSystem.exists(stamp)
+			&& FileSystem.exists(output + ".live.json")
+			&& FileSystem.exists(output + ".hli")
+			&& File.getContent(stamp) == Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision;
+	}
+
+	static function writeModule(result:CompileResult, output:String, session:Null<CompilerSession>):Void {
+		if (session == null)
+			HlWriter.writeFile(result.module, output);
+		else
+			session.writeHashLink(result.module, output);
+	}
+
+	static function deleteIfExists(path:String):Void
+		if (FileSystem.exists(path))
+			FileSystem.deleteFile(path);
+
+	/** Empty unless typing found modules the graph lacked; the restart then redid the whole frontend. */
+	static function frontendRestarts(reasons:Array<String>):String
+		return reasons.length == 0 ? "" : " (restarted: " + reasons.join("; ") + ")";
 
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
-			+ " frontend=" + milliseconds(metrics.frontendMs) + " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse="
-			+ milliseconds(metrics.graphParseMs) + " dependencies=" + milliseconds(metrics.graphDependencyMs) + " initialization="
-			+ milliseconds(metrics.graphInitializationMs) + " semantic=" + milliseconds(metrics.semanticAssemblyMs) + " (alias-setup="
-			+ milliseconds(metrics.semanticAliasMs) + " canonicalization=" + milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse="
-			+ milliseconds(metrics.semanticContributionReuseMs) + " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs)
-			+ " invalidation=" + milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))"
-			+ " typing/lowering=" + milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
+			+ " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts) + " (graph="
+			+ milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs) + " dependencies="
+			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs) + " semantic="
+			+ milliseconds(metrics.semanticAssemblyMs) + " (alias-setup=" + milliseconds(metrics.semanticAliasMs) + " canonicalization="
+			+ milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse=" + milliseconds(metrics.semanticContributionReuseMs)
+			+ " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs) + " invalidation="
+			+ milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))" + " typing/lowering="
+			+ milliseconds(metrics.typingLoweringMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
 			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + " setup="
 			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="
 			+ milliseconds(metrics.typerMetadataMs) + " bodies=" + milliseconds(metrics.typerBodiesMs) + " body-transition="
@@ -175,6 +260,24 @@ class CompilerDriver {
 	}
 
 	/** Defines supplied by the command-line target before user source is analyzed. */
+	/**
+	 * Renames over an existing file. On Windows a rename fails while another process has the destination open, as the
+	 * live host briefly has the stamp every tick, so this retries for up to half a second before giving up.
+	 */
+	public static function replaceFile(from:String, to:String):Void {
+		var attempt = 0;
+		while (true) {
+			try {
+				FileSystem.rename(from, to);
+				return;
+			} catch (error:Dynamic) {
+				if (++attempt >= 50)
+					throw error;
+				Sys.sleep(0.01);
+			}
+		}
+	}
+
 	public static function targetDefines(target:String):Array<String> {
 		var result = ["haxeon", "target=" + target];
 		switch target {

@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main PatchUnwindMain
+-hl out/patch-unwind-test.hl

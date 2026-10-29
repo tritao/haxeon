@@ -275,6 +275,165 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** Unwrapped, a large document shapes only the groups something needs, and the rest are placed exactly where shaping
+		them puts them: the layout matches one with every group shaped, wherever its shaped groups are. A group shaped
+		above the scroll anchor reports how far it moved the content there. */
+	static function unwrappedLayoutShapesOnlyWhatIsNeeded(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...20000)
+			value.add(line % 500 == 250 ? "é🙂 emoji line " + line + "\n" : "plain unwrapped line " + line + "\n");
+		var style = new ParagraphStyle(haxeon.ui.TextWrap.None);
+		var editor = new TextEditorState(fonts, value.toString(), null, style);
+		editor.updateLayout(600.0);
+		var counts = editor.layout.shapedGroups();
+		if (counts.total < 100 || counts.shaped > 2)
+			throw "opening an unwrapped document shaped " + counts.shaped + " of " + counts.total + " groups";
+		var full = new haxeon.ui.widgets.text.TextEditorLayout(fonts, editor.text, 600.0, editor.textStyle, style);
+		full.selectionRects(new TextPosition(0, 0), new TextPosition(Utf8Text.length(editor.text), 0));
+		if (full.shapedGroups().shaped != full.shapedGroups().total)
+			throw "the reference layout did not shape every group";
+		function sameAsFull(label:String):Void {
+			var actual = editor.layout.visualRows(), expected = full.visualRows();
+			if (actual.length != expected.length)
+				throw label + ": " + actual.length + " rows, a fully shaped layout has " + expected.length;
+			for (index in 0...actual.length) {
+				var a = actual[index], b = expected[index];
+				if (a.start != b.start || a.end != b.end || Math.abs(a.top - b.top) > 0.001 || Math.abs(a.bottom - b.bottom) > 0.001)
+					throw label + ": row " + index + " is " + a.start + "-" + a.end + " at " + a.top + ", fully shaped " + b.start + "-" + b.end + " at " + b.top;
+			}
+			if (Math.abs(editor.layout.measure().height - full.measure().height) > 0.001)
+				throw label + ": content height " + editor.layout.measure().height + ", fully shaped " + full.measure().height;
+		}
+		sameAsFull("as opened");
+		// The end of the document: its caret is where the fully shaped layout has it, and only its group was shaped.
+		var end = Utf8Text.length(editor.text);
+		var a = editor.layout.caret(new TextPosition(end, 0)), b = full.caret(new TextPosition(end, 0));
+		if (Math.abs(a.y - b.y) > 0.001)
+			throw "the caret at the end is at " + a.y + ", fully shaped at " + b.y;
+		if (editor.layout.shapedGroups().shaped > 3)
+			throw "reaching the end shaped " + editor.layout.shapedGroups().shaped + " groups";
+		// Groups holding emoji, shaped below and above a scroll anchor in the middle.
+		var middle = editor.layout.measure().height / 2;
+		editor.layout.scrollAnchorY = middle;
+		editor.layout.takeScrollShift();
+		var before = editor.layout.measure().height;
+		var above = 0.0;
+		for (line in [250, 9750, 19750]) {
+			var paragraph = new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(line).start;
+			var top = editor.layout.caret(new TextPosition(paragraph, 0)).y;
+			if (line < 10000) above = top;
+		}
+		var shift = editor.layout.takeScrollShift();
+		var moved = editor.layout.measure().height - before;
+		if (Math.abs(shift) > Math.abs(moved) + 0.001)
+			throw "shaping moved content above the anchor by " + shift + " but the document by only " + moved;
+		sameAsFull("after shaping groups across it");
+		full.dispose();
+		editor.dispose();
+		return true;
+	}
+
+	/** An editor whose document is edited by its owner, as an edit-intent handler does, relays out only the edit and
+		ends where a fresh layout of the same text would; rows stay right across edits, syncs and width changes. */
+	static function externalEditsRelayoutCorrectly(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...300)
+			value.add("é🙂 external " + line + (line % 7 == 0 ? " with a longer line that wraps at narrow widths" : "") + "\n");
+		var document = new haxeon.editor.TextDocument(value.toString());
+		var editor = new TextEditorState(fonts, "", null, null, document);
+		editor.updateLayout(240.0);
+		function sameAsFresh(width:Float, label:String):Void {
+			var expected = new TextEditorState(fonts, editor.text);
+			expected.updateLayout(width);
+			var actual = editor.layout.visualRows(), fresh = expected.layout.visualRows();
+			if (actual.length != fresh.length)
+				throw label + ": " + actual.length + " rows, a fresh layout has " + fresh.length;
+			for (index in 0...actual.length) {
+				var a = actual[index], b = fresh[index];
+				if (a.start != b.start || a.end != b.end || Math.abs(a.top - b.top) > 0.001 || Math.abs(a.bottom - b.bottom) > 0.001)
+					throw label + ": row " + index + " is " + a.start + "-" + a.end + " at " + a.top + "-" + a.bottom + ", a fresh layout's is " +
+						b.start + "-" + b.end + " at " + b.top + "-" + b.bottom;
+			}
+			expected.dispose();
+		}
+		sameAsFresh(240.0, "initial");
+		var revision = document.revision;
+		// One edit per sync: applied to the paragraphs it touched.
+		var edits:Array<{start:Int, end:Int, text:String}> = [
+			{start: 0, end: 0, text: "\n"},
+			{start: document.paragraphRangeAtIndex(40).start, end: document.paragraphRangeAtIndex(44).start, text: "joined é🙂 "},
+			{start: document.paragraphRangeAtIndex(120).start + 3, end: document.paragraphRangeAtIndex(120).start + 3, text: "typed"},
+			{start: document.paragraphRangeAtIndex(200).end, end: document.paragraphRangeAtIndex(201).start, text: ""}
+		];
+		for (edit in edits) {
+			document.replace(edit.start, edit.end, edit.text);
+			if (document.editSince(revision) == null)
+				throw "a single replacement was not recorded";
+			revision = document.revision;
+			if (!editor.syncDocument(document))
+				throw "an external edit was not synced";
+			sameAsFresh(240.0, "after external edit " + edits.indexOf(edit));
+		}
+		// Two edits before one sync: nothing to apply incrementally, so it lays the document out again.
+		document.replace(0, 1, "");
+		document.replace(document.codepointCount, document.codepointCount, "tail");
+		if (document.editSince(revision) != null)
+			throw "two replacements were reported as one";
+		editor.syncDocument(document);
+		sameAsFresh(240.0, "after two edits");
+		// A width change reflows every paragraph, so cached rows are measured again.
+		editor.updateLayout(520.0);
+		sameAsFresh(520.0, "after a width change");
+		// The editor's value compares by revision: unchanged without being assembled, changed after an edit.
+		var before = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		before.setValueSource(editor, editor.documentLength());
+		var same = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		same.setValueSource(editor, editor.documentLength());
+		if (!before.sameValue(same))
+			throw "an unchanged editor value compared unequal";
+		document.replace(0, 0, "x");
+		editor.syncDocument(document);
+		var after = new haxeon.ui.semantics.Semantics(AccessibilityRole.TextField);
+		after.setValueSource(editor, editor.documentLength());
+		if (before.sameValue(after) || after.value != editor.text)
+			throw "an edited editor value compared equal";
+		editor.dispose();
+		return true;
+	}
+
+	/** Without wrapping, a width change leaves left-aligned groups as they are and moves right-to-left ones. An editor
+		resized to each width matches a layout made at that width directly, which never takes the width-change path. */
+	static function unwrappedWidthChangesMatchFreshLayout(fonts:FontCollection):Bool {
+		var value = new StringBuf();
+		for (line in 0...200)
+			value.add(line == 0 ? "שלום עולם " + line + "\n" : "unwrapped line " + line + "\n");
+		var editor = new TextEditorState(fonts, value.toString(), null, new ParagraphStyle(haxeon.ui.TextWrap.None));
+		// A group that starts with right-to-left text takes that direction, so its start alignment is the right edge.
+		var probes = [2, new haxeon.editor.TextDocument(editor.text).paragraphRangeAtIndex(120).start + 3];
+		for (width in [600.0, 900.0, 640.0]) {
+			editor.updateLayout(width);
+			var expected = new haxeon.ui.widgets.text.TextEditorLayout(fonts, editor.text, width, editor.textStyle, new ParagraphStyle(haxeon.ui.TextWrap.None));
+			var actual = editor.layout.visualRows(), fresh = expected.visualRows();
+			if (actual.length != fresh.length)
+				throw "unwrapped rows at width " + width + " differ from a fresh layout";
+			for (index in 0...actual.length)
+				if (actual[index].start != fresh[index].start || actual[index].end != fresh[index].end ||
+					Math.abs(actual[index].top - fresh[index].top) > 0.001)
+					throw "unwrapped row " + index + " at width " + width + " differs from a fresh layout";
+			for (offset in probes) {
+				var a = editor.layout.caret(new TextPosition(offset, 0)), b = expected.caret(new TextPosition(offset, 0));
+				if (Math.abs(a.x - b.x) > 0.001 || Math.abs(a.y - b.y) > 0.001)
+					throw "caret at " + offset + " for width " + width + " is at " + a.x + ", a fresh layout's at " + b.x;
+			}
+			// Unwrapped content is as wide as the groups shaped so far; the probes have shaped the same ones in both.
+			if (Math.abs(editor.layout.measure().width - expected.measure().width) > 0.001)
+				throw "unwrapped content width at " + width + " differs from a fresh layout";
+			expected.dispose();
+		}
+		editor.dispose();
+		return true;
+	}
+
 	static function newlineChunksValid(fonts:FontCollection):Bool {
 		var value = new StringBuf();
 		for (line in 0...220)
@@ -591,6 +750,8 @@ class FrameworkSmoke {
 			return 270;
 		if (!hostSessionLifecycleValid())
 			return 271;
+		if (!retainedRectanglesFollowThePaint())
+			return 278;
 		if (!hostPendingResourcesValid())
 			return 273;
 		if (!coordinateMathValid())
@@ -660,6 +821,13 @@ class FrameworkSmoke {
 		Sys.println("PASS: logical affinity range tags, reversed endpoints and chunked cache");
 		if (!newlineChunksValid(fonts))
 			return 310;
+		if (!unwrappedLayoutShapesOnlyWhatIsNeeded(fonts))
+			throw "unwrapped layout shaped more than it needed or placed unshaped groups wrongly";
+		if (!externalEditsRelayoutCorrectly(fonts))
+			return 311;
+		if (!unwrappedWidthChangesMatchFreshLayout(fonts))
+			return 312;
+		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout, and editor values compare by revision");
 		if (!foregroundRangesValid(fonts))
 			return 308;
 		if (!decorationRangesValid(fonts))
@@ -735,8 +903,11 @@ class FrameworkSmoke {
 			return 0;
 		}
 		if (!sidebarValid(context)) throw "sidebar registry, persistence or lazy provider regression";
+		DockPresentationTests.run(context);
 		if (!dockWorkspaceValid(context))
 			return 231;
+		if (!dockPanelStateFollowsPanel(context))
+			throw "a dock panel's state was rebuilt when the layout around it changed, or kept after it closed";
 		var emptyEditor = new TextEditorState(fonts, "");
 		if (Utf8Text.length(emptyEditor.text) != 0)
 			return 38;
@@ -745,6 +916,18 @@ class FrameworkSmoke {
 		var surrounding = editor.surroundingText(2048, 2048);
 		if (surrounding.text != "á🙂" || surrounding != editor.surroundingText(2048, 2048))
 			throw "unchanged surrounding text did not retain its window";
+		// A large selection does not grow the window: it stays around the caret and reports the selection clamped into it.
+		var long = new TextEditorState(fonts, StringTools.rpad("", "x", 10000));
+		long.setSelection(0, 10000);
+		var bounded = long.surroundingText(2048, 2048);
+		if (bounded.start != 10000 - 2048 || bounded.end != 10000 || Utf8Text.length(bounded.text) != 2048 ||
+			bounded.selectionStart != bounded.start || bounded.selectionEnd != 10000)
+			throw "a large selection's text-input window was not bounded around the caret";
+		long.setSelection(4000, 4100);
+		var whole = long.surroundingText(2048, 2048);
+		if (whole.start != 4100 - 2048 || whole.end != 4100 + 2048 || whole.selectionStart != 4000 || whole.selectionEnd != 4100)
+			throw "a selection within the text-input bounds was not reported whole";
+		long.dispose();
 		if (Utf8Text.length(editor.text) != 3)
 			return 32;
 		if (Utf8Text.slice(editor.text, 0, 2) != "á")
@@ -2127,8 +2310,8 @@ class FrameworkSmoke {
 		var heldX = heldThumb.x + heldThumb.width * 0.5;
 		var heldY = heldThumb.y + heldThumb.height * 0.5;
 		context.pointerDown(heldX, heldY, 0);
-		if (!context.events.hasCapturedPointer())
-			return 270;
+		if (!context.events.hasPointerCapture(scrollRoot.children[1].children[0].id))
+			throw "Scrollbar resize fixture must capture its visible thumb before resizing";
 		scrollView.style.height = LayoutAxis.fixed(160.0);
 		scrollRoot = context.submit(scrollView, new LayoutFrame(256.0, 160.0));
 		context.pointerMove(heldX, heldY - 2.0);
@@ -2882,7 +3065,7 @@ class FrameworkSmoke {
 
 		var theme = new Theme();
 		if (theme.tokens.textPrimary != theme.text || theme.tokens.textSecondary != theme.mutedText ||
-			theme.tokens.surface != theme.panelBackground || theme.tokens.accent != theme.buttonFocused ||
+			theme.tokens.surface != theme.panelBackground || theme.tokens.focusRing != theme.buttonFocused ||
 			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
 			theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0)
 			return 225;
@@ -2898,7 +3081,7 @@ class FrameworkSmoke {
 		theme.tokens.deriveComponents();
 		if (theme.tokens.navigationBackground != theme.tokens.surfaceRaised ||
 			theme.tokens.navigationFocused != theme.tokens.surfaceRaised ||
-			theme.tokens.buttonFocused != theme.tokens.accent ||
+			theme.tokens.buttonFocused != theme.tokens.focusRing ||
 			theme.tokens.focusRing != customFocusRing ||
 			theme.tokens.selectionBorder != theme.tokens.border)
 			return 225;
@@ -3372,7 +3555,7 @@ class FrameworkSmoke {
 			theme.buttonLabelColor(true, lightNeutral, theme.body.color) != theme.body.color ||
 			theme.buttonLabelColor(true, accentButton) != theme.button.color ||
 			theme.buttonLabelColor(false, accentButton) != theme.disabledButtonText)
-			return 101;
+			throw "Button labels must retain readable preferences, choose contrasting defaults and honor disabled colors";
 		theme.buttonHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
 		theme.buttonPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
 		theme.buttonFocused = Color.rgba(0.4, 0.2, 0.8, 1.0);
@@ -3585,7 +3768,9 @@ class FrameworkSmoke {
 		var captureButton = captureRoot.children[2].children[0];
 		var captureHoverEnters = 0;
 		var capturePointerDowns = 0;
-		captureButton.on(UiEventKind.HoverEnter, function(_) { captureHoverEnters++; });
+		captureButton.on(UiEventKind.HoverEnter, function(event) {
+			if (event.target.equals(captureButton.id)) captureHoverEnters++;
+		});
 		captureButton.on(UiEventKind.PointerDown, function(_) { capturePointerDowns++; });
 		var captureDividerGeometry:ResolvedLayoutItem = cast captureDivider.resolved;
 		var captureButtonGeometry:ResolvedLayoutItem = cast captureButton.resolved;
@@ -3627,7 +3812,7 @@ class FrameworkSmoke {
 			context.events.hasPointerCapture(captureDivider.id) ||
 			platformCaptureStates.length != 2 || platformCaptureStates[1] ||
 			context.events.hoveredId() == null ||
-			!context.events.hoveredId().equals(captureButton.id) ||
+			captureButton.find(context.events.hoveredId()) == null ||
 			context.events.cursorShape() != UiCursorShape.Arrow)
 			return 250;
 		context.pointerMove(captureDividerX, captureDividerY);
@@ -3738,7 +3923,7 @@ class FrameworkSmoke {
 		if (themedRoot.layout.style.background != theme.buttonBackground ||
 			themedRoot.computedStyle.get(StyleProperty.BorderColor) != theme.tokens.textOnAccent ||
 			themedRoot.computedStyle.get(StyleProperty.BorderWidth) != 1.0)
-			return 81;
+			throw "Focused primary buttons must retain their fill and show a contrasting border";
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, true))
 			return 237;
@@ -4367,6 +4552,37 @@ class FrameworkSmoke {
 		session.dispose();
 		return stops == 1 && !session.isActive() &&
 			session.state == UiHostLifecycle.Stopping;
+	}
+
+	/** A retained canvas keeps every rectangle its last paint drew, however many, so an identical repaint of a large
+		paint records identical commands; it disposes only the rectangles a paint stopped drawing. */
+	@:access(haxeon.ui.Canvas)
+	static function retainedRectanglesFollowThePaint():Bool {
+		var canvas = new Canvas();
+		canvas.retainRectangles = true;
+		var color = Color.fromBytes(10, 20, 30);
+		function paint(rects:Int):Void {
+			canvas.reset();
+			for (i in 0...rects) canvas.fillRect(new Rect(i, 0, 1, 1), color);
+			canvas.fillRect(new Rect(0, 0, 1, 1), color);
+		}
+		function count(entries:Null<Map<String, {path:Path, paint:Paint}>>):Int {
+			var n = 0;
+			if (entries != null) for (_ in entries) n++;
+			return n;
+		}
+		paint(600);
+		var first = new Map<String, Path>();
+		for (key in canvas.paintedRects.keys()) first.set(key, canvas.paintedRects.get(key).path);
+		paint(600);
+		var reused = count(canvas.paintedRects) == 600;
+		for (key in first.keys())
+			if (canvas.paintedRects.get(key) == null || canvas.paintedRects.get(key).path != first.get(key)) reused = false;
+		paint(10);
+		canvas.reset();
+		var swept = count(canvas.retainedRects) == 10 && count(canvas.paintedRects) == 0;
+		canvas.releaseRetained();
+		return first.keys().hasNext() && reused && swept && count(canvas.retainedRects) == 0;
 	}
 
 	static function hostPendingResourcesValid():Bool {
@@ -5308,12 +5524,24 @@ class FrameworkSmoke {
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-in");
 		visibility.reveal(); clock.advance(0.15);
 		scrollbarCheck(visibility.opacity == 1, "repeated activity preserves fade progress");
+		scrollbarCheck(!clock.needsFrame && Math.abs(clock.waitSeconds() - 0.5) < 0.001, "idle delay waits for a deadline instead of frames");
+		clock.advance(0.01);
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.49) < 0.001, "idle delay counts down");
+		visibility.reveal();
+		scrollbarCheck(Math.abs(clock.waitSeconds() - 0.5) < 0.001, "activity restarts the idle delay");
 		clock.advance(0.49);
 		scrollbarCheck(visibility.opacity == 1, "idle delay follows completed fade-in");
+		scrollbarCheck(!clock.needsFrame && clock.waitSeconds() > 0.0 && clock.waitSeconds() < 0.011, "idle delay ends at its deadline");
 		clock.advance(0.11);
 		scrollbarCheck(Math.abs(visibility.opacity - 0.5) < 0.001, "gradual fade-out");
 		clock.advance(0.11);
 		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "idle animation stops");
+		visibility.reveal(); clock.advance(0.3);
+		scrollbarCheck(!clock.needsFrame, "idle delay after a fade-in needs no frames");
+		clock.advance(0.5);
+		scrollbarCheck(clock.needsFrame && clock.waitSeconds() < 0.0, "fade-out needs frames");
+		clock.advance(0.2);
+		scrollbarCheck(visibility.opacity == 0 && clock.activeCount == 0, "a late wake still fades out");
 
 		visibility.setViewportHovered(true); clock.advance(0.15);
 		visibility.setAvailable(true);
@@ -5536,6 +5764,33 @@ class FrameworkSmoke {
 		if (future == null || future.id != "future" || restored.width != 360) return false;
 		trace("PASS: sidebar lazy providers, shared width, deferred registration and atomic persistence");
 		return true;
+	}
+
+	/** A panel's state belongs to the panel, not to its place in the split tree: it survives its neighbour closing and
+		the panel moving to another split, and goes when the panel closes. */
+	static function dockPanelStateFollowsPanel(uiContext:UiContext):Bool {
+		var created = 0, disposed = 0;
+		var model = new DockWorkspaceModel();
+		for (id in ["sidebar", "editor", "terminal"]) model.register(new DockPanelDescriptor(id, id));
+		var editor = new DockPanelSmoke(() -> created++, () -> disposed++);
+		var workspace = new DockWorkspace("panel-state-workspace", model, [
+			new DockPanelContent("sidebar", _ -> new Text("Sidebar")),
+			new DockPanelContent("editor", _ -> editor),
+			new DockPanelContent("terminal", _ -> new Text("Terminal"))
+		]);
+		var submit = () -> uiContext.submit(workspace, new LayoutFrame(640.0, 480.0)) != null;
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.25, DockNode.Panel("sidebar"),
+			DockNode.Split(DockSplitAxis.Vertical, 0.7, DockNode.Panel("editor"), DockNode.Panel("terminal"))));
+		if (!submit() || created != 1) return false;
+		// The sidebar closes: the editor's split moves up to the root.
+		model.setRoot(DockNode.Split(DockSplitAxis.Vertical, 0.7, DockNode.Panel("editor"), DockNode.Panel("terminal")));
+		if (!submit() || created != 1 || disposed != 0) return false;
+		// The editor moves to the other side of another split.
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.3, DockNode.Panel("terminal"),
+			DockNode.Split(DockSplitAxis.Vertical, 0.5, DockNode.Panel("sidebar"), DockNode.Panel("editor"))));
+		if (!submit() || created != 1 || disposed != 0) return false;
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.3, DockNode.Panel("sidebar"), DockNode.Panel("terminal")));
+		return submit() && created == 1 && disposed == 1;
 	}
 
 	static function dockWorkspaceValid(uiContext:UiContext):Bool {
@@ -6299,6 +6554,20 @@ private class SmokeHostApplication implements UiApplication {
 }
 
 /** Fixed sibling content shares the pane overlay, without becoming scroll content. */
+/** A panel holding one resource, created and disposed through the build context like an editor's state. */
+private class DockPanelSmoke implements View {
+	final create:Void->Void;
+	final dispose:Void->Void;
+	public function new(create:Void->Void, dispose:Void->Void) {
+		this.create = create;
+		this.dispose = dispose;
+	}
+	public function build(context:BuildContext):RenderNode {
+		context.resourceState(context.id("panel-resource"), () -> { create(); return 1; }, _ -> dispose());
+		return new Text("Editor").build(context);
+	}
+}
+
 private class ExternalScrollbarSmoke implements View {
 	final controller:ScrollController;
 	public function new(controller:ScrollController) this.controller = controller;

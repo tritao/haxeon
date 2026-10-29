@@ -63,6 +63,8 @@ class ProjectWorkspace {
 	final diskSources:Map<String, String> = [];
 	final declaredSourceDirectories:Map<String, Bool> = [];
 	final outputDirectories:Map<String, Bool> = [];
+	// Source folders of haxeon.json packages below the package root; the manifest names their outputs exactly.
+	final manifestSourceRoots:Map<String, Bool> = [];
 	final compilerPathByDisk:Map<String, String> = [];
 	final diskPathByCompiler:Map<String, String> = [];
 	final sourceRoots:Array<String> = [];
@@ -111,6 +113,7 @@ class ProjectWorkspace {
 		diskSources.clear();
 		declaredSourceDirectories.clear();
 		outputDirectories.clear();
+		manifestSourceRoots.clear();
 		compilerPathByDisk.clear();
 		diskPathByCompiler.clear();
 		for (path => compilerPath in previous)
@@ -408,9 +411,13 @@ class ProjectWorkspace {
 						directory = Path.directory(directory);
 					}
 				}
-				for (root in value.sourceRoots)
+				// Discovery returns native separators; ownership compares normalized paths.
+				for (root in value.sourceRoots.map(normalize)) {
+					if (root != normalize(value.root))
+						manifestSourceRoots.set(root, true);
 					if (roots.indexOf(root) < 0)
 						roots.push(root);
+				}
 				for (path in value.ffiInterfaces)
 					interfaces.set(path, File.getContent(path));
 				for (path in value.ffiProjections)
@@ -452,7 +459,8 @@ class ProjectWorkspace {
 			errors.push('Source root does not exist: $root');
 			return;
 		}
-		var pending = [root], loaded = 0;
+		// Without a manifest, build and out are presumed to hold generated output rather than packages.
+		var pending = [root], loaded = 0, presumeOutputs = !manifestSourceRoots.exists(normalize(root));
 		while (pending.length > 0 && loaded < 10000) {
 			var directory = pending.pop(),
 				names = FileSystem.readDirectory(directory);
@@ -463,7 +471,7 @@ class ProjectWorkspace {
 					|| name == "node_modules"
 					|| name == "vendor"
 					|| outputDirectories.exists(path)
-					|| ((name == "build" || name == "out") && !declaredSourceDirectories.exists(path)))
+					|| (presumeOutputs && (name == "build" || name == "out") && !declaredSourceDirectories.exists(path)))
 					continue;
 				if (FileSystem.isDirectory(path))
 					pending.push(path);
@@ -552,8 +560,15 @@ class ProjectWorkspace {
 		return result;
 	}
 
-	static function uriPath(uri:String):String
-		return normalize(StringTools.startsWith(uri, "file://") ? StringTools.urlDecode(uri.substr(7)) : uri);
+	static function uriPath(uri:String):String {
+		if (!StringTools.startsWith(uri, "file://"))
+			return normalize(uri);
+		var path = StringTools.urlDecode(uri.substr(7));
+		// file:///C:/x carries a slash before the Windows drive letter.
+		if (Sys.systemName() == "Windows" && ~/^\/[A-Za-z]:/.match(path))
+			path = path.substr(1);
+		return normalize(path);
+	}
 
 	static function normalize(path:String):String
 		return StringTools.replace(FileSystem.absolutePath(path), "\\", "/");

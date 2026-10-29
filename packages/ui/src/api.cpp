@@ -89,6 +89,8 @@ struct DisplayListSlot {
     uint32_t custom_refs = 0;
     uint16_t generation = 1;
     uint64_t revision = 1;
+    /** Hash of the commands last submitted, so resubmitting identical commands is not seen as a change. */
+    uint64_t content_hash = 0;
 };
 
 struct FontEntry {
@@ -118,6 +120,10 @@ struct ResourceSlot {
     // the direct glyph path instead of creating one-use render targets.
     bool row_placement_known = false;
     std::array<float, 6> row_placement{};
+    // Admit only repeated row contents, not a new GPU target for every edit.
+    // Track publications rather than line indices so edits can move cached rows.
+    // Entries are pruned to the current visible rows (at most 96).
+    std::unordered_map<uint64_t, bool> row_raster_candidates;
     uint64_t text_content_revision = 1;
     float text_width = 0.0f;
     nkui::TextLayoutOptions text_options{};
@@ -242,6 +248,11 @@ struct RendererSlot {
     std::size_t registered_custom_effects = 0;
     nkui::UiGpuStats retired_gpu{};
     nkui_renderer_stats stats{};
+    /* Set by nkui_renderer_set_gpu_frame_timing, and handed to each backend renderer the slot gets. */
+    bool gpu_frame_timing = false;
+    /* The newest GPU frame time, published by the render thread after each frame so a poll never waits for one. */
+    uint64_t gpu_last_frame_ns = 0;
+    uint64_t gpu_timed_frames = 0;
     uint16_t generation = 1;
 };
 
@@ -273,6 +284,36 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     void *measure_user_data = nullptr;
     bool fonts_configured = false;
     bool submitted = false;
+    /* Counts the layout results this session has published; a render plan built from one snapshot stays valid until it
+       changes. */
+    uint64_t render_epoch = 1;
+
+    /* What a sealed frame read from a mutable resource when it was built: the resource and its state then. */
+    struct PlanDependency {
+        nkui_resource handle{};
+        std::array<uint64_t, 6> state{};
+    };
+    /* The last sealed frame, kept so a frame whose inputs did not change submits it again instead of compiling the
+       snapshot and publishing its glyphs a second time. */
+    struct ReusablePlan {
+        bool valid = false;
+        /* Set once two builds in a row saw the same inputs, so one-frame promotions such as row textures have settled. */
+        bool settled = false;
+        uint64_t epoch = 0;
+        uint64_t frame_key = 0;
+        uint64_t lists_key = 0;
+        std::shared_ptr<const nkui::SealedRenderPlan> plan;
+        std::vector<nkui::TextEngine *> text_engines;
+        std::vector<std::shared_ptr<nkui::TextEngine>> text_engine_owners;
+        std::vector<PlanDependency> dependencies;
+        uint64_t render_plan_commands = 0;
+        uint64_t custom_paint_bytes = 0;
+        uint64_t session_atlas_key = 0;
+        uint64_t session_layout_generation = 0;
+        uint64_t session_font_generation = 0;
+    } reusable_plan;
+    /* Hash of the snapshot the last submit produced; the epoch moves only when a submit changes it. */
+    uint64_t snapshot_hash = 0;
 };
 
 thread_local LayoutSessionState *active_measure_session = nullptr;
@@ -437,6 +478,10 @@ RendererSlot *resolve(nkui_renderer handle) {
     return entry.active && entry.generation == generation ? &entry : nullptr;
 }
 
+} // namespace
+static void apply_gpu_frame_timing(RendererSlot &slot);
+namespace {
+
 struct RenderSubmission {
     nkui_renderer renderer{};
     nk_surface surface = NK_INVALID_HANDLE;
@@ -589,6 +634,8 @@ void execute_render_submission(RenderSubmission &submission) {
         nk_graphics_unbind_frame_target(&submission.frame_target);
     nkui::UiRenderer *renderer_impl = nullptr;
     bool new_backend = false;
+    nkgpu_frame_timing gpu_timing{};
+    bool have_gpu_timing = false;
     if (bound) {
         std::shared_lock<std::shared_mutex> renderer_execution_lock(renderer_execution_mutex,
                                                                     std::defer_lock);
@@ -615,6 +662,9 @@ void execute_render_submission(RenderSubmission &submission) {
                         success = register_custom_effects(*slot);
                     if (success)
                         renderer_impl = slot->renderer.get();
+                    /* The backend is created here, after the toggle was recorded, and again after device loss. */
+                    if (renderer_impl)
+                        apply_gpu_frame_timing(*slot);
                 }
             }
         }
@@ -647,11 +697,23 @@ void execute_render_submission(RenderSubmission &submission) {
                                  renderer_impl->lastError(), nkgpu_last_error());
             }
         }
+        if (renderer_impl && success && renderer_impl->gpuRenderer().id) {
+            gpu_timing.struct_size = sizeof(gpu_timing);
+            have_gpu_timing =
+                nkgpu_get_frame_timing(renderer_impl->gpuRenderer(), &gpu_timing) == NKGPU_OK;
+        }
         /* Stats are protected by renderers_mutex.  Do not reacquire it while
            the shared execution lock is held: nkui_renderer_get_stats takes
            those locks in the opposite order. */
         if (renderer_execution_lock.owns_lock())
             renderer_execution_lock.unlock();
+    }
+    if (have_gpu_timing) {
+        std::lock_guard lock(renderers_mutex);
+        if (auto *slot = resolve(submission.renderer)) {
+            slot->gpu_last_frame_ns = gpu_timing.last_frame_nanoseconds;
+            slot->gpu_timed_frames = gpu_timing.timed_frames;
+        }
     }
 
     /* GL/EGL retains a thread-local context through submit so sealed-plan
@@ -1369,6 +1431,35 @@ std::pair<uint32_t, uint32_t> visible_text_line_range(
     return layout.text->visible_lines(min_y, max_y);
 }
 
+// Horizontal counterpart of visible_text_line_range, in layout units relative to
+// the command origin. Very long lines publish only the glyphs inside it, so a row
+// shifts it by its own offset.
+nkui::GlyphWindow visible_text_window(
+    const nkui::RenderCommand &command, const std::array<float, 6> &transform,
+    const nkui_frame_info &frame, const nkui::RenderTargetDescriptor &target) {
+    if (transform[1] != 0 || transform[2] != 0 || transform[0] == 0 ||
+        target.origin_x != 0.0f || target.origin_y != 0.0f)
+        return {};
+    float left = 0;
+    float right = target.width > 0 ? static_cast<float>(target.width)
+                                  : static_cast<float>(frame.framebuffer_width);
+    if (command.has_scissor) {
+        left = std::max(left, command.scissor_x);
+        right = std::min(right, command.scissor_x + command.scissor_width);
+    }
+    if (right < left)
+        right = left;
+    const float a = (left - transform[4]) / transform[0] - command.x;
+    const float b = (right - transform[4]) / transform[0] - command.x;
+    return {std::min(a, b), std::max(a, b)};
+}
+
+nkui::GlyphWindow row_window(nkui::GlyphWindow window, float row_x) {
+    window.min_x -= row_x;
+    window.max_x -= row_x;
+    return window;
+}
+
 std::shared_ptr<nkui::PreparedGlyphs> prepare_visible_text(
     ResourceSlot &layout, const nkui::RenderCommand &command,
     const std::array<float, 6> &transform, const nkui_frame_info &frame,
@@ -1637,6 +1728,7 @@ void release_resource_slot(ResourceSlot &slot) {
     slot.text_color_ranges.clear();
     slot.row_placement_known = false;
     slot.row_placement = {};
+    slot.row_raster_candidates.clear();
     slot.text_content_revision = 1;
     slot.text_width = 0.0f;
     slot.text_options = {};
@@ -1836,6 +1928,7 @@ extern "C" nkui_result nkui_display_list_reset(nkui_display_list list) {
         return NKUI_ERROR_INVALID_HANDLE;
     release_display_resources(*slot);
     slot->list->reset();
+    slot->content_hash = 0;
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -1868,6 +1961,19 @@ extern "C" nkui_result nkui_display_list_submit(nkui_display_list list, const ui
     }
     release_display_resources(*slot);
     slot->resources = std::move(retained);
+    {
+        uint64_t hash = UINT64_C(1469598103934665603) ^ command_bytes;
+        size_t offset = 0;
+        for (; offset + sizeof(uint64_t) <= command_bytes; offset += sizeof(uint64_t)) {
+            uint64_t word = 0;
+            std::memcpy(&word, commands + offset, sizeof(word));
+            hash = (hash ^ word) * UINT64_C(1099511628211);
+            hash ^= hash >> 29;
+        }
+        for (; offset < command_bytes; ++offset)
+            hash = (hash ^ commands[offset]) * UINT64_C(1099511628211);
+        slot->content_hash = hash;
+    }
     if (++slot->revision == 0)
         slot->revision = 1;
     return NKUI_OK;
@@ -2033,6 +2139,8 @@ extern "C" nkui_result nkui_layout_session_set_font_collection(nkui_layout_sessi
         if (!state->engine->valid())
             return NKUI_ERROR_OUT_OF_MEMORY;
         state->compiler.set_font_collection(shared_fonts);
+        ++state->render_epoch;
+        state->reusable_plan = {};
         configure_layout_measure_callback(*state);
         state->fonts_configured = true;
     }
@@ -2323,6 +2431,102 @@ extern "C" nkui_result nkui_layout_session_set_cache_policy(nkui_layout_session 
     return set_cache_policy(resolve(session), node_id, policy, false);
 }
 
+namespace {
+
+void hash_snapshot_value(uint64_t &hash, uint64_t value) {
+    hash ^= value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2);
+}
+
+void hash_snapshot_float(uint64_t &hash, float value) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    hash_snapshot_value(hash, bits);
+}
+
+void hash_snapshot_rect(uint64_t &hash, const nkui::LayoutRect &rect) {
+    hash_snapshot_float(hash, rect.x);
+    hash_snapshot_float(hash, rect.y);
+    hash_snapshot_float(hash, rect.width);
+    hash_snapshot_float(hash, rect.height);
+}
+
+void hash_snapshot_transform(uint64_t &hash, const nkui::LayoutTransform &transform) {
+    for (const float value : {transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty})
+        hash_snapshot_float(hash, value);
+}
+
+void hash_snapshot_string(uint64_t &hash, const std::string &text) {
+    hash_snapshot_value(hash, text.size());
+    for (const uint8_t byte : text)
+        hash_snapshot_value(hash, byte);
+}
+
+/* Covers everything the render plan compiler reads from a snapshot, so an identical layout result can be recognised. */
+uint64_t hash_layout_snapshot(const nkui::LayoutSnapshot &snapshot) {
+    uint64_t hash = UINT64_C(1469598103934665603);
+    hash_snapshot_value(hash, snapshot.items.size());
+    for (const auto &item : snapshot.items) {
+        hash_snapshot_value(hash, item.id);
+        hash_snapshot_value(hash, static_cast<uint64_t>(item.visual_kind));
+        hash_snapshot_rect(hash, item.bounds);
+        hash_snapshot_rect(hash, item.clip_bounds);
+        hash_snapshot_rect(hash, item.content_bounds);
+        hash_snapshot_rect(hash, item.world_bounds);
+        hash_snapshot_transform(hash, item.transform);
+        hash_snapshot_float(hash, item.baseline);
+        hash_snapshot_value(hash, (item.visible ? 1u : 0u) | (item.hit_self ? 2u : 0u) | (item.hit_children ? 4u : 0u));
+        hash_snapshot_value(hash, item.parent_id);
+        hash_snapshot_value(hash, item.paint_order);
+        hash_snapshot_value(hash, static_cast<uint64_t>(static_cast<int64_t>(item.z_index)));
+        hash_snapshot_value(hash, item.content_revision);
+        hash_snapshot_value(hash, item.geometry_revision);
+        hash_snapshot_value(hash, item.composite_revision);
+    }
+    hash_snapshot_value(hash, snapshot.primitives.size());
+    for (const auto &primitive : snapshot.primitives) {
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.kind));
+        hash_snapshot_value(hash, primitive.node_id);
+        hash_snapshot_rect(hash, primitive.bounds);
+        hash_snapshot_transform(hash, primitive.transform);
+        hash_snapshot_value(hash, primitive.visible ? 1u : 0u);
+        for (const float value : {primitive.color.red, primitive.color.green, primitive.color.blue,
+                                  primitive.color.alpha, primitive.radius_top_left,
+                                  primitive.radius_top_right, primitive.radius_bottom_left,
+                                  primitive.radius_bottom_right, primitive.text_style.font_size,
+                                  primitive.text_style.letter_spacing,
+                                  primitive.paragraph_style.line_height})
+            hash_snapshot_float(hash, value);
+        hash_snapshot_string(hash, primitive.text);
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.text_style.family));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.wrap));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.alignment));
+        hash_snapshot_value(hash, static_cast<uint64_t>(primitive.paragraph_style.direction));
+        hash_snapshot_value(hash, primitive.paragraph_style.tab_width);
+        hash_snapshot_value(hash, primitive.text_layout_id);
+        hash_snapshot_value(hash, primitive.text_line_index);
+        hash_snapshot_value(hash, primitive.content_revision);
+        hash_snapshot_value(hash, primitive.geometry_revision);
+        hash_snapshot_value(hash, primitive.composite_revision);
+    }
+    hash_snapshot_value(hash, snapshot.text_layouts.size());
+    for (const auto &layout : snapshot.text_layouts) {
+        hash_snapshot_value(hash, layout.id);
+        hash_snapshot_value(hash, layout.node_id);
+        hash_snapshot_string(hash, layout.text);
+        hash_snapshot_float(hash, layout.width);
+        hash_snapshot_float(hash, layout.height);
+        hash_snapshot_float(hash, layout.first_line_baseline);
+        for (const auto &line : layout.lines) {
+            hash_snapshot_value(hash, line.text_offset);
+            hash_snapshot_value(hash, line.text_length);
+            hash_snapshot_rect(hash, line.bounds);
+        }
+    }
+    return hash;
+}
+
+} // namespace
+
 extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
                                                   const uint8_t *transaction,
                                                   uint32_t transaction_bytes,
@@ -2360,6 +2564,10 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     state->snapshot = std::move(snapshot);
     state->submitted = true;
+    if (const uint64_t hash = hash_layout_snapshot(state->snapshot); hash != state->snapshot_hash) {
+        state->snapshot_hash = hash;
+        ++state->render_epoch;
+    }
     std::lock_guard<std::mutex> lists_lock(lists_mutex);
     for (auto it = state->custom_paints.begin(); it != state->custom_paints.end();) {
         const auto *item = state->snapshot.find(it->first);
@@ -2586,6 +2794,7 @@ extern "C" nkui_result nkui_text_layout_update(nkui_resource layout, const char 
         return NKUI_ERROR_INVALID_ARGUMENT;
     slot->text_width = width;
     slot->text_options = options;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2604,6 +2813,7 @@ extern "C" nkui_result nkui_text_layout_set_text(nkui_resource layout, const cha
     nkui::TextLayoutResult shaped;
     if (!slot->text->layout_utf8(text ? text : "", slot->text_width, slot->text_options, &shaped))
         return NKUI_ERROR_INVALID_ARGUMENT;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2623,6 +2833,7 @@ extern "C" nkui_result nkui_text_layout_edit(nkui_resource layout, int32_t start
     nkui::TextLayoutResult shaped;
     if (!slot->text->edit_utf8(start, end, replacement ? replacement : "", &shaped))
         return NKUI_ERROR_INVALID_ARGUMENT;
+    slot->text->set_grid_positions({});
     slot->text_color_ranges.clear();
     ++slot->text_content_revision;
     slot->text_glyphs = {};
@@ -2663,6 +2874,36 @@ extern "C" nkui_result nkui_text_layout_set_color_ranges(nkui_resource layout,
     tint_text_glyphs(slot->text_glyphs, slot->text_color, slot->text_color_ranges);
     for (auto &[_, glyphs] : slot->scaled_text_glyphs)
         tint_text_glyphs(glyphs, slot->text_color, slot->text_color_ranges);
+    return NKUI_OK;
+}
+
+extern "C" nkui_result nkui_text_layout_set_grid_positions(nkui_resource layout,
+    const uint8_t *positions, uint32_t position_bytes) {
+    if ((!positions && position_bytes) || position_bytes % 4 || position_bytes > 4 * 1048576)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(resources_mutex);
+    auto *slot = resolve(layout, nkui::ResourceKind::TextLayout);
+    if (!slot || !slot->text) return NKUI_ERROR_INVALID_HANDLE;
+    std::vector<float> grid;
+    grid.reserve(position_bytes / 4);
+    for (uint32_t index = 0; index < position_bytes; index += 4) {
+        uint32_t bits = static_cast<uint32_t>(positions[index]) |
+            (static_cast<uint32_t>(positions[index + 1]) << 8) |
+            (static_cast<uint32_t>(positions[index + 2]) << 16) |
+            (static_cast<uint32_t>(positions[index + 3]) << 24);
+        float x;
+        std::memcpy(&x, &bits, sizeof(x));
+        grid.push_back(x);
+    }
+    bool changed = false;
+    if (!slot->text->set_grid_positions(grid, &changed)) return NKUI_ERROR_INVALID_ARGUMENT;
+    if (changed) {
+        ++slot->text_content_revision;
+        slot->text_glyphs = {};
+        slot->scaled_text_glyphs.clear();
+        slot->visible_text_glyphs.clear();
+        slot->visible_line_glyphs.clear();
+    }
     return NKUI_OK;
 }
 
@@ -3385,6 +3626,61 @@ extern "C" nkui_result nkui_renderer_get_stats(nkui_renderer renderer,
     return NKUI_OK;
 }
 
+/* Hands the slot's frame-timing choice to its current backend renderer, which a surface or device loss may have
+   replaced since it was set. Callers hold the renderer locks. */
+static void apply_gpu_frame_timing(RendererSlot &slot) {
+    if (!slot.renderer)
+        return;
+    const nkgpu_renderer gpu = slot.renderer->gpuRenderer();
+    if (gpu.id)
+        nkgpu_set_frame_timing(gpu, slot.gpu_frame_timing ? 1u : 0u);
+}
+
+extern "C" nkui_result nkui_renderer_set_gpu_frame_timing(nkui_renderer renderer, uint8_t enabled) {
+    if (enabled > 1)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(renderers_mutex);
+    auto *slot = resolve(renderer);
+    if (!slot)
+        return NKUI_ERROR_INVALID_HANDLE;
+    slot->gpu_frame_timing = enabled != 0;
+    /* With a render thread the backend belongs to it, which applies the recorded state before its next frame; waiting
+       for the frame in flight here would stall the caller. */
+    if (!nk::core::render_executor_physical())
+        apply_gpu_frame_timing(*slot);
+    return NKUI_OK;
+}
+
+extern "C" nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
+                                                        uint64_t *out_nanoseconds,
+                                                        uint64_t *out_timed_frames) {
+    if (!out_nanoseconds || !out_timed_frames)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(renderers_mutex);
+    auto *slot = resolve(renderer);
+    if (!slot)
+        return NKUI_ERROR_INVALID_HANDLE;
+    *out_nanoseconds = 0;
+    *out_timed_frames = 0;
+    if (nk::core::render_executor_physical()) {
+        /* The render thread owns the backend and holds the execution lock while it draws; waiting for that lock would
+           make every poll wait for the frame in flight. It publishes the newest result after each frame instead. */
+        *out_nanoseconds = slot->gpu_last_frame_ns;
+        *out_timed_frames = slot->gpu_timed_frames;
+        return NKUI_OK;
+    }
+    apply_gpu_frame_timing(*slot);
+    if (!slot->renderer || !slot->renderer->gpuRenderer().id)
+        return NKUI_OK;
+    nkgpu_frame_timing timing{};
+    timing.struct_size = sizeof(timing);
+    if (nkgpu_get_frame_timing(slot->renderer->gpuRenderer(), &timing) == NKGPU_OK) {
+        *out_nanoseconds = timing.last_frame_nanoseconds;
+        *out_timed_frames = timing.timed_frames;
+    }
+    return NKUI_OK;
+}
+
 static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_display_list list,
                                               nk_surface surface, const nkui_frame_info *frame_info,
                                               bool load_existing) {
@@ -3508,6 +3804,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
         uint32_t line_index = 0;
         float pixel_scale = 1.0f;
         uint64_t content_generation = 0;
+        nkui::GlyphWindow window;
     };
     std::vector<OwnedRowBind> owned_row_binds;
     uint16_t prepared_slot = 1;
@@ -3665,23 +3962,27 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                 const auto visible = visible_text_line_range(*layout, command, transform,
                                                                *frame_info, pass.target_descriptor);
                 const auto row_count = visible.second - visible.first;
+                const auto base_window = visible_text_window(command, transform, *frame_info,
+                                                             pass.target_descriptor);
                 // A row keeps its own immutable glyph snapshot and cache key.
-                // Leave one-row views and unusually large ranges on the bounded
-                // aggregate path so transient resource IDs cannot overflow.
-                if (row_count > 1 && row_count <=
-                    std::numeric_limits<uint16_t>::max() - prepared_slot) {
+                // Leave short one-row views and unusually large ranges on the bounded
+                // aggregate path so transient resource IDs cannot overflow. A one-row
+                // view of a very long line takes the row path to be windowed.
+                if ((row_count > 1 || (row_count == 1 && layout->text->text_count() > 2048)) &&
+                    row_count <= std::numeric_limits<uint16_t>::max() - prepared_slot) {
                     std::vector<nkui::RenderCommand> row_commands;
                     row_commands.reserve(row_count);
                     for (uint32_t row_index = visible.first; row_index < visible.second; ++row_index) {
+                        const auto bounds = layout->text->line_bounds(row_index);
+                        const auto window = row_window(base_window, bounds.x);
                         auto row = layout->text->published_glyphs_for_line(
                             layout->text->active_layout_id(), row_index, 0, 0, raster_scale,
                             nkui::GlyphMode::Alpha, glyph_tint_from_color(layout->text_color),
-                            layout->text_color_ranges);
+                            layout->text_color_ranges, nkui::GlyphPreparation::Rasterize, window);
                         if (!row) {
                             valid = false;
                             break;
                         }
-                        const auto bounds = layout->text->line_bounds(row_index);
                         auto row_command = command;
                         row_command.resource = nkui::make_resource_id(
                             nkui::ResourceKind::TextLayout, 0x0FFE, prepared_slot++);
@@ -3699,7 +4000,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                         if (!valid)
                             break;
                         owned_row_binds.push_back({row_command.resource, layout, std::move(row),
-                                                   row_index, raster_scale, content_generation});
+                                                   row_index, raster_scale, content_generation, window});
                         row_commands.push_back(std::move(row_command));
                     }
                     if (!valid)
@@ -3827,7 +4128,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                 bind.layout->text->active_layout_id(), bind.line_index, 0, 0,
                 bind.pixel_scale, nkui::GlyphMode::Alpha,
                 glyph_tint_from_color(bind.layout->text_color),
-                bind.layout->text_color_ranges);
+                bind.layout->text_color_ranges, nkui::GlyphPreparation::Rasterize, bind.window);
             if (!bind.glyphs ||
                 !frame_resources.bind_text(bind.id, *bind.glyphs,
                                            bind.content_generation,
@@ -3919,6 +4220,40 @@ extern "C" nkui_result nkui_renderer_render_frame_overlay(nkui_renderer renderer
                                                           const nkui_frame_info *frame_info) {
     return renderer_render_frame_impl(renderer, list, surface, frame_info, true);
 }
+
+namespace {
+
+uint64_t mix_render_key(uint64_t hash, uint64_t value) {
+    return hash ^ (value + UINT64_C(0x9e3779b97f4a7c15) + (hash << 6) + (hash >> 2));
+}
+
+uint64_t float_key(float value) {
+    uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+/* The state of a mutable resource that a built frame depends on, compared again before the frame is submitted twice. */
+std::array<uint64_t, 6> plan_dependency_state(const ResourceSlot &slot) {
+    std::array<uint64_t, 6> state{};
+    if (slot.kind == nkui::ResourceKind::TextLayout && slot.text) {
+        state[0] = slot.text_content_revision;
+        state[1] = slot.text->layout_generation();
+        state[2] = slot.text->font_collection_generation();
+        state[3] = slot.text->atlas_generation_key();
+        state[4] = reinterpret_cast<uintptr_t>(slot.text.get());
+    } else if (slot.kind == nkui::ResourceKind::RenderTarget) {
+        state[0] = slot.graphics_image.id;
+        if (slot.surface) {
+            const nk_graphics_image published = slot.surface->retained_image();
+            state[1] = published.id;
+            state[2] = static_cast<uint64_t>(slot.surface->generation());
+        }
+    }
+    return state;
+}
+
+} // namespace
 
 extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                         nkui_layout_session session,
@@ -4075,6 +4410,108 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             if (policy >= NKUI_LAYOUT_CACHE_AUTO)
                 raster_paint_nodes.insert(node_id);
     }
+    const auto enqueue_sealed = [&](std::shared_ptr<const nkui::SealedRenderPlan> sealed_plan,
+                                    std::vector<nkui::TextEngine *> engines,
+                                    std::vector<std::shared_ptr<nkui::TextEngine>> owners) {
+        auto *submission = new RenderSubmission{renderer,
+                                                surface,
+                                                frame,
+                                                frame_target,
+                                                std::move(sealed_plan),
+                                                std::move(engines),
+                                                std::move(owners),
+                                                session_state->shared_from_this()};
+        submission->acquired_at_ns = frame_acquired_at_ns;
+        submission->build_time_ns = elapsed_ns(build_started_at_ns, nk_time_now_ns());
+        renderer_lock.unlock();
+        lists_lock.unlock();
+        resources_lock.unlock();
+        sessions_lock.unlock();
+        cpu_lock.unlock();
+        if (!enqueue_render_submission(submission))
+            return NKUI_ERROR_RENDERING;
+        frame_guard.handed_off = true;
+        return NKUI_OK;
+    };
+    /* A frame whose layout, display lists, text and targets are exactly those of the last one renders the same plan.
+       Compiling it again and publishing every visible row's glyphs again only reproduces it. */
+    uint64_t reuse_frame_key = 0;
+    uint64_t reuse_lists_key = 0;
+    if (threaded) {
+        reuse_frame_key = mix_render_key(0, compile_target.value);
+        reuse_frame_key = mix_render_key(reuse_frame_key, has_backdrop ? 1u : 0u);
+        reuse_frame_key = mix_render_key(reuse_frame_key, load_existing ? 1u : 0u);
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->pixel_scale));
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->logical_width));
+        reuse_frame_key = mix_render_key(reuse_frame_key, float_key(frame_info->logical_height));
+        reuse_frame_key = mix_render_key(reuse_frame_key, static_cast<uint64_t>(frame_info->framebuffer_width));
+        reuse_frame_key = mix_render_key(reuse_frame_key, static_cast<uint64_t>(frame_info->framebuffer_height));
+        /* Unordered maps iterate in no fixed order, so each entry is mixed on its own and the results are summed. */
+        uint64_t entries = 0;
+        for (const auto &[node_id, list_handle] : session_state->custom_paints) {
+            const auto *list_slot = resolve(list_handle);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
+        }
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
+        entries = 0;
+        for (const auto &[node_id, list_handle] : session_state->custom_paint_composites) {
+            const auto *list_slot = resolve(list_handle);
+            entries += mix_render_key(mix_render_key(node_id, list_handle.id), list_slot ? list_slot->content_hash : 0);
+        }
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
+        entries = 0;
+        for (const auto &[node_id, policy] : session_state->cache_policies)
+            entries += mix_render_key(node_id, static_cast<uint64_t>(policy));
+        reuse_lists_key = mix_render_key(reuse_lists_key, entries);
+        const auto &previous = session_state->reusable_plan;
+        /* The first reason a frame cannot reuse the last plan, counted so a capture shows why it was compiled. */
+        uint64_t nkui_renderer_stats::*miss = nullptr;
+        if (!previous.valid || !previous.plan)
+            miss = &nkui_renderer_stats::render_plan_miss_unsettled;
+        else if (previous.epoch != session_state->render_epoch)
+            miss = &nkui_renderer_stats::render_plan_miss_epoch;
+        else if (previous.frame_key != reuse_frame_key)
+            miss = &nkui_renderer_stats::render_plan_miss_frame;
+        else if (previous.lists_key != reuse_lists_key)
+            miss = &nkui_renderer_stats::render_plan_miss_lists;
+        if (!miss) {
+            bool dependencies_current = true;
+            for (const auto &dependency : previous.dependencies) {
+                const auto *dependency_slot =
+                    resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+                if (!dependency_slot)
+                    dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+                if (!dependency_slot || plan_dependency_state(*dependency_slot) != dependency.state) {
+                    dependencies_current = false;
+                    break;
+                }
+            }
+            const auto *layout_text_engine = session_state->engine->text_engine();
+            if (!dependencies_current)
+                miss = &nkui_renderer_stats::render_plan_miss_dependencies;
+            else if (layout_text_engine &&
+                     /* The session's own glyphs live in an atlas that another publication could have repacked, and
+                        added fonts change which glyphs exist. */
+                     (previous.session_atlas_key != layout_text_engine->atlas_generation_key() ||
+                      previous.session_layout_generation != layout_text_engine->layout_generation() ||
+                      previous.session_font_generation != layout_text_engine->font_collection_generation()))
+                miss = &nkui_renderer_stats::render_plan_miss_atlas;
+            else if (!previous.settled)
+                miss = &nkui_renderer_stats::render_plan_miss_unsettled;
+        }
+        if (!miss) {
+            ++renderer_slot->stats.render_plan_reuses;
+            accumulate_render_plan_stats(renderer_slot->stats, previous.plan->plan());
+            renderer_slot->stats.render_plan_commands += previous.render_plan_commands;
+            renderer_slot->stats.custom_paint_bytes += previous.custom_paint_bytes;
+            return enqueue_sealed(previous.plan, previous.text_engines, previous.text_engine_owners);
+        }
+        ++(renderer_slot->stats.*miss);
+    }
+    ++renderer_slot->stats.render_plan_compiles;
+    const uint64_t commands_before = renderer_slot->stats.render_plan_commands;
+    const uint64_t custom_bytes_before = renderer_slot->stats.custom_paint_bytes;
+    std::vector<LayoutSessionState::PlanDependency> plan_dependencies;
     nkui::LayoutRenderCompileError compile_error{};
     if (!session_state->compiler.compile(
             session_state->snapshot, compile_target, frame_info->pixel_scale, session_state->frame,
@@ -4120,6 +4557,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         uint32_t line_index = 0;
         float pixel_scale = 1.0f;
         uint64_t content_generation = 0;
+        nkui::GlyphWindow window;
     };
     std::vector<SessionRowBind> session_row_binds;
     std::vector<nkui::RenderPass> session_row_rasters;
@@ -4318,6 +4756,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                      : "too many prepared resources in one frame";
                     break;
                 }
+                plan_dependencies.push_back({nkui_resource{command.resource.value},
+                                             plan_dependency_state(*layout)});
                 const auto scale = nkui::text_raster_scale_for_transform(command.transform.data());
                 if (!scale.key) {
                     valid = false;
@@ -4329,6 +4769,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 const auto visible = visible_text_line_range(*layout, command, command.transform,
                                                                *frame_info, pass.target_descriptor);
                 const uint32_t row_count = visible.second - visible.first;
+                const auto base_window = visible_text_window(command, command.transform, *frame_info,
+                                                             pass.target_descriptor);
                 auto placement = command.transform;
                 // Whole-pixel movement can reuse canonical row textures; only
                 // a changed subpixel phase or linear transform requires direct drawing.
@@ -4339,25 +4781,36 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 const bool stable_placement = layout->row_placement_known && layout->row_placement == placement;
                 layout->row_placement = placement;
                 layout->row_placement_known = true;
-                // Small single-line paragraphs use the same row cache. Keep
-                // very long unwrapped lines on the direct single-row path.
-                if ((row_count > 1 || (row_count == 1 && layout->text->text_count() <= 2048)) &&
+                auto &raster_candidates = layout->row_raster_candidates;
+                if (row_count > 96) raster_candidates.clear();
+                else for (auto &[publication, seen] : raster_candidates) seen = false;
+                // Single-line paragraphs use the same row cache, so a very long
+                // unwrapped line publishes only the window the clip shows.
+                if (row_count >= 1 &&
                     row_count <=
                     std::numeric_limits<uint16_t>::max() - prepared_slot + 1) {
                     std::vector<nkui::RenderCommand> row_commands;
                     row_commands.reserve(row_count);
                     for (uint32_t row_index = visible.first; row_index < visible.second; ++row_index) {
+                        const auto bounds = layout->text->line_bounds(row_index);
+                        const auto window = row_window(base_window, bounds.x);
                         auto row = layout->text->published_glyphs_for_line(
                             layout->text->active_layout_id(), row_index, 0, 0, raster_scale,
                             nkui::GlyphMode::Alpha, glyph_tint_from_color(layout->text_color),
-                            layout->text_color_ranges);
+                            layout->text_color_ranges, nkui::GlyphPreparation::Rasterize, window);
                         if (!row) {
                             valid = false;
                             invalid_reason = "a visible text row could not be prepared";
                             break;
                         }
+                        bool stable_content = false;
+                        if (row_count <= 96) {
+                            const auto [candidate, inserted] =
+                                raster_candidates.try_emplace(row->publication_key, true);
+                            stable_content = !inserted;
+                            candidate->second = true;
+                        }
                         auto row_command = command;
-                        const auto bounds = layout->text->line_bounds(row_index);
                         row_command.resource = nkui::make_resource_id(
                             nkui::ResourceKind::TextLayout, 0x0FFD,
                             static_cast<uint16_t>(prepared_slot++));
@@ -4377,7 +4830,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                             sealable = false;
                         if (!valid)
                             break;
-                        if (stable_placement && row_count <= 96 && command.transform[1] == 0.0f &&
+                        if (stable_placement && stable_content && row_count <= 96 && command.transform[1] == 0.0f &&
                             command.transform[2] == 0.0f && command.transform[0] > 0.0f &&
                             command.transform[3] > 0.0f && !row->vertices.empty()) {
                             float min_y = INFINITY, max_y = -INFINITY;
@@ -4430,9 +4883,10 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                         }
                         session_row_binds.push_back({glyph_id, layout, std::move(row),
                                                      row_index, raster_scale,
-                                                     row_command.content_generation});
+                                                     row_command.content_generation, window});
                         row_commands.push_back(std::move(row_command));
                     }
+                    std::erase_if(raster_candidates, [](const auto &entry) { return !entry.second; });
                     if (!valid)
                         break;
                     retain_text_engine(layout->text, text_engines, text_engine_owners);
@@ -4494,6 +4948,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                         invalid_reason = "a composited render target was destroyed";
                         break;
                     }
+                    plan_dependencies.push_back({nkui_resource{command.resource.value},
+                                                 plan_dependency_state(*surface_slot)});
                     if (surface_slot->graphics_image.id) {
                         frame_stage = "composite target: bind graphics image";
                         valid = frame_resources.bind_graphics_image(command.resource,
@@ -4554,7 +5010,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 bind.layout->text->active_layout_id(), bind.line_index, 0, 0,
                 bind.pixel_scale, nkui::GlyphMode::Alpha,
                 glyph_tint_from_color(bind.layout->text_color),
-                bind.layout->text_color_ranges);
+                bind.layout->text_color_ranges, nkui::GlyphPreparation::Rasterize, bind.window);
             if (!bind.glyphs ||
                 !frame_resources.bind_text(bind.id, *bind.glyphs,
                                            bind.content_generation,
@@ -4567,6 +5023,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         }
     }
     auto *session_text_engine = session_state->frame.text_engine();
+    session_state->reusable_plan.valid = false;
     if (!sealable && threaded)
         return NKUI_ERROR_RENDERING;
     if (!threaded) {
@@ -4591,25 +5048,42 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         if (threaded) {
             if (session_text_engine)
                 text_engines.push_back(session_text_engine);
-            auto *submission = new RenderSubmission{renderer,
-                                                    surface,
-                                                    frame,
-                                                    frame_target,
-                                                    std::move(sealed),
-                                                    std::move(text_engines),
-                                                    std::move(text_engine_owners),
-                                                    session_state->shared_from_this()};
-            submission->acquired_at_ns = frame_acquired_at_ns;
-            submission->build_time_ns = elapsed_ns(build_started_at_ns, nk_time_now_ns());
-            renderer_lock.unlock();
-            lists_lock.unlock();
-            resources_lock.unlock();
-            sessions_lock.unlock();
-            cpu_lock.unlock();
-            if (!enqueue_render_submission(submission))
-                return NKUI_ERROR_RENDERING;
-            frame_guard.handed_off = true;
-            return NKUI_OK;
+            auto &reusable = session_state->reusable_plan;
+            /* Glyphs published for this frame move the atlas keys, so the states are taken once it is built. */
+            for (auto &dependency : plan_dependencies) {
+                const auto *dependency_slot =
+                    resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+                if (!dependency_slot)
+                    dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+                if (dependency_slot)
+                    dependency.state = plan_dependency_state(*dependency_slot);
+            }
+            const bool same_inputs =
+                reusable.epoch == session_state->render_epoch && reusable.frame_key == reuse_frame_key &&
+                reusable.lists_key == reuse_lists_key && reusable.dependencies.size() == plan_dependencies.size() &&
+                std::equal(reusable.dependencies.begin(), reusable.dependencies.end(),
+                           plan_dependencies.begin(),
+                           [](const auto &left, const auto &right) {
+                               return left.handle.id == right.handle.id && left.state == right.state;
+                           }) &&
+                reusable.session_atlas_key ==
+                    (session_text_engine ? session_text_engine->atlas_generation_key() : 0);
+            reusable.settled = reusable.plan != nullptr && same_inputs;
+            reusable.valid = true;
+            reusable.epoch = session_state->render_epoch;
+            reusable.frame_key = reuse_frame_key;
+            reusable.lists_key = reuse_lists_key;
+            reusable.plan = sealed;
+            reusable.text_engines = text_engines;
+            reusable.text_engine_owners = text_engine_owners;
+            reusable.dependencies = std::move(plan_dependencies);
+            reusable.render_plan_commands = renderer_slot->stats.render_plan_commands - commands_before;
+            reusable.custom_paint_bytes = renderer_slot->stats.custom_paint_bytes - custom_bytes_before;
+            reusable.session_atlas_key = session_text_engine ? session_text_engine->atlas_generation_key() : 0;
+            reusable.session_layout_generation = session_text_engine ? session_text_engine->layout_generation() : 0;
+            reusable.session_font_generation =
+                session_text_engine ? session_text_engine->font_collection_generation() : 0;
+            return enqueue_sealed(std::move(sealed), std::move(text_engines), std::move(text_engine_owners));
         }
         nkui::RenderExecutionError execution_error{};
         const bool sealed_executed = nkui::execute_render_plan(*renderer_slot->renderer, *sealed,

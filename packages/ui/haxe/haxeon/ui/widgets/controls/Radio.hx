@@ -13,7 +13,6 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
-import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleStateUtil;
@@ -135,8 +134,7 @@ class Radio implements View {
 			node.add(text);
 			if (enabled && hasSelectHandler) {
 				var select = function(_:UiEvent) { onSelect(value); };
-				node.on(UiEventKind.Click, select);
-				node.on(UiEventKind.Activate, select);
+				node.onActivate(select);
 			}
 			return node;
 		});

@@ -124,7 +124,9 @@ class EventDispatcher {
 				targetPath[targetPath.length - 1].id, x, y, 0.0, 0.0, 0, 0,
 				modifiers, null, data, 0, pointerId);
 			dispatchPath(targetPath, event);
-			if (event.defaultPrevented)
+			// Only motion within a pressed gesture can suppress its click.
+			// Consumed hover (for example terminal mouse tracking) has no click.
+			if (event.defaultPrevented && pressedIds.exists(pointerId))
 				suppressedClicks.set(pointerId, true);
 			applyPointerCaptureRequest(pointerId, event);
 			if (event.pointerReleaseRequested)
@@ -136,6 +138,8 @@ class EventDispatcher {
 			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
 		if (capturedIds.exists(pointerId))
 			pointerCancel(pointerId, x, y, modifiers, data);
+		// Suppression belongs to one press/release sequence, never a later one.
+		suppressedClicks.remove(pointerId);
 		rememberPointer(pointerId, x, y);
 		var path = hitPath(x, y);
 		if (root != null)
@@ -154,7 +158,7 @@ class EventDispatcher {
 		var event = new UiEvent(UiEventKind.PointerDown, target.id, x, y,
 			0.0, 0.0, button, 0, modifiers, null, data, 0, pointerId,
 			timestamp < 0.0 ? NativeKit.nk_time_seconds() : timestamp);
-		updatePathState(path, StyleState.Pressed, true);
+		updatePathState(path, StyleState.Pressed, button == 0);
 		dispatchPath(path, event);
 		if (event.defaultPrevented)
 			suppressedClicks.set(pointerId, true);
@@ -197,6 +201,7 @@ class EventDispatcher {
 		}
 		var path = capturedPath(pointerId);
 		var pressed = pressedIds.get(pointerId);
+		var pressedButton = pressedButtons.get(pointerId);
 		var clickSuppressed = suppressedClicks.exists(pointerId);
 		if (path.length == 0)
 			path = pressedPath(pointerId);
@@ -215,7 +220,7 @@ class EventDispatcher {
 			probe("pointerDispatchSeconds", now - stageStarted);
 			stageStarted = now;
 		}
-		if (!clickSuppressed && pressed != null && releasePath.length > 0 &&
+		if (!clickSuppressed && pressed != null && pressedButton == button && releasePath.length > 0 &&
 			releasePath[releasePath.length - 1].id.equals(pressed)) {
 			dispatchPath(releasePath, new UiEvent(UiEventKind.Click, pressed, x, y,
 				0.0, 0.0, button, 0, modifiers, null, data, 0, pointerId));
@@ -275,6 +280,18 @@ class EventDispatcher {
 		}
 		var event = new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, key,
 			modifiers, null, null, scancode);
+		var inModal = false;
+		for (entry in path)
+			if (entry.focusTrap)
+				inModal = true;
+		var commandTried = false;
+		var commandShortcutFilter = node.commandShortcutFilter;
+		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
+			commandShortcutFilter != null) {
+			commandTried = true;
+			if (routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat, commandShortcutFilter))
+				return;
+		}
 		dispatchPath(path, event);
 		if (event.pointerCancelRequested)
 			cancelCapturedPointerFor(node.id);
@@ -287,11 +304,7 @@ class EventDispatcher {
 		}
 		// A modal focus trap owns keyboard input, including keys its focused child
 		// does not handle. Do not let those keys invoke commands behind the modal.
-		var inModal = false;
-		for (entry in path)
-			if (entry.focusTrap)
-				inModal = true;
-		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
+		if (!commandTried && !inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) &&
 			routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat)) {
 			event.preventDefault();
 			return;
@@ -323,7 +336,8 @@ class EventDispatcher {
 		return true;
 	}
 
-	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false):Bool {
+	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false,
+			?shortcutFilter:String->Bool):Bool {
 		if (commandRegistry == null)
 			return false;
 		var scopes:Array<String> = [];
@@ -331,7 +345,7 @@ class EventDispatcher {
 			if (entry.commandScope != null)
 				scopes.push(entry.commandScope);
 		lastCommandResult = commandRegistry.dispatchContextInScopes(key, modifiers,
-			commandContext, scopes, repeated);
+			commandContext, scopes, repeated, shortcutFilter);
 		if (onCommandResult != null)
 			onCommandResult(lastCommandResult);
 		return lastCommandResult.succeeded;

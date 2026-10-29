@@ -18,10 +18,12 @@ private typedef DelimiterGroup = {
 /** Classifies token boundaries and turns overlong delimited groups into constraints. */
 class BreakAnalyzer {
 	public static function analyze(line:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):Array<Boundary> {
-		var tokens = line.tokens, groups = findGroups(tokens, syntax), expanded = [];
+		var tokens = line.tokens, groups = findGroups(tokens, syntax), expanded:Array<DelimiterGroup> = [];
+		// Outermost first: a group inside an expanded one starts its own line, so only the part of the line before it counts.
+		groups.sort((left, right) -> left.open - right.open);
 		for (group in groups)
 			if (group.commas.length > 0
-				&& groupPrefixWidth(tokens, group.open, line.indent, config, syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
+				&& groupPrefixWidth(tokens, group.open, expanded, line.indent, config, syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
 				expanded.push(group);
 
 		var result:Array<Boundary> = [];
@@ -42,7 +44,7 @@ class BreakAnalyzer {
 				penalty = 20;
 			} else if (rightKind != null
 				&& isComparisonOperator(rightKind)
-				&& !(rightKind == TokenKind.Less && isGenericOpen(tokens, index + 1))) {
+				&& !(rightKind == TokenKind.Less && opensTypeArguments(tokens, index + 1, syntax))) {
 				canBreak = true;
 				penalty = 25;
 			} else if (rightKind == TokenKind.Question && isTernaryQuestion(tokens, index + 1)) {
@@ -128,7 +130,7 @@ class BreakAnalyzer {
 				case TokenKind.LeftBrace:
 					stack.push({open: index, closeKind: TokenKind.RightBrace, commas: []});
 				case TokenKind.Less:
-					if (isGenericOpen(tokens, index))
+					if (opensTypeArguments(tokens, index, syntax))
 						stack.push({open: index, closeKind: TokenKind.Greater, commas: []});
 				case TokenKind.Comma:
 					if (stack.length > 0)
@@ -150,12 +152,14 @@ class BreakAnalyzer {
 		return result;
 	}
 
+	/** Adjacent token pieces that are one operator in source: `<<`, `>>=`, and the map arrow `=>`. */
 	static function adjacentShiftParts(left:FormatToken, right:FormatToken):Bool {
 		if (left.end != right.start)
 			return false;
 		var leftKind = FormatTokenTools.syntaxKind(left),
 			rightKind = FormatTokenTools.syntaxKind(right);
-		return (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
+		return (leftKind == TokenKind.Assign && rightKind == TokenKind.Greater)
+			|| (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
 			|| (leftKind == TokenKind.Greater && (rightKind == TokenKind.Greater || rightKind == TokenKind.GreaterEqual));
 	}
 
@@ -173,24 +177,24 @@ class BreakAnalyzer {
 			return 0;
 		if (left == TokenKind.LeftParen || left == TokenKind.LeftBracket || left == TokenKind.Dot)
 			return 0;
-		if (right == TokenKind.LeftParen)
-			return left == TokenKind.If || left == TokenKind.While || left == TokenKind.For || left == TokenKind.Switch || left == TokenKind.Catch ? 1 : 0;
-		if (right == TokenKind.Less && isGenericOpen(tokens, index + 1))
+		if (right == TokenKind.Less && opensTypeArguments(tokens, index + 1, syntax))
 			return 0;
-		if (left == TokenKind.Less && isGenericOpen(tokens, index))
+		if (left == TokenKind.Less && opensTypeArguments(tokens, index, syntax))
 			return 0;
-		if (right == TokenKind.Greater && isGenericClose(tokens, index + 1))
+		if (right == TokenKind.Greater && closesTypeArguments(tokens, index + 1, syntax))
 			return 0;
+		if (right == TokenKind.LeftParen && left != TokenKind.Colon && left != TokenKind.Comma && left != TokenKind.LeftBrace)
+			return endsOperand(tokens, index, left, syntax) || isPrefixOperator(tokens, index, left) ? 0 : 1;
+		if (right == TokenKind.LeftBracket && left != TokenKind.Colon && left != TokenKind.Comma && left != TokenKind.LeftBrace)
+			return endsOperand(tokens, index, left, syntax) || isPrefixOperator(tokens, index, left) ? 0 : 1;
 		if (left == TokenKind.Greater
-			&& isGenericClose(tokens, index)
+			&& closesTypeArguments(tokens, index, syntax)
 			&& (right == TokenKind.LeftParen || right == TokenKind.LeftBracket || right == TokenKind.Dot || right == TokenKind.Comma
 				|| right == TokenKind.Semicolon || right == TokenKind.RightParen || right == TokenKind.RightBracket || right == TokenKind.RightBrace
 				|| right == TokenKind.Greater))
 			return 0;
 		if (left == TokenKind.LeftBrace)
 			return 0;
-		if (right == TokenKind.LeftBracket)
-			return left == TokenKind.Assign || left == TokenKind.Return || left == TokenKind.Comma ? 1 : 0;
 		if (right == TokenKind.LeftBrace)
 			return 1;
 		if (left == TokenKind.Comma)
@@ -200,6 +204,8 @@ class BreakAnalyzer {
 		if (right == TokenKind.Colon)
 			return ternaryColon(tokens, index) ? 1 : 0;
 		if (left == TokenKind.At)
+			return 0;
+		if (left == TokenKind.Question && !isTernaryQuestion(tokens, index))
 			return 0;
 		if (right == TokenKind.Increment || right == TokenKind.Decrement || left == TokenKind.Not || left == TokenKind.BitNot)
 			return 0;
@@ -220,64 +226,53 @@ class BreakAnalyzer {
 			return false;
 		if (index == 0)
 			return false;
-		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
-		return previous != TokenKind.LeftParen && previous != TokenKind.Comma && previous != TokenKind.Assign && previous != TokenKind.Colon;
+		// `?` is the conditional operator only after an operand; elsewhere it marks an optional parameter or field.
+		return switch FormatTokenTools.syntaxKind(tokens[index - 1]) {
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.Integer, TokenKind.Float,
+				TokenKind.StringLiteral, TokenKind.RegexLiteral, TokenKind.BoolTrue, TokenKind.BoolFalse, TokenKind.This, TokenKind.Increment,
+				TokenKind.Decrement, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString:
+				true;
+			default: false;
+		};
 	}
 
-	static function isGenericOpen(tokens:Array<FormatToken>, index:Int):Bool {
-		if (index <= 0 || FormatTokenTools.syntaxKind(tokens[index]) != TokenKind.Less)
-			return false;
-		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
-		if (!isTypeName(previous))
-			return false;
-		var depth = 0, hasContent = false;
-		for (cursor in index...tokens.length) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == null)
-				continue;
-			switch kind {
-				case TokenKind.Less:
-					depth++;
-				case TokenKind.Greater:
-					depth--;
-					if (depth == 0) {
-						if (!hasContent)
-							return false;
-						var after = cursor + 1 < tokens.length ? FormatTokenTools.syntaxKind(tokens[cursor + 1]) : null;
-						return after == null || after == TokenKind.LeftParen || after == TokenKind.LeftBracket || after == TokenKind.Dot
-							|| after == TokenKind.Comma || after == TokenKind.RightParen || after == TokenKind.RightBracket || after == TokenKind.RightBrace
-							|| after == TokenKind.Assign || after == TokenKind.Colon || after == TokenKind.Semicolon || after == TokenKind.Arrow;
-					}
-				case TokenKind.Comma:
-					hasContent = true;
-				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void:
-					hasContent = true;
-				case TokenKind.LeftBracket, TokenKind.RightBracket, TokenKind.Dot:
-				default:
-					return false;
-			}
-		}
-		return false;
-	}
+	static function opensTypeArguments(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length && syntax.typeArgumentOpens.exists(tokens[index].start);
 
-	static function isGenericClose(tokens:Array<FormatToken>, index:Int):Bool {
-		var cursor = index - 1;
-		while (cursor >= 0) {
-			var kind = FormatTokenTools.syntaxKind(tokens[cursor]);
-			if (kind == TokenKind.Less && isGenericOpen(tokens, cursor))
-				return true;
-			if (kind == TokenKind.Semicolon || kind == TokenKind.Assign || kind == TokenKind.LeftBrace || kind == TokenKind.RightBrace)
-				break;
-			cursor--;
-		}
-		return false;
-	}
+	static function closesTypeArguments(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool
+		return index >= 0 && index < tokens.length && syntax.typeArgumentCloses.exists(tokens[index].start);
 
-	static function isTypeName(kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Identifier || kind == TokenKind.TypeInt || kind == TokenKind.TypeBool || kind == TokenKind.TypeFloat
-			|| kind == TokenKind.TypeString || kind == TokenKind.Void || kind == TokenKind.RightBracket || kind == TokenKind.Greater;
+	/** Can this token end an operand, so that a following `(` or `[` is a call or an index rather than a new expression? */
+	static function endsOperand(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>, syntax:SyntaxInfo):Bool
+		return switch kind {
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.This, TokenKind.New,
+				TokenKind.Function, TokenKind.StringLiteral, TokenKind.Integer, TokenKind.Float, TokenKind.BoolTrue, TokenKind.BoolFalse,
+				TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Dollar:
+				true;
+			case TokenKind.Greater: closesTypeArguments(tokens, index, syntax);
+			default: false;
+		};
+
+	/** A prefix operator binds to what follows it without a space: `!(a)`, `-(a)`, `@:meta`. */
+	static function isPrefixOperator(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>):Bool
+		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At
+			|| isUnary(tokens, index, kind);
 
 	static function colonNeedsSpace(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool {
+		// A structure type inside type arguments, `Array<{a:Int}>`, is annotated like any other type.
+		var typeDepth = 0;
+		for (cursor in 0...index) {
+			if (syntax.typeArgumentOpens.exists(tokens[cursor].start))
+				typeDepth++;
+			else if (syntax.typeArgumentCloses.exists(tokens[cursor].start))
+				typeDepth--;
+		}
+		if (typeDepth > 0)
+			return false;
+		// The body of a typedef declares field types, like `{a:Int}` above.
+		for (cursor in 0...index)
+			if (FormatTokenTools.syntaxKind(tokens[cursor]) == TokenKind.Typedef)
+				return false;
 		var objectDepth = 0;
 		for (cursor in 0...index + 1) {
 			var token = tokens[cursor],
@@ -302,7 +297,11 @@ class BreakAnalyzer {
 			return true;
 		var previous = FormatTokenTools.syntaxKind(tokens[index - 1]);
 		return previous == TokenKind.LeftParen || previous == TokenKind.LeftBracket || previous == TokenKind.Comma || previous == TokenKind.Assign
-			|| previous == TokenKind.Colon || previous == TokenKind.Question || isBinaryOperator(previous);
+			|| previous == TokenKind.Colon || previous == TokenKind.Question || previous == TokenKind.Return || previous == TokenKind.Throw
+			|| previous == TokenKind.Case || previous == TokenKind.In || previous == TokenKind.Arrow || previous == TokenKind.Else
+			|| previous == TokenKind.Do || previous == TokenKind.PlusAssign || previous == TokenKind.MinusAssign || previous == TokenKind.StarAssign
+			|| previous == TokenKind.SlashAssign || previous == TokenKind.PercentAssign || previous == TokenKind.AndAssign
+			|| previous == TokenKind.OrAssign || previous == TokenKind.XorAssign || isBinaryOperator(previous);
 	}
 
 	static function isBinaryOperator(kind:Null<TokenKind>):Bool
@@ -319,7 +318,7 @@ class BreakAnalyzer {
 
 	static function isArithmeticOperator(kind:TokenKind):Bool
 		return kind == TokenKind.Plus || kind == TokenKind.Minus || kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent
-			|| kind == TokenKind.Ampersand || kind == TokenKind.Pipe || kind == TokenKind.Caret;
+			|| kind == TokenKind.Ampersand || kind == TokenKind.Pipe || kind == TokenKind.Caret || kind == TokenKind.NullCoalesce;
 
 	static function flatWidth(tokens:Array<FormatToken>, indent:Int, config:FormatConfig, syntax:SyntaxInfo):Int {
 		var width = indent * config.indentWidth;
@@ -331,10 +330,29 @@ class BreakAnalyzer {
 		return width;
 	}
 
-	static function groupPrefixWidth(tokens:Array<FormatToken>, open:Int, indent:Int, config:FormatConfig, syntax:SyntaxInfo):Int
-		return indent * config.indentWidth
-			+ (open == 0 ? 0 : rangeWidth(tokens, 0, open - 1, syntax))
-			+ (open == 0 ? 0 : spacing(tokens, open - 1, FormatTokenTools.syntaxKind(tokens[open - 1]), FormatTokenTools.syntaxKind(tokens[open]), syntax));
+	/** The width of the line before the group's opening token, given which enclosing groups are already split one element per line. */
+	static function groupPrefixWidth(tokens:Array<FormatToken>, open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig,
+			syntax:SyntaxInfo):Int {
+		var start = lineStart(open, expanded, indent, config);
+		return start.indent * config.indentWidth
+			+ (open == start.token ? 0 : rangeWidth(tokens, start.token, open - 1, syntax)
+				+ spacing(tokens, open - 1, FormatTokenTools.syntaxKind(tokens[open - 1]), FormatTokenTools.syntaxKind(tokens[open]), syntax));
+	}
+
+	/** The first token of the line holding `open` and that line's indent: the element of the innermost expanded group around it. */
+	static function lineStart(open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig):{token:Int, indent:Int} {
+		var parent:Null<DelimiterGroup> = null;
+		for (group in expanded)
+			if (group.open < open && open < group.close && (parent == null || group.open > parent.open))
+				parent = group;
+		if (parent == null)
+			return {token: 0, indent: indent};
+		var token = parent.open + 1;
+		for (comma in parent.commas)
+			if (comma < open)
+				token = comma + 1;
+		return {token: token, indent: lineStart(parent.open, expanded, indent, config).indent + FormatConfigTools.continuationLevels(config)};
+	}
 
 	static function rangeWidth(tokens:Array<FormatToken>, start:Int, end:Int, syntax:SyntaxInfo):Int {
 		if (start > end)

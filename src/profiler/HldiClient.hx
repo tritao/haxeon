@@ -1,30 +1,39 @@
 package profiler;
 
-import haxe.Int64;
 import haxe.io.Bytes;
 import profiler.HldiCodec.HldiReader;
+import profiler.HldiTypes.HldiFrame;
 import profiler.HldiTypes.HldiHello;
 import profiler.HldiTypes.HldiMetadata;
-import profiler.HldiTypes.HldiReadResult;
 import profiler.HldiTypes.HldiStatus;
 import sys.net.Host;
 import sys.net.Socket;
 
-/** Synchronous, dependency-free client for the HashLink Diagnostics Interface. */
+/**
+	Synchronous, dependency-free client for the HashLink Diagnostics Interface (HLDI v2).
+
+	While a session runs the runtime pushes frames between the responses to requests. A request that waits for its
+	response queues the pushed frames it reads on the way; `nextFrame` hands them out in order.
+**/
 class HldiClient {
 	public static inline final CAP_PROFILER = 1;
 	public static inline final CAP_SYMBOLS = 2;
 	public static inline final CAP_AUTH_REQUIRED = 4;
 
+	public static inline final SOURCE_INSTRUMENT = 1;
+	public static inline final SOURCE_SAMPLING = 2;
+	public static inline final SOURCE_ALLOC = 4;
+
 	static inline final SERVICE_CONTROL = 0;
 	static inline final SERVICE_PROFILER = 2;
 	static inline final CONTROL_AUTHENTICATE = 2;
 	static inline final PROFILE_STATUS = 1;
-	static inline final PROFILE_CONFIGURE = 2;
-	static inline final PROFILE_READ = 3;
 	static inline final PROFILE_METADATA = 4;
+	static inline final PROFILE_START = 16;
+	static inline final PROFILE_STOP = 17;
 	static inline final FLAG_RESPONSE = 1;
 	static inline final FLAG_ERROR = 2;
+	static inline final FLAG_PUSH = 4;
 	static inline final MAX_REPLY = 64 * 1024 * 1024;
 
 	public final hello:HldiHello;
@@ -32,6 +41,7 @@ class HldiClient {
 	var socket:Socket;
 	var nextRequestId = 1;
 	var closed = false;
+	final pushed:Array<HldiFrame> = [];
 
 	public function new(host:String, port:Int, timeoutSeconds:Float = 5.0, ?token:String) {
 		if (port <= 0 || port > 65535)
@@ -48,7 +58,7 @@ class HldiClient {
 			magic = input.take(4),
 			version = input.u16(),
 			capabilities = input.u16();
-		if (version != 1) {
+		if (version != 2) {
 			close();
 			throw 'Unsupported HLDI version $version';
 		}
@@ -70,32 +80,44 @@ class HldiClient {
 	public function status():HldiStatus
 		return decodeStatus(request(PROFILE_STATUS, Bytes.alloc(0)));
 
-	public function configure(sampleRate:Int, enabled:Bool, allocationInterval:Int = 0):HldiStatus {
+	/** Starts a session. The runtime then pushes frames, beginning with the session and metadata frames. */
+	public function start(sources:Int, sampleRate:Int, allocationInterval:Int = 0, poolMiB:Int = 0):HldiStatus {
+		if (sources <= 0 || sources > 7)
+			throw 'Invalid profiler sources $sources';
 		if (sampleRate <= 0)
 			throw 'Invalid profiler sample rate $sampleRate';
 		if (allocationInterval < 0)
 			throw 'Invalid allocation sampling interval $allocationInterval';
-		var payload = Bytes.alloc(12);
-		put32(payload, 0, sampleRate);
-		put32(payload, 4, enabled ? 1 : 0);
-		put32(payload, 8, enabled ? allocationInterval : 0);
-		return decodeStatus(request(PROFILE_CONFIGURE, payload));
+		if (poolMiB < 0)
+			throw 'Invalid profiler pool size $poolMiB';
+		var payload = Bytes.alloc(16);
+		put32(payload, 0, sources);
+		put32(payload, 4, sampleRate);
+		put32(payload, 8, allocationInterval);
+		put32(payload, 12, poolMiB);
+		return decodeStatus(request(PROFILE_START, payload));
 	}
 
-	public function read(cursor:Int64, maxBytes:Int = 256 * 1024):HldiReadResult {
-		if (maxBytes <= 0)
-			throw 'Invalid HLDI read size $maxBytes';
-		if (maxBytes > 256 * 1024)
-			maxBytes = 256 * 1024;
-		var payload = Bytes.alloc(12);
-		put64(payload, 0, cursor);
-		put32(payload, 8, maxBytes);
-		var input = new HldiReader(request(PROFILE_READ, payload));
-		var next = input.u64(),
-			dropped = input.u64(),
-			bytes = input.take(input.remaining());
-		return new HldiReadResult(next, dropped, bytes);
+	/** Ends the session. Every remaining frame, ending with the end frame, is queued before this returns. */
+	public function stop():HldiStatus
+		return decodeStatus(request(PROFILE_STOP, Bytes.alloc(0)));
+
+	/** The next pushed frame, waiting up to `timeoutSeconds` for one to arrive; null if none did. */
+	public function nextFrame(timeoutSeconds:Float = 0.0):Null<HldiFrame> {
+		if (pushed.length != 0)
+			return pushed.shift();
+		if (closed)
+			throw "HLDI client is closed";
+		if (Socket.select([socket], [], [], timeoutSeconds).read.length == 0)
+			return null;
+		var frame = readFrame();
+		if (frame.flags & FLAG_PUSH == 0)
+			throw "Unexpected HLDI response";
+		return new HldiFrame(frame.type, frame.flags, frame.payload);
 	}
+
+	public function queuedFrames():Int
+		return pushed.length;
 
 	public function metadata():HldiMetadata
 		return HldiCodec.metadata(metadataBytes());
@@ -129,21 +151,43 @@ class HldiClient {
 			socket.output.writeFullBytes(payload, 0, payload.length);
 		socket.output.flush();
 
+		while (true) {
+			var frame = readFrame();
+			if (frame.flags & FLAG_PUSH != 0) {
+				pushed.push(new HldiFrame(frame.type, frame.flags, frame.payload));
+				continue;
+			}
+			if (frame.service != service || frame.type != type || frame.requestId != id || frame.flags & FLAG_RESPONSE == 0)
+				throw 'Mismatched HLDI response for request $id';
+			if (frame.flags & FLAG_ERROR != 0)
+				throw 'HLDI request $id failed';
+			return frame.payload;
+		}
+	}
+
+	function readFrame():{
+		service:Int,
+		type:Int,
+		flags:Int,
+		requestId:Int,
+		payload:Bytes
+	} {
 		var reply = new HldiReader(readExact(16)),
-			replyService = reply.u8(),
-			replyType = reply.u8(),
+			service = reply.u8(),
+			type = reply.u8(),
 			flags = reply.u16(),
-			replyId = reply.u32(),
+			requestId = reply.u32(),
 			length = reply.u32();
 		reply.u32();
-		if (replyService != service || replyType != type || replyId != id || flags & FLAG_RESPONSE == 0)
-			throw 'Mismatched HLDI response for request $id';
 		if (length < 0 || length > MAX_REPLY)
-			throw 'Invalid HLDI response length $length';
-		var body = readExact(length);
-		if (flags & FLAG_ERROR != 0)
-			throw 'HLDI request $id failed';
-		return body;
+			throw 'Invalid HLDI frame length $length';
+		return {
+			service: service,
+			type: type,
+			flags: flags,
+			requestId: requestId,
+			payload: readExact(length)
+		};
 	}
 
 	function readExact(length:Int):Bytes {
@@ -158,23 +202,14 @@ class HldiClient {
 	}
 
 	static function decodeStatus(bytes:Bytes):HldiStatus {
-		if (bytes.length != 32 && bytes.length != 56 && bytes.length != 80)
+		if (bytes.length != 32)
 			throw 'Invalid HLDI status length ${bytes.length}';
 		var input = new HldiReader(bytes);
-		var first = input.u64(),
-			next = input.u64(),
-			dropped = input.u64(),
-			rate = input.u32(),
-			paused = input.u32() != 0;
-		if (bytes.length == 32)
-			return new HldiStatus(first, next, dropped, rate, paused);
-		var capacity = input.u64(),
-			consumer = input.u64(),
-			requested = input.u32();
-		input.u32();
-		if (bytes.length == 56)
-			return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested);
-		return new HldiStatus(first, next, dropped, rate, paused, capacity, consumer, requested, input.u64(), input.u64(), input.u64());
+		var active = input.u32() != 0,
+			sources = input.u32(),
+			chunks = input.u32(),
+			chunksInUse = input.u32();
+		return new HldiStatus(active, sources, chunks, chunksInUse, input.u64(), input.u64());
 	}
 
 	static function put32(bytes:Bytes, position:Int, value:Int):Void {
@@ -182,10 +217,5 @@ class HldiClient {
 		bytes.set(position + 1, value >>> 8);
 		bytes.set(position + 2, value >>> 16);
 		bytes.set(position + 3, value >>> 24);
-	}
-
-	static function put64(bytes:Bytes, position:Int, value:Int64):Void {
-		put32(bytes, position, value.low);
-		put32(bytes, position + 4, value.high);
 	}
 }

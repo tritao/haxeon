@@ -51,6 +51,7 @@ class ProcessOutputCapture {
 			stderrError:Dynamic = null;
 
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.capture.stdout");
 			try
 				stdoutBytes = process.stdout.readAll()
 			catch (error:Dynamic) {
@@ -60,6 +61,7 @@ class ProcessOutputCapture {
 			stdoutDone.release();
 		});
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.capture.stderr");
 			try
 				stderrResult = read(process.stderr, stderrLimit)
 			catch (error:Dynamic) {
@@ -113,6 +115,7 @@ class ProcessOutputCapture {
 		var process = sys.io.Process.run(command, arguments), mutex = new Mutex(), stdout = "", stderr = "", stdoutDone = false, stderrDone = false,
 			failure:Dynamic = null;
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.capture.stdout");
 			var error:Dynamic = null;
 			try
 				stdout = process.readStdout()
@@ -125,6 +128,7 @@ class ProcessOutputCapture {
 			mutex.release();
 		});
 		Thread.create(function() {
+			runtime.ThreadName.setCurrent("haxeon.capture.stderr");
 			var error:Dynamic = null;
 			try
 				stderr = process.readStderr()

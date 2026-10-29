@@ -58,9 +58,40 @@ class DocCheck {
   try new haxeon.editor.ViewportLook.ViewportLight([0,0,0],1,[1,1,1],0) catch (_:Dynamic) rejected=true;
   check(rejected,"a light needs a direction");
  }
+ static function editRecords():Void {
+  var doc=new TextDocument("one\ntwo 🙂\nthree");
+  check(doc.editSince(-1)==null&&doc.editSince(0)==null,"a new document has no edit");
+  doc.replace(4,7,"2🧑‍💻");
+  var edit=doc.editSince(0);
+  check(edit!=null&&edit.revision==1&&edit.start==4&&edit.oldEnd==7&&edit.newEnd==8&&edit.previousCodepointCount==15,"an edit records its range and the length before it");
+  check(doc.editSince(1)==null,"no edit since the current revision");
+  doc.replace(0,0,"");
+  check(doc.revision==1&&doc.editSince(0)!=null,"a no-op replacement keeps the last edit");
+  doc.replace(0,0,"x");
+  check(doc.editSince(0)==null&&doc.editSince(1)!=null,"two edits since a revision are not one");
+ }
+ /** Boundaries are computed on first use; edits made before then, or after, end where a fresh map of the text does,
+     across flags (regional indicator pairs), combining marks and ZWJ sequences the edits split and join. */
+ static function lazyGraphemes():Void {
+  var source="🇵🇹🇧🇷 a\u0301 🧑‍💻 x\ny";
+  for (computedFirst in [false,true]) {
+   var map=new TextOffsetMap(source);
+   if (computedFirst) map.graphemeCount();
+   var text=source;
+   for (edit in [{start:2,end:2,insert:"🇫🇷"},{start:0,end:1,insert:""},{start:5,end:5,insert:"\u0301"},
+     {start:1,end:3,insert:"🇩"},{start:9,end:10,insert:"‍"},{start:0,end:0,insert:"q"}])
+    text=map.replaceCodepointsIncremental(edit.start,edit.end,edit.insert);
+   var fresh=new TextOffsetMap(text);
+   check(map.graphemeCount()==fresh.graphemeCount(),"graphemes after edits "+(computedFirst?"with":"without")+" boundaries computed first: "+map.graphemeCount()+", fresh "+fresh.graphemeCount());
+   for (index in 0...fresh.graphemeBoundaryCount())
+    check(map.graphemeBoundaryAt(index)==fresh.graphemeBoundaryAt(index),"grapheme boundary "+index+" after edits differs from a fresh map");
+  }
+ }
  static function main():Void {
+  lazyGraphemes();
   viewportLook();
   asciiGraphemes();
+  editRecords();
   var content=new StringBuf();
   for (i in 0...260) content.add(StringTools.lpad(Std.string(i),"0",4)+" Café e\u0301 🙂 🧑‍💻 漢字 שלום\n");
   var expected=content.toString(); var doc=new TextDocument(expected);

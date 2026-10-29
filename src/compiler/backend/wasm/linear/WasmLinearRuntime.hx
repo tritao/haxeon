@@ -130,7 +130,7 @@ class WasmLinearRuntime {
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
 						case "__string_concat":
-							functions.set(native.name, addStringConcat(module, native.name, allocator));
+							functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
 						case "__string_to_lower_case":
 							functions.set(native.name, addStringCase(module, native.name, allocator, true));
 						case "__string_to_upper_case":
@@ -195,7 +195,7 @@ class WasmLinearRuntime {
 						case "__array_join_bytes":
 							var stringConcat = functions.get("__string_concat");
 							if (stringConcat == null) {
-								stringConcat = addStringConcat(module, "__string_concat", allocator);
+								stringConcat = addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null"));
 								functions.set("__string_concat", stringConcat);
 							}
 							functions.set(native.name, WasmLinearArrays.addArrayJoinBytes(module, native.name, allocator, stringConcat));
@@ -2784,8 +2784,21 @@ class WasmLinearRuntime {
 		]));
 	}
 
-	public static function addStringConcat(module:WasmModule, name:String, allocator:Int):Int {
+	/** Concatenates two strings; a null operand is written as "null" (`nullString`, its static data), as Haxe does. */
+	public static function addStringConcat(module:WasmModule, name:String, allocator:Int, nullString:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+			LocalGet(0),
+			I32Eqz,
+			If(null),
+			I32Const(nullString),
+			LocalSet(0),
+			End,
+			LocalGet(1),
+			I32Eqz,
+			If(null),
+			I32Const(nullString),
+			LocalSet(1),
+			End,
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			LocalSet(2),

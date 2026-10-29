@@ -24,6 +24,7 @@ import haxeon.ui.TextWrap;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
+import haxeon.ui.core.KeyScope;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
@@ -51,8 +52,18 @@ class DockWorkspace implements View {
 	public var availableHeight:Null<Float> = null;
 	/** Available content width when the workspace sits beside application chrome. */
 	public var availableWidth:Null<Float> = null;
+	/** Optional fixed actions for a dock tab group, including single dock headers. */
+	public var headerActions:Null<Array<String>->String->Null<View>> = null;
+	/** Application-owned action state included in retained pane keys. */
+	public var headerActionsRevision:String = "";
+	/** Expand a matching group vertically without changing the persisted dock tree. */
+	public var expandedGroup:Null<Array<String>> = null;
+	/** Presentation-only suppression; preserves the model, split paths and saved layout. */
+	public var hiddenPanels:Array<String> = [];
 	final suppliedInteraction:Bool;
 	final panelContents:Map<String, DockPanelContent>;
+	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
+	var panelScope:Null<KeyScope> = null;
 
 	public function new(key:String, model:DockWorkspaceModel,
 			?panelContents:Array<DockPanelContent>, ?style:LayoutStyle,
@@ -92,6 +103,7 @@ class DockWorkspace implements View {
 		var paneCache:DockPanelCache = context.state(
 			context.id("pane-tree-cache:" + key), new DockPanelCache()).value;
 		paneCache.retain(context);
+		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
 		var content = buildNode(model.root, context, [], "layout",
 			availableWidth == null ? context.viewportWidth : availableWidth, availableHeight == null ? context.viewportHeight : availableHeight,
 			labelWidths, panelCache, paneCache);
@@ -111,11 +123,17 @@ class DockWorkspace implements View {
 		switch (node) {
 			case DockNode.Empty: return new Text("No panels");
 			case DockNode.Panel(panelId):
+				if (hiddenPanels.indexOf(panelId) >= 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
 				return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, function() {
 					return targetView(panelId, buildTabs([panelId], panelId, context, nodeKey,
 						availableWidth, labelWidths, panelCache));
 				});
 			case DockNode.Tabs(panelIds, activePanelId):
+				if (hiddenPanels.length > 0) {
+					panelIds = panelIds == null ? [] : [for (id in panelIds) if (hiddenPanels.indexOf(id) < 0) id];
+					if (panelIds.length == 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
+					if (panelIds.indexOf(activePanelId) < 0) activePanelId = panelIds[0];
+				}
 				var targetPanelId = activePanelId == null && panelIds != null && panelIds.length > 0
 					? panelIds[0] : activePanelId;
 				return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, function() {
@@ -174,6 +192,7 @@ class DockWorkspace implements View {
 		tabsStyle.height = LayoutAxis.grow();
 		var options = new TabsOptions();
 		options.style = tabsStyle;
+		if (headerActions != null) options.headerTrailing = headerActions([for (panel in visiblePanels) panel.id], selectedId);
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.onTabDragStart = function(panelId, event)
 			interaction.beginTabDrag(panelId, event.pointerId, event.x, event.y);
@@ -215,12 +234,25 @@ class DockWorkspace implements View {
 		}, options);
 	}
 
+	function matchesExpandedGroup(node:DockNode):Bool {
+		var ids = haxeon.ui.docking.DockNodeTools.panelIds(node);
+		if (ids.length == 0 || expandedGroup == null) return false;
+		for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
+		return true;
+	}
+
 	function tabLabelWidth(label:String, context:BuildContext,
 		labelWidths:DockTextWidthCache):Float {
 		if (context.fonts == null) return label.length * 8.0;
 		var style = context.resolveTextRole(TextRole.Button,
-			TextStyleOverride.paragraph(TextWrap.None));
+			new TextStyleOverride(null, context.theme.tokens.tabHeaderFontSize, null, TextWrap.None));
 		return labelWidths.measure(context.fonts, label, style.textStyle, style.paragraphStyle);
+	}
+
+	function hasPresentedPanel(node:DockNode):Bool {
+		for (id in haxeon.ui.docking.DockNodeTools.panelIds(node))
+			if (hiddenPanels.indexOf(id) < 0) return true;
+		return false;
 	}
 
 	function buildSplit(axis:DockSplitAxis, ratio:Float, first:DockNode, second:DockNode,
@@ -231,13 +263,25 @@ class DockWorkspace implements View {
 		firstPath.push(0);
 		var secondPath = path.copy();
 		secondPath.push(1);
+		if (hiddenPanels.length > 0) {
+			if (!hasPresentedPanel(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+			if (!hasPresentedPanel(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+		}
+		if (axis == DockSplitAxis.Vertical && expandedGroup != null) {
+			if (matchesExpandedGroup(second) && !matchesExpandedGroup(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+			if (matchesExpandedGroup(first) && !matchesExpandedGroup(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
+				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
+		}
 		var horizontal = axis == DockSplitAxis.Horizontal;
 		var available = horizontal ? availableWidth : availableHeight;
 		if (available <= 0.0)
 			available = 1000.0;
 		var minimum = horizontal ? MinimumHorizontalExtent : 120.0;
 		var divider = DividerExtent;
-		var maximum = available - minimum - divider;
+		var maximum = available - minimum;
 		if (maximum < minimum)
 			maximum = minimum;
 		var options = new SplitViewOptions();
@@ -247,11 +291,11 @@ class DockWorkspace implements View {
 		options.minimumExtent = minimum;
 		options.maximumExtent = maximum;
 		options.dividerExtent = divider;
-		options.dividerVisualExtent = 3.0;
+		options.dividerHairline = true;
 		options.onResize = function(next) {
 			model.setSplitRatio(path, next / available);
 		};
-		var remaining = Math.max(0.0, available - options.extent - divider);
+		var remaining = Math.max(0.0, available - options.extent);
 		var firstWidth = horizontal ? options.extent : availableWidth;
 		var firstHeight = horizontal ? availableHeight : options.extent;
 		var secondWidth = horizontal ? remaining : availableWidth;
@@ -283,7 +327,7 @@ class DockWorkspace implements View {
 		var contentKey:Null<DockPanelCacheKeyBuilder> = content == null ? null : content.cacheKey;
 		if (contentKey == null)
 			return null;
-		var text = nodeKey + "|width=" + availableWidth + "|style=" + context.styleRevision + "|viewport=" + context.viewportWidth + "x" +
+		var text = nodeKey + "|actions=" + headerActionsRevision + "|width=" + availableWidth + "|style=" + context.styleRevision + "|viewport=" + context.viewportWidth + "x" +
 			context.viewportHeight + "|drag=" + interaction.revision + "|active=" + selected;
 		for (panelId in panelIds) {
 			var descriptor = model.get(panelId);
@@ -298,7 +342,7 @@ class DockWorkspace implements View {
 		var content = panelContents.get(panelId);
 		return descriptor == null ? new Text("Missing panel: " + panelId) : content == null ?
 			new Text("Missing panel content: " + panelId) :
-			new DockPanelView(descriptor, content, availableWidth, panelCache);
+			new DockPanelView(descriptor, content, availableWidth, panelCache, panelScope);
 	}
 
 	function targetView(targetPanelId:String, child:View):View
@@ -364,13 +408,15 @@ private class DockPanelView implements View {
 	final content:DockPanelContent;
 	final availableWidth:Float;
 	final panelCache:DockPanelCache;
+	final scope:KeyScope;
 
 	public function new(descriptor:DockPanelDescriptor, content:DockPanelContent,
-			availableWidth:Float, panelCache:DockPanelCache) {
+			availableWidth:Float, panelCache:DockPanelCache, scope:KeyScope) {
 		this.descriptor = descriptor;
 		this.content = content;
 		this.availableWidth = availableWidth;
 		this.panelCache = panelCache;
+		this.scope = scope;
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -396,13 +442,16 @@ private class DockPanelView implements View {
 		var observed = context.buildProbe != null;
 		var preparationStarted = observed ? Sys.time() : 0.0;
 		var stateMarker = context.stateUsageMarker();
-		var widthBuilder = content.buildWithWidth;
-		var view = widthBuilder == null ? content.build(context) :
-			widthBuilder(context, availableWidth);
-		if (view == null)
-			view = new Text("Panel returned no content: " + descriptor.id);
-		var buildStarted = observed ? Sys.time() : 0.0;
-		var root = context.withScope(new Key("panel:" + descriptor.id), function() {
+		var buildStarted = 0.0;
+		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
+		// changes: a neighbour closing, or the panel moving to another split.
+		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
+			var widthBuilder = content.buildWithWidth;
+			var view = widthBuilder == null ? content.build(context) :
+				widthBuilder(context, availableWidth);
+			if (view == null)
+				view = new Text("Panel returned no content: " + descriptor.id);
+			buildStarted = observed ? Sys.time() : 0.0;
 			return view.build(context);
 		});
 		if (observed)

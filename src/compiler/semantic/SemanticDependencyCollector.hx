@@ -235,7 +235,7 @@ class SemanticDependencyCollector {
 			case Index(array, offset, _):
 				scanNativeLayoutQueryExpression(result, owner, array, aliases);
 				scanNativeLayoutQueryExpression(result, owner, offset, aliases);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				scanNativeLayoutQueryStatements(result, owner, body, aliases);
 			case IntegerLiteral(_, _) | FloatLiteral(_, _) | StringLiteral(_, _) | BoolLiteral(_, _) | NullLiteral(_) | Unreachable(_) | EmptyExpression(_) |
 				ErrorExpression(_) | Variable(_, _) | NewMap(_, _, _):
@@ -442,7 +442,7 @@ class SemanticDependencyCollector {
 				scanCallExpression(offset, calls, aliases);
 			case PostfixIncrement(target, _, _):
 				scanCallExpression(target, calls, aliases);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				for (statement in body)
 					scanCalls(statement, calls, aliases);
 			default:

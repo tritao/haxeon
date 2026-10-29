@@ -3,8 +3,10 @@ package profiler;
 import haxe.Int64;
 import haxe.Timer;
 import haxe.io.Bytes;
-import profiler.HldiCodec.HldiStreamDecoder;
+import profiler.HldiCodec.HldiClock;
+import profiler.HldiCodec.HldiFrames;
 import profiler.HldiCodec.HldiReader;
+import profiler.HldiTypes.HldiFrame;
 import profiler.HldiTypes.HldiMetadata;
 import profiler.HldiTypes.HldiRecord;
 import profiler.HldiTypes.HldiSourceLine;
@@ -26,6 +28,9 @@ class ProfileAggregate {
 	public final line:Null<Int>;
 	public var selfSamples = 0;
 	public var totalSamples = 0;
+
+	/** Instrumented calls (functions only; lines have none). */
+	public var calls = 0;
 
 	public function new(key:String, stableKey:String, name:String, ?file:String, ?line:Int) {
 		this.key = key;
@@ -183,8 +188,8 @@ class ProfileAllocationSample {
 class ProfilerSnapshot {
 	public final state:ProfilerSessionState;
 	public final samples:Int;
+	public final instrumentedCalls:Int;
 	public final unresolvedFrames:Int;
-	public final dropped:Int64;
 	public final functions:Array<ProfileAggregate>;
 	public final lines:Array<ProfileAggregate>;
 	public final stacks:Array<ProfileStack>;
@@ -193,16 +198,16 @@ class ProfilerSnapshot {
 	public final metadataChanges:Array<ProfileMetadataChange>;
 	public final metadataSchema:Int;
 	public final metadataRevisions:Map<String, Int>;
-	public final pendingBytes:Int;
 	public final bufferCapacity:Int64;
 	public final bufferUsed:Int64;
 	public final bufferUtilization:Float;
 	public final requestedSampleRate:Int;
-	public final effectiveSampleRate:Int;
 	public final metadataRefreshMs:Float;
 	public final sampleRecords:Int64;
 	public final generatedBytes:Int64;
-	public final overheadMicrosPerSample:Float;
+	public final sentBytes:Int64;
+	public final stalls:Int64;
+	public final malformedSegments:Int;
 	public final gcSamples:Int;
 	public final threads:Map<Int, String>;
 	public final gcStats:Array<ProfileGcStats>;
@@ -214,8 +219,8 @@ class ProfilerSnapshot {
 	public function new(session:ProfilerSession) {
 		state = session.state;
 		samples = session.samples;
+		instrumentedCalls = session.instrumentedCalls;
 		unresolvedFrames = session.unresolvedFrames;
-		dropped = session.dropped;
 		functions = session.functionAggregates();
 		lines = session.lineAggregates();
 		stacks = session.stackAggregates();
@@ -224,16 +229,16 @@ class ProfilerSnapshot {
 		metadataChanges = session.metadataChanges.copy();
 		metadataSchema = session.metadata == null ? 0 : session.metadata.schema;
 		metadataRevisions = session.metadata == null ? new Map() : session.metadata.revisions.copy();
-		pendingBytes = session.pendingBytes();
 		bufferCapacity = session.bufferCapacity;
 		bufferUsed = session.bufferUsed;
 		bufferUtilization = session.bufferUtilization;
 		requestedSampleRate = session.requestedSampleRate;
-		effectiveSampleRate = session.effectiveSampleRate;
 		metadataRefreshMs = session.metadataRefreshMs;
 		sampleRecords = session.sampleRecords;
 		generatedBytes = session.generatedBytes;
-		overheadMicrosPerSample = session.overheadMicrosPerSample;
+		sentBytes = session.sentBytes;
+		stalls = session.stalls;
+		malformedSegments = session.malformedSegments;
 		gcSamples = session.gcSamples;
 		threads = session.threads.copy();
 		gcStats = session.gcStats.copy();
@@ -254,17 +259,19 @@ class ProfilerSession {
 
 	public var state(default, null):ProfilerSessionState = Connected;
 	public var samples(default, null) = 0;
+	public var instrumentedCalls(default, null) = 0;
 	public var unresolvedFrames(default, null) = 0;
-	public var dropped(default, null):Int64 = Int64.ofInt(0);
 	public var bufferCapacity(default, null):Int64 = Int64.ofInt(0);
 	public var bufferUsed(default, null):Int64 = Int64.ofInt(0);
 	public var bufferUtilization(default, null):Float = 0;
 	public var requestedSampleRate(default, null) = 0;
-	public var effectiveSampleRate(default, null) = 0;
 	public var metadataRefreshMs(default, null):Float = 0;
 	public var sampleRecords(default, null):Int64 = Int64.ofInt(0);
 	public var generatedBytes(default, null):Int64 = Int64.ofInt(0);
-	public var overheadMicrosPerSample(default, null):Float = 0;
+	public var sentBytes(default, null):Int64 = Int64.ofInt(0);
+	public var stalls(default, null):Int64 = Int64.ofInt(0);
+	public var malformedSegments(default, null) = 0;
+	public var sources(default, null) = 0;
 	public var gcSamples(default, null) = 0;
 	public final threads = new Map<Int, String>();
 	public final gcStats:Array<ProfileGcStats> = [];
@@ -273,14 +280,14 @@ class ProfilerSession {
 	public var timelineCapacity:Int = 50000;
 	public var allocationCapacity:Int = 10000;
 
+	static inline final CHUNK_BYTES = 256 * 1024;
+
 	var timelineSequence = 0;
 	var allocationSequence = 0;
-	var allocationInterval = 0;
 	final nativeSymbols = new Map<String, {name:String, module:String, base:Int64}>();
 
 	public var metadata(default, null):Null<HldiMetadata>;
 	public var lastError(default, null):Null<String>;
-	public var metadataRefreshSeconds:Float = 5.0;
 	public final events:Array<ProfileEvent> = [];
 	public final leaves:Array<ProfileLeaf> = [];
 	public final metadataChanges:Array<ProfileMetadataChange> = [];
@@ -289,58 +296,111 @@ class ProfilerSession {
 
 	final client:HldiClient;
 	var capture:Null<HlpcCapture>;
-	final decoder = new HldiStreamDecoder();
+	var capturePath:Null<String>;
+	var clock = new HldiClock();
 	final functions = new Map<String, ProfileAggregate>();
 	final lines = new Map<String, ProfileAggregate>();
 	final stacks = new Map<String, ProfileStack>();
-	var cursor:Int64 = Int64.ofInt(0);
 	var sampleRate = 1000;
-	var nextMetadataRefresh = 0.0;
+	var metadataReceived = false;
+	var endSeen = false;
+	var latestTime = 0.0;
+	// The frames that describe a session, kept so a capture begun mid-session can start with them.
+	var sessionFrame:Null<HldiFrame>;
+	var clockFrame:Null<HldiFrame>;
+	var threadsFrame:Null<HldiFrame>;
 
 	public function new(client:HldiClient)
 		this.client = client;
 
-	public function start(sampleRate:Int = 1000, allocationInterval:Int = 0):Void {
+	/**
+		Starts a session and waits for the metadata it pushes first. `sources` defaults to sampling, plus allocation
+		sampling when `allocationInterval` is set.
+	**/
+	public function start(sampleRate:Int = 1000, allocationInterval:Int = 0, ?sources:Int):Void {
 		if (state == Closed)
 			throw "Profiler session is closed";
+		if (state == Running)
+			pause();
 		this.sampleRate = sampleRate;
-		this.allocationInterval = allocationInterval;
-		refreshMetadata();
-		var status = client.configure(sampleRate, true, allocationInterval);
-		updateHealth(status);
-		cursor = status.next;
-		dropped = status.dropped;
-		state = Running;
-		lastError = null;
+		this.sources = sources != null ? sources : HldiClient.SOURCE_SAMPLING | (allocationInterval > 0 ? HldiClient.SOURCE_ALLOC : 0);
+		requestedSampleRate = sampleRate;
+		// Ticks restart with each session; its timestamps continue from where the last one stopped.
+		clock = new HldiClock();
+		clock.offsetSeconds = latestTime;
+		metadataReceived = false;
+		endSeen = false;
+		var started = false;
+		try {
+			if (capturePath != null && capture == null)
+				capture = new HlpcCapture(capturePath, client.hello.processId, sampleRate, this.sources);
+			updateStatus(client.start(this.sources, sampleRate, allocationInterval));
+			started = true;
+			state = Running;
+			lastError = null;
+			var deadline = Timer.stamp() + 10.0;
+			while (!metadataReceived) {
+				var frame = client.nextFrame(0.1);
+				if (frame != null)
+					handle(frame);
+				if (endSeen)
+					throw "The runtime ended the profiling session before it started";
+				if (Timer.stamp() > deadline)
+					throw "The runtime did not push symbol metadata";
+			}
+		} catch (error:Dynamic) {
+			lastError = Std.string(error);
+			state = Failed;
+			// The runtime's session is stopped, and the capture file closed incomplete; the capture stays requested, so the
+			// next start records it again. Neither hides the error.
+			try {
+				if (started)
+					client.stop();
+			} catch (_:Dynamic) {}
+			try {
+				if (capture != null)
+					capture.close(false);
+			} catch (_:Dynamic) {}
+			capture = null;
+			throw error;
+		}
 	}
 
+	/** Stops the session and consumes everything it recorded. */
 	public function pause():Void {
 		if (state != Running)
 			return;
-		var status = client.configure(sampleRate, false, 0);
-		updateHealth(status);
-		cursor = status.next;
-		dropped = status.dropped;
+		try {
+			updateStatus(client.stop());
+			drainQueued();
+		} catch (error:Dynamic) {
+			lastError = Std.string(error);
+			state = Failed;
+			throw error;
+		}
 		state = Paused;
 	}
 
-	public function poll(maxBytes:Int = 256 * 1024):Int {
-		if (state != Running && state != Paused)
+	/**
+		Consumes the frames the runtime has pushed, waiting up to `waitSeconds` for the first. Returns after about
+		`maxBytes` of frames. Throws if the connection fails or the runtime ends the session.
+	**/
+	public function poll(maxBytes:Int = 1024 * 1024, waitSeconds:Float = 0.0):Int {
+		if (state != Running)
 			return 0;
 		try {
-			if (metadataRefreshSeconds > 0 && Timer.stamp() >= nextMetadataRefresh)
-				refreshMetadata();
-			var requested = cursor, result = client.read(cursor, maxBytes);
-			if (capture != null)
-				capture.samples(requested, result.next, result.dropped, result.bytes);
-			cursor = result.next;
-			dropped = result.dropped;
-			var records = decoder.append(result.bytes);
-			for (record in records)
-				consume(record);
-			updateHealth(client.status());
+			var records = 0, bytes = 0, frame = client.nextFrame(waitSeconds);
+			while (frame != null) {
+				bytes += frame.payload.length;
+				records += handle(frame);
+				if (bytes >= maxBytes || endSeen)
+					break;
+				frame = client.nextFrame(0.0);
+			}
+			if (endSeen)
+				throw "The runtime ended the profiling session";
 			lastError = null;
-			return records.length;
+			return records;
 		} catch (error:Dynamic) {
 			lastError = Std.string(error);
 			state = Failed;
@@ -348,29 +408,12 @@ class ProfilerSession {
 		}
 	}
 
-	public function refreshMetadata(?timestamp:Float):Void {
-		var previous = metadata,
-			started = Timer.stamp(),
-			bytes = client.metadataBytes(),
-			next = profiler.HldiCodec.metadata(bytes);
-		if (capture != null)
-			capture.metadata(bytes);
-		metadataRefreshMs = (Timer.stamp() - started) * 1000;
-		if (previous != null)
-			for (moduleId => revision in next.revisions) {
-				var oldRevision = previous.revisions.get(moduleId);
-				if (oldRevision != null && oldRevision != revision)
-					metadataChanges.push(new ProfileMetadataChange(timestamp == null ? Timer.stamp() : timestamp, moduleId, oldRevision, revision));
-			}
-		metadata = next;
-		nextMetadataRefresh = Timer.stamp() + metadataRefreshSeconds;
-	}
-
 	public function snapshot():ProfilerSnapshot
 		return new ProfilerSnapshot(this);
 
 	public function reset():Void {
 		samples = 0;
+		instrumentedCalls = 0;
 		unresolvedFrames = 0;
 		functions.clear();
 		lines.clear();
@@ -398,25 +441,36 @@ class ProfilerSession {
 		state = Closed;
 	}
 
-	public function pendingBytes():Int
-		return decoder.pendingBytes();
-
+	/**
+		Records the session's pushed frames to an HLPC v2 capture. Before `start` the capture begins with the next
+		session; while one runs it begins with the frames that describe it. A capture ends with its session.
+	**/
 	public function startCapture(path:String):Void {
-		if (capture != null)
+		if (capturePath != null)
 			throw "Profiler capture is already active";
-		capture = new HlpcCapture(path, client.hello.processId, sampleRate);
+		capturePath = path;
+		if (state != Running)
+			return;
+		capture = new HlpcCapture(path, client.hello.processId, sampleRate, sources);
+		if (sessionFrame != null)
+			capture.frame(sessionFrame);
 		capture.metadata(client.metadataBytes());
+		if (clockFrame != null)
+			capture.frame(clockFrame);
+		if (threadsFrame != null)
+			capture.frame(threadsFrame);
 	}
 
+	/** Closes the capture. It is complete only if its session ended while it was recording. */
 	public function stopCapture():Void {
-		if (capture == null)
-			return;
-		capture.close(cursor, dropped);
+		if (capture != null)
+			capture.close(false);
 		capture = null;
+		capturePath = null;
 	}
 
 	public function captureActive():Bool
-		return capture != null;
+		return capturePath != null;
 
 	public function nativeSymbolCount():Int {
 		var count = 0;
@@ -425,16 +479,89 @@ class ProfilerSession {
 		return count;
 	}
 
-	function updateHealth(status:profiler.HldiTypes.HldiStatus):Void {
-		dropped = status.dropped;
-		bufferCapacity = status.bufferCapacity;
-		bufferUsed = Int64.sub(status.next, status.consumer);
-		requestedSampleRate = status.requestedRate;
-		effectiveSampleRate = status.sampleRate;
-		sampleRecords = status.sampleRecords;
-		generatedBytes = status.generatedBytes;
-		overheadMicrosPerSample = status.sampleRecords == 0 ? 0 : Std.parseFloat(Int64.toStr(status.sampleNanos)) / Std.parseFloat(Int64.toStr(status.sampleRecords)) / 1000;
-		bufferUtilization = bufferCapacity == 0 ? 0 : Std.parseFloat(Int64.toStr(bufferUsed)) / Std.parseFloat(Int64.toStr(bufferCapacity));
+	function drainQueued():Void {
+		var frame = client.nextFrame(0.0);
+		while (frame != null) {
+			handle(frame);
+			frame = client.nextFrame(0.0);
+		}
+	}
+
+	function updateStatus(status:profiler.HldiTypes.HldiStatus):Void
+		updateBuffers(status.chunks, status.chunksInUse);
+
+	function updateBuffers(chunks:Int, chunksInUse:Int):Void {
+		bufferCapacity = Int64.mul(Int64.ofInt(chunks), Int64.ofInt(CHUNK_BYTES));
+		bufferUsed = Int64.mul(Int64.ofInt(chunksInUse), Int64.ofInt(CHUNK_BYTES));
+		bufferUtilization = chunks == 0 ? 0 : chunksInUse / chunks;
+	}
+
+	/** Applies one pushed frame and returns the records it held. */
+	function handle(frame:HldiFrame):Int {
+		if (capture != null) {
+			capture.frame(frame);
+			if (frame.type == HldiFrames.PUSH_END) {
+				capture.close(true);
+				capture = null;
+				capturePath = null;
+			}
+		}
+		switch frame.type {
+			case HldiFrames.PUSH_METADATA:
+				applyMetadata(frame.payload);
+			case HldiFrames.PUSH_SESSION:
+				var info = HldiFrames.session(frame.payload);
+				clock.nominalHz = Std.parseFloat(Int64.toStr(info.nominalHz));
+				sessionFrame = frame;
+			case HldiFrames.PUSH_CLOCK:
+				clock.add(HldiFrames.clock(frame.payload));
+				clockFrame = frame;
+			case HldiFrames.PUSH_THREADS:
+				for (thread in HldiFrames.threads(frame.payload))
+					threads.set(thread.id, thread.name);
+				threadsFrame = frame;
+			case HldiFrames.PUSH_STATS:
+				var stats = HldiFrames.stats(frame.payload);
+				updateBuffers(stats.chunkCount, stats.chunksInUse);
+				stalls = stats.stalls;
+				sentBytes = stats.sentBytes;
+			case HldiFrames.PUSH_END:
+				endSeen = true;
+			case HldiFrames.PUSH_DATA:
+				return handleData(frame);
+			default:
+		}
+		return 0;
+	}
+
+	function handleData(frame:HldiFrame):Int {
+		var records;
+		try {
+			var data = HldiFrames.data(frame.payload);
+			records = HldiFrames.records(clock, data.threadId, data.records);
+			generatedBytes = Int64.add(generatedBytes, Int64.ofInt(data.rawLength));
+		} catch (_:Dynamic) {
+			malformedSegments++;
+			return 0;
+		}
+		for (record in records)
+			consume(record);
+		return records.length;
+	}
+
+	function applyMetadata(payload:Bytes):Void {
+		var previous = metadata,
+			started = Timer.stamp(),
+			next = profiler.HldiCodec.metadata(payload);
+		metadataRefreshMs = (Timer.stamp() - started) * 1000;
+		if (previous != null)
+			for (moduleId => revision in next.revisions) {
+				var oldRevision = previous.revisions.get(moduleId);
+				if (oldRevision != null && oldRevision != revision)
+					metadataChanges.push(new ProfileMetadataChange(latestTime, moduleId, oldRevision, revision));
+			}
+		metadata = next;
+		metadataReceived = true;
 	}
 
 	public function functionAggregates():Array<ProfileAggregate>
@@ -450,22 +577,22 @@ class ProfilerSession {
 	}
 
 	function consume(record:HldiRecord):Void {
-		if (record.kind == 2) {
+		if (record.timestamp > latestTime)
+			latestTime = record.timestamp;
+		if (record.kind == HldiFrames.KIND_ENTER) {
+			instrumentedCalls++;
+			var symbol = resolve(record.frames[0]);
+			if (symbol != null)
+				functionAggregate(symbol).calls++;
+			return;
+		}
+		if (record.kind == HldiFrames.KIND_EVENT) {
 			events.push(new ProfileEvent(record.timestamp, record.threadId, record.value, record.payload));
 			if (eventCapacity <= 0)
 				events.resize(0);
 			else if (events.length > eventCapacity)
 				events.splice(0, events.length - eventCapacity);
-			if (record.value == EVENT_MODULE_REVISION) {
-				if (record.payload.length != 12)
-					throw "Invalid HLDI module revision event";
-				var announced = new HldiReader(record.payload),
-					moduleId = Int64.toStr(announced.u64()),
-					revision = announced.u32();
-				refreshMetadata(record.timestamp);
-				if (metadata == null || metadata.revisions.get(moduleId) != revision)
-					throw 'HLDI metadata did not reach announced module revision $revision';
-			}
+			// The runtime pushes the metadata for a new module revision, so EVENT_MODULE_REVISION needs no refresh.
 			if (record.value == EVENT_THREAD_NAME)
 				threads.set(record.threadId, record.payload.toString());
 			if (record.value == EVENT_GC_STATS && record.payload.length == 40) {
@@ -479,7 +606,11 @@ class ProfilerSession {
 					pc = Int64.toStr(input.u64()),
 					base = input.u64();
 				var moduleLength = input.u32(), symbolLength = input.u32();
-				if (moduleLength + symbolLength == input.remaining()) {
+				// Lengths are unsigned on the wire: one past 2^31 reads negative here.
+				if (moduleLength >= 0
+					&& symbolLength >= 0
+					&& moduleLength <= input.remaining()
+					&& symbolLength == input.remaining() - moduleLength) {
 					var module = input.take(moduleLength).toString(),
 						name = input.take(symbolLength).toString();
 					nativeSymbols.set(pc, {name: name, module: module, base: base});
@@ -504,6 +635,7 @@ class ProfilerSession {
 			return;
 		}
 		samples++;
+		sampleRecords = Int64.add(sampleRecords, Int64.ofInt(1));
 		if (record.flags & 1 != 0)
 			gcSamples++;
 		if (!threads.exists(record.threadId))
@@ -624,7 +756,10 @@ class ProfilerSession {
 
 	static function sorted(values:Map<String, ProfileAggregate>):Array<ProfileAggregate> {
 		var result = [for (value in values) value];
-		result.sort((left, right) -> left.selfSamples == right.selfSamples ? right.totalSamples - left.totalSamples : right.selfSamples - left.selfSamples);
+		result.sort((left, right) -> left.selfSamples != right.selfSamples ? right.selfSamples
+			- left.selfSamples : left.totalSamples != right.totalSamples ? right.totalSamples
+				- left.totalSamples : right.calls
+				- left.calls);
 		return result;
 	}
 }

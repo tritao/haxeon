@@ -311,8 +311,7 @@ private class VirtualGridCell implements View {
 				var activate = function(event:UiEvent) {
 					callback(rowIndex, columnIndex);
 				};
-				node.on(UiEventKind.Click, activate);
-				node.on(UiEventKind.Activate, activate);
+				node.onActivate(activate);
 			}
 			if (onCellKeyDown != null) {
 				var keyCallback:Int->Int->WidgetId->UiEvent->Void = cast onCellKeyDown;

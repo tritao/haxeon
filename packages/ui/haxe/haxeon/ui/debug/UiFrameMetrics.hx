@@ -49,6 +49,8 @@ class UiFrameMetrics {
 	/** Paint-capable visible nodes skipped because either resolved axis was empty. */
 	public var emptyPaintNodes(default, null):Int;
 	public var reusedSubmission(default, null):Bool;
+	/** Custom painters invalidated by a retained hover-only submission. */
+	public var hoverPaintUpdatedNodes:Int = 0;
 	public var renderSeconds(default, null):Float;
 	public var totalSeconds(default, null):Float;
 

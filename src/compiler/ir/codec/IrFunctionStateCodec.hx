@@ -20,16 +20,65 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 11;
+	static inline final VERSION = 12;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
-	public static function encode(fn:IrFunction):Bytes {
+	public static function encode(fn:IrFunction):Bytes
+		return encodeFunction(fn, true);
+
+	/**
+	 * Encodes everything `encode` does except the content hash of each source file and the byte offsets of each location.
+	 * The hash covers the whole file and the offsets move with any edit before the function, so an edit anywhere would make
+	 * every later function of the file look different. Line and column numbers stay in: a function whose lines moved differs.
+	 * `samePlacement` tells whether two functions with the same comparison encoding also agree on what it leaves out.
+	 */
+	public static function encodeForComparison(fn:IrFunction):Bytes
+		return encodeFunction(fn, true, false);
+
+	/**
+	 * Whether two functions with the same comparison encoding also have the same file hashes and byte offsets, so one can
+	 * stand in for the other in a build: its debug information then names a source snapshot the build carries.
+	 */
+	public static function samePlacement(left:IrFunction, right:IrFunction):Bool {
+		for (index in 0...left.debugBindings.length) {
+			var a = left.debugBindings[index], b = right.debugBindings[index];
+			if (a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd)
+				return false;
+		}
+		for (blockIndex in 0...left.blocks.length) {
+			var a = left.blocks[blockIndex], b = right.blocks[blockIndex];
+			for (index in 0...a.instructions.length)
+				if (!samePlace(a.instructions[index].provenance, b.instructions[index].provenance))
+					return false;
+			var leftTerminator = a.terminator, rightTerminator = b.terminator;
+			if (leftTerminator != null && rightTerminator != null && !samePlace(leftTerminator.provenance, rightTerminator.provenance))
+				return false;
+		}
+		return true;
+	}
+
+	static function samePlace(left:SourceProvenance, right:SourceProvenance):Bool {
+		var a = left.location, b = right.location;
+		if (a == null || b == null)
+			return a == b;
+		return a.start == b.start && a.end == b.end && a.sourceHash == b.sourceHash;
+	}
+
+	/**
+	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
+	 * fingerprint run the same code, wherever their source sits and whatever they are called.
+	 */
+	public static function codeFingerprint(fn:IrFunction):String
+		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false)));
+
+	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true):Bytes {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
-		for (binding in fn.debugBindings)
-			collectValue(binding.value, values);
+		if (identified)
+			for (binding in fn.debugBindings)
+				collectValue(binding.value, values);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
 				collectInstruction(instruction.value, values);
@@ -37,29 +86,32 @@ class IrFunctionStateCodec {
 			if (terminator != null)
 				collectTerminator(terminator.value, values);
 		}
-		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value]),
+		var valueBytes = IrValueTableCodec.encode([for (_ => value in values) value], identified),
 			output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("IRF");
 		output.writeByte(VERSION);
 		writeBytes(output, valueBytes);
-		IrTypeCodec.writeString(output, fn.name);
+		IrTypeCodec.writeString(output, identified ? fn.name : "");
 		output.writeInt32(fn.arguments.length);
 		for (argument in fn.arguments)
 			IrValueTableCodec.writeReference(output, argument);
 		IrTypeCodec.writeType(output, fn.result, 0);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
-		output.writeInt32(fn.debugBindings.length);
-		for (binding in fn.debugBindings) {
+		var debugBindings = identified ? fn.debugBindings : [];
+		output.writeInt32(debugBindings.length);
+		for (binding in debugBindings) {
 			IrTypeCodec.writeString(output, binding.identity);
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
 			IrTypeCodec.writeString(output, binding.path);
-			output.writeInt32(binding.scopeStart);
-			output.writeInt32(binding.scopeEnd);
+			output.writeInt32(hashed ? binding.scopeStart : 0);
+			output.writeInt32(hashed ? binding.scopeEnd : 0);
 		}
-		if (fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
+		// A fingerprint describes whatever the compiler holds, including functions still being built; only persisted state must be
+		// complete.
+		if (identified && fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
 			throw "Invalid IR function block count";
 		var blocks:Map<Int, Bool> = [];
 		output.writeInt32(fn.blocks.length);
@@ -76,16 +128,22 @@ class IrFunctionStateCodec {
 			output.writeInt32(block.instructions.length);
 			for (instruction in block.instructions) {
 				writeBytes(output, IrInstructionCodec.encode(instruction.value));
-				writeProvenance(output, instruction.provenance);
+				if (identified)
+					writeProvenance(output, instruction.provenance, hashed);
 			}
+			// An unreachable block may stay open, as the continuation of a try whose every path returns or throws; the verifiers
+			// check only reachable blocks. Rejecting it here made every such function compare as changed on each live edit.
 			var blockTerminator = block.terminator;
-			if (blockTerminator == null)
-				throw "IR block has no terminator";
+			if (blockTerminator == null) {
+				output.writeInt32(-1);
+				continue;
+			}
 			var terminator = new BytesOutput();
 			terminator.bigEndian = false;
 			IrTerminatorCodec.write(terminator, blockTerminator.value);
 			writeBytes(output, terminator.getBytes());
-			writeProvenance(output, blockTerminator.provenance);
+			if (identified)
+				writeProvenance(output, blockTerminator.provenance, hashed);
 		}
 		return output.getBytes();
 	}
@@ -155,7 +213,10 @@ class IrFunctionStateCodec {
 						provenance = version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache");
 					block.instructions.push(new Located(instruction, provenance));
 				}
-				var terminatorBytes = readBytes(input, bytes.length),
+				var terminatorLength = input.readInt32();
+				if (terminatorLength == -1 && version >= 12)
+					continue;
+				var terminatorBytes = readSized(input, bytes.length, terminatorLength),
 					terminatorInput = new BytesInput(terminatorBytes);
 				terminatorInput.bigEndian = false;
 				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
@@ -172,18 +233,18 @@ class IrFunctionStateCodec {
 		}
 	}
 
-	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance):Void {
+	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance, hashed:Bool = true):Void {
 		var location = provenance.location;
 		output.writeByte(location == null ? 0 : 1);
 		if (location != null) {
 			IrTypeCodec.writeString(output, location.path);
-			output.writeInt32(location.start);
-			output.writeInt32(location.end);
+			output.writeInt32(hashed ? location.start : 0);
+			output.writeInt32(hashed ? location.end : 0);
 			output.writeInt32(location.line);
 			output.writeInt32(location.column);
 			output.writeInt32(location.endLine);
 			output.writeInt32(location.endColumn);
-			output.writeInt32(location.sourceHash);
+			output.writeInt32(hashed ? location.sourceHash : 0);
 		}
 		switch provenance.origin {
 			case UserSource:
@@ -310,8 +371,10 @@ class IrFunctionStateCodec {
 		output.write(bytes);
 	}
 
-	static function readBytes(input:BytesInput, totalLength:Int):Bytes {
-		var length = input.readInt32();
+	static function readBytes(input:BytesInput, totalLength:Int):Bytes
+		return readSized(input, totalLength, input.readInt32());
+
+	static function readSized(input:BytesInput, totalLength:Int, length:Int):Bytes {
 		if (length < 0 || length > 0x10000000 || length > totalLength - input.position)
 			throw "Invalid IR function section length";
 		return input.read(length);

@@ -9,6 +9,9 @@ import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import hl.Gc;
+import haxeon.ProfileFrame;
+import haxeon.ProfileNativeTrace;
+import haxeon.ProfileSpan;
 
 import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
@@ -58,6 +61,8 @@ class DesktopUiHost {
 		var frameRequestCounts:Map<String, Int> = new Map();
 		var captureState = {startedAt: -1.0, readyFrames: 0};
 		var frameGc = FrameGcScheduler.fromEnvironment();
+		// A profiler frame runs from one rendered frame to the next, or until the host goes idle.
+		var profileFrameOpen = false;
 		var script = options.inputScriptPath == null ? null : new ScriptedInput(options.inputScriptPath);
 		var scriptedCount = 0;
 		var scriptedAt = -1.0;
@@ -93,6 +98,8 @@ class DesktopUiHost {
 			if (NativeKit.nk_init(init) != Result.Ok)
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
+			// NativeKit's waits, frames and input then appear in profiler captures.
+			ProfileNativeTrace.install("nativekit");
 
 			var initialWidth = Std.int(Math.max(options.width, options.minimumWidth));
 			var initialHeight = Std.int(Math.max(options.height, options.minimumHeight));
@@ -100,9 +107,12 @@ class DesktopUiHost {
 			windowOptions.set_width(initialWidth);
 			windowOptions.set_height(initialHeight);
 			windowOptions.set_title(options.title);
+			// Assign window icons before Windows creates its taskbar button.
+			var deferShowForIcon = options.icons != null && Sys.systemName() == "Windows";
 			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
 				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
-			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0));
+			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0) |
+				(deferShowForIcon ? WindowFlags.Hidden : 0));
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
@@ -147,6 +157,8 @@ class DesktopUiHost {
 				if (NativeKit.nk_window_set_icons(window, pixels, images) != Result.Ok)
 					throw "Window icons failed: " + NativeKit.nk_last_error();
 			}
+			if (deferShowForIcon && NativeKit.nk_window_show(window, true) != Result.Ok)
+				throw "Window show failed: " + NativeKit.nk_last_error();
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
 			var surfaceOptions = new NativeSurfaceOptions();
@@ -188,15 +200,24 @@ class DesktopUiHost {
 			var repaintOnlyRequested = false;
 			var frameRequestedAt = -1.0;
 			var nextCaretFrameAt = -1.0;
+			// When animations are only counting down a delay, no frames run until this time.
+			var nextAnimationFrameAt = -1.0;
 			var frameRequestReason = "none";
 			var frameRequestSerial = 0;
 			var inputRequestedAt = -1.0;
 			var lastInputDeliveredAt = -1.0;
 			var inputRequestCount = 0;
+			var pointerRequestedAt = -1.0;
+			var latestPointerAt = -1.0;
+			var pointerMoveCount = 0;
 			var inputDispatchSeconds = 0.0;
 			if (options.captureDirectory != null)
 				inputTraceSubscription = pump.listen(function(value) {
 					switch value {
+						case PointerMove(source, _, _) if (source.rawValue() == window.rawValue()):
+							latestPointerAt = Sys.time();
+							if (pointerRequestedAt < 0) pointerRequestedAt = latestPointerAt;
+							pointerMoveCount++;
 						case TextInput(source, _) if (source.rawValue() == window.rawValue()):
 							lastInputDeliveredAt = Sys.time();
 							if (inputRequestedAt < 0.0) inputRequestedAt = lastInputDeliveredAt;
@@ -233,15 +254,33 @@ class DesktopUiHost {
 			var hostContext = new DesktopUiHostContext(fonts, pump, window, surface,
 				function() session.stop(), scheduleFrame);
 			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
-			runtime = new UiHostRuntime(session, hostContext, window, surface,
+			var liveRuntime = new UiHostRuntime(session, hostContext, window, surface,
 				initialWidth, initialHeight, applySizeLimits);
-			runtime.start(function(_) return create(hostContext));
+			runtime = liveRuntime;
+			liveRuntime.start(function(_) return create(hostContext));
 			if (session.state == UiHostLifecycle.Failed) throw session.error;
-			if (runtime.app() != null)
-				runtime.app().context().onAnimationFrameRequested = scheduleFrame;
+			if (liveRuntime.app() != null)
+				liveRuntime.app().context().onAnimationFrameRequested = scheduleFrame;
 			var borrowedSurface = Surface.borrowNativeHandle(surface);
 			nativeSurface = borrowedSurface;
 
+			// The Win32 sizing loop blocks this pump for the whole drag. Every intermediate size is
+			// queued and replayed one per iteration afterwards, and a full queue drops the final one.
+			// Applying the live size makes the first replayed event final and the rest no-ops.
+			var windowsResize = Sys.systemName() == "Windows";
+			var resizeSurface = function(width:Int, height:Int):Void {
+				if (windowsResize) {
+					var size = NativeKit.nk_window_get_size(window);
+					if (size.status != Result.Ok) throw "Window size query failed: " + NativeKit.nk_last_error();
+					if (size.out_width == liveRuntime.logicalWidth && size.out_height == liveRuntime.logicalHeight) return;
+					width = size.out_width;
+					height = size.out_height;
+				}
+				if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
+					throw "Surface resize failed";
+				liveRuntime.resize(width, height, liveRuntime.framebufferWidth, liveRuntime.framebufferHeight);
+				scheduleFrameWithReason("window-resize");
+			};
 			eventSubscription = pump.listen(function(value) {
 				var eventName = eventKind(value);
 				if (eventName == "TextInput" && lastInputDeliveredAt >= 0.0)
@@ -256,12 +295,11 @@ class DesktopUiHost {
 						hostContext.requestClose();
 						scheduleFrameWithReason("window-close");
 					case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
-						if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
-							throw "Surface resize failed";
-						runtime.resize(width, height, runtime.framebufferWidth, runtime.framebufferHeight);
-						scheduleFrameWithReason("window-resize");
+						resizeSurface(width, height);
+					case WindowFramebufferResize(source, _, _) if (windowsResize && source.rawValue() == window.rawValue()):
+						resizeSurface(0, 0);
 					case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
-						runtime.setScale(scale);
+						liveRuntime.setScale(scale);
 						scheduleFrameWithReason("window-scale");
 					case WindowStateChanged(source, flags) if (source.rawValue() == window.rawValue()):
 						if (hostContext.windowControls != null) hostContext.windowControls.observe(flags);
@@ -277,12 +315,14 @@ class DesktopUiHost {
 						if (size.status != Result.Ok) throw "Framebuffer size query failed";
 						var scale = NativeKit.nk_window_get_scale(window);
 						if (scale.status != Result.Ok) throw "Window scale query failed";
-						runtime.setScale(scale.out_scale);
-						runtime.resize(runtime.logicalWidth, runtime.logicalHeight,
+						liveRuntime.setScale(scale.out_scale);
+						liveRuntime.resize(liveRuntime.logicalWidth, liveRuntime.logicalHeight,
 							size.out_width, size.out_height);
-						runtime.setSurfaceReady(size.out_width > 0 && size.out_height > 0);
+						liveRuntime.setSurfaceReady(size.out_width > 0 && size.out_height > 0);
 						if (frameSubscription == null)
 							frameSubscription = borrowedSurface.onFrame(function(width, height) {
+								// Profiler spans left open by a throw are closed in the handler, so a capture stays balanced.
+								var frameSpanOpen = false, gcSpanOpen = false;
 								try {
 									framePending = false;
 									if (!active || !surfaceAvailable || !frameRequested) return;
@@ -296,6 +336,8 @@ class DesktopUiHost {
 									var scriptedFrameDeliveredAt = scriptedDeliveredAt;
 									var scriptedFrameDispatch = scriptedDispatch;
 									scriptedCount = 0; scriptedAt = -1.0; scriptedDeliveredAt = -1.0; scriptedDispatch = 0.0;
+									var pointerFirstAt = pointerRequestedAt, pointerLatestAt = latestPointerAt, pointerCount = pointerMoveCount;
+									pointerRequestedAt = -1.0; latestPointerAt = -1.0; pointerMoveCount = 0;
 									var textInputRequestedAt = inputRequestedAt;
 									var textInputCount = inputRequestCount;
 									var textInputDispatchSeconds = inputDispatchSeconds;
@@ -303,24 +345,36 @@ class DesktopUiHost {
 									inputRequestCount = 0;
 									inputDispatchSeconds = 0.0;
 									frameRequested = false;
-									runtime.resize(runtime.logicalWidth, runtime.logicalHeight, width, height);
+									liveRuntime.resize(liveRuntime.logicalWidth, liveRuntime.logicalHeight, width, height);
 									var frameStartedAt = Sys.time();
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
-									runtime.measureFrameTimings = options.captureDirectory != null;
+									liveRuntime.measureFrameTimings = options.captureDirectory != null;
+									ProfileFrame.mark();
+									profileFrameOpen = true;
+									frameSpanOpen = true;
+									ProfileSpan.begin("ui.frame");
 									frameGc.beginFrame();
-									var rendered = runtime.render(Sys.time(), repaintOnly);
+									var rendered = liveRuntime.render(Sys.time(), repaintOnly);
 									var collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
+									gcSpanOpen = true;
+									ProfileSpan.begin("ui.frame.gc");
 									frameGc.endFrame();
+									gcSpanOpen = false;
+									ProfileSpan.end("ui.frame.gc");
+									frameSpanOpen = false;
+									ProfileSpan.end("ui.frame");
 									var collectionSeconds = options.captureDirectory == null ? 0.0 : Sys.time() - collectionStartedAt;
 									if (options.captureDirectory != null) callbackSeconds += Sys.time() - frameStartedAt;
 									if (!rendered) return;
 									var frameRendered = options.onFrameRendered;
 									if (frameRendered != null) frameRendered();
 									var frameFinishedAt = options.captureDirectory == null ? 0.0 : Sys.time();
-									var renderedApp = runtime.app();
+									var renderedApp = liveRuntime.app();
 									nextCaretFrameAt = renderedApp != null
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
+									var animationWait = renderedApp != null ? renderedApp.context().animationWaitSeconds() : -1.0;
+									nextAnimationFrameAt = animationWait >= 0.0 ? Sys.time() + animationWait : -1.0;
 									var readyCheck = options.captureReady;
 									var captureReady = readyCheck == null || readyCheck();
 									if (captureReady) {
@@ -338,16 +392,21 @@ class DesktopUiHost {
 										Gc.censusStart(65536);
 									}
 									if (options.captureDirectory != null) {
-										var metrics = runtime.app() == null ? null : runtime.app().context().frameMetrics;
+										var metrics = liveRuntime.app() == null ? null : liveRuntime.app().context().frameMetrics;
 										var record = {
-											frame: runtime.rendered,
+											frame: liveRuntime.rendered,
+											pointerMoveCount: pointerCount,
+											pointerToPaintSeconds: pointerFirstAt < 0 ? null : frameFinishedAt - pointerFirstAt,
+											latestPointerToPaintSeconds: pointerLatestAt < 0 ? null : frameFinishedAt - pointerLatestAt,
+											hoverPaintUpdatedNodes: metrics == null ? 0 : metrics.hoverPaintUpdatedNodes,
+											reusedSubmission: metrics == null ? false : metrics.reusedSubmission,
 											repaintOnly: repaintOnly,
-											allocatedBytes: runtime.lastFrameAllocatedBytes,
-											prepareSeconds: runtime.lastPrepareSeconds,
-											applicationSubmitSeconds: runtime.lastApplicationSubmitSeconds,
-											contextRenderSeconds: runtime.lastContextRenderSeconds,
-											prepareAllocatedBytes: runtime.lastPrepareAllocatedBytes,
-											submitAllocatedBytes: runtime.lastSubmitAllocatedBytes,
+											allocatedBytes: liveRuntime.lastFrameAllocatedBytes,
+											prepareSeconds: liveRuntime.lastPrepareSeconds,
+											applicationSubmitSeconds: liveRuntime.lastApplicationSubmitSeconds,
+											contextRenderSeconds: liveRuntime.lastContextRenderSeconds,
+											prepareAllocatedBytes: liveRuntime.lastPrepareAllocatedBytes,
+											submitAllocatedBytes: liveRuntime.lastSubmitAllocatedBytes,
 											startedAtSeconds: frameStartedAt,
 											requestReason: requestReason,
 											requestSerial: requestSerial,
@@ -360,7 +419,7 @@ class DesktopUiHost {
 											textInputDispatchSeconds: textInputDispatchSeconds,
 											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
 											frameSeconds: frameFinishedAt - frameStartedAt,
-											paintSeconds: runtime.lastPaintSeconds,
+											paintSeconds: liveRuntime.lastPaintSeconds,
 											bookkeepingSeconds: 0.0,
 											gcSeconds: 0.0,
 											gcCollectionsTotal: 0.0,
@@ -392,12 +451,12 @@ class DesktopUiHost {
 									if (session.state == UiHostLifecycle.Failed) active = false;
 									if (options.captureDirectory != null && options.frameLimit > 0 &&
 										captureState.readyFrames >= options.frameLimit) {
-										writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
+										writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
 											eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 										session.stop();
 									}
 									var continueFrames = options.continuousFrames;
-									var needsAnimationFrame = runtime.app().context().needsAnimationFrame;
+									var needsAnimationFrame = liveRuntime.app().context().needsAnimationFrame;
 									var wantsContinuousFrames = !needsAnimationFrame &&
 										continueFrames != null && continueFrames();
 									if (active && session.state == UiHostLifecycle.Running &&
@@ -413,21 +472,25 @@ class DesktopUiHost {
 									// Waiting until the next host tick can miss GTK's frame-clock deadline.
 									if (requestSuccessorDuringPaint) submitFrameRequest();
 								} catch (error:Dynamic) {
+									if (gcSpanOpen) ProfileSpan.end("ui.frame.gc");
+									if (frameSpanOpen) ProfileSpan.end("ui.frame");
 									frameGc.endFrame();
 									recordFailure("frame-callback", error);
-									runtime.fail("frame-callback", error);
+									liveRuntime.fail("frame-callback", error);
 									active = false;
 								}
 							});
 						scheduleFrameWithReason("surface-ready");
 					case SurfaceResize(source, width, height, framebufferWidth, framebufferHeight)
 						if (source.rawValue() == surface.rawValue()):
-						runtime.resize(width, height, framebufferWidth, framebufferHeight);
+						liveRuntime.resize(width, height, framebufferWidth, framebufferHeight);
 						scheduleFrameWithReason("surface-resize");
 					case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
 						surfaceAvailable = false;
 						framePending = false;
-						runtime.setSurfaceReady(false);
+						nextAnimationFrameAt = -1.0;
+						liveRuntime.setSurfaceReady(false);
+					case _ if (isBackgroundIo(value)):
 					case _:
 						scheduleFrameWithReason("event:" + eventName);
 				}
@@ -438,7 +501,7 @@ class DesktopUiHost {
 				if (activeScript == null) return;
 				if (recordPath != null) File.appendContent(recordPath, Json.stringify({kind:"checkpoint",
 					label:label, at:Sys.time(), scheduledAt:activeScript.scheduledAt,
-					delivered:activeScript.delivered, appState:(cast runtime.app():DesktopUiApplication).diagnosticState()}) + "\n");
+					delivered:activeScript.delivered, appState:(cast liveRuntime.app():DesktopUiApplication).diagnosticState()}) + "\n");
 			};
 			var beforeScriptedInput = function(at:Float):Void {
 				if (scriptedAt < 0) {
@@ -456,24 +519,36 @@ class DesktopUiHost {
 			};
 			step = function() {
 				if (!active) return false;
+				var pollSpanOpen = false;
 				try {
 				var measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
 				var pollStarted = measureLoop ? Sys.time() : 0.0;
-				var framesBeforePoll = runtime.rendered;
+				var framesBeforePoll = liveRuntime.rendered;
 				var callbackBeforePoll = callbackSeconds;
 				// Native polling can render. Deliver already-due scripted input first,
 				// then catch deadlines that elapsed during a native callback.
 				var hadEvent = drainScriptedInput();
-				if (pump.poll()) hadEvent = true;
+				// Polling waits for native events and runs the callbacks they trigger, frames included.
+				pollSpanOpen = true;
+				ProfileSpan.begin("ui.events");
+				// Take every queued event before drawing; a bound keeps a flood from starving frames.
+				var polled = false;
+				for (_ in 0...64) {
+					if (!pump.poll()) break;
+					polled = true;
+				}
+				pollSpanOpen = false;
+				ProfileSpan.end("ui.events");
+				if (polled) hadEvent = true;
 				if (drainScriptedInput()) hadEvent = true;
 				// Surface callbacks run directly in the backend pump, without a queued event.
-				var hadFrame = runtime.rendered != framesBeforePoll;
+				var hadFrame = liveRuntime.rendered != framesBeforePoll;
 				var backgroundStarted = measureLoop ? Sys.time() : 0.0;
 				if (measureLoop) {
 					loopTiming.loops++;
 					loopTiming.pollSeconds += backgroundStarted - pollStarted;
 					loopTiming.pollFrameSeconds += callbackSeconds - callbackBeforePoll;
-					loopTiming.pollFrames += runtime.rendered - framesBeforePoll;
+					loopTiming.pollFrames += liveRuntime.rendered - framesBeforePoll;
 				}
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
@@ -482,7 +557,7 @@ class DesktopUiHost {
 				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0 &&
 					Sys.time() - captureState.startedAt >= options.captureSeconds &&
 					(script == null || script.complete && scriptedCount == 0)) {
-					writeDiagnostics(options, cast runtime.app(), cast runtime.frameRenderer(), runtime,
+					writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
 						eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 					session.stop();
 				}
@@ -491,25 +566,39 @@ class DesktopUiHost {
 					nextCaretFrameAt = -1.0;
 					scheduleFrameWithReason("text-caret");
 				}
+				if (active && surfaceAvailable && nextAnimationFrameAt >= 0.0 &&
+					Sys.time() >= nextAnimationFrameAt) {
+					nextAnimationFrameAt = -1.0;
+					scheduleFrameWithReason("animation");
+				}
 				submitFrameRequest();
-				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) frameGc.idle();
+				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
+					frameGc.idle();
+					if (profileFrameOpen) {
+						ProfileFrame.idle();
+						profileFrameOpen = false;
+					}
+				}
 				if (active && !hadEvent && !hadFrame) {
 					var waitStarted = measureLoop ? Sys.time() : 0.0;
 					var callbackBeforeWait = callbackSeconds;
-					var framesBeforeWait = runtime.rendered;
+					var framesBeforeWait = liveRuntime.rendered;
 					var waitSeconds = 1.0 / options.targetFps;
 					var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
 					if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+					if (surfaceAvailable && nextAnimationFrameAt >= 0.0)
+						waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
 					pump.wait(waitSeconds);
 					if (measureLoop) {
 						loopTiming.waits++;
 						loopTiming.waitSeconds += Sys.time() - waitStarted;
 						loopTiming.waitFrameSeconds += callbackSeconds - callbackBeforeWait;
-						loopTiming.waitFrames += runtime.rendered - framesBeforeWait;
+						loopTiming.waitFrames += liveRuntime.rendered - framesBeforeWait;
 					}
 				}
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
+					if (pollSpanOpen) ProfileSpan.end("ui.events");
 					recordFailure("desktop-host", error);
 					session.fail("desktop-host", error);
 					Sys.println(options.title + ": " + Std.string(error));
@@ -688,7 +777,27 @@ class DesktopUiHost {
 			case SurfaceResize(_, _, _, _, _): "SurfaceResize";
 			case SurfaceLost(_): "SurfaceLost";
 			case None: "None";
+			case Raw(_, _, _, _, _, _, _): "Raw";
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _): "Task";
+			case HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _) | HttpComplete(_, _, _, _): "Http";
 			case _: "other";
+		};
+	}
+
+	/** Background I/O (transports, terminals, tasks, HTTP) is for the code that started it, not the window: a redraw
+		for each chunk of a busy connection would draw continuously while nothing on screen changes. That code requests
+		a frame when its state changes. Other raw events (menus, file watches, application lifecycle) still redraw. */
+	static function isBackgroundIo(value:PlatformEvent):Bool {
+		return switch (value) {
+			case Raw(kind, _, _, _, _, _, _):
+				kind == EventKind.TransportConnected || kind == EventKind.TransportAccepted
+					|| kind == EventKind.TransportData || kind == EventKind.TransportWritable
+					|| kind == EventKind.TransportClosed || kind == EventKind.TransportFailed
+					|| kind == EventKind.PtyReadable || kind == EventKind.PtyExited;
+			case TaskProgress(_, _) | TaskComplete(_, _, _) | TaskFailed(_, _, _) | TaskCancelled(_, _, _)
+				| HttpHeaders(_, _, _, _) | HttpDataAvailable(_, _) | HttpProgressEvent(_, _, _, _, _, _)
+				| HttpComplete(_, _, _, _): true;
+			case _: false;
 		};
 	}
 

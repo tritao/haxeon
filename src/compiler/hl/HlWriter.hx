@@ -588,6 +588,14 @@ class HlWriter {
 					{opcode: HlOpcode.ToSFloat, operands: [destination, source]};
 				case ToInt(destination, source):
 					{opcode: HlOpcode.ToInt, operands: [destination, source]};
+				case UnsafeCast(destination, source):
+					{opcode: HlOpcode.UnsafeCast, operands: [destination, source]};
+				case Unref(destination, source):
+					{opcode: HlOpcode.Unref, operands: [destination, source]};
+				case Setref(destination, source):
+					{opcode: HlOpcode.Setref, operands: [destination, source]};
+				case RefOffset(destination, source, index):
+					{opcode: HlOpcode.RefOffset, operands: [destination, source, index]};
 				case SafeCast(destination, source):
 					{opcode: HlOpcode.SafeCast, operands: [destination, source]};
 				case GlobalGet(destination, global):

@@ -214,7 +214,9 @@ enum AstExpression {
 	NewMap(key:AstType, value:AstType, span:SourceSpan);
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	PostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan);
-	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, span:SourceSpan);
+
+	/** `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. */
+	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan);
 }
 
 /** Compile-time query over a fixed native ABI layout. */

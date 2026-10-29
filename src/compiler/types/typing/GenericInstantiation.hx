@@ -169,6 +169,7 @@ class GenericInstantiation {
 			typed.unshift(session.representation.boundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
+		session.invalidateCallEffects(baseName, scope);
 		return session.representation.boundaryCast(call, result);
 	}
 

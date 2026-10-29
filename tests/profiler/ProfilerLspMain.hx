@@ -65,7 +65,6 @@ class ProfilerLspMain {
 				throw "Profiler stack frames omitted source navigation metadata";
 			if (notification.params.sampleRecords == "0"
 				|| notification.params.generatedBytes == "0"
-				|| notification.params.overheadMicrosPerSample <= 0
 				|| notification.params.threads.length == 0
 				|| notification.params.gcStats.length == 0
 				|| notification.params.timeline.samples.length == 0

@@ -1,0 +1,19 @@
+class Operators {
+  function f(a:Float, b:Float, radius:Float, items:Array<Float>, ?optional:Int, ?name:String = "x"):Float {
+    var z = a *(b + 1) /(radius * 2) -(a + b) +(radius);
+    for (v in[a, b]) trace(v);
+    for (v in [a, b]) trace(v);
+    var neg = -1;
+    var spaced = a -(b);
+    var group = -(a + b) * !(a < b ? 1 : 0);
+    var ternary = a<0 ? -1 : a> b ? 1 : 0;
+    foo(a, (b), [1, 2], [for (i in 0...3) i]);
+    var index = items[0] + [1, 2][1] +(a + b);
+    var compare = index<0 || index>= items.length;
+    var fallback = optional??name??"none";
+    var map = ["a"=>1, "b" => 2];
+    for (key=>value in map) trace(key);
+    return -radius;
+  }
+  function rows():Array<Dynamic> { return [{name:"flat",profile:Profile.flat(2*radius,0.02),depth:0.002,corners:[radius,1.5*radius],weight:9.4},{name:"ball",profile:Profile.ball(2*radius,0.02),depth:0.004,corners:[1.01*radius,1.5*radius],weight:7.5}]; }
+}

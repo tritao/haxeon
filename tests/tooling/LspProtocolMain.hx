@@ -18,10 +18,11 @@ class BlockingLanguageService extends LanguageService {
 		return super.complete(path, position, token);
 	}
 
-	public override function completeResult(path:String, position:Int, ?token:CancellationToken):compiler.service.LanguageService.CompletionResult {
+	public override function completeResult(path:String, position:Int, ?token:CancellationToken,
+			?allowPartialWorkspaceIndex:Bool = false):compiler.service.LanguageService.CompletionResult {
 		entered.release();
 		resume.wait();
-		return super.completeResult(path, position, token);
+		return super.completeResult(path, position, token, allowPartialWorkspaceIndex);
 	}
 }
 
@@ -35,6 +36,34 @@ class BlockingDiagnosticLanguageService extends LanguageService {
 			entered.release();
 			resume.wait();
 		}
+		return super.analyze(entryModule, token);
+	}
+}
+
+class CancellableBlockingDiagnosticLanguageService extends LanguageService {
+	public final entered = new sys.thread.Lock();
+	public final cancellationObserved = new sys.thread.Lock();
+	public var block = false;
+
+	public override function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		if (block) {
+			entered.release();
+			while (token != null && !token.cancelled)
+				Sys.sleep(0.001);
+			block = false;
+			cancellationObserved.release();
+			if (token != null)
+				token.check();
+		}
+		return super.analyze(entryModule, token);
+	}
+}
+
+class CountingDiagnosticLanguageService extends LanguageService {
+	public var analyzeCalls = 0;
+
+	public override function analyze(entryModule:String, ?token:CancellationToken):compiler.Compiler.AnalysisResult {
+		analyzeCalls++;
 		return super.analyze(entryModule, token);
 	}
 }
@@ -915,16 +944,16 @@ class LspProtocolMain {
 				foregroundHasMain = true;
 		if (!foregroundHasMain || foregroundProtocol.lastForegroundAnalysisMs < 0)
 			throw "first-open completion did not demand a current semantic snapshot";
-		var interruptedService = new BlockingDiagnosticLanguageService(),
+		var interruptedService = new CancellableBlockingDiagnosticLanguageService(),
 			interruptedProtocol = new LspProtocol(interruptedService),
-			interruptedDefinition:Dynamic = null,
+			interruptedCompletion:Dynamic = null,
 			resumedDiagnostics = new sys.thread.Lock(),
 			interruptedDone = new sys.thread.Lock();
 		interruptedService.block = true;
 		var interruptedDispatcher = new LspDispatcher(interruptedProtocol, response -> {
 			var parsed:Dynamic = Json.parse(response);
 			if (parsed.id == 883) {
-				interruptedDefinition = parsed;
+				interruptedCompletion = parsed;
 				interruptedDone.release();
 			}
 			if (parsed.method == "textDocument/publishDiagnostics")
@@ -947,20 +976,75 @@ class LspProtocolMain {
 		interruptedDispatcher.dispatch(Json.stringify({
 			jsonrpc: "2.0",
 			id: 883,
-			method: "textDocument/definition",
+			method: "textDocument/completion",
 			params: {
 				textDocument: {uri: uri},
-				position: {line: 0, character: source.lastIndexOf("answer") + 1}
+				position: {line: 0, character: source.lastIndexOf("answer") + 3}
 			}
 		}));
+		if (!interruptedService.cancellationObserved.wait(10))
+			throw "completion did not cancel background diagnostics";
 		interruptedService.block = false;
-		interruptedService.resume.release();
-		if (!interruptedDone.wait(10) || !resumedDiagnostics.wait(10))
-			throw "navigation interruption lost diagnostic work";
+		if (!interruptedDone.wait(10))
+			throw "completion did not finish after interrupting diagnostics";
+		if (!resumedDiagnostics.wait(10))
+			throw "completion interruption did not resume diagnostics";
 		interruptedDispatcher.finish();
-		if (interruptedDefinition.result == null || interruptedDefinition.error != null)
-			throw "navigation failed after interrupting diagnostics";
-		Sys.println("PASS: navigation priority, queue/analysis timings and resumed interrupted diagnostics");
+		var interruptedCompletionHasAnswer = false;
+		if (interruptedCompletion != null && interruptedCompletion.result != null)
+			for (item in cast(interruptedCompletion.result.items, Array<Dynamic>))
+				if (item.label == "answer")
+					interruptedCompletionHasAnswer = true;
+		if (interruptedCompletion == null
+			|| interruptedCompletion.result == null
+			|| interruptedCompletion.error != null
+			|| !interruptedCompletionHasAnswer)
+			throw "completion did not return locals after interrupting background diagnostics";
+		Sys.println("PASS: foreground completion interrupts background diagnostics and they resume afterward");
+		var syntaxTokenService = new CountingDiagnosticLanguageService(),
+			syntaxTokenProtocol = new LspProtocol(syntaxTokenService),
+			syntaxTokenUri = "file:///workspace/SyntaxTokens.hx",
+			syntaxTokenSource = 'class SyntaxTokens { static function value():Int { var answer = 42; var wrong:String = "bad"; return answer; } }';
+		syntaxTokenProtocol.enableDeferredDiagnostics();
+		request(syntaxTokenProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 884,
+			method: "initialize",
+			params: {}
+		}));
+		syntaxTokenProtocol.handle(Json.stringify({
+			jsonrpc: "2.0",
+			method: "textDocument/didOpen",
+			params: {
+				textDocument: {
+					uri: syntaxTokenUri,
+					version: 1,
+					languageId: "haxe",
+					text: syntaxTokenSource
+				}
+			}
+		}));
+		var syntaxTokens = request(syntaxTokenProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 885,
+			method: "textDocument/semanticTokens/full",
+			params: {
+				textDocument: {uri: syntaxTokenUri}
+			}
+		}));
+		if (syntaxTokens.result.data.length == 0 || syntaxTokenService.analyzeCalls != 1)
+			throw "semantic tokens did not use the recovered current syntax snapshot";
+		request(syntaxTokenProtocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 886,
+			method: "textDocument/semanticTokens/full",
+			params: {
+				textDocument: {uri: syntaxTokenUri}
+			}
+		}));
+		if (syntaxTokenService.analyzeCalls != 1)
+			throw "repeated semantic tokens reanalyzed an unchanged broken document";
+		Sys.println("PASS: semantic tokens reuse recovered syntax while diagnostics are deferred");
 		var diagnosticService = new LanguageService(),
 			diagnosticProtocol = new LspProtocol(diagnosticService),
 			choiceUri = "file:///workspace/shape/Choice.hx",
@@ -1652,12 +1736,16 @@ class LspProtocolMain {
 			base + "/app/src/generated",
 			base + "/lib",
 			base + "/lib/code",
-			base + "/lib/code/dep"
+			base + "/lib/code/dep",
+			base + "/lib/code/build"
 		])
 			sys.FileSystem.createDirectory(directory);
 		sys.io.File.saveContent(base + "/app/haxeon.json",
 			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"outputDir":"src/generated","scopeSourceRoots":false,"dependencies":{"helper":{"path":"../lib"}}}');
-		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"scopeSourceRoots":false}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json",
+			'{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"sources":["code/dep/Value.hx"],"scopeSourceRoots":false}');
+		// A package directory named build is source when the manifest names its output elsewhere, even beside listed sources.
+		sys.io.File.saveContent(base + "/lib/code/build/Digest.hx", "package build; class Digest {} ");
 		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx", "package dep; class Value { public static function answer():Int return 42; }");
 		sys.io.File.saveContent(base + "/app/src/build/BuildDiagnostic.hx", "package build; class BuildDiagnostic {} ");
 		sys.io.File.saveContent(base + "/app/src/generated/Artifact.hx", "invalid generated output");
@@ -1676,6 +1764,7 @@ class LspProtocolMain {
 			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
 			|| !protocol.project.hasDiskSource(base + "/lib/code/dep/Value.hx")
 			|| !protocol.project.hasDiskSource(base + "/app/src/build/BuildDiagnostic.hx")
+			|| !protocol.project.hasDiskSource(base + "/lib/code/build/Digest.hx")
 			|| protocol.project.hasDiskSource(base + "/app/src/generated/Artifact.hx"))
 			throw "haxeon.json source roots and local package dependencies were not discovered";
 		var broken = StringTools.replace(source, "var answer = Value.answer()", 'var answer:Int = "wrong"'),

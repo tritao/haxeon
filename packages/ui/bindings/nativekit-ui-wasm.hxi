@@ -800,6 +800,12 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_renderer_destroy(renderer: nkui_renderer) -> nkui_result;
 	/**
+	 * Writes the GPU time of the newest measured frame and the number of frames measured by the current backend
+	 * renderer, both 0 before the first result. A result arrives a few frames after its frame. A recreated backend
+	 * renderer counts from 0 again, so a change in the count, not only a rise, means a new result.
+	 */
+	extern fn nkui_renderer_get_gpu_frame_time(renderer: nkui_renderer, out_nanoseconds: ptr<u64> @out, out_timed_frames: ptr<u64> @out) -> nkui_result;
+	/**
 	 * Borrows the prepared renderer's opaque NativeKit GPU handle value.
 	 */
 	extern fn nkui_renderer_get_gpu_renderer(renderer: nkui_renderer, out_gpu_renderer_id: ptr<u32> @out) -> nkui_result;
@@ -848,6 +854,10 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * nk_surface_request_frame() after state, input, or animation changes.
 	 */
 	extern fn nkui_renderer_render_frame_overlay(renderer: nkui_renderer, list: nkui_display_list, surface: nk_surface, frame_info: ptr<const<nkui_frame_info>>) -> nkui_result;
+	/**
+	 * Measures the GPU time of the renderer's frames while enabled (nkgpu_set_frame_timing). Off by default.
+	 */
+	extern fn nkui_renderer_set_gpu_frame_timing(renderer: nkui_renderer, enabled: u8) -> nkui_result;
 	/**
 	 * Releases the caller's ownership of a UI resource.
 	 *
@@ -1540,7 +1550,7 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	/**
 	 * Preparation and geometry-cache counters for one renderer.
 	 */
-	struct nkui_renderer_stats @layout(536, 8) {
+	struct nkui_renderer_stats @layout(600, 8) {
 		/**
 		 * Set to sizeof(nkui_renderer_stats) when returned by the API.
 		 */
@@ -1809,6 +1819,38 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		 * Cumulative time from frame acquisition until platform frame close, in nanoseconds.
 		 */
 		render_submission_acquire_to_present_ns: u64 @offset(528);
+		/**
+		 * Layout-session frames whose render plan was compiled.
+		 */
+		render_plan_compiles: u64 @offset(536);
+		/**
+		 * Layout-session frames that submitted the previous render plan again.
+		 */
+		render_plan_reuses: u64 @offset(544);
+		/**
+		 * Compiles because the session's layout changed since the previous plan.
+		 */
+		render_plan_miss_epoch: u64 @offset(552);
+		/**
+		 * Compiles because the frame size, scale, target or load mode changed.
+		 */
+		render_plan_miss_frame: u64 @offset(560);
+		/**
+		 * Compiles because a custom-paint display list, composite or cache policy changed.
+		 */
+		render_plan_miss_lists: u64 @offset(568);
+		/**
+		 * Compiles because a text layout or render target the plan read changed.
+		 */
+		render_plan_miss_dependencies: u64 @offset(576);
+		/**
+		 * Compiles because the session text engine's atlas, layout or fonts changed.
+		 */
+		render_plan_miss_atlas: u64 @offset(584);
+		/**
+		 * Compiles of a first plan, or of a plan not yet confirmed by a second identical build.
+		 */
+		render_plan_miss_unsettled: u64 @offset(592);
 	}
 	/**
 	 * Payload for NKUI_COMMAND_SET_PAINT and resource-only draw commands.

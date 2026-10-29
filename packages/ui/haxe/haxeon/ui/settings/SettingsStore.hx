@@ -34,6 +34,7 @@ class SettingsStore {
 	public var lastError(default, null):Null<String>;
 
 	final overrides:Map<String, PropertyValue>;
+	final restartBaseline:Map<String, PropertyValue> = new Map();
 	final unknown:Map<String, Dynamic>;
 	final state:Map<String, Dynamic>;
 	final listeners:Array<SettingsListener>;
@@ -55,13 +56,32 @@ class SettingsStore {
 		dirty = false;
 		if (file != null)
 			load();
+		for (definition in registry.all()) if (definition.restartRequired) get(definition.path);
 	}
 
 	public function get(path:String):PropertyValue {
 		var definition = require(path);
 		adopt(definition);
 		var value = overrides.get(path);
-		return value == null ? definition.defaultValue : value;
+		var result = value == null ? definition.defaultValue : value;
+		if (definition.restartRequired && !restartBaseline.exists(path)) restartBaseline.set(path, result);
+		return result;
+	}
+
+	/** Preserve the running baseline when replacing a store after an external reload. */
+	public function inheritRestartBaseline(previous:SettingsStore):Void {
+		for (path in previous.restartBaseline.keys()) restartBaseline.set(path, previous.restartBaseline.get(path));
+	}
+
+	/** Changes from the running application's initial values; never persisted. */
+	public function restartChanges():Array<SettingDefinition> {
+		var result:Array<SettingDefinition> = [];
+		for (definition in registry.all()) {
+			if (!definition.restartRequired || definition.internal) continue;
+			var current = get(definition.path);
+			if (!PropertyValueTools.same(current, restartBaseline.get(definition.path))) result.push(definition);
+		}
+		return result;
 	}
 
 	public function getBool(path:String):Bool
@@ -110,6 +130,7 @@ class SettingsStore {
 
 	public function reset(path:String):Void {
 		var definition = require(path);
+		if (definition.restartRequired) get(path);
 		adopt(definition);
 		if (overrides.remove(path))
 			changed(path);

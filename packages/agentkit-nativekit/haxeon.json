@@ -1,0 +1,11 @@
+{
+	"version": 1,
+	"package": { "name": "haxeon-agentkit-nativekit" },
+	"sourceRoots": ["src"],
+	"scopeSourceRoots": false,
+	"dependencies": {
+		"haxeon-agentkit": { "path": "../agentkit" },
+		"haxeon-platform": { "path": "../platform" }
+	},
+	"target": "host"
+}

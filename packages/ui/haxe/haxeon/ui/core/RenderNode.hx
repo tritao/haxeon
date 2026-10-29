@@ -52,6 +52,15 @@ class RenderNode {
 	 * when the pointer moves over them, so cache validation ignores them.
 	 */
 	public var recordsInteraction(default, null):Bool = false;
+	/** Opt-in contract: hover changes only custom paint, or have no visual effect.
+	 * UiContext still rejects this path when a matching stylesheet hover rule exists. */
+	public var hoverPaintOnly:Bool = false;
+
+	/** Invalidate a retained custom display list without changing geometry or text. */
+	public function invalidatePaint():Void {
+		contentRevision++;
+		invalidationFlags = UiDirtyFlag.NeedsPaint;
+	}
 
 	inline function set_states(value:Int):Int {
 		recordsInteraction = true;
@@ -64,6 +73,11 @@ class RenderNode {
 	public var styleTags:Array<String>;
 	/** Optional command scope contributed by this node and its focused subtree. */
 	public var commandScope:Null<String>;
+	/** Focused input widgets may route selected commands before consuming their keys.
+	 * The predicate receives the winning command ID, after scope and binding resolution.
+	 * Other keys still reach the widget; modal focus traps suppress this routing.
+	 */
+	public var commandShortcutFilter:Null<String->Bool> = null;
 	public var computedStyle:Null<ComputedStyle>;
 	public var tabIndex:Int;
 	/** Cursor intent used while this node is hovered or holds pointer capture. */
@@ -263,6 +277,17 @@ class RenderNode {
 		return this;
 	}
 
+	/** Primary pointer clicks and semantic activation (keyboard/accessibility).
+	 * Other mouse buttons remain available to raw Click/context-menu handlers.
+	 */
+	public function onActivate(handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
+		if (handler == null) throw "Activation handlers require a callback";
+		on(UiEventKind.Click, function(event) {
+			if (event.button == 0) handler(event);
+		}, phase);
+		return on(UiEventKind.Activate, handler, phase);
+	}
+
 	/** Runs when a pointer press targets a node outside this node's subtree. */
 	public function onPointerDownOutside(handler:UiEvent->Void):RenderNode {
 		if (handler == null)
@@ -411,8 +436,10 @@ class RenderNode {
 		}
 		if (basePaintKey == null) return null;
 		var style = computedStyle == null ? null : computedStyle.getReadOnly(StyleProperty.Decorations);
-		return style != null && style.decorations.length > 0
+		var result = style != null && style.decorations.length > 0
 			? basePaintKey + "|style-decorations:" + style.key() : basePaintKey;
+		// Keep the rendered key truthful even when hover falls back to a full build.
+		return hoverPaintOnly ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
 	}
 
 	function buildBasePaintKey():Null<String> {
@@ -686,7 +713,7 @@ class RenderNode {
 			return true;
 		if (left == null || right == null)
 			return false;
-		return left.role == right.role && left.label == right.label && left.value == right.value &&
+		return left.role == right.role && left.label == right.label && left.sameValue(right) &&
 			left.states == right.states && left.actions == right.actions &&
 			left.numericValue == right.numericValue && left.numericMinimum == right.numericMinimum &&
 			left.numericMaximum == right.numericMaximum && left.textStart == right.textStart &&

@@ -6,7 +6,6 @@ from pathlib import Path
 import resource
 import pty
 import select
-import signal
 import subprocess
 import tempfile
 
@@ -31,7 +30,7 @@ def main():
                 "-main", "Main", "-hl", str(bytecode)], check=True, capture_output=True, text=True)
             return [str(ROOT / ".tools/hashlink/hl"), str(bytecode)]
 
-        # First test: a real null dereference must retain the pending tail.
+        # A language null access throws and retains the pending stdout tail.
         compile_body('Sys.println("before-crash"); var box:Box = null; Sys.println(box.value);',
             'class Box { public var value:Int; public function new() { value = 1; } }')
         config = project / "haxeon.json"
@@ -41,7 +40,7 @@ def main():
             "--project", str(config), "--output", str(project / "main.hl")], check=True, capture_output=True)
         command = [str(ROOT / ".tools/hashlink/hl"), str(project / "main.hl")]
         result = subprocess.run(command, env=environment, capture_output=True, timeout=5)
-        assert result.returncode == -signal.SIGSEGV, result
+        assert result.returncode == 1, result
         assert result.stdout == b"before-crash\n", result
 
         # Exercise the native fatal-error path, which can trap before exit().

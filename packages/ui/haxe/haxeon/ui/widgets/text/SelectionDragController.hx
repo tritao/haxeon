@@ -8,7 +8,7 @@ import haxeon.ui.animation.AnimationScheduler;
 /** Keeps selection scrolling while a captured pointer remains near a viewport edge. */
 class SelectionDragController implements Animation {
 	var scheduler:AnimationScheduler;
-	var editor:TextEditorState;
+	var active:Void->Bool;
 	var geometry:Void->Null<ResolvedLayoutItem>;
 	var selectAt:(Float, Float)->Void;
 	var scroll:Float->Bool;
@@ -21,8 +21,13 @@ class SelectionDragController implements Animation {
 
 	public function configure(scheduler:AnimationScheduler, editor:TextEditorState,
 			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float)->Void, scroll:Float->Bool):Void {
+		configureAdapter(scheduler, function() return !editor.isDisposed() && editor.draggingSelection, geometry, selectAt, scroll);
+	}
+
+	public function configureAdapter(scheduler:AnimationScheduler, active:Void->Bool,
+			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float)->Void, scroll:Float->Bool):Void {
 		this.scheduler = scheduler;
-		this.editor = editor;
+		this.active = active;
 		this.geometry = geometry;
 		this.selectAt = selectAt;
 		this.scroll = scroll;
@@ -45,7 +50,7 @@ class SelectionDragController implements Animation {
 	}
 
 	public function advance(deltaSeconds:Float):Bool {
-		if (editor.isDisposed() || !editor.draggingSelection) return false;
+		if (!active()) return false;
 		var speed = velocity();
 		if (speed == 0.0) return false;
 		if (deltaSeconds <= 0.0) return true;
@@ -63,7 +68,7 @@ class SelectionDragController implements Animation {
 	public function layoutResolved():Void {
 		if (!selectionPending) return;
 		selectionPending = false;
-		if (!editor.isDisposed() && editor.draggingSelection) selectAt(x, y);
+		if (active()) selectAt(x, y);
 	}
 
 	public function stop():Void {

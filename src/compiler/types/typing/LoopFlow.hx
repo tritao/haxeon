@@ -26,10 +26,8 @@ class LoopFlow {
 		var visible = scope.visibleDeclarations(),
 			assigned = AssignedDeclarations.within(statements, visible).declarations;
 		for (name => declaration in visible)
-			if (assigned.exists(declaration)) {
+			if (assigned.exists(declaration))
 				scope.invalidate(name);
-				scope.invalidateExpressionsForLocal(name);
-			}
 		var locals = scope.visibleLocalNames(),
 			privateMaps = scope.visiblePrivateMapNames(),
 			arrays = scope.visibleArrayNames(),
@@ -45,7 +43,7 @@ class LoopFlow {
 				}
 		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, privateMaps, arrays, maps);
 		if (stores == null)
-			scope.invalidateAllExpressions();
+			session.invalidateUnknownCall(scope);
 		else {
 			// Stores forget only what the same store forgets in straight-line code, and also map-entry facts, which a
 			// later iteration's store could falsify. An array element carries no facts.

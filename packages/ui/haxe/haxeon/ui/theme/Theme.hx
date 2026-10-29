@@ -185,6 +185,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("secondary").state(StyleState.Disabled),
 			[StyleValue.background(tokens.surfaceSunken)]);
 		styles.rule(StyleSelector.widget("button").className("tab-header"), [
+			StyleValue.fontSize(tokens.tabHeaderFontSize),
 			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
 			StyleValue.padding(new Insets(10.0, 6.0, 10.0, 6.0)),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 0.0),
@@ -241,7 +242,7 @@ class Theme {
 			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item"), [
 			StyleValue.width(LayoutAxis.grow()),
-			StyleValue.padding(new Insets(10.0, 10.0, 6.0, 6.0)),
+			StyleValue.padding(new Insets(8.0, 4.0, 8.0, 4.0)),
 			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 0.0),
 			StyleValue.radius(StyleProperty.RadiusTopRight, 0.0),
@@ -363,13 +364,13 @@ class Theme {
 			StyleValue.sliderThumbColor(disabledText)
 		]);
 		styles.rule(StyleSelector.widget("split-divider"),
-			[StyleValue.background(tokens.selectionBorder)]);
-		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Hovered),
-			[StyleValue.background(tokens.controlSelected)]);
-		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Pressed),
-			[StyleValue.background(tokens.buttonPressed)]);
+			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue, 0.14))]);
 		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Focused),
-			[StyleValue.background(tokens.buttonFocused)]);
+			[StyleValue.background(tokens.accent)]);
+		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Hovered),
+			[StyleValue.background(tokens.accentHover)]);
+		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Pressed),
+			[StyleValue.background(tokens.accentPressed)]);
 		styles.rule(StyleSelector.widget("progress-bar"), [
 			StyleValue.progressTrackColor(tokens.progressTrack),
 			StyleValue.progressFillColor(tokens.progressFill)
@@ -407,10 +408,11 @@ class Theme {
 		styles.rule(StyleSelector.widget("dialog-heading"),
 			[StyleValue.textColor(text)]);
 		styles.rule(StyleSelector.widget("tooltip"), [
+			StyleValue.fontSize(tokens.tooltipFontSize),
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
-			StyleValue.borderColor(tokens.borderStrong), StyleValue.borderWidth(1.0),
+			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0),
 			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration(), BorderDecoration.deviceHairline()])),
 			// Compositor effects include their ink overflow; shadow parameters alone
 			// do not paint a shadow, and node-local decorations are clipped.

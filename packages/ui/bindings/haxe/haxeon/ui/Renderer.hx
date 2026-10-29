@@ -67,6 +67,48 @@ class Renderer {
 			stats.get_raster_cache_entries(), stats.get_raster_cache_bytes());
 	}
 
+	/** How often layout-session frames compiled a render plan or reused the last one, and why each compile was needed.
+		Cumulative; the reasons add up to `compiles`. */
+	public function planReuse():RenderPlanReuse {
+		ensureLive();
+		var result = NativeKitUI.nkui_renderer_get_stats(value);
+		UiResult.check(result.status, "renderer.planReuse");
+		var stats = result.out_stats;
+		return new RenderPlanReuse(haxe.Int64.toFloat(stats.get_render_plan_compiles()), haxe.Int64.toFloat(stats.get_render_plan_reuses()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_epoch()), haxe.Int64.toFloat(stats.get_render_plan_miss_frame()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_lists()), haxe.Int64.toFloat(stats.get_render_plan_miss_dependencies()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_atlas()), haxe.Int64.toFloat(stats.get_render_plan_miss_unsettled()));
+	}
+
+	var gpuFrameTiming = false;
+
+	/** Measures the GPU time of the renderer's frames while enabled. Off by default; cheap to call each frame. */
+	public function setGpuFrameTiming(enabled:Bool):Void {
+		if (enabled == gpuFrameTiming)
+			return;
+		ensureLive();
+		UiResult.check(NativeKitUI.nkui_renderer_set_gpu_frame_timing(value, enabled ? 1 : 0), "renderer.setGpuFrameTiming");
+		gpuFrameTiming = enabled;
+	}
+
+	/** GPU time of the newest measured frame in nanoseconds, as of the last pollGpuFrameTime. */
+	public var gpuFrameNanoseconds(default, null):Float = 0;
+
+	var gpuTimedFrames:haxe.Int64 = 0;
+
+	/** Reads the newest GPU frame time while timing is enabled; true when a result arrived since the last poll. A result
+		belongs to a frame a few frames back. */
+	public function pollGpuFrameTime():Bool {
+		ensureLive();
+		var result = NativeKitUI.nkui_renderer_get_gpu_frame_time(value);
+		UiResult.check(result.status, "renderer.pollGpuFrameTime");
+		if (result.out_timed_frames == gpuTimedFrames)
+			return false;
+		gpuTimedFrames = result.out_timed_frames;
+		gpuFrameNanoseconds = haxe.Int64.toFloat(result.out_nanoseconds);
+		return true;
+	}
+
 	/** Releases the renderer and its backend resources. Repeated disposal is safe. */
 	public function dispose():Void {
 		if (disposed)
@@ -88,6 +130,36 @@ class Renderer {
 	function ensureLive():Void {
 		if (disposed)
 			throw "Renderer has been disposed";
+	}
+}
+
+/** Cumulative render plan compile and reuse counts, with the reason for each compile. */
+class RenderPlanReuse {
+	public final compiles:Float;
+	public final reuses:Float;
+	/** The session's layout changed. */
+	public final missEpoch:Float;
+	/** The frame size, scale, target or load mode changed. */
+	public final missFrame:Float;
+	/** A custom paint list, composite or cache policy changed. */
+	public final missLists:Float;
+	/** A text layout or render target the plan read changed. */
+	public final missDependencies:Float;
+	/** The session text engine's atlas, layout or fonts changed. */
+	public final missAtlas:Float;
+	/** The first plan, or one not yet confirmed by a second identical build. */
+	public final missUnsettled:Float;
+
+	public function new(compiles:Float, reuses:Float, missEpoch:Float, missFrame:Float, missLists:Float, missDependencies:Float, missAtlas:Float,
+			missUnsettled:Float) {
+		this.compiles = compiles;
+		this.reuses = reuses;
+		this.missEpoch = missEpoch;
+		this.missFrame = missFrame;
+		this.missLists = missLists;
+		this.missDependencies = missDependencies;
+		this.missAtlas = missAtlas;
+		this.missUnsettled = missUnsettled;
 	}
 }
 

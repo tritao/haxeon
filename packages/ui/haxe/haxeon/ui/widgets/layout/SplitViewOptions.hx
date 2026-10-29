@@ -13,6 +13,8 @@ class SplitViewOptions {
 	public var dividerExtent:Float;
 	/** Visible divider width; null uses the full draggable extent. */
 	public var dividerVisualExtent:Null<Float>;
+	/** Paint a device-aligned one-pixel separator with an overlapping resize target and no layout gap. */
+	public var dividerHairline:Bool = false;
 	public var style:Null<LayoutStyle>;
 	public var dividerStyle:Null<LayoutStyle>;
 	public var onResize:Null<Float->Void>;

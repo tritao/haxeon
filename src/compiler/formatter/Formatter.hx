@@ -30,7 +30,7 @@ class Formatter {
 		try {
 			var conditional = ConditionalCompilation.process(file, []);
 			new Parser(new Lexer(file, conditional.text).tokenize()).parseProgram();
-			var tokens = new FormatScanner(file).scan(),
+			var tokens = TypeArguments.splitAssignments(new FormatScanner(file).scan()),
 				comments = CommentAttachmentTools.attach(tokens),
 				syntax = SyntaxAnnotator.annotate(tokens),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),

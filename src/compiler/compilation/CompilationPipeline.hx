@@ -82,7 +82,8 @@ class CompilationPipeline {
 	}
 
 	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			transactionStartedAt:Float, snapshotDoneAt:Float, frontendStartedAt:Float, ?indexSemantics = true):CompileResult {
+			transactionStartedAt:Float, snapshotDoneAt:Float, frontendStartedAt:Float, ?indexSemantics = true,
+			?publicationBaseline:compiler.compilation.CompilerPublication.PublishedBaseline):CompileResult {
 		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true, indexSemantics);
 		var modules = context.modules, moduleId = context.moduleId;
 		var ir = frontend.ir,
@@ -97,7 +98,7 @@ class CompilationPipeline {
 			frontendGraphDoneAt = frontend.frontendGraphDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
-		var backend = BackendAssembly.assemble(context, ir, regenerated, token);
+		var backend = BackendAssembly.assemble(context, ir, regenerated, frontend.relocated, token);
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
 			candidateAssembler = backend.assembler,
@@ -143,6 +144,10 @@ class CompilationPipeline {
 			functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
 			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, candidateAssembler.cache.stableIds),
+			unchanged: assembly.unchanged
+			&& (publicationBaseline == null
+				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == assembly.revision)),
+			baseRevision: publicationBaseline == null ? assembly.baseRevision : publicationBaseline.revision,
 			revision: assembly.revision,
 			patchBytes: patchBytes,
 			metrics: {
@@ -155,6 +160,7 @@ class CompilationPipeline {
 				graphParseMs: frontend.graphParseMs,
 				graphDependencyMs: frontend.graphDependencyMs,
 				graphInitializationMs: frontend.graphInitializationMs,
+				frontendRestarts: frontend.frontendRestarts,
 				semanticAssemblyMs: frontendDoneAt - frontendGraphDoneAt,
 				semanticAliasMs: frontend.semanticAliasMs,
 				semanticCanonicalizationMs: frontend.semanticCanonicalizationMs,

@@ -16,6 +16,7 @@ import haxeon.ui.properties.PropertyValue;
  */
 class SettingsCatalog {
 	public final store:SettingsStore;
+	public var onlyPaths:Null<Array<String>>;
 	final descriptors:Map<String, PropertyDescriptor>;
 
 	public function new(store:SettingsStore) {
@@ -47,33 +48,51 @@ class SettingsCatalog {
 	 * advanced ones only when asked for, or when the filter names them. The
 	 * filter matches the label or path, ignoring case.
 	 */
+	public function setDescriptor(path:String, descriptor:PropertyDescriptor):Void {
+		descriptors.set(path, descriptor);
+	}
+
 	public static function visible(definition:SettingDefinition, filter:String, showAdvanced:Bool):Bool {
 		if (definition.internal)
 			return false;
 		var text = filter == null ? "" : StringTools.trim(filter).toLowerCase();
 		if (text.length == 0)
 			return showAdvanced || !definition.advanced;
-		return definition.label.toLowerCase().indexOf(text) >= 0
-			|| definition.path.indexOf(text.split(" ").join("_")) >= 0;
+		var haystack = (definition.label + " " + definition.path + " " + definition.path.split("/").join(" ").split("_").join(" ")
+			+ " " + (definition.tooltip == null ? "" : definition.tooltip)).toLowerCase();
+		for (word in text.split(" "))
+			if (haystack.indexOf(word) < 0) return false;
+		return true;
 	}
 
 	/** Categories that hold a visible setting, in definition order. */
-	public function categories(filter:String, showAdvanced:Bool):Array<String> {
+	public function categories(filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Array<String> {
 		var result:Array<String> = [];
 		for (definition in store.registry.all()) {
 			var category = categoryOf(definition);
-			if (visible(definition, filter, showAdvanced) && result.indexOf(category) < 0)
+			if ((onlyPaths == null || onlyPaths.indexOf(definition.path) >= 0) && visible(definition, filter, showAdvanced) && (!modifiedOnly || !store.isDefault(definition.path)) && result.indexOf(category) < 0)
 				result.push(category);
 		}
 		return result;
 	}
 
+	/** Counts share the result rows' filter, Advanced, and override rules. */
+	public function categoryCounts(filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Map<String, Int> {
+		var counts:Map<String, Int> = new Map();
+		for (definition in store.registry.all()) {
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
+			var category = categoryOf(definition), previous = counts.get(category);
+			counts.set(category, previous == null ? 1 : previous + 1);
+		}
+		return counts;
+	}
+
 	/** The category's visible settings as inspector sections: unsectioned first, then in definition order. */
-	public function sections(category:String, filter:String, showAdvanced:Bool):Array<PropertyInspectorSection> {
+	public function sections(category:String, filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Array<PropertyInspectorSection> {
 		var order:Array<String> = [];
 		var grouped:Map<String, Array<PropertyDescriptor>> = new Map();
 		for (definition in store.registry.all()) {
-			if (categoryOf(definition) != category || !visible(definition, filter, showAdvanced))
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || categoryOf(definition) != category || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path)))
 				continue;
 			var section = sectionOf(definition);
 			if (!grouped.exists(section)) {
@@ -106,6 +125,10 @@ class SettingsCatalog {
 		var options = new PropertyDescriptorOptions();
 		options.category = categoryOf(definition);
 		options.recordHistory = false;
+		options.description = definition.tooltip;
+		options.restartRequired = definition.restartRequired;
+		options.modified = function() return !store.isDefault(definition.path);
+		options.reset = function() store.reset(definition.path);
 		options.minimum = definition.minimum;
 		options.maximum = definition.maximum;
 		options.step = definition.step;
@@ -115,7 +138,7 @@ class SettingsCatalog {
 		options.validator = function(_, value) return definition.validate(value);
 		var target = store;
 		var path = definition.path;
-		var created = new PropertyDescriptor(path, definition.restartRequired ? definition.label + " *" : definition.label,
+		var created = new PropertyDescriptor(path, definition.label,
 			definition.type, function(_) return target.get(path), function(_, value:PropertyValue) {
 				var error = target.set(path, value);
 				if (error != null)

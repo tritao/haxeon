@@ -176,7 +176,7 @@ class FormatScanner {
 			case ".": TokenKind.Dot;
 			case "[": TokenKind.LeftBracket;
 			case "]": TokenKind.RightBracket;
-			case "?": TokenKind.Question;
+			case "?": consume("?") ? TokenKind.NullCoalesce : TokenKind.Question;
 			case "@": TokenKind.At;
 			case "$": TokenKind.Dollar;
 			case "~": TokenKind.BitNot;

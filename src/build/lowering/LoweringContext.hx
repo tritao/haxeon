@@ -1,6 +1,7 @@
 package build.lowering;
 
 import build.BuildEnvironment;
+import build.BuildSession;
 import build.TargetLayout;
 import project.ResolvedProject;
 
@@ -21,8 +22,12 @@ class LoweringContext {
 	/** Build for `haxeon run --watch --live`: the compiler keeps the history patches address the running module by. */
 	public final live:Bool;
 
+	/** What a watching process keeps between rebuilds; null for one-shot builds. */
+	public final session:Null<BuildSession>;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
-			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool) {
+			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession) {
+		this.session = session;
 		this.sharedNative = sharedNative == true;
 		this.live = live == true;
 		this.environment = environment;

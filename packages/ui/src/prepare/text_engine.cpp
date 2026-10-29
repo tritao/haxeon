@@ -16,6 +16,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iterator>
+#include <list>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -23,9 +25,14 @@
 
 namespace nkui {
 
+struct SystemFontFallbackState {
+    std::unordered_map<std::string, skb_font_handle_t> fonts;
+    std::unordered_map<uint64_t, skb_font_handle_t> codepoints;
+};
+
 struct FontCollection::State {
     skb_font_collection_t *fonts = nullptr;
-    std::unordered_set<std::string> system_fonts_loaded;
+    SystemFontFallbackState system_fonts;
     std::vector<std::shared_ptr<std::vector<uint8_t>>> font_data;
     uint32_t font_load_count = 0;
 };
@@ -58,6 +65,9 @@ struct TextEngine::State {
         std::vector<uint64_t> line_revisions;
         std::vector<float> prefix_bottoms;
         std::vector<float> suffix_tops;
+        std::vector<float> grid_positions;
+        std::vector<float> grid_source_positions;
+        uint64_t grid_revision = 0;
     };
 
     std::shared_ptr<FontCollection> font_collection;
@@ -85,6 +95,18 @@ struct TextEngine::State {
     uint32_t last_scale_key = 0;
     uint32_t scale_generation = 0;
     std::unordered_map<uint64_t, std::weak_ptr<const PreparedGlyphs>> published_glyphs;
+    // The map above is weak, so a row nobody holds is rebuilt on its next request, which for
+    // the rows of a viewport is every frame. This keeps the most recent snapshots alive.
+    struct RetainedPublication {
+        uint64_t key = 0;
+        std::shared_ptr<const PreparedGlyphs> glyphs;
+        std::size_t bytes = 0;
+    };
+    std::list<RetainedPublication> retained_publications;
+    std::unordered_map<uint64_t, std::list<RetainedPublication>::iterator> retained_index;
+    std::size_t retained_publication_bytes = 0;
+    // The weak map is swept when it reaches this size, which then grows with the live entries.
+    std::size_t published_sweep_size = 256;
     // The public buffer API asks for size and contents separately. Retain one
     // bounded query so neither that pair nor repeated paints rewalks the text.
     TextLayoutId selection_layout_id = 0;
@@ -132,9 +154,19 @@ const TextEngine::State::RetainedLayout *active_layout(const TextEngine::State &
 
 namespace {
 
+skb_font_handle_t load_system_font(skb_font_collection_t *fonts, const std::string &path,
+                                   uint8_t family, SystemFontFallbackState &state) {
+    const std::string key = std::to_string(static_cast<unsigned>(family)) + ":" + path;
+    const auto previous = state.fonts.find(key);
+    if (previous != state.fonts.end()) return previous->second;
+    const auto handle = skb_font_collection_add_font(fonts, path.c_str(), family, nullptr);
+    state.fonts.emplace(key, handle);
+    return handle;
+}
+
 bool system_font_fallback(skb_font_collection_t *font_collection, const char *, uint8_t script,
                           uint8_t font_family, void *context) {
-    auto *system_fonts_loaded = static_cast<std::unordered_set<std::string> *>(context);
+    auto &state = *static_cast<SystemFontFallbackState *>(context);
     const uint32_t script_tag = skb_script_to_iso15924_tag(script);
     const bool emoji = font_family == SKB_FONT_FAMILY_EMOJI;
     if (std::getenv("NKUI_DEBUG_GLYPHS"))
@@ -153,10 +185,9 @@ bool system_font_fallback(skb_font_collection_t *font_collection, const char *, 
                 continue;
             const std::string key =
                 std::to_string(static_cast<unsigned>(font_family)) + ":" + font.path;
-            if (!system_fonts_loaded->insert(key).second)
-                return true;
-            if (skb_font_collection_add_font(font_collection, font.path.c_str(), font_family,
-                                             nullptr)) {
+            if (state.fonts.find(key) != state.fonts.end())
+                continue;
+            if (load_system_font(font_collection, font.path, font_family, state)) {
                 added = true;
                 if (std::getenv("NKUI_DEBUG_GLYPHS"))
                     std::fprintf(stderr, "fallback font %s color=%u\n", font.path.c_str(),
@@ -170,6 +201,28 @@ bool system_font_fallback(skb_font_collection_t *font_collection, const char *, 
         }
     }
     return added;
+}
+
+skb_font_handle_t system_codepoint_fallback(skb_font_collection_t *fonts, const char *,
+                                           uint32_t codepoint, uint8_t family, void *context) {
+    auto &state = *static_cast<SystemFontFallbackState *>(context);
+    const uint64_t key = (static_cast<uint64_t>(family) << 32) | codepoint;
+    const auto previous = state.codepoints.find(key);
+    if (previous != state.codepoints.end()) return previous->second;
+    const auto candidates = system_font_fallbacks_for_codepoint(codepoint,
+        family == SKB_FONT_FAMILY_MONOSPACE, family == SKB_FONT_FAMILY_EMOJI);
+    skb_font_handle_t resolved = 0;
+    for (const auto &font : candidates) {
+        const auto handle = load_system_font(fonts, font.path, family, state);
+        if (handle && skb_font_collection_font_has_codepoint(fonts, handle, codepoint)) {
+            resolved = handle;
+            break;
+        }
+    }
+    // Cache misses too: unsupported characters must not trigger a platform
+    // font scan on every row or frame. Each collection owns this cache.
+    state.codepoints.emplace(key, resolved);
+    return resolved;
 }
 
 skb_rasterize_alpha_mode_t raster_mode(GlyphMode mode) {
@@ -296,7 +349,28 @@ struct RenderGlyphContext {
     PreparedGlyphs *output = nullptr;
     int32_t line_start = -1;
     int32_t line_end = -1;
+    const std::vector<float> *grid_positions = nullptr;
+    const std::vector<float> *grid_source_positions = nullptr;
+    GlyphWindow window;
 };
+
+// Lines longer than this publish only the horizontal chunks a caller asks for.
+constexpr int32_t kWindowedLineCodepoints = 1024;
+// Windows snap outward to multiples of this, so small scrolls reuse a snapshot.
+constexpr float kGlyphWindowChunk = 1024.0f;
+// Slack around a window, in font sizes, for glyphs that overhang their advance.
+constexpr float kGlyphWindowSlackEm = 2.0f;
+
+// Snaps a requested extent to whole chunks. Returns false when it is not usable.
+bool quantize_glyph_window(GlyphWindow &window) {
+    if (!window.bounded())
+        return false;
+    window.min_x = std::floor(window.min_x / kGlyphWindowChunk) * kGlyphWindowChunk;
+    window.max_x = std::ceil(window.max_x / kGlyphWindowChunk) * kGlyphWindowChunk;
+    if (window.max_x <= window.min_x)
+        window.max_x = window.min_x + kGlyphWindowChunk;
+    return true;
+}
 
 // Hard line breaks participate in layout and editing, never in glyph painting.
 bool is_hard_line_break(uint32_t codepoint) {
@@ -321,6 +395,12 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
     if (render.line_start >= 0 &&
         (glyph->text_range.end <= render.line_start || glyph->text_range.start >= render.line_end))
         return true;
+    if (render.window.bounded()) {
+        const float slack = glyph->font_size * kGlyphWindowSlackEm;
+        const float x = render.origin_x + glyph->offset_x;
+        if (x + glyph->advance_x + slack < render.window.min_x || x - slack > render.window.max_x)
+            return true;
+    }
     if (std::getenv("NKUI_DEBUG_GLYPHS")) {
         const uint32_t script = skb_script_to_iso15924_tag(glyph->script);
         std::fprintf(
@@ -334,12 +414,29 @@ bool append_render_glyph(const skb_layout_render_glyph_t *glyph, void *context) 
                 ? skb_layout_get_text_at(render.layout, glyph->text_range.start) : 0u,
             glyph->offset_x, glyph->offset_y);
     }
-    const skb_quad_t quad = skb_image_atlas_get_glyph_quad(
+    skb_quad_t quad = skb_image_atlas_get_glyph_quad(
         render.state->atlas, render.origin_x + glyph->offset_x, render.origin_y + glyph->offset_y,
         render.pixel_scale, render.font_collection, glyph->font_handle, glyph->glyph_id,
         glyph->font_size, glyph->color, raster_mode(render.requested_mode));
     if (quad.flags & SKB_QUAD_IS_EMPTY)
         return true;
+
+    if (render.grid_positions && !render.grid_positions->empty()) {
+        const auto start = static_cast<size_t>(glyph->text_range.start);
+        const auto end = static_cast<size_t>(glyph->text_range.end);
+        if (end < render.grid_positions->size() && start < end) {
+            const auto &target = *render.grid_positions;
+            const auto &source = *render.grid_source_positions;
+            const float left = std::min(source[start], source[end]);
+            const float advance = std::abs(source[end] - source[start]);
+            const float width = target[end] - target[start];
+            const float scale = advance > width && advance > 0 ? width / advance : 1.0f;
+            const float inset = std::max(0.0f, (width - advance * scale) * 0.5f);
+            quad.geom.x = render.output->origin_x + target[start] + inset +
+                          (quad.geom.x - render.origin_x - left) * scale;
+            quad.geom.width *= scale;
+        }
+    }
 
     const GlyphMode actual_mode = quad_mode(quad, render.requested_mode);
     const AtlasTextureId atlas_id = render.state->atlas_texture_ids[quad.texture_idx];
@@ -376,6 +473,35 @@ void atlas_texture_created(skb_image_atlas_t *, uint8_t texture_index, void *con
     const auto id = atlas_texture_ids.allocate();
     state.atlas_texture_ids[texture_index] = id;
     if (!id.value) state.atlas_identity_exhausted = true;
+}
+
+// Newest snapshots stay alive between frames, within a count and memory budget.
+constexpr std::size_t kRetainedPublicationCount = 1024;
+constexpr std::size_t kRetainedPublicationBytes = 48u * 1024u * 1024u;
+
+// Keeps a snapshot alive and marks it newest; a snapshot over the whole budget is not kept.
+void retain_publication(TextEngine::State &state, uint64_t key,
+                        const std::shared_ptr<const PreparedGlyphs> &snapshot) {
+    const std::size_t bytes = snapshot->vertices.size() * sizeof(GlyphVertex) +
+        snapshot->indices.size() * sizeof(uint32_t) +
+        snapshot->source_ranges.size() * sizeof(GlyphSourceRange);
+    if (const auto found = state.retained_index.find(key); found != state.retained_index.end()) {
+        state.retained_publication_bytes -= found->second->bytes;
+        state.retained_publications.erase(found->second);
+        state.retained_index.erase(found);
+    }
+    if (bytes > kRetainedPublicationBytes)
+        return;
+    state.retained_publications.push_back({key, snapshot, bytes});
+    state.retained_index[key] = std::prev(state.retained_publications.end());
+    state.retained_publication_bytes += bytes;
+    while (state.retained_publications.size() > kRetainedPublicationCount ||
+           state.retained_publication_bytes > kRetainedPublicationBytes) {
+        const auto &oldest = state.retained_publications.front();
+        state.retained_publication_bytes -= oldest.bytes;
+        state.retained_index.erase(oldest.key);
+        state.retained_publications.pop_front();
+    }
 }
 
 } // namespace
@@ -435,6 +561,7 @@ bool FontCollection::add_font(const char *path, FontFamily family) {
     if (!path || !skb_font_collection_add_font(state_->fonts, path, skb_family, nullptr))
         return false;
     ++state_->font_load_count;
+    state_->system_fonts.codepoints.clear();
     return true;
 }
 
@@ -450,6 +577,7 @@ bool FontCollection::add_font_from_shared_data(const char *name,
         return false;
     state_->font_data.push_back(data);
     ++state_->font_load_count;
+    state_->system_fonts.codepoints.clear();
     return true;
 }
 
@@ -457,7 +585,9 @@ bool FontCollection::add_system_fallbacks() {
     if (!valid())
         return false;
     skb_font_collection_set_on_font_fallback(state_->fonts, system_font_fallback,
-                                             &state_->system_fonts_loaded);
+                                             &state_->system_fonts);
+    skb_font_collection_set_on_codepoint_fallback(state_->fonts, system_codepoint_fallback,
+                                                 &state_->system_fonts);
     return true;
 }
 
@@ -643,14 +773,21 @@ bool TextEngine::layout_utf8(const char *text, float width, const TextLayoutOpti
     const uint64_t font_generation = state_->font_collection->generation();
     for (auto &entry : state_->layouts) {
         auto &cached = *entry.second;
+        // A left-aligned, unwrapped LTR paragraph has no width-dependent glyph
+        // positions. Keep its shaping when a splitter changes the containing
+        // viewport; centered, wrapped and resolved RTL layouts still reflow.
+        const bool width_independent = options.wrap == TextWrapMode::None &&
+            options.alignment == TextAlignment::Start && cached.layout &&
+            skb_layout_get_resolved_direction(cached.layout.get()) == SKB_DIRECTION_LTR;
         if (cached.font_generation == font_generation && cached.text == text &&
-            cached.width == width && cached.options.font_size == options.font_size &&
+            (cached.width == width || width_independent) && cached.options.font_size == options.font_size &&
             cached.options.letter_spacing == options.letter_spacing &&
             cached.options.line_height == options.line_height &&
             cached.options.tab_width == options.tab_width &&
             cached.options.family == options.family && cached.options.wrap == options.wrap &&
             cached.options.alignment == options.alignment &&
             cached.options.direction == options.direction) {
+            cached.width = width;
             cached.last_used = ++state_->layout_use_sequence;
             state_->active_layout_id = entry.first;
             if (result)
@@ -1024,7 +1161,8 @@ bool TextEngine::prepare_glyphs_for_line(uint32_t line_index, float origin_x, fl
 
 bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                          float origin_y, float pixel_scale, GlyphMode mode,
-                                         PreparedGlyphs &output, GlyphPreparation preparation) {
+                                         PreparedGlyphs &output, GlyphPreparation preparation,
+                                         GlyphWindow window) {
     const auto *layout = find_layout(*state_, id);
     if (!layout || line_index >= layout->result.lines.size() ||
         line_index >= layout->line_ranges.size())
@@ -1033,7 +1171,7 @@ bool TextEngine::prepare_glyphs_for_line(TextLayoutId id, uint32_t line_index, f
     const auto range = layout->line_ranges[line_index];
     return prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode, output, range.start,
                                    range.end, line.bounds.x, line.bounds.y, static_cast<int32_t>(line_index), -1,
-                                   preparation);
+                                   preparation, window);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::published_glyphs(TextLayoutId id, float origin_x,
@@ -1049,9 +1187,9 @@ std::shared_ptr<const PreparedGlyphs>
 TextEngine::published_glyphs_for_line(TextLayoutId id, uint32_t line_index, float origin_x,
                                       float origin_y, float pixel_scale, GlyphMode mode,
                                       GlyphTint tint, const std::vector<GlyphColorRange> &ranges,
-                                      GlyphPreparation preparation) {
+                                      GlyphPreparation preparation, GlyphWindow window) {
     return publish_glyphs(id, static_cast<int32_t>(line_index), origin_x, origin_y, pixel_scale,
-                          mode, tint, ranges, -1, preparation);
+                          mode, tint, ranges, -1, preparation, window);
 }
 
 std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id,
@@ -1059,11 +1197,16 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
                                                                  float origin_y, float pixel_scale,
                                                                  GlyphMode mode, GlyphTint tint,
                                                                    const std::vector<GlyphColorRange> &ranges, int32_t end_line,
-                                                                   GlyphPreparation preparation) {
+                                                                   GlyphPreparation preparation, GlyphWindow window) {
     const auto *layout = find_layout(*state_, id);
     const auto raster_scale = text_raster_scale(pixel_scale);
     if (!layout || !raster_scale.key || !std::isfinite(origin_x) ||
-        !std::isfinite(origin_y) || !valid_glyph_color_ranges(ranges))
+        !std::isfinite(origin_y))
+        return {};
+    // The ranges of a whole document are sorted and disjoint; a row only needs to
+    // see its own, so rows check just that slice instead of every range per call.
+    const bool row_request = line_index >= 0;
+    if (!row_request && !valid_glyph_color_ranges(ranges))
         return {};
     pixel_scale = raster_scale.value;
     if (line_index >= 0 && end_line < 0 && static_cast<std::size_t>(line_index) >= layout->result.lines.size())
@@ -1082,8 +1225,23 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     mix(single_line ? layout->line_revisions[line_index]
                     : skb_layout_get_generation(layout->layout.get()));
     mix(font_collection_generation());
+    mix(layout->grid_revision);
     mix(raster_scale.key);
     mix(static_cast<uint64_t>(mode));
+    // Only a very long single line is windowed; its snapshot then depends on the chunks it holds.
+    const bool windowed = single_line &&
+        layout->line_ranges[line_index].end - layout->line_ranges[line_index].start >
+            kWindowedLineCodepoints &&
+        quantize_glyph_window(window);
+    if (!windowed)
+        window = {};
+    else {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &window.min_x, sizeof(bits));
+        mix(bits);
+        std::memcpy(&bits, &window.max_x, sizeof(bits));
+        mix(bits);
+    }
     if (!single_line) {
         mix(static_cast<uint64_t>(line_index + 1));
         mix(static_cast<uint64_t>(end_line + 1));
@@ -1101,15 +1259,25 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         static_cast<uint64_t>(tint.blue) << 8 | static_cast<uint64_t>(tint.alpha));
 
     std::vector<GlyphColorRange> relevant_ranges;
-    for (auto range : ranges) {
-        if (line_index >= 0) {
-            if (end_line == line_index)
-                continue;
-            const skb_range_t line = end_line < 0 ? layout->line_ranges[line_index]
-                : skb_range_t{layout->line_ranges[line_index].start,
-                              layout->line_ranges[end_line - 1].end};
-            range.start = std::max(range.start, line.start);
-            range.end = std::min(range.end, line.end);
+    // The span a row request covers; an empty span has no rows to color or look up.
+    const bool empty_span = row_request && end_line == line_index;
+    skb_range_t span{0, 0};
+    auto first_range = ranges.begin();
+    if (row_request && !empty_span) {
+        span = end_line < 0 ? layout->line_ranges[line_index]
+                            : skb_range_t{layout->line_ranges[line_index].start,
+                                          layout->line_ranges[end_line - 1].end};
+        // Skip the ranges that end before the span starts.
+        first_range = std::partition_point(ranges.begin(), ranges.end(),
+            [&span](const GlyphColorRange &candidate) { return candidate.end <= span.start; });
+    }
+    for (auto range_it = empty_span ? ranges.end() : first_range; range_it != ranges.end(); ++range_it) {
+        auto range = *range_it;
+        if (row_request) {
+            if (range.start >= span.end)
+                break;
+            range.start = std::max(range.start, span.start);
+            range.end = std::min(range.end, span.end);
             if (range.start >= range.end)
                 continue;
         }
@@ -1143,11 +1311,14 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
                 }
                 if (prepared_glyphs_current(*rebased)) {
                     state_->published_glyphs[key] = rebased;
+                    retain_publication(*state_, key, rebased);
                     return rebased;
                 }
             }
-            if (prepared_glyphs_current(*cached))
+            if (prepared_glyphs_current(*cached)) {
+                retain_publication(*state_, key, cached);
                 return cached;
+            }
         }
     }
 
@@ -1160,7 +1331,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
         : line_index < 0 ? prepare_glyphs_internal(id, origin_x, origin_y, pixel_scale, mode,
                                                  *snapshot, -1, -1, 0.0f, 0.0f, -1, -1, preparation)
                        : prepare_glyphs_for_line(id, static_cast<uint32_t>(line_index), origin_x,
-                                                 origin_y, pixel_scale, mode, *snapshot, preparation);
+                                                 origin_y, pixel_scale, mode, *snapshot, preparation, window);
     if (!prepared)
         return {};
 
@@ -1169,7 +1340,7 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
     snapshot->publication_key = key;
 
     /* Weak entries keep live snapshots shared and let the rest expire. */
-    if (state_->published_glyphs.size() >= 256) {
+    if (state_->published_glyphs.size() >= state_->published_sweep_size) {
         for (auto entry = state_->published_glyphs.begin();
              entry != state_->published_glyphs.end();) {
             if (entry->second.expired())
@@ -1177,8 +1348,10 @@ std::shared_ptr<const PreparedGlyphs> TextEngine::publish_glyphs(TextLayoutId id
             else
                 ++entry;
         }
+        state_->published_sweep_size = std::max<std::size_t>(256, state_->published_glyphs.size() * 2);
     }
     state_->published_glyphs[key] = snapshot;
+    retain_publication(*state_, key, snapshot);
     return snapshot;
 }
 
@@ -1186,7 +1359,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                                          float pixel_scale, GlyphMode mode, PreparedGlyphs &output,
                                          int32_t line_start, int32_t line_end, float line_x,
                                          float line_y, int32_t line_index, int32_t end_line,
-                                         GlyphPreparation preparation) {
+                                         GlyphPreparation preparation, GlyphWindow window) {
     const auto *retained = find_layout(*state_, id);
     const auto raster_scale = text_raster_scale(pixel_scale);
     if (!retained || !raster_scale.key || !std::isfinite(origin_x) || !std::isfinite(origin_y))
@@ -1209,6 +1382,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
     output.first_line = line_index;
     output.end_line = end_line < 0 ? line_index + 1 : end_line;
     output.layout_generation = skb_layout_get_generation(retained->layout.get());
+    output.grid_revision = retained->grid_revision;
     output.line_revision = line_index >= 0 && end_line < 0 &&
         static_cast<std::size_t>(line_index) < retained->line_revisions.size()
         ? retained->line_revisions[line_index] : 0;
@@ -1246,7 +1420,10 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
                               mode,
                               &output,
                               line_start,
-                              line_end};
+                              line_end,
+                              &retained->grid_positions,
+                              &retained->grid_source_positions,
+                              window};
     if (!skb_layout_iterate_render_glyphs_range(retained->layout.get(), lines, append_render_glyph, &render))
         return false;
     if (resource_limited()) return false;
@@ -1256,7 +1433,7 @@ bool TextEngine::prepare_glyphs_internal(TextLayoutId id, float origin_x, float 
 
 bool TextEngine::prepared_glyphs_current(const PreparedGlyphs &glyphs) const {
     const auto *layout = find_layout(*state_, glyphs.layout_id);
-    if (!state_->atlas || !layout)
+    if (!state_->atlas || !layout || glyphs.grid_revision != layout->grid_revision)
         return false;
     if (glyphs.line_revision != 0) {
         if (glyphs.first_line < 0 || glyphs.end_line != glyphs.first_line + 1 ||
@@ -1294,13 +1471,66 @@ TextRect TextEngine::bounds() const {
     if (!layout)
         return {};
     const skb_rect2_t value = skb_layout_get_bounds(layout->layout.get());
-    return {value.x, value.y, value.width, value.height};
+    return {layout->grid_positions.empty() ? value.x : 0.0f, value.y,
+            layout->grid_positions.empty() ? value.width : layout->grid_positions.back(), value.height};
+}
+
+bool TextEngine::set_grid_positions(const std::vector<float> &positions, bool *changed) {
+    if (changed) *changed = false;
+    auto *layout = active_layout(*state_);
+    if (!layout) return false;
+    if (!positions.empty()) {
+        if (layout->result.lines.size() > 1 || positions.size() != static_cast<size_t>(text_count()) + 1)
+            return false;
+        float previous = 0;
+        for (float x : positions) {
+            if (!std::isfinite(x) || x < previous) return false;
+            previous = x;
+        }
+    }
+    if (positions == layout->grid_positions) return true;
+    layout->grid_positions = positions;
+    layout->grid_source_positions.assign(positions.size(), 0.0f);
+    if (!positions.empty()) {
+        std::vector<bool> assigned(positions.size(), false);
+        auto iterator = skb_caret_iterator_make(layout->layout.get(), 0);
+        float x = 0, advance = 0, midpoint = 0;
+        skb_caret_iterator_result_t left{}, right{};
+        while (skb_caret_iterator_next(&iterator, &x, &advance, &midpoint, &left, &right)) {
+            for (const auto &candidate : {left, right}) {
+                if (candidate.layout_run_idx == SKB_INVALID_INDEX) continue;
+                const auto offset = static_cast<size_t>(skb_layout_get_offset_from_text_position(
+                    layout->layout.get(), candidate.text_position));
+                if (offset < positions.size() && !assigned[offset]) {
+                    layout->grid_source_positions[offset] = x;
+                    assigned[offset] = true;
+                }
+            }
+        }
+        for (size_t offset = 1; offset < positions.size(); ++offset)
+            if (!assigned[offset]) layout->grid_source_positions[offset] = layout->grid_source_positions[offset - 1];
+    }
+    layout->grid_revision = ++state_->line_revision_sequence;
+    state_->published_glyphs.clear();
+    state_->selection_layout_id = 0;
+    if (changed) *changed = true;
+    return true;
 }
 
 TextPosition TextEngine::hit_test(float x, float y) const {
     const auto *layout = active_layout(*state_);
     if (!layout)
         return {};
+    if (!layout->grid_positions.empty()) {
+        const auto &grid = layout->grid_positions;
+        auto end = std::upper_bound(grid.begin(), grid.end(), x);
+        const size_t first = end == grid.begin() ? 0 : static_cast<size_t>(end - grid.begin() - 1);
+        const size_t next = std::min(first + 1, grid.size() - 1);
+        const float span = grid[next] - grid[first];
+        const float fraction = span > 0 ? std::clamp((x - grid[first]) / span, 0.0f, 1.0f) : 0.0f;
+        x = layout->grid_source_positions[first] + fraction *
+            (layout->grid_source_positions[next] - layout->grid_source_positions[first]);
+    }
     const skb_text_position_t value = skb_layout_hit_test(layout->layout.get(), SKB_MOVEMENT_CARET, x, y);
     return {value.offset, static_cast<uint8_t>(value.affinity)};
 }
@@ -1321,7 +1551,10 @@ TextCaret TextEngine::caret(TextPosition position) const {
     const skb_text_position_t value = {position.offset,
                                        static_cast<skb_caret_affinity_t>(position.affinity)};
     const skb_caret_info_t result = skb_layout_get_caret_info_at(layout->layout.get(), value);
-    return {result.x, result.y, result.ascender, result.descender, result.slope, result.direction};
+    const int32_t offset = skb_layout_get_offset_from_text_position(layout->layout.get(), value);
+    const float x = !layout->grid_positions.empty() && offset >= 0 &&
+        static_cast<size_t>(offset) < layout->grid_positions.size() ? layout->grid_positions[offset] : result.x;
+    return {x, result.y, result.ascender, result.descender, result.slope, result.direction};
 }
 
 // Code selection is lexical rather than natural-language word segmentation.

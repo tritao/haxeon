@@ -21,9 +21,31 @@ class CompilerClient {
 		return (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore=" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
 			+ (Sys.getEnv("HAXEON_STRENGTH") == "0" ? "off" : "on");
 
+	/**
+	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
+	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one.
+	 */
+	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String, profilePort:Null<String>,
+			?session:build.BuildSession):String {
+		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption() + (profilePort == null ? "" : ":profile:" +
+			profilePort)), [],
+			[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map()));
+		if (session == null)
+			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
+		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
+		return session.workerVersion(memoKey, () -> {
+			var version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), [], session.digests);
+			Sys.println('haxeon: compiler worker version $version (kept for this watch session)');
+			return version;
+		});
+	}
+
 	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
-			fallback:Void->Int):Int {
-		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0" || (Sys.systemName() != "Linux" && Sys.systemName() != "Mac"))
+			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
+		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
+		// compiled CLI uses one there.
+		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0"
+			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
 			return fallback();
 		var connection:Null<Connection> = null;
 		try {
@@ -35,10 +57,7 @@ class CompilerClient {
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
 			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
-			var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption()
-				+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
-				[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map())),
-				version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []),
+			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session),
 				key = version + "-" + Sha256.encode(projectRoot + "\n" + buildRoot).substr(0, 16),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
@@ -47,42 +66,47 @@ class CompilerClient {
 					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
 				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
-				var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
-					libraryPath = [
-						Path.join([home, "out"]),
-						Path.join([home, ".tools", "hashlink"]),
-						Sys.getEnv(libraryVariable)
-					].filter(value -> value != null && value.length > 0).join(":"),
-					launchArguments = [hashlink];
-				if (profilePort != null) {
-					launchArguments.push("--diagnostics");
-					launchArguments.push(profilePort);
+				if (Sys.systemName() == "Windows") {
+					if (startWindowsWorker(home, hashlink, workerArtifact, statePath, logPath, profilePort) != 0)
+						throw "Could not start compiler worker";
+				} else {
+					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+						libraryPath = [
+							Path.join([home, "out"]),
+							Path.join([home, ".tools", "hashlink"]),
+							Sys.getEnv(libraryVariable)
+						].filter(value -> value != null && value.length > 0).join(":"),
+						launchArguments = [hashlink];
+					if (profilePort != null) {
+						launchArguments.push("--diagnostics");
+						launchArguments.push(profilePort);
+					}
+					launchArguments.push(workerArtifact);
+					launchArguments.push(statePath);
+					var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
+					// Redirect all three streams so the worker cannot keep the caller's
+					// pipes open after the build exits.
+					var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
+						status = Sys.command("sh", ["-c",
+							"umask 077; cd "
+							+ SysTools.quoteUnixArg(home)
+							+ " && export "
+							+ libraryVariable
+							+ "="
+							+
+							SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
+								// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
+								// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
+							+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
+							+ detach
+							+ "nohup "
+							+ launch
+							+ " > "
+							+ SysTools.quoteUnixArg(logPath)
+							+ " 2>&1 < /dev/null &"]);
+					if (status != 0)
+						throw "Could not start compiler worker";
 				}
-				launchArguments.push(workerArtifact);
-				launchArguments.push(statePath);
-				var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
-				// Redirect all three streams so the worker cannot keep the caller's
-				// pipes open after the build exits.
-				var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
-					status = Sys.command("sh", ["-c",
-						"umask 077; cd "
-						+ SysTools.quoteUnixArg(home)
-						+ " && export "
-						+ libraryVariable
-						+ "="
-						+
-						SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-							// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-							// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-						+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
-						+ detach
-						+ "nohup "
-						+ launch
-						+ " > "
-						+ SysTools.quoteUnixArg(logPath)
-						+ " 2>&1 < /dev/null &"]);
-				if (status != 0)
-					throw "Could not start compiler worker";
 				var deadline = Sys.time() + 30;
 				while (connection == null && Sys.time() < deadline) {
 					Sys.sleep(0.05);
@@ -93,9 +117,14 @@ class CompilerClient {
 			}
 			retireWorkers(directory, version, key);
 			markUsed(statePath);
+			if (session != null && !session.workerPings.exists(statePath))
+				session.workerPings.set(statePath, Sys.time());
 			var socket = connection.socket;
 			socket.setTimeout(600);
-			var bytes = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, arguments: arguments}));
+			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {token: connection.token, arguments: arguments, background: true} : {
+				token: connection.token,
+				arguments: arguments
+			}));
 			socket.output.writeInt32(bytes.length);
 			socket.output.write(bytes);
 			socket.output.flush();
@@ -117,6 +146,58 @@ class CompilerClient {
 			Sys.println("Compiler session unavailable; using one-shot compilation: " + Std.string(error));
 			return fallback();
 		}
+	}
+
+	/**
+	 * Pings each worker a session uses once a third of its idle timeout has passed, so a watch session keeps its warm worker
+	 * for as long as it runs. A ping is a request that does nothing, sent without waiting for an answer: a worker busy
+	 * compiling reads it from its accept queue later, and an inherited copy of a socket cannot keep a worker alive the way an
+	 * open connection would, so once the session ends or dies its workers exit within their idle timeout. A worker that is
+	 * gone is forgotten; the next build starts a new one and registers it again.
+	 */
+	public static function keepWorkersAlive(session:build.BuildSession):Void {
+		var now = Sys.time();
+		for (statePath in [for (path in session.workerPings.keys()) path]) {
+			var due = session.workerPings.get(statePath);
+			if (due != null && due > now)
+				continue;
+			var interval = pingWorker(statePath);
+			if (interval == null)
+				session.workerPings.remove(statePath);
+			else
+				session.workerPings.set(statePath, now + interval);
+		}
+	}
+
+	/** Pings one worker; the seconds until the next ping is due, or null when no worker that understands pings answers. */
+	static function pingWorker(statePath:String):Null<Float> {
+		var idleSeconds = 0.0;
+		try {
+			var state:Dynamic = Json.parse(File.getContent(statePath));
+			if (Std.isOfType(state.idleSeconds, Float))
+				idleSeconds = state.idleSeconds;
+		} catch (_:Dynamic) {}
+		// A worker from before pings would take one for a compile request.
+		if (idleSeconds <= 0)
+			return null;
+		var connection = connect(statePath);
+		if (connection == null)
+			return null;
+		try {
+			var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, ping: true}));
+			connection.socket.output.writeInt32(request.length);
+			connection.socket.output.write(request);
+			connection.socket.output.flush();
+			connection.socket.close();
+		} catch (_:Dynamic) {
+			try
+				connection.socket.close()
+			catch (_:Dynamic) {}
+			return null;
+		}
+		// The worker this session uses stays the most recently used, so retirement takes others first.
+		markUsed(statePath);
+		return Math.max(0.25, idleSeconds / 3);
 	}
 
 	static function connect(statePath:String):Null<Connection> {
@@ -144,7 +225,9 @@ class CompilerClient {
 
 	/**
 	 * Compiles one compiler program once per compiler version; concurrent callers wait for the first to finish.
-	 * Each use refreshes its modification time, so stale-file cleanup only removes programs nobody runs.
+	 * On Linux and macOS each use refreshes its modification time, so stale-file cleanup only removes programs nobody
+	 * runs. Windows has no touch, so there an unused program is removed by age; the current version's program and any a
+	 * running worker uses are always kept.
 	 */
 	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String, mainClass:String):Void {
 		#if (target.threaded && !eval)
@@ -152,7 +235,8 @@ class CompilerClient {
 		#end
 		try {
 			if (FileSystem.exists(artifact)) {
-				Sys.command("touch", ["-c", artifact]);
+				if (Sys.systemName() != "Windows")
+					Sys.command("touch", ["-c", artifact]);
 			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
 				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
@@ -200,12 +284,48 @@ class CompilerClient {
 		return ProcessRunner.run(hashlink, [artifact].concat(arguments), home, environment);
 	}
 
+	/**
+		Windows has no setsid or nohup. `start /b` returns at once, and redirecting all three streams
+		keeps the worker from holding the build's pipes open.
+	**/
+	static function startWindowsWorker(home:String, hashlink:String, workerArtifact:String, statePath:String, logPath:String, profilePort:Null<String>):Int {
+		var quote = (value:String) -> '"' + value + '"';
+		var path = [
+			Path.join([home, "out"]),
+			Path.join([home, ".tools", "hashlink"]),
+			Sys.getEnv("PATH")
+		].filter(value -> value != null && value.length > 0).join(";");
+		var launch = [quote(hashlink + ".exe")];
+		if (profilePort != null) {
+			launch.push("--diagnostics");
+			launch.push(profilePort);
+		}
+		launch.push(quote(workerArtifact));
+		launch.push(quote(statePath));
+		var threshold = Sys.getEnv("HL_GC_MARK_THRESHOLD");
+		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
+			+ (threshold == null || threshold.length == 0 ? "0.4" : threshold)
+			+ '" && start "" /b '
+			+ launch.join(" ")
+			+ " > "
+			+ quote(logPath)
+			+ " 2>&1 < nul");
+	}
+
 	/** The session directory, created private to this user. */
 	static function preparedSessionDirectory():String {
 		var directory = sessionDirectory();
 		FileSystem.createDirectory(directory);
-		if (Sys.command("chmod", ["700", directory]) != 0)
-			throw "Could not make the compiler session directory private";
+		if (Sys.systemName() != "Windows") {
+			if (Sys.command("chmod", ["700", directory]) != 0)
+				throw "Could not make the compiler session directory private";
+		} else if (Sys.getEnv("HAXEON_COMPILER_SESSION_DIR") != null && Sys.getEnv("HAXEON_COMPILER_SESSION_DIR").length > 0) {
+			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
+			// this user's access, as chmod 700 does.
+			var user = Sys.getEnv("USERNAME");
+			if (user == null || Sys.command("icacls", [directory, "/inheritance:r", "/grant:r", user + ":(OI)(CI)F", "/q"]) != 0)
+				throw "Could not make the compiler session directory private";
+		}
 		return directory;
 	}
 
@@ -214,9 +334,12 @@ class CompilerClient {
 		var configured = Sys.getEnv("HAXEON_COMPILER_SESSION_DIR");
 		if (configured != null && configured.length > 0)
 			return configured;
+		var local = Sys.systemName() == "Windows" ? Sys.getEnv("LOCALAPPDATA") : null;
+		if (local != null && local.length > 0)
+			return Path.join([local, "haxeon", "compiler"]);
 		var cache = Sys.getEnv("XDG_CACHE_HOME");
 		if (cache == null || cache.length == 0)
-			cache = Path.join([Sys.getEnv("HOME"), ".cache"]);
+			cache = Path.join([Sys.getEnv(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"), ".cache"]);
 		return Path.join([cache, "haxeon", "compiler"]);
 	}
 

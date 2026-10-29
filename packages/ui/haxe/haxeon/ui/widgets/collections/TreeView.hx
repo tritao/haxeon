@@ -55,6 +55,8 @@ class TreeView implements View {
 	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
 	public var onStateReady:Null<TreeView->Void>;
 	public var onItemActivated:Null<String->Void>;
+	/** Event-aware activation for callers that need pointer or keyboard modifiers. */
+	public var onItemActivatedWithEvent:Null<String->UiEvent->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
 	public var onItemClicked:Null<String->Int->Void>;
 	/** Optional non-blocking hint used to draw expand controls without loading children. */
@@ -63,6 +65,11 @@ class TreeView implements View {
 	public var expandOnSingleClick:Bool = false;
 	public var onItemContextMenu:Null<String->UiEvent->Void>;
 	public var onItemRename:Null<String->Void>;
+	/** Optional intra-tree drag/drop policy. Drops use stable model keys. */
+	public var canDragItem:Null<String->Bool>;
+	public var canDropItem:Null<(String, String)->Bool>;
+	public var onItemDrop:Null<(String, String)->Void>;
+	var drag = new TreeItemDrag();
 	/** Optional row builder receiving the current expansion state. */
 	public var itemBuilder:Null<(String, Bool)->View>;
 	/** Return false to defer a requested expansion; toggles identify repeated pointer/activation intent. */
@@ -114,6 +121,7 @@ class TreeView implements View {
 		this.selectedKey = selectedKey;
 		this.onSelectionChanged = onSelectionChanged;
 		this.onItemActivated = onItemActivated;
+		onItemActivatedWithEvent = null;
 		onItemClicked = null;
 		hasChildrenHint = null;
 		onItemContextMenu = null;
@@ -145,6 +153,9 @@ class TreeView implements View {
 		extentIndex = null;
 		itemIds = new Map();
 	}
+
+	/** Cancel an in-flight drag when the owning workspace changes. */
+	public function cancelDrag():Void drag.clear();
 
 	/** Selects a visible node. Null clears selection; notify=false synchronizes without a callback. */
 	public function select(nextKey:Null<String>, notify:Bool = true):Bool {
@@ -298,6 +309,8 @@ class TreeView implements View {
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
 			var treeId = context.id("tree");
+			drag = context.resourceState(context.id("tree-drag"),
+				function() return new TreeItemDrag(), function(value) value.dispose()).value;
 			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(treeId), StyleState.Hovered)
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
@@ -325,6 +338,7 @@ class TreeView implements View {
 			}
 			if (onStateReady != null) onStateReady(this);
 			itemIds = new Map();
+			drag.rows.clear();
 
 			var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight :
 				(viewportStyle.height.sizing == LayoutSizing.Fixed ? viewportStyle.height.value :
@@ -347,7 +361,7 @@ class TreeView implements View {
 					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
 						compactLeafIndent, selectedKey == nodeKey, guideOpacity,
 						function() { select(nodeKey); },
-						function() { if (entry.hasChildren) toggleExpanded(nodeKey); else if (onItemActivated != null) onItemActivated(nodeKey); },
+						function(event) { if (entry.hasChildren) toggleExpanded(nodeKey); else activateItem(nodeKey, event); },
 						function() { toggleExpanded(nodeKey); },
 						function(event) {
 							var count = clicks.value.register(nodeKey, event);
@@ -356,10 +370,10 @@ class TreeView implements View {
 								// Single-click expansion applies to every click, including the
 								// second click recognized as part of a double-click sequence.
 								if (expandOnSingleClick || count == 2) toggleExpanded(nodeKey);
-							} else if (count == 2 && onItemActivated != null) onItemActivated(nodeKey);
+							} else if (count == 2) activateItem(nodeKey, event);
 						},
 						function(event) { handleNodeKey(context, entry, event); },
-						function(id) { itemIds.set(nodeKey, id); },
+						function(node) { itemIds.set(nodeKey, node.id); drag.rows.set(nodeKey, node); },
 						function(event) {
 							var handler = onItemContextMenu;
 							if (handler != null) handler(nodeKey, event);
@@ -389,6 +403,9 @@ class TreeView implements View {
 			root.semantics = semantics;
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
+			if (canDragItem != null && canDropItem != null && onItemDrop != null)
+				drag.attach(root, this, context);
+			else drag.clear();
 			root.states = context.interactionStates.get(root.id);
 			guideVisibility.root = root;
 			return root;
@@ -446,6 +463,11 @@ class TreeView implements View {
 		var target = itemIds.get(nextKey);
 		if (target != null)
 			context.requestFocus(target);
+	}
+
+	function activateItem(nodeKey:String, event:UiEvent):Void {
+		if (onItemActivatedWithEvent != null) onItemActivatedWithEvent(nodeKey, event);
+		else if (onItemActivated != null) onItemActivated(nodeKey);
 	}
 
 	function adjacentKey(nodeKey:String, delta:Int):Null<String> {
@@ -860,17 +882,17 @@ private class TreeViewRow implements View {
 	final selected:Bool;
 	final guideOpacity:Float;
 	final onSelect:Void->Void;
-	final onActivate:Void->Void;
+	final onActivate:UiEvent->Void;
 	final onToggle:Void->Void;
 	final onClick:UiEvent->Void;
 	final onKey:UiEvent->Void;
-	final onBuilt:WidgetId->Void;
+	final onBuilt:RenderNode->Void;
 	final onContextMenu:UiEvent->Void;
 
 	public function new(key:String, itemKey:String, child:View, entry:TreeEntry, indentWidth:Float,
 			verticalGuidesOnly:Bool, compactLeafIndent:Bool, selected:Bool, guideOpacity:Float,
-			onSelect:Void->Void, onActivate:Void->Void, onToggle:Void->Void,
-			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:WidgetId->Void, onContextMenu:UiEvent->Void) {
+			onSelect:Void->Void, onActivate:UiEvent->Void, onToggle:Void->Void,
+			onClick:UiEvent->Void, onKey:UiEvent->Void, onBuilt:RenderNode->Void, onContextMenu:UiEvent->Void) {
 		this.key = key;
 		this.itemKey = itemKey;
 		this.child = child;
@@ -900,11 +922,19 @@ private class TreeViewRow implements View {
 			style.childAlignY = LayoutAlignmentY.Center;
 			style.childGap = 2.0;
 			style.padding = new Insets(entry.depth * indentWidth, 0.0, 0.0, 0.0);
-			style.background = selected ? context.theme.tokens.selectionHighlight :
-				StyleStateUtil.contains(flags, StyleState.Hovered)
-					? context.theme.tokens.selectionHover : Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var node = new RenderNode(id, LayoutVisualKind.Box, style);
+			// Row width follows the viewport, independent of the custom painter's intrinsic width.
+			style.width = LayoutAxis.stretch();
+			var node = new RenderNode(id, LayoutVisualKind.Custom, style);
 			node.states = flags;
+			node.hoverPaintOnly = true;
+			var normalHover = context.theme.tokens.selectionHover;
+			var selectedColor = context.theme.tokens.selectionHighlight;
+			node.onPaint(function(canvas, geometry) {
+				var hovered = StyleStateUtil.contains(context.interactionStates.get(id), StyleState.Hovered);
+				if (selected || hovered) canvas.fillRectIfPositive(new haxeon.ui.Rect(0.0, 0.0, geometry.width, geometry.height),
+					selected ? selectedColor : normalHover);
+			}, "tree-row-background:" + selected + ":" + normalHover.red + ":" + normalHover.green + ":" + normalHover.blue + ":" + normalHover.alpha
+				+ ":" + selectedColor.red + ":" + selectedColor.green + ":" + selectedColor.blue + ":" + selectedColor.alpha);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.TreeItem);
 			semantics.label = itemKey;
@@ -921,7 +951,7 @@ private class TreeViewRow implements View {
 			semantics.hierarchyLevel = entry.depth + 1;
 			node.semantics = semantics;
 			node.on(UiEventKind.Click, function(event) { if (event.button == 0) { onSelect(); onClick(event); } });
-			node.on(UiEventKind.Activate, function(_) { onSelect(); onActivate(); });
+			node.on(UiEventKind.Activate, function(event) { onSelect(); onActivate(event); });
 			node.on(UiEventKind.KeyDown, onKey);
 			node.on(UiEventKind.KeyRepeat, onKey);
 			node.on(UiEventKind.PointerDown, function(event) {
@@ -932,7 +962,8 @@ private class TreeViewRow implements View {
 					event.stopPropagation();
 				}
 			});
-			if (entry.depth > 0) {
+			// Keep the outermost tree level open; draw guides only within nested branches.
+			if (entry.depth > 1) {
 				var guides = new LayoutStyle();
 				guides.positioning = LayoutPositioning.Absolute;
 				guides.width = LayoutAxis.grow();
@@ -944,15 +975,15 @@ private class TreeViewRow implements View {
 				var hasNext = entry.hasNextSibling;
 				var border = context.theme.tokens.border;
 				var guideColor = Color.rgba(border.red, border.green, border.blue, border.alpha * guideOpacity);
-				var guideKey = "tree-guide:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
+				var guideKey = "tree-guide:nested:" + depth + ":" + (hasNext ? "1" : "0") + ":" +
 					(entry.hasChildren ? "branch" : "leaf") + ":";
-				for (level in 1...depth)
+				for (level in 2...depth)
 					guideKey += continuation[level] ? "1" : "0";
 				guideNode.onPaint(function(canvas, geometry) {
 					var path = new PathBuilder();
 					var hasSegments = false;
 					var centerY = geometry.height * 0.5;
-					for (level in 1...depth) if (continuation[level]) {
+					for (level in 2...depth) if (continuation[level]) {
 						var x = (level - 1) * indentWidth + indentWidth * 0.5;
 						path.moveTo(x, 0.0).lineTo(x, geometry.height);
 						hasSegments = true;
@@ -980,7 +1011,7 @@ private class TreeViewRow implements View {
 					LayoutAxis.fixed(entry.extent));
 			node.add(context.withScope(new Key("disclosure"), function() return disclosure.build(context)));
 			node.add(new KeyedView('item:$itemKey', child).build(context));
-			onBuilt(node.id);
+			onBuilt(node);
 			return node;
 		});
 	}

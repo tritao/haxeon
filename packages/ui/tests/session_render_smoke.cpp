@@ -853,7 +853,9 @@ int main() {
                 if (first_rows.raster_cache_misses < before_rows.raster_cache_misses + 2 ||
                     repeated_rows.raster_cache_hits < first_rows.raster_cache_hits + 2 ||
                     edited_rows.raster_cache_hits < repeated_rows.raster_cache_hits + 2 ||
-                    edited_rows.raster_cache_misses != repeated_rows.raster_cache_misses + 2)
+                    // The edited row draws directly until its content repeats;
+                    // only the enclosing custom-node raster misses immediately.
+                    edited_rows.raster_cache_misses != repeated_rows.raster_cache_misses + 1)
                     result = 48;
             }
             // Unicode forces a fresh native layout but unchanged rows must
@@ -864,10 +866,15 @@ int main() {
                 nkui_renderer_get_stats(renderer, &unicode_rows) != NKUI_OK))
                 result = 50;
             if (!result && (unicode_rows.raster_cache_hits < edited_rows.raster_cache_hits + 2 ||
-                unicode_rows.raster_cache_misses != edited_rows.raster_cache_misses + 2)) {
+                unicode_rows.raster_cache_misses != edited_rows.raster_cache_misses + 1)) {
                 std::fprintf(stderr, "Unicode row edit rebuilt unchanged rasters\n");
                 result = 51;
             }
+            // Admit the edited row once it stops changing, then verify that
+            // insertion/deletion reuses those publications at new line indices.
+            if (!result && (nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) != NKUI_OK ||
+                nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) != NKUI_OK ||
+                nkui_renderer_get_stats(renderer, &unicode_rows) != NKUI_OK)) result = 51;
             std::vector<uint8_t> original_pixels(framebuffer_width * framebuffer_height * 4);
             if (!result)
                 glReadPixels(0, 0, framebuffer_width, framebuffer_height, GL_RGBA,
@@ -905,7 +912,7 @@ int main() {
                 nkui_renderer_get_stats(renderer, &restored_rows) != NKUI_OK))
                 result = 54;
             if (!result && (restored_rows.raster_cache_hits < moved_rows.raster_cache_hits + 2 ||
-                restored_rows.raster_cache_misses != moved_rows.raster_cache_misses + 2))
+                restored_rows.raster_cache_misses != moved_rows.raster_cache_misses + 1))
                 result = 55;
             if (!result) {
                 std::vector<uint8_t> restored_pixels(original_pixels.size());

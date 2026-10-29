@@ -1,10 +1,13 @@
 package compiler.compilation;
 
 import compiler.Diagnostic.CompileError;
+import compiler.runtime.PlatformAbi;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
+import compiler.abi.PositionalName;
 import compiler.ir.IrFunction;
+import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrInliner;
 import compiler.ir.IrProgramAssembler;
@@ -32,6 +35,10 @@ typedef FrontendResult = {
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
+
+	/** Functions whose code is unchanged but whose positions moved in their file: lowered again, not patched. */
+	final relocated:Array<String>;
+
 	final typerMetrics:TyperPhaseMetrics;
 	final frontendGraphDoneAt:Float;
 	final semanticAliasMs:Float;
@@ -43,6 +50,7 @@ typedef FrontendResult = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
+	final frontendRestarts:Array<String>;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -453,6 +461,7 @@ class FrontendCompilation {
 				retyped: retyped,
 				invalidations: semanticAssembly.invalidations,
 				regenerated: regenerated,
+				relocated: [],
 				typerMetrics: typerMetrics,
 				frontendGraphDoneAt: frontendGraphDoneAt,
 				semanticAliasMs: semanticAssembly.aliasSetupMs,
@@ -464,6 +473,7 @@ class FrontendCompilation {
 				graphParseMs: graphParseMs,
 				graphDependencyMs: graphDependencyMs,
 				graphInitializationMs: graphInitializationMs,
+				frontendRestarts: context.frontendRestarts,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
@@ -502,6 +512,11 @@ class FrontendCompilation {
 					throw 'Native "${native.name}" is declared more than once';
 			irNatives.push(native);
 		}
+		var instrumentScope = context.instrumentScope();
+		if (instrumentScope != null)
+			for (native in compiler.ir.IrInstrumentation.natives())
+				if (![for (existing in irNatives) existing.name].contains(native.name))
+					irNatives.push(native);
 		var irCNatives = context.irCNatives();
 		for (native in IrProgramAssembler.cNativesFrom(typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
@@ -509,13 +524,33 @@ class FrontendCompilation {
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached), entryPoint, irCNatives,
-			IrProgramAssembler.reflectableObjectsFrom(typedNew));
+			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
+		var cNativeNames = [for (native in irCNatives) native.name].join(",");
+		for (fn in cached)
+			if (PositionalName.is(fn.name))
+				ir.positionalFingerprints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
+		context.inlineCache().finishPositionalFingerprints();
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		for (name in IrInliner.run(ir, context.inlineCache(), context.inlineEnabled()))
-			if (regenerated.indexOf(name) < 0)
+		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
+		// Regenerating a function's IR does not change it when the typed function is the same: a semantic invalidation
+		// regenerates every function of a module whose declarations moved. Only functions whose final IR differs from the
+		// published one, or that were typed again, need lowering and patching; the rest keep their lowered form.
+		var changedIr:Map<String, Bool> = [for (name in inlinerChanged) name => true],
+			retypedNow:Map<String, Bool> = [for (name in retyped) name => true],
+			present:Map<String, Bool> = [for (fn in ir.functions) fn.name => true];
+		regenerated = [
+			for (name in regenerated)
+				if (!present.exists(name) || changedIr.exists(name) || retypedNow.exists(name)) name
+		];
+		var listed:Map<String, Bool> = [for (name in regenerated) name => true];
+		for (name in inlinerChanged)
+			if (!listed.exists(name)) {
+				listed.set(name, true);
 				regenerated.push(name);
+			}
 		regenerated.sort(Reflect.compare);
+		var relocated = [for (name in context.inlineCache().relocated) if (!listed.exists(name)) name];
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
@@ -525,6 +560,7 @@ class FrontendCompilation {
 			retyped: retyped,
 			invalidations: semanticAssembly.invalidations,
 			regenerated: regenerated,
+			relocated: relocated,
 			typerMetrics: typerMetrics,
 			frontendGraphDoneAt: frontendGraphDoneAt,
 			semanticAliasMs: semanticAssembly.aliasSetupMs,
@@ -536,6 +572,7 @@ class FrontendCompilation {
 			graphParseMs: graphParseMs,
 			graphDependencyMs: graphDependencyMs,
 			graphInitializationMs: graphInitializationMs,
+			frontendRestarts: context.frontendRestarts,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
@@ -653,8 +690,8 @@ class FrontendCompilation {
 
 	/**
 	 * The environment object of a lambda or function adapter exists for that function alone. When an edit renames the
-	 * function (a lambda is named by its source offset) or removes it, the old environment must go with it; anything else
-	 * kept in the cache is content-named and harmless to keep.
+	 * function (a lambda is named by its position among the lambdas of its body) or removes it, the old environment must go
+	 * with it; anything else kept in the cache is content-named and harmless to keep.
 	 */
 	static function isGeneratedObjectOfRetypedFunction(name:String, retyped:Map<String, Bool>):Bool {
 		for (prefix in ["$cell:", "$lambda-env:", "$function-adapter-env:"])
@@ -780,6 +817,9 @@ class FrontendCompilation {
 		for (dependency in dependencies) {
 			if (names.indexOf(dependency.target) >= 0)
 				continue;
+			// Only targets without native dynamic objects (Wasm) call the stdlib's class; elsewhere the dependency is unused.
+			if (dependency.target == PlatformAbi.DYNAMIC_OBJECT_CLASS && !context.isWasmTarget())
+				continue;
 			var target = context.loadSourceModuleDependency(dependency.target);
 			if (target == null)
 				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
@@ -795,6 +835,7 @@ class FrontendCompilation {
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
 			var state = context.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
+				context.frontendRestarts.push('${dependency.functionName} needs $target');
 				state.dependencies.push(target);
 				state.dependencies.sort(Reflect.compare);
 				changed = true;

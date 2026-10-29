@@ -5,48 +5,62 @@ import haxe.Timer;
 import haxe.io.Bytes;
 import sys.io.File;
 import sys.io.FileOutput;
+import profiler.HldiCodec.HldiFrames;
+import profiler.HldiTypes.HldiFrame;
 
-/** Streaming writer for the native hlprof-live HLPC/1 capture format. */
+/** Streaming writer for the native hlprof-live HLPC/2 capture format: the pushed frames, written as they arrive. */
 class HlpcCapture {
+	static inline final TYPE_COMPLETE = 3;
+
 	final output:FileOutput;
 	final started = Timer.stamp();
 	var closed = false;
+	var frames:Int64 = Int64.ofInt(0);
+	var bytes:Int64 = Int64.ofInt(0);
 
-	public function new(path:String, processId:Int, sampleRate:Int) {
+	public function new(path:String, processId:Int, sampleRate:Int, sources:Int) {
 		output = File.write(path, true);
 		var header = Bytes.alloc(24);
 		header.blit(0, Bytes.ofString("HLPC"), 0, 4);
-		put16(header, 4, 1);
+		put16(header, 4, 2);
 		put16(header, 6, 24);
 		put32(header, 12, processId);
 		put32(header, 16, sampleRate);
+		put32(header, 20, sources);
 		output.write(header);
 	}
 
-	public function metadata(bytes:Bytes):Void
-		record(1, bytes);
+	/** Writes a frame the runtime pushed, with its type and payload unchanged. */
+	public function frame(frame:HldiFrame):Void
+		record(frame.type, frame.payload);
 
-	public function samples(requested:Int64, next:Int64, dropped:Int64, bytes:Bytes):Void {
-		var payload = Bytes.alloc(24 + bytes.length);
-		put64(payload, 0, requested);
-		put64(payload, 8, next);
-		put64(payload, 16, dropped);
-		payload.blit(24, bytes, 0, bytes.length);
-		record(2, payload);
-	}
+	/** Writes a metadata snapshot as a metadata frame (type 4). */
+	public function metadata(payload:Bytes):Void
+		record(HldiFrames.PUSH_METADATA, payload);
 
-	public function close(cursor:Int64, dropped:Int64):Void {
+	/** Ends the capture; only a session that reached its end frame is complete. */
+	public function close(complete:Bool = true):Void {
 		if (closed)
 			return;
-		var payload = Bytes.alloc(16);
-		put64(payload, 0, cursor);
-		put64(payload, 8, dropped);
-		record(3, payload);
+		if (complete) {
+			var payload = Bytes.alloc(16);
+			put64(payload, 0, frames);
+			put64(payload, 8, bytes);
+			writeRecord(TYPE_COMPLETE, payload);
+		}
 		closed = true;
 		output.close();
 	}
 
 	function record(type:Int, payload:Bytes):Void {
+		if (closed)
+			return;
+		writeRecord(type, payload);
+		frames = Int64.add(frames, Int64.ofInt(1));
+		bytes = Int64.add(bytes, Int64.ofInt(payload.length));
+	}
+
+	function writeRecord(type:Int, payload:Bytes):Void {
 		var header = Bytes.alloc(16);
 		put32(header, 0, type);
 		put32(header, 4, payload.length);

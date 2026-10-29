@@ -8,7 +8,25 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Token.TokenKind;
 
 class FormatterMain {
+	/** The scanner and the lexer must agree on every operator, or the formatter would split a token such as `??`. */
+	static function assertScannerMatchesLexer(text:String):Void {
+		var file = new SourceFile("operators.hx", text), tokens = new FormatScanner(file).scan(), lexical = new Lexer(file).tokenize(), index = 0;
+		for (token in tokens)
+			switch token.kind {
+				case FormatTokenKind.Syntax(kind):
+					if (lexical[index].kind != kind || lexical[index].text != token.text)
+						throw 'scanner token "${token.text}" differs from lexer token "${lexical[index].text}"';
+					index++;
+				default:
+			}
+		if (lexical[index].kind != TokenKind.Eof)
+			throw "scanner dropped tokens the lexer produced";
+	}
+
 	static function main():Void {
+		assertScannerMatchesLexer("function main():Int { var a = b ?? c; a += 1; a -= 1; a *= 2; a /= 2; a %= 2; a &= 1; a |= 1; a ^= 1; a++; --a; "
+			+ "var t = a == b || a != b && a <= b || a >= b; var f = (x) -> x; var u = !a; var v = ~a; var w = [a ? b : c]; "
+			+ "var s = (a << 1) | (a >> 1) & (a >>> 1); var q:Map<String, Array<Int>> = []; @:meta var m = a.b; $a; return a < b ? 1 : a > b ? 2 : 3; }");
 		var source = "function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
 			expected = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n",
 			formatted = SourceFormatter.format(source, 2, true);

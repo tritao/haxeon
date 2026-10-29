@@ -9,6 +9,12 @@ typedef RuntimeAbiDescriptor = {
 	final interfaces:Map<String, String>;
 	final enums:Map<String, String>;
 	final globals:Map<String, String>;
+
+	/**
+	 * Code fingerprint of every positionally named function (`PositionalName`), which tells whether an edit moved those names onto
+	 * other functions (see `PatchPlanner.renumberedGroups`); null when the descriptor was persisted before builds recorded them.
+	 */
+	final positional:Null<Map<String, String>>;
 }
 
 /** Canonical description of the runtime-visible ABI emitted to HashLink. */
@@ -39,7 +45,8 @@ class RuntimeAbi {
 			objects: objects,
 			interfaces: interfaces,
 			enums: enums,
-			globals: globals
+			globals: globals,
+			positional: [for (name => fingerprint in program.positionalFingerprints) name => fingerprint]
 		};
 	}
 

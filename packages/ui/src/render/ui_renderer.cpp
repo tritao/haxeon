@@ -884,7 +884,8 @@ bool make_effect_cache_room(UiRendererImpl::State &state, int width, int height)
     return true;
 }
 
-bool make_raster_cache_room(UiRendererImpl::State &state, int width, int height) {
+bool make_raster_cache_room(UiRendererImpl::State &state, int width, int height,
+                            UiRendererImpl::State::EffectCacheEntry &replacement) {
     if (width <= 0 || height <= 0)
         return false;
     const uint64_t width_value = static_cast<uint64_t>(width);
@@ -894,6 +895,17 @@ bool make_raster_cache_room(UiRendererImpl::State &state, int width, int height)
     const uint64_t bytes = width_value * height_value * 4u;
     if (bytes > kMaxCachedEffectBytes)
         return false;
+    const auto evict = [&](auto victim) {
+        auto &target = victim->second.target;
+        // Repaint a compatible LRU target instead of destroying its GPU
+        // attachments and allocating identical ones for the next cache key.
+        // Current-frame entries remain protected by the selection below.
+        if (!replacement.target.color.id && target.width == width && target.height == height &&
+            target.color.id && target.depth.id && target.image.id)
+            std::swap(replacement.target, target);
+        destroy_cached_raster(state, victim->second);
+        state.raster_cache.erase(victim);
+    };
     while (state.raster_cache.size() >= kMaxCachedRasterTargets) {
         auto victim = state.raster_cache.end();
         for (auto iterator = state.raster_cache.begin(); iterator != state.raster_cache.end();
@@ -906,8 +918,7 @@ bool make_raster_cache_room(UiRendererImpl::State &state, int width, int height)
         }
         if (victim == state.raster_cache.end())
             return false;
-        destroy_cached_raster(state, victim->second);
-        state.raster_cache.erase(victim);
+        evict(victim);
     }
     while (cached_raster_bytes(state) > kMaxCachedEffectBytes - bytes) {
         auto victim = state.raster_cache.end();
@@ -921,8 +932,7 @@ bool make_raster_cache_room(UiRendererImpl::State &state, int width, int height)
         }
         if (victim == state.raster_cache.end())
             return false;
-        destroy_cached_raster(state, victim->second);
-        state.raster_cache.erase(victim);
+        evict(victim);
     }
     return true;
 }
@@ -2025,13 +2035,19 @@ bool UiRendererImpl::beginRasterPass(ResourceId target_id, uint64_t cache_key, i
         return true;
     }
     ++state_->raster_cache_misses;
-    if (!make_raster_cache_room(*state_, width, height))
+    State::EffectCacheEntry replacement;
+    if (!make_raster_cache_room(*state_, width, height, replacement)) {
+        destroy_cached_raster(*state_, replacement);
         return beginTargetPass(target_id, width, height, false);
+    }
     const auto inserted = state_->raster_cache.try_emplace(cache_key);
-    if (!inserted.second)
+    if (!inserted.second) {
+        destroy_cached_raster(*state_, replacement);
         return fail(*state_, "raster cache insertion failed");
+    }
     auto &entry = inserted.first->second;
-    if (!create_target(*state_, entry.target, width, height)) {
+    std::swap(entry.target, replacement.target);
+    if (!entry.target.color.id && !create_target(*state_, entry.target, width, height)) {
         state_->raster_cache.erase(inserted.first);
         return false;
     }

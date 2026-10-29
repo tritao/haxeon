@@ -37,6 +37,7 @@ class Text implements View {
 		var node = new RenderNode(id, LayoutVisualKind.Text, computed.toLayoutStyle());
 		node.setStyleIdentity("text", null, null, null, ["text"]);
 		node.states = context.interactionStates.get(id);
+		node.hoverPaintOnly = true;
 		node.computedStyle = computed;
 		node.layout.text = value;
 		var resolved = context.resolveTextRole(role, textStyle);
@@ -44,9 +45,9 @@ class Text implements View {
 		var fontSource = computed.source(StyleProperty.FontSize);
 		var letterSource = computed.source(StyleProperty.LetterSpacing);
 		var computedOverride = new TextStyleOverride(null,
-			textStyle == null && fontSource != null && fontSource.layer != "framework"
+			(textStyle == null || textStyle.fontSize == null) && fontSource != null && fontSource.layer != "framework"
 				? computed.get(StyleProperty.FontSize) : null,
-			textStyle == null && letterSource != null && letterSource.layer != "framework"
+			(textStyle == null || textStyle.letterSpacing == null) && letterSource != null && letterSource.layer != "framework"
 				? computed.get(StyleProperty.LetterSpacing) : null,
 			null, null, null, null,
 			color == null && colorSource != null && colorSource.layer != "framework"

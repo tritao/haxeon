@@ -39,6 +39,8 @@ class PropertyEditor implements View {
 	public var revision(default, null):Int;
 	public var enabled:Bool;
 	public var labelWidth:Float;
+	public var stackedRows:Bool = false;
+	public var searchQuery:String = "";
 	/** When false, category headers are supplied by an outer inspector. */
 	public var showCategories:Bool;
 	final drafts:Map<String, String>;
@@ -108,6 +110,19 @@ class PropertyEditor implements View {
 		return result == PropertyEditResult.Applied;
 	}
 
+	public function resetValue(context:BuildContext, descriptor:PropertyDescriptor):Void {
+		var reset = descriptor.reset;
+		if (reset == null) {
+			applyValue(context, descriptor, descriptor.defaultValue);
+			return;
+		}
+		reset();
+		drafts.remove(descriptor.id);
+		errors.remove(descriptor.id);
+		revision++;
+		context.commands.refresh();
+	}
+
 	public function build(context:BuildContext):RenderNode {
 		if (cachedColumn == null || cachedShowCategories != showCategories) {
 			var children:Array<KeyedView> = [];
@@ -162,7 +177,7 @@ class PropertyEditor implements View {
 	 */
 	function rowRevision(descriptor:PropertyDescriptor, value:PropertyValue):String {
 		var result = descriptor.id + ":value=" + valueKey(value) +
-			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":labelWidth=" + labelWidth + ":generation=" + generation;
+			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":search=" + searchQuery + ":stacked=" + stackedRows + ":labelWidth=" + labelWidth + ":generation=" + generation;
 		if (drafts.exists(descriptor.id))
 			result += ":draft=" + drafts.get(descriptor.id);
 		var error = errors.get(descriptor.id);
@@ -344,7 +359,8 @@ private class PropertyEditorRow implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var value = descriptor.readValue(context.commandContext);
-		var revision = owner.rowRevision(descriptor, value);
+		var isModified = descriptor.modified;
+		var revision = owner.rowRevision(descriptor, value) + (isModified != null && isModified() ? 1 : 0);
 		var retained = new RetainedView("property-row:" + descriptor.id,
 			function(_) return new PropertyEditorRowContent(owner, descriptor, value),
 			function() return revision);
@@ -367,28 +383,32 @@ private class PropertyEditorRowContent implements View {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
 		var labelStyle = new LayoutStyle();
-		labelStyle.width = LayoutAxis.fixed(owner.labelWidth);
+		labelStyle.width = owner.stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(owner.labelWidth);
 		var rowStyle = new LayoutStyle();
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fit();
-		rowStyle.direction = LayoutDirection.LeftToRight;
+		rowStyle.direction = owner.stackedRows ? LayoutDirection.TopToBottom : LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = switch descriptor.type { case Custom(_): LayoutAlignmentY.Start; default: LayoutAlignmentY.Center; };
 		rowStyle.childGap = 8.0;
 		var children:Array<KeyedView> = [
-			new KeyedView("label", new Text(PropertyEditor.accessibleName(descriptor), labelStyle)),
+			new KeyedView("label", new haxeon.ui.widgets.text.HighlightedText(PropertyEditor.accessibleName(descriptor), owner.searchQuery, labelStyle)),
 			new KeyedView("value", owner.editorView(context, descriptor, value))
 		];
-		// Like a revert arrow: offered only while the value differs from its default.
+		var isModified = descriptor.modified;
+		var modified = isModified != null ? isModified() :
+			descriptor.defaultValue != null && !owner.registry.same(value, descriptor.defaultValue);
+		if (descriptor.modified != null && modified)
+			children.push(new KeyedView("modified", new Text("Modified")));
 		if (descriptor.defaultValue != null && !descriptor.readOnly
-			&& !owner.registry.same(value, descriptor.defaultValue)) {
+			&& modified) {
 			var reset = new IconButton("reset", IconName.Reset, "Reset " + descriptor.label + " to default",
-				function() owner.applyValue(context, descriptor, descriptor.defaultValue));
+				function() owner.resetValue(context, descriptor));
 			reset.enabled = owner.enabled && !owner.pending.exists(descriptor.id);
 			children.push(new KeyedView("reset", reset));
 		}
-		var row = new Row("row", children, rowStyle);
+		var row:View = owner.stackedRows ? new Column("row", children, rowStyle) : new Row("row", children, rowStyle);
 		var error = owner.errorFor(descriptor.id);
-		if (error == null) {
+		if (error == null && descriptor.description == null && !descriptor.restartRequired && StringTools.trim(owner.searchQuery).length == 0) {
 			var result = row.build(context);
 			if (observed)
 				context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
@@ -400,10 +420,17 @@ private class PropertyEditorRowContent implements View {
 		columnStyle.width = LayoutAxis.grow();
 		columnStyle.height = LayoutAxis.fit();
 		columnStyle.childGap = 2.0;
-		var result = new Column("error-row", [
-			new KeyedView("field", row),
-			new KeyedView("message", new Text(error, errorStyle))
-		], columnStyle).build(context);
+		var details:Array<KeyedView> = [new KeyedView("field", row)];
+		if (descriptor.description != null && descriptor.description.length > 0)
+			details.push(new KeyedView("description", new haxeon.ui.widgets.text.HighlightedText(descriptor.description, owner.searchQuery, errorStyle, context.theme.tokens.textSecondary,
+				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter), haxeon.ui.theme.TextRole.Caption)));
+		if (StringTools.trim(owner.searchQuery).length > 0)
+			details.push(new KeyedView("path", new haxeon.ui.widgets.text.HighlightedText(descriptor.id, owner.searchQuery, errorStyle,
+				context.theme.tokens.textSecondary, null, haxeon.ui.theme.TextRole.Caption)));
+		if (descriptor.restartRequired)
+			details.push(new KeyedView("restart", new Text("Requires restart", errorStyle)));
+		if (error != null) details.push(new KeyedView("message", new Text(error, errorStyle)));
+		var result = new Column("details-row", details, columnStyle).build(context);
 		if (observed)
 			context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 		return result;

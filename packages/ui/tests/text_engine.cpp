@@ -1,7 +1,9 @@
 #include "prepare/text_engine.h"
 #include "prepare/text_raster.h"
 
+#include <algorithm>
 #include <cstring>
+#include <algorithm>
 #include <cstdio>
 #include <cmath>
 #include <limits>
@@ -20,6 +22,103 @@
 using namespace nkui;
 
 int main() {
+    // Physical terminal cells must not inherit proportional/fallback advances.
+    {
+        auto fonts = std::make_shared<FontCollection>();
+        if (!fonts->add_font(NKUI_TEST_FONT_PATH)) return 301;
+        TextEngine grid(fonts);
+        TextLayoutOptions options;
+        options.wrap = TextWrapMode::None;
+        TextLayoutResult result;
+        if (!grid.layout_utf8("Wi.i", 1000, options, &result)) return 302;
+        const auto natural = grid.published_glyphs(result.id, 0, 0, 1, GlyphMode::Alpha);
+        const float natural_end = grid.caret({4, 0}).x;
+        const auto builds = grid.layout_build_count();
+        bool changed = false;
+        if (!natural || !grid.set_grid_positions({0, 8, 16, 24, 32}, &changed) || !changed ||
+            grid.layout_build_count() != builds || grid.prepared_glyphs_current(*natural)) return 303;
+        for (int offset = 0; offset <= 4; ++offset)
+            if (std::abs(grid.caret({offset, 0}).x - offset * 8.0f) > .01f) return 304;
+        if (std::abs(grid.bounds().width - 32) > .01f ||
+            grid.offset_from_position(grid.hit_test(17, 5)) != 2) return 305;
+        const auto projected = grid.published_glyphs(result.id, 0, 0, 1, GlyphMode::Alpha);
+        if (!projected || projected == natural || projected->vertices.size() != natural->vertices.size() ||
+            projected->batches.size() != natural->batches.size()) return 306;
+        for (size_t i = 0; i < natural->vertices.size(); ++i)
+            if (projected->vertices[i].u != natural->vertices[i].u ||
+                projected->vertices[i].v != natural->vertices[i].v) return 307;
+        for (size_t i = 0; i < natural->batches.size(); ++i)
+            if (projected->batches[i].atlas.value != natural->batches[i].atlas.value) return 308;
+        if (!grid.set_grid_positions({0, 8, 16, 24, 32}, &changed) || changed ||
+            grid.published_glyphs(result.id, 0, 0, 1, GlyphMode::Alpha) != projected) return 309;
+        for (const auto &invalid : std::vector<std::vector<float>>{
+                 {0, 8}, {0, 8, 7, 24, 32}, {-1, 8, 16, 24, 32},
+                 {0, 8, std::numeric_limits<float>::quiet_NaN(), 24, 32}})
+            if (grid.set_grid_positions(invalid) ||
+                !grid.prepared_glyphs_current(*projected)) return 310;
+        if (!grid.set_grid_positions({}) ||
+            std::abs(grid.caret({4, 0}).x - natural_end) > .01f ||
+            grid.prepared_glyphs_current(*projected)) return 311;
+        if (!grid.layout_utf8("Ax́中Z", 1000, options, &result) || grid.text_count() != 5 ||
+            !grid.set_grid_positions({0, 8, 8, 16, 32, 40}) ||
+            std::abs(grid.caret({3, 0}).x - 16) > .01f ||
+            std::abs(grid.caret({4, 0}).x - 32) > .01f) return 312;
+        const auto clusters = grid.published_glyphs(result.id, 0, 0, 1, GlyphMode::Alpha);
+        if (!clusters || clusters->vertices.empty()) return 313;
+        for (const auto &range : clusters->source_ranges) {
+            if (range.start < 1 || range.end > 3) continue;
+            float min_x = std::numeric_limits<float>::max(), max_x = -min_x;
+            for (uint32_t i = range.first_vertex; i < range.first_vertex + range.vertex_count; ++i) {
+                min_x = std::min(min_x, clusters->vertices[i].x);
+                max_x = std::max(max_x, clusters->vertices[i].x);
+            }
+            if (max_x - min_x <= 0) return 314;
+        }
+        TextEngine centered(fonts);
+        options.alignment = TextAlignment::Center;
+        if (!centered.layout_utf8("Wi.i", 1000, options, &result) ||
+            !centered.set_grid_positions({0, 8, 16, 24, 32})) return 315;
+        const auto scaled = centered.published_glyphs_for_line(result.id, 0, 7.25f, 3.5f, 2,
+                                                               GlyphMode::Alpha);
+        if (!scaled || scaled->vertices.empty() || centered.bounds().x != 0) return 316;
+        for (const auto &vertex : scaled->vertices)
+            if (!std::isfinite(vertex.x) || vertex.x < 5 || vertex.x > 42) return 317;
+        if (!grid.layout_utf8("a\nb", 1000, options, &result) ||
+            grid.set_grid_positions({0, 8, 16, 24})) return 318;
+    }
+    // Resizing must reuse width-independent shaping and keep bidi/aligned/wrapped
+    // geometry identical to a fresh layout at the new width.
+    {
+        auto fonts = std::make_shared<FontCollection>();
+        if (!fonts->add_font(NKUI_TEST_FONT_PATH)) return 260;
+        const auto resize_check = [&](const char *text, TextLayoutOptions options, bool reuse) {
+            TextEngine retained(fonts), fresh(fonts);
+            TextLayoutResult before, after, expected;
+            if (!retained.layout_utf8(text, 500, options, &before) ||
+                !retained.layout_utf8(text, 180, options, &after) ||
+                !fresh.layout_utf8(text, 180, options, &expected)) return false;
+            if ((before.id == after.id) != reuse || after.lines.size() != expected.lines.size()) return false;
+            const auto near = [](float a, float b) { return std::abs(a - b) < 0.01f; };
+            if (!near(after.bounds.x, expected.bounds.x) || !near(after.bounds.y, expected.bounds.y) ||
+                !near(after.bounds.width, expected.bounds.width) || !near(after.bounds.height, expected.bounds.height)) return false;
+            for (int offset : {0, 2, 5}) {
+                const auto actual = retained.caret({offset, 0}), wanted = fresh.caret({offset, 0});
+                if (!near(actual.x, wanted.x) || !near(actual.y, wanted.y)) return false;
+            }
+            return true;
+        };
+        TextLayoutOptions options;
+        options.wrap = TextWrapMode::None;
+        if (!resize_check("Latin caf\xC3\xA9 mixed \xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D text", options, true)) return 261;
+        if (!resize_check("\xD7\xA9\xD7\x9C\xD7\x95\xD7\x9D mixed Latin", options, false)) return 262;
+        options.alignment = TextAlignment::Center;
+        if (!resize_check("Centered source text", options, false)) return 263;
+        options.alignment = TextAlignment::End;
+        if (!resize_check("Right aligned source text", options, false)) return 264;
+        options.alignment = TextAlignment::Start;
+        options.wrap = TextWrapMode::WordCharacter;
+        if (!resize_check("Wrapped source text that must reflow when its available width changes", options, false)) return 265;
+    }
     // Code boundaries are opt-in and shared by selection and word commands.
     {
         TextEngine code;
@@ -1183,6 +1282,97 @@ int main() {
             restored->source_start != shifted->source_start ||
             moved->first_line != 2 || !rows.prepared_glyphs_current(*restored))
             return 159;
+    }
+    {
+        // A very long unwrapped line publishes only the chunks a caller windows to,
+        // and a short line ignores the window.
+        TextEngine wide(shared_fonts);
+        TextLayoutOptions wide_options;
+        wide_options.font_size = 16.0f;
+        wide_options.wrap = TextWrapMode::None;
+        const std::string wide_text = std::string(20000, 'a') + "\nshort";
+        TextLayoutResult wide_layout;
+        if (!wide.layout_utf8(wide_text.c_str(), 400.0f, wide_options, &wide_layout) ||
+            wide_layout.lines.size() != 2)
+            return 230;
+        const auto whole = wide.published_glyphs_for_line(wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha);
+        const auto windowed = wide.published_glyphs_for_line(
+            wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha, {}, {}, GlyphPreparation::Rasterize,
+            GlyphWindow{4000.0f, 5000.0f});
+        if (!whole || !windowed || whole->vertices.size() < 20000 * 4 ||
+            windowed->vertices.empty() || windowed->vertices.size() > 1000 ||
+            windowed->publication_key == whole->publication_key)
+            return 231;
+        float low = INFINITY, high = -INFINITY;
+        for (const auto &vertex : windowed->vertices) {
+            low = std::min(low, vertex.x);
+            high = std::max(high, vertex.x);
+        }
+        // Snapped outward to chunks of 1024 units, plus a little slack.
+        if (low > 4000.0f || high < 5000.0f || low < 2800.0f || high > 6300.0f)
+            return 232;
+        // A nearby window in the same chunks reuses the snapshot.
+        if (wide.published_glyphs_for_line(wide_layout.id, 0, 0, 0, 1, GlyphMode::Alpha, {}, {},
+                                           GlyphPreparation::Rasterize,
+                                           GlyphWindow{3500.0f, 4500.0f}) != windowed)
+            return 233;
+        const auto short_whole = wide.published_glyphs_for_line(wide_layout.id, 1, 0, 0, 1, GlyphMode::Alpha);
+        const auto short_windowed = wide.published_glyphs_for_line(
+            wide_layout.id, 1, 0, 0, 1, GlyphMode::Alpha, {}, {}, GlyphPreparation::Rasterize,
+            GlyphWindow{4000.0f, 5000.0f});
+        if (!short_whole || short_whole != short_windowed || short_whole->vertices.empty())
+            return 234;
+    }
+    {
+        TextEngine retained(shared_fonts);
+        TextLayoutOptions retained_options;
+        retained_options.font_size = 16.0f;
+        TextLayoutResult retained_layout;
+        if (!retained.layout_utf8("one\ntwo\nthree", 400.0f, retained_options, &retained_layout))
+            return 235;
+        const void *first_address = retained.published_glyphs_for_line(
+            retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get();
+        // No caller holds the snapshot, yet the next request returns the same object.
+        if (retained.published_glyphs_for_line(retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha).get() !=
+            first_address)
+            return 236;
+
+        // Empty spans publish nothing and never index past the lines, with colour ranges present.
+        const std::vector<GlyphColorRange> spans = {{0, 6, GlyphTint{10, 20, 30, 255}}};
+        const uint32_t line_total = static_cast<uint32_t>(retained_layout.lines.size());
+        for (const uint32_t at : {0u, line_total}) {
+            const auto none = retained.published_glyphs_for_lines(
+                retained_layout.id, at, at, 0, 0, 1, GlyphMode::Alpha, GlyphTint{}, spans);
+            if (!none || !none->vertices.empty())
+                return 237;
+        }
+
+        // A colour range that starts in an earlier row and runs into this one colours its start only.
+        const auto spanned = retained.published_glyphs_for_line(
+            retained_layout.id, 1, 0, 0, 1, GlyphMode::Alpha, GlyphTint{}, spans);
+        if (!spanned)
+            return 238;
+        bool tinted = false, plain = false;
+        for (const auto &vertex : spanned->vertices) {
+            tinted = tinted || vertex.red == 10;
+            plain = plain || vertex.red == 255;
+        }
+        if (!tinted || !plain)
+            return 239;
+
+        // After a line is inserted above, a row below is rebased once and then reused.
+        const auto below = retained.published_glyphs_for_line(
+            retained_layout.id, 2, 0, 0, 1, GlyphMode::Alpha);
+        TextLayoutResult inserted;
+        if (!below || !retained.edit_utf8(0, 0, "x\n", &inserted) || inserted.lines.size() != 4)
+            return 240;
+        const auto moved_once = retained.published_glyphs_for_line(
+            inserted.id, 3, 0, 0, 1, GlyphMode::Alpha);
+        const auto moved_again = retained.published_glyphs_for_line(
+            inserted.id, 3, 0, 0, 1, GlyphMode::Alpha);
+        if (!moved_once || moved_once != moved_again ||
+            moved_once->vertices.size() != below->vertices.size())
+            return 241;
     }
     return glyphs.vertices.size() % 4 == 0 && glyphs.indices.size() % 6 == 0 ? 0 : 41;
 }

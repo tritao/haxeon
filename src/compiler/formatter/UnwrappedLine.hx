@@ -19,7 +19,7 @@ typedef UnwrappedLine = {
 class UnwrappedLineBuilder {
 	public static function build(tokens:Array<FormatToken>, syntax:SyntaxInfo, ?comments:CommentAttachments):Array<UnwrappedLine> {
 		var result:Array<UnwrappedLine> = [], current:Array<FormatToken> = [], depth = 0, blankBefore = 0, pendingNewlines = 0,
-			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0;
+			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false;
 
 		function begin(token:FormatToken):Void {
 			if (current.length == 0) {
@@ -82,7 +82,7 @@ class UnwrappedLineBuilder {
 					}
 					if (pendingNewlines > 0
 						&& current.length > 0
-						&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.Semicolon)
+						&& endsDeclaration(current[current.length - 1], syntax))
 						flush();
 					begin(token);
 					if (token.kind == FormatTokenKind.LineComment || current.length == 1)
@@ -96,7 +96,7 @@ class UnwrappedLineBuilder {
 						closesSwitch = isCloseBlock
 							&& switchBases.length > 0
 							&& (depth == switchBases[switchBases.length - 1] + 1 || depth == switchBases[switchBases.length - 1] + 2);
-					if (current.length > 0 && FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.Semicolon)
+					if (current.length > 0 && endsDeclaration(current[current.length - 1], syntax))
 						flush();
 					if (kind == TokenKind.Case || kind == TokenKind.Default) {
 						if (switchBases.length > 0) {
@@ -106,14 +106,18 @@ class UnwrappedLineBuilder {
 						begin(token);
 						continue;
 					}
+					// A block's closing brace ends the statement. The `}` of an object literal or a structure type continues it,
+					// unless a declaration follows: `typedef T = {...}` needs no semicolon.
 					if (current.length > 0
 						&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.RightBrace
+						&& (lastClosedBlock || startsDeclaration(kind))
 						&& kind != TokenKind.Else
 						&& kind != TokenKind.Catch
 						&& kind != TokenKind.While
 						&& kind != TokenKind.Semicolon
 						&& kind != TokenKind.Comma
-						&& kind != TokenKind.Dot)
+						&& kind != TokenKind.Dot
+						&& kind != TokenKind.Greater)
 						flush();
 					if (isCloseBlock) {
 						flush();
@@ -140,11 +144,28 @@ class UnwrappedLineBuilder {
 					}
 					if (closesSwitch && switchBases.length > 0)
 						switchBases.pop();
+					lastClosedBlock = isCloseBlock;
 			}
 		}
 		flush();
 		return result;
 	}
+
+	/** A semicolon ends a statement, and a comma ends a field of a declaration list such as a typedef body. */
+	static function endsDeclaration(token:FormatToken, syntax:SyntaxInfo):Bool
+		return switch FormatTokenTools.syntaxKind(token) {
+			case TokenKind.Semicolon: true;
+			case TokenKind.Comma: syntax.declarationCommas.exists(token.start);
+			default: false;
+		};
+
+	static function startsDeclaration(kind:TokenKind):Bool
+		return switch kind {
+			case TokenKind.Class, TokenKind.Typedef, TokenKind.Enum, TokenKind.Interface, TokenKind.Struct, TokenKind.Public, TokenKind.Private,
+				TokenKind.Static, TokenKind.Function, TokenKind.Var, TokenKind.Final, TokenKind.Inline, TokenKind.Import, TokenKind.Package, TokenKind.At:
+				true;
+			default: false;
+		};
 
 	static function containsKind(tokens:Array<FormatToken>, wanted:TokenKind):Bool {
 		for (token in tokens)

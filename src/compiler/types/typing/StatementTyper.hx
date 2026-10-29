@@ -222,7 +222,7 @@ class StatementTyper {
 					default:
 				}
 				switch lambda {
-					case Lambda(arguments, body, _):
+					case Lambda(arguments, body, _, _):
 						var self = LexicalStorageAnalysis.key(name, span),
 							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
 						if (!assignments.exists(self)) localFunction = {
@@ -238,7 +238,7 @@ class StatementTyper {
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
-						case Lambda(_, _, _):
+						case Lambda(_, _, _, _):
 							scope.define(name, declaredType, span, true, null, false, localFunction);
 							predeclared = true;
 							// A recursive local function reads itself through a cell bound before its closure exists.
@@ -282,6 +282,9 @@ class StatementTyper {
 					// never produce a value: a throw statement, which leaves the function's
 					// result to its other returns (or Void) instead of inferring Never.
 					output.push(TThrow(thrown, span));
+				} else if (expected == null && value.type == TNever) {
+					// Likewise a call that never returns, such as the body of `try fail() catch (e:String) 40`.
+					output.push(TExpression(value, span));
 				} else if (expected != null && expected == TVoid && context.contextualVoidLambda) {
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
@@ -418,7 +421,9 @@ class StatementTyper {
 			scope.markAssigned(name);
 			scope.setMapKeySource(name, value.mapKeySource);
 			scope.invalidateExpressionsForLocal(name);
-			scope.refine(name, assignmentFlowType(assignedValue.type, value.type));
+			var flowType = assignmentFlowType(assignedValue.type, value.type);
+			scope.recordAssignment(name, flowType);
+			scope.refine(name, flowType);
 			return statement;
 		}
 
@@ -563,6 +568,7 @@ class StatementTyper {
 		var typedCatches:Array<TypedCatch> = [],
 			catchScopes:Array<Scope> = [],
 			tryScope = new Scope(scope),
+			exceptionalInvalidations = tryScope.trackInvalidations(),
 			typedTry = typeStatements(tryBranch, tryScope, result);
 		for (i in 0...catches.length) {
 			var catchClause = catches[i],
@@ -581,6 +587,8 @@ class StatementTyper {
 					fail("E1022", "Unsupported catch binding type", catchClause.span);
 			}
 			var catchScope = new Scope(scope);
+			// A handler can run after any prefix of the try body, not just after its final state.
+			catchScope.applyInvalidations(exceptionalInvalidations);
 			catchScopes.push(catchScope);
 			catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 			bindCell(catchClause.name, catchClause.span, catchScope, loweredCatchType);

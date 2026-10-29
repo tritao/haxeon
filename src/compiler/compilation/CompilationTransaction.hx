@@ -34,12 +34,15 @@ class CompilationTransaction {
 			var context = new CompilationContext(candidate, indexSemantics);
 			var frontendStartedAt = Sys.time() * 1000.0;
 			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, frontendStartedAt,
-				indexSemantics);
+				indexSemantics, compiler.publication.baseline());
 			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
 			compiler.adoptCandidate(candidate);
-			compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
+			if (result.unchanged)
+				compiler.publication.unchanged(result.revision);
+			else
+				compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
 			return result;
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

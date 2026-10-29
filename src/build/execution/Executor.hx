@@ -16,11 +16,13 @@ class Executor implements ExecutionBackend {
 	final print:String->Void;
 	final artifactCache:ArtifactCache;
 	var digests = new ContentDigestCache();
+	final sharedDigests:Null<ContentDigestCache>;
 
 	/** Actions whose fingerprint another action consumes; see `fingerprintFor`. */
 	var dependedOn:Map<String, Bool> = [];
 
-	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void) {
+	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void, ?sharedDigests:ContentDigestCache) {
+		this.sharedDigests = sharedDigests;
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
 		this.print = print == null ? Sys.println : print;
@@ -28,7 +30,7 @@ class Executor implements ExecutionBackend {
 	}
 
 	public function execute(plan:ExecutionPlan):ExecutionResult {
-		digests = new ContentDigestCache();
+		digests = sharedDigests == null ? new ContentDigestCache() : sharedDigests;
 		dependedOn = [];
 		for (action in plan.actions)
 			for (dependency in action.dependencies)
@@ -219,6 +221,7 @@ class Executor implements ExecutionBackend {
 				var currentAction = action,
 					dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				Thread.create(function() {
+					runtime.ThreadName.setCurrent("haxeon.build.action");
 					// Always report and release: an exception escaping this thread would leave the
 					// scheduler waiting on the lock forever.
 					var server = jobServer,

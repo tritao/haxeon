@@ -29,6 +29,28 @@ UI has no dependency on a Materia or SceneKit checkout.
 Compiler and native artifacts should live under Haxeon’s `out/` tree or an
 explicit build directory, rather than inside the package’s source folders.
 
+## Search pickers and tooltips
+
+`widgets.commands.SearchPicker` owns input focus, a virtualized result viewport,
+keyboard routing, selection reveal and popup sizing. Retain its instance across
+builds and supply a `SearchPickerModel` plus a row builder. The model owns queries,
+results, selection and activation; the builder receives selection, hover and
+tooltip-dismissal revision values. `CommandPalette` uses this same surface with
+a command-registry adapter. `ShortcutKeycaps` renders shortcut alternatives and
+chords independently of command or file models.
+
+`widgets.overlays.Tooltip` accepts either explicit x/y offsets or a preferred
+`placement` side. Side positioning supports `delaySeconds`, optional bounding
+rectangles and a `TooltipHoverGroup` for switching between neighboring anchors
+without restarting the initial delay. Wrap the window content in
+`TooltipOverlayHost` to lift tooltip surfaces above clipped containers.
+
+Run the picker interaction tests after building the native UI library:
+
+```sh
+packages/ui/tools/test-search-picker.sh
+```
+
 ## Component Lab
 
 The Haxe package `haxeon.ui.lab` provides a reusable isolated-component
@@ -145,6 +167,16 @@ showcase and framework tests live under `examples/ui_haxeon` and
 `tests/haxeon`; generated bindings are checked with
 `tools/check-hxi.sh`.
 
+`FontCollection.addSystemFallbacks()` installs both script and missing-character
+lookup. On Linux, Fontconfig is queried for the actual missing Unicode scalar,
+with a monospace preference for terminal text. Loaded glyph coverage is checked
+before accepting a fallback. Common-script symbols can use that font even when
+the surrounding run resolves to Latin or another script. Each collection caches
+successful lookups, misses, and loaded font handles. macOS queries Core Text for
+the missing character; Windows verifies coverage in its registry candidates.
+Browser hosts still supply their own font assets. The native
+`nativekit_ui_system_fonts` test checks the callback and platform discovery.
+
 Code editors opt into `TextField.codeWordBoundaries` (also available on `TextArea`
 and `TextEditorLayout`). The default remains natural-language segmentation.
 The native layout owns the shared policy used by double-click selection, word
@@ -161,6 +193,16 @@ shaped cluster uses its first codepoint's color. Ranges reuse measured geometry
 and glyph atlas entries; an empty array clears them. Replacing text or updating
 the layout clears ranges, while `setColor` changes the fallback color and keeps
 overrides. Color changes invalidate the affected resource's raster cache.
+
+Single-row terminal layouts can use `TextLayout.setGridPositions` to supply a
+physical x coordinate for every codepoint boundary. Repeated positions represent
+combining clusters; a wide character spans multiple cells. The native renderer
+projects each shaped cluster into that span, fitting wider fallback glyphs
+horizontally while preserving their vertical metrics. The row keeps its shared
+atlas, source text, color ranges and glyph batches. Carets and hit testing use
+the projected positions. Grid changes invalidate published geometry without
+reshaping or rerasterizing glyphs. An empty array restores natural spacing;
+text updates clear the grid. Ordinary text layouts keep their natural spacing.
 
 The virtualization paths can be measured independently with:
 
@@ -256,6 +298,14 @@ When application state changes outside a command action, call
 `context.commands.refresh()` so cached UI submissions are invalidated.
 `EventDispatcher` routes unhandled key-down chords to the active command
 registry, while focused widgets can consume a key event first.
+
+Action controls register `RenderNode.onActivate` for primary pointer clicks and
+semantic keyboard/accessibility activation. Raw `Click` events retain their
+mouse button, so secondary/context-menu and middle-button behavior stays
+available without invoking the primary action. Pressed feedback is primary-only,
+and click synthesis requires matching press/release buttons on the same target.
+`tools/test-activation.sh` verifies these rules across shared controls; set
+`NATIVEKIT_BUILD_DIR` when the native UI libraries live outside the default build.
 
 Contextual commands use `CommandContext` to receive the active
 `EditorDocument`, selected object IDs, viewport ID, typed parameter accessors,

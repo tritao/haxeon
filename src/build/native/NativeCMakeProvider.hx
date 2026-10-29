@@ -81,6 +81,15 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=" + outputDirectory);
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
+		// haxeon-native.cmake keeps frame pointers off Windows, for the sampling profiler, and instruments when asked.
+		configureArguments.push("-DCMAKE_PROJECT_INCLUDE=" + Path.join([context.compilerHome, "cmake", "haxeon-native.cmake"]));
+		for (file in ["haxeon-native.cmake", "haxeon-frame-pointers.cmake"])
+			cmakeInputs.push(Path.join([context.compilerHome, "cmake", file]));
+		var instrumenting = instrumentArguments(context);
+		for (argument in instrumenting)
+			configureArguments.push(argument);
+		if (instrumenting.length > 0)
+			cmakeInputs.push(Path.join([context.compilerHome, "cmake", "haxeon-instrument.cmake"]));
 		var actions = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
 				Process("cmake", configureArguments, runDirectory, compilerCache)),
@@ -141,6 +150,26 @@ class NativeCMakeProvider {
 				artifactActions.set(artifact.id.key(), [linkId]);
 			}
 		return {actions: actions, artifactActions: artifactActions};
+	}
+
+	/**
+	 * Configure arguments for the instrumented build flavor: `cmake/haxeon-instrument.cmake` compiles the sources in the
+	 * manifest's native scope with the compiler's function instrumentation (`/Gh /GH` on MSVC) and links the hooks
+	 * HashLink builds; on MSVC it also gives every module a PDB. Only MSVC x64 and Linux have native instrumentation;
+	 * elsewhere the flavor builds native code as usual.
+	 */
+	static function instrumentArguments(context:LoweringContext):Array<String> {
+		var instrument = context.environment.instrument,
+			target = context.environment.target;
+		var msvcX64 = target.os == TargetOs.Windows && target.abi == TargetAbi.Msvc && target.arch == build.Target.TargetArch.X64;
+		if (instrument == null || !(msvcX64 || target.os == TargetOs.Linux))
+			return [];
+		var home = context.compilerHome;
+		return [
+			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", msvcX64 ? "hlprof_penter.lib" : "libhlprof_hooks.a"]),
+			"-DHAXEON_INSTRUMENT_INCLUDE=" + instrument.nativeInclude.join(";"),
+			"-DHAXEON_INSTRUMENT_EXCLUDE=" + instrument.nativeExclude.join(";")
+		];
 	}
 
 	/** Where a shared CMake tree leaves its runtime libraries, or null when the package has no CMake provider. */

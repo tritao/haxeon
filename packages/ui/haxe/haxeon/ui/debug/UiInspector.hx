@@ -21,6 +21,12 @@ import haxeon.ui.style.StyleProperty;
 
 /** Produces deterministic, headless snapshots and readable render-tree dumps. */
 class UiInspector {
+	/** Inspect one node without traversing its descendants. */
+	public static function nodeSnapshot(node:RenderNode, focused:Null<WidgetId>):UiNodeSnapshot {
+		var result:Array<UiNodeSnapshot> = [];
+		append(node, node.parent == null ? 0 : node.parent.id.value, 0, focused, null, null, result, false);
+		return result[0];
+	}
 	public static function snapshot(root:Null<RenderNode>, focused:Null<WidgetId>,
 			hovered:Null<WidgetId> = null, pressed:Null<WidgetId> = null):Array<UiNodeSnapshot> {
 		var result:Array<UiNodeSnapshot> = [];
@@ -86,7 +92,7 @@ class UiInspector {
 
 	static function append(node:RenderNode, parentId:Int, depth:Int,
 			focused:Null<WidgetId>, hovered:Null<WidgetId>, pressed:Null<WidgetId>,
-			output:Array<UiNodeSnapshot>):Void {
+			output:Array<UiNodeSnapshot>, recursive:Bool = true):Void {
 		var semantics:Null<Semantics> = cast node.semantics;
 		var geometry = node.resolved;
 		var bounds = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.bounds();
@@ -150,7 +156,7 @@ class UiInspector {
 			effectPasses, estimatedBytes,
 			new UiNodeEffectInfo(effectDescriptions, backdropEffectDescriptions,
 				backdropEffectPasses, maskPasses, isolationReasons, estimatedIntermediateTargets)));
-		for (child in node.children)
+		if (recursive) for (child in node.children)
 			append(child, node.id.value, depth + 1, focused, hovered, pressed, output);
 	}
 

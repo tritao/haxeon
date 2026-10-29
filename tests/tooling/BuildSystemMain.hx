@@ -6,6 +6,11 @@ import build.BuildEnvironment.ToolchainInfo;
 import build.BuildIntent;
 import build.BuildPlan;
 import build.BuildPlanner;
+import build.BuildSession;
+import build.execution.CompilerClient;
+import build.execution.ContentDigestCache;
+import tools.DirectoryWatcher;
+import tools.WatchRun;
 import build.Target;
 import build.TargetLayout;
 import build.NativeArtifactDemand.NativeArtifactDemand;
@@ -29,6 +34,7 @@ import build.native.NativeToolchain;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.PackageManifest;
+import project.PackageManifest.InstrumentManifest;
 import project.FfiManifest.FfiImportManifest;
 import project.PackageSourceTools;
 import project.PackageResolver;
@@ -62,6 +68,12 @@ class BuildSystemMain {
 		testExecutorSharesJobServerTokens();
 		#end
 		testFingerprintsAndSkipping();
+		testPersistentDigestCache();
+		testSharedDigestsAcrossExecutions();
+		testWorkerVersionMemo();
+		testWatchChangeClassification();
+		testWatchSnapshot();
+		testDirectoryWatcher();
 		testArtifactCache();
 		testDelegatedNativeInvalidation();
 		testCMakeLibraryOutputs();
@@ -220,7 +232,43 @@ class BuildSystemMain {
 			"MSVC C++ toolchains should use cl standard, DLL, and import-library arguments");
 		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0 && gnuLink.indexOf("libfoo.dll.a") >= 0,
 			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
+		testLinuxNativeInstrumentation(root);
 		removeTree(root);
+	}
+
+	/** Linux instruments the sources in the native scope with the compiler's flags and links the hooks into each module. */
+	static function testLinuxNativeInstrumentation(root:String):Void {
+		var linux = Target.parse("linux-x86_64-gnu"),
+			scope = new InstrumentManifest(null, null, ["native/**"], ["native/vendor/skipped.c"]);
+		function toolchain(clang:Bool, ?instrument:InstrumentManifest, ?home:String):NativeToolchain {
+			var info = new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null, null, clang);
+			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug, linux, info, instrument), home);
+		}
+		var home = Path.join([root, "home"]),
+			clang = toolchain(true, scope, home),
+			gcc = toolchain(false, scope, home),
+			plain = toolchain(true, null, home),
+			noHome = toolchain(true, scope),
+			clangCompile = clang.compileArguments("native/a.c", "a.o", [], null, root),
+			gccCompile = gcc.compileArguments("native/a.c", "a.o", [], null, root);
+		expect(clang.instrumenting() && !plain.instrumenting() && !noHome.instrumenting(),
+			"Linux instruments only the instrumented flavor, and only when the hooks can be found");
+		expect(clangCompile.indexOf("-finstrument-functions-after-inlining") >= 0 && clangCompile.indexOf("-finstrument-functions") < 0,
+			"Clang should leave out functions it inlines");
+		expect(gccCompile.indexOf("-finstrument-functions") >= 0
+			&& gccCompile.indexOf("-finstrument-functions-exclude-file-list=/usr/include,/c++/") >= 0
+			&& gccCompile.indexOf("-finstrument-functions-after-inlining") < 0, "GCC should skip functions defined in system headers");
+		expect(clang.compileArguments("native/vendor/skipped.c", "s.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0
+			&& clang.compileArguments("other/b.c", "b.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0,
+			"sources outside the native scope, or excluded from it, are left alone");
+		expect(clang.compileArguments("native/a.c", "a.o", []).indexOf("-finstrument-functions-after-inlining") < 0,
+			"a source without an instrument root is left alone");
+		var hooks = Path.join([home, ".tools", "hashlink", "libhlprof_hooks.a"]),
+			link = clang.sharedArguments("a.so", ["a.o"], ["-lm"]);
+		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o") && link.indexOf(hooks) > link.indexOf("-lm"),
+			"an instrumented module links the hooks after its objects and libraries");
+		expect(!clang.writesDebugDatabase() && plain.sharedArguments("a.so", ["a.o"], ["-lm"]).indexOf(hooks) < 0,
+			"a module is linked without a PDB, and without the hooks outside the instrumented flavor");
 	}
 
 	static function testArtifactAndPlanDeterminism():Void {
@@ -523,6 +571,183 @@ class BuildSystemMain {
 		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0 && secondCompile.actions[0].skipped
 			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
+		removeTree(root);
+	}
+
+	static function testPersistentDigestCache():Void {
+		var root = temporaryDirectory("persistent-digests"),
+			source = Path.join([root, "input.txt"]);
+		File.saveContent(source, "first contents
+");
+		var cache = new ContentDigestCache(true), now = Sys.time();
+		cache.clock = () -> now;
+		var first = cache.file(source);
+		expect(first == Sha256.make(File.getBytes(source)).toHex() && cache.hashes == 1, "a persistent cache hashes a file once");
+		// Just written, so its timestamps are within the margin of the hash: the entry is racily clean and must not be trusted.
+		File.saveContent(source, "other contents
+");
+		var second = cache.file(source);
+		expect(second == Sha256.make(File.getBytes(source)).toHex() && second != first,
+			"a same-size rewrite within the timestamp resolution must not return the stale digest");
+		expect(cache.hashes == 2, "a racily clean entry is hashed again");
+		// A clock far enough ahead makes the file old relative to the hash, so the entry is trusted from then on.
+		now += 60.0;
+		var third = cache.file(source);
+		expect(third == second && cache.hashes == 3, "the lookup after the margin hashes once more and settles");
+		expect(cache.file(source) == second && cache.file(source) == second && cache.hashes == 3, "a settled entry is served without reading the file");
+		File.saveContent(source, "a longer replacement
+");
+		expect(cache.file(source) == Sha256.make(File.getBytes(source)).toHex()
+			&& cache.hashes == 4, "a changed size invalidates a settled entry");
+		// One cache per execution keeps its old behaviour: it trusts the signature without a margin.
+		var local = new ContentDigestCache();
+		local.file(source);
+		local.file(source);
+		expect(local.hashes == 1, "a per-execution cache serves a freshly written file from memory");
+		removeTree(root);
+	}
+
+	static function testSharedDigestsAcrossExecutions():Void {
+		var root = temporaryDirectory("shared-digests"),
+			buildRoot = Path.join([root, "build"]),
+			source = Path.join([root, "input.txt"]),
+			output = Path.join([root, "output.txt"]);
+		File.saveContent(source, "version one
+");
+		var environment = new BuildEnvironment(root, buildRoot), runs = 0,
+			action = new ExecutionAction(new ActionId("shared-digests"), [], [source], [output], "write output",
+				Compiler("compiler", [], root, new Map(), () -> {
+					runs++;
+					File.saveContent(output, "built
+");
+					return 0;
+				}));
+		var session = new BuildSession();
+		var executor = () -> new Executor(environment, 1, _ -> {}, session.digests);
+		expect(executor().execute(new ExecutionPlan([action])).exitCode == 0 && runs == 1, "the first execution runs the action");
+		var again = executor().execute(new ExecutionPlan([action]));
+		expect(again.actions[0].skipped && runs == 1, "an unchanged input is skipped on a shared cache");
+		expect(ActionFingerprint.compute(action, buildRoot, environment.target.toString(), [],
+			session.digests) == ActionFingerprint.compute(action, buildRoot, environment.target.toString(), []),
+			"a shared cache yields the fingerprint a fresh one does");
+		File.saveContent(source, "version two
+");
+		var edited = executor().execute(new ExecutionPlan([action]));
+		expect(edited.exitCode == 0 && !edited.actions[0].skipped && runs == 2, "an edited input reruns the action through a shared cache");
+		File.saveContent(source, "version 333
+");
+		File.saveContent(source, "version 444
+");
+		expect(!executor().execute(new ExecutionPlan([action])).actions[0].skipped && runs == 3,
+			"a same-size edit right after a build still reruns the action");
+		removeTree(root);
+	}
+
+	static function testWorkerVersionMemo():Void {
+		var session = new BuildSession(), computed = 0, compute = () -> "version-" + (++computed);
+		expect(session.workerVersion("identity-a", compute) == "version-1"
+			&& session.workerVersion("identity-a", compute) == "version-1"
+			&& computed == 1,
+			"a worker version is computed once per identity");
+		expect(session.workerVersion("identity-b", compute) == "version-2"
+			&& session.workerVersionsComputed == 2, "a different identity gets its own version");
+		var root = temporaryDirectory("worker-memo"),
+			source = Path.join([root, "compiler"]),
+			home = Path.join([root, "home"]);
+		FileSystem.createDirectory(home);
+		FileSystem.createDirectory(source);
+		File.saveContent(Path.join([source, "A.hx"]), "class A {}
+");
+		var one = CompilerClient.workerVersion("haxe", source, home, root, null, session),
+			baseline = session.workerVersionsComputed;
+		File.saveContent(Path.join([source, "A.hx"]), "class A { var x:Int; }
+");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, null, session) == one
+			&& session.workerVersionsComputed == baseline,
+			"a watch session keeps the worker it chose after the compiler sources change");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, null) != one, "without a session the version follows the sources");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one, "a profile port selects a different worker");
+		removeTree(root);
+	}
+
+	/** The watch snapshot stats each Haxe file under the source roots and the manifest, and nothing else. */
+	@:access(tools.WatchRun)
+	static function testWatchSnapshot():Void {
+		var root = temporaryDirectory("watch-snapshot");
+		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}',
+			["src/Main.hx", "src/deep/er/B.hx", "src/notes.txt", "src/folder.hx/C.hx"]);
+		ensureDirectory(Path.join([root, "src", "empty"]));
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])), files = WatchRun.snapshot(project), names = [
+			for (path in files.keys())
+				path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)
+		];
+		names.sort(Reflect.compare);
+		expect(names.join(",") == "haxeon.json,src/Main.hx,src/deep/er/B.hx,src/folder.hx/C.hx",
+			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));
+		for (path => stamp in files) {
+			var stat = FileSystem.stat(path);
+			expect(stamp == '${stat.mtime.getTime()}:${stat.size}', "a snapshot entry is the file's modification time and size");
+		}
+		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
+");
+		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
+		removeTree(root);
+	}
+
+	static function testWatchChangeClassification():Void {
+		var before = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];
+		var edited = ["src/A.hx" => "2:11", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];
+		var change = WatchRun.classify(before, edited);
+		expect(change.compilerOnly && !change.structural, "editing a Haxe file's contents keeps the resolved project");
+		var added = [
+			"src/A.hx" => "1:10",
+			"src/B.hx" => "1:20",
+			"src/C.hx" => "2:5",
+			"haxeon.json" => "1:30"
+		];
+		change = WatchRun.classify(before, added);
+		expect(change.compilerOnly && change.structural, "a new Haxe file changes the project's sources");
+		var removed = ["src/A.hx" => "1:10", "haxeon.json" => "1:30"];
+		change = WatchRun.classify(before, removed);
+		expect(change.compilerOnly && change.structural, "a deleted Haxe file changes the project's sources");
+		var manifest = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "2:31"];
+		change = WatchRun.classify(before, manifest);
+		expect(!change.compilerOnly && change.structural, "a manifest edit forces a new resolution");
+		var native = [
+			"src/A.hx" => "1:10",
+			"src/B.hx" => "1:20",
+			"haxeon.json" => "1:30",
+			"native/x.c" => "1:1"
+		];
+		change = WatchRun.classify(before, native);
+		expect(!change.compilerOnly && change.structural, "a new native file forces a new resolution");
+	}
+
+	/** A save wakes the watch loop within tens of milliseconds, including editors that save by rename or replace. */
+	static function testDirectoryWatcher():Void {
+		var root = temporaryDirectory("directory-watcher");
+		FileSystem.createDirectory(Path.join([root, "src"]));
+		var target = Path.join([root, "src", "A.hx"]);
+		File.saveContent(target, "one");
+		var watcher = DirectoryWatcher.create([{path: root, recursive: true}]);
+		if (watcher == null) {
+			removeTree(root);
+			return;
+		}
+		expect(!watcher.wait(0.05), "an idle tree reports no change");
+		var start = Sys.time();
+		File.saveContent(target, "two");
+		expect(watcher.wait(2.0), "a save is reported");
+		expect(Sys.time() - start < 0.25, "a save is reported within tens of milliseconds, not a polling interval");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(target + ".tmp", "three");
+		FileSystem.deleteFile(target);
+		FileSystem.rename(target + ".tmp", target);
+		expect(watcher.wait(2.0), "a save by rename is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "src", "B.hx"]), "new");
+		expect(watcher.wait(2.0), "a new file is reported");
+		watcher.close();
 		removeTree(root);
 	}
 

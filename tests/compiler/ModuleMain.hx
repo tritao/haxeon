@@ -213,7 +213,7 @@ class ModuleMain {
 		var lambdaCompiler = new Compiler();
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 42; }; return f(); }");
 		var lambdaFirst = lambdaCompiler.compile("Main"),
-			lambdaId = lambdaFirst.functionIds.get("$lambda:main:30");
+			lambdaId = lambdaFirst.functionIds.get("$lambda:main:main#0");
 		if (lambdaId == null)
 			throw "Generated lambda did not receive a stable function identity";
 		var lambdaUnchanged = lambdaCompiler.compile("Main");
@@ -221,7 +221,7 @@ class ModuleMain {
 			throw "Unchanged lambda build reported changes";
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 41 + 1; }; return f(); }");
 		var lambdaBody = lambdaCompiler.compile("Main");
-		if (lambdaBody.functionIds.get("$lambda:main:30") != lambdaId || lambdaBody.retyped.length != 2)
+		if (lambdaBody.functionIds.get("$lambda:main:main#0") != lambdaId || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
 		var capturedCompiler = new Compiler();
 		capturedCompiler.update("Main.hx", "function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
@@ -305,6 +305,23 @@ class ModuleMain {
 				throw error;
 		}
 		publicationCompiler.acknowledgePublication(publicationInitial.revision);
+		for (_ in 0...2) {
+			var unchangedPublication = publicationCompiler.compile("Main");
+			if (!unchangedPublication.unchanged
+				|| unchangedPublication.revision != publicationInitial.revision
+				|| unchangedPublication.baseRevision != publicationInitial.revision
+				|| unchangedPublication.patchBytes != null
+				|| publicationCompiler.publicationStatus().hasPendingRevision)
+				throw "Unchanged build advanced the runtime revision or left publication pending";
+			try {
+				publicationCompiler.acknowledgePublication(unchangedPublication.revision);
+				throw "Unchanged build incorrectly accepted an acknowledgement";
+			} catch (error:String) {
+				if (error != "No publication is pending")
+					throw error;
+			}
+		}
+
 		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
@@ -326,6 +343,9 @@ class ModuleMain {
 		}
 		publicationCompiler.update("Main.hx", "function main():Int { return 41; }");
 		var rejectedPublication = publicationCompiler.compile("Main");
+		if (rejectedPublication.baseRevision != publicationInitial.revision
+			|| rejectedPublication.revision != publicationInitial.revision + 1)
+			throw "Changed publication did not start at the last runtime revision";
 		try {
 			publicationCompiler.exportIdentityState();
 			throw "Compiler persisted an unacknowledged candidate";

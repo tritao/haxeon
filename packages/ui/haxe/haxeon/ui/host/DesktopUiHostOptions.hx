@@ -2,6 +2,8 @@ package haxeon.ui.host;
 
 /** Window, pacing, and deterministic-capture policy for DesktopUiHost. */
 class DesktopUiHostOptions extends UiHostOptions {
+	/** Stable application identity, including Windows taskbar grouping. */
+	public var applicationId:Null<String> = null;
 	public var customTitlebar:Bool = false;
 	/** Minimum application layout size, scaled by application zoom for native limits.
 	 * Zero leaves an axis unconstrained. */

@@ -973,6 +973,11 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 */
 		NK_EVENT_FILE_WATCH_OVERFLOW = 411;
 		/**
+		 * A directory added to a file watcher is watched, with everything under it for a recursive add. The payload is
+		 * an nk_file_changed_event whose path is the added directory. Changes before this may not have been reported.
+		 */
+		NK_EVENT_FILE_WATCH_READY = 412;
+		/**
 		 * A notification was delivered by the platform.
 		 */
 		NK_EVENT_NOTIFICATION_DELIVERED = 500;
@@ -3176,7 +3181,9 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 */
 	extern fn nk_executor_is_current(executor: nk_executor) -> nk_bool;
 	/**
-	 * Adds an absolute UTF-8 native filesystem directory to a watcher.
+	 * Adds an absolute UTF-8 native filesystem directory to a watcher, with everything under it when `recursive`.
+	 * Returns once the directory itself is watched. A recursive add may register the directories under it afterwards,
+	 * off the calling thread: NK_EVENT_FILE_WATCH_READY names the directory once all of it is watched.
 	 */
 	extern fn nk_file_watch_add_directory(watch: nk_file_watch, path: utf8, recursive: nk_bool) -> nk_result;
 	/**
@@ -3187,6 +3194,11 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * Stops the backend and destroys a watcher.
 	 */
 	extern fn nk_file_watch_destroy(watch: nk_file_watch) -> nk_result;
+	/**
+	 * Leaves an absolute UTF-8 native filesystem directory, and everything under it, out of a watcher's recursive
+	 * registrations, including directories created there later. Directories already watched there stop being watched.
+	 */
+	extern fn nk_file_watch_exclude_directory(watch: nk_file_watch, path: utf8) -> nk_result;
 	/**
 	 * Removes a previously added absolute UTF-8 native filesystem directory.
 	 */
@@ -4708,11 +4720,15 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	/**
 	 * Payload of NK_EVENT_DIALOG_MESSAGE_COMPLETE.
 	 */
-	struct nk_dialog_message_result @layout(4, 4) {
+	struct nk_dialog_message_result @layout(8, 4) {
 		/**
 		 * Button selected by the user, or NK_MESSAGE_RESULT_NONE on cancellation.
 		 */
 		button: nk_message_result @offset(0);
+		/**
+		 * Nonzero when the optional verification checkbox was checked.
+		 */
+		checkbox_checked: u32 @offset(4);
 	}
 	/**
 	 * Header at the start of NK_EVENT_DROP_FILES and NK_EVENT_DROP_TEXT data.
@@ -4787,6 +4803,9 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	 * Payload stored in NK_EVENT_FILE_CHANGED and NK_EVENT_FILE_WATCH_OVERFLOW.
 	 * `path_offset` and `old_path_offset` are byte offsets from this header to
 	 * NUL-terminated UTF-8 strings. An absent old path has offset and length zero.
+	 * Paths are absolute but not canonical: letter case and separators may differ
+	 * from the registered spelling, so compare them normalized where the
+	 * filesystem is case-insensitive.
 	 */
 	struct nk_file_changed_event @layout(28, 4) {
 		change_type: nk_file_change_type @offset(0);
@@ -5156,7 +5175,7 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 	/**
 	 * Options for a native message dialog.
 	 */
-	struct nk_message_dialog_options @layout(24, 4) {
+	struct nk_message_dialog_options @layout(32, 4) {
 		/**
 		 * Set to sizeof(nk_message_dialog_options) before starting the dialog.
 		 */
@@ -5181,6 +5200,14 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		 * Required UTF-8 message text.
 		 */
 		message: utf8 @offset(20);
+		/**
+		 * Optional label for the affirmative (YES) button.
+		 */
+		yes_label: nullable<utf8> @offset(24);
+		/**
+		 * Optional unchecked verification checkbox; null hides it.
+		 */
+		checkbox_label: nullable<utf8> @offset(28);
 	}
 	/**
 	 * Platform-owned event values forwarded by a mobile host.

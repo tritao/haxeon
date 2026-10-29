@@ -457,7 +457,7 @@ class SemanticIndex {
 					indexRecoveredExpression(argument);
 			case NewArray(_, length, _):
 				indexRecoveredExpression(length);
-			case Lambda(_, body, _):
+			case Lambda(_, body, _, _):
 				indexRecoveredStatementUses(body);
 			case SwitchExpression(value, cases, fallback, _):
 				indexRecoveredExpression(value);
@@ -846,6 +846,7 @@ class SemanticIndex {
 				case TSwitch(value, cases, fallback, _, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
 					for (item in cases) {
+						indexExpression(fn, item.value, resolve, resolveEnumCase);
 						bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.span);
 						indexStatements(fn, item.statements, resolve, resolveEnumCase);
 					}

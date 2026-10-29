@@ -169,3 +169,10 @@ This layout replaces the former `NativeKit*`/`Native*` managed names without
 compatibility aliases. `NativeKitError` retains its backend-specific name because
 it carries NativeKit's typed result code. All binding and backend errors share
 `PlatformError` as their common base.
+
+## File watching
+
+`FileWatch.create(runtime.events, listener)` watches registered directories through the shared event pump.
+`FileWatchEvent` reports readiness, changes, overflow, lost registrations, and failures; `FileWatchChange`
+contains the affected paths and change kind. Wait for `ready` before relying on complete recursive coverage,
+and dispose the watch before its runtime.

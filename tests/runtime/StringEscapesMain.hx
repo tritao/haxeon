@@ -34,7 +34,14 @@ class StringEscapesMain {
 			{body: "'\\101$$${2}'.charCodeAt(0)", expected: 65},
 			{body: "'\\u00e9${3}\\'\\u{1F600}'.length", expected: 5},
 			{body: "'\\377${1}'.charCodeAt(0)", expected: 255},
-			{body: "'${4}\\uD83D\\uDE00' == '${4}\\u{1F600}' ? 1 : 0", expected: 1}
+			{body: "'${4}\\uD83D\\uDE00' == '${4}\\u{1F600}' ? 1 : 0", expected: 1},
+			// Text between escapes is copied in runs: escapes at either end, back to back, and between interpolations.
+			{body: '"\\tab\\ncd\\x41".length', expected: 7},
+			{body: '"ab\\ncd" == "ab" + "\\n" + "cd" ? 1 : 0', expected: 1},
+			{body: '"x\\\\\\ty".charCodeAt(2)', expected: 9},
+			{body: '"no escapes here".length', expected: 15},
+			{body: "'ab${1}cd\\nef$$gh${2}'.length", expected: 12},
+			{body: "'ab${1}cd\\nef$$gh${2}' == 'ab1cd\\nef$$gh2' ? 1 : 0", expected: 1}
 		];
 		var source = "";
 		for (index in 0...cases.length)

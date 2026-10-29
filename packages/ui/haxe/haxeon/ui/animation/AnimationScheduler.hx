@@ -58,7 +58,7 @@ class AnimationScheduler {
 		for (handle in current)
 			if (active.indexOf(handle) >= 0 && !handle.advance(deltaSeconds))
 				removeHandle(handle);
-		if (active.length > 0)
+		if (needsFrame)
 			requestFrame();
 		if (hadActive)
 			revision++;
@@ -76,6 +76,31 @@ class AnimationScheduler {
 	public var activeCount(get, never):Int;
 	inline function get_activeCount():Int
 		return active.length;
+
+	/** Whether some animation changes on every frame, as opposed to only waiting for a deadline. */
+	public var needsFrame(get, never):Bool;
+	function get_needsFrame():Bool {
+		for (handle in active)
+			if (handle.delaySeconds() <= 0.0)
+				return true;
+		return false;
+	}
+
+	/**
+	 * Seconds until the earliest deadline when every active animation is waiting, or -1 when
+	 * nothing is active or some animation needs frames now.
+	 */
+	public function waitSeconds():Float {
+		var earliest = -1.0;
+		for (handle in active) {
+			var delay = handle.delaySeconds();
+			if (delay <= 0.0)
+				return -1.0;
+			if (earliest < 0.0 || delay < earliest)
+				earliest = delay;
+		}
+		return earliest;
+	}
 
 	function requestFrame():Void {
 		if (onFrameRequested != null)

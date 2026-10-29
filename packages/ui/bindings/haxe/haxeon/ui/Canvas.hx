@@ -19,6 +19,13 @@ class Canvas {
 	var savedDepth:Int;
 	var openLayers:Int;
 	final transientResources:Array<NativeKitUIResource>;
+	/** When set, solid rectangles keep their path and paint between updates, so repainting identical content records
+		identical commands and the retained list does not look changed. Each reset disposes the rectangles the previous
+		update did not draw, so a paint of any size keeps its own and no more. Release with `releaseRetained`. */
+	public var retainRectangles = false;
+	// Rectangles drawn by the current update, and those kept from the previous one that it has not drawn yet.
+	var paintedRects:Null<Map<String, {path:Path, paint:Paint}>>;
+	var retainedRects:Null<Map<String, {path:Path, paint:Paint}>>;
 
 	public function new(capacity:Int = 4096) {
 		commands = new CanvasCommandBuffer(capacity);
@@ -31,6 +38,7 @@ class Canvas {
 
 	public function reset():Void {
 		releaseTransientResources();
+		sweepRetained();
 		commands.reset();
 		state.reset();
 		savedDepth = 0;
@@ -187,6 +195,37 @@ class Canvas {
 	public function fillRect(rect:Rect, color:Color):Void {
 		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Filled rectangle requires positive bounds and a color";
+		if (retainRectangles) {
+			if (paintedRects == null) {
+				paintedRects = new Map();
+				retainedRects = new Map();
+			}
+			var key = rect.x + "," + rect.y + "," + rect.width + "," + rect.height + "," + color.red + "," + color.green + "," + color.blue + "," + color.alpha;
+			var entry = paintedRects.get(key);
+			if (entry == null) {
+				entry = retainedRects.get(key);
+				if (entry != null) {
+					retainedRects.remove(key);
+					paintedRects.set(key, entry);
+				}
+			}
+			if (entry == null) {
+				var retainedPath = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
+					.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
+					.close().build();
+				var retainedPaint:Paint;
+				try {
+					retainedPaint = SolidPaint.create(color);
+				} catch (error:Dynamic) {
+					retainedPath.dispose();
+					throw error;
+				}
+				entry = {path: retainedPath, paint: retainedPaint};
+				paintedRects.set(key, entry);
+			}
+			fill(entry.path, entry.paint);
+			return;
+		}
 		var path = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
 			.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
 			.close().build();
@@ -204,6 +243,30 @@ class Canvas {
 			path.dispose();
 			throw error;
 		}
+	}
+
+	/** Disposes the paths and paints kept by `retainRectangles`. */
+	public function releaseRetained():Void {
+		disposeRects(paintedRects);
+		disposeRects(retainedRects);
+	}
+
+	// Keeps what the last update drew for the next one, and disposes what it did not draw.
+	function sweepRetained():Void {
+		var unused = retainedRects;
+		if (unused == null) return;
+		disposeRects(unused);
+		retainedRects = paintedRects;
+		paintedRects = unused;
+	}
+
+	static function disposeRects(entries:Null<Map<String, {path:Path, paint:Paint}>>):Void {
+		if (entries == null) return;
+		for (entry in entries) {
+			entry.path.dispose();
+			entry.paint.dispose();
+		}
+		entries.clear();
 	}
 
 	/** Adds a filled rectangle when its bounds and color are valid. */

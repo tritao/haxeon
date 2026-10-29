@@ -11,7 +11,7 @@ class TypedExpression {
 	public final span:SourceSpan;
 	public final stableFlowValue:Bool;
 
-	/** Source symbol retained when a compile-time constant becomes a literal. */
+	/** Source symbol retained when resolution erases it, such as a constant or typedef qualifier. */
 	public final semanticReference:Null<String>;
 
 	/** Map whose keys are represented by this array, when the value originated from Map.keys(). */

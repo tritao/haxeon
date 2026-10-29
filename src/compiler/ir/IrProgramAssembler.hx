@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.CompilerType;
@@ -426,7 +427,7 @@ class IrProgramAssembler {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
-			?reflectableObjects:Array<String>):IrProgram {
+			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -434,7 +435,7 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
-		allFunctions = IrStaticNullChecks.run(allFunctions, objects);
+		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,

@@ -667,6 +667,97 @@ class LanguageServiceMain {
 				foundSlash = true;
 		if (!foundSlash)
 			throw "local completion stopped suggesting a declared variable after a type error";
+		brokenLocalService.update("Completions.hx",
+			"function slalom():Int return 1; abstract slAbstract(Int) {} enum abstract slEnumAbstract(Int) { var One = 1; }");
+		brokenLocalService.analyze("Completions");
+		var partialCompletion = brokenLocalService.completeResult("BrokenLocal.hx", localPrefix, null, true),
+			partialHasSlash = false,
+			partialHasSlalom = false;
+		for (item in partialCompletion.items) {
+			if (item.label == "slash")
+				partialHasSlash = true;
+			if (item.label == "slalom")
+				partialHasSlalom = true;
+		}
+		if (!partialCompletion.isIncomplete || !partialHasSlash || partialHasSlalom)
+			throw "cold partial completion did not return current locals with an incomplete workspace list";
+		while (brokenLocalService.indexWorkspaceSymbolsChunk(8)) {}
+		var indexedCompletion = brokenLocalService.completeResult("BrokenLocal.hx", localPrefix, null, true),
+			indexedHasSlash = false,
+			indexedHasSlalom = false,
+			indexedHasAbstract = false,
+			indexedHasEnumAbstract = false;
+		for (item in indexedCompletion.items) {
+			if (item.label == "slash")
+				indexedHasSlash = true;
+			if (item.label == "slalom")
+				indexedHasSlalom = true;
+			if (item.label == "slAbstract")
+				indexedHasAbstract = true;
+			if (item.label == "slEnumAbstract")
+				indexedHasEnumAbstract = true;
+		}
+		if (indexedCompletion.isIncomplete
+			|| !indexedHasSlash
+			|| !indexedHasSlalom
+			|| !indexedHasAbstract
+			|| !indexedHasEnumAbstract)
+			throw "warm partial completion did not merge local and workspace candidates";
+		brokenLocalService.update("LaterCompletions.hx", "function slate():Int return 2;");
+		brokenLocalService.analyze("LaterCompletions");
+		var invalidatedCompletion = brokenLocalService.completeResult("BrokenLocal.hx", localPrefix, null, true),
+			invalidatedHasSlate = false;
+		for (item in invalidatedCompletion.items)
+			if (item.label == "slate")
+				invalidatedHasSlate = true;
+		if (!invalidatedCompletion.isIncomplete || invalidatedHasSlate)
+			throw "workspace completion index did not become incomplete after a module was added";
+		while (brokenLocalService.indexWorkspaceSymbolsChunk(8)) {}
+		var expandedCompletion = brokenLocalService.completeResult("BrokenLocal.hx", localPrefix, null, true),
+			expandedHasSlate = false;
+		for (item in expandedCompletion.items)
+			if (item.label == "slate")
+				expandedHasSlate = true;
+		if (expandedCompletion.isIncomplete || !expandedHasSlate)
+			throw "workspace completion index did not recover after indexing a newly added module";
+		var discoveredRoot = haxe.io.Path.join([Sys.getCwd(), "out", "language-service-index-" + Std.int(Sys.time() * 1000)]),
+			discoveredPath = discoveredRoot + "/workspace/lib/Loaded.hx",
+			discoveredService = new LanguageService();
+		sys.FileSystem.createDirectory(discoveredRoot + "/workspace/lib");
+		sys.io.File.saveContent(discoveredPath, "package workspace.lib; class Loaded { public static function discoveredSlate():Int return 42; }");
+		discoveredService.update("Entry.hx", "import workspace.lib.Loaded; function main():Int return Loaded.discoveredSlate();");
+		try
+			discoveredService.analyze("Entry")
+		catch (_:CompileError) {}
+		discoveredService.workspaceSymbols("");
+		if (discoveredService.workspaceSymbolsIndexNeedsWork())
+			throw "complete workspace index was unexpectedly incomplete before a source root was added";
+		discoveredService.compiler.addSourceRoot(discoveredRoot);
+		discoveredService.analyze("Entry");
+		if (!discoveredService.workspaceSymbolsIndexNeedsWork())
+			throw "analysis did not invalidate the completed workspace index after loading a dependency";
+		while (discoveredService.indexWorkspaceSymbolsChunk(8)) {}
+		var discovered = discoveredService.cachedWorkspaceSymbols("discoveredSlate");
+		if (discovered.isIncomplete || discovered.symbols.length != 1)
+			throw "incremental workspace indexing missed a module loaded during analysis";
+		sys.FileSystem.deleteFile(discoveredPath);
+		sys.FileSystem.deleteDirectory(discoveredRoot + "/workspace/lib");
+		sys.FileSystem.deleteDirectory(discoveredRoot + "/workspace");
+		sys.FileSystem.deleteDirectory(discoveredRoot);
+		// An open document is analysed as its own entry. Here it reaches host.Application only through the `extends`
+		// clause of the interface it imports, as exosuit's app reaches UiApplication through DesktopUiApplication.
+		var headerService = new LanguageService(),
+			headerBaseSource = "package host; interface Application { public function context():Int; }",
+			headerShellSource = "package app; import host.DesktopApplication; class Shell { public static function run(application:DesktopApplication):Int return application.context(); }";
+		headerService.update("host/Application.hx", headerBaseSource);
+		headerService.update("host/DesktopApplication.hx", "package host; interface DesktopApplication extends Application { public function state():Int; }");
+		headerService.update("app/Shell.hx", headerShellSource);
+		headerService.analyze("app.Shell");
+		var inheritedDefinition = headerService.definition("app/Shell.hx", headerShellSource.lastIndexOf("context") + 1);
+		if (inheritedDefinition == null
+			|| inheritedDefinition.path != "host/Application.hx"
+			|| inheritedDefinition.span.file.slice(inheritedDefinition.span.start, inheritedDefinition.span.end).indexOf("context") < 0)
+			throw "definition through an interface extending a same-package sibling did not reach the sibling";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}
 }

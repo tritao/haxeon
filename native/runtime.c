@@ -6,6 +6,8 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <io.h>
+#include <fcntl.h>
 #else
 #include <dlfcn.h>
 #endif
@@ -26,6 +28,7 @@
 #include "runtime/core.c"
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
+#include "runtime/dir_watch.c"
 #include "runtime/arrays.c"
 #include "runtime/iterators.c"
 #include "runtime/maps.c"
@@ -40,6 +43,7 @@
 #include "runtime/child_processes.c"
 #include "runtime/host_state.c"
 #include "runtime/native_call.c"
+#include "runtime/native_trace.c"
 #include "runtime/memory.c"
 #include "runtime/module_runtime.c"
 #include "runtime/bindings.c"

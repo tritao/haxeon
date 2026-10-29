@@ -72,33 +72,26 @@ class HlLower {
 	}
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			stringConstants:Bool = false):MeasuredHlCode {
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
+			?debugCache:HlDebugMetadataCache):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
 		if (cachedFunctions == null || regenerated == null)
 			IrVerifier.verify(program);
 		else {
-			var selected:Map<String, Bool> = [],
-				regeneratedNames:Map<String, Bool> = [],
-				regeneratedSources:Map<String, Bool> = [];
+			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
+			// hash included, so its cached lowering is still exact; re-lowering every function that touched a changed file
+			// redid most of the program on each edit and produced the same bytes.
+			var selected:Map<String, Bool> = [];
 			for (name in regenerated)
-				regeneratedNames.set(name, true);
-			for (fn in program.functions)
-				if (regeneratedNames.exists(fn.name))
-					collectSourcePaths(fn, regeneratedSources);
-			for (fn in program.functions)
-				if (regeneratedNames.exists(fn.name) || touchesSourcePath(fn, regeneratedSources))
-					selected.set(fn.name, true);
+				selected.set(name, true);
 			IrVerifier.verifyFunctions(program, selected);
-			affected = [for (name in selected.keys()) name];
 		}
-		var verifiedAt = Sys.time() * 1000.0, allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache), code = {
-				lowerer.stringConstants = stringConstants;
-				lowerer.lowerProgram(program);
-			};
+		var verifiedAt = Sys.time() * 1000.0,
+			allocationAfterVerification = AllocationMeter.sample(),
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache),
+			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
 			metrics: {
@@ -118,12 +111,6 @@ class HlLower {
 	final cachedFunctions:Null<Map<String, HlFunction>>;
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
-
-	/**
-	 * Literals become globals holding one String object each, created when the module loads, instead of a new String at every
-	 * evaluation. A patch cannot add globals, so this is only for builds nothing will patch.
-	 */
-	var stringConstants = false;
 
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
@@ -153,23 +140,39 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
-		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy(),
-			dispatchArities:Map<String, Bool> = [];
+		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
 			if (arity > 16)
 				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
+			if ((isNativePointer(native.result) || isManagedPointerBytes(native) || isUtf8Result(native))
+				&& native.pointerOwnership == "unspecified")
+				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
+		}
+		for (native in discoverCDispatchNatives(program))
+			cDispatchNatives.push(native);
+		lowerProgramWithNatives(program, runtimeNatives);
+		return code;
+	}
+
+	/**
+	 * The runtime natives that ordinary C calls dispatch through, one per call shape, in first-use order. A module's layout
+	 * places them with the other natives, before every function, so functions a later build appends never move them.
+	 */
+	public static function discoverCDispatchNatives(program:IrProgram):Array<IrNative> {
+		var result:Array<IrNative> = [],
+			dispatchArities:Map<String, Bool> = [];
+		for (native in program.cNatives) {
+			var arity = native.arguments.length;
 			var pointerResult = isNativePointer(native.result),
 				bytesResult = isManagedPointerBytes(native),
 				aggregateResult = isAggregateResult(native),
 				utf8Result = isUtf8Result(native),
 				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult:$utf8Result';
-			if ((pointerResult || bytesResult || utf8Result) && native.pointerOwnership == "unspecified")
-				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
-				cDispatchNatives.push({
+				result.push({
 					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "haxeon_runtime",
 					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
@@ -193,8 +196,7 @@ class HlLower {
 				});
 			}
 		}
-		lowerProgramWithNatives(program, runtimeNatives);
-		return code;
+		return result;
 	}
 
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>, ?selected:Array<String>):Array<IrNative> {
@@ -393,15 +395,14 @@ class HlLower {
 		var allocationAfterDebug = AllocationMeter.sample();
 
 		code.entryPoint = requireFunction(program.entryPoint);
-		if (stringConstants)
-			for (literal in symbols.stringConstantGlobals())
-				code.constants.push({
-					global: literal.global,
-					fields: [
-						symbols.internString(literal.value),
-						symbols.internInt(HlSymbolTable.utf16Length(literal.value))
-					]
-				});
+		for (literal in symbols.stringConstantGlobals())
+			code.constants.push({
+				global: literal.global,
+				fields: [
+					symbols.internString(literal.value),
+					symbols.internInt(HlSymbolTable.utf16Length(literal.value))
+				]
+			});
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
 		code.strings = symbols.strings;
@@ -432,33 +433,6 @@ class HlLower {
 		if (debugCache != null)
 			debugCache.rememberIdentity(fn, identity);
 		return identity;
-	}
-
-	static function collectSourcePaths(fn:IrFunction, target:Map<String, Bool>):Void {
-		for (block in fn.blocks) {
-			for (instruction in block.instructions) {
-				var location = instruction.provenance.location;
-				if (location != null)
-					target.set(location.path, true);
-			}
-			var terminator = block.terminator;
-			if (terminator != null && terminator.provenance.location != null)
-				target.set(terminator.provenance.location.path, true);
-		}
-	}
-
-	static function touchesSourcePath(fn:IrFunction, paths:Map<String, Bool>):Bool {
-		for (block in fn.blocks) {
-			for (instruction in block.instructions) {
-				var location = instruction.provenance.location;
-				if (location != null && paths.exists(location.path))
-					return true;
-			}
-			var terminator = block.terminator;
-			if (terminator != null && terminator.provenance.location != null && paths.exists(terminator.provenance.location.path))
-				return true;
-		}
-		return false;
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -677,6 +651,16 @@ class HlLower {
 				if (!keepsArrayBounds(instruction.value))
 					provenInRange.clear();
 				var output = instructionOutput(instruction.value);
+				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
+				// Emit an explicit check so the active handler works on every thread.
+				var receiver:Null<IrValue> = switch instruction.value {
+					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
+						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value),
+						EnumIndex(_, value), EnumField(_, value, _, _): value;
+					case _: null;
+				};
+				if (receiver != null)
+					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				switch instruction.value {
 					case Phi(_, _):
 					case ConstVoid(output):
@@ -803,14 +787,16 @@ class HlLower {
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
 					case Call(output, functionName, arguments):
-						var destination = defineRegister(output, registers, registerTypes);
-						var functionIndex = requireFunction(functionName);
-						var args = [for (argument in arguments) requireRegister(argument, registers)];
-						switch args.length {
-							case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
-							case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-							case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-							default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
+						if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers, registerTypes)) {
+							var destination = defineRegister(output, registers, registerTypes);
+							var functionIndex = requireFunction(functionName);
+							var args = [for (argument in arguments) requireRegister(argument, registers)];
+							switch args.length {
+								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
+								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
+								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+								default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
+							}
 						}
 					case IteratorNew(output, array):
 						var destination = defineRegister(output, registers, registerTypes),
@@ -1256,22 +1242,12 @@ class HlLower {
 	}
 
 	/**
-	 * A HashLink String is an object carrying its UTF-16 data and length. Patches cannot add globals,
-	 * so literals allocate a fresh String over the module's interned, immutable UTF-16 data.
+	 * A HashLink String is an object carrying its UTF-16 data and length. A literal reads a global holding one String
+	 * created when the module loads, or, for a literal a patch introduces, when the patch is applied; evaluating it
+	 * allocates nothing.
 	 */
-	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
-		if (stringConstants) {
-			instructions.push(HlInstruction.GlobalGet(destination, symbols.internStringConstant(value)));
-			return;
-		}
-		var data = temporaryRegister(IrType.RawPtr, registerTypes),
-			length = temporaryRegister(IrType.I32, registerTypes);
-		instructions.push(HlInstruction.LoadString(data, internString(value)));
-		instructions.push(HlInstruction.LoadInt(length, internInt(HlSymbolTable.utf16Length(value))));
-		instructions.push(HlInstruction.New(destination, internType(IrType.Bytes), 0));
-		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_BYTES_FIELD, data));
-		instructions.push(HlInstruction.FieldSet(destination, HlSymbolTable.STRING_LENGTH_FIELD, length));
-	}
+	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void
+		instructions.push(HlInstruction.GlobalGet(destination, symbols.internStringConstant(value)));
 
 	var rawArrayAccesses = 0;
 
@@ -1349,6 +1325,83 @@ class HlLower {
 		var data = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.RefData(data, arrayRegister));
 		instructions.push(access(data, offset));
+	}
+
+	/**
+	 * Address a runtime header as pointer slots followed by Int slots. RefOffset scales by the referred type,
+	 * so this follows both 32- and 64-bit HashLink layouts without embedding the compiler host's pointer size.
+	 * The source object stays rooted; no interior reference is retained across a fast-path call.
+	 */
+	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType, instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
+		var pointers = temporaryRegisterType(symbols.internReference(IrType.RawPtr), registerTypes);
+		var offset = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(pointers, object));
+		instructions.push(HlInstruction.LoadInt(offset, internInt(pointerSlots)));
+		instructions.push(HlInstruction.RefOffset(pointers, pointers, offset));
+		var field = temporaryRegisterType(symbols.internReference(type), registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(field, pointers));
+		if (intSlots != 0) {
+			instructions.push(HlInstruction.LoadInt(offset, internInt(intSlots)));
+			instructions.push(HlInstruction.RefOffset(field, field, offset));
+		}
+		return field;
+	}
+
+	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
+	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			registerTypes:Array<Int>):Bool {
+		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64" || name == "__array_push_bool"
+			|| name == "__array_push_bytes" || name == "__array_push_ref";
+		var get = name == "__bytes_get", set = name == "__bytes_set";
+		if (!push && !get && !set)
+			return false;
+		var destination = defineRegister(output, registers, registerTypes);
+		var args = [for (argument in arguments) requireRegister(argument, registers)];
+		var id = rawArrayAccesses++,
+			fast = "__runtime_fast_" + id,
+			slow = "__runtime_slow_" + id,
+			done = "__runtime_done_" + id;
+		var size = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.JumpNull(args[0], slow));
+		if (push) {
+			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
+			var capacityRef = runtimeFieldReference(args[0], 2, 1, IrType.I32, instructions, registerTypes);
+			var capacity = temporaryRegister(IrType.I32, registerTypes);
+			var one = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.Unref(size, sizeRef));
+			instructions.push(HlInstruction.Unref(capacity, capacityRef));
+			instructions.push(HlInstruction.JumpUnsignedLess(size, capacity, fast));
+			instructions.push(HlInstruction.Jump(slow));
+			instructions.push(HlInstruction.Label(fast));
+			instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+			instructions.push(HlInstruction.Add(destination, size, one));
+			instructions.push(HlInstruction.Setref(sizeRef, destination));
+			// OSetref performs the managed store/write barrier without OSetArray's native bounds helper.
+			var data = temporaryRegister(IrType.RawPtr, registerTypes);
+			var slot = temporaryRegisterType(symbols.internReference(arguments[1].type), registerTypes);
+			instructions.push(HlInstruction.RefData(data, args[0]));
+			instructions.push(HlInstruction.UnsafeCast(slot, data));
+			instructions.push(HlInstruction.RefOffset(slot, slot, size));
+			instructions.push(HlInstruction.Setref(slot, args[1]));
+		} else {
+			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
+			instructions.push(HlInstruction.Unref(size, sizeRef));
+			instructions.push(HlInstruction.JumpUnsignedLess(args[1], size, fast));
+			instructions.push(HlInstruction.Jump(slow));
+			instructions.push(HlInstruction.Label(fast));
+			var dataRef = runtimeFieldReference(args[0], 1, 0, IrType.RawPtr, instructions, registerTypes);
+			var data = temporaryRegister(IrType.RawPtr, registerTypes);
+			instructions.push(HlInstruction.Unref(data, dataRef));
+			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1], args[2]));
+		}
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(slow));
+		if (args.length == 2)
+			instructions.push(HlInstruction.Call2(destination, requireFunction(name), args[0], args[1]));
+		else
+			instructions.push(HlInstruction.CallN(destination, requireFunction(name), args));
+		instructions.push(HlInstruction.Label(done));
+		return true;
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {

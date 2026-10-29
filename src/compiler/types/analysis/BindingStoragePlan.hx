@@ -16,6 +16,12 @@ class BindingStoragePlan {
 	public final types:Map<String, CompilerType> = [];
 	public final kinds:Map<String, CellStorageKind> = [];
 
+	/** Declarations a closure can write, distinct from cells needed only for parent writes or exception edges. */
+	public final closureWrites:Map<String, Bool> = [];
+
+	/** Cells named so far under each prefix. */
+	final prefixCounts:Map<String, Int> = [];
+
 	public function new() {}
 
 	public function request(declarationKey:String, cellPrefix:String, kind:CellStorageKind):Void {
@@ -46,7 +52,7 @@ class BindingStoragePlan {
 		if (candidate == null)
 			return null;
 		if (!cells.exists(bindingId)) {
-			cells.set(bindingId, candidate.cellPrefix + ":" + bindingId);
+			cells.set(bindingId, cellName(candidate.cellPrefix));
 			types.set(bindingId, type);
 			kinds.set(bindingId, candidate.kind);
 		}
@@ -55,12 +61,23 @@ class BindingStoragePlan {
 
 	public function requestBinding(bindingId:String, cellPrefix:String, kind:CellStorageKind, type:CompilerType):String {
 		if (!cells.exists(bindingId)) {
-			cells.set(bindingId, cellPrefix + ":" + bindingId);
+			cells.set(bindingId, cellName(cellPrefix));
 			types.set(bindingId, type);
 			kinds.set(bindingId, kind);
 		} else if (kinds.get(bindingId) == ExceptionEdge && kind == MutableCapture)
 			kinds.set(bindingId, kind);
 		return cells.get(bindingId);
+	}
+
+	/**
+	 * A cell class is named by its prefix (`$cell:<function>:<local>`) and the order the function declares cells under it, not by
+	 * the binding ID, which counts every local declared before it: a new local above a captured one would rename its cell, change
+	 * the layout of every closure environment holding it, and turn a patchable edit into a reload.
+	 */
+	function cellName(prefix:String):String {
+		var ordinal:Int = prefixCounts.exists(prefix) ? prefixCounts.get(prefix) : 0;
+		prefixCounts.set(prefix, ordinal + 1);
+		return prefix + "#" + ordinal;
 	}
 
 	public function cell(bindingId:String):Null<String>

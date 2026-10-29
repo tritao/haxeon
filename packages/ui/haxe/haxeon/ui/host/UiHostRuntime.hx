@@ -3,6 +3,9 @@ package haxeon.ui.host;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.event.EventPump;
 
+import haxeon.ProfileCounter;
+import haxeon.ProfileRecording;
+import haxeon.ProfileSpan;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.UiResult.UiError;
 import NativeKitUI.UiStatus;
@@ -131,21 +134,32 @@ class UiHostRuntime {
 			application == null || renderer == null)
 			return false;
 		var allocatedAt = AllocationProbe.now();
+		// The phase span still open if a phase throws, so a profiler capture stays balanced.
+		var openPhase:Null<String> = null;
 		try {
 			callbackDepth++;
 			var phaseStarted = Sys.time();
 			var phaseAllocated = AllocationProbe.now();
+			ProfileSpan.begin(openPhase = "ui.prepare");
 			var renderSurface = Surface.fromNativeHandle(surface);
 			context.setGpuRenderer(renderer.prepare(renderSurface));
+			ProfileSpan.end(openPhase);
+			openPhase = null;
 			lastPrepareSeconds = Sys.time() - phaseStarted;
 			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			phaseStarted = Sys.time();
 			phaseAllocated = AllocationProbe.now();
 			frame.setViewport(frameState.layoutWidth, frameState.layoutHeight);
-			frame.deltaSeconds = frameState.nextDelta(timeSeconds);
+			// A frame that ends an animation's wait must count the whole wait, not one capped frame.
+			var animationWait = application.context().animationWaitSeconds();
+			frame.deltaSeconds = frameState.nextDelta(timeSeconds, animationWait >= 0.0 ? animationWait + 0.1 : 0.1);
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
+			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
+			ProfileSpan.begin(openPhase = "ui.submit");
 			application.submit(frame);
+			ProfileSpan.end(openPhase);
+			openPhase = null;
 			lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
 			lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			context.repaintOnly = false;
@@ -155,16 +169,41 @@ class UiHostRuntime {
 				return false;
 			}
 			phaseStarted = Sys.time();
+			ProfileSpan.begin(openPhase = "ui.render");
 			application.context().render(renderer, renderSurface, frameInfo);
+			ProfileSpan.end(openPhase);
+			openPhase = null;
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastPaintSeconds = lastContextRenderSeconds;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
+			ProfileCounter.set("ui.frame.allocated_bytes", lastFrameAllocatedBytes);
+			// GPU time per frame, measured only while a capture records: it costs a GPU query per frame.
+			var recording = ProfileRecording.recording();
+			var timedRenderer = renderer;
+			if (timedRenderer != null) {
+				timedRenderer.setGpuFrameTiming(recording);
+				if (recording && timedRenderer.pollGpuFrameTime())
+					ProfileCounter.set("ui.frame.gpu_ns", timedRenderer.gpuFrameNanoseconds);
+				if (recording) {
+					// Cumulative: a capture reads the difference, and the reasons add up to the compiles.
+					var reuse = timedRenderer.planReuse();
+					ProfileCounter.set("ui.plan.compiles", reuse.compiles);
+					ProfileCounter.set("ui.plan.reuses", reuse.reuses);
+					ProfileCounter.set("ui.plan.miss.epoch", reuse.missEpoch);
+					ProfileCounter.set("ui.plan.miss.frame", reuse.missFrame);
+					ProfileCounter.set("ui.plan.miss.lists", reuse.missLists);
+					ProfileCounter.set("ui.plan.miss.dependencies", reuse.missDependencies);
+					ProfileCounter.set("ui.plan.miss.atlas", reuse.missAtlas);
+					ProfileCounter.set("ui.plan.miss.unsettled", reuse.missUnsettled);
+				}
+			}
 			lastRenderResourceError = null;
 			rendered++;
 			callbackDepth--;
 			if (callbackDepth == 0 && disposeRequested) disposeNow();
 			return true;
 		} catch (error:Dynamic) {
+			if (openPhase != null) ProfileSpan.end(openPhase);
 			context.repaintOnly = false;
 			if (callbackDepth > 0) callbackDepth--;
 			if (Std.isOfType(error, UiError)) {

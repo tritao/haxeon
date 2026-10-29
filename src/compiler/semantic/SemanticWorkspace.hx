@@ -413,16 +413,19 @@ class SemanticWorkspace {
 	}
 
 	public function visibleSymbols(from:ModuleState, ?token:CancellationToken):Array<IndexedSemanticSymbol> {
-		var visibleModules:Map<String, Bool> = [from.name => true],
+		var visibleModules = [from.name => true],
 			result:Array<IndexedSemanticSymbol> = [],
 			seen:Map<String, Bool> = [];
 		for (dependency in from.dependencies)
 			visibleModules.set(dependency, true);
-		for (state in orderedStates()) {
+		var names = [for (name in visibleModules.keys()) name];
+		names.sort(Reflect.compare);
+		for (name in names) {
 			if (token != null)
 				token.check();
-			if (!visibleModules.exists(state.name))
+			if (!modules.exists(name))
 				continue;
+			var state = modules.get(name);
 			var model = effectiveModel(state);
 			if (model != null)
 				for (symbol in model.index.symbols)

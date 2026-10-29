@@ -447,6 +447,9 @@ class SemanticAssembly {
 			}
 			state = context.writableState(name, rollbackModules);
 			state.canonicalAliases = typeAliases.slice(aliasStart);
+			// An alias remains an invalidation node even though typed values use its resolved type.
+			for (alias in state.canonicalAliases)
+				SemanticDependencyCollector.addTypeDependency(state.semanticDependencies, alias.name, SemanticDependencyKind.Layout, alias.type, aliases);
 			state.canonicalEnums = enums.slice(enumStart);
 			state.canonicalEnumAbstracts = enumAbstracts.slice(enumAbstractStart);
 			state.canonicalAbstracts = abstracts.slice(abstractStart);
@@ -589,6 +592,12 @@ class SemanticAssembly {
 								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
 									for (interfaceDecl in interfaces)
 										if (interfaceDecl.name == functionOwner) {
+											structuralQueue.push(functionOwner);
+											break;
+										}
+								if (dependency.kind == SemanticDependencyKind.Layout)
+									for (alias in typeAliases)
+										if (alias.name == functionOwner) {
 											structuralQueue.push(functionOwner);
 											break;
 										}
@@ -912,7 +921,7 @@ class SemanticAssembly {
 	}
 
 	/** A purity/no-return answer is recorded against the exact body that asked, which for a
-	 * closure is its own `$lambda:origin:offset` name. Only the top-level function is ever
+	 * closure is its own `$lambda:origin:identity` name. Only the top-level function is ever
 	 * independently retyped, so walk back through any lambda nesting to find it.
 	 */
 	static function purityDependencyOwner(name:String):String

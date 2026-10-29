@@ -54,12 +54,23 @@ wait "$client_timeout_pid" 2>/dev/null || true
 client_timeout_pid=
 wait "$client_pid"
 client_pid=
-rg -q '^started$' "$temp_dir/runtime.log"
-rg -q '^Profiler target disconnected; finalizing capture$' "$temp_dir/client.log"
+rg --crlf -q '^started$' "$temp_dir/runtime.log"
+# The runtime ends the session with a final frame when the target exits, so the capture is complete rather than partial.
+rg --crlf -q '^recorded .* frames$' "$temp_dir/client.log"
+if rg -q 'partial|disconnected' "$temp_dir/client.log"; then
+	cat "$temp_dir/client.log" >&2
+	echo "profiler capture was partial after the target exited" >&2
+	exit 1
+fi
 "$client" report "$temp_dir/capture.hlpc" >"$temp_dir/report.log" 2>"$temp_dir/report.err"
 if [[ -s "$temp_dir/report.err" ]]; then
 	cat "$temp_dir/report.err" >&2
 	echo "profiler capture was not finalized cleanly" >&2
+	exit 1
+fi
+# The report written above: piped into rg -q under pipefail, the report could fail with SIGPIPE.
+if ! rg -q 'samples=[1-9]' "$temp_dir/report.log"; then
+	echo "profiler capture holds no samples" >&2
 	exit 1
 fi
 echo "PASS: profiler retries startup connection and finalizes a complete capture when the target exits"

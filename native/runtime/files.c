@@ -1,5 +1,8 @@
 extern vbyte *hl_sys_get_cwd( void );
 extern void hl_sys_profile_span( int code, uchar *name );
+extern void hl_sys_profile_event( int code, vbyte *data, int dataLen );
+extern void hl_sys_profile_counter( uchar *name, double value );
+extern void hl_sys_profile_frame( int kind, int frame_set );
 extern vbyte *hl_sys_full_path( vbyte *path );
 extern vbyte *hl_sys_exe_path( void );
 extern bool hl_sys_exists( vbyte *path );
@@ -49,6 +52,18 @@ static vstring *realtime_string_from_platform( vbyte *value ) {
 
 HL_PRIM void HL_NAME(__sys_profile_span)( int code, vstring *name ) {
 	hl_sys_profile_span(code,name == NULL ? NULL : name->bytes);
+}
+
+HL_PRIM void HL_NAME(__sys_profile_counter)( vstring *name, double value ) {
+	hl_sys_profile_counter(name == NULL ? NULL : name->bytes,value);
+}
+
+HL_PRIM void HL_NAME(__sys_profile_frame)( int kind, int frame_set ) {
+	hl_sys_profile_frame(kind,frame_set);
+}
+
+HL_PRIM void HL_NAME(__sys_thread_set_name)( vstring *name ) {
+	hl_thread_set_name(hl_thread_current(),name == NULL ? "" : realtime_string_utf8(name));
 }
 
 HL_PRIM vstring *HL_NAME(__sys_get_cwd)( void ) {

@@ -2,12 +2,27 @@ cmake_minimum_required(VERSION 3.24)
 
 project(haxeon_native LANGUAGES C CXX)
 
+# The sampling profiler walks native stacks along frame pointers; the runtime and the other native targets keep them,
+# as the native packages Haxeon builds do.
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/haxeon-frame-pointers.cmake")
+
 # Keep the CRT choice explicit for every MSVC-compatible compiler. This makes
 # the Release and Debug presets use the matching dynamic CRT (/MD and /MDd)
 # instead of inheriting an undocumented toolchain default.
 if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING
     "MSVC runtime library used by Haxeon and HashLink")
+endif()
+
+# Write PDBs for Release and MinSizeRel MSVC builds (RelWithDebInfo already
+# does) so debuggers and the profiler can name native frames with their
+# functions and source lines. /Z7 keeps the debug info in each object, which
+# avoids a shared compiler PDB under parallel builds, and the explicit /OPT and
+# /INCREMENTAL flags keep the linked code identical to a build without /DEBUG.
+if(MSVC)
+  add_compile_options($<$<CONFIG:Release,MinSizeRel>:/Z7>)
+  add_link_options($<$<CONFIG:Release,MinSizeRel>:/DEBUG> $<$<CONFIG:Release,MinSizeRel>:/OPT:REF>
+    $<$<CONFIG:Release,MinSizeRel>:/OPT:ICF> $<$<CONFIG:Release,MinSizeRel>:/INCREMENTAL:NO>)
 endif()
 
 # HashLink already carries the platform-specific compiler, linker, and system
@@ -71,7 +86,7 @@ set_target_properties(hlprof-live PROPERTIES
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
 add_library(haxeon_runtime SHARED native/runtime.c)
-target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
+target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src vendor/nativekit/include)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   # MSVC gates its C11 <stdatomic.h> implementation behind this opt-in.
@@ -159,4 +174,17 @@ if(UNIX)
   )
 endif()
 
-add_custom_target(haxeon-native DEPENDS hl hlprof-live haxeon_runtime jit_native_properties)
+# Instrumented native builds link the function hooks from the HashLink tools directory: hlprof_penter.lib for /Gh /GH
+# on Windows, libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
+foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
+  if(TARGET ${_hooks})
+    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+  endif()
+endforeach()
+
+add_custom_target(haxeon-native DEPENDS hl hldump hlprof-live haxeon_runtime jit_native_properties)
+foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
+  if(TARGET ${_hooks})
+    add_dependencies(haxeon-native ${_hooks})
+  endif()
+endforeach()

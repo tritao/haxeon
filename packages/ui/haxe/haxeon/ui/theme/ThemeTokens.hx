@@ -36,6 +36,11 @@ class ThemeTokens {
 	public var panelBackground:Color;
 	public var overlayBackdrop:Color;
 	public var tooltipBackground:Color;
+	/** Logical font size shared by ordinary tooltip content. */
+	public var tooltipFontSize:Float = 13.0;
+	/** Shared tab chrome metrics, in logical pixels. */
+	public var tabHeaderHeight:Float = 36.0;
+	public var tabHeaderFontSize:Float = 14.0;
 	public var radiusSmall:Float;
 	public var radiusMedium:Float;
 	public var radiusLarge:Float;
@@ -133,7 +138,7 @@ class ThemeTokens {
 		buttonBackground = accent;
 		buttonHover = accentHover;
 		buttonPressed = accentPressed;
-		buttonFocused = accent;
+		buttonFocused = focusRing;
 		buttonSelected = accentPressed;
 		buttonDisabled = surfaceSunken;
 		navigationBackground = surfaceRaised;

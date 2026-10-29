@@ -32,13 +32,14 @@ class VirtualList implements View {
 	public var materializedFirst(default, null):Int;
 	public var materializedLast(default, null):Int;
 	final itemBuilder:Int->View;
+	final itemMetadata:Null<ListViewItemMetadata>;
 	final keyForIndex:Null<Int->String>;
 	final fallbackViewportHeight:Float;
 	final suppliedController:Bool;
 
 	public function new(key:String, itemCount:Int, itemHeight:Float, itemBuilder:Int->View,
 			?viewportStyle:LayoutStyle, ?keyForIndex:Int->String, ?controller:ScrollController,
-			viewportHeight:Float = 300.0, ?virtualization:VirtualizationPolicy) {
+			viewportHeight:Float = 300.0, ?virtualization:VirtualizationPolicy, ?itemMetadata:ListViewItemMetadata) {
 		if (key == null || key.length == 0 || itemCount < 0 || itemHeight <= 0.0 ||
 			!finite(itemHeight) || itemBuilder == null || viewportHeight <= 0.0 ||
 			!finite(viewportHeight))
@@ -47,6 +48,7 @@ class VirtualList implements View {
 		this.itemCount = itemCount;
 		this.itemHeight = itemHeight;
 		this.itemBuilder = itemBuilder;
+		this.itemMetadata = itemMetadata;
 		this.keyForIndex = keyForIndex;
 		this.suppliedController = controller != null;
 		this.controller = controller == null ? new ScrollController() : controller;
@@ -87,7 +89,7 @@ class VirtualList implements View {
 				var item = itemBuilder(index);
 				if (item == null)
 					throw 'VirtualList item builder returned null for index $index';
-				var row = new VirtualCollectionRow("row", rowKey, item, itemCount, index, itemHeight);
+				var row = new VirtualCollectionRow("row", rowKey, item, itemCount, index, itemHeight, itemMetadata);
 				var slotKey = virtualization.recycleSlots ? 'slot:${index - first}' : 'item:$rowKey';
 				rowViews.push(new KeyedView(slotKey, row));
 			}
@@ -132,15 +134,17 @@ private class VirtualCollectionRow implements View {
 	final setSize:Int;
 	final index:Int;
 	final height:Float;
+	final metadata:Null<ListViewItemMetadata>;
 
 	public function new(key:String, itemKey:String, child:View, setSize:Int, index:Int,
-			height:Float) {
+			height:Float, metadata:Null<ListViewItemMetadata>) {
 		this.key = key;
 		this.itemKey = itemKey;
 		this.child = child;
 		this.setSize = setSize;
 		this.index = index;
 		this.height = height;
+		this.metadata = metadata;
 	}
 
 	public function build(context:BuildContext):RenderNode {
@@ -152,6 +156,11 @@ private class VirtualCollectionRow implements View {
 			var semantics = new Semantics(AccessibilityRole.CollectionItem);
 			semantics.setSize = setSize;
 			semantics.positionInSet = index + 1;
+			if (metadata != null) {
+				semantics.label = metadata.labelAt(index);
+				node.enabled = metadata.enabledAt(index);
+				if (!node.enabled) semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
+			}
 			node.semantics = semantics;
 			node.add(new KeyedView('item:$itemKey', child).build(context));
 			return node;

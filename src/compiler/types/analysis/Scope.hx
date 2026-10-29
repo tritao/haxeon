@@ -176,6 +176,18 @@ class Scope {
 		}
 	}
 
+	public function recordAssignment(name:String, type:CompilerType):Void {
+		var local = resolveLocal(name);
+		if (local != null)
+			facts.recordAssignment(local.id, type);
+	}
+
+	public function trackInvalidations():FlowFacts
+		return facts.trackInvalidations();
+
+	public function applyInvalidations(summary:FlowFacts):Void
+		facts.applyInvalidations(summary);
+
 	public function refine(name:String, type:CompilerType):Void {
 		var local = resolveLocal(name);
 		if (local == null)
@@ -259,10 +271,13 @@ class Scope {
 		}
 	}
 
+	/** A possibly reassigned local also loses field and map-key facts derived from its old value. */
 	public function invalidate(name:String):Void {
 		var local = resolveLocal(name);
-		if (local != null)
+		if (local != null) {
 			facts.invalidate(local.id);
+			invalidateExpressionsForLocal(name);
+		}
 	}
 
 	public function isCapture(name:String):Bool
