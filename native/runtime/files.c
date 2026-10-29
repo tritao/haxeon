@@ -253,6 +253,22 @@ HL_PRIM void HL_NAME(__file_save_content)( vstring *path, vstring *content ) {
 	if( fclose(file) != 0 ) hl_error("Could not close output file");
 }
 
+extern void hl_gc_dump_memory( const char *filename );
+extern void hl_gc_census_dump( const char *filename );
+
+/* The collector reads a NUL-terminated UTF-8 path; taking a String here keeps that conversion out of every caller. */
+HL_PRIM void HL_NAME(__gc_dump_memory)( vstring *path ) {
+	char *path_utf8 = realtime_utf8_copy(path);
+	hl_gc_dump_memory(path_utf8);
+	free(path_utf8);
+}
+
+HL_PRIM void HL_NAME(__gc_census_dump)( vstring *path ) {
+	char *path_utf8 = realtime_utf8_copy(path);
+	hl_gc_census_dump(path_utf8);
+	free(path_utf8);
+}
+
 HL_PRIM void HL_NAME(__file_append_content)( vstring *path, vstring *content ) {
 #ifdef HL_WIN
 	FILE *file = _wfopen((const wchar_t *)realtime_string_data(path),L"ab");

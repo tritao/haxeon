@@ -30,13 +30,14 @@ extern class Gc {
   /** Fraction of the heap that may be allocated between collections (default 0.2, clamped to 0.05...4). */
   @:hlNative("std", "gc_set_mark_threshold") public static function setMarkThreshold(fraction:Float):Void;
   @:hlNative("std", "gc_get_mark_threshold") public static function markThreshold():Float;
-  @:hlNative("std", "gc_dump_memory") public static function dump(path:hl.Bytes):Void;
+  /** Writes a heap dump to the file at `path`. */
+  @:hlNative("haxeon_runtime", "__gc_dump_memory") public static function dump(path:String):Void;
   /** Counts every allocation by type from now on; `stackEveryBytes` > 0 also samples call stacks once per that many allocated bytes. */
   @:hlNative("std", "gc_census_start") public static function censusStart(stackEveryBytes:Int):Void;
   @:hlNative("std", "gc_census_stop") public static function censusStop():Void;
   @:hlNative("std", "gc_census_reset") public static function censusReset():Void;
-  /** Writes the census as JSON (per-type counts and bytes, sampled stacks with resolved names) to a UTF-8 path. */
-  @:hlNative("std", "gc_census_dump") public static function censusDump(path:hl.Bytes):Void;
+  /** Writes the census as JSON (per-type counts and bytes, sampled stacks with resolved names) to the file at `path`. */
+  @:hlNative("haxeon_runtime", "__gc_census_dump") public static function censusDump(path:String):Void;
 }
 #else
 /**
@@ -88,7 +89,7 @@ class Gc {
 	public static function markThreshold():Float
 		return threshold;
 
-	public static function dump(path:hl.Bytes):Void {}
+	public static function dump(path:String):Void {}
 
 	public static function censusStart(stackEveryBytes:Int):Void {}
 
@@ -96,6 +97,6 @@ class Gc {
 
 	public static function censusReset():Void {}
 
-	public static function censusDump(path:hl.Bytes):Void {}
+	public static function censusDump(path:String):Void {}
 }
 #end

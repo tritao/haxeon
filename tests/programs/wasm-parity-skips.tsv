@@ -17,3 +17,4 @@ string-buffer-unicode	skip	String.fromCharCode for a character beyond ASCII is w
 thread-gc-stress	skip	Threads are not implemented on Wasm
 test-shards	skip	A harness for HashLink test programs: it reads Sys.args and times its groups, which the Wasm hosts do not provide
 sha256	gc-linear-memory	C crypto uses validated linear scratch memory on the GC backend
+gc-dump-paths	skip	Wasm has no collector: hl.Gc census and heap dump write no file
