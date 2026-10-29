@@ -48,6 +48,7 @@ class TestCatalog {
 		"InlineConfigurationMain",
 		"LoopBoundsMain",
 		"OpportunityCensusMain",
+		"AllocationReportMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"GenericCallbackContextMain",
