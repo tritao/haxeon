@@ -693,10 +693,7 @@ class DesktopUiHost {
 		createDirectories(directory);
 		if (Sys.getEnv("MATERIA_CAPTURE_ALLOCATIONS") == "1") {
 			Gc.censusStop();
-			var path = haxe.io.Bytes.ofString(directory + "/allocations.json");
-			var terminated = haxe.io.Bytes.alloc(path.length + 1);
-			terminated.blit(0, path, 0, path.length);
-			Gc.censusDump(terminated.getData());
+			Gc.censusDump(directory + "/allocations.json");
 		}
 		File.saveContent(directory + "/ui-tree.txt", application.context().dumpTree() + "\n");
 		File.saveContent(directory + "/layout.json",

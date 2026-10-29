@@ -161,18 +161,35 @@ class ResolvedLayoutItem {
 		var flags = bytes.getInt32(offset + 8);
 		if ((flags & ~3) != 0)
 			throw "Native layout returned unsupported resolved flags";
+		var clipX = readFloat(bytes, offset + 28), clipY = readFloat(bytes, offset + 32),
+			clipWidth = readFloat(bytes, offset + 36), clipHeight = readFloat(bytes, offset + 40);
+		var contentX = readFloat(bytes, offset + 44), contentY = readFloat(bytes, offset + 48),
+			contentWidth = readFloat(bytes, offset + 52), contentHeight = readFloat(bytes, offset + 56);
+		// Rect and Transform2D are immutable. Siblings inherit one clip, and nearly every node has the identity transform,
+		// so a batch of items repeats the same few values: share them instead of allocating one per item.
+		var clip = lastClip;
+		if (clip == null || clip.x != clipX || clip.y != clipY || clip.width != clipWidth || clip.height != clipHeight) {
+			clip = new Rect(clipX, clipY, clipWidth, clipHeight);
+			lastClip = clip;
+		}
+		var content = lastContent;
+		if (content == null || content.x != contentX || content.y != contentY || content.width != contentWidth
+			|| content.height != contentHeight) {
+			content = new Rect(contentX, contentY, contentWidth, contentHeight);
+			lastContent = content;
+		}
+		var a = readFloat(bytes, offset + 60), b = readFloat(bytes, offset + 64), c = readFloat(bytes, offset + 68),
+			d = readFloat(bytes, offset + 72), tx = readFloat(bytes, offset + 76), ty = readFloat(bytes, offset + 80);
+		var transform = a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 && tx == 0.0 && ty == 0.0 ? IdentityTransform : new Transform2D(a, b, c, d, tx, ty);
 		return new ResolvedLayoutItem(bytes.getInt32(offset + 4), flags,
 			readFloat(bytes, offset + 12), readFloat(bytes, offset + 16),
-			readFloat(bytes, offset + 20), readFloat(bytes, offset + 24),
-			new Rect(readFloat(bytes, offset + 28), readFloat(bytes, offset + 32),
-				readFloat(bytes, offset + 36), readFloat(bytes, offset + 40)),
-			new Rect(readFloat(bytes, offset + 44), readFloat(bytes, offset + 48),
-				readFloat(bytes, offset + 52), readFloat(bytes, offset + 56)),
-			new Transform2D(readFloat(bytes, offset + 60), readFloat(bytes, offset + 64),
-				readFloat(bytes, offset + 68), readFloat(bytes, offset + 72),
-				readFloat(bytes, offset + 76), readFloat(bytes, offset + 80)),
+			readFloat(bytes, offset + 20), readFloat(bytes, offset + 24), clip, content, transform,
 			readFloat(bytes, offset + 84));
 	}
+
+	static final IdentityTransform:Transform2D = Transform2D.identity();
+	static var lastClip:Null<Rect> = null;
+	static var lastContent:Null<Rect> = null;
 
 	static inline function contains(rect:Rect, x:Float, y:Float):Bool
 		return x >= rect.x && y >= rect.y && x <= rect.x + rect.width && y <= rect.y + rect.height;

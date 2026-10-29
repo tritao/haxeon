@@ -354,7 +354,8 @@ class UiExplorer {
 	}
 
 	function ensureWebView():Void {
-		if (webView != null || webViewAttempted || !webViewSupported || nativeWindow == null)
+		var parent = nativeWindow;
+		if (webView != null || webViewAttempted || !webViewSupported || parent == null)
 			return;
 		webViewAttempted = true;
 		try {
@@ -363,7 +364,7 @@ class UiExplorer {
 			options.set_y(-10000);
 			options.set_width(1);
 			options.set_height(1);
-			webView = WebView.createNative(nativeWindow, options);
+			webView = WebView.createNative(parent, options);
 			webView.show(false);
 			webView.setHtml(webViewDemoHtml());
 		} catch (_:Dynamic) {

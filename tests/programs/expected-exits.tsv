@@ -400,3 +400,4 @@ string-concat-null	42
 abstract-from-nullable	42
 generic-dynamic-argument	42
 enum-equality	42
+gc-dump-paths	42
