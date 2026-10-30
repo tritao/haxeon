@@ -5,6 +5,7 @@ import haxeon.ui.Paint.SolidPaint;
 import NativeKitUI;
 
 /** Immutable normalized RGBA color value. */
+@:structural
 class Color {
 	public final red:Float;
 	public final green:Float;

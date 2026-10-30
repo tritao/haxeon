@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 /** Six-value affine transform using x'=a*x+c*y+tx and y'=b*x+d*y+ty. */
+@:structural
 class Transform2D {
 	static inline var InvertibilityEpsilon:Float = 0.000001;
 

@@ -239,23 +239,12 @@ class RenderNode {
 	 * across frames to find changes to the submitted tree that nobody announced (UiContext.verifyRetentionEvery).
 	 */
 	public function fingerprint():Int {
-		var style = layout.style;
 		var hash = fingerprintHash.reset();
-		hash.addInt(cast layout.visualKind).addString(layout.text).addInt(layout.measureVersion)
-			.addInt(style.width == null ? -1 : cast style.width.sizing).addFloat(style.width == null ? 0.0 : style.width.value)
-			.addInt(style.height == null ? -1 : cast style.height.sizing).addFloat(style.height == null ? 0.0 : style.height.value)
-			.addInt(cast style.direction).addInt(cast style.positioning).addFloat(style.positionX).addFloat(style.positionY)
-			.addInt(style.zIndex).addBool(style.visible).addBool(style.clipHorizontal).addBool(style.clipVertical)
-			.addFloat(style.childGap).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
+		hash.addInt(haxeon.Structural.hash(layout.style)).addInt(cast layout.visualKind).addString(layout.text)
+			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
 			.addString(semantics == null ? null : semantics.label);
-		var padding = style.padding;
-		if (padding != null) hash.addFloat(padding.left).addFloat(padding.top).addFloat(padding.right).addFloat(padding.bottom);
-		var background = style.background;
-		if (background != null) hash.addFloat(background.red).addFloat(background.green).addFloat(background.blue).addFloat(background.alpha);
-		var transform = style.transform;
-		if (transform != null) hash.addFloat(transform.tx).addFloat(transform.ty).addFloat(transform.a).addFloat(transform.d);
 		var text = layout.textColor;
-		if (text != null) hash.addFloat(text.red).addFloat(text.green).addFloat(text.blue).addFloat(text.alpha);
+		if (text != null) hash.addInt(haxeon.Structural.hash(text));
 		hash.addInt(children.length);
 		return hash.a ^ (hash.b * 31);
 	}
@@ -331,38 +320,8 @@ class RenderNode {
 		return prior;
 	}
 
-	static function applyStyleChange(target:LayoutStyle, before:LayoutStyle, after:LayoutStyle):Void {
-		if (!sameAxis(before.width, after.width)) target.width = after.width;
-		if (!sameAxis(before.height, after.height)) target.height = after.height;
-		if (before.aspectRatio != after.aspectRatio) target.aspectRatio = after.aspectRatio;
-		if (before.direction != after.direction) target.direction = after.direction;
-		if (before.childAlignX != after.childAlignX) target.childAlignX = after.childAlignX;
-		if (before.childAlignY != after.childAlignY) target.childAlignY = after.childAlignY;
-		if (before.childDistribution != after.childDistribution) target.childDistribution = after.childDistribution;
-		if (before.positioning != after.positioning) target.positioning = after.positioning;
-		if (before.wrapMode != after.wrapMode) target.wrapMode = after.wrapMode;
-		if (before.rowGap != after.rowGap) target.rowGap = after.rowGap;
-		if (before.columnGap != after.columnGap) target.columnGap = after.columnGap;
-		if (before.alignSelf != after.alignSelf) target.alignSelf = after.alignSelf;
-		if (before.positionX != after.positionX) target.positionX = after.positionX;
-		if (before.positionY != after.positionY) target.positionY = after.positionY;
-		if (before.zIndex != after.zIndex) target.zIndex = after.zIndex;
-		if (before.clipToParent != after.clipToParent) target.clipToParent = after.clipToParent;
-		if (before.overlay != after.overlay) target.overlay = after.overlay;
-		if (!sameInsets(before.padding, after.padding)) target.padding = after.padding;
-		if (before.childGap != after.childGap) target.childGap = after.childGap;
-		if (!sameColor(before.background, after.background)) target.background = after.background;
-		if (before.radiusTopLeft != after.radiusTopLeft) target.radiusTopLeft = after.radiusTopLeft;
-		if (before.radiusTopRight != after.radiusTopRight) target.radiusTopRight = after.radiusTopRight;
-		if (before.radiusBottomLeft != after.radiusBottomLeft) target.radiusBottomLeft = after.radiusBottomLeft;
-		if (before.radiusBottomRight != after.radiusBottomRight) target.radiusBottomRight = after.radiusBottomRight;
-		if (before.clipHorizontal != after.clipHorizontal) target.clipHorizontal = after.clipHorizontal;
-		if (before.clipVertical != after.clipVertical) target.clipVertical = after.clipVertical;
-		if (before.visible != after.visible) target.visible = after.visible;
-		if (!sameTransform(before.transform, after.transform)) target.transform = after.transform;
-		if (before.transformOriginX != after.transformOriginX) target.transformOriginX = after.transformOriginX;
-		if (before.transformOriginY != after.transformOriginY) target.transformOriginY = after.transformOriginY;
-	}
+	static inline function applyStyleChange(target:LayoutStyle, before:LayoutStyle, after:LayoutStyle):Void
+		haxeon.Structural.assignChanged(target, before, after);
 
 	/** Converts a point in this node's local space into viewport/global space. */
 	public function localToGlobal(point:Point):Point
@@ -770,6 +729,28 @@ class RenderNode {
 			compositeRevision++;
 	}
 
+	/** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */
+	static final StyleLayoutFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "width") | haxeon.Structural.fieldBit(LayoutStyle, "height")
+		| haxeon.Structural.fieldBit(LayoutStyle, "aspectRatio") | haxeon.Structural.fieldBit(LayoutStyle, "direction")
+		| haxeon.Structural.fieldBit(LayoutStyle, "childAlignX") | haxeon.Structural.fieldBit(LayoutStyle, "childAlignY")
+		| haxeon.Structural.fieldBit(LayoutStyle, "childDistribution") | haxeon.Structural.fieldBit(LayoutStyle, "positioning")
+		| haxeon.Structural.fieldBit(LayoutStyle, "wrapMode") | haxeon.Structural.fieldBit(LayoutStyle, "rowGap")
+		| haxeon.Structural.fieldBit(LayoutStyle, "columnGap") | haxeon.Structural.fieldBit(LayoutStyle, "alignSelf")
+		| haxeon.Structural.fieldBit(LayoutStyle, "positionX") | haxeon.Structural.fieldBit(LayoutStyle, "positionY")
+		| haxeon.Structural.fieldBit(LayoutStyle, "padding") | haxeon.Structural.fieldBit(LayoutStyle, "childGap");
+	static final StyleHitFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "zIndex") | haxeon.Structural.fieldBit(LayoutStyle, "clipToParent")
+		| haxeon.Structural.fieldBit(LayoutStyle, "overlay") | haxeon.Structural.fieldBit(LayoutStyle, "clipHorizontal")
+		| haxeon.Structural.fieldBit(LayoutStyle, "clipVertical") | haxeon.Structural.fieldBit(LayoutStyle, "visible");
+	static final StylePaintFields:Int = StyleHitFields | haxeon.Structural.fieldBit(LayoutStyle, "background")
+		| haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft") | haxeon.Structural.fieldBit(LayoutStyle, "radiusTopRight")
+		| haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomRight") | haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomLeft");
+	static final StyleTransformFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "transform")
+		| haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX") | haxeon.Structural.fieldBit(LayoutStyle, "transformOriginY");
+
+	/** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
+	public static function styleFieldsClassified():Bool
+		return (StyleLayoutFields | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Structural.allFieldsMask(LayoutStyle);
+
 	/** Classifies concrete LayoutNode mutations that bypass computed styles. */
 	function layoutInputDiffFlags(previous:RenderNode):Int {
 		var before = previous.layout;
@@ -777,69 +758,21 @@ class RenderNode {
 		var flags = 0;
 		var beforeStyle = before.style;
 		var afterStyle = layout.style;
-		if (!sameAxis(beforeStyle.width, afterStyle.width) ||
-			!sameAxis(beforeStyle.height, afterStyle.height) ||
-			beforeStyle.aspectRatio != afterStyle.aspectRatio ||
-			beforeStyle.direction != afterStyle.direction ||
-			beforeStyle.childAlignX != afterStyle.childAlignX ||
-			beforeStyle.childAlignY != afterStyle.childAlignY ||
-			beforeStyle.childDistribution != afterStyle.childDistribution ||
-			beforeStyle.positioning != afterStyle.positioning ||
-			beforeStyle.wrapMode != afterStyle.wrapMode ||
-			beforeStyle.rowGap != afterStyle.rowGap || beforeStyle.columnGap != afterStyle.columnGap ||
-			beforeStyle.alignSelf != afterStyle.alignSelf ||
-			beforeStyle.positionX != afterStyle.positionX || beforeStyle.positionY != afterStyle.positionY ||
-			!sameInsets(beforeStyle.padding, afterStyle.padding) ||
-			beforeStyle.childGap != afterStyle.childGap)
+		// Generated from LayoutStyle's fields (haxeon.Structural); styleFieldsClassified checks each is in a group below.
+		var changed = beforeStyle == afterStyle ? 0 : haxeon.Structural.changedMask(beforeStyle, afterStyle);
+		if ((changed & StyleLayoutFields) != 0)
 			flags |= UiDirtyFlag.NeedsLayout;
-		if (beforeStyle.zIndex != afterStyle.zIndex ||
-			beforeStyle.clipToParent != afterStyle.clipToParent ||
-			beforeStyle.overlay != afterStyle.overlay ||
-			!sameColor(beforeStyle.background, afterStyle.background) ||
-			beforeStyle.radiusTopLeft != afterStyle.radiusTopLeft ||
-			beforeStyle.radiusTopRight != afterStyle.radiusTopRight ||
-			beforeStyle.radiusBottomRight != afterStyle.radiusBottomRight ||
-			beforeStyle.radiusBottomLeft != afterStyle.radiusBottomLeft ||
-			beforeStyle.clipHorizontal != afterStyle.clipHorizontal ||
-			beforeStyle.clipVertical != afterStyle.clipVertical ||
-			beforeStyle.visible != afterStyle.visible ||
-			!sameColor(before.textColor, after.textColor))
+		if ((changed & StylePaintFields) != 0 || !haxeon.Equality.equals(before.textColor, after.textColor))
 			flags |= UiDirtyFlag.NeedsPaint;
-		if (beforeStyle.zIndex != afterStyle.zIndex ||
-			beforeStyle.clipToParent != afterStyle.clipToParent ||
-			beforeStyle.overlay != afterStyle.overlay ||
-			beforeStyle.clipHorizontal != afterStyle.clipHorizontal ||
-			beforeStyle.clipVertical != afterStyle.clipVertical ||
-			beforeStyle.visible != afterStyle.visible)
+		if ((changed & StyleHitFields) != 0)
 			flags |= UiDirtyFlag.NeedsHitGeometry;
-		if (!sameTransform(beforeStyle.transform, afterStyle.transform) ||
-			beforeStyle.transformOriginX != afterStyle.transformOriginX ||
-			beforeStyle.transformOriginY != afterStyle.transformOriginY) {
+		if ((changed & StyleTransformFields) != 0)
 			flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
-		}
 		if (!sameTextStyle(before.peekTextStyle(), after.peekTextStyle()) ||
 			!sameParagraphStyle(before.peekParagraphStyle(), after.peekParagraphStyle()))
 			flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
 		return flags;
 	}
-
-	static function sameAxis(left:LayoutAxis, right:LayoutAxis):Bool
-		return left == right || (left != null && right != null && left.sizing == right.sizing &&
-			left.value == right.value && left.min == right.min && left.max == right.max &&
-			left.growWeight == right.growWeight);
-
-	static function sameInsets(left:Insets, right:Insets):Bool
-		return left == right || (left != null && right != null && left.left == right.left &&
-			left.top == right.top && left.right == right.right && left.bottom == right.bottom);
-
-	static function sameColor(left:Color, right:Color):Bool
-		return left == right || (left != null && right != null && left.red == right.red &&
-			left.green == right.green && left.blue == right.blue && left.alpha == right.alpha);
-
-	static function sameTransform(left:Transform2D, right:Transform2D):Bool
-		return left == right || (left != null && right != null && left.a == right.a &&
-			left.b == right.b && left.c == right.c && left.d == right.d &&
-			left.tx == right.tx && left.ty == right.ty);
 
 	static function sameTextStyle(left:TextStyle, right:TextStyle):Bool
 		return left == right || (left != null && right != null && left.font == right.font &&

@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 /** One Haxe-owned axis policy encoded into a layout transaction. Immutable, so styles and copies share instances. */
+@:structural
 class LayoutAxis {
 	public final sizing:LayoutSizing;
 	/** Exact value for FIXED, or the parent fraction for PERCENT. */

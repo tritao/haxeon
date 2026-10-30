@@ -259,6 +259,16 @@ class RestyleInPlaceTests {
       {action: "away", key: "one"}, wait, wait, wait, wait, wait, wait, wait, wait, wait,
       {action: "move", key: "one"}, wait, wait,
     ]);
+    // The frame comparison and local style resolution name LayoutStyle fields by hand; each must name every one.
+    check(RenderNode.styleFieldsClassified(), "A LayoutStyle field is in no invalidation group of the frame comparison");
+    check(haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Structural.allFieldsMask(LayoutStyle),
+      "A LayoutStyle field has no style property in local style resolution");
+    var style = new LayoutStyle();
+    style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
+    var copied = style.copy();
+    check(copied != style && haxeon.Equality.equals(copied, style) && haxeon.Structural.hash(copied) == haxeon.Structural.hash(style),
+      "LayoutStyle.copy is not an equal copy");
+    Sys.println("PASS structural: every LayoutStyle field is copied, compared, hashed, classified and resolved");
     fonts.dispose(); runtime.dispose();
     return 0;
   }

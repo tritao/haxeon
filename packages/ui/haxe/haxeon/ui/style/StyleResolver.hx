@@ -245,106 +245,18 @@ class StyleResolver {
 		return key;
 	}
 
-	static function localFingerprint(local:LayoutStyle):Int {
-		var result = 17;
-		result = axisFingerprint(result, local.width);
-		result = axisFingerprint(result, local.height);
-		result = mix(result, Std.int(local.direction));
-		result = mix(result, Std.int(local.childAlignX));
-		result = mix(result, Std.int(local.childAlignY));
-		result = mix(result, Std.int(local.childDistribution));
-		result = mix(result, Std.int(local.positioning));
-		result = mix(result, floatFingerprint(local.aspectRatio));
-		result = mix(result, Std.int(local.wrapMode));
-		result = mix(result, floatFingerprint(local.rowGap));
-		result = mix(result, floatFingerprint(local.columnGap));
-		result = mix(result, Std.int(local.alignSelf));
-		result = mix(result, floatFingerprint(local.positionX));
-		result = mix(result, floatFingerprint(local.positionY));
-		result = mix(result, local.zIndex);
-		result = mix(result, local.clipToParent ? 1 : 0);
-		result = mix(result, local.overlay ? 1 : 0);
-		result = mix(result, floatFingerprint(local.padding.left));
-		result = mix(result, floatFingerprint(local.padding.top));
-		result = mix(result, floatFingerprint(local.padding.right));
-		result = mix(result, floatFingerprint(local.padding.bottom));
-		result = mix(result, floatFingerprint(local.childGap));
-		result = colorFingerprint(result, local.background);
-		result = mix(result, floatFingerprint(local.radiusTopLeft));
-		result = mix(result, floatFingerprint(local.radiusTopRight));
-		result = mix(result, floatFingerprint(local.radiusBottomRight));
-		result = mix(result, floatFingerprint(local.radiusBottomLeft));
-		result = mix(result, local.clipHorizontal ? 1 : 0);
-		result = mix(result, local.clipVertical ? 1 : 0);
-		result = mix(result, local.visible ? 1 : 0);
-		result = mix(result, floatFingerprint(local.transform.a));
-		result = mix(result, floatFingerprint(local.transform.b));
-		result = mix(result, floatFingerprint(local.transform.c));
-		result = mix(result, floatFingerprint(local.transform.d));
-		result = mix(result, floatFingerprint(local.transform.tx));
-		result = mix(result, floatFingerprint(local.transform.ty));
-		result = mix(result, floatFingerprint(local.transformOriginX));
-		return mix(result, floatFingerprint(local.transformOriginY));
-	}
+	/** Every field, generated from LayoutStyle (haxeon.Structural), so a new field cannot be left out of the cache key. */
+	static inline function localFingerprint(local:LayoutStyle):Int
+		return haxeon.Structural.hash(local);
 
-	static function colorFingerprint(seed:Int, value:Color):Int {
-		if (value == null)
-			return mix(seed, 0);
-		var result = mix(seed, floatFingerprint(value.red));
-		result = mix(result, floatFingerprint(value.green));
-		result = mix(result, floatFingerprint(value.blue));
-		return mix(result, floatFingerprint(value.alpha));
-	}
-
-	static function floatFingerprint(value:Float):Int {
-		if (Math.isNaN(value))
-			return 2143289344;
-		if (!Math.isFinite(value))
-			return value < 0.0 ? -2147483647 : 2147483647;
-		var scaled = value * 1000003.0;
-		if (scaled >= 2147483646.0)
-			return 2147483646;
-		if (scaled <= -2147483646.0)
-			return -2147483646;
-		return Std.int(scaled);
-	}
+	static function colorFingerprint(seed:Int, value:Color):Int
+		return mix(seed, value == null ? 0 : haxeon.Structural.hash(value));
 
 	static inline function mix(seed:Int, value:Int):Int
 		return seed * 31 + value;
 
-	static function axisFingerprint(seed:Int, value:LayoutAxis):Int {
-		if (value == null)
-			return mix(seed, 0);
-		var result = mix(seed, Std.int(value.sizing));
-		result = mix(result, floatFingerprint(value.value));
-		result = mix(result, floatFingerprint(value.min));
-		result = mix(result, floatFingerprint(value.max));
-		return mix(result, floatFingerprint(value.growWeight));
-	}
-
-	static function sameAxis(left:LayoutAxis, right:LayoutAxis):Bool
-		return left == right || (left != null && right != null &&
-			left.sizing == right.sizing && left.value == right.value &&
-			left.min == right.min && left.max == right.max &&
-			left.growWeight == right.growWeight);
-
-	static function sameLayoutStyle(left:LayoutStyle, right:LayoutStyle):Bool
-		return sameAxis(left.width, right.width) && sameAxis(left.height, right.height) &&
-			left.direction == right.direction && left.childAlignX == right.childAlignX &&
-			left.childAlignY == right.childAlignY && left.childDistribution == right.childDistribution &&
-			left.positioning == right.positioning && left.aspectRatio == right.aspectRatio &&
-			left.wrapMode == right.wrapMode && left.rowGap == right.rowGap &&
-			left.columnGap == right.columnGap && left.alignSelf == right.alignSelf &&
-			left.positionX == right.positionX && left.positionY == right.positionY &&
-			left.zIndex == right.zIndex && left.clipToParent == right.clipToParent && left.overlay == right.overlay &&
-			left.padding.left == right.padding.left && left.padding.top == right.padding.top &&
-			left.padding.right == right.padding.right && left.padding.bottom == right.padding.bottom &&
-			left.childGap == right.childGap && sameColor(left.background, right.background) &&
-			left.radiusTopLeft == right.radiusTopLeft && left.radiusTopRight == right.radiusTopRight &&
-			left.radiusBottomRight == right.radiusBottomRight && left.radiusBottomLeft == right.radiusBottomLeft &&
-			left.clipHorizontal == right.clipHorizontal && left.clipVertical == right.clipVertical &&
-			left.visible == right.visible && sameTransform(left.transform, right.transform) &&
-			left.transformOriginX == right.transformOriginX && left.transformOriginY == right.transformOriginY;
+	static inline function sameLayoutStyle(left:LayoutStyle, right:LayoutStyle):Bool
+		return haxeon.Equality.equals(left, right);
 
 	static function sourceKey(source:Null<StyleSource>):String
 		return source == null ? "none" : stringKey(source.stylesheet) + "|" + stringKey(source.selector) +
@@ -412,82 +324,140 @@ class StyleResolver {
 		}
 	}
 
+	/** LayoutStyle's defaults, for applyLocal to find which fields a local style sets; never changed. */
+	static final localDefaults:LayoutStyle = new LayoutStyle();
+	/** The LayoutStyle fields the last applyLocal checked: every one, unless a new field has no style property yet. */
+	public static var localFieldsHandled(default, null):Int = 0;
+
 	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>):Void {
 		if (local == null)
 			return;
 		var source = new StyleSource("local", "widget", -1, "local");
-		var defaults = new LayoutStyle();
-		if (!sameAxis(local.width, defaults.width))
+		var changed = haxeon.Structural.changedMask(local, localDefaults);
+		// `handled` collects every field checked here, for localFieldsHandled.
+		var handled = 0, bit = 0;
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "width");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Width, local.width, source);
-		if (!sameAxis(local.height, defaults.height))
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "height");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Height, local.height, source);
-		if (local.direction != defaults.direction)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "direction");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Direction, local.direction, source);
-		if (local.childAlignX != defaults.childAlignX)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignX");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ChildAlignX, local.childAlignX, source);
-		if (local.childAlignY != defaults.childAlignY)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignY");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ChildAlignY, local.childAlignY, source);
-		if (local.childDistribution != defaults.childDistribution)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "childDistribution");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ChildDistribution, local.childDistribution, source);
-		if (local.positioning != defaults.positioning)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "positioning");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Positioning, local.positioning, source);
-		if (local.aspectRatio != defaults.aspectRatio)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "aspectRatio");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.AspectRatio, local.aspectRatio, source);
-		if (local.wrapMode != defaults.wrapMode)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "wrapMode");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.WrapMode, local.wrapMode, source);
-		if (local.rowGap != defaults.rowGap)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "rowGap");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.RowGap, local.rowGap, source);
-		if (local.columnGap != defaults.columnGap)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "columnGap");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ColumnGap, local.columnGap, source);
-		if (local.alignSelf != defaults.alignSelf)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "alignSelf");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.AlignSelf, local.alignSelf, source);
-		if (local.positionX != defaults.positionX)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionX");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.PositionX, local.positionX, source);
-		if (local.positionY != defaults.positionY)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionY");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.PositionY, local.positionY, source);
-		if (local.zIndex != defaults.zIndex)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "zIndex");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ZIndex, local.zIndex, source);
-		if (local.overlay != defaults.overlay)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "overlay");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Overlay, local.overlay, source);
-		if (local.clipToParent != defaults.clipToParent)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipToParent");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ClipToParent, local.clipToParent, source);
-		if (local.padding.left != defaults.padding.left || local.padding.top != defaults.padding.top ||
-			local.padding.right != defaults.padding.right || local.padding.bottom != defaults.padding.bottom)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "padding");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Padding, local.padding, source);
-		if (local.childGap != defaults.childGap)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "childGap");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ChildGap, local.childGap, source);
-		if (!sameColor(local.background, defaults.background))
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "background");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Background, local.background, source);
-		if (local.radiusTopLeft != defaults.radiusTopLeft)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.RadiusTopLeft, local.radiusTopLeft, source);
-		if (local.radiusTopRight != defaults.radiusTopRight)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopRight");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.RadiusTopRight, local.radiusTopRight, source);
-		if (local.radiusBottomRight != defaults.radiusBottomRight)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomRight");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.RadiusBottomRight, local.radiusBottomRight, source);
-		if (local.radiusBottomLeft != defaults.radiusBottomLeft)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomLeft");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.RadiusBottomLeft, local.radiusBottomLeft, source);
-		if (local.clipHorizontal != defaults.clipHorizontal)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipHorizontal");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ClipHorizontal, local.clipHorizontal, source);
-		if (local.clipVertical != defaults.clipVertical)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipVertical");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.ClipVertical, local.clipVertical, source);
-		if (local.visible != defaults.visible)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "visible");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Visible, local.visible, source);
-		if (!sameTransform(local.transform, defaults.transform))
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "transform");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.Transform, local.transform, source);
-		if (local.transformOriginX != defaults.transformOriginX)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.TransformOriginX, local.transformOriginX, source);
-		if (local.transformOriginY != defaults.transformOriginY)
+		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginY");
+		handled |= bit;
+		if ((changed & bit) != 0)
 			result.set(StyleProperty.TransformOriginY, local.transformOriginY, source);
+			localFieldsHandled = handled;
 	}
-
-	static function sameColor(left:Color, right:Color):Bool
-		return left == right || (left != null && right != null && left.red == right.red &&
-			left.green == right.green && left.blue == right.blue && left.alpha == right.alpha);
-
-	static function sameTransform(left:Transform2D, right:Transform2D):Bool
-		return left == right || (left != null && right != null && left.a == right.a &&
-			left.b == right.b && left.c == right.c && left.d == right.d &&
-			left.tx == right.tx && left.ty == right.ty);
 
 	function applyTransitions(result:ComputedStyle, target:StyleTarget,
 			theme:Null<StyleSheet>, application:Null<StyleSheet>):Void {

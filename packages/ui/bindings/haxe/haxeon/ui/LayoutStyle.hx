@@ -1,6 +1,10 @@
 package haxeon.ui;
 
-/** Haxe-owned layout, paint, visibility, and transform data. */
+/**
+ * Haxe-owned layout, paint, visibility, and transform data. Structural: copying, comparing, hashing and diffing go through
+ * haxeon.Structural, generated from the fields below, so a field added here is covered by all of them.
+ */
+@:structural
 class LayoutStyle {
 	public var width:LayoutAxis;
 	public var height:LayoutAxis;
@@ -82,40 +86,8 @@ class LayoutStyle {
 		transformOriginY = 0.5;
 	}
 
-	/** Returns an independent style value for compositional widget builders. */
-	public function copy():LayoutStyle {
-		var result = new LayoutStyle();
-		result.width = width;
-		result.height = height;
-		result.aspectRatio = aspectRatio;
-		result.direction = direction;
-		result.childAlignX = childAlignX;
-		result.childAlignY = childAlignY;
-		result.childDistribution = childDistribution;
-		result.positioning = positioning;
-		result.wrapMode = wrapMode;
-		result.rowGap = rowGap;
-		result.columnGap = columnGap;
-		result.alignSelf = alignSelf;
-		result.positionX = positionX;
-		result.positionY = positionY;
-		result.zIndex = zIndex;
-		result.clipToParent = clipToParent;
-		result.overlay = overlay;
-		result.padding = padding;
-		result.childGap = childGap;
-		result.background = background;
-		result.radiusTopLeft = radiusTopLeft;
-		result.radiusTopRight = radiusTopRight;
-		result.radiusBottomLeft = radiusBottomLeft;
-		result.radiusBottomRight = radiusBottomRight;
-		result.clipHorizontal = clipHorizontal;
-		result.clipVertical = clipVertical;
-		result.visible = visible;
-		result.transform = transform;
-		result.transformOriginX = transformOriginX;
-		result.transformOriginY = transformOriginY;
-		return result;
-	}
+	/** Returns an independent style value for compositional widget builders: every field, generated from the declaration. */
+	public function copy():LayoutStyle
+		return haxeon.Structural.copy(this);
 
 }
