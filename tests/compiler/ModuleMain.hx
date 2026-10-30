@@ -144,8 +144,9 @@ class ModuleMain {
 			throw "Removed function slot was not retained as a tombstone";
 		if (removed.functionIds.get("Temp.oldValue") != oldId || removed.functionIds.get("Temp.freshValue") == oldId)
 			throw "Function removal reused or changed a stable identity";
-		if (!removed.requiresReload)
-			throw "Removing a function did not require reload";
+		// A removed function keeps its slot and last body, which the new code no longer calls, so the removal patches.
+		if (removed.requiresReload)
+			throw "Removing a function required reload";
 		var unchanged = compiler.compile("Main");
 		if (unchanged.changedFunctions.length != 0 || unchanged.requiresReload)
 			throw "Unchanged build reported changes";
@@ -212,8 +213,15 @@ class ModuleMain {
 			throw 'Semantic alias edit invalidated ${semanticEdit.retyped}';
 		var lambdaCompiler = new Compiler();
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 42; }; return f(); }");
+		// A lambda is named by where it is written (LambdaName); the test only needs the one lambda in main.
+		function lambdaIdIn(ids:Map<String, Int>):Null<Int> {
+			for (name => id in ids)
+				if (StringTools.startsWith(name, "$lambda:main:main#"))
+					return id;
+			return null;
+		}
 		var lambdaFirst = lambdaCompiler.compile("Main"),
-			lambdaId = lambdaFirst.functionIds.get("$lambda:main:main#0");
+			lambdaId = lambdaIdIn(lambdaFirst.functionIds);
 		if (lambdaId == null)
 			throw "Generated lambda did not receive a stable function identity";
 		var lambdaUnchanged = lambdaCompiler.compile("Main");
@@ -221,7 +229,7 @@ class ModuleMain {
 			throw "Unchanged lambda build reported changes";
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 41 + 1; }; return f(); }");
 		var lambdaBody = lambdaCompiler.compile("Main");
-		if (lambdaBody.functionIds.get("$lambda:main:main#0") != lambdaId || lambdaBody.retyped.length != 2)
+		if (lambdaIdIn(lambdaBody.functionIds) != lambdaId || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
 		var capturedCompiler = new Compiler();
 		capturedCompiler.update("Main.hx", "function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
@@ -369,10 +377,9 @@ class ModuleMain {
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 42; this.generation = 1; } } function main():Int { var editor = new Editor(); return editor.value; }");
 		var structuralBuild = structuralCompiler.compile("Main");
-		if (!structuralBuild.requiresReload
-			|| structuralBuild.patchBytes != null
-			|| [for (reason in structuralBuild.reloadReasons) Std.string(reason)].indexOf("ObjectLayoutChanged(Editor)") < 0)
-			throw "Class layout edit did not require a full reload";
+		// An added field patches the running class: its objects grow the field, initialized by the patch.
+		if (structuralBuild.requiresReload || structuralBuild.patchBytes == null)
+			throw 'Adding a field did not patch: ' + [for (reason in structuralBuild.reloadReasons) Std.string(reason)].join(", ");
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 

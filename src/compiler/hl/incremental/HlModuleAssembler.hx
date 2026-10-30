@@ -736,11 +736,14 @@ class HlModuleAssembler {
 		ordered.enums = program.enums;
 		ordered.staticFields = program.staticFields;
 		ordered.functions = cache.ordered();
-		// A fresh module needs no retired function (see `moveChangedSignatures` and `renameLambdas`): only closures of the
-		// running module call them. Lowering their stale code again could fail, as it names functions whose signatures changed.
+		// A fresh module needs no retired function (see `moveChangedSignatures` and `renameLambdas`), and no function this
+		// program dropped (`dropGuards`): only closures of the running module call them. Lowering their stale code again could
+		// fail, as it names functions whose signatures changed and objects this program no longer has (a dropped lambda's
+		// environment).
+		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true];
 		function startFresh():Void {
 			discardPublishedSymbols();
-			if (cache.dropRetired(RetiredName.is))
+			if (cache.dropRetired(function(name) return RetiredName.is(name) || !present.exists(name)))
 				ordered.functions = cache.ordered();
 		}
 		var reuseLowered = initialized && !reload;
