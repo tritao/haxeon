@@ -24,6 +24,7 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.Transform2D;
 
 import haxe.io.Bytes;
+import haxeon.ui.TextLayout;
 import haxeon.ui.TextLayout.TextPosition;
 
 class LayoutSessionSmoke {

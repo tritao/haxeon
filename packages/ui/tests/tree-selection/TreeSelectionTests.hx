@@ -1,4 +1,4 @@
-import haxeon.platform.NativeKitRuntime;
+import haxeon.platform.Runtime;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
@@ -54,7 +54,7 @@ class TreeSelectionTests {
   }
 
   public static function main():Int {
-    var runtime = NativeKitRuntime.start();
+    var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
     var ui = new UiContext(null, fonts);
