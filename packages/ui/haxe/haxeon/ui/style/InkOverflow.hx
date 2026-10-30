@@ -7,6 +7,7 @@ package haxeon.ui.style;
  * between style and rendering without exposing render targets or GPU state to
  * the Haxe style system.
  */
+@:structural
 class InkOverflow {
 	public final left:Float;
 	public final top:Float;
@@ -36,8 +37,7 @@ class InkOverflow {
 	}
 
 	public function isEqual(other:InkOverflow):Bool
-		return other != null && left == other.left && top == other.top &&
-			right == other.right && bottom == other.bottom;
+		return other != null && haxeon.Equality.equals(this, other);
 
 	public function toString():String
 		return '($left, $top, $right, $bottom)';

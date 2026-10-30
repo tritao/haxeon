@@ -64,6 +64,7 @@ class Mask {
 	public function copy():Mask
 		return new Mask(kind, radius, x0, y0, x1, y1, alpha0, alpha1, image);
 
+	/** By hand: the image is compared by identity, which the generated equality does not do for a plain class. */
 	public function isEqual(other:Mask):Bool
 		return other != null && kind == other.kind && radius == other.radius && x0 == other.x0 &&
 			y0 == other.y0 && x1 == other.x1 && y1 == other.y1 && alpha0 == other.alpha0 &&

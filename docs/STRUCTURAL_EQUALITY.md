@@ -44,3 +44,15 @@ error rather than a silent omission.
 A structural class may not extend another class: the base's fields would be
 left out. `LayoutStyle` in the UI package uses these for its copy, its restyle
 delta, its frame comparison and its cache keys.
+
+The UI package uses them beyond `LayoutStyle`: `Color`, `Insets`, `LayoutAxis`, `Transform2D`, `Rect`, `TextStyle`,
+`ParagraphStyle`, `Shortcut`, `EffectParameter`, `InkOverflow` and `CustomEffectDefinition` are compared with
+`Equality.equals`, so their comparisons cannot fall behind their fields. What stays written out, and why:
+
+- `Semantics.same`: the value compares through `sameValue` and a deferred source is not a field to compare.
+- `Mask.isEqual`: its image is compared by identity, which `Equality` does not do for a plain class.
+- Decorations and effects extend a base class, which a structural class may not do.
+- String keys that spell out the fields of `Color`, `LayoutAxis`, `Insets`, `Transform2D`, `TextStyle` and `ParagraphStyle`
+  (the style cache and the dock's label widths): a hash could collide. Each is paired with a field list that a test checks
+  against `Structural.allFieldsMask`, so a new field fails the test until the key names it.
+

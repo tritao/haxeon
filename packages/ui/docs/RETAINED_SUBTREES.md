@@ -22,7 +22,9 @@ top and status bars have no keys; panel contents still use `cacheKeyHash`.
 - `BuildContext.selfUpdating`: the widget rebuilds alone and its node is replaced (`TextField`); `requestPatch` asks for it.
 - `BuildContext.selfRestyling`: the widget rebuilds alone on hover and press and the result is applied to its existing node:
   changed style properties, state, and the children it built. Listeners, style changes and children callers added stay
-  (`Button`).
+  (`Button`, `IconButton`, `Checkbox` and `Toggle`, `Radio`). A control qualifies when its build makes the same kind of node
+  with the same listeners every time, and puts no paint callback that captures the build on the node itself: `Slider` and
+  `ProgressBar` do, and `Tabs` and `SelectionPopup` build arbitrary content, so they rebuild with their panel.
 - `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades, scrolled
   content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations whose frames
   only do this implement `RetainedAnimation` and do not count as rebuild work.
@@ -42,6 +44,8 @@ Rules that keep it working:
 - Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build.
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
+  The editor's panels are all observing except the BIM, inspection camera, machine control, mission and CNC panels, whose builds
+  keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the rest.
 
 ## History
 

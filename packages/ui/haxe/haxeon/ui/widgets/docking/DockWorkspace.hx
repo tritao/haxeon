@@ -43,6 +43,10 @@ import haxeon.ui.theme.TextRole;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
+	/** Whether the tab-label width cache's key names every field of the text styles it measures with (see its keyFieldsComplete). */
+	public static function labelKeyComplete():Bool
+		return DockTextWidthCache.keyFieldsComplete();
+
 	public static inline final DividerExtent = 8.0;
 	public static inline final MinimumHorizontalExtent = 190.0;
 	public final key:String;
@@ -707,6 +711,20 @@ private class DockTextWidthCache {
 		widths.set(key, width);
 		entryCount++;
 		return width;
+	}
+
+	/**
+	 * The key below spells out every field of TextStyle and ParagraphStyle, since two labels measure alike only when all of them
+	 * match. This lists them so a test can require that they are all of the classes' fields: a new field fails it until the key
+	 * and this list both name it.
+	 */
+	static function keyFieldsComplete():Bool {
+		var text = haxeon.Structural.fieldBit(TextStyle, "font") | haxeon.Structural.fieldBit(TextStyle, "fontSize")
+			| haxeon.Structural.fieldBit(TextStyle, "letterSpacing");
+		var paragraph = haxeon.Structural.fieldBit(ParagraphStyle, "wrap") | haxeon.Structural.fieldBit(ParagraphStyle, "alignment")
+			| haxeon.Structural.fieldBit(ParagraphStyle, "lineHeight") | haxeon.Structural.fieldBit(ParagraphStyle, "direction")
+			| haxeon.Structural.fieldBit(ParagraphStyle, "tabWidth");
+		return text == haxeon.Structural.allFieldsMask(TextStyle) && paragraph == haxeon.Structural.allFieldsMask(ParagraphStyle);
 	}
 
 	static function cacheKey(label:String, textStyle:TextStyle,

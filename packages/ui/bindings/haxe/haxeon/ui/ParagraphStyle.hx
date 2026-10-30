@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 /** Semantic paragraph inputs shared by all NativeKit text APIs. */
+@:structural
 class ParagraphStyle {
     public var wrap:TextWrap;
     public var alignment:TextAlignment;

@@ -578,9 +578,7 @@ class TextEditorLayout {
 				break;
 			if (record.text.length > 0) {
 				var previous = record.renderColor;
-				if (previous == null || previous.red != color.red ||
-					previous.green != color.green || previous.blue != color.blue ||
-					previous.alpha != color.alpha) {
+				if (previous == null || !haxeon.Equality.equals(previous, color)) {
 					record.layout.setColor(color);
 					record.renderColor = color;
 				}
@@ -690,9 +688,7 @@ class TextEditorLayout {
 			for (index in 0...ranges.length) {
 				var before = previous[index];
 				var after = ranges[index];
-				if (before.start != after.start || before.end != after.end ||
-					before.color.red != after.color.red || before.color.green != after.color.green ||
-					before.color.blue != after.color.blue || before.color.alpha != after.color.alpha)
+				if (before.start != after.start || before.end != after.end || !haxeon.Equality.equals(before.color, after.color))
 					changed = true;
 			}
 		if (changed) {

@@ -1,6 +1,7 @@
 package haxeon.ui.core;
 
 /** A normalized key/modifier chord used by application commands. */
+@:structural
 class Shortcut {
 	public final key:Int;
 	public final modifiers:Int;
@@ -21,7 +22,7 @@ class Shortcut {
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
 	public function equals(other:Null<Shortcut>):Bool
-		return other != null && key == other.key && modifiers == other.modifiers;
+		return other != null && haxeon.Equality.equals(this, other);
 
 	public function toString():String
 		return 'Shortcut($key, $modifiers)';

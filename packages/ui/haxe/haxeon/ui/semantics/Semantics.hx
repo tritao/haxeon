@@ -97,6 +97,30 @@ class Semantics {
 		return value == other.value;
 	}
 
+	/**
+	 * Whether two accessible descriptions are the same to a consumer. Written out by hand rather than generated (haxeon.Equality)
+	 * because the value is compared through `sameValue`, which does not read a deferred source, and the source and its revision
+	 * are not fields to compare. Every other field must be listed here: the structural test in RestyleInPlaceTests changes each
+	 * field in turn and requires the difference to be seen.
+	 */
+	public static function same(left:Null<Semantics>, right:Null<Semantics>):Bool {
+		if (left == right)
+			return true;
+		if (left == null || right == null)
+			return false;
+		return left.role == right.role && left.label == right.label && left.sameValue(right) &&
+			left.states == right.states && left.actions == right.actions &&
+			left.numericValue == right.numericValue && left.numericMinimum == right.numericMinimum &&
+			left.numericMaximum == right.numericMaximum && left.textStart == right.textStart &&
+			left.documentLength == right.documentLength && left.selectionStart == right.selectionStart &&
+			left.selectionEnd == right.selectionEnd && left.setSize == right.setSize &&
+			left.positionInSet == right.positionInSet && left.rowCount == right.rowCount &&
+			left.columnCount == right.columnCount && left.rowIndex == right.rowIndex &&
+			left.columnIndex == right.columnIndex && left.rowSpan == right.rowSpan &&
+			left.columnSpan == right.columnSpan && left.hierarchyLevel == right.hierarchyLevel &&
+			left.orientation == right.orientation;
+	}
+
 	function get_value():Null<String> {
 		var source = valueSource;
 		if (storedValue == null && source != null)

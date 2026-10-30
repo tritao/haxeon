@@ -3,6 +3,7 @@ package haxeon.ui;
 import haxeon.ui.FontFamily;
 
 /** Semantic font and inline-spacing inputs shared by all NativeKit text APIs. */
+@:structural
 class TextStyle {
     public var font:FontFamily;
     public var fontSize:Float;

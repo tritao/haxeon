@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 /** Immutable axis-aligned rectangle. */
+@:structural
 class Rect {
 	public final x:Float;
 	public final y:Float;

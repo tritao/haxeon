@@ -215,8 +215,7 @@ class SpinnerPainter {
 			value == SpinnerKind.Bars || value == SpinnerKind.Pulse;
 
 	static function sameColor(left:Color, right:Color):Bool
-		return left.red == right.red && left.green == right.green &&
-			left.blue == right.blue && left.alpha == right.alpha;
+		return haxeon.Equality.equals(left, right);
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;

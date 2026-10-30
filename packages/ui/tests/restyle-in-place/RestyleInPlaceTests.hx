@@ -10,7 +10,11 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.TextStyle;
 import haxeon.ui.icons.IconName;
+import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.IconButton;
@@ -295,6 +299,72 @@ class RestyleInPlaceTests {
     Sys.println("PASS edits: a change to the submitted tree is reported unless announced with willEditRetained");
   }
 
+  /**
+   * Equality of text styles, paragraph styles, rectangles, shortcuts and effect parameters is generated from their fields, and
+   * the hand-written comparisons and keys that remain must name every field: adding one to a class fails here until they do.
+   */
+  static function structuralValues():Void {
+    var text = new TextStyle(14.0), changedText = haxeon.Structural.copy(text);
+    check(haxeon.Equality.equals(text, changedText) && haxeon.Structural.changedMask(text, changedText) == 0, "TextStyle.copy is not equal");
+    changedText.letterSpacing = 0.5;
+    check(!haxeon.Equality.equals(text, changedText), "TextStyle equality ignores letter spacing");
+    var paragraph = new ParagraphStyle(), changedParagraph = haxeon.Structural.copy(paragraph);
+    changedParagraph.tabWidth = 4;
+    check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the tab width");
+    changedParagraph = haxeon.Structural.copy(paragraph);
+    changedParagraph.lineHeight = 20.0;
+    check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the line height");
+    check(haxeon.Structural.changedMask(paragraph, changedParagraph) == haxeon.Structural.fieldBit(ParagraphStyle, "lineHeight"),
+      "ParagraphStyle reports a changed line height as another field");
+
+    check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
+      && !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)), "Rect equality is wrong");
+    check(new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 2))
+      && !new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 4)) && !new haxeon.ui.core.Shortcut(65, 2).equals(null),
+      "Shortcut equality is wrong");
+    check(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0))
+      && !haxeon.ui.style.EffectParameter.vec2(1.0, 2.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 3.0))
+      && !haxeon.ui.style.EffectParameter.scalar(1.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 0.0)),
+      "EffectParameter equality is wrong");
+
+    check(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0).isEqual(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0))
+      && !new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0).isEqual(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 5.0)),
+      "InkOverflow equality is wrong");
+    var definition = function(id:Int, overflow:Float, types:Array<haxeon.ui.style.EffectParameterType>)
+      return new haxeon.ui.style.CustomEffectDefinition(id, "effect", types, new haxeon.ui.style.InkOverflow(overflow, 0.0, 0.0, 0.0));
+    check(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]))
+      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(2, 1.0, [haxeon.ui.style.EffectParameterType.Float]))
+      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 2.0, [haxeon.ui.style.EffectParameterType.Float]))
+      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Vec2])),
+      "CustomEffectDefinition equality is wrong");
+    check(haxeon.ui.style.StyleResolver.valueKeysComplete(), "A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys");
+    check(haxeon.ui.widgets.docking.DockWorkspace.labelKeyComplete(), "A TextStyle or ParagraphStyle field is missing from the tab label width key");
+    semanticsFields();
+    Sys.println("PASS values: text, paragraph, rectangle, shortcut and effect parameter equality is generated; hand-written keys and Semantics.same name every field");
+  }
+
+  /** Semantics.same is written by hand (its value compares through sameValue); changing any other field in turn must show. */
+  static function semanticsFields():Void {
+    var base = new Semantics(AccessibilityRole.Button, "label", "value");
+    // A deferred value's source and revision are compared through sameValue, not as fields of their own.
+    var notCompared = ["valueSource", "valueRevision"], compared = 0;
+    check(Semantics.same(base, new Semantics(AccessibilityRole.Button, "label", "value")), "Equal semantics differ");
+    for (name in Reflect.fields(base)) {
+      if (notCompared.indexOf(name) >= 0) continue;
+      var changed = new Semantics(AccessibilityRole.Button, "label", "value");
+      var current:Dynamic = Reflect.field(changed, name), next:Dynamic;
+      if (Std.isOfType(current, String)) next = current + "!";
+      else if (Std.isOfType(current, Bool)) next = !current;
+      else if (Std.isOfType(current, Int)) next = current + 1;
+      else if (Std.isOfType(current, Float)) next = current + 1.0;
+      else throw "Semantics gained the field " + name + " of a type this test cannot change; extend it, and Semantics.same";
+      Reflect.setField(changed, name, next);
+      check(!Semantics.same(base, changed), "Semantics.same ignores " + name);
+      compared++;
+    }
+    check(compared >= 20, "Semantics fields were not found by reflection (" + compared + ")");
+  }
+
   public static function main():Int {
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
@@ -343,6 +413,7 @@ class RestyleInPlaceTests {
     check(copied != style && haxeon.Equality.equals(copied, style) && haxeon.Structural.hash(copied) == haxeon.Structural.hash(style),
       "LayoutStyle.copy is not an equal copy");
     Sys.println("PASS structural: every LayoutStyle field is copied, compared, hashed, classified and resolved");
+    structuralValues();
     fonts.dispose(); runtime.dispose();
     return 0;
   }

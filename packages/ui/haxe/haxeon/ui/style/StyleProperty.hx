@@ -71,26 +71,18 @@ class StyleProperty<T> {
 	public function hasLayoutBinding():Bool
 		return readLayout != null && writeLayout != null;
 
+	// Color, Insets, LayoutAxis and Transform2D are structural classes: their equality is generated from their fields.
 	static function colorEqual(left:Color, right:Color):Bool
-		return left == right || (left != null && right != null &&
-			left.red == right.red && left.green == right.green &&
-			left.blue == right.blue && left.alpha == right.alpha);
+		return haxeon.Equality.equals(left, right);
 
 	static function insetsEqual(left:Insets, right:Insets):Bool
-		return left == right || (left != null && right != null &&
-			left.left == right.left && left.top == right.top &&
-			left.right == right.right && left.bottom == right.bottom);
+		return haxeon.Equality.equals(left, right);
 
 	static function axisEqual(left:LayoutAxis, right:LayoutAxis):Bool
-		return left == right || (left != null && right != null &&
-			left.sizing == right.sizing && left.value == right.value &&
-			left.min == right.min && left.max == right.max &&
-			left.growWeight == right.growWeight);
+		return haxeon.Equality.equals(left, right);
 
 	static function transformEqual(left:Transform2D, right:Transform2D):Bool
-		return left == right || (left != null && right != null &&
-			left.a == right.a && left.b == right.b && left.c == right.c &&
-			left.d == right.d && left.tx == right.tx && left.ty == right.ty);
+		return haxeon.Equality.equals(left, right);
 
 	static function effectChainEqual(left:EffectChain, right:EffectChain):Bool
 		return left == right || (left != null && right != null && left.isEqual(right));

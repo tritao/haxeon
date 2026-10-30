@@ -1194,17 +1194,14 @@ class UiContext {
 	}
 
 	static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
+		// Everything but the id, which names the node rather than where it is. The rectangles and the transform are compared by
+		// the generated equality of their structural classes.
 		return left == right || left.flags == right.flags && left.x == right.x && left.y == right.y &&
 			left.width == right.width && left.height == right.height && left.baseline == right.baseline &&
-			sameRect(left.clipBounds, right.clipBounds) && sameRect(left.contentBounds, right.contentBounds) &&
-			left.transform.a == right.transform.a && left.transform.b == right.transform.b &&
-			left.transform.c == right.transform.c && left.transform.d == right.transform.d &&
-			left.transform.tx == right.transform.tx && left.transform.ty == right.transform.ty;
+			haxeon.Equality.equals(left.clipBounds, right.clipBounds) &&
+			haxeon.Equality.equals(left.contentBounds, right.contentBounds) &&
+			haxeon.Equality.equals(left.transform, right.transform);
 	}
-
-	static inline function sameRect(left:Rect, right:Rect):Bool
-		return left.x == right.x && left.y == right.y && left.width == right.width &&
-			left.height == right.height;
 
 	public function isDirty():Bool
 		return dirtyFlags != UiDirtyFlag.None;

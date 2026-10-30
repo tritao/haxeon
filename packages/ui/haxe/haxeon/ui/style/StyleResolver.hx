@@ -290,6 +290,27 @@ class StyleResolver {
 		};
 	}
 
+	/**
+	 * The value keys below spell out the fields of Color, LayoutAxis, Insets and Transform2D, which a generated key could not
+	 * replace (a hash may collide, and these are compared as text). This lists those fields so a test can require them to be all
+	 * of each class's fields: a new field fails it until the key and this list both name it.
+	 */
+	public static function valueKeysComplete():Bool {
+		var colorFields = haxeon.Structural.fieldBit(Color, "red") | haxeon.Structural.fieldBit(Color, "green")
+			| haxeon.Structural.fieldBit(Color, "blue") | haxeon.Structural.fieldBit(Color, "alpha");
+		var axisFields = haxeon.Structural.fieldBit(LayoutAxis, "sizing") | haxeon.Structural.fieldBit(LayoutAxis, "value")
+			| haxeon.Structural.fieldBit(LayoutAxis, "min") | haxeon.Structural.fieldBit(LayoutAxis, "max")
+			| haxeon.Structural.fieldBit(LayoutAxis, "growWeight");
+		var insetsFields = haxeon.Structural.fieldBit(Insets, "left") | haxeon.Structural.fieldBit(Insets, "top")
+			| haxeon.Structural.fieldBit(Insets, "right") | haxeon.Structural.fieldBit(Insets, "bottom");
+		var transformFields = haxeon.Structural.fieldBit(Transform2D, "a") | haxeon.Structural.fieldBit(Transform2D, "b")
+			| haxeon.Structural.fieldBit(Transform2D, "c") | haxeon.Structural.fieldBit(Transform2D, "d")
+			| haxeon.Structural.fieldBit(Transform2D, "tx") | haxeon.Structural.fieldBit(Transform2D, "ty");
+		return colorFields == haxeon.Structural.allFieldsMask(Color) && axisFields == haxeon.Structural.allFieldsMask(LayoutAxis)
+			&& insetsFields == haxeon.Structural.allFieldsMask(Insets)
+			&& transformFields == haxeon.Structural.allFieldsMask(Transform2D);
+	}
+
 	static function colorKey(value:Color):String
 		return value == null ? "null" : value.red + "," + value.green + "," + value.blue + "," + value.alpha;
 

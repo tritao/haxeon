@@ -717,7 +717,7 @@ class RenderNode {
 			geometryChanged = true;
 			invalidationFlags |= UiDirtyFlag.NeedsHitGeometry;
 		}
-		if (!sameSemantics(semantics, previous.semantics) || enabled != previous.enabled ||
+		if (!Semantics.same(semantics, previous.semantics) || enabled != previous.enabled ||
 			focusable != previous.focusable || focusTrap != previous.focusTrap ||
 			tabIndex != previous.tabIndex)
 			invalidationFlags |= UiDirtyFlag.NeedsSemantics;
@@ -768,37 +768,10 @@ class RenderNode {
 			flags |= UiDirtyFlag.NeedsHitGeometry;
 		if ((changed & StyleTransformFields) != 0)
 			flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
-		if (!sameTextStyle(before.peekTextStyle(), after.peekTextStyle()) ||
-			!sameParagraphStyle(before.peekParagraphStyle(), after.peekParagraphStyle()))
+		if (!haxeon.Equality.equals(before.peekTextStyle(), after.peekTextStyle()) ||
+			!haxeon.Equality.equals(before.peekParagraphStyle(), after.peekParagraphStyle()))
 			flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
 		return flags;
-	}
-
-	static function sameTextStyle(left:TextStyle, right:TextStyle):Bool
-		return left == right || (left != null && right != null && left.font == right.font &&
-			left.fontSize == right.fontSize && left.letterSpacing == right.letterSpacing);
-
-	static function sameParagraphStyle(left:ParagraphStyle, right:ParagraphStyle):Bool
-		return left == right || (left != null && right != null && left.wrap == right.wrap &&
-			left.alignment == right.alignment && left.lineHeight == right.lineHeight &&
-			left.direction == right.direction && left.tabWidth == right.tabWidth);
-
-	static function sameSemantics(left:Null<Semantics>, right:Null<Semantics>):Bool {
-		if (left == right)
-			return true;
-		if (left == null || right == null)
-			return false;
-		return left.role == right.role && left.label == right.label && left.sameValue(right) &&
-			left.states == right.states && left.actions == right.actions &&
-			left.numericValue == right.numericValue && left.numericMinimum == right.numericMinimum &&
-			left.numericMaximum == right.numericMaximum && left.textStart == right.textStart &&
-			left.documentLength == right.documentLength && left.selectionStart == right.selectionStart &&
-			left.selectionEnd == right.selectionEnd && left.setSize == right.setSize &&
-			left.positionInSet == right.positionInSet && left.rowCount == right.rowCount &&
-			left.columnCount == right.columnCount && left.rowIndex == right.rowIndex &&
-			left.columnIndex == right.columnIndex && left.rowSpan == right.rowSpan &&
-			left.columnSpan == right.columnSpan && left.hierarchyLevel == right.hierarchyLevel &&
-			left.orientation == right.orientation;
 	}
 
 	@:allow(haxeon.ui.core.EventDispatcher)

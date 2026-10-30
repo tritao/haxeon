@@ -59,8 +59,7 @@ class Effect {
 		return value == null ? null : Color.rgba(value.red, value.green, value.blue, value.alpha);
 
 	public static function equalColor(left:Color, right:Color):Bool
-		return left == right || (left != null && right != null && left.red == right.red &&
-			left.green == right.green && left.blue == right.blue && left.alpha == right.alpha);
+		return haxeon.Equality.equals(left, right);
 
 	public static function interpolateColor(left:Color, right:Color, amount:Float):Color
 		return Color.rgba(interpolateFloat(left.red, right.red, amount),

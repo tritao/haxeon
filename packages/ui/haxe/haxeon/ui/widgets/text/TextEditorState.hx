@@ -399,8 +399,7 @@ class TextEditorState implements SemanticsValueSource {
 		ensureLive();
 		if (color == null)
 			return;
-		if (renderColor.red == color.red && renderColor.green == color.green &&
-			renderColor.blue == color.blue && renderColor.alpha == color.alpha)
+		if (haxeon.Equality.equals(renderColor, color))
 			return;
 		renderColor = color;
 		renderMeasurement.invalidate();

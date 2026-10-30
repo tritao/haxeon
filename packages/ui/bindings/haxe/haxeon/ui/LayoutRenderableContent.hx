@@ -88,15 +88,11 @@ class LayoutRenderableContent implements LayoutContent {
 	}
 
 	static function geometryEqual(a:ResolvedLayoutItem, b:ResolvedLayoutItem):Bool {
+		// Everything but the id; the rectangles and the transform are compared by their classes' generated equality.
 		return a.flags == b.flags && a.x == b.x && a.y == b.y &&
 			a.width == b.width && a.height == b.height && a.baseline == b.baseline &&
-			sameRect(a.clipBounds, b.clipBounds) &&
-			sameRect(a.contentBounds, b.contentBounds) &&
-			a.transform.a == b.transform.a && a.transform.b == b.transform.b &&
-			a.transform.c == b.transform.c && a.transform.d == b.transform.d &&
-			a.transform.tx == b.transform.tx && a.transform.ty == b.transform.ty;
+			haxeon.Equality.equals(a.clipBounds, b.clipBounds) &&
+			haxeon.Equality.equals(a.contentBounds, b.contentBounds) &&
+			haxeon.Equality.equals(a.transform, b.transform);
 	}
-
-	static function sameRect(a:Rect, b:Rect):Bool
-		return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
 }

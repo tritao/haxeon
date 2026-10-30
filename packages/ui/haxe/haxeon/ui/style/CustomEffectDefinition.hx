@@ -9,6 +9,7 @@ import haxeon.ui.style.EffectParameterTypeUtil;
  * it. Haxe carries only this typed contract; shader source, pipelines, and
  * backend-specific mapping remain native concerns.
  */
+@:structural
 class CustomEffectDefinition {
 	public final id:Int;
 	public final name:String;
@@ -41,16 +42,8 @@ class CustomEffectDefinition {
 		this.componentCount = components;
 	}
 
-	public function isEqual(other:CustomEffectDefinition):Bool {
-		if (other == null || id != other.id || name != other.name ||
-			componentCount != other.componentCount ||
-			!overflow.isEqual(other.overflow) || parameterTypes.length != other.parameterTypes.length)
-			return false;
-		for (index in 0...parameterTypes.length)
-			if (parameterTypes[index] != other.parameterTypes[index])
-				return false;
-		return true;
-	}
+	public function isEqual(other:CustomEffectDefinition):Bool
+		return other != null && haxeon.Equality.equals(this, other);
 
 	public function describe():String
 		return name + "#" + id;
