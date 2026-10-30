@@ -5470,7 +5470,12 @@ class FrameworkSmoke {
 		root = context.submit(view, frame);
 		if (!root.id.equals(id) || !context.buildContext.requestPatch(id)) return false;
 		context.submit(new Text("unmounted again"), frame);
-		return !context.buildContext.requestPatch(id);
+		var released = !context.buildContext.requestPatch(id);
+		// A patch asked for just before an unmount is applied in that frame, which touches the widget's state once more, so its
+		// keys are dropped when the mounted nodes next change; change them before the next lifetime test counts keys.
+		var settle:Array<KeyedView> = [new KeyedView("settled", new Text("settled"))];
+		context.submit(new Column("settle", settle), frame);
+		return released;
 	}
 
 	static function externalScrollbarValid(context:UiContext):Bool {

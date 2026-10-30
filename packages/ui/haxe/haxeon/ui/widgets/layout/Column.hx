@@ -31,7 +31,6 @@ class Column implements View {
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("column", key.value, key.value, null, ["column"]);
 			node.states = context.interactionStates.get(id);
-			node.hoverPaintOnly = true;
 			node.computedStyle = computed;
 			for (child in children)
 				node.add(context.withStyleParent(computed, function() return child.build(context)));

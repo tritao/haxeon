@@ -64,8 +64,8 @@ class BinaryControl implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.id(toggle ? "toggle" : "checkbox");
-			// Hover and press change only how the control looks, so it restyles itself and the panel around it stays cached.
-			return context.selfRestyling(nodeId, function() return buildControl(context, nodeId));
+			// Hover and press change only how the control looks, so it updates itself and the panel around it stays cached.
+			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
 		});
 	}
 

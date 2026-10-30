@@ -52,9 +52,6 @@ class RenderNode {
 	 * when the pointer moves over them, so cache validation ignores them.
 	 */
 	public var recordsInteraction(default, null):Bool = false;
-	/** Opt-in contract: hover changes only custom paint, or have no visual effect.
-	 * UiContext still rejects this path when a matching stylesheet hover rule exists. */
-	public var hoverPaintOnly:Bool = false;
 
 	/** Invalidate a retained custom display list without changing geometry or text. */
 	public function invalidatePaint():Void {
@@ -116,11 +113,12 @@ class RenderNode {
 	/** Shared by every node without classes or tags; never mutated. */
 	static final NoStrings:Array<String> = [];
 
-	public function new(id:WidgetId, kind:LayoutVisualKind = LayoutVisualKind.Box, ?style:LayoutStyle) {
+	/** `sharedLayout` is for stand-ins that compare as the node they stand for (snapshotForCompare); it is never submitted. */
+	public function new(id:WidgetId, kind:LayoutVisualKind = LayoutVisualKind.Box, ?style:LayoutStyle, ?sharedLayout:LayoutNode) {
 		if (id == null)
 			throw "Render nodes require a stable widget ID";
 		this.id = id;
-		layout = new LayoutNode(id.value, kind, style);
+		layout = sharedLayout != null ? sharedLayout : new LayoutNode(id.value, kind, style);
 		children = NoChildren;
 		parent = null;
 		resolved = null;
@@ -253,14 +251,16 @@ class RenderNode {
 	 * A detached copy of what the frame comparison reads from this node (style, layout inputs, hit testing, semantics, revisions,
 	 * parent and child order), taken before the node is changed in place so the change is still seen as one.
 	 */
-	public function snapshotForCompare():RenderNode {
-		var prior = new RenderNode(id, layout.visualKind, layout.style.copy());
+	public function snapshotForCompare(shareLayout:Bool = false):RenderNode {
+		var prior = shareLayout ? new RenderNode(id, layout.visualKind, null, layout) : new RenderNode(id, layout.visualKind, layout.style.copy());
 		prior.computedStyle = computedStyle;
 		prior.states = states;
-		prior.layout.text = layout.text;
-		prior.layout.textColor = layout.textColor;
-		prior.layout.measureVersion = layout.measureVersion;
-		prior.layout.intrinsicContent = layout.intrinsicContent;
+		if (!shareLayout) {
+			prior.layout.text = layout.text;
+			prior.layout.textColor = layout.textColor;
+			prior.layout.measureVersion = layout.measureVersion;
+			prior.layout.intrinsicContent = layout.intrinsicContent;
+		}
 		prior.parent = parent;
 		prior.children = children.copy();
 		prior.contentRevision = contentRevision;
@@ -278,35 +278,120 @@ class RenderNode {
 	}
 
 	/**
-	 * Applies a rebuild of this node's own appearance without replacing it, so what other code attached to it since it was built
-	 * (listeners, style changes, references to the node) stays. `before` and `after` are the layout styles the builder produced
-	 * for the previous and for this build; a property is changed only where they differ, so a property that something else set
-	 * and the builder did not change is left alone. `fresh` is the node the builder just made: its computed style, state and
-	 * children move here. Returns a stand-in for the node as it was, for the frame comparison.
+	 * What a builder made on this node when it returned it, to be taken before callers decorate the node: a later rebuild
+	 * (reconcile) replaces just that and leaves the listeners, paint callbacks, children and style changes callers add after.
 	 */
-	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle,
-			builtChildren:Array<RenderNode>):RenderNode {
-		var prior = snapshotForCompare();
+	public function snapshotBuilt():BuiltNode {
+		var built = new BuiltNode(layout.style.copy(), children.copy(), semantics);
+		countCallbacks(built);
+		return built;
+	}
+
+	function countCallbacks(built:BuiltNode):Void {
+		built.handlers = handlers == null ? 0 : handlers.length;
+		built.outsidePointerDownHandlers = outsidePointerDownHandlers == null ? 0 : outsidePointerDownHandlers.length;
+		built.resolvedHandlers = resolvedHandlers == null ? 0 : resolvedHandlers.length;
+		built.paintHandlers = paintHandlers == null ? 0 : paintHandlers.length;
+		built.decorations = decorations == null ? 0 : decorations.length;
+	}
+
+	/**
+	 * Whether `fresh`, a new build of this node, can be applied to it in place. A box a caller or the frame promoted to a custom
+	 * one (decorations, paint) still takes a box build; any other change of kind needs a replacement.
+	 */
+	public function canReconcile(fresh:RenderNode):Bool {
+		var kind = layout.visualKind, next = fresh.layout.visualKind;
+		return fresh.id.value == id.value && (kind == next || (kind == LayoutVisualKind.Custom && next == LayoutVisualKind.Box));
+	}
+
+	/**
+	 * The one way a widget's rebuild reaches the node it built before. Applies `fresh`, the node the builder just made, to this
+	 * one, which stays in the tree with everything callers attached after `built` was taken:
+	 *
+	 * - style: only the properties the builder changed between the two builds (`built` is updated to the new build);
+	 * - computed style, interaction state and semantics (unless a caller replaced them);
+	 * - listeners, outside-pointer, geometry and paint callbacks and decorations the builder made, replaced by the new build's;
+	 * - children the builder made, each swapped for its new build in the same place (a new build's callbacks refer to the nodes it
+	 *   made, so those must be the ones in the tree); surplus ones are removed and further ones inserted after the last.
+	 *
+	 * Properties of the node other than these (focusable, enabled, cursor, tab index, command scope) come from the widget
+	 * instance, which a rebuild keeps. Returns a stand-in for the node as it was, for the frame comparison.
+	 */
+	public function reconcile(fresh:RenderNode, built:BuiltNode):RenderNode {
+		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
+		var styleChanged = haxeon.Structural.changedMask(built.style, fresh.layout.style) != 0;
+		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
+		var prior = styleChanged || appearanceChanged(fresh, built) ? snapshotForCompare(!styleChanged) : this;
 		computedStyle = fresh.computedStyle;
 		states = fresh.states;
-		applyStyleChange(layout.style, before, after);
-		// Only the children the builder made are replaced, each in its place; children others added since stay where they are.
-		var next = fresh.children.copy();
+		haxeon.Structural.assignChanged(layout.style, built.style, fresh.layout.style);
+		haxeon.Structural.assignChanged(built.style, built.style, fresh.layout.style);
+		if (semantics == built.semantics) semantics = fresh.semantics;
+		built.semantics = fresh.semantics;
+		// The counts of the new build, taken before its lists take what callers added to this node.
+		var madeHandlers = built.handlers, madeOutside = built.outsidePointerDownHandlers, madeResolved = built.resolvedHandlers;
+		var madePaint = built.paintHandlers, madeDecorations = built.decorations;
+		fresh.countCallbacks(built);
+		handlers = swapBuilt(handlers, madeHandlers, fresh.handlers);
+		outsidePointerDownHandlers = swapBuilt(outsidePointerDownHandlers, madeOutside, fresh.outsidePointerDownHandlers);
+		resolvedHandlers = swapBuilt(resolvedHandlers, madeResolved, fresh.resolvedHandlers);
+		paintCacheKeys = swapBuilt(paintCacheKeys, madePaint, fresh.paintCacheKeys);
+		paintHandlers = swapBuilt(paintHandlers, madePaint, fresh.paintHandlers);
+		decorationCacheKeys = swapBuilt(decorationCacheKeys, madeDecorations, fresh.decorationCacheKeys);
+		decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
+		basePaintKeyResolved = false;
+		swapChildren(fresh, built.children);
+		return prior;
+	}
+
+	/** Whether `fresh` differs from this node in anything but style the root of a reconcile takes from it (callbacks aside). */
+	function appearanceChanged(fresh:RenderNode, built:BuiltNode):Bool {
+		if (computedStyle != fresh.computedStyle || states != fresh.states || !Semantics.same(semantics, fresh.semantics) ||
+			built.children.length != fresh.children.length)
+			return true;
+		for (index in 0...built.children.length)
+			if (built.children[index].parent != this || built.children[index].id.value != fresh.children[index].id.value)
+				return true;
+		return false;
+	}
+
+	/** `current` with the first `count` entries, which the builder made, replaced by `fresh`: what is left of `current` was added by callers. */
+	static function swapBuilt<T>(current:Null<Array<T>>, count:Int, fresh:Null<Array<T>>):Null<Array<T>> {
+		var total = current == null ? 0 : current.length;
+		if (total <= count)
+			return fresh;
+		var result:Array<T> = fresh == null ? [] : fresh;
+		var source:Array<T> = cast current;
+		for (index in count...total)
+			result.push(source[index]);
+		return result;
+	}
+
+	/**
+	 * Replaces the children the builder made (`built`) by those of `fresh`, each in the place of the one before it; children
+	 * callers added stay where they are. `built` becomes the new build's children.
+	 */
+	function swapChildren(fresh:RenderNode, built:Array<RenderNode>):Void {
+		var count = fresh.children.length;
 		var position = -1;
-		for (index in 0...builtChildren.length) {
-			var old = builtChildren[index];
-			if (old.parent != this) continue;
-			if (index < next.length) {
-				var child = next[index].detach();
+		// Each new child is taken from the front of the new build's list as it is detached, and recorded in `built` over the
+		// old one it replaces.
+		for (index in 0...built.length) {
+			var old = built[index];
+			if (index < count) {
+				var child = fresh.children[0].detach();
+				built[index] = child;
+				if (old.parent != this) continue;
 				old.replaceWith(child);
 				position = children.indexOf(child);
-			} else {
+			} else if (old.parent == this) {
 				position = children.indexOf(old) - 1;
 				old.detach();
 			}
 		}
-		for (index in builtChildren.length...next.length) {
-			var child = next[index].detach();
+		for (index in built.length...count) {
+			var child = fresh.children[0].detach();
+			built.push(child);
 			if (position < 0 || children == NoChildren) {
 				add(child);
 				position = children.length - 1;
@@ -317,11 +402,8 @@ class RenderNode {
 				layout.children.insert(position, child.layout);
 			}
 		}
-		return prior;
+		built.resize(count);
 	}
-
-	static inline function applyStyleChange(target:LayoutStyle, before:LayoutStyle, after:LayoutStyle):Void
-		haxeon.Structural.assignChanged(target, before, after);
 
 	/** Converts a point in this node's local space into viewport/global space. */
 	public function localToGlobal(point:Point):Point
@@ -537,8 +619,8 @@ class RenderNode {
 		var style = computedStyle == null ? null : computedStyle.getReadOnly(StyleProperty.Decorations);
 		var result = style != null && style.decorations.length > 0
 			? basePaintKey + "|style-decorations:" + style.key() : basePaintKey;
-		// Keep the rendered key truthful even when hover falls back to a full build.
-		return hoverPaintOnly ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
+		// Hover alone repaints this node without rebuilding it (BuildContext.hoverRebuilds), so the key says whether it was hovered.
+		return recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
 	}
 
 	function buildBasePaintKey():Null<String> {
@@ -852,6 +934,27 @@ class RenderNode {
 		if (resolved == null)
 			throw "Render node has no resolved geometry; submit the UI first";
 		return cast resolved;
+	}
+}
+
+/** What a builder made on a node, as taken by RenderNode.snapshotBuilt and kept up to date by RenderNode.reconcile. */
+class BuiltNode {
+	/** The style as the builder left it, before callers changed the node: the base of the next build's difference. */
+	public final style:LayoutStyle;
+	/** The children the builder made; others may have added more. */
+	public final children:Array<RenderNode>;
+	public var semantics:Null<Semantics>;
+	/** How many of each list of callbacks the builder made; callers append theirs after. */
+	public var handlers:Int = 0;
+	public var outsidePointerDownHandlers:Int = 0;
+	public var resolvedHandlers:Int = 0;
+	public var paintHandlers:Int = 0;
+	public var decorations:Int = 0;
+
+	public function new(style:LayoutStyle, children:Array<RenderNode>, semantics:Null<Semantics>) {
+		this.style = style;
+		this.children = children;
+		this.semantics = semantics;
 	}
 }
 

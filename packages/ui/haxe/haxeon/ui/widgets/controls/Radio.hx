@@ -52,8 +52,8 @@ class Radio implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var nodeId = context.id("radio");
-			// Hover and press change only how the option looks, so it restyles itself and the panel around it stays cached.
-			return context.selfRestyling(nodeId, function() return buildRadio(context, nodeId));
+			// Hover and press change only how the option looks, so it updates itself and the panel around it stays cached.
+			return context.selfUpdating(nodeId, function() return buildRadio(context, nodeId));
 		});
 	}
 

@@ -8,11 +8,11 @@ class InteractionStateSnapshot {
 
 	final ids:Array<WidgetId>;
 	final values:Array<Int>;
-	/** Per node, the flags its build depends on: Hovered drops out where hover only repaints. */
+	/** Per node, the flags its build depends on: Hovered drops out where no hover rule matches (BuildContext.hoverRebuilds). */
 	final masks:Array<Int>;
-	/** Widgets left out because they restyle themselves, with the builds that do it, kept alive with the cached subtree. */
-	final restyling:Array<WidgetId>;
-	final restylingBuilds:Array<SelfUpdatingBuild>;
+	/** Widgets left out because they update themselves, with the builds that do it, kept alive with the cached subtree. */
+	final updating:Array<WidgetId>;
+	final updatingBuilds:Array<SelfUpdatingBuild>;
 
 	public function new(root:RenderNode, context:BuildContext) {
 		if (root == null)
@@ -20,23 +20,23 @@ class InteractionStateSnapshot {
 		ids = [];
 		values = [];
 		masks = [];
-		restyling = [];
-		restylingBuilds = [];
+		updating = [];
+		updatingBuilds = [];
 		root.walk(function(node) {
 			// Only a node a widget built from interaction state can be stale; routing alone leaves states on others.
 			if (!node.recordsInteraction)
 				return;
-			// A widget that restyles in place follows these changes itself, for its whole subtree.
-			var owner = context.restylingOwner(node);
+			// A widget that updates itself follows these changes itself, for its whole subtree.
+			var owner = context.updatingOwner(node);
 			if (owner != null) {
 				if (owner == node) {
-					restyling.push(node.id);
-					restylingBuilds.push(cast context.restylingBuild(node));
+					updating.push(node.id);
+					updatingBuilds.push(cast context.updatingBuild(node));
 				}
 				return;
 			}
 			var mask = interactionMask;
-			if (node.hoverPaintOnly && !context.hasHoverStyle(node))
+			if (!context.hoverRebuilds(node))
 				mask &= ~StyleState.Hovered;
 			ids.push(node.id);
 			masks.push(mask);
@@ -48,8 +48,8 @@ class InteractionStateSnapshot {
 		for (index in 0...ids.length)
 			if ((context.interactionStates.get(ids[index]) & masks[index]) != values[index])
 				return false;
-		for (index in 0...restyling.length)
-			if (!context.rearmRestyling(restyling[index], restylingBuilds[index]))
+		for (index in 0...updating.length)
+			if (!context.rearm(updating[index], updatingBuilds[index]))
 				return false;
 		return true;
 	}

@@ -75,8 +75,6 @@ class ScrollView implements View {
 			var viewport = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			viewport.setStyleIdentity("scroll-view", key.value, key.value, null, ["scroll-view"]);
 			viewport.states = flags;
-			// Hover only reveals the scrollbar, which its controller does in place; stylesheet hover rules still force a rebuild.
-			viewport.hoverPaintOnly = true;
 			viewport.computedStyle = computed;
 			viewport.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ScrollArea);

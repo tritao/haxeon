@@ -37,7 +37,6 @@ class Text implements View {
 		var node = new RenderNode(id, LayoutVisualKind.Text, computed.toLayoutStyle());
 		node.setStyleIdentity("text", null, null, null, ["text"]);
 		node.states = context.interactionStates.get(id);
-		node.hoverPaintOnly = true;
 		node.computedStyle = computed;
 		node.layout.text = value;
 		var resolved = context.resolveTextRole(role, textStyle);

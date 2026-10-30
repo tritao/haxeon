@@ -8,7 +8,10 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.Key;
 import haxeon.ui.core.View;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextStyle;
@@ -69,7 +72,7 @@ private class Rig {
   public function new(fonts:FontCollection, restyleInPlace:Bool, scrolling:Bool = false, controls:Bool = false) {
     ui = new UiContext(null, fonts);
     ui.buildContext.environment.reducedMotion = !scrolling;
-    ui.buildContext.restyleInPlace = restyleInPlace;
+    ui.buildContext.updateInPlace = restyleInPlace;
     frame = new LayoutFrame(240.0, controls ? 460.0 : 200.0);
     var rig = this;
     decorated = controls ? [
@@ -115,6 +118,75 @@ private class Rig {
   public function submit():RenderNode {
     frame.deltaSeconds = 0.1;
     return ui.submitCached(function() return view, frame, "panel");
+  }
+}
+
+/** A self-updating widget whose build puts a listener, a paint callback and a child on its node, each capturing what it shows. */
+private class Gauge implements View {
+  public var level = 1;
+  public var builds = 0;
+  /** What the callbacks of the newest build last reported. */
+  public var painted = "";
+  public var clicked = "";
+  public var asText = false;
+  public var id:Null<haxeon.ui.core.WidgetId> = null;
+
+  public function new() {}
+
+  public function build(context:BuildContext):RenderNode {
+    return context.withScope(new Key("gauge"), function() {
+      var nodeId = context.id("gauge");
+      id = nodeId;
+      return context.selfUpdating(nodeId, function() {
+        builds++;
+        var shown = level;
+        var style = new LayoutStyle();
+        style.width = LayoutAxis.fixed(100.0);
+        style.height = LayoutAxis.fixed(30.0);
+        style.zIndex = shown;
+        var node = new RenderNode(nodeId, asText ? LayoutVisualKind.Text : LayoutVisualKind.Custom, style);
+        if (!asText) node.onPaint(function(_, _) painted = "level " + shown, "gauge:" + shown);
+        node.on(UiEventKind.Click, function(_) clicked = "level " + shown);
+        var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+        label.layout.text = "level " + shown;
+        node.add(label);
+        return node;
+      });
+    });
+  }
+}
+
+/** A text field given a listener by its caller. */
+private class FieldDecoration implements View {
+  final field:TextField;
+  final onPress:Void->Void;
+
+  public function new(field:TextField, onPress:Void->Void) {
+    this.field = field;
+    this.onPress = onPress;
+  }
+
+  public function build(context:BuildContext):RenderNode {
+    var node = field.build(context);
+    node.on(UiEventKind.PointerDown, function(_) onPress());
+    return node;
+  }
+}
+
+/** What a container does to a node after building it: a listener, a style change, a child, and its own semantics. */
+private class DecoratedGauge implements View {
+  public var presses = 0;
+  public final gauge:Gauge;
+
+  public function new(gauge:Gauge) this.gauge = gauge;
+
+  public function build(context:BuildContext):RenderNode {
+    var node = gauge.build(context);
+    node.on(UiEventKind.Click, function(_) presses++);
+    node.layout.style.positionX = 4.0;
+    node.semantics = new Semantics(AccessibilityRole.Button, "decorated");
+    node.add(new RenderNode(context.id("caller-child"), LayoutVisualKind.Box));
+    return node;
   }
 }
 
@@ -209,6 +281,97 @@ class RestyleInPlaceTests {
     Sys.println("PASS " + name + ": " + script.length + " steps match a full rebuild (" + changed + " changed the tree); panel builds patched="
       + patched.panelBuilds + " reference=" + reference.panelBuilds);
     patched.ui.dispose(); reference.ui.dispose();
+  }
+
+
+  static function find(root:RenderNode, text:String):Null<RenderNode> {
+    var found:Null<RenderNode> = null;
+    root.walk(function(node) { if (node.layout.text == text) found = node; });
+    return found;
+  }
+
+  /**
+   * One rebuild of a self-updating widget, applied to the node it built before: the node stays with what its caller attached,
+   * takes the callbacks, style and children of the new build, and is only replaced when its kind changes.
+   */
+  static function reconcile(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts);
+    var gauge = new Gauge(), decorated = new DecoratedGauge(gauge);
+    var frame = new LayoutFrame(240.0, 120.0);
+    // Retained, so that only the gauge itself builds again.
+    var view:View = new RetainedView("gauge-panel", function(_) return new Column("gauge-column", [new KeyedView("gauge", decorated)]));
+    var submit = function() return ui.submitCached(function() return view, frame, "gauge");
+    var column = submit();
+    var root = column.children[0];
+    var semantics = root.semantics;
+    check(find(root, "level 1") != null && gauge.builds == 1, "The gauge did not build");
+    for (level in 2...4) {
+      gauge.level = level;
+      check(ui.buildContext.requestPatch(cast gauge.id), "The gauge was not registered as self-updating");
+      var next = submit().children[0];
+      check(next == root && RenderNode.latest(root) == root, "A rebuild replaced the node instead of reconciling it");
+      check(gauge.builds == level, "The gauge built " + gauge.builds + " times");
+      check(find(root, "level " + level) != null && find(root, "level " + (level - 1)) == null, "The builder's child was not replaced");
+      check(root.layout.style.zIndex == level, "The builder's style change was not applied");
+      check(root.layout.style.positionX == 4.0, "The caller's style change was lost");
+      check(root.semantics == semantics, "Semantics the caller replaced were taken back");
+      var callerChildren = 0;
+      for (child in root.children) if (child.styleType == null && child.layout.visualKind == LayoutVisualKind.Box) callerChildren++;
+      check(callerChildren == 1 && root.children.length == 2, "A child added by the caller was lost or duplicated");
+      var bounds = root.globalBounds();
+      ui.pointerDown(bounds.x + 5, bounds.y + 5, 0);
+      ui.pointerUp(bounds.x + 5, bounds.y + 5, 0);
+      check(gauge.clicked == "level " + level, "The listener of the first build ran instead of the new one: " + gauge.clicked);
+      check(decorated.presses == level - 1, "The caller's listener ran " + decorated.presses + " times");
+      var paint:Array<Dynamic> = Reflect.field(root, "paintHandlers");
+      check(paint != null && paint.length == 1, "The paint callbacks were not replaced one for one");
+      var paintGauge:Dynamic = paint[0];
+      paintGauge(null, null);
+      check(gauge.painted == "level " + level, "The paint callback of the first build ran instead of the new one: " + gauge.painted);
+    }
+    // A build that changes the node's kind cannot be reconciled: its node is replaced.
+    gauge.asText = true;
+    check(ui.buildContext.requestPatch(cast gauge.id), "The gauge was not registered as self-updating");
+    var replaced = submit().children[0];
+    check(replaced != root && RenderNode.latest(root) == replaced, "A change of kind did not replace the node");
+    check(ui.buildContext.requestPatch(cast gauge.id), "The replacement was not registered as self-updating");
+    ui.dispose();
+    Sys.println("PASS reconcile: a rebuild keeps the node and what callers added, takes the new build's style, children, listeners and paint, and is replaced only when its kind changes");
+    textField(fonts);
+  }
+
+  /** A text field patches itself while typing: its node stays, with what its caller attached, and matches a full rebuild. */
+  static function textField(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts);
+    var field = new TextField("name", "abc");
+    var presses = 0;
+    var decorated = new FieldDecoration(field, function() presses++);
+    var view:View = new RetainedView("field-panel", function(_) return decorated);
+    var frame = new LayoutFrame(240.0, 60.0);
+    var build = function() return view;
+    var submit = function() return ui.submitCached(build, frame, "field");
+    var root = submit();
+    check(ui.focusWidget(root.id), "The field did not take focus");
+    root = submit();
+    var node = root;
+    for (letter in ["d", "e", "f"]) {
+      ui.text(UiEventKind.TextInput, letter);
+      root = submit();
+      check(root == node, "Typing replaced the field's node");
+      check(ui.verifyRetention(build, frame) == null, "The patched field differs from a fresh build");
+      // The verification built everything afresh, so the next frame starts from a new node.
+      root = submit();
+      node = root;
+    }
+    var typed:Null<RenderNode> = null;
+    root.walk(function(child) { if (child.layout.text != null && child.layout.text.length == 6) typed = child; });
+    check(typed != null, "The typed text is not shown");
+    var bounds = root.globalBounds();
+    ui.pointerDown(bounds.x + 2, bounds.y + 2, 0);
+    ui.pointerUp(bounds.x + 2, bounds.y + 2, 0);
+    check(presses == 1, "The caller's listener ran " + presses + " times, expected 1");
+    ui.dispose();
+    Sys.println("PASS field: typing patches the field in place, keeping what its caller attached");
   }
 
   /** Verify mode must pass with an honest cache key and catch one that misses an input. */
@@ -370,6 +533,7 @@ class RestyleInPlaceTests {
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
     verifyMode(fonts);
+    reconcile(fonts);
     run(fonts, "buttons", false, false, 1, [
       {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},
       {action: "down", key: "decorated"}, {action: "up", key: "decorated"}, {action: "move", key: "one"},

@@ -41,8 +41,8 @@ class IconButton implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var id = context.id("icon-button");
-			// Hover and press change only how the button looks, so it restyles itself and the panel around it stays cached.
-			return context.selfRestyling(id, function() return buildButton(context, id));
+			// Hover and press change only how the button looks, so it updates itself and the panel around it stays cached.
+			return context.selfUpdating(id, function() return buildButton(context, id));
 		});
 	}
 

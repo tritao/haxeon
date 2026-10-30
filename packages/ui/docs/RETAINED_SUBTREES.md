@@ -11,37 +11,61 @@ is reused while all of these hold:
 - the widget states its build read have the same revisions (`stateIdsUsedSince` / `stateRevisions`);
 - every value it read through `BuildContext.observeInt`, `observeBool` or `observeString` reads the same again (`Dependencies`);
 - the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is
-  ignored where it only repaints, and widgets that restyle themselves are left out).
+  ignored where no stylesheet rule matches it, and widgets that update themselves are left out).
 
 Prefer observing to keys: `context.observeString(() -> session.label())` returns the value and records the read, so a
 dependency cannot be left out. `CommandButton` observes its command's presence and enabled and checked states. The editor's
 top and status bars have no keys; panel contents still use `cacheKeyHash`.
 
-**In place** changes without rebuilding the view:
+**In place** changes without rebuilding the view. A widget's own rebuild goes through one step, `RenderNode.reconcile`; the other two ways
+are edits that have no build to reconcile.
 
-- `BuildContext.selfUpdating`: the widget rebuilds alone and its node is replaced (`TextField`); `requestPatch` asks for it.
-- `BuildContext.selfRestyling`: the widget rebuilds alone on hover and press and the result is applied to its existing node:
-  changed style properties, state, and the children it built. Listeners, style changes and children callers added stay
-  (`Button`, `IconButton`, `Checkbox` and `Toggle`, `Radio`). A control qualifies when its build makes the same kind of node
-  with the same listeners every time, and puts no paint callback that captures the build on the node itself: `Slider` and
-  `ProgressBar` do, and `Tabs` and `SelectionPopup` build arbitrary content, so they rebuild with their panel.
+- `BuildContext.selfUpdating(id, build)`: the widget rebuilds alone, on a pointer change over it or when it asks
+  (`requestPatch`, after `State.updateQuietly`; `TextField` does), and the result is reconciled with the node it built before.
+  The node stays. A rebuild replaces what the builder made on it and nothing else:
+  - style: only the properties that differ between the two builds (`haxeon.Structural.changedMask`/`assignChanged`), so a
+    style change a caller made after build stays;
+  - computed style, interaction state, and semantics (unless the caller replaced them);
+  - the listeners, outside-pointer, geometry and paint callbacks and decorations the builder made (counted when it returned
+    the node, `BuiltNode`); the ones callers appended after stay behind them;
+  - the children the builder made, each swapped in place for its new build; children callers added stay where they are.
+  Properties that come from the widget instance (focusable, enabled, cursor, tab index) are not reapplied. A build whose node
+  changed kind cannot be reconciled and replaces the node (`replacedBy`, followed by the caches that held it), without what callers
+  added; the root of the whole tree is left to the next full build. `Button`, `IconButton`, `Checkbox` and `Toggle`, `Radio`
+  and `TextField` use it. A widget qualifies when its build makes the same kind of node every time, and its closures refer to
+  nodes below the root but not to the root itself (a rebuild keeps the first root and drops the one the build made: capture what
+  you read from it, as `TextField` does with its background). `Slider` and `ProgressBar` refer to their root, `Tabs` and
+  `SelectionPopup` build arbitrary content, so they still rebuild with their panel.
+  Children are swapped rather than patched field by field because the new build's closures refer to the nodes it made
+  (`TextField`'s pointer handlers read `textNode.resolved`), so those must be the ones in the tree; a hand-kept list of node
+  properties to copy would also go stale with every new one.
+- Hover never needs a flag: `BuildContext.hoverRebuilds` says hover alone matters to a node only if a stylesheet rule matches it
+  on hover (or it belongs to a self-updating widget, which follows it itself). Otherwise caches ignore it and a node that
+  paints from live state (`TreeView` rows) is repainted by the frame (`UiContext`: `patchFramePaintNodes`). A widget that does
+  more with hover than resolve its style must update itself.
 - `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades, scrolled
   content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations whose frames
-  only do this implement `RetainedAnimation` and do not count as rebuild work.
+  only do this implement `RetainedAnimation` and do not count as rebuild work. This stays a separate mechanism because there is
+  no build to reconcile: a scroll offset or a fade changes every frame from a controller, and rebuilding the widget (and its
+  state) for it would cost far more than the edit; what it shares with `reconcile` is the stand-in of how the node was, which
+  the frame comparison needs.
 
-A frame where only these happened runs as a patch frame: the submitted tree stays, only patches and edits are applied.
+A frame where only these happened runs as a patch frame: the submitted tree stays, only the reconciled widgets and edits are
+applied and the view is not built. That is how `requestPatch` and pointer changes are scheduled, not another way to update: it
+exists because skipping the view build is where the saving is, so `selfUpdating` widgets cost one build each per frame.
 
 **Verify mode** is the safety net: `UiContext.verifyRetention` builds the view again with every cache, patch and edit
 bypassed and compares the trees. `verifyRetentionEvery` or `HAXEON_UI_VERIFY_RETENTION=N` runs it every N frames that did work
 and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. While it is on, every node
 is also fingerprinted at the end of a frame, and a node still in the next tree whose fingerprint changed without
-`willEditRetained` or a patch is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
+`willEditRetained` or a reconcile is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
 of old UI.
 
 Rules that keep it working:
 
 - Read data a retained build depends on, outside widget state, through `observe*`.
-- Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build.
+- Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build (which `selfUpdating`
+  reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
   The editor's panels are all observing except the BIM, inspection camera, machine control, mission and CNC panels, whose builds

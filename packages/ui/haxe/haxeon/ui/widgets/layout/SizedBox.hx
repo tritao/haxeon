@@ -33,7 +33,6 @@ class SizedBox implements View {
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("sized-box", key.value, key.value, null, ["sized-box"]);
 			node.states = context.interactionStates.get(id);
-			node.hoverPaintOnly = true;
 			node.computedStyle = computed;
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));

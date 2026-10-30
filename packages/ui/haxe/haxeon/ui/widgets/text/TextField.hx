@@ -233,6 +233,8 @@ class TextField implements View {
 					new StyleSource("local", "text-field", -1, "local"));
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
+			// Painted children read this, not the node: a rebuild keeps the first node and drops the one this build made.
+			var fieldBackground = node.layout.style.background;
 			node.states = flags;
 			node.computedStyle = computed;
 			node.focusable = enabled;
@@ -322,7 +324,7 @@ class TextField implements View {
 					var selections = additionalSelections.copy();
 					selections.push(new TextSelection(editor.selectionAnchor, editor.selectionFocus));
 					var normal = whitespaceColor == null ? context.theme.mutedText : whitespaceColor;
-					var editorBackground = node.layout.style.background.compositeOver(context.theme.tokens.surface);
+					var editorBackground = fieldBackground.compositeOver(context.theme.tokens.surface);
 					var selectionFill = context.textInput.isOwner(id) ? context.theme.textSelection : context.theme.textSelectionInactive;
 					var background = selectionFill.compositeOver(editorBackground);
 					var selected = haxeon.ui.theme.Theme.contrastingDecoration(normal, background);

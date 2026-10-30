@@ -1085,7 +1085,7 @@ class UiContext {
 		for (change in changes) {
 			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
 			var node = currentNodesById.get(change.id);
-			if (node == null || (node.recordsInteraction && (!node.hoverPaintOnly || buildContext.hasHoverStyle(node)))) return -1;
+			if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
 		}
 		var painted = 0;
 		for (change in changes) {
@@ -1107,7 +1107,7 @@ class UiContext {
 	 * or returns false having changed nothing, in which case the whole view rebuilds.
 	 */
 	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
-		if (inspectionEnabled || !buildContext.restyleInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
+		if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			var bits = change.before ^ change.after;
@@ -1119,14 +1119,15 @@ class UiContext {
 			if (other != 0 && (change.after & other) != (node.states & other)) return false;
 			bits &= patchInteractionMask;
 			if (bits == 0) continue;
-			if (buildContext.restylingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || !node.hoverPaintOnly || buildContext.hasHoverStyle(node))) return false;
+			if (buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || buildContext.hoverRebuilds(node))) return false;
 		}
 		patchFramePaintNodes.resize(0);
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
-			var owner = buildContext.restylingOwner(node);
-			if (owner != null) buildContext.queuePatch(owner.id);
-			else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+			var owner = buildContext.updatingOwner(node);
+			if (owner != null) {
+				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
+			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
 		return true;
 	}
@@ -1137,10 +1138,11 @@ class UiContext {
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
-			var owner = buildContext.restylingOwner(node);
-			if (owner != null) buildContext.queuePatch(owner.id);
-			// Retained caches ignore hover that only repaints, so a cached node that paints it is repainted here.
-			else if (node.hoverPaintOnly && node.hasPaintHandler()) patchFramePaintNodes.push(node);
+			var owner = buildContext.updatingOwner(node);
+			if (owner != null) {
+				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
+			// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
+			} else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
 	}
 
