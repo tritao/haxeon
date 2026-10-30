@@ -18,8 +18,9 @@ private typedef Connection = {final socket:Socket; final token:String;}
 class CompilerClient {
 	/** Optimization switches are read once at startup, so each combination needs a separate worker. */
 	static function inlineOption():String
-		return (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore=" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
-			+ (Sys.getEnv("HAXEON_STRENGTH") == "0" ? "off" : "on");
+		return (ProcessRunner.environmentValue("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore="
+			+ (ProcessRunner.environmentValue("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
+			+ (ProcessRunner.environmentValue("HAXEON_STRENGTH") == "0" ? "off" : "on");
 
 	/**
 	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
@@ -44,12 +45,12 @@ class CompilerClient {
 			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
 		// compiled CLI uses one there.
-		if (Sys.getEnv("HAXEON_COMPILER_SERVER") == "0"
+		if (ProcessRunner.environmentValue("HAXEON_COMPILER_SERVER") == "0"
 			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
 			return fallback();
 		var connection:Null<Connection> = null;
 		try {
-			var profilePort = Sys.getEnv("HAXEON_COMPILER_PROFILE_PORT");
+			var profilePort = ProcessRunner.environmentValue("HAXEON_COMPILER_PROFILE_PORT");
 			if (profilePort != null
 				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1 || Std.parseInt(profilePort) > 65535))
 				throw "HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535";
@@ -74,7 +75,7 @@ class CompilerClient {
 						libraryPath = [
 							Path.join([home, "out"]),
 							Path.join([home, ".tools", "hashlink"]),
-							Sys.getEnv(libraryVariable)
+							ProcessRunner.environmentValue(libraryVariable)
 						].filter(value -> value != null && value.length > 0).join(":"),
 						launchArguments = [hashlink];
 					if (profilePort != null) {
@@ -293,7 +294,7 @@ class CompilerClient {
 		var path = [
 			Path.join([home, "out"]),
 			Path.join([home, ".tools", "hashlink"]),
-			Sys.getEnv("PATH")
+			ProcessRunner.environmentValue("PATH")
 		].filter(value -> value != null && value.length > 0).join(";");
 		var launch = [quote(hashlink + ".exe")];
 		if (profilePort != null) {
@@ -302,7 +303,7 @@ class CompilerClient {
 		}
 		launch.push(quote(workerArtifact));
 		launch.push(quote(statePath));
-		var threshold = Sys.getEnv("HL_GC_MARK_THRESHOLD");
+		var threshold = ProcessRunner.environmentValue("HL_GC_MARK_THRESHOLD");
 		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
 			+ (threshold == null || threshold.length == 0 ? "0.4" : threshold)
 			+ '" && start "" /b '
@@ -319,10 +320,10 @@ class CompilerClient {
 		if (Sys.systemName() != "Windows") {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw "Could not make the compiler session directory private";
-		} else if (Sys.getEnv("HAXEON_COMPILER_SESSION_DIR") != null && Sys.getEnv("HAXEON_COMPILER_SESSION_DIR").length > 0) {
+		} else if (ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR") != null && ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR").length > 0) {
 			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
 			// this user's access, as chmod 700 does.
-			var user = Sys.getEnv("USERNAME");
+			var user = ProcessRunner.environmentValue("USERNAME");
 			if (user == null || Sys.command("icacls", [directory, "/inheritance:r", "/grant:r", user + ":(OI)(CI)F", "/q"]) != 0)
 				throw "Could not make the compiler session directory private";
 		}
@@ -331,20 +332,20 @@ class CompilerClient {
 
 	/** The per-user directory holding worker programs, connection metadata, and logs. */
 	static function sessionDirectory():String {
-		var configured = Sys.getEnv("HAXEON_COMPILER_SESSION_DIR");
+		var configured = ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR");
 		if (configured != null && configured.length > 0)
 			return configured;
-		var local = Sys.systemName() == "Windows" ? Sys.getEnv("LOCALAPPDATA") : null;
+		var local = Sys.systemName() == "Windows" ? ProcessRunner.environmentValue("LOCALAPPDATA") : null;
 		if (local != null && local.length > 0)
 			return Path.join([local, "haxeon", "compiler"]);
-		var cache = Sys.getEnv("XDG_CACHE_HOME");
+		var cache = ProcessRunner.environmentValue("XDG_CACHE_HOME");
 		if (cache == null || cache.length == 0)
-			cache = Path.join([Sys.getEnv(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"), ".cache"]);
+			cache = Path.join([ProcessRunner.environmentValue(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"), ".cache"]);
 		return Path.join([cache, "haxeon", "compiler"]);
 	}
 
 	static function positiveSetting(name:String, fallback:Int):Int {
-		var value = Sys.getEnv(name),
+		var value = ProcessRunner.environmentValue(name),
 			parsed = value == null ? null : Std.parseInt(value);
 		return parsed == null || parsed < 1 ? fallback : parsed;
 	}

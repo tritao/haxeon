@@ -62,9 +62,9 @@ class ActionFingerprint {
 	/** Options the compiler reads from its environment change what it emits, so a cached output is only valid for them. */
 	static function appendCompilerOptions(fields:FingerprintFields):Void {
 		// Inlining is on unless HAXEON_INLINE is "0" (see IrInliner.enabled).
-		fields.add("inline:" + (Sys.getEnv("HAXEON_INLINE") == "0" ? "off" : "on"));
-		fields.add("loadstore:" + (Sys.getEnv("HAXEON_LOADSTORE") == "0" ? "off" : "on"));
-		fields.add("strength:" + (Sys.getEnv("HAXEON_STRENGTH") == "0" ? "off" : "on"));
+		fields.add("inline:" + (ProcessRunner.environmentValue("HAXEON_INLINE") == "0" ? "off" : "on"));
+		fields.add("loadstore:" + (ProcessRunner.environmentValue("HAXEON_LOADSTORE") == "0" ? "off" : "on"));
+		fields.add("strength:" + (ProcessRunner.environmentValue("HAXEON_STRENGTH") == "0" ? "off" : "on"));
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
@@ -217,7 +217,7 @@ class ActionFingerprint {
 			"SDKROOT",
 			"MACOSX_DEPLOYMENT_TARGET"
 		]) {
-			var value = Sys.getEnv(name);
+			var value = ProcessRunner.environmentValue(name);
 			if (value != null)
 				fields.add('inherited:$name=$value');
 		}
@@ -306,11 +306,11 @@ class ActionFingerprint {
 	static function resolveTool(command:String):String {
 		if (Path.isAbsolute(command) || command.indexOf("/") >= 0 || command.indexOf("\\") >= 0)
 			return FileSystem.exists(command) ? FileSystem.fullPath(command) : command;
-		var path = Sys.getEnv("PATH");
+		var path = ProcessRunner.environmentValue("PATH");
 		if (path == null)
 			return command;
-		var suffixes = Sys.systemName() == "Windows" ? [""].concat((Sys.getEnv("PATHEXT") == null ? ".COM;.EXE;.BAT;.CMD" : Sys.getEnv("PATHEXT"))
-			.split(";")) : [""];
+		var extensions = ProcessRunner.environmentValue("PATHEXT"),
+			suffixes = Sys.systemName() == "Windows" ? [""].concat((extensions == null ? ".COM;.EXE;.BAT;.CMD" : extensions).split(";")) : [""];
 		for (directory in path.split(Sys.systemName() == "Windows" ? ";" : ":"))
 			for (suffix in suffixes) {
 				var candidate = Path.join([directory, command + suffix]);

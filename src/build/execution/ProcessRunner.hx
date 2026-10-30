@@ -19,6 +19,27 @@ class ProcessRunner {
 	static final launchMutex = new Mutex();
 	#end
 
+	/**
+	 * A copy of an environment variable, read while no launch is changing the environment. On HashLink for Windows,
+	 * Sys.getEnv returns a String over the C runtime's own copy of the value, which the next Sys.putEnv of that variable
+	 * frees, and a launch sets its process's variables in this process while it starts it. Code that can run while
+	 * actions execute reads the environment through here.
+	 */
+	public static function environmentValue(name:String):Null<String> {
+		#if (target.threaded && !eval)
+		launchMutex.acquire();
+		var value = copyOf(Sys.getEnv(name));
+		launchMutex.release();
+		return value;
+		#else
+		return copyOf(Sys.getEnv(name));
+		#end
+	}
+
+	/** A String with its own storage, so that it outlives the environment entry it was read from. */
+	static function copyOf(value:Null<String>):Null<String>
+		return value == null ? null : Bytes.ofString(value).toString();
+
 	public static function run(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>, forwardOutput:Bool = true):Int {
 		#if (target.threaded && !eval)
 		var oldEnvironment = new Map<String, Null<String>>(),
@@ -34,7 +55,7 @@ class ProcessRunner {
 				Sys.setCwd(cwd);
 			if (environment != null)
 				for (key in environment.keys()) {
-					oldEnvironment.set(key, Sys.getEnv(key));
+					oldEnvironment.set(key, copyOf(Sys.getEnv(key)));
 					Sys.putEnv(key, environment.get(key));
 				}
 			process = new Process(command, arguments);
@@ -72,7 +93,7 @@ class ProcessRunner {
 				Sys.setCwd(cwd);
 			if (environment != null)
 				for (key in environment.keys()) {
-					oldEnvironment.set(key, Sys.getEnv(key));
+					oldEnvironment.set(key, copyOf(Sys.getEnv(key)));
 					Sys.putEnv(key, environment.get(key));
 				}
 			if (forwardOutput) {
