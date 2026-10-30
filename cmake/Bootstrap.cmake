@@ -168,6 +168,55 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_HOST_SYSTEM_NAME STREQUAL "D
   run_checked("Ninja version check" "${TOOLS_DIR}/ninja/ninja" --version)
 endif()
 
+# ccache, rarely installed on Windows. Haxeon launches MSVC through it for the CMake packages it builds with Ninja
+# (src/build/native/NativeCompilerCache.hx), so a build tree that is configured again or deleted and rebuilt reuses its
+# objects from %LOCALAPPDATA%\ccache.
+# It is optional: when it cannot be downloaded (offline, say) the bootstrap warns and the builds compile without it.
+# Script mode leaves CMAKE_HOST_SYSTEM_PROCESSOR unset.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" AND "$ENV{PROCESSOR_ARCHITECTURE}" STREQUAL "AMD64")
+  set(CCACHE_VERSION "4.14.1")
+  set(ccache_name "ccache-${CCACHE_VERSION}-windows-x86_64")
+  set(ccache_archive "${TOOLS_DIR}/${ccache_name}.zip")
+  if(EXISTS "${TOOLS_DIR}/ccache" AND NOT EXISTS "${TOOLS_DIR}/ccache/ccache-${CCACHE_VERSION}")
+    file(REMOVE_RECURSE "${TOOLS_DIR}/ccache")
+  endif()
+  if(NOT EXISTS "${TOOLS_DIR}/ccache" AND NOT EXISTS "${ccache_archive}")
+    message(STATUS "Downloading ${ccache_name}.zip")
+    # EXPECTED_HASH would make any failed download fatal, so the hash is checked after it.
+    file(DOWNLOAD "https://github.com/ccache/ccache/releases/download/v${CCACHE_VERSION}/${ccache_name}.zip"
+      "${ccache_archive}.part"
+      TLS_VERIFY ON
+      STATUS ccache_download)
+    list(GET ccache_download 0 ccache_status)
+    list(GET ccache_download 1 ccache_detail)
+    if(ccache_status EQUAL 0)
+      file(SHA256 "${ccache_archive}.part" ccache_sha256)
+      if(ccache_sha256 STREQUAL "6219f3865ca59aec41ee4b678df171d5d35855ecb2b6dbbbd20690b3a68af7b4")
+        file(RENAME "${ccache_archive}.part" "${ccache_archive}")
+      else()
+        set(ccache_detail "SHA-256 ${ccache_sha256} is not the pinned one")
+      endif()
+    endif()
+    file(REMOVE "${ccache_archive}.part")
+    if(NOT EXISTS "${ccache_archive}")
+      message(WARNING "Could not download ccache (${ccache_detail}); native packages build without it")
+    endif()
+  endif()
+  if(NOT EXISTS "${TOOLS_DIR}/ccache" AND EXISTS "${ccache_archive}")
+    extract_single_directory("${ccache_archive}" "${TOOLS_DIR}/ccache.unpacked")
+    file(MAKE_DIRECTORY "${TOOLS_DIR}/ccache")
+    file(RENAME "${TOOLS_DIR}/ccache.unpacked" "${TOOLS_DIR}/ccache/ccache-${CCACHE_VERSION}")
+    file(COPY_FILE "${TOOLS_DIR}/ccache/ccache-${CCACHE_VERSION}/ccache.exe" "${TOOLS_DIR}/ccache/ccache.exe")
+  endif()
+  if(EXISTS "${TOOLS_DIR}/ccache/ccache.exe")
+    execute_process(COMMAND "${TOOLS_DIR}/ccache/ccache.exe" --version RESULT_VARIABLE ccache_check OUTPUT_QUIET ERROR_QUIET)
+    if(NOT ccache_check EQUAL 0)
+      file(REMOVE_RECURSE "${TOOLS_DIR}/ccache")
+      message(WARNING "ccache ${CCACHE_VERSION} does not run (${ccache_check}); native packages build without it")
+    endif()
+  endif()
+endif()
+
 run_checked("Native CMake configuration"
   "${CMAKE_COMMAND}" --preset "${native_preset}" -S "${HAXEON_ROOT}")
 run_checked("Native build"
