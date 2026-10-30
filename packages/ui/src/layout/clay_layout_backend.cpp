@@ -174,8 +174,9 @@ struct LayoutEngine::Impl {
     bool add_font_from_data(const char *name, const void *data, std::size_t bytes,
                             FontFamily family);
     bool add_system_fallbacks();
-    bool layout(const std::vector<LayoutNode> &nodes, float width, float height,
-                float delta_seconds, LayoutSnapshot &out, LayoutError *error);
+    bool layout(const LayoutNodeView &nodes, float width, float height,
+                float delta_seconds, LayoutSnapshot &out, LayoutError *error,
+                const LayoutInputChanges *changes);
 
     static Clay_Dimensions measure_text(Clay_StringSlice text, Clay_TextElementConfig *config,
                                         void *user_data);
@@ -190,9 +191,16 @@ struct LayoutEngine::Impl {
     std::vector<char> clay_memory;
     Clay_Context *context = nullptr;
     TextEngine text;
-    const std::vector<LayoutNode> *nodes = nullptr;
+    const LayoutNodeView *nodes = nullptr;
+    std::vector<const LayoutNode *> dense_nodes;
     std::vector<std::vector<std::size_t>> children;
     std::vector<Clay_ElementId> element_ids;
+    bool prepared = false;
+    std::size_t root_index = 0;
+    std::vector<std::vector<std::size_t>> floating_children;
+    std::vector<std::vector<std::size_t>> overlay_children;
+    std::vector<std::size_t> context_order;
+    std::vector<int32_t> layers;
     std::unordered_map<TextLayoutId, LayoutTextLayout> text_layouts;
     struct MeasureCacheKey {
         uint32_t node_id = 0;
@@ -664,8 +672,9 @@ bool LayoutEngine::Impl::add_system_fallbacks() {
     return text.add_system_fallbacks();
 }
 
-bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float width, float height,
-                                float delta_seconds, LayoutSnapshot &out, LayoutError *error) {
+bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float height,
+                                float delta_seconds, LayoutSnapshot &out, LayoutError *error,
+                                const LayoutInputChanges *changes) {
     if (error)
         *error = {};
     out = {};
@@ -678,170 +687,188 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
 
     const double prepare_started = layout_cost_time();
     auto &state = *this;
-    std::size_t required_elements = nodes.size();
-    for (const auto &node : nodes) {
-        if (node.visual_kind == LayoutVisualKind::Text) {
-            if (required_elements == std::numeric_limits<std::size_t>::max()) {
-                if (error)
-                    error->message = "layout element count overflow";
+    const bool topology_changed = !state.prepared || !changes || changes->topology;
+    const bool layers_changed = topology_changed || changes->layers;
+    state.prepared = false;
+    std::size_t root = state.root_index;
+    if (topology_changed) {
+        std::size_t required_elements = nodes.size();
+        for (const auto &node : nodes) {
+            if (node.visual_kind == LayoutVisualKind::Text) {
+                if (required_elements == std::numeric_limits<std::size_t>::max()) {
+                    if (error)
+                        error->message = "layout element count overflow";
+                    return false;
+                }
+                ++required_elements;
+            }
+        }
+        // Clay also allocates its root container, and its array keeps one slot
+        // available while checking capacity during OpenElement.
+        if (required_elements == std::numeric_limits<std::size_t>::max()) {
+            if (error)
+                error->message = "layout element count overflow";
+            return false;
+        }
+        ++required_elements;
+        // Clay retains the previous frame's IDs until EndLayout prunes them. A tab
+        // switch can therefore need room for both trees during this submission.
+        if (required_elements >
+            (static_cast<std::size_t>(std::numeric_limits<int32_t>::max()) - 1) / 2 ||
+            !state.reserve_elements(required_elements * 2)) {
+            if (error)
+                error->message = "layout capacity could not grow for this submission";
+            return false;
+        }
+        state.children.assign(nodes.size(), {});
+        state.element_ids.resize(nodes.size());
+        state.measure_node_ids.clear();
+
+        root = nodes.size();
+        std::vector<uint8_t> marks(nodes.size(), 0);
+        std::unordered_map<uint32_t, std::size_t> ids;
+        for (std::size_t index = 0; index < nodes.size(); ++index) {
+            const auto &node = nodes[index];
+            if ((!changes || !changes->topology_validated) && (!node.id || !ids.emplace(node.id, index).second)) {
+                if (error) {
+                    error->node_index = index;
+                    error->message = "layout node IDs must be unique and non-zero";
+                }
                 return false;
             }
-            ++required_elements;
+            if (node.style.overlay && node.style.positioning != LayoutPositioning::Absolute) {
+                if (error) {
+                    error->node_index = index;
+                    error->message = "layout overlays require absolute positioning";
+                }
+                return false;
+            }
+            state.element_ids[index] = element_id(node.id);
+            if (node.visual_kind == LayoutVisualKind::Custom)
+                state.measure_node_ids[state.element_ids[index].id] = {node.id, node.measure_version};
+            if (node.parent < 0) {
+                if (root != nodes.size()) {
+                    if (error) {
+                        error->node_index = index;
+                        error->message = "layout tree must have exactly one root";
+                    }
+                    return false;
+                }
+                root = index;
+            } else if (static_cast<std::size_t>(node.parent) >= nodes.size()) {
+                if (error) {
+                    error->node_index = index;
+                    error->message = "layout node parent is out of range";
+                }
+                return false;
+            } else {
+                state.children[static_cast<std::size_t>(node.parent)].push_back(index);
+            }
         }
-    }
-    // Clay also allocates its root container, and its array keeps one slot
-    // available while checking capacity during OpenElement.
-    if (required_elements == std::numeric_limits<std::size_t>::max()) {
-        if (error)
-            error->message = "layout element count overflow";
-        return false;
-    }
-    ++required_elements;
-    // Clay retains the previous frame's IDs until EndLayout prunes them. A tab
-    // switch can therefore need room for both trees during this submission.
-    if (required_elements >
-        (static_cast<std::size_t>(std::numeric_limits<int32_t>::max()) - 1) / 2 ||
-        !state.reserve_elements(required_elements * 2)) {
-        if (error)
-            error->message = "layout capacity could not grow for this submission";
-        return false;
+        if (root == nodes.size()) {
+            if (error)
+                error->message = "layout tree must have exactly one root";
+            return false;
+        }
+
+        const auto visit = [&](auto &&self, std::size_t index) -> bool {
+            if (marks[index] == 1)
+                return false;
+            if (marks[index] == 2)
+                return true;
+            marks[index] = 1;
+            for (const std::size_t child : state.children[index]) {
+                if (!self(self, child))
+                    return false;
+            }
+            marks[index] = 2;
+            return true;
+        };
+        if ((!changes || !changes->topology_validated) && (!visit(visit, root) ||
+            std::any_of(marks.begin(), marks.end(), [](uint8_t mark) { return mark != 2; }))) {
+            if (error)
+                error->message = "layout tree contains a cycle or disconnected node";
+            return false;
+        }
+
+        state.root_index = root;
+    } else {
+        for (const auto index : changes->nodes)
+            if (nodes[index].visual_kind == LayoutVisualKind::Custom)
+                state.measure_node_ids[state.element_ids[index].id] = {nodes[index].id, nodes[index].measure_version};
     }
     Clay_SetCurrentContext(state.context);
     state.nodes = &nodes;
-    state.children.assign(nodes.size(), {});
-    state.element_ids.resize(nodes.size());
-    state.measure_node_ids.clear();
     state.clay_error.clear();
     state.text_layouts.clear();
     state.frame_measurements.clear();
     state.callback_lines.clear();
-
-    std::size_t root = nodes.size();
-    std::vector<uint8_t> marks(nodes.size(), 0);
-    std::unordered_map<uint32_t, std::size_t> ids;
-    for (std::size_t index = 0; index < nodes.size(); ++index) {
-        const auto &node = nodes[index];
-        if (!node.id || !ids.emplace(node.id, index).second) {
-            if (error) {
-                error->node_index = index;
-                error->message = "layout node IDs must be unique and non-zero";
-            }
-            return false;
-        }
-        if (node.style.overlay && node.style.positioning != LayoutPositioning::Absolute) {
-            if (error) {
-                error->node_index = index;
-                error->message = "layout overlays require absolute positioning";
-            }
-            return false;
-        }
-        state.element_ids[index] = element_id(node.id);
-        state.measure_node_ids[state.element_ids[index].id] = {node.id, node.measure_version};
-        if (node.parent < 0) {
-            if (root != nodes.size()) {
-                if (error) {
-                    error->node_index = index;
-                    error->message = "layout tree must have exactly one root";
+    auto &floating_children = state.floating_children;
+    auto &overlay_children = state.overlay_children;
+    auto &context_order = state.context_order;
+    auto &layers = state.layers;
+    if (layers_changed) {
+        // Ordinary floating contexts preserve nested z-order. Overlays escape those
+        // contexts, but remain inside the nearest enclosing overlay (e.g. a dialog).
+        floating_children.assign(nodes.size(), {});
+        overlay_children.assign(nodes.size(), {});
+        const auto collect_floating = [&](auto &&self, std::size_t index,
+                                          std::size_t owner, std::size_t overlay_owner) -> void {
+            if (index != root && nodes[index].style.positioning == LayoutPositioning::Absolute) {
+                if (nodes[index].style.overlay) {
+                    overlay_children[overlay_owner].push_back(index);
+                    overlay_owner = index;
+                } else {
+                    floating_children[owner].push_back(index);
                 }
-                return false;
+                owner = index;
             }
-            root = index;
-        } else if (static_cast<std::size_t>(node.parent) >= nodes.size()) {
-            if (error) {
-                error->node_index = index;
-                error->message = "layout node parent is out of range";
-            }
-            return false;
-        } else {
-            state.children[static_cast<std::size_t>(node.parent)].push_back(index);
-        }
-    }
-    if (root == nodes.size()) {
-        if (error)
-            error->message = "layout tree must have exactly one root";
-        return false;
-    }
-
-    const auto visit = [&](auto &&self, std::size_t index) -> bool {
-        if (marks[index] == 1)
-            return false;
-        if (marks[index] == 2)
-            return true;
-        marks[index] = 1;
-        for (const std::size_t child : state.children[index]) {
-            if (!self(self, child))
-                return false;
-        }
-        marks[index] = 2;
-        return true;
-    };
-    if (!visit(visit, root) ||
-        std::any_of(marks.begin(), marks.end(), [](uint8_t mark) { return mark != 2; })) {
-        if (error)
-            error->message = "layout tree contains a cycle or disconnected node";
-        return false;
-    }
-
-    // Ordinary floating contexts preserve nested z-order. Overlays escape those
-    // contexts, but remain inside the nearest enclosing overlay (e.g. a dialog).
-    std::vector<std::vector<std::size_t>> floating_children(nodes.size());
-    std::vector<std::vector<std::size_t>> overlay_children(nodes.size());
-    const auto collect_floating = [&](auto &&self, std::size_t index,
-                                      std::size_t owner, std::size_t overlay_owner) -> void {
-        if (index != root && nodes[index].style.positioning == LayoutPositioning::Absolute) {
-            if (nodes[index].style.overlay) {
-                overlay_children[overlay_owner].push_back(index);
-                overlay_owner = index;
-            } else {
-                floating_children[owner].push_back(index);
-            }
-            owner = index;
-        }
-        for (const std::size_t child : state.children[index])
-            self(self, child, owner, overlay_owner);
-    };
-    collect_floating(collect_floating, root, root, root);
-    std::vector<std::size_t> context_order;
-    const auto order_floating = [&](auto &&self, std::size_t owner) -> void {
-        const auto sort_children = [&](auto &children) {
-            std::stable_sort(children.begin(), children.end(), [&](std::size_t left,
-                                                                   std::size_t right) {
-                return nodes[left].style.z_index < nodes[right].style.z_index;
-            });
+            for (const std::size_t child : state.children[index])
+                self(self, child, owner, overlay_owner);
         };
-        auto &children = floating_children[owner];
-        sort_children(children);
-        for (const std::size_t child : children)
-            if (nodes[child].style.z_index < 0) self(self, child);
-        context_order.push_back(owner);
-        for (const std::size_t child : children)
-            if (nodes[child].style.z_index >= 0) self(self, child);
-        auto &overlays = overlay_children[owner];
-        sort_children(overlays);
-        for (const std::size_t child : overlays) self(self, child);
-    };
-    order_floating(order_floating, root);
-    const auto root_order = std::find(context_order.begin(), context_order.end(), root);
-    std::vector<int32_t> layers(nodes.size(), 0);
-    for (std::size_t order = 0; order < context_order.size(); ++order) {
-        const auto rank = static_cast<int64_t>(order) - (root_order - context_order.begin());
-        if (rank < std::numeric_limits<int16_t>::min() ||
-            rank > std::numeric_limits<int16_t>::max()) {
-            if (error)
-                error->message = "layout has too many floating layers";
-            return false;
+        collect_floating(collect_floating, root, root, root);
+        context_order.clear();
+        const auto order_floating = [&](auto &&self, std::size_t owner) -> void {
+            const auto sort_children = [&](auto &children) {
+                std::stable_sort(children.begin(), children.end(), [&](std::size_t left,
+                                                                       std::size_t right) {
+                    return nodes[left].style.z_index < nodes[right].style.z_index;
+                });
+            };
+            auto &children = floating_children[owner];
+            sort_children(children);
+            for (const std::size_t child : children)
+                if (nodes[child].style.z_index < 0) self(self, child);
+            context_order.push_back(owner);
+            for (const std::size_t child : children)
+                if (nodes[child].style.z_index >= 0) self(self, child);
+            auto &overlays = overlay_children[owner];
+            sort_children(overlays);
+            for (const std::size_t child : overlays) self(self, child);
+        };
+        order_floating(order_floating, root);
+        const auto root_order = std::find(context_order.begin(), context_order.end(), root);
+        layers.assign(nodes.size(), 0);
+        for (std::size_t order = 0; order < context_order.size(); ++order) {
+            const auto rank = static_cast<int64_t>(order) - (root_order - context_order.begin());
+            if (rank < std::numeric_limits<int16_t>::min() ||
+                rank > std::numeric_limits<int16_t>::max()) {
+                if (error)
+                    error->message = "layout has too many floating layers";
+                return false;
+            }
+            layers[context_order[order]] = static_cast<int32_t>(rank);
         }
-        layers[context_order[order]] = static_cast<int32_t>(rank);
+        const auto assign_layers = [&](auto &&self, std::size_t index,
+                                       int32_t owner_layer) -> void {
+            if (index != root && nodes[index].style.positioning == LayoutPositioning::Absolute)
+                owner_layer = layers[index];
+            layers[index] = owner_layer;
+            for (const std::size_t child : state.children[index])
+                self(self, child, owner_layer);
+        };
+        assign_layers(assign_layers, root, 0);
     }
-    const auto assign_layers = [&](auto &&self, std::size_t index,
-                                   int32_t owner_layer) -> void {
-        if (index != root && nodes[index].style.positioning == LayoutPositioning::Absolute)
-            owner_layer = layers[index];
-        layers[index] = owner_layer;
-        for (const std::size_t child : state.children[index])
-            self(self, child, owner_layer);
-    };
-    assign_layers(assign_layers, root, 0);
 
     const double solve_started = layout_cost_time();
     Clay_SetLayoutDimensions({width, height});
@@ -1116,6 +1143,7 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
         out.items[paint_indices[order]].paint_order = order + 1;
 
     const double snapshot_finished = layout_cost_time();
+    state.prepared = true;
     if (layout_cost_enabled())
         std::fprintf(stderr, "layout-cost backend nodes=%zu prepare=%.9f solve=%.9f snapshot=%.9f\n",
                      nodes.size(), solve_started - prepare_started, snapshot_started - solve_started,
@@ -1172,13 +1200,28 @@ LayoutMeasureStats LayoutEngine::measure_stats() const {
 }
 
 bool LayoutEngine::layout(const std::vector<LayoutNode> &nodes, float width, float height,
-                          float delta_seconds, LayoutSnapshot &out, LayoutError *error) {
+                          float delta_seconds, LayoutSnapshot &out, LayoutError *error,
+                          const LayoutInputChanges *changes) {
+    if (!impl_) {
+        if (error) error->message = "layout implementation is unavailable";
+        return false;
+    }
+    impl_->dense_nodes.clear();
+    for (const auto &node : nodes) {
+        impl_->dense_nodes.push_back(&node);
+    }
+    return layout(LayoutNodeView(impl_->dense_nodes), width, height, delta_seconds, out, error, changes);
+}
+
+bool LayoutEngine::layout(const LayoutNodeView &nodes, float width, float height,
+                          float delta_seconds, LayoutSnapshot &out, LayoutError *error,
+                                const LayoutInputChanges *changes) {
     if (!impl_) {
         if (error)
             error->message = "layout implementation is unavailable";
         return false;
     }
-    return impl_->layout(nodes, width, height, delta_seconds, out, error);
+    return impl_->layout(nodes, width, height, delta_seconds, out, error, changes);
 }
 
 } // namespace nkui

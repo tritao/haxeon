@@ -511,6 +511,13 @@ class BuildContext {
 
 	/** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see willEditRetained. */
 	final retainedEdits:Array<RenderNode> = [];
+	var retainedEditEpoch:Int = 0;
+	final retainedEditCaches:Map<Int, RetainedEditCache> = new Map();
+	final retainedEditCacheIds:Array<Int> = [];
+
+	/** Start the lifetime of geometry feedback priors after event edits for this submission have been captured. */
+	public function beginLayoutSubmission():Void
+		retainedEditEpoch++;
 	final retainedEditPriors:Array<RenderNode> = [];
 	/** Bumped by each first edit of a node between frames; a different value from the submitted one means a frame is due. */
 	public var retainedEditRevision(default, null):Int = 0;
@@ -524,8 +531,22 @@ class BuildContext {
 		if (retainedEdits.indexOf(node) >= 0)
 			return;
 		retainedEdits.push(node);
-		retainedEditPriors.push(node.snapshotForCompare());
+		retainedEditPriors.push(captureEditPrior(node, retainedEditEpoch));
 		retainedEditRevision++;
+	}
+
+	/** Input normalization runs after fingerprint checks, but its prior still belongs to the pre-feedback phase. */
+	public function comparisonPrior(node:RenderNode):RenderNode
+		return captureEditPrior(node, retainedEditEpoch - 1);
+
+	function captureEditPrior(node:RenderNode, epoch:Int):RenderNode {
+		var cache = retainedEditCaches.get(node.id.value);
+		if (cache == null) {
+			cache = new RetainedEditCache();
+			retainedEditCaches.set(node.id.value, cache);
+			retainedEditCacheIds.push(node.id.value);
+		}
+		return cache.capture(node, epoch);
 	}
 
 	/** Whether `node` was announced with willEditRetained since the last frame. */
@@ -561,6 +582,14 @@ class BuildContext {
 
 	/** Retire builders whose widgets are absent from the committed render tree. */
 	public function pruneSelfUpdatingBuilds(mounted:Map<Int, RenderNode>):Void {
+		var cacheIndex = 0;
+		while (cacheIndex < retainedEditCacheIds.length) {
+			var id = retainedEditCacheIds[cacheIndex];
+			if (mounted.exists(id)) { cacheIndex++; continue; }
+			retainedEditCaches.remove(id);
+			retainedEditCacheIds[cacheIndex] = retainedEditCacheIds[retainedEditCacheIds.length - 1];
+			retainedEditCacheIds.pop();
+		}
 		var removed = false;
 		var index = 0;
 		while (index < selfUpdatingIds.length) {
@@ -618,6 +647,8 @@ class BuildContext {
 
 	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
 	public function releaseRetained():Void {
+		retainedEditCaches.clear();
+		retainedEditCacheIds.resize(0);
 		retainedEdits.resize(0);
 		retainedEditPriors.resize(0);
 		// Builds that retained caches still hold were made by the code being released; they must not come back.
@@ -634,6 +665,8 @@ class BuildContext {
 
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
+		retainedEditCaches.clear();
+		retainedEditCacheIds.resize(0);
 		selfUpdatingBuilds.clear();
 		selfUpdatingIds.resize(0);
 		pendingPatches = [];
@@ -787,5 +820,29 @@ class SelfUpdatingBuild {
 		this.scope = scope;
 		this.styleParent = styleParent;
 		this.textStyleStack = textStyleStack;
+	}
+}
+
+/** Only announced editors need priors. A frame's input prior and its later geometry-feedback prior have separate lifetimes. */
+private class RetainedEditCache {
+	var prior:Null<RenderNode> = null;
+	var spare:Null<RenderNode> = null;
+	var owner:Null<RenderNode> = null;
+	var epoch:Int = -1;
+
+	public function new() {}
+
+	public function capture(node:RenderNode, epoch:Int):RenderNode {
+		if (this.epoch != epoch) {
+			var previous = prior; prior = spare; spare = previous;
+			this.epoch = epoch;
+		} else if (owner != node && owner != null) {
+			// Two instances with the same ID can be edited while a build replaces one; the first prior must stay intact.
+			return node.snapshotForCompare();
+		}
+		owner = node;
+		var result = node.snapshotForCompare(false, prior);
+		prior = result;
+		return result;
 	}
 }

@@ -8,13 +8,45 @@ import NativeKitUI.NkuiLayoutClipFlags;
 class LayoutTransaction {
 	var nodes:Array<LayoutNode> = [];
 	var parents:Array<Int> = [];
-	var stringValues:Array<String> = [];
 	var stringBytes:Array<Bytes> = [];
 	/** Identifies the current encode; a node stamped with it has already been appended, so it is duplicated or cyclic. */
 	static var encodeCounter:Int = 0;
 	var encodeStamp:Int = 0;
 	final intrinsicNodes:Array<LayoutNode> = [];
 	var nodeCount:Int = 0;
+	final tree:Array<LayoutNode> = [];
+	var treeIndex:IntIndex = new IntIndex();
+	var submittedIds:Array<Int> = [];
+	var treeIds:Array<Int> = [];
+	var submittedStrings:Array<String> = [];
+	var submittedStringBytes:Array<Bytes> = [];
+	var treeStrings:Array<String> = [];
+	var treeStringBytes:Array<Bytes> = [];
+	static final EmptyText:Bytes = Bytes.alloc(0);
+	var submittedIndex:IntIndex = new IntIndex();
+	final removedIds:Array<Int> = [];
+	final changedParents:Array<LayoutNode> = [];
+	var treeCount:Int = 0;
+	var submittedRoot:Int = 0;
+	var patch:Bool = false;
+	var rootChanged:Bool = false;
+	var captureContentVersions:Bool = true;
+	var changes:Null<LayoutChanges>;
+
+	public function updatedCount():Int return nodeCount;
+	public function removedCount():Int return removedIds.length;
+	public function parentCount():Int return changedParents.length;
+	public function orderedNodes():Array<LayoutNode> return tree;
+	public function previousPosition(id:Int):Int return submittedIndex.get(id);
+
+	/** Acknowledge only a successful native submit; encoding or a failed submit does not advance the base. */
+	public function commit():Void {
+		var previousIndex = submittedIndex; submittedIndex = treeIndex; treeIndex = previousIndex;
+		var previousIds = submittedIds; submittedIds = treeIds; treeIds = previousIds;
+		var previousStrings = submittedStrings; submittedStrings = treeStrings; treeStrings = previousStrings;
+		var previousBytes = submittedStringBytes; submittedStringBytes = treeStringBytes; treeStringBytes = previousBytes;
+		submittedRoot = tree[0].id;
+	}
 	var output:Null<Bytes>;
 	var outputLength:Int = 0;
 
@@ -28,30 +60,64 @@ class LayoutTransaction {
 		return new LayoutTransaction().encodeInto(root);
 
 	/** Encodes into reusable storage and returns the backing byte buffer. */
-	public function encodeInto(root:LayoutNode):Bytes {
+	public function encodeInto(root:LayoutNode, ?changes:LayoutChanges, captureContentVersions:Bool = true):Bytes {
 		if (root == null)
 			throw "Layout transaction requires a root node";
 
 		nodeCount = 0;
+		treeCount = 0;
+		treeIndex.clear();
+		removedIds.resize(0);
+		changedParents.resize(0);
+		this.changes = changes;
+		this.captureContentVersions = captureContentVersions;
+		patch = changes != null && submittedRoot != 0;
+		rootChanged = patch && submittedRoot != root.id;
 		encodeStamp = ++encodeCounter;
 		intrinsicNodes.resize(0);
 		appendNode(root, -1);
+		tree.resize(treeCount);
+		treeIds.resize(treeCount);
+		treeStrings.resize(treeCount);
+		treeStringBytes.resize(treeCount);
+		nodes.resize(nodeCount);
+		parents.resize(nodeCount);
+		if (patch)
+			for (id in submittedIds) if (treeIndex.get(id) < 0) removedIds.push(id);
+		var childWords = rootChanged ? 3 : 0;
+		for (parent in changedParents) childWords += 2 + parent.children.length;
 
 		var stringByteCount = 0;
 		for (index in 0...nodeCount)
 			stringByteCount += this.stringBytes[index].length;
-		var headerBytes:Int = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
+		var headerBytes:Int = patch ? NativeKitUIConstants.NKUI_LAYOUT_PATCH_HEADER_BYTES : NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
 		var recordBytes:Int = NativeKitUIConstants.NKUI_LAYOUT_NODE_RECORD_BYTES;
-		var stringOffset = headerBytes + nodeCount * recordBytes;
+		var stringOffset = headerBytes + nodeCount * recordBytes + (patch ? (removedIds.length + childWords) * 4 : 0);
 		ensureOutput(stringOffset + stringByteCount);
 		var output = this.output;
 		if (output == null)
 			throw "Layout transaction storage was not allocated";
 		outputLength = stringOffset + stringByteCount;
-		output.setInt32(0, NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_VERSION);
+		output.setInt32(0, patch ? NativeKitUIConstants.NKUI_LAYOUT_PATCH_VERSION : NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_VERSION);
 		output.setInt32(4, nodeCount);
 		output.setInt32(8, recordBytes);
 		output.setInt32(12, stringOffset);
+		if (patch) {
+			output.setInt32(16, removedIds.length);
+			output.setInt32(20, childWords);
+			output.setInt32(24, treeCount);
+			output.setInt32(28, 0);
+			var cursor = headerBytes + nodeCount * recordBytes;
+			for (id in removedIds) { output.setInt32(cursor, id); cursor += 4; }
+			if (rootChanged) {
+				output.setInt32(cursor, 0); output.setInt32(cursor + 4, 1); output.setInt32(cursor + 8, root.id);
+				cursor += 12;
+			}
+			for (parent in changedParents) {
+				output.setInt32(cursor, parent.id); output.setInt32(cursor + 4, parent.children.length); cursor += 8;
+				for (child in parent.children) { output.setInt32(cursor, child.id); cursor += 4; }
+			}
+		}
 
 		var textOffset = stringOffset;
 		for (index in 0...nodeCount) {
@@ -60,8 +126,6 @@ class LayoutTransaction {
 			var nodeTextStyle = node.peekTextStyle(), nodeParagraphStyle = node.peekParagraphStyle();
 			var record = headerBytes + index * recordBytes;
 			var measureVersion = node.measureVersion;
-			if (node.intrinsicContent != null)
-				measureVersion = node.intrinsicContent.getVersion();
 			var lineHeight:Float = nodeParagraphStyle.lineHeight == null ? 0.0 : nodeParagraphStyle.lineHeight;
 			if (node.id <= 0 || node.id == 0x80000000)
 				throw "Layout node ID is out of range";
@@ -230,8 +294,37 @@ class LayoutTransaction {
 		if (node.encodeStamp == encodeStamp)
 			throw "Layout tree contains a duplicate or cyclic node";
 		node.encodeStamp = encodeStamp;
-		if (node.intrinsicContent != null)
+		var content = node.intrinsicContent;
+		if (content != null) {
 			intrinsicNodes.push(node);
+			if (captureContentVersions) {
+				var version = content.getVersion();
+				if (version != node.measureVersion) {
+					node.measureVersion = version;
+					var changed = changes;
+					if (changed != null) changed.inputs.set(node.id, 0);
+				}
+			}
+		}
+		if (treeIndex.get(node.id) >= 0) throw "Layout node IDs must be unique";
+		var treePosition = treeCount++;
+		if (treePosition == tree.length) tree.push(node); else tree[treePosition] = node;
+		treeIndex.set(node.id, treePosition);
+		if (treePosition == treeIds.length) treeIds.push(node.id); else treeIds[treePosition] = node.id;
+		var previous = submittedIndex.get(node.id);
+		var added = previous < 0;
+		var value = node.text == null ? "" : node.text;
+		var text = value.length == 0 ? EmptyText : previous >= 0 && submittedStrings[previous] == value
+			? submittedStringBytes[previous] : Bytes.ofString(value);
+		if (treePosition == treeStrings.length) { treeStrings.push(value); treeStringBytes.push(text); }
+		else { treeStrings[treePosition] = value; treeStringBytes[treePosition] = text; }
+		var delta = changes;
+		if (patch && delta != null && (added ? node.children.length > 0 : delta.children.get(node.id) >= 0)) changedParents.push(node);
+		if (!patch || added || (delta != null && delta.inputs.get(node.id) >= 0)) appendRecord(node, parent, text);
+		for (child in node.children) appendNode(child, treePosition);
+	}
+
+	function appendRecord(node:LayoutNode, parent:Int, text:Bytes):Void {
 		var index = nodeCount++;
 		if (index == nodes.length) {
 			nodes.push(node);
@@ -240,16 +333,7 @@ class LayoutTransaction {
 			nodes[index] = node;
 			parents[index] = parent;
 		}
-		var value = node.text == null ? "" : node.text;
-		if (index == stringValues.length) {
-			stringValues.push(value);
-			stringBytes.push(Bytes.ofString(value));
-		} else if (stringValues[index] != value) {
-			stringValues[index] = value;
-			stringBytes[index] = Bytes.ofString(value);
-		}
-		for (child in node.children)
-			appendNode(child, index);
+		if (index == stringBytes.length) stringBytes.push(text); else stringBytes[index] = text;
 	}
 
 	static function finite(value:Float):Bool {

@@ -20,6 +20,7 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.View;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.widgets.text.TextField;
+import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextStyle;
@@ -686,12 +687,40 @@ class RestyleInPlaceTests {
     check(compared >= 20, "Semantics fields were not found by reflection (" + compared + ")");
   }
 
+  /** A build reparents a cached subtree; its old membership and topology must still compare as the submitted frame. */
+  static function submittedIndex(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), builds = 0;
+    var retained = new RetainedView("membership", function(_) {
+      builds++;
+      return new Text("kept child");
+    });
+    var frame = new LayoutFrame(240, 160);
+    var build = function() return new Column("membership-host", [
+      new KeyedView("kept", retained), new KeyedView("other", new Text("other child"))]);
+    var first = ui.submit(build(), frame), child = first.children[0];
+    for (index in 0...4) {
+      var next = ui.submit(build(), frame), metrics = ui.frameMetrics;
+      check(next != first && next.children[0] == child && builds == 1, "The membership fixture did not reparent a retained child");
+      check(metrics != null && metrics.styleChangedNodes == 0 && metrics.nativeLayoutReused,
+        "Reparenting while rebuilding treated unchanged nodes as new inputs or changed topology");
+    }
+    var reordered = function() return new Column("membership-host", [
+      new KeyedView("other", new Text("other child")), new KeyedView("kept", retained)]);
+    var moved = ui.submit(reordered(), frame), metrics = ui.frameMetrics;
+    check(moved.children[1] == child && metrics != null && metrics.nativeLayoutSubmitted && metrics.styleChangedNodes == 0,
+      "An actual child reordering was lost or invalidated unchanged styles");
+    check(ui.verifyRetention(reordered, frame) == null, "Reordered retained children differ from a full build");
+    ui.dispose();
+    Sys.println("PASS membership: rebuilding reparents retained nodes without false input changes; a real reordering still submits and verifies");
+  }
+
   public static function main():Int {
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
     verifyMode(fonts);
     reconcile(fonts);
+    submittedIndex(fonts);
     motion(fonts);
     run(fonts, "buttons", false, false, 1, [
       {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},

@@ -167,6 +167,7 @@ class ScrollView implements View {
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
 				if (transform.tx != -controller.offsetX || transform.ty != -controller.offsetY) {
+					context.willEditRetained(translatedContent);
 					translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX,
 						-controller.offsetY);
 					context.requestLayoutFeedback();
@@ -174,10 +175,10 @@ class ScrollView implements View {
 				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0 && controller.viewportHeight > 0);
 				overlaySize.width = overlayHost.resolved == null ? controller.viewportWidth : overlayHost.resolved.width;
 				overlaySize.height = overlayHost.resolved == null ? controller.viewportHeight : overlayHost.resolved.height;
-				if (scrollbar != null && updateScrollbar(scrollbar, overlaySize.width, overlaySize.height, true))
+				if (scrollbar != null && updateScrollbar(scrollbar, overlaySize.width, overlaySize.height, true, context))
 					context.requestLayoutFeedback();
 				horizontalVisibility.value.setAvailable(horizontal != null && controller.maxScrollX > 0 && controller.viewportWidth > 0);
-				if (horizontal != null && updateScrollbar(horizontal, overlaySize.width, overlaySize.height, false)) context.requestLayoutFeedback();
+				if (horizontal != null && updateScrollbar(horizontal, overlaySize.width, overlaySize.height, false, context)) context.requestLayoutFeedback();
 			});
 			viewport.on(UiEventKind.Scroll, function(event) {
 				if (onScroll != null)
@@ -346,7 +347,7 @@ class ScrollView implements View {
 		return track;
 	}
 
-	function updateScrollbar(track:RenderNode, width:Float, height:Float, vertical:Bool):Bool {
+	function updateScrollbar(track:RenderNode, width:Float, height:Float, vertical:Bool, ?context:BuildContext):Bool {
 		var thumb = track.children[0], trackStyle = track.layout.style, thumbStyle = thumb.layout.style;
 		var viewportExtent = vertical ? controller.viewportHeight : controller.viewportWidth;
 		var contentExtent = vertical ? controller.contentHeight : controller.contentWidth;
@@ -360,6 +361,10 @@ class ScrollView implements View {
 		var changed = trackStyle.visible != visible || (vertical ?
 			trackStyle.height.value != length || thumbStyle.height.value != thumbLength || thumbStyle.positionY != along || trackStyle.positionX != cross :
 			trackStyle.width.value != length || thumbStyle.width.value != thumbLength || thumbStyle.positionX != along || trackStyle.positionY != cross);
+		if (changed && context != null) {
+			context.willEditRetained(track);
+			context.willEditRetained(thumb);
+		}
 		trackStyle.positionX = vertical ? cross : ScrollbarInset;
 		trackStyle.positionY = vertical ? ScrollbarInset : cross;
 		// These four axes are owned by this scrollbar and initialized together.

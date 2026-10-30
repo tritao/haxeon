@@ -17,8 +17,10 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 22,
+    NKUI_LAYOUT_API_VERSION = 23,
     NKUI_LAYOUT_TRANSACTION_VERSION = 17,
+    NKUI_LAYOUT_PATCH_VERSION = 18,
+    NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
     NKUI_LAYOUT_NODE_RECORD_BYTES = 264,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
@@ -396,6 +398,13 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_set_cache_policy(nkui_layout_se
  * transaction. The native side copies all values before returning, so the
  * input buffer may be reused. The transaction is bounded by
  * NKUI_LAYOUT_MAX_TRANSACTION_BYTES; node capacity grows with submitted data.
+ * A PATCH_VERSION packet has a 32-byte header: version, updated-node count,
+ * record size, string offset, removed-ID count, child-list word count, final
+ * node count, and reserved zero. Updated records retain the full record format;
+ * their parent field is ignored. After the records come removed uint32 IDs,
+ * then child-list blocks (parent ID, child count, ordered child IDs), then UTF-8.
+ * Parent zero's sole child is the root. Only changed parents need a block.
+ * Patches require a prior successful full submit and are applied atomically.
  * Each node transform is applied about its normalized resolved-box origin;
  * clipped nodes must have an axis-aligned cumulative transform. The default
  * origin is the center of the resolved box.
@@ -404,7 +413,7 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_submit(
     nkui_layout_session session, const uint8_t *transaction NKUI_IN_ARRAY(transaction_bytes),
     uint32_t transaction_bytes, const nkui_layout_frame_input *frame);
 
-/** Copies the resolved geometry for every node in submission order.
+/** Copies resolved geometry in retained tree order. Full submits preserve submission order; patches use child-list preorder.
  *
  * The buffer contains `nkui_layout_item` records with `struct_size` set.
  * Bounds remain in pre-transform layout coordinates; `transform` maps them to
@@ -416,6 +425,18 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_submit(
 NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_items(
     nkui_layout_session session, uint8_t *out_buffer NK_OUT_BUFFER(inout_bytes),
     uint32_t *inout_bytes NK_INOUT);
+
+/** Copies only geometry records changed by the last successful submit. Repeated reads return the same records.
+ * The first submit exports every record; removals and item order follow the submitted tree, not this update buffer.
+ */
+NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates(
+    nkui_layout_session session, uint8_t *out_buffer NK_OUT_BUFFER(inout_bytes),
+    uint32_t *inout_bytes NK_INOUT);
+
+/** Checks every retained native node and its order against a full transaction without changing the session. */
+NKUI_API nkui_result NK_CALL nkui_layout_session_verify_tree(
+    nkui_layout_session session, const uint8_t *transaction NKUI_IN_ARRAY(transaction_bytes),
+    uint32_t transaction_bytes);
 
 /** Returns the root-to-target geometric hit path for a viewport point.
  *

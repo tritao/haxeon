@@ -14,6 +14,7 @@ import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 import haxeon.ui.LayoutNode;
+import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Canvas;
@@ -266,6 +267,7 @@ class RenderNode {
 			prior.layout.textColor = layout.textColor;
 			prior.layout.measureVersion = layout.measureVersion;
 			prior.layout.intrinsicContent = layout.intrinsicContent;
+			layout.copyTextStylesTo(prior.layout);
 		}
 		prior.parent = parent;
 		if (prior.children == NoChildren) prior.children = [];
@@ -616,8 +618,18 @@ class RenderNode {
 		}
 	}
 
+	/** Synchronize the complete native input tree without allocating a visitor closure for each frame. */
+	@:allow(haxeon.ui.core.UiContext)
+	function syncLayoutInputs(changes:LayoutChanges):Void {
+		syncHitTestPolicy();
+		syncSceneRevisions();
+		if ((invalidationFlags & UiDirtyFlag.NativeInputs) != 0) changes.inputs.set(id.value, 0);
+		for (child in children) child.syncLayoutInputs(changes);
+	}
+
 	/** Copies retained scene revisions into the native layout transaction payload. */
 	@:allow(haxeon.ui.core.UiContext)
+	@:allow(haxeon.ui.debug.UiStyleInvalidationMetrics)
 	function syncSceneRevisions():Void {
 		layout.contentRevision = contentRevision;
 		layout.geometryRevision = geometryRevision;
@@ -765,7 +777,8 @@ class RenderNode {
 	 * can now distinguish content, geometry, and composition changes.
 	 */
 	@:allow(haxeon.ui.debug.UiStyleInvalidationMetrics)
-	function syncRevisions(previous:Null<RenderNode>, diff:StyleDiff):Void {
+	function syncRevisions(previous:Null<RenderNode>, diff:StyleDiff, accumulate:Bool = false):Void {
+		var preserved = accumulate ? invalidationFlags : UiDirtyFlag.None;
 		if (previous == null) {
 			invalidationFlags = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle |
 				UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
@@ -826,6 +839,7 @@ class RenderNode {
 			geometryRevision++;
 		if (compositeChanged)
 			compositeRevision++;
+		invalidationFlags |= preserved;
 	}
 
 	/** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */

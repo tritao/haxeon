@@ -7,8 +7,8 @@ with a node count in each and the encode start timestamp in the Haxe record. Cle
 
 The measured boundaries are:
 
-- `encode`: `LayoutTransaction.encodeInto`, including its tree walk, validation, string table and record writes.
-- `parse`: native transaction decoding into `LayoutNode`s.
+- `encode`: `LayoutTransaction.encodeInto`, including its tree walk, validation, string table, record writes and successful-submission receipt swap.
+- `parse`: native transaction decoding into `LayoutNode`s, applying the retained mutation and publishing its identity/topology index.
 - `prepare`: native backend validation, adjacency/ID tables, floating layers and Clay capacity setup.
 - `solve`: Clay BeginLayout, tree declaration and EndLayout, including intrinsic measurement and text shaping callbacks.
 - `snapshot`: reading Clay geometry, text layouts, transforms/clips, primitives and paint order into `LayoutSnapshot`.
@@ -131,3 +131,93 @@ only, so its after measurements are the same as this baseline.
 Validation for this checkpoint: all ten UI scripts PASS; all nine retention scenarios PASS with verification every active
 frame; performance budgets PASS without ceiling changes; all three 500-cycle memory runs PASS. Compiler sources and
 stdlib are unchanged; the compiler suites will also run at the end of the bridge work.
+
+### Item 2: retained native inputs and incremental transactions
+
+The bridge remains inside `packages/ui`; no NativeKit session API outside the package is changed. Clay still solves the
+complete tree. API version 23 keeps full transaction version 17 and adds patch version 18 to the same submit entry point.
+A patch contains updated 264-byte node records, removed IDs, and ordered child lists for changed parents. Parent ID zero
+owns the root. New IDs carry their input records and nonempty child lists. Unchanged records and child lists are absent.
+The header validates exact metadata lengths, final node count and a reserved zero before applying anything.
+
+**One dirty classification.** `UiStyleInvalidationMetrics.compare` and `RenderNode.syncRevisions` still decide what changed,
+including generated `Structural.changedMask` style differences, text, intrinsic content, hit policy and retained scene
+revisions. `LayoutChanges` is reusable transport scratch populated from those decisions, not another style cache or
+fingerprint. The encoder walks for membership, order, validation and intrinsic registration, but validates and writes input
+records only for changed or new nodes. Successful-submission identity tables are swapped into place and reused by decode;
+failed submissions do not advance the Haxe base. The complete encoder remains for first submits, newly created sessions,
+explicit full submits, direct callers without retained dirty information, and verification reference builds.
+
+The previous comparison walked the old tree *after* building had detached retained children from it. Those nodes then
+looked new despite already being native. `UiContext` now preserves the published frame's complete node index before building.
+Two reusable `RenderTreeTopology` tables preserve exact parent IDs and ordered child IDs: live parent/child pointers change
+while a builder reparents cached subtrees. This fixes the source of the existing comparison rather than deduplicating its
+false positives in another bridge cache. A regression rebuilds a parent around a retained child, requires zero changed
+styles and native layout reuse, then reorders the children and requires a native submit matching a full rebuild.
+
+**Retained storage and preparation.** Native owns a stable node slot per live ID, with dense input records in reusable
+chunks. Identity, visitation and exported-geometry metadata live outside those hot input arrays. A topology edit rebuilds
+an ordered pointer view and materializes its parent indices without copying or moving untouched input records. Child-list edits stay keyed by ID.
+Changed records exchange with their old values until solve succeeds; additions and removals commit with the topology.
+Malformed packets, duplicate IDs/parents, missing children, cycles, disconnected nodes and failed solves preserve the input
+tree and published snapshot. Full submits retain the same atomic behavior. Free slots are reused after unmounting.
+
+Clay preparation retains adjacency, element IDs, intrinsic IDs and floating-layer tables. Style/content-only patches update
+intrinsic versions only for changed custom nodes; unrelated inputs reuse these tables. Actual topology changes rebuild the
+index-dependent tables, and positioning/overlay/z-order changes rebuild floating layers. Patch topology has already been
+validated by the retained-tree traversal, so preparation does not repeat its ID/cycle validation; full/direct engine inputs
+still receive the complete validation. Intrinsic measurement ID entries are needed only for Custom nodes.
+
+**Geometry feedback and decode.** Geometry callbacks announce their node edits through the existing `willEditRetained`
+prior mechanism before changing input fields. The same comparison classifies these priors for a subsequent incremental
+submit. Feedback revisions accumulate with the first pass and are not reset by the final metrics summary. Two reusable
+prior slots per announced ID keep an event/input prior alive through that frame's geometry feedback; the cache belongs to
+`BuildContext`, is pruned on unmount and cleared on retained-code release. It adds no fields to every `RenderNode`.
+The outer document-path popup also announces its geometry edit.
+
+Native compares the 96-byte resolved record with that ID's previous exported record and exports only changed geometry.
+Paint remains in the native snapshot; unchanged geometry needs no Haxe paint metadata. The full geometry API is retained.
+Updates are repeatable reads, not a consumed queue. Haxe decodes only the returned records, reuses immutable items otherwise,
+and assembles tree order using the successful-submission identity index and two reusable result arrays. No per-ID Haxe map
+entries are allocated while panels change.
+
+**Verification and intrinsic versions.** With retention verification enabled, every submit also fully encodes its captured
+inputs and asks native to compare every node field and parent/order with the retained tree. C++ defaulted equality covers
+all input fields, including future additions. The existing retention reference rebuild forces full encoding and preparation
+and still compares the rebuilt UI and geometry. Fingerprints and `checkUnannouncedEdits` remain intact.
+
+An intrinsic provider can invalidate itself while measuring or receiving resolved viewport dimensions; the text editor does.
+Its version is now captured in the existing `LayoutNode.measureVersion` input during comparison, *after* unannounced edits
+are checked. A shared comparison prior is detached before that field changes. The reference encoding checks that captured
+input version, not a later external version produced by the solve itself. The next submit samples the provider again and
+uses the same dirty path. The low-level session similarly samples attached providers before encoding. A regression changes
+a provider's version during measurement, verifies the submitted tree, and requires remeasurement on the next submit.
+
+Native tests exercise 1,201 nodes, paint/geometry/text changes, floating layers, empty patches, identity replacement,
+sibling reversal, malformed packets and rollback after a solve failure, comparing complete exported geometry bytes and
+native inputs against full submissions. Haxe tests cover 1,101 nodes, unchanged item identity, reordered/added/removed nodes,
+root replacement, full resubmission and a deliberately omitted input change which must fail verification.
+
+UTF-8 bytes follow the successful-submission identity index, so changing patch record order does not reallocate unchanged
+strings. Empty text shares one byte buffer. The comparison and input-sync walks avoid captured visitors and boxed counters;
+the exact typing census falls from 18,552/18,808 bytes (character/backspace) to 18,200/18,456, 352 fewer bytes per action.
+The ordinary budget replay reports 17.8 KiB for both. All measured actions remain at or below the fresh baseline allocation.
+
+Same-machine item 2 measurements, sequential 60-cycle captures `ui-bridge-step2-published-{interaction,tab-matrix,selection-stress}`:
+
+| scenario | passes/frame | nodes | encode | parse | prepare | Clay solve | snapshot | hash | decode | bridge sum before → after |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| interaction | 1 | 350–351 | 0.020 | 0.001 | 0.003 | 0.136 | 0.081 | 0.020 | 0.010 | 0.293 → 0.034 (−88%) |
+| tab-matrix | 1 | 344–485 | 0.048 | 0.034 | 0.022 | 0.184 | 0.085 | 0.020 | 0.045 | 0.346 → 0.149 (−57%) |
+| selection-stress | 2 | 350 | 0.097 | 0.052 | 0.023 | 0.285 | 0.164 | 0.040 | 0.063 | 0.632 → 0.235 (−63%) |
+
+Bridge sum is encode + parse + prepare + decode, summed from the independent phase medians. The interaction and tab sums
+also beat half of the original table's 0.298/0.335 ms. Solve and hash remain effectively unchanged; the tab solve/snapshot
+differ by 3 microseconds from this session's baseline. Snapshot's linear searches remain for item 3. Probe-off allocations
+(KiB, fresh baseline → incremental): hierarchy→sensors 169.4→164.9, sensors→hierarchy 135.5→129.0, console→telemetry
+112.8→112.5, telemetry→console 132.8→130.5; hover-other 13.1→13.1, hover-field 25.6→23.9, hover-away 26.8→24.9,
+scroll-inspector 22.9→22.3; typing 17.8→17.8. No budget ceiling changed.
+
+Validation: all ten UI scripts PASS, all nine every-frame retention scenarios PASS, performance budgets PASS, all three
+500-cycle memory runs PASS, native layout invariants/render compiler/session tests PASS, compiler suites 608 passed,
+0 failed. The missing-delta and rejected rotated-clip diagnostics in the regression tests are intentional negative cases.

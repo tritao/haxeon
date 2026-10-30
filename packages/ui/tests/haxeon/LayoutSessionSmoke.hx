@@ -7,6 +7,7 @@ import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutImageContent;
 import haxeon.ui.LayoutMeasureConstraints;
 import haxeon.ui.LayoutMeasureResult;
@@ -37,6 +38,95 @@ class LayoutSessionSmoke {
 		}
 	}
 
+	static function incremental(fonts:FontCollection):Void {
+		var session = LayoutSession.create();
+		session.setFonts(fonts);
+		session.verifyTransactions = true;
+		var root = LayoutNode.box(10000);
+		root.style.width = LayoutAxis.fixed(240);
+		root.style.height = LayoutAxis.fixed(160);
+		for (index in 0...1100) {
+			var child = LayoutNode.box(10001 + index);
+			child.style.width = LayoutAxis.fixed(20);
+			child.style.height = LayoutAxis.fixed(1);
+			root.add(child);
+		}
+		var frame = new LayoutFrame(240, 160);
+		var changes = new LayoutChanges();
+		var first = session.submit(root, frame, changes)[10];
+		var next = session.submit(root, frame, changes);
+		if (next[10] != first) throw "An empty patch replaced unchanged geometry";
+		root.children[900].style.width = LayoutAxis.fixed(30);
+		changes.inputs.set(root.children[900].id, 0);
+		next = session.submit(root, frame, changes);
+		if (next[10] != first || next[901].width != 30) throw "An input patch did not preserve unchanged items";
+		changes.clear();
+		var moved = root.children[0];
+		root.remove(moved); root.add(moved);
+		changes.children.set(root.id, 0);
+		next = session.submit(root, frame, changes);
+		if (next[next.length - 1].id != moved.id) throw "Child reordering did not reach native";
+		root.remove(root.children[10]);
+		var added = LayoutNode.textNode(15000, "new text");
+		root.add(added);
+		next = session.submit(root, frame, changes);
+		if (next.length != 1101 || next[next.length - 1].id != added.id) throw "Added or removed identity was lost";
+		changes.clear();
+		session.submit(root, frame, changes, true);
+		session.submit(root, frame, changes);
+		added.text = "日本語🙂 changed";
+		changes.inputs.set(added.id, 0);
+		session.submit(root, frame, changes);
+		changes.clear();
+		var oldFirst = root.children[0];
+		root.remove(added); root.remove(oldFirst); root.add(added); root.add(oldFirst);
+		changes.children.set(root.id, 0);
+		session.submit(root, frame, changes);
+		changes.clear();
+		added.style.background = Color.rgba(0.3, 0.4, 0.5, 1);
+		changes.inputs.set(added.id, 0);
+		session.submit(root, frame, changes);
+		changes.clear();
+		var wrapper = LayoutNode.box(17000);
+		wrapper.add(root);
+		next = session.submit(wrapper, frame, changes);
+		if (next[0].id != wrapper.id || next.length != 1102) throw "Changing the layout root was lost";
+		next = session.submit(root, frame, changes);
+		if (next[0].id != root.id || next.length != 1101) throw "Removing the old layout root was lost";
+		// Omitting an actual input change must fail verification, even when native can retain its old geometry.
+		root.children[20].style.width = LayoutAxis.fixed(31);
+		var caught = false;
+		try session.submit(root, frame, changes) catch (error:Dynamic)
+			caught = Std.string(error).indexOf("layoutSession.verifyIncrementalTree") >= 0;
+		if (!caught) throw "Verification accepted an unreported native input change";
+		session.dispose();
+		Sys.println("PASS: incremental layout, stable geometry, reorder, add/remove, full reset and missing-delta detection on 1101 nodes");
+	}
+
+	static function measuredVersion(fonts:FontCollection):Void {
+		var measurement:Null<LayoutMeasuredContent> = null;
+		var calls = 0;
+		measurement = new LayoutMeasuredContent(function(_) {
+			calls++;
+			var current = measurement;
+			if (current != null) current.invalidate();
+			return new LayoutMeasureResult(20, 10);
+		});
+		var node = LayoutNode.custom(18000, measurement);
+		var session = LayoutSession.create();
+		session.setFonts(fonts);
+		session.verifyTransactions = true;
+		var changes = new LayoutChanges();
+		var frame = new LayoutFrame(240, 160);
+		session.submit(node, frame, changes);
+		var before = calls;
+		session.submit(node, frame, changes);
+		if (calls <= before) throw "A measurement's new version was not submitted";
+		session.verifyTree(node);
+		session.dispose();
+		Sys.println("PASS: an intrinsic version changed by measurement is captured as an input, verified, and resubmitted");
+	}
+
 	static function main():Int {
 		var fontPath = Sys.getEnv("NKUI_TEST_FONT_PATH");
 		if (fontPath == null)
@@ -44,6 +134,8 @@ class LayoutSessionSmoke {
 
 		var fonts = FontCollection.create();
 		fonts.add(fontPath);
+		incremental(fonts);
+		measuredVersion(fonts);
 		var duplicateRoot = LayoutNode.box(80);
 		var sharedChild = LayoutNode.box(81);
 		duplicateRoot.add(sharedChild);
@@ -53,11 +145,7 @@ class LayoutSessionSmoke {
 		var repeatedIdRoot = LayoutNode.box(82);
 		repeatedIdRoot.add(LayoutNode.box(83));
 		repeatedIdRoot.add(LayoutNode.box(83));
-		try {
-			LayoutTransaction.encode(repeatedIdRoot);
-		} catch (_:Dynamic) {
-			return 48;
-		}
+		if (!rejectsTransaction(repeatedIdRoot)) return 48;
 		var infinity = Math.pow(2.0, 1024.0);
 		var infiniteFontSize = LayoutNode.textNode(90, "font size");
 		infiniteFontSize.textStyle.fontSize = infinity;

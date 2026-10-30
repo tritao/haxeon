@@ -25,7 +25,7 @@ class LayoutNode {
 	public var hitChildren:Bool;
 	/** Optional external content measured when this node is Custom. */
 	public var intrinsicContent:Null<LayoutContent>;
-	/** Invalidates native intrinsic measurement when no content object is attached. */
+	/** Intrinsic input version. Sampled from an attached provider before submit; otherwise set by its caller. */
 	public var measureVersion:Int;
 	/** Paint/text revision consumed by native raster-cache identity. */
 	public var contentRevision:Int;
@@ -88,6 +88,16 @@ class LayoutNode {
 	public function peekParagraphStyle():ParagraphStyle {
 		var own = ownParagraphStyle;
 		return own == null ? DefaultParagraphStyle : own;
+	}
+
+	/** Copy mutable typography into a comparison prior without allocating default styles for boxes. */
+	public function copyTextStylesTo(target:LayoutNode):Void {
+		if (ownTextStyle == null) target.ownTextStyle = null;
+		else if (target.ownTextStyle == null) target.ownTextStyle = haxeon.Structural.copy(ownTextStyle);
+		else haxeon.Structural.assignChanged(target.ownTextStyle, target.ownTextStyle, ownTextStyle);
+		if (ownParagraphStyle == null) target.ownParagraphStyle = null;
+		else if (target.ownParagraphStyle == null) target.ownParagraphStyle = haxeon.Structural.copy(ownParagraphStyle);
+		else haxeon.Structural.assignChanged(target.ownParagraphStyle, target.ownParagraphStyle, ownParagraphStyle);
 	}
 
 	public function add(child:LayoutNode):LayoutNode {

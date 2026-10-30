@@ -106,6 +106,7 @@ class Tooltip implements View {
 				var nextY = Math.max(edge, Math.min(anchorBounds.y + y, context.viewportHeight - edge - bounds.height)) - parentBounds.y;
 				if (tooltipNode.layout.style.positionX != nextX || tooltipNode.layout.style.positionY != nextY ||
 					tooltipNode.layout.style.width.max != maxWidth) {
+					context.willEditRetained(tooltipNode);
 					tooltipNode.layout.style.positionX = nextX;
 					tooltipNode.layout.style.positionY = nextY;
 					tooltipNode.layout.style.width = LayoutAxis.fit(0, maxWidth);
@@ -212,6 +213,8 @@ class Tooltip implements View {
 				var shownLabel = label;
 				var labelWidth = shownLabel == null ? placement.width : shownLabel.layout.style.width.max;
 				if (tip.layout.style.positionX != placement.x || tip.layout.style.positionY != placement.y || labelWidth != placement.width) {
+					context.willEditRetained(tip);
+					if (shownLabel != null) context.willEditRetained(shownLabel);
 					tip.layout.style.positionX = placement.x;
 					tip.layout.style.positionY = placement.y;
 					if (shownLabel != null)

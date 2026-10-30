@@ -215,6 +215,7 @@ class Popup implements View {
 					top = Math.max(margin, Math.min(top, bounds.height - geometry.height - margin));
 					if (Math.abs(panel.layout.style.positionX - left) > 0.01 ||
 						Math.abs(panel.layout.style.positionY - top) > 0.01) {
+						context.willEditRetained(panel);
 						panel.layout.style.positionX = left;
 						panel.layout.style.positionY = top;
 						context.requestLayoutFeedback();

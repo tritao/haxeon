@@ -268,6 +268,57 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     nkui::LayoutRenderCompiler compiler;
     nkui::LayoutRenderFrame frame;
     nkui::LayoutSnapshot snapshot;
+    struct ResolvedRecord {
+        nkui_layout_item value{};
+        bool valid = false;
+    };
+    struct RetainedNode {
+        nkui::LayoutNode *value = nullptr;
+        std::size_t index = 0;
+        uint64_t visit = 0;
+        uint64_t removed = 0;
+        uint64_t updated = 0;
+        std::vector<RetainedNode *> children;
+        ResolvedRecord *resolved = nullptr;
+    };
+    struct NodeChunk {
+        std::array<nkui::LayoutNode, 128> values;
+        std::array<RetainedNode, 128> nodes;
+        std::array<ResolvedRecord, 128> geometry;
+    };
+    std::vector<std::unique_ptr<NodeChunk>> node_chunks;
+    std::vector<RetainedNode *> free_nodes;
+    RetainedNode *acquire_node(nkui::LayoutNode &&value) {
+        if (free_nodes.empty()) {
+            auto chunk = std::make_unique<NodeChunk>();
+            for (std::size_t index = chunk->nodes.size(); index > 0; --index) {
+                chunk->nodes[index - 1].value = &chunk->values[index - 1];
+                chunk->nodes[index - 1].resolved = &chunk->geometry[index - 1];
+                free_nodes.push_back(&chunk->nodes[index - 1]);
+            }
+            node_chunks.push_back(std::move(chunk));
+        }
+        auto *node = free_nodes.back(); free_nodes.pop_back();
+        *node->value = std::move(value); node->index = 0; node->visit = 0; node->removed = 0; node->updated = 0; node->children.clear(); node->resolved->valid = false;
+        return node;
+    }
+    void release_node(RetainedNode *node) {
+        *node->value = {}; node->children.clear(); node->resolved->valid = false;
+        free_nodes.push_back(node);
+    }
+    std::unordered_map<uint32_t, RetainedNode *> node_storage;
+    RetainedNode *root = nullptr;
+    std::vector<const nkui::LayoutNode *> ordered_nodes;
+    std::vector<RetainedNode *> ordered_slots;
+    std::vector<int32_t> ordered_parents;
+    std::vector<const nkui::LayoutNode *> pending_nodes;
+    std::vector<RetainedNode *> pending_slots;
+    std::vector<int32_t> pending_parents;
+    uint64_t visit_epoch = 0;
+    std::vector<nkui::LayoutNode> parsed_updates;
+    nkui::LayoutInputChanges input_changes;
+    std::vector<nkui_layout_item> resolved_updates;
+    bool resolved_updates_ready = false;
     std::unordered_map<uint32_t, nkui_display_list> custom_paints;
     std::unordered_map<uint32_t, nkui_display_list> custom_paint_composites;
     std::unordered_map<uint32_t, nkui_layout_cache_policy> cache_policies;
@@ -907,8 +958,8 @@ bool read_float(const uint8_t *bytes, size_t size, size_t offset, float &out) {
 }
 
 bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
-                             std::vector<nkui::LayoutNode> &nodes) {
-    constexpr size_t header_bytes = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
+                             std::vector<nkui::LayoutNode> &nodes, bool allow_patch = false) {
+    size_t header_bytes = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
     constexpr size_t record_bytes = NKUI_LAYOUT_NODE_RECORD_BYTES;
     if (!bytes || byte_count < header_bytes || byte_count > NKUI_LAYOUT_MAX_TRANSACTION_BYTES)
         return false;
@@ -919,9 +970,12 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
     uint32_t string_offset = 0;
     if (!read_u32(bytes, size, 0, version) || !read_u32(bytes, size, 4, node_count) ||
         !read_u32(bytes, size, 8, encoded_record_bytes) ||
-        !read_u32(bytes, size, 12, string_offset) || version != NKUI_LAYOUT_TRANSACTION_VERSION ||
-        !node_count || encoded_record_bytes != record_bytes)
+        !read_u32(bytes, size, 12, string_offset) ||
+        (version != NKUI_LAYOUT_TRANSACTION_VERSION && !(allow_patch && version == NKUI_LAYOUT_PATCH_VERSION)) ||
+        (!node_count && version == NKUI_LAYOUT_TRANSACTION_VERSION) || encoded_record_bytes != record_bytes)
         return false;
+    if (version == NKUI_LAYOUT_PATCH_VERSION) header_bytes = NKUI_LAYOUT_PATCH_HEADER_BYTES;
+    if (size < header_bytes) return false;
     if (static_cast<size_t>(node_count) >
         (std::numeric_limits<size_t>::max() - header_bytes) / record_bytes)
         return false;
@@ -2530,6 +2584,222 @@ uint64_t hash_layout_snapshot(const nkui::LayoutSnapshot &snapshot) {
     return hash;
 }
 
+nkui_layout_item encode_layout_item(const nkui::LayoutItem &resolved) {
+    nkui_layout_item item{};
+    item.struct_size = sizeof(item);
+    item.node_id = resolved.id;
+    item.flags = (resolved.visible ? NKUI_LAYOUT_RESOLVED_VISIBLE : 0u) |
+                 (resolved.has_baseline ? NKUI_LAYOUT_RESOLVED_HAS_BASELINE : 0u);
+    item.x = resolved.bounds.x;
+    item.y = resolved.bounds.y;
+    item.width = resolved.bounds.width;
+    item.height = resolved.bounds.height;
+    item.clip_x = resolved.clip_bounds.x;
+    item.clip_y = resolved.clip_bounds.y;
+    item.clip_width = resolved.clip_bounds.width;
+    item.clip_height = resolved.clip_bounds.height;
+    item.content_x = resolved.content_bounds.x;
+    item.content_y = resolved.content_bounds.y;
+    item.content_width = resolved.content_bounds.width;
+    item.content_height = resolved.content_bounds.height;
+    item.transform[0] = resolved.transform.a;
+    item.transform[1] = resolved.transform.b;
+    item.transform[2] = resolved.transform.c;
+    item.transform[3] = resolved.transform.d;
+    item.transform[4] = resolved.transform.tx;
+    item.transform[5] = resolved.transform.ty;
+    item.baseline = resolved.baseline;
+    return item;
+}
+
+/** Own only the changed values until solve succeeds. Untouched retained nodes never move or get copied. */
+struct LayoutMutation {
+    LayoutSessionState &state;
+    bool full;
+    bool active = false;
+    bool committed = false;
+    decltype(LayoutSessionState::node_storage) old_storage;
+    std::unordered_set<uint32_t> added;
+    std::vector<LayoutSessionState::RetainedNode *> removed;
+    uint64_t epoch = 0;
+    std::unordered_map<uint32_t, std::vector<uint32_t>> child_lists;
+    nkui::LayoutInputChanges &changes;
+
+    LayoutMutation(LayoutSessionState &state, bool full) : state(state), full(full), changes(state.input_changes) {
+        changes.topology = true; changes.layers = true; changes.topology_validated = false; changes.nodes.clear();
+    }
+    ~LayoutMutation() {
+        if (!active) return;
+        if (committed) {
+            if (full) for (const auto &[_, node] : old_storage) state.release_node(node);
+            return;
+        }
+        if (full) {
+            for (const auto &[_, node] : state.node_storage) state.release_node(node);
+            state.node_storage.swap(old_storage);
+        } else for (auto &node : state.parsed_updates) {
+            if (added.contains(node.id)) {
+                state.release_node(state.node_storage.at(node.id)); state.node_storage.erase(node.id);
+            } else std::swap(*state.node_storage.at(node.id)->value, node);
+        }
+        for (std::size_t index = 0; index < state.ordered_slots.size(); ++index)
+            state.ordered_slots[index]->value->parent = state.ordered_parents[index];
+    }
+
+    bool apply(const uint8_t *bytes, uint32_t size) {
+        auto &updates = state.parsed_updates;
+        auto &storage = state.node_storage;
+        auto &order = state.pending_nodes;
+        auto &parents = state.pending_parents;
+        if (full) {
+            active = true;
+            old_storage.swap(storage);
+            order.clear(); parents.clear(); state.pending_slots.clear();
+            for (auto &node : updates) {
+                const auto parent = node.parent;
+                if (storage.contains(node.id)) return false;
+                auto *slot = state.acquire_node(std::move(node));
+                const auto old = old_storage.find(slot->value->id);
+                if (old != old_storage.end()) {
+                    *slot->resolved = *old->second->resolved;
+                }
+                storage.emplace(slot->value->id, slot);
+                order.push_back(slot->value); state.pending_slots.push_back(slot);
+                parents.push_back(parent);
+            }
+            return true;
+        }
+        uint32_t removed_count = 0, child_words = 0, final_count = 0, reserved = 0, string_offset = 0;
+        if (!state.submitted || !read_u32(bytes, size, 12, string_offset) ||
+            !read_u32(bytes, size, 16, removed_count) || !read_u32(bytes, size, 20, child_words) ||
+            !read_u32(bytes, size, 24, final_count) || !read_u32(bytes, size, 28, reserved) || reserved || !final_count)
+            return false;
+        const uint64_t metadata = NKUI_LAYOUT_PATCH_HEADER_BYTES + uint64_t(updates.size()) * NKUI_LAYOUT_NODE_RECORD_BYTES;
+        if (metadata + uint64_t(removed_count) * 4 + uint64_t(child_words) * 4 != string_offset) return false;
+        epoch = ++state.visit_epoch;
+        removed.reserve(removed_count);
+        changes.topology = removed_count || child_words;
+        changes.layers = changes.topology;
+        for (const auto &node : updates) {
+            if (!node.id) return false;
+            const auto found = storage.find(node.id);
+            if (found == storage.end()) {
+                if (!changes.topology) return false;
+                if (!added.insert(node.id).second) return false;
+            } else {
+                if (found->second->updated == epoch) return false;
+                found->second->updated = epoch;
+                const auto &before = *found->second->value;
+                changes.layers |= before.style.positioning != node.style.positioning ||
+                    before.style.overlay != node.style.overlay || before.style.z_index != node.style.z_index;
+                changes.topology |= before.visual_kind != node.visual_kind;
+                changes.nodes.push_back(found->second->index);
+            }
+        }
+        size_t cursor = static_cast<size_t>(metadata);
+        for (uint32_t index = 0; index < removed_count; ++index, cursor += 4) {
+            uint32_t id = 0;
+            if (!read_u32(bytes, size, cursor, id)) return false;
+            const auto found = storage.find(id);
+            if (found == storage.end() || found->second->updated == epoch || found->second->removed == epoch) return false;
+            found->second->removed = epoch;
+            removed.push_back(found->second);
+        }
+        const auto child_end = cursor + size_t(child_words) * 4;
+        while (cursor < child_end) {
+            uint32_t parent = 0, count = 0;
+            if (!read_u32(bytes, size, cursor, parent) || !read_u32(bytes, size, cursor + 4, count) ||
+                child_lists.contains(parent) || (parent && ((!storage.contains(parent) && !added.contains(parent)) || (storage.contains(parent) && storage.at(parent)->removed == epoch))))
+                return false;
+            cursor += 8;
+            if (cursor > child_end || count > (child_end - cursor) / 4) return false;
+            auto &list = child_lists[parent];
+            list.reserve(count);
+            for (uint32_t index = 0; index < count; ++index, cursor += 4) {
+                uint32_t id = 0;
+                if (!read_u32(bytes, size, cursor, id)) return false;
+                list.push_back(id);
+            }
+        }
+        if (final_count != storage.size() + added.size() - removed.size()) return false;
+        active = true;
+        for (auto &node : updates) {
+            node.parent = added.contains(node.id) ? -1 : storage.at(node.id)->value->parent;
+            if (added.contains(node.id)) storage.emplace(node.id, state.acquire_node(std::move(node)));
+            else std::swap(*storage.at(node.id)->value, node);
+        }
+        if (!changes.topology) return true;
+        changes.layers = true;
+        order.clear(); parents.clear(); state.pending_slots.clear();
+        auto *root = state.root;
+        const auto roots = child_lists.find(0);
+        if (roots != child_lists.end()) {
+            if (roots->second.size() != 1) return false;
+            const auto found = storage.find(roots->second[0]);
+            if (found == storage.end()) return false;
+            root = found->second;
+        }
+        const auto append = [&](auto &&self, LayoutSessionState::RetainedNode *slot, int32_t parent) -> bool {
+            if (!slot || slot->removed == epoch || slot->visit == epoch) return false;
+            slot->visit = epoch;
+            const auto index = static_cast<int32_t>(order.size());
+            order.push_back(slot->value); state.pending_slots.push_back(slot); parents.push_back(parent);
+            const auto changed = child_lists.find(slot->value->id);
+            if (changed != child_lists.end()) {
+                for (const auto next : changed->second) {
+                    const auto found = storage.find(next);
+                    if (found == storage.end() || !self(self, found->second, index)) return false;
+                }
+            } else for (auto *next : slot->children) if (!self(self, next, index)) return false;
+            return true;
+        };
+        const bool valid = append(append, root, -1) && order.size() == final_count;
+        changes.topology_validated = valid;
+        if (valid)
+            for (std::size_t index = 0; index < order.size(); ++index)
+                state.pending_slots[index]->value->parent = parents[index];
+        return valid;
+    }
+
+    nkui::LayoutNodeView view() const {
+        return full || changes.topology ? nkui::LayoutNodeView(state.pending_nodes)
+                                       : nkui::LayoutNodeView(state.ordered_nodes);
+    }
+
+    void publish() {
+        if (full) {
+            for (std::size_t index = 0; index < state.pending_slots.size(); ++index) {
+                auto *slot = state.pending_slots[index];
+                const auto parent = state.pending_parents[index];
+                if (parent < 0) state.root = slot;
+                else state.pending_slots[parent]->children.push_back(slot);
+            }
+        } else if (changes.topology) {
+            for (const auto &[parent, list] : child_lists) {
+                if (!parent) { state.root = state.node_storage.at(list[0]); continue; }
+                auto &children = state.node_storage.at(parent)->children;
+                children.clear();
+                for (const auto id : list) children.push_back(state.node_storage.at(id));
+            }
+            // The wire retains prior tree order. Release in reverse so the next subtree reuses dense input slots in order.
+            for (auto it = removed.rbegin(); it != removed.rend(); ++it) {
+                const auto id = (*it)->value->id;
+                state.release_node(*it);
+                state.node_storage.erase(id);
+            }
+        }
+        if (full || changes.topology) {
+            state.ordered_nodes.swap(state.pending_nodes);
+            state.ordered_slots.swap(state.pending_slots);
+            state.ordered_parents.swap(state.pending_parents);
+            for (std::size_t index = 0; index < state.ordered_nodes.size(); ++index)
+                state.ordered_slots[index]->index = index;
+        }
+        committed = true;
+    }
+};
+
+
 } // namespace
 
 extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
@@ -2552,24 +2822,36 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     auto *state = pinned_state.get();
     std::unique_lock<std::mutex> session_lock(state->mutex);
     const double parse_started = nkui::layout_cost_time();
-    std::vector<nkui::LayoutNode> nodes;
-    if (!read_layout_transaction(transaction, transaction_bytes, nodes))
+    uint32_t version = 0;
+    if (!read_u32(transaction, transaction_bytes, 0, version))
         return NKUI_ERROR_INVALID_TRANSACTION;
+    const bool patch = version == NKUI_LAYOUT_PATCH_VERSION;
+    auto &updates = state->parsed_updates;
+    if (!read_layout_transaction(transaction, transaction_bytes, updates, patch))
+        return NKUI_ERROR_INVALID_TRANSACTION;
+    LayoutMutation mutation(*state, !patch);
+    if (!mutation.apply(transaction, transaction_bytes)) return NKUI_ERROR_INVALID_TRANSACTION;
+    const auto nodes = mutation.view();
     const double parse_finished = nkui::layout_cost_time();
-    const bool has_text = std::any_of(nodes.begin(), nodes.end(), [](const nkui::LayoutNode &node) {
-        return node.visual_kind == nkui::LayoutVisualKind::Text && !node.text.empty();
-    });
-    if (has_text && !state->fonts_configured)
+    bool has_text = false;
+    for (const auto &node : nodes)
+        has_text |= node.visual_kind == nkui::LayoutVisualKind::Text && !node.text.empty();
+    if (has_text && !state->fonts_configured) {
         return NKUI_ERROR_INVALID_ARGUMENT;
+    }
     nkui::LayoutSnapshot snapshot;
     nkui::LayoutError error{};
     if (!state->engine->layout(nodes, frame->width, frame->height, frame->delta_seconds, snapshot,
-                               &error)) {
+                               &error, &mutation.changes)) {
         std::fprintf(stderr, "UIKit layout rejected node %zu: %s\n", error.node_index,
                      error.message ? error.message : "unknown layout error");
         return NKUI_ERROR_INVALID_TRANSACTION;
     }
+    const double index_started = nkui::layout_cost_time();
+    mutation.publish();
+    const double index_seconds = nkui::layout_cost_time() - index_started;
     state->snapshot = std::move(snapshot);
+    state->resolved_updates_ready = false;
     state->submitted = true;
     const double hash_started = nkui::layout_cost_time();
     if (const uint64_t hash = hash_layout_snapshot(state->snapshot); hash != state->snapshot_hash) {
@@ -2579,7 +2861,7 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     const double hash_finished = nkui::layout_cost_time();
     if (nkui::layout_cost_enabled())
         std::fprintf(stderr, "layout-cost native nodes=%zu parse=%.9f hash=%.9f\n",
-                     nodes.size(), parse_finished - parse_started, hash_finished - hash_started);
+                     state->ordered_nodes.size(), parse_finished - parse_started + index_seconds, hash_finished - hash_started);
     std::lock_guard<std::mutex> lists_lock(lists_mutex);
     for (auto it = state->custom_paints.begin(); it != state->custom_paints.end();) {
         const auto *item = state->snapshot.find(it->first);
@@ -2641,33 +2923,68 @@ extern "C" nkui_result nkui_layout_session_get_resolved_items(nkui_layout_sessio
     }
     for (size_t index = 0; index < state->snapshot.items.size(); ++index) {
         const auto &resolved = state->snapshot.items[index];
-        nkui_layout_item item{};
-        item.struct_size = sizeof(item);
-        item.node_id = resolved.id;
-        item.flags = (resolved.visible ? NKUI_LAYOUT_RESOLVED_VISIBLE : 0u) |
-                     (resolved.has_baseline ? NKUI_LAYOUT_RESOLVED_HAS_BASELINE : 0u);
-        item.x = resolved.bounds.x;
-        item.y = resolved.bounds.y;
-        item.width = resolved.bounds.width;
-        item.height = resolved.bounds.height;
-        item.clip_x = resolved.clip_bounds.x;
-        item.clip_y = resolved.clip_bounds.y;
-        item.clip_width = resolved.clip_bounds.width;
-        item.clip_height = resolved.clip_bounds.height;
-        item.content_x = resolved.content_bounds.x;
-        item.content_y = resolved.content_bounds.y;
-        item.content_width = resolved.content_bounds.width;
-        item.content_height = resolved.content_bounds.height;
-        item.transform[0] = resolved.transform.a;
-        item.transform[1] = resolved.transform.b;
-        item.transform[2] = resolved.transform.c;
-        item.transform[3] = resolved.transform.d;
-        item.transform[4] = resolved.transform.tx;
-        item.transform[5] = resolved.transform.ty;
-        item.baseline = resolved.baseline;
+        const auto item = encode_layout_item(resolved);
         std::memcpy(out_buffer + index * sizeof(item), &item, sizeof(item));
     }
     *inout_bytes = required;
+    return NKUI_OK;
+}
+
+
+extern "C" nkui_result nkui_layout_session_verify_tree(nkui_layout_session session,
+                                                       const uint8_t *transaction, uint32_t bytes) {
+    if (active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
+    auto *state = resolve(session);
+    if (!state) return NKUI_ERROR_INVALID_HANDLE;
+    std::lock_guard<std::mutex> session_lock(state->mutex);
+    std::vector<nkui::LayoutNode> reference;
+    if (!state->submitted || !read_layout_transaction(transaction, bytes, reference))
+        return NKUI_ERROR_INVALID_TRANSACTION;
+    if (reference.size() != state->ordered_nodes.size()) return NKUI_ERROR_INVALID_TRANSACTION;
+    for (std::size_t index = 0; index < reference.size(); ++index) {
+        const auto parent = reference[index].parent;
+        const auto &retained = *state->ordered_nodes[index];
+        if (reference[index] == retained && parent == state->ordered_parents[index]) continue;
+        std::fprintf(stderr, "UIKit incremental tree differs from full encode: node=%zu id=%u/%u parent=%d/%d style=%d text=%d measure=%u/%u revisions=%u,%u,%u/%u,%u,%u\n",
+            index, reference[index].id, retained.id, parent, state->ordered_parents[index],
+            reference[index].style == retained.style, reference[index].text == retained.text,
+            reference[index].measure_version, retained.measure_version,
+            reference[index].content_revision, reference[index].geometry_revision, reference[index].composite_revision,
+            retained.content_revision, retained.geometry_revision, retained.composite_revision);
+        return NKUI_ERROR_INVALID_TRANSACTION;
+    }
+    return NKUI_OK;
+}
+
+extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_session session,
+                                                               uint8_t *out_buffer, uint32_t *inout_bytes) {
+    if (!inout_bytes || active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
+    std::lock_guard<std::mutex> lock(layout_sessions_mutex);
+    auto *state = resolve(session);
+    if (!state) return NKUI_ERROR_INVALID_HANDLE;
+    std::lock_guard<std::mutex> session_lock(state->mutex);
+    if (!state->submitted) return NKUI_ERROR_INVALID_ARGUMENT;
+    if (!state->resolved_updates_ready) {
+        auto &updates = state->resolved_updates;
+        updates.clear();
+        for (std::size_t index = 0; index < state->snapshot.items.size(); ++index) {
+            const auto record = encode_layout_item(state->snapshot.items[index]);
+            auto &slot = *state->ordered_slots[index];
+            if (!slot.resolved->valid || std::memcmp(&slot.resolved->value, &record, sizeof(record))) {
+                updates.push_back(record);
+                slot.resolved->value = record;
+                slot.resolved->valid = true;
+            }
+        }
+        state->resolved_updates_ready = true;
+    }
+    const auto required = state->resolved_updates.size() * sizeof(nkui_layout_item);
+    if (required > UINT32_MAX) return NKUI_ERROR_OUT_OF_MEMORY;
+    if (!out_buffer) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_OK; }
+    if (*inout_bytes < required) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_ERROR_INVALID_ARGUMENT; }
+    if (required) std::memcpy(out_buffer, state->resolved_updates.data(), required);
+    *inout_bytes = static_cast<uint32_t>(required);
     return NKUI_OK;
 }
 

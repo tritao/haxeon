@@ -45,12 +45,14 @@ enum class TextDirection : uint8_t {
 };
 
 struct TextStyle {
+    bool operator==(const TextStyle &) const = default;
     FontFamily family = FontFamily::Default;
     float font_size = 16.0f;
     float letter_spacing = 0.0f;
 };
 
 struct ParagraphStyle {
+    bool operator==(const ParagraphStyle &) const = default;
     TextWrapMode wrap = TextWrapMode::WordCharacter;
     TextAlignment alignment = TextAlignment::Start;
     float line_height = 0.0f;
@@ -113,6 +115,7 @@ enum class LayoutSizing : uint8_t {
 };
 
 struct LayoutAxis {
+    bool operator==(const LayoutAxis &) const = default;
     LayoutSizing sizing = LayoutSizing::Fit;
     // Used by FIXED and PERCENT.
     float value = 0.0f;
@@ -126,6 +129,7 @@ struct LayoutAxis {
 };
 
 struct LayoutColor {
+    bool operator==(const LayoutColor &) const = default;
     float red = 0.0f;
     float green = 0.0f;
     float blue = 0.0f;
@@ -133,6 +137,7 @@ struct LayoutColor {
 };
 
 struct LayoutTransform {
+    bool operator==(const LayoutTransform &) const = default;
     float a = 1.0f;
     float b = 0.0f;
     float c = 0.0f;
@@ -142,6 +147,7 @@ struct LayoutTransform {
 };
 
 struct LayoutStyle {
+    bool operator==(const LayoutStyle &) const = default;
     LayoutAxis width{};
     LayoutAxis height{};
     float aspect_ratio = 0.0f;
@@ -179,6 +185,7 @@ struct LayoutStyle {
 
 /** A flat, frame-scoped render/layout tree. Parent indices refer to this array. */
 struct LayoutNode {
+    bool operator==(const LayoutNode &) const = default;
     uint32_t id = 0;
     int32_t parent = -1;
     LayoutVisualKind visual_kind = LayoutVisualKind::Box;
@@ -198,6 +205,27 @@ struct LayoutNode {
     uint32_t geometry_revision = 0;
     /** Opacity/effects revision supplied by the retained scene owner. */
     uint32_t composite_revision = 0;
+};
+
+/** Borrowed ordered nodes and parent indices. Retained sessions keep node storage stable across topology edits. */
+class LayoutNodeView {
+  public:
+    explicit LayoutNodeView(const std::vector<const LayoutNode *> &nodes) : nodes_(nodes) {}
+    std::size_t size() const { return nodes_.size(); }
+    bool empty() const { return nodes_.empty(); }
+    const LayoutNode &operator[](std::size_t index) const { return *nodes_[index]; }
+    int32_t parent(std::size_t index) const { return nodes_[index]->parent; }
+    struct Iterator {
+        const LayoutNodeView *view;
+        std::size_t index;
+        const LayoutNode &operator*() const { return (*view)[index]; }
+        Iterator &operator++() { ++index; return *this; }
+        bool operator!=(const Iterator &other) const { return index != other.index; }
+    };
+    Iterator begin() const { return {this, 0}; }
+    Iterator end() const { return {this, size()}; }
+  private:
+    const std::vector<const LayoutNode *> &nodes_;
 };
 
 /** NativeKit-owned constraints for opaque external content measurement. */
@@ -235,6 +263,7 @@ struct LayoutError {
 };
 
 struct LayoutRect {
+    bool operator==(const LayoutRect &) const = default;
     float x = 0.0f;
     float y = 0.0f;
     float width = 0.0f;
@@ -244,6 +273,7 @@ struct LayoutRect {
 constexpr uint32_t kInvalidLayoutIndex = UINT32_MAX;
 
 struct LayoutItem {
+    bool operator==(const LayoutItem &) const = default;
     uint32_t id = 0;
     LayoutVisualKind visual_kind = LayoutVisualKind::Box;
     LayoutRect bounds{};
@@ -290,6 +320,7 @@ enum class LayoutPrimitiveKind : uint8_t {
 };
 
 struct LayoutPrimitive {
+    bool operator==(const LayoutPrimitive &) const = default;
     LayoutPrimitiveKind kind = LayoutPrimitiveKind::Rectangle;
     uint32_t node_id = 0;
     LayoutRect bounds{};
@@ -311,12 +342,14 @@ struct LayoutPrimitive {
 };
 
 struct LayoutTextLine {
+    bool operator==(const LayoutTextLine &) const = default;
     std::size_t text_offset = 0;
     std::size_t text_length = 0;
     LayoutRect bounds{};
 };
 
 struct LayoutTextLayout {
+    bool operator==(const LayoutTextLayout &) const = default;
     TextLayoutId id = 0;
     uint32_t node_id = 0;
     std::string text;
@@ -330,6 +363,7 @@ struct LayoutTextLayout {
 };
 
 struct LayoutSnapshot {
+    bool operator==(const LayoutSnapshot &) const = default;
     std::vector<LayoutItem> items;
     std::vector<uint32_t> child_indices;
     std::vector<LayoutPrimitive> primitives;

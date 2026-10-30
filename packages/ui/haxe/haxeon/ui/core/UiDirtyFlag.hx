@@ -18,6 +18,9 @@ class UiDirtyFlag {
 	/** Resolved transforms, clips, bounds, or paint order must be refreshed. */
 	public static inline var NeedsHitGeometry:Int = 1 << 7;
 
+	/** Work that changes a serialized native node; build/child membership is compared separately. */
+	public static inline var NativeInputs:Int = NeedsTextLayout | NeedsLayout | NeedsPaint | NeedsComposite | NeedsHitGeometry;
+
 	public static function fromStyleImpact(impact:StyleImpact):Int {
 		var result = 0;
 		if ((impact & StyleImpact.Layout) != 0) result |= NeedsLayout;

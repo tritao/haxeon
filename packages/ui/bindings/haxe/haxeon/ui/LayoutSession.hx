@@ -12,10 +12,13 @@ class LayoutSession {
 	var value:nkui_layout_session;
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
-	final resolved:Array<ResolvedLayoutItem>;
-	final previousResolvedItems:Array<ResolvedLayoutItem> = [];
-	final previousResolvedIndexById:IntIndex = new IntIndex();
-	var previousResolvedBytes:Null<Bytes> = null;
+	var resolved:Array<ResolvedLayoutItem>;
+	var nextResolved:Array<ResolvedLayoutItem> = [];
+	final updatesIndex:IntIndex = new IntIndex();
+	final updatedItems:Array<ResolvedLayoutItem> = [];
+	final referenceTransaction:LayoutTransaction = new LayoutTransaction();
+	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
+	public var verifyTransactions:Bool = false;
 	var hitPathBytes:Bytes;
 	var measureCallback:Null<nkui_layout_measure_callbackCallback>;
 	var measureFunction:Null<LayoutMeasureCallback>;
@@ -63,12 +66,12 @@ class LayoutSession {
 	}
 
 	/** Submits one render tree and returns geometry for the complete resolved frame. */
-	public function submit(root:LayoutNode, frame:LayoutFrame):Array<ResolvedLayoutItem> {
+	public function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Array<ResolvedLayoutItem> {
 		ensureLive();
 		if (frame == null)
 			throw "Layout session frame cannot be null";
 		var encodeStarted = measureCost ? Sys.time() : 0.0;
-		var transactionBytes:Bytes = transaction.encodeInto(root);
+		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
 		var encodeFinished = measureCost ? Sys.time() : 0.0;
 		collectMeasureContents(root);
 		refreshMeasureCallback();
@@ -76,72 +79,57 @@ class LayoutSession {
 		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
 			transaction.byteLength(), nativeFrame),
 			"layoutSession.submit");
+		if (verifyTransactions) verifyTree(root);
 		var decodeStarted = measureCost ? Sys.time() : 0.0;
-		var result = NativeKitUI.nkui_layout_session_get_resolved_items(value);
+		var result = NativeKitUI.nkui_layout_session_get_resolved_updates(value);
 		UiResult.check(result.status, "layoutSession.resolvedItems");
 		var bytes:Bytes = result.out_buffer;
 		var recordBytes = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
 		if (bytes.length % recordBytes != 0)
 			throw "Native layout returned a truncated geometry snapshot";
-		resolved.resize(0);
-		decodeResolvedItems(bytes, recordBytes);
+		updatesIndex.clear();
+		var count = Std.int(bytes.length / recordBytes);
+		updatedItems.resize(count);
+		for (index in 0...count) {
+			var item = ResolvedLayoutItem.decode(bytes, index * recordBytes);
+			updatedItems[index] = item;
+			updatesIndex.set(item.id, index);
+		}
+		var ordered = transaction.orderedNodes();
+		nextResolved.resize(ordered.length);
+		for (index in 0...ordered.length) {
+			var id = ordered[index].id;
+			var changed = updatesIndex.get(id);
+			if (changed >= 0) nextResolved[index] = updatedItems[changed];
+			else {
+				var previous = transaction.previousPosition(id);
+				if (previous < 0 || previous >= resolved.length) throw "Native layout omitted a new resolved item";
+				nextResolved[index] = resolved[previous];
+			}
+		}
+		var previous = resolved;
+		resolved = nextResolved;
+		nextResolved = previous;
 		var decodeFinished = measureCost ? Sys.time() : 0.0;
+		var commitStarted = measureCost ? Sys.time() : 0.0;
+		transaction.commit();
+		var commitSeconds = measureCost ? Sys.time() - commitStarted : 0.0;
 		if (measureCost) {
-			Sys.println("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted)
+			Sys.println("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted + commitSeconds)
 				+ " decode=" + (decodeFinished - decodeStarted));
+			Sys.println("layout-delta updated=" + transaction.updatedCount() + " removed=" + transaction.removedCount()
+				+ " parents=" + transaction.parentCount() + " resolved=" + count);
 			Sys.stdout().flush();
 		}
 		return resolved;
 	}
 
-	/**
-	 * Items are immutable, so a record whose bytes match the previous frame's keeps that frame's item instead of being
-	 * decoded again: most of a tree is unchanged between frames, and a decode is four objects.
-	 */
-	function decodeResolvedItems(bytes:Bytes, recordBytes:Int):Void {
-		var count = Std.int(bytes.length / recordBytes);
-		var before = previousResolvedBytes;
-		var reusable = before != null && before != bytes;
-		var previousCount = previousResolvedItems.length;
-		var indexById:Null<IntIndex> = null;
-		for (index in 0...count) {
-			var offset = index * recordBytes;
-			var item:Null<ResolvedLayoutItem> = null;
-			if (reusable) {
-				if (index < previousCount && sameRecord(before, offset, bytes, offset, recordBytes))
-					item = previousResolvedItems[index];
-				else if (previousCount > 0) {
-					// The order shifted (a subtree changed size): find the same node by its ID.
-					if (indexById == null) {
-						indexById = previousResolvedIndexById;
-						indexById.clear();
-						for (position in 0...previousCount)
-							indexById.set(previousResolvedItems[position].id, position);
-					}
-					var id = bytes.getInt32(offset + 4);
-					var position = indexById.get(id);
-					if (position >= 0 && sameRecord(before, position * recordBytes, bytes, offset, recordBytes))
-						item = previousResolvedItems[position];
-				}
-			}
-			resolved.push(item == null ? ResolvedLayoutItem.decode(bytes, offset) : item);
-		}
-		previousResolvedItems.resize(0);
-		for (item in resolved)
-			previousResolvedItems.push(item);
-		previousResolvedBytes = bytes;
-	}
-
-	static function sameRecord(left:Bytes, leftOffset:Int, right:Bytes, rightOffset:Int, length:Int):Bool {
-		if (leftOffset < 0 || leftOffset + length > left.length)
-			return false;
-		var word = 0;
-		while (word < length) {
-			if (left.getInt32(leftOffset + word) != right.getInt32(rightOffset + word))
-				return false;
-			word += 4;
-		}
-		return true;
+	/** Compare a retained native tree against its complete Haxe input, without replacing the native tree. */
+	public function verifyTree(root:LayoutNode):Void {
+		ensureLive();
+		var reference = referenceTransaction.encodeInto(root, null, false);
+		UiResult.check(NativeKitUI.nkui_layout_session_verify_tree_slice(value, reference, 0,
+			referenceTransaction.byteLength()), "layoutSession.verifyIncrementalTree");
 	}
 
 	/** Returns the native root-to-target geometric hit path for viewport coordinates. */

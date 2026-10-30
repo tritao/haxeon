@@ -131,6 +131,126 @@ std::vector<uint8_t> transaction_with_nodes(uint32_t node_count) {
     return bytes;
 }
 
+
+std::vector<uint8_t> patch_from(const std::vector<uint8_t> &full, const std::vector<uint32_t> &indices,
+                                const std::vector<uint32_t> &removed = {},
+                                const std::vector<uint32_t> &children = {}) {
+    uint32_t full_strings = 0, count = 0;
+    std::memcpy(&full_strings, full.data() + 12, 4);
+    std::memcpy(&count, full.data() + 4, 4);
+    const auto strings = NKUI_LAYOUT_PATCH_HEADER_BYTES + indices.size() * NKUI_LAYOUT_NODE_RECORD_BYTES +
+        (removed.size() + children.size()) * 4;
+    std::vector<uint8_t> result(strings + full.size() - full_strings);
+    write_u32(result, 0, NKUI_LAYOUT_PATCH_VERSION);
+    write_u32(result, 4, static_cast<uint32_t>(indices.size()));
+    write_u32(result, 8, NKUI_LAYOUT_NODE_RECORD_BYTES);
+    write_u32(result, 12, static_cast<uint32_t>(strings));
+    write_u32(result, 16, static_cast<uint32_t>(removed.size()));
+    write_u32(result, 20, static_cast<uint32_t>(children.size()));
+    write_u32(result, 24, count);
+    for (size_t index = 0; index < indices.size(); ++index) {
+        const auto record = NKUI_LAYOUT_PATCH_HEADER_BYTES + index * NKUI_LAYOUT_NODE_RECORD_BYTES;
+        const auto source = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + indices[index] * NKUI_LAYOUT_NODE_RECORD_BYTES;
+        std::memcpy(result.data() + record, full.data() + source, NKUI_LAYOUT_NODE_RECORD_BYTES);
+        uint32_t text = 0;
+        std::memcpy(&text, full.data() + source + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, 4);
+        write_u32(result, record + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
+                  static_cast<uint32_t>(strings + text - full_strings));
+    }
+    auto cursor = NKUI_LAYOUT_PATCH_HEADER_BYTES + indices.size() * NKUI_LAYOUT_NODE_RECORD_BYTES;
+    for (const auto id : removed) { write_u32(result, cursor, id); cursor += 4; }
+    for (const auto word : children) { write_u32(result, cursor, word); cursor += 4; }
+    std::memcpy(result.data() + strings, full.data() + full_strings, full.size() - full_strings);
+    return result;
+}
+
+std::vector<uint8_t> geometry(nkui_layout_session session, bool updates = false) {
+    uint32_t size = 0;
+    const auto get = updates ? nkui_layout_session_get_resolved_updates : nkui_layout_session_get_resolved_items;
+    if (get(session, nullptr, &size) != NKUI_OK) return {};
+    std::vector<uint8_t> result(size);
+    if (get(session, result.data(), &size) != NKUI_OK) return {};
+    return result;
+}
+
+bool incremental(nkui_resource fonts) {
+    nkui_layout_session session{}, reference{};
+    if (nkui_layout_session_create(&session) != NKUI_OK || nkui_layout_session_create(&reference) != NKUI_OK ||
+        nkui_layout_session_set_font_collection(session, fonts) != NKUI_OK ||
+        nkui_layout_session_set_font_collection(reference, fonts) != NKUI_OK) return false;
+    nkui_layout_frame_input frame{sizeof(frame), 256, 192, 0};
+    auto full = transaction_with_nodes(1201);
+    const auto submit = [&](nkui_layout_session target, const std::vector<uint8_t> &bytes) {
+        return nkui_layout_session_submit(target, bytes.data(), static_cast<uint32_t>(bytes.size()), &frame);
+    };
+    const auto matches = [&] {
+        return nkui_layout_session_verify_tree(session, full.data(), static_cast<uint32_t>(full.size())) == NKUI_OK &&
+            submit(reference, full) == NKUI_OK && geometry(session) == geometry(reference);
+    };
+    if (submit(session, full) != NKUI_OK || !matches() ||
+        geometry(session, true).size() != 1201 * NKUI_LAYOUT_RESOLVED_ITEM_BYTES) return false;
+    auto patch = patch_from(full, {});
+    if (submit(session, patch) != NKUI_OK || !matches() || !geometry(session, true).empty()) return false;
+    const auto record = [](uint32_t index) { return NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + index * NKUI_LAYOUT_NODE_RECORD_BYTES; };
+    // Paint-only, geometry, text/visual-kind and floating layer changes must all match a full solve.
+    for (int action = 0; action < 4; ++action) {
+        if (action == 0) write_color(full, record(400) + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, .3f, .2f, .1f, 1);
+        if (action == 1) write_float(full, record(400) + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 2);
+        if (action == 2) {
+            write_u32(full, record(400) + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, NKUI_LAYOUT_VISUAL_TEXT);
+            write_u32(full, record(400) + NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, 5);
+            full.insert(full.end(), {'h', 'e', 'l', 'l', 'o'});
+        }
+        if (action == 3) {
+            write_u32(full, record(400) + NKUI_LAYOUT_NODE_FLAGS_OFFSET, NKUI_LAYOUT_NODE_VISIBLE | NKUI_LAYOUT_NODE_FLOATING);
+            write_i32(full, record(400) + NKUI_LAYOUT_NODE_Z_INDEX_OFFSET, 12);
+        }
+        patch = patch_from(full, {400});
+        if (submit(session, patch) != NKUI_OK || !matches()) return false;
+        const auto changed = geometry(session, true);
+        if (changed.size() > geometry(session).size()) return false;
+    }
+    // Replace an identity and reverse sibling order. Only the new node and the changed parent's list are sent.
+    write_u32(full, record(1000) + NKUI_LAYOUT_NODE_ID_OFFSET, 1600);
+    std::vector<uint32_t> order{1, 1200};
+    for (uint32_t index = 1200; index > 0; --index) {
+        uint32_t id = 0; std::memcpy(&id, full.data() + record(index), 4); order.push_back(id);
+    }
+    patch = patch_from(full, {1000}, {1001}, order);
+    // Match the reference's submission order to the declared child order.
+    auto reversed = full;
+    for (uint32_t index = 1; index <= 1200; ++index)
+        std::memcpy(reversed.data() + record(index), full.data() + record(1201 - index), NKUI_LAYOUT_NODE_RECORD_BYTES);
+    full.swap(reversed);
+    if (submit(session, patch) != NKUI_OK || !matches()) return false;
+    // Failed patches leave both the retained input tree and the published snapshot intact.
+    const auto before = geometry(session);
+    auto invalid = patch_from(full, {1, 1});
+    if (submit(session, invalid) != NKUI_ERROR_INVALID_TRANSACTION || !matches() || geometry(session) != before) return false;
+    invalid = patch_from(full, {1}, {}, {1, 1, 1}); // changed input plus a cycle/disconnected tree
+    write_float(invalid, NKUI_LAYOUT_PATCH_HEADER_BYTES + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 19);
+    if (submit(session, invalid) != NKUI_ERROR_INVALID_TRANSACTION || !matches()) return false;
+    invalid = patch_from(full, {1});
+    write_float(invalid, NKUI_LAYOUT_PATCH_HEADER_BYTES + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, -1);
+    if (submit(session, invalid) != NKUI_ERROR_INVALID_TRANSACTION || !matches()) return false;
+    // This parses successfully, then fails during transformed-clip snapshot construction. Roll back actual changed inputs.
+    invalid = patch_from(full, {0});
+    const auto root_record = NKUI_LAYOUT_PATCH_HEADER_BYTES;
+    write_u32(invalid, root_record + NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, NKUI_LAYOUT_CLIP_HORIZONTAL);
+    write_float(invalid, root_record + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, .8f);
+    write_float(invalid, root_record + NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET, .6f);
+    write_float(invalid, root_record + NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET, -.6f);
+    write_float(invalid, root_record + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, .8f);
+    if (submit(session, invalid) != NKUI_ERROR_INVALID_TRANSACTION || !matches() || geometry(session) != before) return false;
+    patch = patch_from(full, {});
+    if (submit(session, patch) != NKUI_OK || !matches()) return false;
+    auto wrong_reference = full;
+    write_float(wrong_reference, record(1) + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, 17);
+    if (nkui_layout_session_verify_tree(session, wrong_reference.data(), wrong_reference.size()) != NKUI_ERROR_INVALID_TRANSACTION)
+        return false;
+    return nkui_layout_session_destroy(session) == NKUI_OK && nkui_layout_session_destroy(reference) == NKUI_OK;
+}
+
 struct MeasureState {
     uint32_t calls = 0;
     nkui_layout_session session{};
@@ -171,6 +291,8 @@ int main() {
         nkui_layout_session_create(&session) != NKUI_OK ||
         nkui_layout_session_set_font_collection(session, fonts) != NKUI_OK)
         return 3;
+
+    if (!incremental(fonts)) { std::cerr << "incremental transaction regression\n"; return 90; }
 
     MeasureState measure_state;
     measure_state.session = session;

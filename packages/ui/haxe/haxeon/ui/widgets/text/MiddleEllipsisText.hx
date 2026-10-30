@@ -85,6 +85,7 @@ class MiddleEllipsisText implements View {
         if (displayed.value != next) displayed.update(next);
         // Settle the current frame, including a retained label resized in place.
         if (node.layout.text != next) {
+          context.willEditRetained(node);
           node.layout.text = next;
           context.requestLayoutFeedback();
         }

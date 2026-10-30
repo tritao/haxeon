@@ -9,6 +9,7 @@ import nativekit.ffi.NativeKitTypes;
 
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
+import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutHitTestStats;
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
@@ -35,10 +36,13 @@ import haxeon.ui.debug.UiFrameMetrics;
 import haxeon.ui.debug.UiInspector;
 import haxeon.ui.debug.UiNodeSnapshot;
 import haxeon.ui.debug.UiStyleInvalidationMetrics;
+import haxeon.ui.debug.UiStyleInvalidationMetrics.UiStyleInvalidationFrame;
 
 /** Owns the frame-local render tree and the Haxe-side UI subsystems. */
 class UiContext {
 	final session:LayoutSession;
+	final layoutChanges:LayoutChanges = new LayoutChanges();
+	final comparisonFrame:UiStyleInvalidationFrame;
 	public final stateStore:StateStore;
 	public final clipboard:ClipboardService;
 	public final buildContext:BuildContext;
@@ -104,6 +108,9 @@ class UiContext {
 	var customCompositeBound:Map<Int, Bool>;
 	final previousNodesById:Map<Int, RenderNode>;
 	final currentNodesById:Map<Int, RenderNode>;
+	final submittedNodes:Array<RenderNode> = [];
+	var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
+	var nextTopology:RenderTreeTopology = new RenderTreeTopology();
 	final resolvedById:Map<Int, ResolvedLayoutItem>;
 	var accessibilityBridge:Null<AccessibilityBridge>;
 	var accessibilitySurface:Null<PlatformSurface>;
@@ -131,6 +138,7 @@ class UiContext {
 		commandContext = new CommandContext();
 		buildContext = new BuildContext(stateStore, fonts, textInput, clipboard, theme,
 			gestures, animations, null, interactionStates, commands);
+		comparisonFrame = new UiStyleInvalidationFrame(buildContext, layoutChanges, submittedTopology);
 		buildContext.setCommandContext(commandContext);
 		if (fonts != null)
 			this.session.setFonts(fonts);
@@ -310,6 +318,7 @@ class UiContext {
 		ensureLive();
 		if (root == null || build == null || frame == null)
 			return null;
+		session.verifyTree(root.layout);
 		var live = comparableDump();
 		var savedKey = submittedBuildKey;
 		var delta = frame.deltaSeconds;
@@ -426,6 +435,10 @@ class UiContext {
 			diagnosticStage = 0;
 			return cast root;
 		}
+		buildContext.beginLayoutSubmission();
+		// Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
+		previousNodesById.clear();
+		for (node in submittedNodes) previousNodesById.set(node.id.value, node);
 		// A patch-only frame keeps the submitted tree and rebuilds just the widgets that read the pointer change.
 		buildContext.resetObserved();
 		if (!patchOnly) {
@@ -451,23 +464,24 @@ class UiContext {
 		// Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
 		if (verifyRetentionEvery > 0 && !verifying)
 			checkUnannouncedEdits(next);
+
 		buildContext.takeRetainedEdits(currentNodesById);
+		layoutChanges.clear();
+		comparisonFrame.topology = submittedTopology;
+		comparisonFrame.preserveRevisions = false;
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
-			previousNodesById, currentNodesById, buildContext.patchedPriors());
+			previousNodesById, currentNodesById, buildContext.patchedPriors(), comparisonFrame);
 		buildContext.endPatchFrame();
 		// The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it. On a
 		// full rebuild a node may have been replaced by a fresh one, which paints anyway; invalidating the old one is harmless.
 		for (node in patchFramePaintNodes) node.invalidatePaint();
 		patchFramePaintNodes.resize(0);
 		var compareAllocatedAt = AllocationProbe.now();
-		next.walk(function(node) {
-			node.syncHitTestPolicy();
-			node.syncSceneRevisions();
-		});
+		next.syncLayoutInputs(layoutChanges);
 		var syncAllocatedAt = AllocationProbe.now();
 		var previousById = previousNodesById;
 		var nodesById = currentNodesById;
-		var nativeLayoutReused = !styleInvalidation.nativeLayoutRequired &&
+		var nativeLayoutReused = !verifying && !styleInvalidation.nativeLayoutRequired &&
 			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height;
 		if (nativeLayoutReused)
 			next.walk(function(node) {
@@ -487,8 +501,11 @@ class UiContext {
 				if (previousResolved != null)
 					resolved.push(previousResolved);
 			});
-		} else
-			resolved = session.submit(next.layout, frame);
+		} else {
+			session.verifyTransactions = verifyRetentionEvery > 0;
+			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+		}
+		layoutChanges.clear();
 		diagnosticStage = 6;
 		var resolvedStateRevision = stateStore.revision;
 		var missing = false;
@@ -510,7 +527,10 @@ class UiContext {
 			resolvedGeometryChangedNodes = 0;
 			resolvedGeometryReusedNodes = 0;
 			diagnosticStage = 7;
+			submittedNodes.resize(0);
+			nextTopology.clear();
 			next.walk(function(node) {
+				submittedNodes.push(node);
 				nodeCount++;
 				mountedHash = mountedHash * 31 + node.id.value;
 				// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
@@ -530,6 +550,7 @@ class UiContext {
 					resolvedGeometryChangedNodes++;
 				// Resolved callbacks still run when geometry is retained.
 				node.setResolved(item);
+				nextTopology.append(node);
 			});
 			if (missing) {
 				diagnosticStage = 8;
@@ -550,14 +571,23 @@ class UiContext {
 			// a requested pass; fail explicitly if callbacks cannot converge.
 			if (layoutPass >= 7)
 				throw "UI layout feedback did not converge after 8 passes";
-			resolved = session.submit(next.layout, frame);
+			buildContext.takeRetainedEdits(currentNodesById);
+			UiStyleInvalidationMetrics.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(), layoutChanges);
+			buildContext.endPatchFrame();
+			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+			layoutChanges.clear();
 			layoutPass++;
 		}
 		var nativeLayoutEndedAt = Sys.time();
 		var nativeLayoutEndAllocatedAt = AllocationProbe.now();
-		if (layoutPass > 0)
+		if (layoutPass > 0) {
+			comparisonFrame.preserveRevisions = true;
 			styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
-				previousNodesById, currentNodesById);
+				previousNodesById, currentNodesById, null, comparisonFrame);
+		}
+		var previousTopology = submittedTopology;
+		submittedTopology = nextTopology;
+		nextTopology = previousTopology;
 		syncWindowDecorations(next);
 		diagnosticStage = 9;
 		var previousFocus = focus.focusedId;
@@ -661,6 +691,9 @@ class UiContext {
 	public function releaseRetained():Void {
 		ensureLive();
 		root = null;
+		submittedNodes.resize(0);
+		submittedTopology.clear();
+		nextTopology.clear();
 		inspectionNode = null;
 		submittedBuildKey = null;
 		previousNodesById.clear();

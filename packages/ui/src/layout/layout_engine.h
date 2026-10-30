@@ -11,6 +11,13 @@ namespace nkui {
 class TextEngine;
 class FontCollection;
 
+struct LayoutInputChanges {
+    bool topology = true;
+    bool layers = true;
+    bool topology_validated = false;
+    std::vector<std::size_t> nodes;
+};
+
 /**
  * Private NativeKit layout boundary. Clay and its types are deliberately
  * hidden in the implementation; callers submit NativeKit-owned nodes and
@@ -39,8 +46,13 @@ class LayoutEngine {
     /** Returns cumulative intrinsic-measure activity and current cache occupancy. */
     LayoutMeasureStats measure_stats() const;
 
+    bool layout(const LayoutNodeView &nodes, float width, float height,
+                float delta_seconds, LayoutSnapshot &out, LayoutError *error = nullptr,
+                const LayoutInputChanges *changes = nullptr);
+
     bool layout(const std::vector<LayoutNode> &nodes, float width, float height,
-                float delta_seconds, LayoutSnapshot &out, LayoutError *error = nullptr);
+                float delta_seconds, LayoutSnapshot &out, LayoutError *error = nullptr,
+                const LayoutInputChanges *changes = nullptr);
 
   private:
     struct Impl;
