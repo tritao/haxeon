@@ -167,8 +167,10 @@ private class SearchPickerRow implements View {
 			activate(); event.stopPropagation();
 		});
 		node.on(UiEventKind.Activate, function(event) { activate(); event.stopPropagation(); });
-		node.on(UiEventKind.HoverEnter, function(_) hover(true));
-		node.on(UiEventKind.HoverLeave, function(_) hover(false));
+		// Descendant hover transitions bubble too; only the row boundary changes
+		// whether its hover controls are visible.
+		node.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(node.id)) hover(true); });
+		node.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(node.id)) hover(false); });
 		return node;
 	}
 }
