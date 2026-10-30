@@ -71,6 +71,66 @@ Rules that keep it working:
   The editor's panels are all observing except the BIM, inspection camera, machine control, mission and CNC panels, whose builds
   keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the rest.
 
+## Typing allocation (2026-10-30)
+
+The reported 2 KiB step was not all a reconcile allocation. HashLink's thread-local allocation buffers reserve 2,048-byte
+runs (`vendor/hashlink/src/gc.c`, `GC_TLAB_RUN`); `Gc.totalAllocated()` counts the refill, not each consumption of a slot.
+Which action crosses a refill changes its reported median. Census mode disables that fast path and counts actual object
+allocations. Capturing the UI sources immediately before `6d14bc5f` and the current sources on this machine showed about
+312 bytes more per typing action in census mode. A separate replacement-path control removed exactly 360 bytes: the
+288-byte comparison RenderNode and its 72-byte children array. Both historical controls were removed after capture;
+verify mode and the runtime's allocation counter were not changed.
+
+The remaining typing allocations were traced with `--census 1` and an isolated
+`MATERIA_INTERACTION_ONLY=type-char,type-backspace` replay (100 cycles), then checked with the full interaction replay.
+The comparison prior is now reused by its `BuiltNode`, including its child storage; it is overwritten only when another
+patch takes a snapshot, after the previous frame consumed it. A change between shared and copied layout storage creates
+a compatible prior; copied styles are updated with `Structural.assignChanged`. The cache retains at most one previous
+snapshot/subtree per self-updating widget and has the lifetime of that build entry.
+
+Other measured, discarded work on the same typing path was removed:
+
+- Scroll layout callbacks built three Transform2Ds even when the offset was unchanged (about 1,008 bytes per action).
+  They now construct the translation only when it changes. Unchanged scrollbar geometry also retains its four immutable
+  axes (about 384 bytes); scrollbar visibility, focus and numeric semantics are still updated every time.
+- Self-updating build pruning copied the map's keys (about 320 bytes). A maintained ID array now supplies membership;
+  pruning still checks every registered ID against the mounted tree, removes absent builders, and supports rearming them.
+- Ellipsis labels constructed clipped-bounds Rects to rediscover the same available width (about 240 bytes). Their existing
+  memo now caches width by immutable resolved-item identity, which changes when geometry or clipping changes.
+- The patch builder copied its saved typography stack (72 bytes). It can borrow it: `withTextStyle` balances pushes on
+  success and failure. Native submits also allocated an empty resolved array before replacing it (72 bytes); it is now
+  created only for the reuse path. Native hit-path arrays are sized once from the known ID count rather than grown by push
+  (about 416 bytes). An empty animation scheduler returns after time validation instead of copying an empty list.
+
+These are measured sources, not a claim that each was introduced by `6d14bc5f`. Removing the actual stand-in allocation
+alone would not reliably meet targets expressed through the refill counter. Census medians fell by exactly 2,864 bytes:
+
+| isolated action | census before bytes | census after bytes |
+|---|---:|---:|
+| type-char | 21,416 | 18,552 |
+| type-backspace | 21,672 | 18,808 |
+
+Normal budget replay on the same machine, KiB per action, with census disabled:
+
+| action | before | after |
+|---|---:|---:|
+| hierarchy→sensors | 171.9 | 168.5 |
+| sensors→hierarchy | 138.6 | 135.0 |
+| console→telemetry | 118.2 | 112.8 |
+| telemetry→console | 135.6 | 132.8 |
+| hover-other | 18.1 | 13.1 |
+| hover-field | 29.2 | 25.8 |
+| hover-away | 31.5 | 26.8 |
+| scroll-inspector | 26.5 | 22.9 |
+| idle | 0.2 | 0.2 |
+| type-char | 20.1–22.1 | 17.8 |
+| type-backspace | 22.1 | 17.8 |
+
+Three additional full interaction runs measured typing at 17.8–18.3 KiB for char and 17.8 KiB for backspace. Refill attribution
+also moves some non-typing medians between runs, so the census is the source attribution and the normal replay is the
+acceptance test. Full frame latency remains about 0.7 ms for typing and 1.45–1.91 ms for tab transitions. No budget ceiling
+or retention check was raised or weakened; the typing ceilings are lowered to 19.8/19.9 KiB. Nine retention scenarios and all three 500-cycle memory runs pass.
+
 ## History
 
 Status 2026-09-30: **stopped after stage 1 and a bound on stage 3; the design below was not implemented as written.** See

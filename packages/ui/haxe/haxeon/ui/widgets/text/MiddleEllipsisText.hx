@@ -4,6 +4,7 @@ import haxeon.ui.FontFamily;
 import haxeon.editor.TextDocument;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.TextDirection;
@@ -47,7 +48,7 @@ class MiddleEllipsisText implements View {
       var memo:EllipsisMemo = context.resourceState(context.id("ellipsis-memo"), function() return new EllipsisMemo(), function(_) {}).value;
       node.onResolved(function(geometry) {
         if (context.fonts == null) return;
-        var available = Math.max(0.0, geometry.clippedViewportBounds().width);
+        var available = memo.availableWidth(geometry);
         var next:String;
         if (memo.matches(value, available, resolved.textStyle, resolved.paragraphStyle))
           next = memo.result;
@@ -95,6 +96,8 @@ class MiddleEllipsisText implements View {
 
 /** The last truncation and the inputs that decided it; the result only changes when one of them does. */
 private class EllipsisMemo {
+  var geometry:Null<ResolvedLayoutItem> = null;
+  var geometryWidth:Float = 0.0;
   var value:Null<String> = null;
   var available:Float = -1.0;
   var font:Null<FontFamily> = null;
@@ -107,6 +110,15 @@ private class EllipsisMemo {
   public var result:String = "";
 
   public function new() {}
+
+  public function availableWidth(next:ResolvedLayoutItem):Float {
+    // Resolved items are immutable and reused while their encoded geometry is unchanged.
+    if (geometry != next) {
+      geometry = next;
+      geometryWidth = Math.max(0.0, next.clippedViewportBounds().width);
+    }
+    return geometryWidth;
+  }
 
   public function matches(value:String, available:Float, text:TextStyle, paragraph:ParagraphStyle):Bool
     return this.value != null && this.value == value && this.available == available && font == text.font &&

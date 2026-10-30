@@ -74,6 +74,8 @@ class BuildContext {
 	var updatingEpoch:Int = 0;
 	/** Widgets that rebuild themselves in place, by widget ID; see selfUpdating. */
 	final selfUpdatingBuilds:Map<Int, SelfUpdatingBuild> = new Map();
+	/** Stable membership storage: iterating the map would copy its keys on every frame. */
+	final selfUpdatingIds:Array<Int> = [];
 	var pendingPatches:Array<SelfUpdatingBuild> = [];
 	/** True while a patch runs: its IDs are claimed later, when the retained tree that holds them is claimed. */
 	var patching:Bool = false;
@@ -368,7 +370,7 @@ class BuildContext {
 	public function selfUpdating(id:WidgetId, build:Void->RenderNode):RenderNode {
 		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.copy());
 		entry.epoch = updatingEpoch;
-		selfUpdatingBuilds.set(id.value, entry);
+		registerSelfUpdatingBuild(id.value, entry);
 		var root = build();
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
@@ -439,7 +441,7 @@ class BuildContext {
 		var current = selfUpdatingBuilds.get(id.value);
 		if (current == entry) return true;
 		if (current != null && current.root != entry.root) return false;
-		selfUpdatingBuilds.set(id.value, entry);
+		registerSelfUpdatingBuild(id.value, entry);
 		return true;
 	}
 
@@ -458,7 +460,8 @@ class BuildContext {
 			var savedScope = scope, savedParent = styleParent, savedStack = textStyleStack;
 			scope = entry.scope;
 			styleParent = entry.styleParent;
-			textStyleStack = entry.textStyleStack.copy();
+			// withTextStyle balances every push, including when the builder throws.
+			textStyleStack = entry.textStyleStack;
 			patching = true;
 			try {
 				var fresh = entry.build();
@@ -551,27 +554,30 @@ class BuildContext {
 	public function endPatchFrame():Void
 		patchPriors.clear();
 
+	function registerSelfUpdatingBuild(id:Int, entry:SelfUpdatingBuild):Void {
+		if (!selfUpdatingBuilds.exists(id)) selfUpdatingIds.push(id);
+		selfUpdatingBuilds.set(id, entry);
+	}
+
 	/** Retire builders whose widgets are absent from the committed render tree. */
 	public function pruneSelfUpdatingBuilds(mounted:Map<Int, RenderNode>):Void {
-		// Most frames retire nothing: look before allocating the list.
-		var anyStale = false;
-		for (id => _ in selfUpdatingBuilds)
-			if (!mounted.exists(id)) {
-				anyStale = true;
-				break;
+		var removed = false;
+		var index = 0;
+		while (index < selfUpdatingIds.length) {
+			var id = selfUpdatingIds[index];
+			if (mounted.exists(id)) {
+				index++;
+				continue;
 			}
-		if (!anyStale)
-			return;
-		var stale:Array<Int> = [];
-		for (id => _ in selfUpdatingBuilds)
-			if (!mounted.exists(id)) stale.push(id);
-		for (id in stale) {
 			var entry:SelfUpdatingBuild = cast selfUpdatingBuilds.get(id);
 			entry.pending = false;
 			// The node may still be held by a retained cache, which registers the build again on reuse (rearm).
 			selfUpdatingBuilds.remove(id);
+			selfUpdatingIds[index] = selfUpdatingIds[selfUpdatingIds.length - 1];
+			selfUpdatingIds.pop();
+			removed = true;
 		}
-		if (stale.length > 0)
+		if (removed)
 			pendingPatches = [for (entry in pendingPatches) if (entry.pending) entry];
 	}
 
@@ -621,6 +627,7 @@ class BuildContext {
 			entry.pending = false;
 		}
 		selfUpdatingBuilds.clear();
+		selfUpdatingIds.resize(0);
 		pendingPatches = [];
 		patchPriors.clear();
 	}
@@ -628,6 +635,7 @@ class BuildContext {
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
 		selfUpdatingBuilds.clear();
+		selfUpdatingIds.resize(0);
 		pendingPatches = [];
 		patchPriors.clear();
 	}

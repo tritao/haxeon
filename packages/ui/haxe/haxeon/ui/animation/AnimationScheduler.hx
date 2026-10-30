@@ -53,6 +53,7 @@ class AnimationScheduler {
 	public function advance(deltaSeconds:Float):Void {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Animation time must be finite and non-negative";
+		if (active.length == 0) return;
 		var hadActive = rebuildingCount > 0;
 		var current = active.copy();
 		for (handle in current)

@@ -251,8 +251,14 @@ class RenderNode {
 	 * A detached copy of what the frame comparison reads from this node (style, layout inputs, hit testing, semantics, revisions,
 	 * parent and child order), taken before the node is changed in place so the change is still seen as one.
 	 */
-	public function snapshotForCompare(shareLayout:Bool = false):RenderNode {
-		var prior = shareLayout ? new RenderNode(id, layout.visualKind, null, layout) : new RenderNode(id, layout.visualKind, layout.style.copy());
+	public function snapshotForCompare(shareLayout:Bool = false, ?reuse:RenderNode):RenderNode {
+		var reusable = reuse != null && (reuse.layout == layout) == shareLayout;
+		var prior:RenderNode = reusable ? cast reuse : shareLayout
+			? new RenderNode(id, layout.visualKind, null, layout) : new RenderNode(id, layout.visualKind, layout.style.copy());
+		if (reusable && !shareLayout) {
+			haxeon.Structural.assignChanged(prior.layout.style, prior.layout.style, layout.style);
+			prior.layout.visualKind = layout.visualKind;
+		}
 		prior.computedStyle = computedStyle;
 		prior.states = states;
 		if (!shareLayout) {
@@ -262,7 +268,10 @@ class RenderNode {
 			prior.layout.intrinsicContent = layout.intrinsicContent;
 		}
 		prior.parent = parent;
-		prior.children = children.copy();
+		if (prior.children == NoChildren) prior.children = [];
+		prior.children.resize(children.length);
+		for (index in 0...children.length)
+			prior.children[index] = children[index];
 		prior.contentRevision = contentRevision;
 		prior.geometryRevision = geometryRevision;
 		prior.compositeRevision = compositeRevision;
@@ -321,7 +330,11 @@ class RenderNode {
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
 		var styleChanged = haxeon.Structural.changedMask(built.style, fresh.layout.style) != 0;
 		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
-		var prior = styleChanged || appearanceChanged(fresh, built) ? snapshotForCompare(!styleChanged) : this;
+		var prior = this;
+		if (styleChanged || appearanceChanged(fresh, built)) {
+			prior = snapshotForCompare(!styleChanged, built.prior);
+			built.prior = prior;
+		}
 		computedStyle = fresh.computedStyle;
 		states = fresh.states;
 		haxeon.Structural.assignChanged(layout.style, built.style, fresh.layout.style);
@@ -939,6 +952,8 @@ class RenderNode {
 
 /** What a builder made on a node, as taken by RenderNode.snapshotBuilt and kept up to date by RenderNode.reconcile. */
 class BuiltNode {
+	/** Reused by later patches; comparison consumes it before the next patch takes another snapshot. */
+	public var prior:Null<RenderNode> = null;
 	/** The style as the builder left it, before callers changed the node: the base of the next build's difference. */
 	public final style:LayoutStyle;
 	/** The children the builder made; others may have added more. */

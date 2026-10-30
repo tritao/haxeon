@@ -476,10 +476,11 @@ class UiContext {
 				if (previousResolved == null)
 					nativeLayoutReused = false;
 			});
-		var resolved:Array<ResolvedLayoutItem> = [];
+		var resolved:Array<ResolvedLayoutItem>;
 		var nativeLayoutStartedAt = Sys.time();
 		var nativeLayoutStartAllocatedAt = AllocationProbe.now();
 		if (nativeLayoutReused) {
+			resolved = [];
 			next.walk(function(node) {
 				var previous = previousById.get(node.id.value);
 				var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
@@ -573,11 +574,12 @@ class UiContext {
 		events.setHitTestProvider(function(x:Float, y:Float) {
 			session.hitTestInto(x, y, hitTestIds);
 			var path:Array<RenderNode> = [];
-			for (id in hitTestIds) {
-				var node = nodesById.get(id);
+			path.resize(hitTestIds.length);
+			for (index in 0...hitTestIds.length) {
+				var node = nodesById.get(hitTestIds[index]);
 				if (node == null)
 					return [];
-				path.push(node);
+				path[index] = node;
 			}
 			return path;
 		});

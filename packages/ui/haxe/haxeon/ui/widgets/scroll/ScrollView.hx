@@ -4,6 +4,7 @@ import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
@@ -165,10 +166,9 @@ class ScrollView implements View {
 				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
-				var nextTransform = Transform2D.identity().translated(-controller.offsetX,
-					-controller.offsetY);
-				if (transform.tx != nextTransform.tx || transform.ty != nextTransform.ty) {
-					translatedContent.layout.style.transform = nextTransform;
+				if (transform.tx != -controller.offsetX || transform.ty != -controller.offsetY) {
+					translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX,
+						-controller.offsetY);
 					context.requestLayoutFeedback();
 				}
 				visibility.value.setAvailable(scrollbar != null && controller.maxScrollY > 0 && controller.viewportHeight > 0);
@@ -362,12 +362,15 @@ class ScrollView implements View {
 			trackStyle.width.value != length || thumbStyle.width.value != thumbLength || thumbStyle.positionX != along || trackStyle.positionY != cross);
 		trackStyle.positionX = vertical ? cross : ScrollbarInset;
 		trackStyle.positionY = vertical ? ScrollbarInset : cross;
-		trackStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : length);
-		trackStyle.height = LayoutAxis.fixed(vertical ? length : ScrollbarHitWidth);
+		// These four axes are owned by this scrollbar and initialized together.
+		if (changed || trackStyle.width.sizing != LayoutSizing.Fixed) {
+			trackStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : length);
+			trackStyle.height = LayoutAxis.fixed(vertical ? length : ScrollbarHitWidth);
+			thumbStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : thumbLength);
+			thumbStyle.height = LayoutAxis.fixed(vertical ? thumbLength : ScrollbarHitWidth);
+		}
 		thumbStyle.positionX = vertical ? 0 : along;
 		thumbStyle.positionY = vertical ? along : 0;
-		thumbStyle.width = LayoutAxis.fixed(vertical ? ScrollbarHitWidth : thumbLength);
-		thumbStyle.height = LayoutAxis.fixed(vertical ? thumbLength : ScrollbarHitWidth);
 		trackStyle.visible = thumbStyle.visible = thumb.focusable = visible;
 		var semantics:Semantics = cast thumb.semantics;
 		semantics.numericMaximum = maximum; semantics.numericValue = offset;
