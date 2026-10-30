@@ -88,6 +88,9 @@ class TreeView implements View {
 	public var compactLeafIndent:Bool = false;
 	/** Shift-click selects a range and Control/Super-click toggles rows; plain clicks select one row. */
 	public var multiSelect:Bool = false;
+	/** Optional observed primary selection. Null clears selection; absent keys render unselected. Only input notifies the owner. */
+	public var selectionProvider:Null<Void->Null<String>> = null;
+
 
 	final fallbackViewportHeight:Float;
 	/** Rows selected besides selectedKey, which stays the focused row of a multi-selection. */
@@ -405,7 +408,9 @@ class TreeView implements View {
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
-			var clicks:State<PointerClickSequence> = context.state(context.id("click-sequence"), new PointerClickSequence());
+			var clickId = context.id("click-sequence");
+			var clicks:State<PointerClickSequence> = context.stateStore.contains(clickId)
+				? context.existingState(clickId) : context.state(clickId, new PointerClickSequence());
 			var expansion:State<Map<String, Bool>> = context.state(
 				context.id("expanded-state"), expandedKeys);
 			expandedState = expansion;
@@ -425,6 +430,19 @@ class TreeView implements View {
 			if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 				selectedKey = null;
 				selection.update("");
+			}
+			var provider = selectionProvider;
+			if (provider != null) {
+				var desired = context.observeString(provider);
+				if (desired != null && !branchByKey.exists(desired)) desired = null;
+				if (selectedKey != desired) {
+					extraSelected.clear();
+					selectionAnchor = desired;
+					selectedKey = desired;
+				}
+				var stored = desired == null ? "" : desired;
+				// This build already uses the controlled value; synchronizing its private store is not another input event.
+				if (selection.value != stored) selection.updateQuietly(stored);
 			}
 			for (hidden in [for (extra in extraSelected.keys()) if (!branchByKey.exists(extra)) extra])
 				extraSelected.remove(hidden);

@@ -95,7 +95,7 @@ Rules that keep it working:
   reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  The editor's panels are all observing except the BIM, machine control, mission and CNC panels, whose builds
+  The editor's panels are all observing except the machine control, mission and CNC panels, whose builds
   keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the others.
 
 ## Inspection camera retention (2026-10-30)
@@ -187,6 +187,75 @@ The normal eight-cycle fixture (`app/build/profiles/ui-camera-normal`) measures 
 Gate logs are retained in `app/build/profiles/ui-camera-gates`.
 Captures under `app/build/profiles`: `ui-camera-cost-{tab-matrix,interaction,selection-stress}` and
 `ui-camera-census-{after,main-control}-{tab-matrix,interaction,selection-stress}`. Captured bytecode is omitted.
+
+## BIM retention (2026-10-30)
+
+BIM now observes a model-owned `cadkit.parametric.Document.metadataRevision`, its active projection and selection, and the
+editor binding. CadKit advances this non-persisted counter at the record mutation/restore methods for collection
+membership, names, typed properties, definition input/default metadata, instance overrides/definition reassignment, and
+relationship endpoints. Undo, redo and codecs use those same paths. The counter is not restored with a historical
+`Definition.revision`, so restoring an earlier input revision cannot make an old retained snapshot current again.
+It is catalog/metadata invalidation, not a revision for feature geometry or derived shape caches.
+
+Both BIM tree models return this scalar revision. Their previous signatures enumerated and serialized elements,
+relationships, definitions and instance counts during revision checks. The type signature also missed an instance rename
+that left its count unchanged. A scalar getter allocates nothing and covers that rename as well as property-schema edits.
+The UI does not maintain a second list of model fields to hash, and direct model edits need no editor history revision.
+
+The dock supplies its known width through `BimModelEditor.atWidth`; standalone builds use the context viewport width.
+The editor no longer measures its width and changes the next build's breakpoint from an `onResolved` callback. Compact
+and wide composition therefore use the same inputs on the submitting build and its verification reference.
+
+Tree selection has one owner. `TreeView.selectionProvider` is an optional observed primary-selection source; normal
+uncontrolled trees keep their previous behavior. A controlled tree clamps unavailable keys to no visible selection and
+synchronizes only its private state quietly after choosing the value this build will render. Input still updates normal
+widget state and notifies the owner once; synchronization does not notify the owner. As for other observed reads, the
+owner schedules a frame/build when external model values change. BIM's inspector and each projection now use the same
+selection, rather than letting a newly created tree restore a different old selection from its internal store. An empty
+owner selection no longer silently highlights the first tree root while the inspector still says to select an object.
+
+An initialized tree also reuses its stored `PointerClickSequence`: building an unused placeholder on every rebuild was
+unnecessary allocation. This keeps double-click history intact while accommodating the controlled-selection binding.
+
+The `panel-flows` fixture constructs one project/site/building/storey and one window type/instance, without loading a
+source project. It exercises real row clicks and keyboard expansion/collapse, both projections, renaming, property
+addition/removal and type replacement, undo/redo, definition default restoration with a repeated history revision,
+instance overrides and labels, wide/compact resize, unchanged-node retention and document replacement. Row hit-test paths
+must contain the row identified by resolved geometry. The normal replay checks retention identity; verify mode continues
+to rebuild and compare every submitting frame. Existing fitted-label feedback gets a settling frame before isolating an
+unchanged frame.
+
+The tree-selection suite separately checks externally controlled selection through a retained parent, null and missing
+keys, input notifications and comparison with a full rebuild. `CADKIT_SMOKE_ENTRY=MetadataRevisionSmoke bash
+cadkit/scripts/test-haxeon` checks the revision invariants, including no invalidation for an identical property, collection
+insertion/removal, low-level restores, history and decoding. The existing `BimEditorProjectionTests` also pass.
+
+The ten UI suites, all nine verify-every-frame editor scenarios, the ordinary eight-cycle panel replay and all three
+500-cycle memory runs pass. Allocation ceilings are unchanged. Same-machine probe-off measurements against the starting
+baseline are below; BIM was closed in these standard cost scenarios, so these establish regression coverage rather than
+a claimed speedup for BIM. Exact census comparisons against the preceding camera commit show unchanged bytes for all
+four tab transitions and all ten interaction actions. Selection tree/style allocation falls from 851,304 to 851,272 bytes
+(the full selection-frame allocation is not reported).
+
+| action | baseline KiB | BIM KiB | baseline ms | BIM ms |
+| --- | ---: | ---: | ---: | ---: |
+| hierarchy → sensors | 165.1 | 165.4 | 1.70 | 1.66 |
+| sensors → hierarchy | 129.0 | 127.0 | 1.35 | 1.30 |
+| console → telemetry | 112.5 | 112.5 | 1.16 | 1.13 |
+| telemetry → console | 130.7 | 132.5 | 1.22 | 1.21 |
+| hover-other | 13.1 | 13.1 | 0.42 | 0.42 |
+| hover-field | 23.9 | 23.9 | 0.43 | 0.43 |
+| hover-away | 25.0 | 25.0 | 0.43 | 0.43 |
+| scroll-inspector | 22.3 | 22.3 | 0.72 | 0.72 |
+| type-char / type-backspace | 17.8 | 17.8 | 0.43 / 0.42 | 0.42 / 0.42 |
+| idle / idle-focused | 0.2 | 0.2 | 0.00 | 0.00 |
+| hover-enter / hover-inside | 0.6 | 0.6 | 0.00 | 0.00 |
+| selection | not reported | not reported | 3.05 | 3.60 |
+
+Raw allocation differences caused by refill attribution must not be interpreted as object-allocation changes; the exact
+census comparison above covers that distinction. Selection timing varies between captures (3.1 ms in the strict budget
+run); no latency improvement is claimed. Evidence is retained under `app/build/profiles/ui-bim-cost-*`,
+`ui-bim-census-*`, `ui-bim-normal` and `ui-bim-gates`, omitting captured bytecode.
 
 ## Typing allocation (2026-10-30)
 
