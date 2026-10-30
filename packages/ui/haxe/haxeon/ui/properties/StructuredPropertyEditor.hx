@@ -65,12 +65,13 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		var root:Dynamic = switch value { case Custom(_, data): data; default: new Array<Dynamic>(); };
 		var base = display(root);
 		var draftState:State<StructuredPropertyDrafts> = context.state(context.id(key + ":drafts"), new StructuredPropertyDrafts(base));
-		var local = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
-		if (local == null) local = new StructuredPropertyDrafts(base);
-		if (local.base != base) {
-			local = new StructuredPropertyDrafts(base);
-			draftState.update(local);
+		var found = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
+		if (found != null && found.base != base) {
+			found = new StructuredPropertyDrafts(base);
+			draftState.update(found);
 		}
+		// Revert's closure replaces `local`, so it is declared non-null rather than null-checked.
+		var local:StructuredPropertyDrafts = found != null ? found : new StructuredPropertyDrafts(base);
 		if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 		var drafts = local.drafts;
 		if (!vector) root = local.current;
