@@ -174,6 +174,10 @@ class TextField implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var id = context.id("field");
+			// Shown from a document: a retained subtree around the field rebuilds when the document changes outside it.
+			var shownDocument = document;
+			if (shownDocument != null)
+				context.observeInt(function() return shownDocument.revision);
 			// The field rebuilds only itself when its own state changes (typing, selection, caret), so the panel around it stays cached.
 			return context.selfUpdating(id, function() return buildField(context, id));
 		});

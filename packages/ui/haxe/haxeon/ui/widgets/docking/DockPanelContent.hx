@@ -20,6 +20,19 @@ class DockPanelContent {
 	public final cacheKey:Null<DockPanelCacheKeyBuilder>;
 	/** Allocation-free alternative to `cacheKey`; when both are given this one is used. */
 	public final cacheKeyHash:Null<DockPanelCacheKeyHasher>;
+	/**
+	 * Retain the panel by what its build reads through BuildContext.observeInt and friends (and the widget state it uses),
+	 * with no key: a read cannot be left out of a key that does not exist. See `observing`.
+	 */
+	public var observed:Bool = false;
+
+	/** A panel retained by what its build observes; the preferred way to make a panel retained. */
+	public static function observing(panelId:String, build:DockPanelBuilder,
+			?buildWithWidth:WidthAwareDockPanelBuilder):DockPanelContent {
+		var content = new DockPanelContent(panelId, build, buildWithWidth);
+		content.observed = true;
+		return content;
+	}
 
 	public function new(panelId:String, build:DockPanelBuilder,
 			?buildWithWidth:WidthAwareDockPanelBuilder,

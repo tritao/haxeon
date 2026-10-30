@@ -393,6 +393,9 @@ class TreeView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
+			// The rows come from the model: a retained subtree around the tree rebuilds when the model's revision changes.
+			var observedModel = model;
+			context.observeInt(function() return observedModel.revision());
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
 			var treeId = context.id("tree");

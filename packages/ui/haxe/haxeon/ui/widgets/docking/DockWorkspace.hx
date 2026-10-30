@@ -333,7 +333,8 @@ class DockWorkspace implements View {
 		var content = panelContents.get(selected);
 		var contentHasher:Null<DockPanelCacheKeyHasher> = content == null ? null : content.cacheKeyHash;
 		var contentKey:Null<DockPanelCacheKeyBuilder> = content == null ? null : content.cacheKey;
-		if (contentHasher == null && contentKey == null)
+		// An observed panel has no key of its own: the pane's cache records what the panel's build reads.
+		if (contentHasher == null && contentKey == null && (content == null || !content.observed))
 			return false;
 		var hash = paneKeyHash.reset();
 		hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
@@ -441,7 +442,7 @@ private class DockPanelView implements View {
 		var cacheKeyHasher:Null<DockPanelCacheKeyHasher> = content.cacheKeyHash;
 		var keyed = false;
 		var keyA = 0, keyB = 0;
-		if (cacheKeyHasher != null || cacheKeyBuilder != null) {
+		if (cacheKeyHasher != null || cacheKeyBuilder != null || content.observed) {
 			keyed = true;
 			var hash = scratchKey.reset();
 			if (cacheKeyHasher != null)
