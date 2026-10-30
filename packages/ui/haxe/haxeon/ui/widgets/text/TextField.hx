@@ -470,6 +470,9 @@ class TextField implements View {
 					context.textInput.platformActive));
 			};
 			var syncCursor = function(geometry:ResolvedLayoutItem) {
+				// Resolved callbacks run on every frame: without a focused editor or a listener, nobody uses the caret.
+				if (!editor.focused && onCaretRect == null && onDiagnostics == null)
+					return;
 				var caret = editor.layout.caret(editor.focusPosition());
 				var topX = geometry.x + caret.x + caret.ascender * caret.slope;
 				var topY = geometry.y + caret.y + caret.ascender - editor.scrollOffsetY;

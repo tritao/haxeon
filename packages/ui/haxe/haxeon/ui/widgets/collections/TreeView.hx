@@ -487,6 +487,8 @@ class TreeView implements View {
 			var content = new Column("tree-content", rowViews, contentStyle);
 			var scroll = new ScrollView("viewport", content, viewportStyle,
 				ScrollAxis.Vertical, controller);
+			// The rows built depend on the offset.
+			scroll.contentFollowsOffset = true;
 			var root = new RenderNode(treeId, LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;

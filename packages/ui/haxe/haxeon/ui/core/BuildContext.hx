@@ -170,9 +170,12 @@ class BuildContext {
 		if (node.styleType == null) return false;
 		var target = new StyleTarget(node.styleType, node.styleKey, node.styleId,
 			node.styleClasses, node.styleTags, -1);
-		for (sheet in [theme.styles, styleSheet])
-			for (rule in sheet.rules)
-				if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0 && rule.selector.matches(target)) return true;
+		return sheetHasHoverRule(theme.styles, target) || sheetHasHoverRule(styleSheet, target);
+	}
+
+	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, target:StyleTarget):Bool {
+		for (rule in sheet.rules)
+			if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0 && rule.selector.matches(target)) return true;
 		return false;
 	}
 
@@ -339,10 +342,12 @@ class BuildContext {
 		entry.inPlace = true;
 		entry.epoch = restylingEpoch;
 		selfUpdatingBuilds.set(id.value, entry);
-		entry.root = build();
+		var root = build();
+		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
-		entry.built = entry.root.layout.style.copy();
-		return entry.root;
+		entry.built = root.layout.style.copy();
+		entry.builtChildren = root.children.copy();
+		return root;
 	}
 
 	/**
@@ -352,9 +357,17 @@ class BuildContext {
 	public function requestPatch(id:WidgetId):Bool {
 		if (!queuePatch(id))
 			return false;
-		commands.refresh();
+		// Its own revision, not a command refresh: a frame with nothing but patches pending rebuilds only the patched widgets.
+		patchRequestRevision++;
 		return true;
 	}
+
+	/** Bumped by requestPatch; a different value from the submitted one means a frame is due. */
+	public var patchRequestRevision(default, null):Int = 0;
+
+	public var hasPendingPatches(get, never):Bool;
+	inline function get_hasPendingPatches():Bool
+		return pendingPatches.length > 0;
 
 	/** Queues the patch without asking for a frame; the caller already has one running. False when the widget is not self-updating. */
 	public function queuePatch(id:WidgetId):Bool {
@@ -442,8 +455,10 @@ class BuildContext {
 						if (node != old && !patchPriors.exists(node.id.value))
 							patchPriors.set(node.id.value, node);
 					});
-					var before = old.restyleFrom(next, entry.built, next.layout.style);
+					var nextChildren = next.children.copy();
+					var before = old.restyleFrom(next, entry.built, next.layout.style, entry.builtChildren);
 					entry.built = next.layout.style.copy();
+					entry.builtChildren = nextChildren;
 					if (!patchPriors.exists(old.id.value))
 						patchPriors.set(old.id.value, before);
 				} else {
@@ -507,8 +522,17 @@ class BuildContext {
 
 	/** Retire builders whose widgets are absent from the committed render tree. */
 	public function pruneSelfUpdatingBuilds(mounted:Map<Int, RenderNode>):Void {
+		// Most frames retire nothing: look before allocating the list.
+		var anyStale = false;
+		for (id => _ in selfUpdatingBuilds)
+			if (!mounted.exists(id)) {
+				anyStale = true;
+				break;
+			}
+		if (!anyStale)
+			return;
 		var stale:Array<Int> = [];
-		for (id in selfUpdatingBuilds.keys())
+		for (id => _ in selfUpdatingBuilds)
 			if (!mounted.exists(id)) stale.push(id);
 		for (id in stale) {
 			var entry:SelfUpdatingBuild = cast selfUpdatingBuilds.get(id);
@@ -681,6 +705,8 @@ class SelfUpdatingBuild {
 	public var epoch:Int = 0;
 	/** The style the builder last produced, before callers changed the node; the base for the next rebuild's difference. */
 	public var built:Null<haxeon.ui.LayoutStyle> = null;
+	/** The children the builder last made; others may have added more, which rebuilds leave alone. */
+	public var builtChildren:Array<RenderNode> = [];
 
 	public function new(build:Void->RenderNode, scope:KeyScope, styleParent:Null<ComputedStyle>, textStyleStack:Array<ResolvedTextStyle>) {
 		this.build = build;

@@ -36,6 +36,11 @@ class ScrollView implements View {
 	public var onScroll:UiEvent->Void;
 	/** Shows an interactive overlay scrollbar when vertical content overflows. */
 	public var showScrollbar:Bool;
+	/**
+	 * Set when the content builds from the scroll offset, as virtualized rows do: scrolling then rebuilds the view. Otherwise
+	 * the content is moved in place and nothing is rebuilt.
+	 */
+	public var contentFollowsOffset:Bool = false;
 	/** Expand content to fill a short viewport while retaining intrinsic scroll overflow. */
 	public var fillViewport:Bool = false;
 	/** Optional intrinsic content dimensions for clipped or virtualized document widgets. */
@@ -125,11 +130,14 @@ class ScrollView implements View {
 			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
 			viewport.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
 			viewport.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
+			var followsOffset = contentFollowsOffset;
 			binding.value.attach(controller, context.animations, function(_) {
+				context.willEditRetained(translatedContent);
 				translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX, -controller.offsetY);
 				visibility.value.reveal();
 				horizontalVisibility.value.reveal();
-				context.commands.refresh();
+				if (followsOffset)
+					context.commands.refresh();
 			});
 
 			viewport.add(translatedContent);

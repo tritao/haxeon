@@ -76,6 +76,7 @@ class UiContext {
 	var submittedStateRevision:Int;
 	var submittedInteractionRevision:Int;
 	var submittedRetainedEditRevision:Int = 0;
+	var submittedPatchRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
@@ -322,8 +323,10 @@ class UiContext {
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
 			previousNodesById, currentNodesById, buildContext.patchedPriors());
 		buildContext.endPatchFrame();
-		// The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it.
-		if (patchOnly) for (node in patchFramePaintNodes) node.invalidatePaint();
+		// The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it. On a
+		// full rebuild a node may have been replaced by a fresh one, which paints anyway; invalidating the old one is harmless.
+		for (node in patchFramePaintNodes) node.invalidatePaint();
+		patchFramePaintNodes.resize(0);
 		var compareAllocatedAt = AllocationProbe.now();
 		next.walk(function(node) {
 			node.syncHitTestPolicy();
@@ -464,6 +467,7 @@ class UiContext {
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
+		submittedPatchRequestRevision = buildContext.patchRequestRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedCommandRevision = commands.revision;
 		submittedNodeCount = nodeCount;
@@ -940,7 +944,7 @@ class UiContext {
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
 	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
-		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits) return -1;
+		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
@@ -993,10 +997,14 @@ class UiContext {
 
 	/** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
 	function queueInteractionPatches():Void {
+		patchFramePaintNodes.resize(0);
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
-			var owner = node == null ? null : buildContext.restylingOwner(node);
+			if (node == null) continue;
+			var owner = buildContext.restylingOwner(node);
 			if (owner != null) buildContext.queuePatch(owner.id);
+			// Retained caches ignore hover that only repaints, so a cached node that paints it is repainted here.
+			else if (node.hoverPaintOnly && node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
 	}
 
@@ -1095,6 +1103,10 @@ class UiContext {
 				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
 		if (animations.rebuildingCount > 0)
 			result |= UiDirtyFlag.NeedsComposite;
+		if (buildContext.patchRequestRevision != submittedPatchRequestRevision)
+			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
+				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
+				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision)
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
 				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;

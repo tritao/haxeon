@@ -8,6 +8,8 @@ class InteractionStateSnapshot {
 
 	final ids:Array<WidgetId>;
 	final values:Array<Int>;
+	/** Per node, the flags its build depends on: Hovered drops out where hover only repaints. */
+	final masks:Array<Int>;
 	/** Widgets left out because they restyle themselves, with the builds that do it, kept alive with the cached subtree. */
 	final restyling:Array<WidgetId>;
 	final restylingBuilds:Array<SelfUpdatingBuild>;
@@ -17,10 +19,12 @@ class InteractionStateSnapshot {
 			throw "Retained interaction snapshots require a render tree";
 		ids = [];
 		values = [];
+		masks = [];
 		restyling = [];
 		restylingBuilds = [];
 		root.walk(function(node) {
-			if (!(node.recordsInteraction || node.focusable || node.semantics != null))
+			// Only a node a widget built from interaction state can be stale; routing alone leaves states on others.
+			if (!node.recordsInteraction)
 				return;
 			// A widget that restyles in place follows these changes itself, for its whole subtree.
 			var owner = context.restylingOwner(node);
@@ -31,16 +35,18 @@ class InteractionStateSnapshot {
 				}
 				return;
 			}
-			// Nodes that can own focus or semantics may start recording state only
-			// after the first pointer or focus transition.
+			var mask = interactionMask;
+			if (node.hoverPaintOnly && !context.hasHoverStyle(node))
+				mask &= ~StyleState.Hovered;
 			ids.push(node.id);
-			values.push(node.states & interactionMask);
+			masks.push(mask);
+			values.push(node.states & mask);
 		});
 	}
 
 	public function matches(context:BuildContext):Bool {
 		for (index in 0...ids.length)
-			if ((context.interactionStates.get(ids[index]) & interactionMask) != values[index])
+			if ((context.interactionStates.get(ids[index]) & masks[index]) != values[index])
 				return false;
 		for (index in 0...restyling.length)
 			if (!context.rearmRestyling(restyling[index], restylingBuilds[index]))

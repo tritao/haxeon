@@ -25,6 +25,11 @@ private class DecoratedButton implements View {
     var node = new Button("Decorated", null, null, "decorated").build(context);
     node.on(UiEventKind.PointerDown, function(_) presses++);
     node.layout.style.zIndex = 3;
+    // As DockWorkspace does with tab buttons: an overlay child added by the caller.
+    var overlayStyle = new LayoutStyle();
+    overlayStyle.width = LayoutAxis.fixed(6.0);
+    overlayStyle.height = LayoutAxis.fixed(6.0);
+    node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
     return node;
   }
 }
@@ -136,6 +141,9 @@ class RestyleInPlaceTests {
     var decoratedNode:Null<RenderNode> = null;
     patchedRoot.walk(function(node) { if (node.styleKey == "decorated" && node.styleType == "button") decoratedNode = node; });
     check(decoratedNode != null && decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost");
+    var overlays = 0;
+    decoratedNode.walk(function(node) { if (node.layout.style.width.value == 6.0 && node.layout.style.height.value == 6.0) overlays++; });
+    check(overlays == 1, "A child added after build was lost or duplicated (" + overlays + ")");
     check(patched.panelBuilds == 1, name + ": pointer changes rebuilt the retained panel " + patched.panelBuilds + " times");
     check(reference.panelBuilds > patched.panelBuilds, name + ": the reference did not rebuild the panel");
     Sys.println("PASS " + name + ": " + script.length + " steps match a full rebuild (" + changed + " changed the tree); panel builds patched="

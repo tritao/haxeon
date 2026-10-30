@@ -62,6 +62,7 @@ class UiStyleInvalidationMetrics {
 		var semanticsInvalidatedNodes = 0;
 		var hitGeometryInvalidatedNodes = 0;
 		var treeChanged = previous == null && current != null;
+		var matchedPriors = 0;
 		if (current != null)
 			current.walk(function(node) {
 				currentIndex.set(node.id.value, node);
@@ -69,6 +70,7 @@ class UiStyleInvalidationMetrics {
 				if (prior == null) {
 					treeChanged = true;
 				} else {
+					matchedPriors++;
 					var priorParent = prior.parent == null ? 0 : prior.parent.id.value;
 					var currentParent = node.parent == null ? 0 : node.parent.id.value;
 					if (priorParent != currentParent || prior.layout.visualKind != node.layout.visualKind ||
@@ -94,10 +96,10 @@ class UiStyleInvalidationMetrics {
 				if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsSemantics)) semanticsInvalidatedNodes++;
 				if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsHitGeometry)) hitGeometryInvalidatedNodes++;
 			});
-		if (previous != null)
-			for (id in previousIndex.keys())
-				if (!currentIndex.exists(id))
-					treeChanged = true;
+		// A removed node is a prior ID the walk above did not visit. Every visited ID was matched against one, so when every
+		// prior was matched none was removed; counting avoids walking the prior keys, which allocates their array.
+		if (previous != null && !treeChanged && matchedPriors != previousIndex.size())
+			treeChanged = true;
 
 		if (treeChanged)
 			invalidationFlags |= UiDirtyFlag.NeedsBuild;

@@ -104,8 +104,10 @@ class Tabs implements View {
 				selectedKey : state.value;
 			if (!isEnabled(active))
 				active = firstEnabled();
+			// Syncing during the build: this build already uses `active`, so bumping the revision would only make every cache
+			// around the tabs rebuild them again on the next frame.
 			if (active != state.value)
-				state.update(active);
+				state.updateQuietly(active);
 			selectedKey = active;
 			var select = function(next:String) {
 				if (next == selectedKey)
@@ -419,6 +421,7 @@ class Tabs implements View {
 			dragState:Null<State<TabDragState>>):Void {
 		if (dragState == null)
 			return;
+		// Only these handlers read the drag state, never a build, so changing it must not invalidate the caches around the tabs.
 		buttonNode.on(UiEventKind.PointerDown, function(event) {
 			if (event.button != 0)
 				return;
@@ -429,7 +432,7 @@ class Tabs implements View {
 			drag.tabKey = tabKey;
 			drag.startX = event.x;
 			drag.startY = event.y;
-			dragState.update(drag);
+			dragState.updateQuietly(drag);
 			// Dock targets stay inside the workspace. Logical capture keeps the
 			// drag routed to this tab without grabbing the native window pointer.
 			event.capturePointer(false);
@@ -442,7 +445,7 @@ class Tabs implements View {
 			var dy = event.y - drag.startY;
 			if (!drag.dragging && dx * dx + dy * dy >= 36.0) {
 				drag.dragging = true;
-				dragState.update(drag);
+				dragState.updateQuietly(drag);
 				if (onTabDragStart != null)
 					onTabDragStart(tabKey, event);
 			}
@@ -462,7 +465,7 @@ class Tabs implements View {
 				event.preventDefault();
 			}
 			drag.clear();
-			dragState.update(drag);
+			dragState.updateQuietly(drag);
 			event.releasePointer();
 		});
 		buttonNode.on(UiEventKind.PointerCancel, function(event) {
@@ -472,7 +475,7 @@ class Tabs implements View {
 			if (drag.dragging && onTabDragCancel != null)
 				onTabDragCancel(tabKey, event);
 			drag.clear();
-			dragState.update(drag);
+			dragState.updateQuietly(drag);
 			event.releasePointer();
 		});
 		buttonNode.on(UiEventKind.KeyDown, function(event) {

@@ -267,15 +267,39 @@ class RenderNode {
 	 * and the builder did not change is left alone. `fresh` is the node the builder just made: its computed style, state and
 	 * children move here. Returns a stand-in for the node as it was, for the frame comparison.
 	 */
-	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle):RenderNode {
+	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle,
+			builtChildren:Array<RenderNode>):RenderNode {
 		var prior = snapshotForCompare();
 		computedStyle = fresh.computedStyle;
 		states = fresh.states;
 		applyStyleChange(layout.style, before, after);
-		for (child in children.copy())
-			child.detach();
-		for (child in fresh.children.copy())
-			add(child.detach());
+		// Only the children the builder made are replaced, each in its place; children others added since stay where they are.
+		var next = fresh.children.copy();
+		var position = -1;
+		for (index in 0...builtChildren.length) {
+			var old = builtChildren[index];
+			if (old.parent != this) continue;
+			if (index < next.length) {
+				var child = next[index].detach();
+				old.replaceWith(child);
+				position = children.indexOf(child);
+			} else {
+				position = children.indexOf(old) - 1;
+				old.detach();
+			}
+		}
+		for (index in builtChildren.length...next.length) {
+			var child = next[index].detach();
+			if (position < 0 || children == NoChildren) {
+				add(child);
+				position = children.length - 1;
+			} else {
+				position++;
+				child.parent = this;
+				children.insert(position, child);
+				layout.children.insert(position, child.layout);
+			}
+		}
 		return prior;
 	}
 
