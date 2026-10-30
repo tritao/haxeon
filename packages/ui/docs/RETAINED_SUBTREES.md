@@ -31,8 +31,10 @@ A frame where only these happened runs as a patch frame: the submitted tree stay
 
 **Verify mode** is the safety net: `UiContext.verifyRetention` builds the view again with every cache, patch and edit
 bypassed and compares the trees. `verifyRetentionEvery` or `HAXEON_UI_VERIFY_RETENTION=N` runs it every N frames that did work
-and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. A stale cache key, quiet
-update or unannounced edit shows up there as a failure instead of old UI.
+and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. While it is on, every node
+is also fingerprinted at the end of a frame, and a node still in the next tree whose fingerprint changed without
+`willEditRetained` or a patch is reported. A stale cache key, quiet update or unannounced edit shows up as a failure instead
+of old UI.
 
 Rules that keep it working:
 

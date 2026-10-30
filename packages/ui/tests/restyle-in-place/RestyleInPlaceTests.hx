@@ -209,6 +209,34 @@ class RestyleInPlaceTests {
     check(ui.verifyRetention(build, frame) == null, "Observed reads left the retained tree stale");
     ui.dispose();
     Sys.println("PASS observed: a keyless retained view rebuilds exactly when an observed read changes, through an outer cache");
+    unannouncedEdits(fonts);
+  }
+
+  /** With verification on, a node of the submitted tree changed between frames must be announced with willEditRetained. */
+  static function unannouncedEdits(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts);
+    var frame = new LayoutFrame(240.0, 120.0);
+    var view:View = new RetainedView("edited", function(_) return new haxeon.ui.widgets.text.Text("label"), function() return "fixed");
+    var build = function() return view;
+    var reported:Null<String> = null;
+    ui.onRetentionMismatch = function(text) reported = text;
+    ui.verifyRetentionEvery = 1000;
+    var frameNumber = 0;
+    var submit = function() return ui.submitCached(build, frame, "edits-" + (frameNumber++));
+    var text:Null<RenderNode> = null;
+    submit().walk(function(node) { if (node.layout.text == "label") text = node; });
+    check(text != null, "No text node");
+    var node:RenderNode = cast text;
+    node.layout.style.positionX = 7.0;
+    submit();
+    check(reported != null && reported.indexOf("without willEditRetained") >= 0, "An unannounced edit was not reported: " + reported);
+    reported = null;
+    ui.buildContext.willEditRetained(node);
+    node.layout.style.positionX = 9.0;
+    submit();
+    check(reported == null, "An announced edit was reported: " + reported);
+    ui.dispose();
+    Sys.println("PASS edits: a change to the submitted tree is reported unless announced with willEditRetained");
   }
 
   public static function main():Int {

@@ -333,6 +333,41 @@ class UiContext {
 		return live == rebuilt ? null : describeDifference(live, rebuilt);
 	}
 
+	/** Fingerprints of the submitted tree's nodes, by widget ID, while verification is on. */
+	final submittedFingerprints:Map<Int, Int> = new Map();
+
+	function recordFingerprints(tree:RenderNode):Void {
+		submittedFingerprints.clear();
+		tree.walk(function(node) submittedFingerprints.set(node.id.value, node.fingerprint()));
+	}
+
+	/**
+	 * Finds nodes of the submitted tree that are still in the new one and were changed in between without willEditRetained
+	 * or a patch: a frame cannot see such a change, so it is shown only by chance. Reported like a retention mismatch.
+	 */
+	function checkUnannouncedEdits(tree:RenderNode):Void {
+		var patched = buildContext.patchedPriors();
+		var found:Array<String> = [];
+		tree.walk(function(node) {
+			var id = node.id.value;
+			if (currentNodesById.get(id) != node || !submittedFingerprints.exists(id) || patched.exists(id) ||
+				buildContext.editAnnounced(node))
+				return;
+			if (submittedFingerprints.get(id) != node.fingerprint() && found.length < 5)
+				found.push(stateStoreDescription(node));
+		});
+		if (found.length == 0)
+			return;
+		var difference = "Nodes of the submitted tree changed without willEditRetained:\n  " + found.join("\n  ");
+		var report = onRetentionMismatch;
+		if (report == null)
+			throw difference;
+		report(difference);
+	}
+
+	function stateStoreDescription(node:RenderNode):String
+		return (node.styleType == null ? "" : node.styleType + " ") + stateStore.describe(node.id);
+
 	static final pointerFlags = ~/ ?(states=)?(hovered|pressed)/g;
 
 	function comparableDump():String
@@ -414,6 +449,8 @@ class UiContext {
 		diagnosticStage = 5;
 		var treeBuiltAllocatedAt = AllocationProbe.now();
 		// Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
+		if (verifyRetentionEvery > 0 && !verifying)
+			checkUnannouncedEdits(next);
 		buildContext.takeRetainedEdits(currentNodesById);
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
 			previousNodesById, currentNodesById, buildContext.patchedPriors());
@@ -583,6 +620,8 @@ class UiContext {
 		if (reconcileNewFocus && focusChanged && (nextFocus != null ||
 			(previousFocus != null && nodesById.exists(previousFocus.value))))
 			return submitInternal(frame, cacheKey, function() return view, false);
+		if (verifyRetentionEvery > 0)
+			recordFingerprints(next);
 		frameNumber++;
 		var submitEndedAt = Sys.time();
 		var submitEndAllocatedAt = AllocationProbe.now();

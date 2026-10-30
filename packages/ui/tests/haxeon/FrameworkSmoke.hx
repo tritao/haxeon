@@ -3052,7 +3052,9 @@ class FrameworkSmoke {
 		closeNode = closeRow.children[1].children[0];
 		if (closeNode.layout.style.visible) throw "Leaving a tab must hide its close target";
 		context.focusWidget(closeRow.children[0].id);
-		context.submit(closeTabs, tabsFrame);
+		// Focus updates state and the frame builds the close action visible; the node shown is the new tree's.
+		closeRoot = context.submit(closeTabs, tabsFrame);
+		closeNode = tabStrip(closeRoot).children[1].children[0].children[1].children[0];
 		if (!closeNode.layout.style.visible) throw "Keyboard focus must reveal the close action";
 
 		for (value in ["🙂🙂🙂🙂🙂🙂🙂🙂-a-very-long-filename.txt", "日本語の長いファイル名-a-very-long-filename.hx"]) {

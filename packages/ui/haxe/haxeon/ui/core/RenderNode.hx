@@ -232,6 +232,34 @@ class RenderNode {
 		return next;
 	}
 
+	static final fingerprintHash:KeyHash = new KeyHash();
+
+	/**
+	 * A hash of what this node shows and how it lays out, from what the frame comparison reads. A debug check compares it
+	 * across frames to find changes to the submitted tree that nobody announced (UiContext.verifyRetentionEvery).
+	 */
+	public function fingerprint():Int {
+		var style = layout.style;
+		var hash = fingerprintHash.reset();
+		hash.addInt(cast layout.visualKind).addString(layout.text).addInt(layout.measureVersion)
+			.addInt(style.width == null ? -1 : cast style.width.sizing).addFloat(style.width == null ? 0.0 : style.width.value)
+			.addInt(style.height == null ? -1 : cast style.height.sizing).addFloat(style.height == null ? 0.0 : style.height.value)
+			.addInt(cast style.direction).addInt(cast style.positioning).addFloat(style.positionX).addFloat(style.positionY)
+			.addInt(style.zIndex).addBool(style.visible).addBool(style.clipHorizontal).addBool(style.clipVertical)
+			.addFloat(style.childGap).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
+			.addString(semantics == null ? null : semantics.label);
+		var padding = style.padding;
+		if (padding != null) hash.addFloat(padding.left).addFloat(padding.top).addFloat(padding.right).addFloat(padding.bottom);
+		var background = style.background;
+		if (background != null) hash.addFloat(background.red).addFloat(background.green).addFloat(background.blue).addFloat(background.alpha);
+		var transform = style.transform;
+		if (transform != null) hash.addFloat(transform.tx).addFloat(transform.ty).addFloat(transform.a).addFloat(transform.d);
+		var text = layout.textColor;
+		if (text != null) hash.addFloat(text.red).addFloat(text.green).addFloat(text.blue).addFloat(text.alpha);
+		hash.addInt(children.length);
+		return hash.a ^ (hash.b * 31);
+	}
+
 	/**
 	 * A detached copy of what the frame comparison reads from this node (style, layout inputs, hit testing, semantics, revisions,
 	 * parent and child order), taken before the node is changed in place so the change is still seen as one.

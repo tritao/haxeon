@@ -500,6 +500,10 @@ class BuildContext {
 		retainedEditRevision++;
 	}
 
+	/** Whether `node` was announced with willEditRetained since the last frame. */
+	public function editAnnounced(node:RenderNode):Bool
+		return retainedEdits.indexOf(node) >= 0;
+
 	public var hasRetainedEdits(get, never):Bool;
 	inline function get_hasRetainedEdits():Bool
 		return retainedEdits.length > 0;

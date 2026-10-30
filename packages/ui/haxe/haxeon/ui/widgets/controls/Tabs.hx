@@ -378,17 +378,18 @@ class Tabs implements View {
 		var closeNode = close.build(context);
 		closeNode.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
 		closeNode.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
-		var refresh = function() { closeNode.layout.style.visible = hover.value || focused.value; };
-		refresh();
+		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
+		// changing a node of the submitted tree behind the frame's back.
+		closeNode.layout.style.visible = hover.value || focused.value;
 		row.on(UiEventKind.HoverEnter, function(event) {
-			if (event.target.equals(row.id)) { hover.update(true); refresh(); }
+			if (event.target.equals(row.id)) hover.update(true);
 		});
 		row.on(UiEventKind.HoverLeave, function(event) {
-			if (event.target.equals(row.id)) { hover.update(false); refresh(); }
+			if (event.target.equals(row.id)) hover.update(false);
 		});
 		for (node in [buttonNode, closeNode]) {
-			node.on(UiEventKind.Focus, function(_) { focused.update(true); refresh(); });
-			node.on(UiEventKind.Blur, function(_) { focused.update(false); refresh(); });
+			node.on(UiEventKind.Focus, function(_) focused.update(true));
+			node.on(UiEventKind.Blur, function(_) focused.update(false));
 		}
 		slot.add(closeNode);
 		row.add(slot);
