@@ -46,13 +46,21 @@ class CommandButton implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var commands = registry == null ? context.commands : registry;
+		var actualContext = invocationContext == null ? context.commandContext : invocationContext;
+		var id = commandId, invocation = invocationContext;
+		// Observed, so a retained subtree around the button notices the command appearing, enabling or checking. Predicates
+		// change without any notification (after a selection, for example), so they are read again to check.
+		context.observeInt(function() {
+			var current = commands.get(id);
+			var checkedIn = invocation == null ? context.commandContext : invocation;
+			return current == null ? -1 : (current.isEnabled(checkedIn) ? 1 : 0) | (current.isChecked(checkedIn) ? 2 : 0);
+		});
 		var command = commands.get(commandId);
 		if (command == null) {
 			var missing = new Button("Missing command: " + commandId, style, null, key);
 			missing.enabled = false;
 			return missing.build(context);
 		}
-		var actualContext = invocationContext == null ? context.commandContext : invocationContext;
 		var button = new Button(displayLabel == null ? command.label : displayLabel, style, function() {
 			var result = commands.executeContext(commandId, actualContext);
 			if (onResult != null)

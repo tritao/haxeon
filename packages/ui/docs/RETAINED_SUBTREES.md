@@ -1,6 +1,50 @@
 # Retained subtrees
 
-Status: 2026-09-30. **Stopped after stage 1 and a bound on stage 3; nothing below was implemented.** See "Outcome".
+## Current model (2026-10-30)
+
+A frame rebuilds the view by default. Work is skipped in three ways, and one check keeps all of them honest.
+
+**Retained caches** reuse a built subtree: `RetainedView`, and in `DockWorkspace` the pane and panel caches. A cached subtree
+is reused while all of these hold:
+
+- its optional key matches (a `RetainedView` revision, a panel's `cacheKeyHash`, plus style revision and viewport);
+- the widget states its build read have the same revisions (`stateIdsUsedSince` / `stateRevisions`);
+- every value it read through `BuildContext.observeInt`, `observeBool` or `observeString` reads the same again (`Dependencies`);
+- the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is
+  ignored where it only repaints, and widgets that restyle themselves are left out).
+
+Prefer observing to keys: `context.observeString(() -> session.label())` returns the value and records the read, so a
+dependency cannot be left out. `CommandButton` observes its command's presence and enabled and checked states. The editor's
+top and status bars have no keys; panel contents still use `cacheKeyHash`.
+
+**In place** changes without rebuilding the view:
+
+- `BuildContext.selfUpdating`: the widget rebuilds alone and its node is replaced (`TextField`); `requestPatch` asks for it.
+- `BuildContext.selfRestyling`: the widget rebuilds alone on hover and press and the result is applied to its existing node:
+  changed style properties, state, and the children it built. Listeners, style changes and children callers added stay
+  (`Button`).
+- `BuildContext.willEditRetained(node)` before changing a node of the submitted tree directly (scrollbar fades, scrolled
+  content, fitted text): the next frame compares it with how it was and lays it out without a rebuild. Animations whose frames
+  only do this implement `RetainedAnimation` and do not count as rebuild work.
+
+A frame where only these happened runs as a patch frame: the submitted tree stays, only patches and edits are applied.
+
+**Verify mode** is the safety net: `UiContext.verifyRetention` builds the view again with every cache, patch and edit
+bypassed and compares the trees. `verifyRetentionEvery` or `HAXEON_UI_VERIFY_RETENTION=N` runs it every N frames that did work
+and throws on a difference; `app/tools/check-ui-retention.py` runs the editor scenarios that way. A stale cache key, quiet
+update or unannounced edit shows up there as a failure instead of old UI.
+
+Rules that keep it working:
+
+- Read data a retained build depends on, outside widget state, through `observe*`.
+- Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build.
+- Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
+- Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
+
+## History
+
+Status 2026-09-30: **stopped after stage 1 and a bound on stage 3; the design below was not implemented as written.** See
+"Outcome". Its verify mode and the dock chrome measurements led to the model above.
 
 ## What the numbers say
 

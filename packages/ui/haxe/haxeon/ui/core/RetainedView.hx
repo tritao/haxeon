@@ -1,6 +1,10 @@
 package haxeon.ui.core;
 
-/** Reuses a stable render subtree while an application-owned revision key is unchanged. */
+/**
+ * Reuses a render subtree while nothing it was built from changed: widget state and interaction inside it, reads recorded with
+ * BuildContext.observeInt and friends, and the optional application-owned revision key. Prefer observing what the builder reads
+ * to a hand-written key: the read itself records the dependency, so it cannot be left out.
+ */
 class RetainedView implements View {
 	final builder:BuildContext->View;
 	final key:String;
@@ -30,6 +34,7 @@ class RetainedView implements View {
 		var cached = cache.entry;
 		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
+			context.retainObserved(cached.observed);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
@@ -39,13 +44,14 @@ class RetainedView implements View {
 		if (cached != null)
 			cached.root.detach();
 		var marker = context.stateUsageMarker();
+		var intMark = context.observedIntMarker(), stringMark = context.observedStringMarker();
 		var view = builder(context);
 		if (view == null)
 			throw 'Retained view "$key" returned no view';
 		var root = view.build(context);
 		var usedStates = context.stateIdsUsedSince(marker);
 		cache.replace(keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-			new InteractionStateSnapshot(context.currentRoot(root), context));
+			new InteractionStateSnapshot(context.currentRoot(root), context), context.observedSince(intMark, stringMark));
 		return root;
 	}
 }
@@ -57,10 +63,10 @@ private class RetainedViewCache {
 		entry = null;
 
 	public function replace(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
-			interactions:InteractionStateSnapshot):Void {
+			interactions:InteractionStateSnapshot, observed:Dependencies):Void {
 		if (entry != null && entry.root != root)
 			entry.root.detach();
-		entry = new RetainedViewEntry(keyA, keyB, root, stateIds, stateRevisions, interactions);
+		entry = new RetainedViewEntry(keyA, keyB, root, stateIds, stateRevisions, interactions, observed);
 	}
 
 	public function dispose():Void {
@@ -77,15 +83,18 @@ private class RetainedViewEntry {
 	public final stateIds:Array<Int>;
 	final stateRevisions:Array<Int>;
 	final interactions:InteractionStateSnapshot;
+	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
+	public final observed:Dependencies;
 
 	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
-		interactions:InteractionStateSnapshot) {
+		interactions:InteractionStateSnapshot, observed:Dependencies) {
 		this.keyA = keyA;
 		this.keyB = keyB;
 		this.root = root;
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
 		this.interactions = interactions;
+		this.observed = observed;
 	}
 
 	public function matches(otherA:Int, otherB:Int):Bool
@@ -101,6 +110,6 @@ private class RetainedViewEntry {
 		for (index in 0...current.length)
 			if (current[index] != stateRevisions[index])
 				return false;
-		return interactions.matches(context);
+		return interactions.matches(context) && observed.current();
 	}
 }

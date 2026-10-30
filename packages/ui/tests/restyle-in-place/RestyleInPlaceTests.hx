@@ -182,6 +182,33 @@ class RestyleInPlaceTests {
     check(reported != null, "The automatic check did not report a stale cache");
     ui.dispose();
     Sys.println("PASS verify: an honest cache passes; a key missing an input is reported, also by the automatic check");
+    observedReads(fonts);
+  }
+
+  /** A retained view without a key follows what its builder read through observeString, and nothing else rebuilds it. */
+  static function observedReads(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts);
+    var frame = new LayoutFrame(240.0, 120.0);
+    var title = "first", builds = 0, frameNumber = 0;
+    var inner:View = new RetainedView("inner", function(context) {
+      builds++;
+      return new haxeon.ui.widgets.text.Text(context.observeString(function() return title));
+    });
+    // An outer retained view around the inner one must notice the inner read too.
+    var view:View = new RetainedView("outer", function(_) return inner);
+    var build = function() return view;
+    var shown = function():String {
+      var found = "";
+      ui.submitCached(build, frame, "observed-" + (frameNumber++)).walk(function(node) { if (node.layout.text != null) found = node.layout.text; });
+      return found;
+    };
+    check(shown() == "first" && builds == 1, "The first build did not show the observed value");
+    check(shown() == "first" && builds == 1, "An unchanged observed read rebuilt the view");
+    title = "second";
+    check(shown() == "second" && builds == 2, "A changed observed read was not picked up through the outer cache");
+    check(ui.verifyRetention(build, frame) == null, "Observed reads left the retained tree stale");
+    ui.dispose();
+    Sys.println("PASS observed: a keyless retained view rebuilds exactly when an observed read changes, through an outer cache");
   }
 
   public static function main():Int {

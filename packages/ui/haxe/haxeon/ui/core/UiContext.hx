@@ -392,6 +392,7 @@ class UiContext {
 			return cast root;
 		}
 		// A patch-only frame keeps the submitted tree and rebuilds just the widgets that read the pointer change.
+		buildContext.resetObserved();
 		if (!patchOnly) {
 			buildContext.beginFrame();
 			queueInteractionPatches();

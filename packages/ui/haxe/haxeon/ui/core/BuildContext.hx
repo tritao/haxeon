@@ -644,6 +644,48 @@ class BuildContext {
 	public function stateUsageMarker():Int
 		return stateStore.usageMarker();
 
+	/** Every observed read of the current frame, in order; retained caches take the part their subtree recorded. */
+	final observed:Dependencies = new Dependencies();
+
+	/**
+	 * Reads a value a build depends on and records it, so a retained subtree around this build is reused only while `read`
+	 * gives the same value. Use it for what lives outside widget state: model fields, command predicates, revisions. The read
+	 * runs again on later frames to check, so keep it cheap and free of side effects.
+	 */
+	public function observeInt(read:Void->Int):Int {
+		var value = read();
+		observed.addInt(read, value);
+		return value;
+	}
+
+	public function observeBool(read:Void->Bool):Bool
+		return observeInt(function() return read() ? 1 : 0) == 1;
+
+	/** As observeInt; strings compare by value. */
+	public function observeString(read:Void->Null<String>):Null<String> {
+		var value = read();
+		observed.addString(read, value);
+		return value;
+	}
+
+	public function observedIntMarker():Int
+		return observed.intCount;
+
+	public function observedStringMarker():Int
+		return observed.stringCount;
+
+	/** The reads observed since the markers, for a retained subtree to keep. */
+	public function observedSince(intMark:Int, stringMark:Int):Dependencies
+		return observed.since(intMark, stringMark);
+
+	/** Records a reused subtree's reads again, so a retained subtree around it depends on them too. */
+	public function retainObserved(dependencies:Dependencies):Void
+		observed.addAll(dependencies);
+
+	/** Called as a frame starts: the log only links reads to the subtrees built in one frame. */
+	public function resetObserved():Void
+		observed.clear();
+
 	/** Returns state IDs touched after a retained subtree build marker. */
 	public function stateIdsUsedSince(marker:Int):Array<Int>
 		return stateStore.usedIdsSince(marker);

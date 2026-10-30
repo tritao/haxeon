@@ -457,6 +457,7 @@ private class DockPanelView implements View {
 		var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
 		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
+			context.retainObserved(cached.observed);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
@@ -470,6 +471,7 @@ private class DockPanelView implements View {
 		var observed = context.buildProbe != null;
 		var preparationStarted = observed ? Sys.time() : 0.0;
 		var stateMarker = context.stateUsageMarker();
+		var intMark = context.observedIntMarker(), stringMark = context.observedStringMarker();
 		var buildStarted = 0.0;
 		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
 		// changes: a neighbour closing, or the panel moving to another split.
@@ -488,7 +490,7 @@ private class DockPanelView implements View {
 		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			panelCache.put(descriptor.id, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-				new InteractionStateSnapshot(context.currentRoot(root), context));
+				new InteractionStateSnapshot(context.currentRoot(root), context), context.observedSince(intMark, stringMark));
 		}
 		return root;
 	}
@@ -519,6 +521,7 @@ private class DockPaneView implements View {
 		var cached = retainable ? cache.entry(key) : null;
 		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
+			context.retainObserved(cached.observed);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
@@ -529,12 +532,14 @@ private class DockPaneView implements View {
 		if (cached != null)
 			cached.root.detach();
 		var stateMarker = context.stateUsageMarker();
+		var intMark = context.observedIntMarker(), stringMark = context.observedStringMarker();
 		var targetMark = interaction.targetCount(), tabMark = interaction.tabTargetCount();
 		var root = create().build(context);
 		if (retainable) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
 			cache.put(key, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
-				new InteractionStateSnapshot(context.currentRoot(root), context), interaction.targetsSince(targetMark),
+				new InteractionStateSnapshot(context.currentRoot(root), context), context.observedSince(intMark, stringMark),
+				interaction.targetsSince(targetMark),
 				interaction.tabTargetsSince(tabMark));
 		}
 		return root;
@@ -551,13 +556,13 @@ private class DockPanelCache {
 		return entries.get(panelId);
 
 	public function put(panelId:String, keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>,
-			stateRevisions:Array<Int>, interactions:InteractionStateSnapshot,
+			stateRevisions:Array<Int>, interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies,
 			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>):Void {
 		var previous = entries.get(panelId);
 		if (previous != null && previous.root != root)
 			previous.root.detach();
 		entries.set(panelId, new DockPanelCacheEntry(keyA, keyB, root, stateIds, stateRevisions,
-			interactions, targets, tabTargets));
+			interactions, observed, targets, tabTargets));
 	}
 
 	public function retain(context:BuildContext):Void {
@@ -576,9 +581,11 @@ private class DockPanelCacheEntry {
 	public final tabTargets:Array<DockTabDropTarget>;
 	final stateRevisions:Array<Int>;
 	final interactions:InteractionStateSnapshot;
+	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
+	public final observed:haxeon.ui.core.Dependencies;
 
 	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
-			interactions:InteractionStateSnapshot, ?targets:Array<DockDropTarget>,
+			interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies, ?targets:Array<DockDropTarget>,
 			?tabTargets:Array<DockTabDropTarget>) {
 		this.keyA = keyA;
 		this.keyB = keyB;
@@ -586,6 +593,7 @@ private class DockPanelCacheEntry {
 		this.stateIds = stateIds == null ? [] : stateIds.copy();
 		this.stateRevisions = stateRevisions == null ? [] : stateRevisions.copy();
 		this.interactions = interactions;
+		this.observed = observed;
 		this.targets = targets == null ? [] : targets;
 		this.tabTargets = tabTargets == null ? [] : tabTargets;
 	}
@@ -604,7 +612,7 @@ private class DockPanelCacheEntry {
 		for (index in 0...current.length)
 			if (current[index] != stateRevisions[index])
 				return false;
-		return interactions.matches(context);
+		return interactions.matches(context) && observed.current();
 	}
 }
 
