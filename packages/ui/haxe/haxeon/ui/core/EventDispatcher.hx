@@ -625,7 +625,7 @@ class EventDispatcher {
 		var next = StyleStateUtil.withState(node.states, state, enabled);
 		if (next == node.states)
 			return;
-		node.states = next;
+		node.routeStates(next);
 		interactionStates.set(node.id, next);
 	}
 

@@ -75,6 +75,7 @@ class UiContext {
 	}
 	var submittedStateRevision:Int;
 	var submittedInteractionRevision:Int;
+	var submittedRetainedEditRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
@@ -316,6 +317,8 @@ class UiContext {
 		next.walk(function(node) node.syncPaintKind());
 		diagnosticStage = 5;
 		var treeBuiltAllocatedAt = AllocationProbe.now();
+		// Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
+		buildContext.takeRetainedEdits(currentNodesById);
 		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
 			previousNodesById, currentNodesById, buildContext.patchedPriors());
 		buildContext.endPatchFrame();
@@ -460,6 +463,7 @@ class UiContext {
 		interactionStates.acknowledge();
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
+		submittedRetainedEditRevision = buildContext.retainedEditRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedCommandRevision = commands.revision;
 		submittedNodeCount = nodeCount;
@@ -928,7 +932,7 @@ class UiContext {
 	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
 		return root != null && submittedBuildKey == cacheKey && submittedStateRevision == stateStore.revision &&
 			submittedStyleRevision == buildContext.styleRevision && submittedFrameWidth == frame.width &&
-			submittedFrameHeight == frame.height && animations.activeCount == 0 &&
+			submittedFrameHeight == frame.height && animations.rebuildingCount == 0 &&
 			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
 			commands.revision == submittedCommandRevision && buildContext.theme == submittedTheme &&
 			buildContext.styleSheet == submittedStyleSheet;
@@ -936,7 +940,7 @@ class UiContext {
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
 	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
-		if (!steadyForInteractionReuse(cacheKey, frame)) return -1;
+		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
@@ -965,16 +969,18 @@ class UiContext {
 	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
 		if (inspectionEnabled || !buildContext.restyleInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
 		var changes = interactionStates.changes();
-		var patches = 0;
 		for (change in changes) {
 			var bits = change.before ^ change.after;
-			if ((bits & ~patchInteractionMask) != 0) return false;
 			var node = currentNodesById.get(change.id);
 			if (node == null) return false;
-			if (buildContext.restylingOwner(node) != null) patches++;
-			else if (node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || !node.hoverPaintOnly || buildContext.hasHoverStyle(node))) return false;
+			// Routing stores the state a node was built with (Selected, Disabled) alongside the pointer bits, so the first pointer
+			// change of a node appears to set those too. Only a pointer bit, or a disagreement with the built state, is a change.
+			var other = bits & ~patchInteractionMask;
+			if (other != 0 && (change.after & other) != (node.states & other)) return false;
+			bits &= patchInteractionMask;
+			if (bits == 0) continue;
+			if (buildContext.restylingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || !node.hoverPaintOnly || buildContext.hasHoverStyle(node))) return false;
 		}
-		if (patches == 0) return false;
 		patchFramePaintNodes.resize(0);
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
@@ -1087,8 +1093,11 @@ class UiContext {
 			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
 				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
 				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-		if (animations.activeCount > 0)
+		if (animations.rebuildingCount > 0)
 			result |= UiDirtyFlag.NeedsComposite;
+		if (buildContext.retainedEditRevision != submittedRetainedEditRevision)
+			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
+				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
 		return result;
 	}
 

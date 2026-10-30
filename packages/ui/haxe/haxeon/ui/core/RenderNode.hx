@@ -66,6 +66,14 @@ class RenderNode {
 		recordsInteraction = true;
 		return states = value;
 	}
+
+	/** Keeps the routed state on the node without claiming that a widget built from it: that is what `recordsInteraction` says. */
+	@:allow(haxeon.ui.core.EventDispatcher)
+	function routeStates(value:Int):Void {
+		var recorded = recordsInteraction;
+		states = value;
+		recordsInteraction = recorded;
+	}
 	public var styleType:Null<String>;
 	public var styleKey:Null<String>;
 	public var styleId:Null<String>;
@@ -225,13 +233,10 @@ class RenderNode {
 	}
 
 	/**
-	 * Applies a rebuild of this node's own appearance without replacing it, so what other code attached to it since it was built
-	 * (listeners, style changes, references to the node) stays. `before` and `after` are the layout styles the builder produced
-	 * for the previous and for this build; a property is changed only where they differ, so a property that something else set
-	 * and the builder did not change is left alone. `fresh` is the node the builder just made: its computed style, state and
-	 * children move here. Returns a stand-in for the node as it was, for the frame comparison.
+	 * A detached copy of what the frame comparison reads from this node (style, layout inputs, hit testing, semantics, revisions,
+	 * parent and child order), taken before the node is changed in place so the change is still seen as one.
 	 */
-	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle):RenderNode {
+	public function snapshotForCompare():RenderNode {
 		var prior = new RenderNode(id, layout.visualKind, layout.style.copy());
 		prior.computedStyle = computedStyle;
 		prior.states = states;
@@ -252,6 +257,18 @@ class RenderNode {
 		prior.focusTrap = focusTrap;
 		prior.tabIndex = tabIndex;
 		prior.resolved = resolved;
+		return prior;
+	}
+
+	/**
+	 * Applies a rebuild of this node's own appearance without replacing it, so what other code attached to it since it was built
+	 * (listeners, style changes, references to the node) stays. `before` and `after` are the layout styles the builder produced
+	 * for the previous and for this build; a property is changed only where they differ, so a property that something else set
+	 * and the builder did not change is left alone. `fresh` is the node the builder just made: its computed style, state and
+	 * children move here. Returns a stand-in for the node as it was, for the frame comparison.
+	 */
+	public function restyleFrom(fresh:RenderNode, before:LayoutStyle, after:LayoutStyle):RenderNode {
+		var prior = snapshotForCompare();
 		computedStyle = fresh.computedStyle;
 		states = fresh.states;
 		applyStyleChange(layout.style, before, after);

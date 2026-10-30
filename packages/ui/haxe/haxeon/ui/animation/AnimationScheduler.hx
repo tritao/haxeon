@@ -23,7 +23,7 @@ class AnimationScheduler {
 				return handle;
 		var handle = new AnimationHandle(this, animation);
 		active.push(handle);
-		revision++;
+		if (!handle.retained) revision++;
 		requestFrame();
 		return handle;
 	}
@@ -46,14 +46,14 @@ class AnimationScheduler {
 			return;
 		if (active.remove(handle)) {
 			handle.deactivate();
-			revision++;
+			if (!handle.retained) revision++;
 		}
 	}
 
 	public function advance(deltaSeconds:Float):Void {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Animation time must be finite and non-negative";
-		var hadActive = active.length > 0;
+		var hadActive = rebuildingCount > 0;
 		var current = active.copy();
 		for (handle in current)
 			if (active.indexOf(handle) >= 0 && !handle.advance(deltaSeconds))
@@ -67,15 +67,25 @@ class AnimationScheduler {
 	public function cancelAll():Void {
 		if (active.length == 0)
 			return;
+		var rebuilding = rebuildingCount > 0;
 		for (handle in active)
 			handle.deactivate();
 		active.resize(0);
-		revision++;
+		if (rebuilding) revision++;
 	}
 
 	public var activeCount(get, never):Int;
 	inline function get_activeCount():Int
 		return active.length;
+
+	/** Active animations whose frames rebuild the view; RetainedAnimation ones do not. */
+	public var rebuildingCount(get, never):Int;
+	function get_rebuildingCount():Int {
+		var count = 0;
+		for (handle in active)
+			if (!handle.retained) count++;
+		return count;
+	}
 
 	/** Whether some animation changes on every frame, as opposed to only waiting for a deadline. */
 	public var needsFrame(get, never):Bool;

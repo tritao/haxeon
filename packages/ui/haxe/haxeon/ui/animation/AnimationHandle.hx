@@ -5,11 +5,14 @@ class AnimationHandle {
 	final scheduler:AnimationScheduler;
 	final animation:Animation;
 	public var active(default, null):Bool;
+	/** Whether advancing it only edits nodes on screen (RetainedAnimation), so it needs no rebuild. */
+	public final retained:Bool;
 
 	@:allow(haxeon.ui.animation.AnimationScheduler)
 	private function new(scheduler:AnimationScheduler, animation:Animation) {
 		this.scheduler = scheduler;
 		this.animation = animation;
+		retained = Std.isOfType(animation, RetainedAnimation);
 		active = true;
 	}
 

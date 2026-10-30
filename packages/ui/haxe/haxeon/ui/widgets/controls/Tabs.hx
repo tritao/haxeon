@@ -124,6 +124,8 @@ class Tabs implements View {
 			var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 			root.setStyleIdentity("tabs", key.value, key.value, null, ["tabs"]);
 			root.states = rootFlags;
+			// Hover reaches the tab list, but only its buttons look different; stylesheet hover rules still force a rebuild.
+			root.hoverPaintOnly = true;
 			root.computedStyle = rootComputed;
 			var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");
 			tabsSemantics.orientation = AccessibilityOrientation.Horizontal;

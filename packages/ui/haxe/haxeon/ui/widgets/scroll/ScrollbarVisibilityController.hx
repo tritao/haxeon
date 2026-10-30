@@ -2,9 +2,13 @@ package haxeon.ui.widgets.scroll;
 
 import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.RetainedAnimation;
 
-/** Mount-owned scrollbar visibility, independent of scroll geometry and paint. */
-class ScrollbarVisibilityController implements DelayedAnimation {
+/**
+ * Mount-owned scrollbar visibility, independent of scroll geometry and paint. Its changes edit the scrollbar's nodes in place
+ * (BuildContext.willEditRetained), so its frames rebuild nothing.
+ */
+class ScrollbarVisibilityController implements DelayedAnimation implements RetainedAnimation {
 	static inline var FadeInSeconds:Float = 0.3;
 	static inline var IdleSeconds:Float = 0.5;
 	static inline var FadeOutSeconds:Float = 0.2;

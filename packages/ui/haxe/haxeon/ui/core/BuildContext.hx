@@ -464,6 +464,40 @@ class BuildContext {
 		}
 	}
 
+	/** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see willEditRetained. */
+	final retainedEdits:Array<RenderNode> = [];
+	final retainedEditPriors:Array<RenderNode> = [];
+	/** Bumped by each first edit of a node between frames; a different value from the submitted one means a frame is due. */
+	public var retainedEditRevision(default, null):Int = 0;
+
+	/**
+	 * Call just before changing a node of the submitted tree in place, outside a build: its style, hit testing or paint. The next
+	 * frame compares the node against how it was now and lays out and paints the change, without rebuilding the view. Repeated
+	 * calls for the same node before that frame keep the first state.
+	 */
+	public function willEditRetained(node:RenderNode):Void {
+		if (retainedEdits.indexOf(node) >= 0)
+			return;
+		retainedEdits.push(node);
+		retainedEditPriors.push(node.snapshotForCompare());
+		retainedEditRevision++;
+	}
+
+	public var hasRetainedEdits(get, never):Bool;
+	inline function get_hasRetainedEdits():Bool
+		return retainedEdits.length > 0;
+
+	/** Hands the frame comparison the prior state of edited nodes still in the submitted tree, and forgets the rest. */
+	public function takeRetainedEdits(mounted:Map<Int, RenderNode>):Void {
+		for (index in 0...retainedEdits.length) {
+			var node = retainedEdits[index];
+			if (mounted.get(node.id.value) == node && !patchPriors.exists(node.id.value))
+				patchPriors.set(node.id.value, retainedEditPriors[index]);
+		}
+		retainedEdits.resize(0);
+		retainedEditPriors.resize(0);
+	}
+
 	/** The nodes patches replaced this frame, by ID, so the frame comparison can see what changed. */
 	public function patchedPriors():Map<Int, RenderNode>
 		return patchPriors;
@@ -525,6 +559,8 @@ class BuildContext {
 
 	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
 	public function releaseRetained():Void {
+		retainedEdits.resize(0);
+		retainedEditPriors.resize(0);
 		// Builds that retained caches still hold were made by the code being released; they must not come back.
 		restylingEpoch++;
 		for (entry in selfUpdatingBuilds) {

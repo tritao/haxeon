@@ -70,6 +70,8 @@ class ScrollView implements View {
 			var viewport = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			viewport.setStyleIdentity("scroll-view", key.value, key.value, null, ["scroll-view"]);
 			viewport.states = flags;
+			// Hover only reveals the scrollbar, which its controller does in place; stylesheet hover rules still force a rebuild.
+			viewport.hoverPaintOnly = true;
 			viewport.computedStyle = computed;
 			viewport.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ScrollArea);
@@ -88,8 +90,8 @@ class ScrollView implements View {
 			var binding = context.resourceState(context.id("controller-binding"), function() return new ScrollBinding(),
 				function(value) value.dispose());
 			var visibility = context.resourceState(context.id("scrollbar-visibility"), function() return new ScrollbarVisibilityController(), function(value) value.dispose());
-			var visibilityChanged = function() { visibility.update(visibility.value); context.commands.refresh(); };
-			visibility.value.attach(context.animations, visibilityChanged);
+			// The scrollbar, when there is one, attaches its own callback, which edits its nodes in place (see addScrollbar).
+			visibility.value.attach(context.animations, function() {});
 			visibility.value.bindSource(controller);
 			var policy:Int = scrollbarVisibility == null ? context.environment.scrollbarVisibility : scrollbarVisibility;
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
@@ -136,10 +138,10 @@ class ScrollView implements View {
 			var overlaySize = context.resourceState(context.id("scrollbar-overlay-size"),
 				function() return {width: -1.0, height: -1.0}, function(_) {}).value;
 			var scrollbar = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Horizontal
-				? addScrollbar(context, overlayHost, visibility.value, visibilityChanged, true, overlaySize) : null;
+				? addScrollbar(context, overlayHost, visibility.value, true, overlaySize) : null;
 
 			var horizontal = showScrollbar && policy != ScrollbarVisibility.Hidden && axis != ScrollAxis.Vertical
-				? addScrollbar(context, overlayHost, horizontalVisibility.value, visibilityChanged, false, overlaySize) : null;
+				? addScrollbar(context, overlayHost, horizontalVisibility.value, false, overlaySize) : null;
 			translatedContent.onResolved(function(geometry) {
 				var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
 				// The viewport's content bounds include the overlay scrollbar. Its
@@ -224,7 +226,7 @@ class ScrollView implements View {
 
 	/** One scrollbar implementation shares painting, capture and accessibility for both axes. */
 	function addScrollbar(context:BuildContext, viewport:RenderNode, visibility:ScrollbarVisibilityController,
-			changed:Void->Void, vertical:Bool, overlaySize:{width:Float, height:Float}):RenderNode {
+			vertical:Bool, overlaySize:{width:Float, height:Float}):RenderNode {
 		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();
 		trackStyle.positioning = LayoutPositioning.Absolute;
@@ -276,7 +278,14 @@ class ScrollView implements View {
 			visualStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
 			thumb.hitTestSelf = opacity > 0;
 		};
-		visibility.attach(context.animations, function() { updatePaint(); changed(); });
+		// Fades and hover change only these nodes, so they are edited in place: the frame lays them out and paints them
+		// without rebuilding the view or any cache around it.
+		visibility.attach(context.animations, function() {
+			context.willEditRetained(track);
+			context.willEditRetained(thumb);
+			context.willEditRetained(visual);
+			updatePaint();
+		});
 		updatePaint();
 		track.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(track.id)) visibility.setHovered(true); });
 		track.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(track.id)) visibility.setHovered(false); });
