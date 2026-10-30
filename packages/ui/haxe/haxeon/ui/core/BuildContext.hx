@@ -66,6 +66,8 @@ class BuildContext {
 	 * Tests turn it off to build a reference tree to compare the patched one against.
 	 */
 	public var restyleInPlace:Bool = true;
+	/** While set, retained caches build their subtree afresh instead of reusing it; UiContext.verifyRetention sets it. */
+	public var bypassRetention:Bool = false;
 	/** Bumped when the retained tree is released, so restyling builds made before it are not registered again. */
 	var restylingEpoch:Int = 0;
 	/** Widgets that rebuild themselves in place, by widget ID; see selfUpdating. */

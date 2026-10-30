@@ -151,10 +151,44 @@ class RestyleInPlaceTests {
     patched.ui.dispose(); reference.ui.dispose();
   }
 
+  /** Verify mode must pass with an honest cache key and catch one that misses an input. */
+  static function verifyMode(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts);
+    ui.buildContext.environment.reducedMotion = true;
+    var frame = new LayoutFrame(240.0, 120.0);
+    var label = "first";
+    var honest = true;
+    var view:View = new RetainedView("labelled", function(_) return new haxeon.ui.widgets.text.Text(label),
+      function() return honest ? label : "always the same");
+    var build = function() return view;
+    ui.submitCached(build, frame, "verify");
+    check(ui.verifyRetention(build, frame) == null, "An honest cache failed verification");
+    label = "second";
+    ui.submitCached(build, frame, "verify-2");
+    check(ui.verifyRetention(build, frame) == null, "An honest cache failed verification after a change");
+    honest = false;
+    ui.submitCached(build, frame, "verify-3");
+    label = "third";
+    ui.submitCached(build, frame, "verify-4");
+    var difference = ui.verifyRetention(build, frame);
+    check(difference != null && difference.indexOf("third") >= 0,
+      "Verification missed a cache whose key leaves out what it shows: " + difference);
+    // The automatic mode reports through the callback.
+    var reported:Null<String> = null;
+    ui.onRetentionMismatch = function(text) reported = text;
+    ui.verifyRetentionEvery = 1;
+    label = "fourth";
+    ui.submitCached(build, frame, "verify-5");
+    check(reported != null, "The automatic check did not report a stale cache");
+    ui.dispose();
+    Sys.println("PASS verify: an honest cache passes; a key missing an input is reported, also by the automatic check");
+  }
+
   public static function main():Int {
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
+    verifyMode(fonts);
     run(fonts, false, [
       {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},
       {action: "down", key: "decorated"}, {action: "up", key: "decorated"}, {action: "move", key: "one"},

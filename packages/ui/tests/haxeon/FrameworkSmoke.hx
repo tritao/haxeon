@@ -5804,7 +5804,9 @@ class FrameworkSmoke {
 		require(late.setModeVisible("search", false) && late.moveMode("files", "scm") && ids(late) == "agents,search,files,scm",
 			"hidden destination lost its place");
 		var hidden = make(["files", "search", "scm", "agents"]);
-		require(hidden.restore(late.encode()) && !hidden.find("search").visible && ids(hidden) == "agents,search,files,scm",
+		var restoredHidden = hidden.restore(late.encode());
+		var hiddenSearch = hidden.find("search");
+		require(restoredHidden && hiddenSearch != null && !hiddenSearch.visible && ids(hidden) == "agents,search,files,scm",
 			"hidden order did not round trip");
 		require(hidden.setModeVisible("search", true) && ids(hidden) == "agents,search,files,scm", "re-added destination moved");
 		// Unregistered destinations keep their saved place for later.
@@ -5812,8 +5814,10 @@ class FrameworkSmoke {
 			"move dropped an unregistered destination from the order");
 		// Version 2 layouts migrate to the default order.
 		var legacy = make(["files", "search", "scm", "agents"]);
-		require(legacy.moveMode("agents", "files") && legacy.restore("2|search|1|300|search,0") && !legacy.customOrder &&
-			ids(legacy) == "files,search,scm,agents" && !legacy.find("search").visible && legacy.width == 300, "v2 layout did not migrate");
+		var migrated = legacy.moveMode("agents", "files") && legacy.restore("2|search|1|300|search,0");
+		var legacySearch = legacy.find("search");
+		require(migrated && !legacy.customOrder && ids(legacy) == "files,search,scm,agents" && legacySearch != null &&
+			!legacySearch.visible && legacy.width == 300, "v2 layout did not migrate");
 		var before = late.encode();
 		for (invalid in ["3|files|1|240|", "3|files|1|240||files,files", "3|files|1|240||files,", "3|files|1|240||fi les",
 			"3|files|1|240||files|x", "4|files|1|240||files"])

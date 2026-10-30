@@ -28,7 +28,7 @@ class RetainedView implements View {
 			.addInt(context.styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight);
 		var keyA = hash.a, keyB = hash.b;
 		var cached = cache.entry;
-		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
+		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);

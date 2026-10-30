@@ -455,7 +455,7 @@ private class DockPanelView implements View {
 		}
 		var cached = keyed ? panelCache.entry(descriptor.id) : null;
 		var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
-		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
+		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);
@@ -517,7 +517,7 @@ private class DockPaneView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var cached = retainable ? cache.entry(key) : null;
-		if (cached != null && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
+		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
 			cached.replaceRoot(retained);

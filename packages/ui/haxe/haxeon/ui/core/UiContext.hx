@@ -140,6 +140,10 @@ class UiContext {
 		onAnimationFrameRequested = null;
 		submittedStateRevision = -1;
 		submittedInteractionRevision = -1;
+		var verifyEvery = Sys.getEnv("HAXEON_UI_VERIFY_RETENTION");
+		var parsedEvery:Null<Int> = verifyEvery == null ? null : Std.parseInt(verifyEvery);
+		if (parsedEvery != null && parsedEvery > 0)
+			verifyRetentionEvery = parsedEvery;
 		submittedStyleRevision = -1;
 		submittedAnimationRevision = -1;
 		submittedGestureRevision = -1;
@@ -245,8 +249,11 @@ class UiContext {
 	}
 
 	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
-	public function submit(view:View, frame:LayoutFrame):RenderNode
-		return submitInternal(frame, null, function() return view);
+	public function submit(view:View, frame:LayoutFrame):RenderNode {
+		var build = function() return view;
+		var result = submitInternal(frame, null, build);
+		return maybeVerifyRetention(build, frame, result);
+	}
 
 	/**
 	 * Submits a lazily built view and reuses the prior tree when the complete
@@ -258,7 +265,94 @@ class UiContext {
 			throw "Cached UI submissions require a build callback";
 		if (cacheKey == null || cacheKey.length == 0)
 			throw "Cached UI submissions require a non-empty cache key";
-		return submitInternal(frame, cacheKey, build);
+		var result = submitInternal(frame, cacheKey, build);
+		return maybeVerifyRetention(build, frame, result);
+	}
+
+	/**
+	 * Debug check that retention is invisible. Every `verifyRetentionEvery` frames that did work, the view is built again from
+	 * scratch, bypassing every retained cache, patch and in-place edit, and must give the same tree; see verifyRetention. 0 turns
+	 * it off. The environment variable HAXEON_UI_VERIFY_RETENTION sets it when the context is created.
+	 */
+	public var verifyRetentionEvery:Int = 0;
+	/** Called with the difference when a check fails; by default the check throws it. */
+	public var onRetentionMismatch:Null<String->Void> = null;
+	var framesSinceVerify:Int = 0;
+	var verifying:Bool = false;
+
+	function maybeVerifyRetention(build:Void->View, frame:LayoutFrame, result:RenderNode):RenderNode {
+		if (verifyRetentionEvery <= 0 || verifying)
+			return result;
+		var metrics = lastFrameMetrics;
+		if (metrics != null && metrics.reusedSubmission)
+			return result;
+		framesSinceVerify++;
+		if (framesSinceVerify < verifyRetentionEvery)
+			return result;
+		framesSinceVerify = 0;
+		var difference = verifyRetention(build, frame);
+		if (difference != null) {
+			var report = onRetentionMismatch;
+			if (report == null)
+				throw difference;
+			report(difference);
+		}
+		return cast root;
+	}
+
+	/**
+	 * Builds the view again from scratch, with every retained cache, patch and in-place edit bypassed and no time passing, and
+	 * compares the result with the tree that was live. Returns null when they match, or the first lines that differ. Hover and
+	 * press flags are not compared: routing writes them onto live nodes that no widget built from them. The rebuilt tree stays
+	 * live, which is harmless when they match.
+	 */
+	public function verifyRetention(build:Void->View, frame:LayoutFrame):Null<String> {
+		ensureLive();
+		if (root == null || build == null || frame == null)
+			return null;
+		var live = comparableDump();
+		var savedKey = submittedBuildKey;
+		var delta = frame.deltaSeconds;
+		frame.deltaSeconds = 0.0;
+		verifying = true;
+		buildContext.bypassRetention = true;
+		try {
+			submitInternal(frame, null, build, false);
+		} catch (error:Dynamic) {
+			buildContext.bypassRetention = false;
+			verifying = false;
+			frame.deltaSeconds = delta;
+			throw error;
+		}
+		buildContext.bypassRetention = false;
+		verifying = false;
+		frame.deltaSeconds = delta;
+		// The tree is equivalent when the check passes, so the next frame may reuse it as before.
+		submittedBuildKey = savedKey;
+		var rebuilt = comparableDump();
+		return live == rebuilt ? null : describeDifference(live, rebuilt);
+	}
+
+	static final pointerFlags = ~/ ?(states=)?(hovered|pressed)/g;
+
+	function comparableDump():String
+		return pointerFlags.replace(dumpTree(), "");
+
+	static function describeDifference(live:String, rebuilt:String):String {
+		var left = live.split("\n"), right = rebuilt.split("\n");
+		var line = 0;
+		while (line < left.length && line < right.length && left[line] == right[line])
+			line++;
+		var from = line < 3 ? 0 : line - 3;
+		var out = new StringBuf();
+		out.add("Retained UI differs from a fresh build at line " + (line + 1) + ":\n");
+		for (index in from...line)
+			out.add("    " + left[index] + "\n");
+		for (index in line...Std.int(Math.min(left.length, line + 4)))
+			out.add("  - " + left[index] + "\n");
+		for (index in line...Std.int(Math.min(right.length, line + 4)))
+			out.add("  + " + right[index] + "\n");
+		return out.toString();
 	}
 
 	function submitInternal(frame:LayoutFrame, cacheKey:Null<String>, build:Void->View,
@@ -482,9 +576,11 @@ class UiContext {
 			accessibilityBridge.coordinateScale = platformCoordinateScale;
 			accessibilityBridge.update(next, focus.focusedId);
 		}
-		// A newly mounted focus trap chooses its first target after layout. Rebuild
-		// once with that focus state before returning the frame for painting.
-		if (reconcileNewFocus && focusChanged && nextFocus != null)
+		// A newly mounted focus trap chooses its first target after layout, and a widget that stopped being focusable (disabled)
+		// loses focus here while still on screen. Rebuild once with that focus state before returning the frame for painting;
+		// a widget that left the tree shows nothing stale, so losing its focus needs no second build.
+		if (reconcileNewFocus && focusChanged && (nextFocus != null ||
+			(previousFocus != null && nodesById.exists(previousFocus.value))))
 			return submitInternal(frame, cacheKey, function() return view, false);
 		frameNumber++;
 		var submitEndedAt = Sys.time();
