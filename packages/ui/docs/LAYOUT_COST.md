@@ -88,3 +88,46 @@ frame times before/after were 1.44–1.89/1.51–2.04 ms for tab transitions, 0.
 selection. This measurement-only change claims no latency improvement. Allocation and latency gates, all ten UI scripts,
 all nine retention scenarios, and the compiler suite (608 passed, 0 failed) passed. The first overlapping capture/retention
 attempt exhausted disk space; redundant capture bytecode was removed and retention rerun successfully with `TMPDIR=/dev/shm`.
+
+## Bridge work: baseline and selection feedback (2026-10-30)
+
+Remeasured at `8624a138` on this machine before changes, 60 cycles, release runtime, probes enabled, no profiler or
+retention verification. These three captures ran sequentially after the build completed. Captures under the outer
+repository's `app/build/profiles`: `ui-bridge-before-interaction`, `ui-bridge-before-tab-matrix`, and
+`ui-bridge-before-selection-stress`. Redundant captured bytecode was removed; launch logs and timelines remain.
+
+| scenario | active frames | passes/frame | nodes | encode | parse | prepare | Clay solve | snapshot | hash | decode |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| interaction | 354 | 1 | 350–351 | 0.147 | 0.047 | 0.046 | 0.138 | 0.082 | 0.020 | 0.053 |
+| tab-matrix | 236 | 1 | 344–485 | 0.155 | 0.048 | 0.057 | 0.181 | 0.082 | 0.020 | 0.086 |
+| selection-stress | 59 | 2 | 350 | 0.303 | 0.097 | 0.098 | 0.286 | 0.162 | 0.040 | 0.134 |
+
+### Item 1: the selection pass depends on solved content
+
+A temporary trace at every package `requestLayoutFeedback` call identified `ScrollView`'s vertical `updateScrollbar`
+as the requester on every selection frame. Neither ellipsis fitting nor tab/tooltip/popup placement requested a pass.
+The trace was removed after diagnosis. The outer editor's `InspectorPanel` creates a new `PropertyInspector` on a selection
+revision, keyed by `scene-inspector:<selectedId>`. That inspector owns a fresh `ScrollController` and passes it explicitly
+to its `ScrollView`. Its initial viewport and content extents are zero, so its track starts hidden with zero length.
+
+The first solve determines viewport height **535.4263916015625** and content height **724.5** in this fixture. The resolved
+content callback publishes those metrics, which establish track length **531.4263916015625** and thumb length
+**392.73942754598136**, and reveals the scrollbar. The requested second solve gives those nodes correct geometry, clipping,
+hit testing and paint in the same published frame. On subsequent selection changes the inspector identity changes again;
+the new controller correctly starts without metrics. The remembered overlay host width alone cannot supply content extent.
+
+This pass is inherent to the current Haxe-owned scrollbar geometry contract: arbitrary inspector content is measured by
+native layout, then Haxe writes track/thumb layout inputs from that measurement. It is not redundant state invalidation or
+a second view build. Suppressing feedback would publish stale or zero scrollbar geometry. Reusing another selection's
+metrics, retaining unmounted inspector trees, or assuming fixed row heights would only predict the answer and still require
+feedback for changed content, fonts, viewport or expansion state. Those are not a general solution.
+
+A single solve would require declaring the scrollbar's viewport/content dependency to native layout and resolving its
+track and thumb there after content sizing, including offset clamping, overlay-host coordinates, semantics and hit geometry.
+That is a new scrollbar layout facility, rather than removal of a redundant submit. Keep the convergence check and both
+passes; incremental transactions should make the second pass submit only its actual changes. Item 1 changes documentation
+only, so its after measurements are the same as this baseline.
+
+Validation for this checkpoint: all ten UI scripts PASS; all nine retention scenarios PASS with verification every active
+frame; performance budgets PASS without ceiling changes; all three 500-cycle memory runs PASS. Compiler sources and
+stdlib are unchanged; the compiler suites will also run at the end of the bridge work.
