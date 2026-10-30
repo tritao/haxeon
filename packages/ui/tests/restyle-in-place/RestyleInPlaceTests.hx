@@ -1,3 +1,11 @@
+import haxeon.ui.Canvas;
+import haxeon.ui.Color;
+import haxeon.ui.Rect;
+import haxeon.ui.ResolvedLayoutItem;
+import haxeon.ui.core.UiKey;
+import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.controls.ProgressBar;
+import haxeon.ui.widgets.controls.ProgressMode;
 import haxeon.platform.Runtime;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
@@ -50,6 +58,76 @@ private class DecoratedControl implements View {
     overlayStyle.height = LayoutAxis.fixed(7.5);
     node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
     return node;
+  }
+}
+
+/** Records the controls' actual drawing, including caller paint, without depending on native resource IDs. */
+private class PaintTrace extends Canvas {
+  public final rectangles:Array<Rect> = [];
+  public final colors:Array<Color> = [];
+  public function new() super();
+  public override function fillRect(rect:Rect, color:Color):Void {
+    rectangles.push(rect);
+    colors.push(color);
+  }
+  public function same(other:PaintTrace):Bool {
+    if (rectangles.length != other.rectangles.length) return false;
+    for (index in 0...rectangles.length)
+      if (!haxeon.Equality.equals(rectangles[index], other.rectangles[index]) ||
+          !haxeon.Equality.equals(colors[index], other.colors[index])) return false;
+    return true;
+  }
+}
+
+private class MotionRig {
+  public final ui:UiContext;
+  public final slider:Slider;
+  public final progress:ProgressBar;
+  public final decorated:Array<DecoratedControl>;
+  public var sliderBuilt:Null<RenderNode>;
+  public var progressBuilt:Null<RenderNode>;
+  public var panelBuilds = 0;
+  final frame = new LayoutFrame(240.0, 140.0);
+  final view:View;
+  final patched:Bool;
+  var submissions = 0;
+
+  public function new(fonts:FontCollection, patched:Bool) {
+    this.patched = patched;
+    ui = new UiContext(null, fonts);
+    ui.buildContext.updateInPlace = patched;
+    ui.buildContext.environment.reducedMotion = false;
+    slider = new Slider("live-slider", "Live slider", 0.0, 0.0, 1.0, 0.05);
+    progress = new ProgressBar("live-progress", 0.0);
+    progress.animationDuration = 0.3;
+    decorated = [
+      new DecoratedControl("slider-host", function(context) {
+        var node = slider.build(context);
+        sliderBuilt = node;
+        return decorate(node);
+      }),
+      new DecoratedControl("progress-host", function(context) {
+        var node = progress.build(context);
+        progressBuilt = node;
+        return decorate(node);
+      })
+    ];
+    view = new RetainedView("motion-panel", function(_) {
+      panelBuilds++;
+      return new Column("motion-column", [new KeyedView("slider-host", decorated[0]),
+        new KeyedView("progress-host", decorated[1])]);
+    }, patched ? null : function() return Std.string(panelBuilds));
+  }
+
+  function decorate(node:RenderNode):RenderNode {
+    node.layout.style.width = LayoutAxis.fixed(180.0);
+    node.onPaint(function(canvas, _) canvas.fillRect(new Rect(1.0, 1.0, 2.0, 2.0), Color.rgba(0.2, 0.3, 0.4, 1.0)));
+    return node;
+  }
+
+  public function submit():RenderNode {
+    frame.deltaSeconds = 0.1;
+    return ui.submitCached(function() return view, frame, patched ? "motion" : "motion:" + submissions++);
   }
 }
 
@@ -340,6 +418,86 @@ class RestyleInPlaceTests {
     textField(fonts);
   }
 
+  static function paintTrace(node:RenderNode):PaintTrace {
+    var trace = new PaintTrace();
+    var handlers:Array<Dynamic> = Reflect.field(node, "paintHandlers");
+    check(handlers != null && handlers.length == 2, "Builder or caller paint was lost or duplicated");
+    for (handler in handlers) {
+      var paint:Canvas->ResolvedLayoutItem->Void = cast handler;
+      paint(trace, cast node.resolved);
+    }
+    return trace;
+  }
+
+  /** Repeated drag callbacks use live geometry; both controls keep caller additions while their paint matches a rebuild. */
+  static function motion(fonts:FontCollection):Void {
+    var patched = new MotionRig(fonts, true), reference = new MotionRig(fonts, false);
+    var left = patched.submit(), right = reference.submit();
+    var slider = left.children[0], progress = left.children[1];
+    var overlaySlider = slider.children[0], overlayProgress = progress.children[0];
+    var previousPaint = paintTrace(progress), animatedSteps = 0, steps = 0;
+    var compare = function() {
+      left = patched.submit(); right = reference.submit(); steps++;
+      check(left.children[0] == slider && left.children[1] == progress, "A motion control was replaced");
+      check(RenderNode.latest(cast patched.sliderBuilt) == slider && RenderNode.latest(cast patched.progressBuilt) == progress,
+        "A build root did not resolve to the live node");
+      check(slider.children[0] == overlaySlider && progress.children[0] == overlayProgress,
+        "The caller's child was replaced");
+      check(signature(left) == signature(right), "Motion step " + steps + " differs from a full rebuild");
+      check(patched.slider.value == reference.slider.value, "Slider values differ after a drag");
+      var sliderSemantics:Semantics = cast slider.semantics, otherSlider:Semantics = cast right.children[0].semantics;
+      var progressSemantics:Semantics = cast progress.semantics, otherProgress:Semantics = cast right.children[1].semantics;
+      check(Semantics.same(sliderSemantics, otherSlider) &&
+        Semantics.same(progressSemantics, otherProgress), "Motion semantics differ at step " + steps
+          + ": slider=" + sliderSemantics.value + "/" + otherSlider.value
+          + " progress=" + progressSemantics.value + "/" + otherProgress.value
+          + " targets=" + patched.progress.value + "/" + reference.progress.value);
+      check(paintTrace(slider).same(paintTrace(right.children[0])), "Slider paint differs at step " + steps);
+      var painted = paintTrace(progress);
+      check(painted.same(paintTrace(right.children[1])), "Progress paint differs at step " + steps);
+      if (!painted.same(previousPaint)) animatedSteps++;
+      previousPaint = painted;
+      for (node in [slider, progress])
+        check(node.layout.style.zIndex == 3 && node.layout.style.width.value == 180.0 && node.children.length == 1,
+          "Caller style or children were lost or duplicated");
+      for (index in 0...2)
+        check(patched.decorated[index].presses == reference.decorated[index].presses, "Caller listeners differ");
+    };
+    for (fraction in [0.1, 0.3, 0.7, 0.95, 0.2, 0.6]) {
+      for (rig in [patched, reference]) {
+        var node = rig == patched ? slider : right.children[0];
+        var bounds = node.globalBounds();
+        var x = bounds.x + 10.0 + fraction * (bounds.width - 20.0), y = bounds.y + bounds.height * 0.5;
+        if (fraction == 0.1) rig.ui.pointerDown(x, y, 0);
+        else rig.ui.pointerMove(x, y);
+      }
+      compare();
+      check(Math.abs(patched.slider.value - fraction) < 0.000001, "The drag stopped using live geometry");
+    }
+    for (rig in [patched, reference]) rig.ui.pointerUp(-10.0, -10.0, 0);
+    compare();
+    for (key in [UiKey.Right, UiKey.End, UiKey.Home]) {
+      patched.ui.key(UiEventKind.KeyDown, key); reference.ui.key(UiEventKind.KeyDown, key); compare();
+    }
+    for (value in [0.2, 0.6, 0.9, 0.1, 1.0]) {
+      patched.progress.value = reference.progress.value = value;
+      check(patched.ui.buildContext.requestPatch(progress.id), "Progress was not registered as self-updating");
+      for (_ in 0...4) compare();
+    }
+    for (rig in [patched, reference]) {
+      var bounds = (rig == patched ? progress : right.children[1]).globalBounds();
+      rig.ui.pointerDown(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+    }
+    compare();
+    for (rig in [patched, reference]) rig.ui.pointerUp(-10.0, -10.0, 0);
+    compare();
+    check(patched.decorated[0].presses > 0 && patched.decorated[1].presses > 0, "Caller listeners never ran");
+    check(animatedSteps >= 10, "Progress paint did not advance through the animation");
+    check(patched.panelBuilds == 1 && reference.panelBuilds > steps, "Motion rebuilt its retained panel");
+    patched.ui.dispose(); reference.ui.dispose();
+    Sys.println("PASS motion: " + steps + " decorated slider/progress steps keep nodes, caller additions and match rebuilt geometry, semantics and paint");
+  }
+
   /** A text field patches itself while typing: its node stays, with what its caller attached, and matches a full rebuild. */
   static function textField(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts);
@@ -534,6 +692,7 @@ class RestyleInPlaceTests {
     fonts.addSystemFallbacks();
     verifyMode(fonts);
     reconcile(fonts);
+    motion(fonts);
     run(fonts, "buttons", false, false, 1, [
       {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},
       {action: "down", key: "decorated"}, {action: "up", key: "decorated"}, {action: "move", key: "one"},

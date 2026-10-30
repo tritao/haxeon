@@ -55,121 +55,126 @@ class Slider implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.id("slider");
-			var flags = context.interactionStates.get(nodeId);
-			flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
-			var computed = context.styleResolver.resolve(
-				new StyleTarget("slider", key, key, null, ["slider"], flags),
-				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("slider", key, key, null, ["slider"]);
-			node.states = flags;
-			node.computedStyle = computed;
-			node.focusable = enabled;
-			node.enabled = enabled;
-			var semantics = new Semantics(AccessibilityRole.Slider, label, Std.string(value));
-			semantics.actions = AccessibilityAction.SetValue | AccessibilityAction.Increment |
-				AccessibilityAction.Decrement;
-			semantics.numericValue = value;
-			semantics.numericMinimum = minimum;
-			semantics.numericMaximum = maximum;
-			if (!enabled)
-				semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
-			node.semantics = semantics;
-
-			var invalidation:State<Float> = context.state(node.id, value);
-			var dragging:State<Bool> = context.state(context.id("dragging"), false);
-			var setValue = function(next:Float) {
-				if (!enabled || !finite(next))
-					return false;
-				var bounded = clamp(next, minimum, maximum);
-				var snapped = minimum + Std.int((bounded - minimum) / step + 0.5) * step;
-				bounded = clamp(snapped, minimum, maximum);
-				if (bounded == value)
-					return false;
-				value = bounded;
-				semantics.value = Std.string(value);
-				semantics.numericValue = value;
-				invalidation.update(value);
-				if (onChange != null)
-					onChange(value);
-				return true;
-			};
-			var valueAtPointer = function(event:UiEvent) {
-				if (node.resolved == null)
-					return false;
-				var geometry:ResolvedLayoutItem = cast node.resolved;
-				var point = geometry.viewportToLayout(event.x, event.y);
-				var usableWidth = Math.max(1.0, geometry.width - 20.0);
-				var fraction = clamp((point.x - geometry.x - 10.0) / usableWidth, 0.0, 1.0);
-				return setValue(minimum + fraction * (maximum - minimum));
-			};
-			node.onPaint(function(canvas, geometry) {
-				var accent = computed.get(StyleProperty.SliderFillColor);
-				var muted = computed.get(StyleProperty.SliderTrackColor);
-				var foreground = computed.get(StyleProperty.SliderThumbColor);
-				var y = geometry.height * 0.5;
-				var start = 10.0;
-				var end = Math.max(start + 1.0, geometry.width - 10.0);
-				var knob = start + (end - start) * ((value - minimum) / (maximum - minimum));
-				canvas.fillRect(new Rect(start, y - 2.0, end - start, 4.0),
-					muted);
-				canvas.fillRect(new Rect(start, y - 2.0, Math.max(1.0, knob - start), 4.0),
-					accent);
-				canvas.fillRect(new Rect(knob - 6.0, y - 8.0, 12.0, 16.0),
-					foreground);
-			}, "value:" + value + ":" + minimum + ":" + maximum);
-			node.on(UiEventKind.PointerDown, function(event) {
-				if (enabled && event.button == 0) {
-					event.capturePointer();
-					dragging.update(true);
-					valueAtPointer(event);
-					event.preventDefault();
-				}
-			});
-			node.on(UiEventKind.PointerMove, function(event) {
-				var isDragging:Bool = dragging.value;
-				if (isDragging)
-					valueAtPointer(event);
-			});
-			node.on(UiEventKind.PointerUp, function(_) { dragging.update(false); });
-			node.on(UiEventKind.PointerCancel, function(_) { dragging.update(false); });
-
-			var handleKey = function(event:UiEvent) {
-				if (!enabled)
-					return;
-				var handled = true;
-				if (event.key == UiKey.Left || event.key == UiKey.Down)
-					setValue(value - step);
-				else if (event.key == UiKey.Right || event.key == UiKey.Up)
-					setValue(value + step);
-				else if (event.key == UiKey.Home)
-					setValue(minimum);
-				else if (event.key == UiKey.End)
-					setValue(maximum);
-				else
-					handled = false;
-				if (handled)
-					event.preventDefault();
-			};
-			node.on(UiEventKind.KeyDown, handleKey);
-			node.on(UiEventKind.KeyRepeat, handleKey);
-			node.on(UiEventKind.AccessibilitySetValue, function(event) {
-				if (event.text != null) {
-					var parsed = parseNumericValue(event.text);
-					if (parsed != null)
-						setValue(parsed);
-				}
-			});
-			node.on(UiEventKind.AccessibilityIncrement, function(event) {
-				var action:AccessibilityActionData = cast event.data;
-				setValue(value + step * (action != null && action.granularity > 1 ? action.granularity : 1));
-			});
-			node.on(UiEventKind.AccessibilityDecrement, function(event) {
-				var action:AccessibilityActionData = cast event.data;
-				setValue(value - step * (action != null && action.granularity > 1 ? action.granularity : 1));
-			});
-			return node;
+			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
 		});
+	}
+
+	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		var flags = context.interactionStates.get(nodeId);
+		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+		var computed = context.styleResolver.resolve(
+			new StyleTarget("slider", key, key, null, ["slider"], flags),
+			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
+		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+		node.setStyleIdentity("slider", key, key, null, ["slider"]);
+		node.states = flags;
+		node.computedStyle = computed;
+		node.focusable = enabled;
+		node.enabled = enabled;
+		var semantics = new Semantics(AccessibilityRole.Slider, label, Std.string(value));
+		semantics.actions = AccessibilityAction.SetValue | AccessibilityAction.Increment |
+			AccessibilityAction.Decrement;
+		semantics.numericValue = value;
+		semantics.numericMinimum = minimum;
+		semantics.numericMaximum = maximum;
+		if (!enabled)
+			semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
+		node.semantics = semantics;
+
+		var invalidation:State<Float> = context.state(node.id, value);
+		var dragging:State<Bool> = context.state(context.id("dragging"), false);
+		var setValue = function(next:Float) {
+			if (!enabled || !finite(next))
+				return false;
+			var bounded = clamp(next, minimum, maximum);
+			var snapped = minimum + Std.int((bounded - minimum) / step + 0.5) * step;
+			bounded = clamp(snapped, minimum, maximum);
+			if (bounded == value)
+				return false;
+			value = bounded;
+			if (context.requestPatch(nodeId)) invalidation.updateQuietly(value);
+			else invalidation.update(value);
+			if (onChange != null)
+				onChange(value);
+			return true;
+		};
+		var valueAtPointer = function(event:UiEvent) {
+			var live = RenderNode.latest(node);
+			if (live.resolved == null)
+				return false;
+			var geometry:ResolvedLayoutItem = cast live.resolved;
+			var point = geometry.viewportToLayout(event.x, event.y);
+			var usableWidth = Math.max(1.0, geometry.width - 20.0);
+			var fraction = clamp((point.x - geometry.x - 10.0) / usableWidth, 0.0, 1.0);
+			return setValue(minimum + fraction * (maximum - minimum));
+		};
+		node.onPaint(function(canvas, geometry) {
+			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
+			var accent = liveStyle.get(StyleProperty.SliderFillColor);
+			var muted = liveStyle.get(StyleProperty.SliderTrackColor);
+			var foreground = liveStyle.get(StyleProperty.SliderThumbColor);
+			var y = geometry.height * 0.5;
+			var start = 10.0;
+			var end = Math.max(start + 1.0, geometry.width - 10.0);
+			var knob = start + (end - start) * ((value - minimum) / (maximum - minimum));
+			canvas.fillRect(new Rect(start, y - 2.0, end - start, 4.0),
+				muted);
+			canvas.fillRect(new Rect(start, y - 2.0, Math.max(1.0, knob - start), 4.0),
+				accent);
+			canvas.fillRect(new Rect(knob - 6.0, y - 8.0, 12.0, 16.0),
+				foreground);
+		}, "value:" + value + ":" + minimum + ":" + maximum);
+		node.on(UiEventKind.PointerDown, function(event) {
+			if (enabled && event.button == 0) {
+				event.capturePointer();
+				dragging.updateQuietly(true);
+				valueAtPointer(event);
+				event.preventDefault();
+			}
+		});
+		node.on(UiEventKind.PointerMove, function(event) {
+			var isDragging:Bool = dragging.value;
+			if (isDragging)
+				valueAtPointer(event);
+		});
+		node.on(UiEventKind.PointerUp, function(_) { dragging.updateQuietly(false); });
+		node.on(UiEventKind.PointerCancel, function(_) { dragging.updateQuietly(false); });
+
+		var handleKey = function(event:UiEvent) {
+			if (!enabled)
+				return;
+			var handled = true;
+			if (event.key == UiKey.Left || event.key == UiKey.Down)
+				setValue(value - step);
+			else if (event.key == UiKey.Right || event.key == UiKey.Up)
+				setValue(value + step);
+			else if (event.key == UiKey.Home)
+				setValue(minimum);
+			else if (event.key == UiKey.End)
+				setValue(maximum);
+			else
+				handled = false;
+			if (handled)
+				event.preventDefault();
+		};
+		node.on(UiEventKind.KeyDown, handleKey);
+		node.on(UiEventKind.KeyRepeat, handleKey);
+		node.on(UiEventKind.AccessibilitySetValue, function(event) {
+			if (event.text != null) {
+				var parsed = parseNumericValue(event.text);
+				if (parsed != null)
+					setValue(parsed);
+			}
+		});
+		node.on(UiEventKind.AccessibilityIncrement, function(event) {
+			var action:AccessibilityActionData = cast event.data;
+			setValue(value + step * (action != null && action.granularity > 1 ? action.granularity : 1));
+		});
+		node.on(UiEventKind.AccessibilityDecrement, function(event) {
+			var action:AccessibilityActionData = cast event.data;
+			setValue(value - step * (action != null && action.granularity > 1 ? action.granularity : 1));
+		});
+		return node;
 	}
 
 	static function defaultStyle():LayoutStyle {

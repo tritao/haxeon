@@ -363,7 +363,7 @@ class BuildContext {
 	 * rebuild is reconciled with the node returned here (RenderNode.reconcile): the node stays, with the listeners, style
 	 * changes and children callers added to it after this call, and takes the style, state, semantics, callbacks and children of
 	 * the new build. So `build` must not leave state in closures that outlives the build, other than through the nodes it makes,
-	 * and a closure may refer to the nodes it made below the root but not to the root itself, which a rebuild does not use.
+	 * and a closure that captures the root resolves it through RenderNode.latest when it runs: reconcile keeps the old root.
 	 * A widget that changes its own state during interaction keeps it out of the revision that ancestors' caches watch
 	 * (State.updateQuietly).
 	 */

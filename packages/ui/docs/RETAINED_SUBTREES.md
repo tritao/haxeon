@@ -31,11 +31,11 @@ are edits that have no build to reconcile.
   - the children the builder made, each swapped in place for its new build; children callers added stay where they are.
   Properties that come from the widget instance (focusable, enabled, cursor, tab index) are not reapplied. A build whose node
   changed kind cannot be reconciled and replaces the node (`replacedBy`, followed by the caches that held it), without what callers
-  added; the root of the whole tree is left to the next full build. `Button`, `IconButton`, `Checkbox` and `Toggle`, `Radio`
-  and `TextField` use it. A widget qualifies when its build makes the same kind of node every time, and its closures refer to
-  nodes below the root but not to the root itself (a rebuild keeps the first root and drops the one the build made: capture what
-  you read from it, as `TextField` does with its background). `Slider` and `ProgressBar` refer to their root, `Tabs` and
-  `SelectionPopup` build arbitrary content, so they still rebuild with their panel.
+  added; the root of the whole tree is left to the next full build. `Button`, `IconButton`, `Checkbox`, `Toggle`, `Radio`,
+  `TextField`, `Slider` and `ProgressBar` use it. A widget qualifies when its build makes the same kind of node every time.
+  A closure that captures its build root calls `RenderNode.latest(root)` when it needs the node: reconcile forwards that
+  discarded build root to the instance kept in the tree. Descendant captures remain valid because the built children are
+  swapped into the tree. `Tabs` and `SelectionPopup` still build with their panel.
   Children are swapped rather than patched field by field because the new build's closures refer to the nodes it made
   (`TextField`'s pointer handlers read `textNode.resolved`), so those must be the ones in the tree; a hand-kept list of node
   properties to copy would also go stale with every new one.
@@ -130,6 +130,41 @@ Three additional full interaction runs measured typing at 17.8–18.3 KiB for ch
 also moves some non-typing medians between runs, so the census is the source attribution and the normal replay is the
 acceptance test. Full frame latency remains about 0.7 ms for typing and 1.45–1.91 ms for tab transitions. No budget ceiling
 or retention check was raised or weakened; the typing ceilings are lowered to 19.8/19.9 KiB. Nine retention scenarios and all three 500-cycle memory runs pass.
+
+## Live roots for slider and progress callbacks (2026-10-30)
+
+`RenderNode.latest` now follows both forms of replacement: an old mounted node replaced by a different-kind build, and a
+fresh build root discarded by reconciliation in favor of the already-mounted node. Reconcile links that fresh root to the
+live one after applying its build. A captured root therefore resolves to current geometry and computed style, including
+when a later build changes kind. Reusing a non-fresh root as a new reconcile input is rejected to prevent identity cycles.
+
+This extends the existing canonical-identity mechanism instead of adding widget-specific pointer state, allocating live
+handles, looking nodes up by ID, or changing every callback signature. Resolving a reconciled build root normally takes
+one pointer hop and allocates nothing. Closures must resolve it when invoked, rather than cache the resolved instance.
+`Slider` uses this for drag geometry and paint style; `ProgressBar` uses it for paint style (its geometry was already passed
+into paint correctly). Both register their builds through `BuildContext.selfUpdating`.
+
+Slider value changes request a patch and update their invalidation state quietly, with ordinary state invalidation as the
+fallback when the widget is unregistered. The dragging state is read only by its own handlers and also updates quietly.
+Semantics are produced by the reconciled build, rather than mutated on the submitted node by an input handler. Progress
+keeps its existing retained painter/animation resource; a target change requested as a patch updates that painter and its
+semantics without rebuilding the retained panel.
+
+The motion regression test performs 32 steps against a reference that rebuilds every frame, including frames without
+input: repeated slider dragging, keyboard changes, animated progress targets, and caller pointer listeners. At every
+step it checks node identity, caller listener/style/child/paint preservation, live-root resolution, and equality of geometry,
+semantics and actual rectangle/color paint operations. The retained panel builds once. No fingerprint or verification
+check is bypassed.
+
+This mechanism removes a root-capture obstacle wherever it occurs, but does not make `Tabs` or `SelectionPopup` a direct
+conversion: tabs also build arbitrary panel content and register host drag/drop/header geometry, while the popup mutates a
+supplied trigger root and builds a conditional overlay/option subtree with scroll and focus behavior. Their ownership and
+registration lifecycles still need separate design. Neither is converted here.
+
+The final same-machine budget replay after this conversion measures 17.8 KiB for each typing action, tab transitions at
+112.8–169.4 KiB and 1.51–1.99 ms, and selection at 3.66 ms. Every supplied allocation baseline is unchanged or lower. All
+ten UI scripts, nine retention scenarios, the tightened typing budgets, three 500-cycle memory runs, and the final compiler
+suite (608 passed, 0 failed) pass.
 
 ## History
 

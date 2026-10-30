@@ -45,35 +45,41 @@ class ProgressBar implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.id("progress");
-			var computed = context.styleResolver.resolve(
-				new StyleTarget("progress-bar", key, key, null, ["progress-bar"],
-					context.interactionStates.get(nodeId)),
-				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
-			node.setStyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
-			node.states = context.interactionStates.get(nodeId);
-			node.computedStyle = computed;
-			var indeterminate = mode == ProgressMode.Indeterminate;
-			var semantics = new Semantics(AccessibilityRole.ProgressBar, label,
-				indeterminate ? "Indeterminate" : Std.string(value));
-			semantics.states = indeterminate ? AccessibilityState.Busy : AccessibilityState.ReadOnly;
-			if (!indeterminate) {
-				semantics.numericValue = value;
-				semantics.numericMinimum = minimum;
-				semantics.numericMaximum = maximum;
-			}
-			node.semantics = semantics;
-			var fraction = (value - minimum) / (maximum - minimum);
-			var stored:State<ProgressPainter> = context.resourceState(node.id,
-				function() return new ProgressPainter(context.animations, fraction),
-				function(painter:ProgressPainter) painter.dispose());
-			var painter:ProgressPainter = cast stored.value;
-			painter.configure(mode, fraction, animationDuration, context.environment.reducedMotion);
-			node.onPaint(function(canvas, geometry) painter.paint(canvas, geometry,
-				computed.get(StyleProperty.ProgressTrackColor),
-				computed.get(StyleProperty.ProgressFillColor)));
-			return node;
+			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
 		});
+	}
+
+	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		var computed = context.styleResolver.resolve(
+			new StyleTarget("progress-bar", key, key, null, ["progress-bar"],
+				context.interactionStates.get(nodeId)),
+			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
+		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+		node.setStyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
+		node.states = context.interactionStates.get(nodeId);
+		node.computedStyle = computed;
+		var indeterminate = mode == ProgressMode.Indeterminate;
+		var semantics = new Semantics(AccessibilityRole.ProgressBar, label,
+			indeterminate ? "Indeterminate" : Std.string(value));
+		semantics.states = indeterminate ? AccessibilityState.Busy : AccessibilityState.ReadOnly;
+		if (!indeterminate) {
+			semantics.numericValue = value;
+			semantics.numericMinimum = minimum;
+			semantics.numericMaximum = maximum;
+		}
+		node.semantics = semantics;
+		var fraction = (value - minimum) / (maximum - minimum);
+		var stored:State<ProgressPainter> = context.resourceState(node.id,
+			function() return new ProgressPainter(context.animations, fraction),
+			function(painter:ProgressPainter) painter.dispose());
+		var painter:ProgressPainter = cast stored.value;
+		painter.configure(mode, fraction, animationDuration, context.environment.reducedMotion);
+		node.onPaint(function(canvas, geometry) {
+			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
+			painter.paint(canvas, geometry, liveStyle.get(StyleProperty.ProgressTrackColor),
+				liveStyle.get(StyleProperty.ProgressFillColor));
+		});
+		return node;
 	}
 
 	static function defaultStyle():LayoutStyle {

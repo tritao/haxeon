@@ -198,10 +198,10 @@ class RenderNode {
 		return this;
 	}
 
-	/** Set when this node was rebuilt in place: the node that took its place. Retained caches that still hold this one follow it. */
+	/** The canonical instance for this identity, after replacement or reconciliation; caches and callbacks follow it. */
 	public var replacedBy:Null<RenderNode> = null;
 
-	/** This node, or the node that finally took its place if it was rebuilt in place (possibly more than once). */
+	/** This node's live instance. A callback may capture a build root and resolve it here when it runs. */
 	public static function latest(node:RenderNode):RenderNode {
 		var current = node;
 		var next = current.replacedBy;
@@ -327,6 +327,8 @@ class RenderNode {
 	 * instance, which a rebuild keeps. Returns a stand-in for the node as it was, for the frame comparison.
 	 */
 	public function reconcile(fresh:RenderNode, built:BuiltNode):RenderNode {
+		if (fresh == this || fresh.replacedBy != null)
+			throw "A reconcile requires a fresh render node";
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
 		var styleChanged = haxeon.Structural.changedMask(built.style, fresh.layout.style) != 0;
 		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
@@ -354,6 +356,8 @@ class RenderNode {
 		decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
 		basePaintKeyResolved = false;
 		swapChildren(fresh, built.children);
+		// New callbacks may have captured their build root; it now resolves to the instance kept in the tree.
+		fresh.replacedBy = this;
 		return prior;
 	}
 
