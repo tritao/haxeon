@@ -8,6 +8,7 @@ import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
+import build.Target;
 import build.Target.TargetAbi;
 import build.Target.TargetOs;
 import haxe.io.Path;
@@ -26,7 +27,7 @@ class NativeCMakeProvider {
 		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
 			layout = context.layout,
 			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
-			ninja = ninjaAvailable(context.environment.target.os, context.compilerHome),
+			ninja = ninjaAvailable(context.environment.target, context.compilerHome),
 			ninjaProgram = ninjaExecutable(context.compilerHome), // CMake rejects a cache created by another generator, so Ninja trees get their own directory.
 			buildTree = ninja ? "cmake-ninja" : "cmake", // Workspace builds identify a CMake tree by what it builds, so packages that request the same
 		// (source, target) pair share one configure, one build and one set of runtime libraries.
@@ -59,12 +60,17 @@ class NativeCMakeProvider {
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE=" + configuration
 			].concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
+			windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment),
 			ccache = NativeCompilerCache.executable(),
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
 		discardCacheOfOtherSource(buildDirectory, source);
+		// MSVC, as the Visual Studio generator would use, even when CC or CXX names another compiler.
+		if (windowsNinja)
+			for (argument in ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"])
+				configureArguments.push(argument);
 		for (argument in NativeCompilerCache.configureArguments(ccache))
 			configureArguments.push(argument);
 		if (native.cmake.libraries.length > 0) {
@@ -233,14 +239,10 @@ class NativeCMakeProvider {
 
 	/** Output of `ninja --version`, or null when the executable cannot run. */
 	static function ninjaVersion(executable:String):Null<String> {
-		if (!ninjaVersions.exists(executable))
-			ninjaVersions.set(executable, try {
-				var process = new sys.io.Process(executable, ["--version"]),
-					output = StringTools.trim(process.stdout.readAll().toString()),
-					status = process.exitCode();
-				process.close();
-				status == 0 ? output : "";
-			} catch (_:Dynamic) "");
+		if (!ninjaVersions.exists(executable)) {
+			var output = HostCommand.text(executable, ["--version"]);
+			ninjaVersions.set(executable, output == null ? "" : output);
+		}
 		var version = ninjaVersions.get(executable);
 		return version == "" ? null : version;
 	}
@@ -258,10 +260,16 @@ class NativeCMakeProvider {
 
 	/**
 	 * Ninja builds in parallel by default, while `cmake --build` on the Makefiles generator is serial
-	 * without `-j`. Windows keeps its default generator so MSVC does not need a prepared environment.
+	 * without `-j`. On Windows the Visual Studio generator compiles a project's files one at a time and checks every
+	 * project again when nothing changed, so MSVC builds use Ninja too, in the developer environment that
+	 * `MsvcEnvironment` provides; the Ninja that Visual Studio ships is on its PATH.
+	 * `HAXEON_CMAKE_GENERATOR=default` keeps the platform's default generator.
 	 */
-	static function ninjaAvailable(os:TargetOs, home:String):Bool {
-		if (os == TargetOs.Windows || Sys.getEnv("HAXEON_CMAKE_GENERATOR") == "default")
+	static function ninjaAvailable(target:Target, home:String):Bool {
+		if (Sys.getEnv("HAXEON_CMAKE_GENERATOR") == "default")
+			return false;
+		if (target.os == TargetOs.Windows
+			&& (target.abi != TargetAbi.Msvc || Sys.systemName() != "Windows" || !MsvcEnvironment.ensure(target.arch)))
 			return false;
 		return ninjaVersion(ninjaExecutable(home)) != null;
 	}

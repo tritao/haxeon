@@ -139,7 +139,8 @@ if(NOT EXISTS "${TOOLS_DIR}/formatter/run.js")
 endif()
 
 # Ninja 1.13 can join Haxeon's job server, so native builds share one job limit with Haxeon's own
-# actions; older system copies cannot. Windows builds keep their Visual Studio generator.
+# actions; older system copies cannot. Windows uses the Ninja that ships with Visual Studio (see
+# src/build/native/MsvcEnvironment.hx).
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
   set(NINJA_VERSION "1.13.2")
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
