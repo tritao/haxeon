@@ -56,6 +56,13 @@ rm "$project_dir/app/build/host/native/foo/foo.hdll"
 run_cli build --project "$project_dir/app/haxeon.json"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 
+# A package whose CMake source moves keeps its build directory, and CMake rejects the cache the old source generated.
+mv "$project_dir/foo/native" "$project_dir/foo/cmake"
+printf '%s\n' '{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"native":{"cmake":{"source":"cmake","target":"foo"}}}' > "$project_dir/foo/haxeon.json"
+rm "$project_dir/app/build/host/native/foo/foo.hdll"
+run_cli build --project "$project_dir/app/haxeon.json"
+test -s "$project_dir/app/build/host/native/foo/foo.hdll"
+
 # Native compiles go through ccache when it is installed, keyed by paths relative to the project root, and not with HAXEON_CCACHE=0.
 cache_of() {
 	grep -h '^CMAKE_CXX_COMPILER_LAUNCHER:' "$(find "$1" -name CMakeCache.txt -path '*foo*' | head -1)" || true

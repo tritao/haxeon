@@ -64,6 +64,7 @@ class NativeCMakeProvider {
 			toolchain = new NativeToolchain(context.environment),
 			ccache = NativeCompilerCache.executable(),
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
+		discardCacheOfOtherSource(buildDirectory, source);
 		for (argument in NativeCompilerCache.configureArguments(ccache))
 			configureArguments.push(argument);
 		if (native.cmake.libraries.length > 0) {
@@ -182,6 +183,32 @@ class NativeCMakeProvider {
 			context.layout.sharedCMakeRoot(sharedName(source, native.cmake.target, context.environment.projectRoot)),
 			"out"
 		]);
+	}
+
+	/**
+	 * A package's CMake tree is named after the package, so a build directory outlives a move of its source (stockkit's
+	 * `core` became `native`), and CMake refuses to configure a cache that another source directory generated. The
+	 * cache can only be reused by that source, so it is dropped and the configure starts the tree over.
+	 */
+	static function discardCacheOfOtherSource(buildDirectory:String, source:String):Void {
+		var cache = Path.join([buildDirectory, "CMakeCache.txt"]);
+		if (!sys.FileSystem.exists(cache))
+			return;
+		var generated:Null<String> = null;
+		for (line in sys.io.File.getContent(cache).split("\n"))
+			if (StringTools.startsWith(line, "CMAKE_HOME_DIRECTORY:")) {
+				generated = StringTools.trim(line.substr(line.indexOf("=") + 1));
+				break;
+			}
+		if (generated == null || sameDirectory(generated, source))
+			return;
+		sys.FileSystem.deleteFile(cache);
+	}
+
+	static function sameDirectory(first:String, second:String):Bool {
+		if (Path.normalize(first) == Path.normalize(second))
+			return true;
+		return sys.FileSystem.exists(first) && sys.FileSystem.exists(second) && sys.FileSystem.fullPath(first) == sys.FileSystem.fullPath(second);
 	}
 
 	/** Stable directory-safe identity of a CMake source and target, relative to the workspace when possible. */
