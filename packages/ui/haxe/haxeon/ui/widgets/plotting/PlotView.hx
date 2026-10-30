@@ -73,7 +73,8 @@ class PlotView implements View {
 			node.cachePolicy = CachePolicy.Raster;
 			node.computedStyle = computed;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "Plot" : label);
-			var cacheKey = "plot:" + model.revision() + ":appearance:" + appearanceKey();
+			// The series change without the widget being rebuilt, so a retained subtree around the plot follows the model.
+			var cacheKey = "plot:" + context.observeInt(function() return model.revision()) + ":appearance:" + appearanceKey();
 			node.onPaint(function(canvas, geometry) paint(canvas, geometry), cacheKey);
 			return node;
 		});
