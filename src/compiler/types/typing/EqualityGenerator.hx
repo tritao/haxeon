@@ -83,15 +83,14 @@ class EqualityGenerator {
 				for (constructor in declaration.cases)
 					for (parameter in constructor.params)
 						collect(session, session.representation.enumParameterType(declaration.typeParameters, parameter, type), root, reachable, requests);
-			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
+			case TInstance(NominalKind.Class, name, _) if (StructuralIntrinsics.isStructural(session, type)):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
 					unsupported(type, span);
-				for (field in declaration.fields)
-					if (!field.isStatic && hasStoredField(field)) {
-						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span);
-						collect(session, fieldType, root, reachable, requests);
-					}
+				for (field in StructuralIntrinsics.storedFields(declaration, span)) {
+					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span);
+					collect(session, fieldType, root, reachable, requests);
+				}
 			default:
 				unsupported(type, span);
 		}
@@ -239,18 +238,18 @@ class EqualityGenerator {
 				}
 				result.push(TReturn(bool(false, span), span));
 				result;
-			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
+			case TInstance(NominalKind.Class, name, _) if (StructuralIntrinsics.isStructural(session, type)):
 				var declaration = session.classDecls.get(name),
-					result:Array<TypedStatement> = [];
+					// A value class is copied on assignment and is never null; a structural reference class can be either.
+					result:Array<TypedStatement> = session.relations.isValueClass(type) ? [] : referenceGuards(type, left, right, span);
 				if (declaration == null)
 					throw 'Missing value type declaration "$name"';
-				for (field in declaration.fields)
-					if (!field.isStatic && hasStoredField(field)) {
-						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span),
-							leftField = new TypedExpression(TField(left, field.name), fieldType, span),
-							rightField = new TypedExpression(TField(right, field.name), fieldType, span);
-						result.push(ifFalse(call(fieldType, leftField, rightField, span), span));
-					}
+				for (field in StructuralIntrinsics.storedFields(declaration, span)) {
+					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span),
+						leftField = new TypedExpression(TField(left, field.name), fieldType, span),
+						rightField = new TypedExpression(TField(right, field.name), fieldType, span);
+					result.push(ifFalse(call(fieldType, leftField, rightField, span), span));
+				}
 				result.push(TReturn(bool(true, span), span));
 				result;
 			default:
@@ -258,7 +257,7 @@ class EqualityGenerator {
 		};
 	}
 
-	static function hasStoredField(field:compiler.syntax.Ast.AstField):Bool {
+	public static function hasStoredField(field:compiler.syntax.Ast.AstField):Bool {
 		if (hasDirectAccess(field.readAccess) || hasDirectAccess(field.writeAccess))
 			return true;
 		for (metadata in field.metadata)

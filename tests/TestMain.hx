@@ -1132,6 +1132,16 @@ class TestMain {
 			'MessagePack.decode requires an expected result type');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Equality.equals(new Thing(), new Thing()) ? 1 : 0;',
 			'Structural equality does not support type "TInstance(class,Thing,[])"');
+		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Structural.hash(new Thing());',
+			'haxeon.Structural.hash expects a value class or a class marked @:structural, got "Thing"');
+		expectCompileError('@:structural class Base { public var a:Int = 0; public function new() {} } @:structural class Derived extends Base { public var b:Int = 0; } function main():Int return haxeon.Structural.allFieldsMask(Derived);',
+			'Structural class "Derived" cannot extend another class: its fields would be left out');
+		expectCompileError('@:structural class Named { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Structural.fieldBit(Named, "b");',
+			'Class "Named" has no stored field "b"');
+		expectCompileError('@:structural class Fixed { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Structural.copy(new Fixed()).a;',
+			'haxeon.Structural.copy cannot copy final field "a" of "Fixed"');
+		expectCompileError('class Opaque { public function new() {} } @:structural class Holder { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Structural.hash(new Holder());',
+			'Structural.hash does not support field "Holder.value" of type "Opaque"');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',

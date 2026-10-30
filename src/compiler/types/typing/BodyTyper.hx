@@ -47,6 +47,7 @@ import compiler.Source.SourceSpan;
 @:allow(compiler.types.typing.ProgramTyper)
 @:allow(compiler.types.typing.WireCodecGenerator)
 @:allow(compiler.types.typing.EqualityGenerator)
+@:allow(compiler.types.typing.StructuralIntrinsics)
 class BodyTyper {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;

@@ -11,8 +11,36 @@ values, and byte buffers compare by content. In particular, `NaN` differs from
 itself, while `0.0` and `-0.0` compare equal. Nullable values compare equal
 when both are null; otherwise their contents are compared. Map keys use the
 map's own key lookup semantics and currently support `Int`, `String`, and
-parameterless enum constructors. Class instances, `Dynamic`, functions, and
-other unsupported types produce a compile diagnostic.
+parameterless enum constructors. Value classes and classes marked
+`@:structural` compare their stored fields in declaration order; a structural
+reference compares equal to itself first, and to null only when both are null.
+Other class instances, `Dynamic`, functions, and other unsupported types
+produce a compile diagnostic.
 
 This helper does not change `==` or `Type.enumEq`. It is intended for typed
 data descriptions; cyclic runtime object graphs are not supported.
+
+## Structural classes
+
+A class marked `@:structural` (or a value class) is also accepted by
+`haxeon.Structural`, whose operations are generated from the class's stored
+instance fields, in declaration order, at each call site. Adding a field to the
+class updates every one of them; a field type they cannot handle is a compile
+error rather than a silent omission.
+
+- `Structural.copy(value)`: a new instance, made with the class's no-argument
+  constructor, with every field copied shallowly. Final fields are an error.
+- `Structural.hash(value)`: an `Int` hash consistent with `Equality.equals`:
+  equal values hash equally. Nested structural fields are hashed by content.
+- `Structural.changedMask(a, b)`: one bit per field, set where `Equality.equals`
+  finds the two values' fields different. At most 32 fields.
+- `Structural.assignChanged(target, before, after)`: copies into `target` each
+  field that differs between `before` and `after`, leaves the others as they
+  are, and returns the mask of the fields it copied.
+- `Structural.fieldBit(Type, "field")` and `Structural.allFieldsMask(Type)`:
+  compile-time constants for those masks. A misspelled field is an error, so a
+  hand-written group of fields can be checked against `allFieldsMask` in a test.
+
+A structural class may not extend another class: the base's fields would be
+left out. `LayoutStyle` in the UI package uses these for its copy, its restyle
+delta, its frame comparison and its cache keys.

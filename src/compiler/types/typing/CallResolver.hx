@@ -1155,6 +1155,9 @@ class CallResolver {
 			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}
+		if (StructuralIntrinsics.handles(name))
+			return typeExpression(StructuralIntrinsics.expand(session, name, arguments, span,
+				function(argument) return typeExpressionValue(argument, scope).type), scope, expectedType, false);
 		if (name == "Type.enumIndex") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
