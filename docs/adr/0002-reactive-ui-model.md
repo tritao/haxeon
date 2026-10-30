@@ -5,7 +5,8 @@ Date: 2026-10-30
 ## Status
 
 Proposed. Stage 1 starts after the current retention and render work in `packages/ui` lands. The component model
-(decision 2) is confirmed or revised by the stage 3 experiment.
+(decision 2) is confirmed or revised by the stage 3 experiment. The discussion behind this record, including the comparison
+with GPUI and the per-frame arena question, is summarized in `packages/ui/docs/ARCHITECTURE_NOTES.md`.
 
 ## Context
 
