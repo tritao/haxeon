@@ -1,5 +1,32 @@
 # Retained subtrees
 
+## Editor coverage baseline (2026-10-30)
+
+Before extending retention to the remaining five panels, remeasured `72a75ee8` with the outer repository at
+`47159e089` on this machine (2026-10-30). `check-editor-performance.py --budgets --measure` used probes off;
+all measured actions are within their existing ceilings. A separate `TMPDIR=/dev/shm python3 app/tools/check-ui-retention.py --skip-build` passed all nine scenarios. Measurement mode itself skips that verification gate.
+These are the starting measurements, not results of the pending panel or render changes.
+
+| action | baseline allocation KiB | baseline frame ms |
+|---|---:|---:|
+| hierarchy→sensors | 165.1 | 1.70 |
+| sensors→hierarchy | 129.0 | 1.35 |
+| console→telemetry | 112.5 | 1.16 |
+| telemetry→console | 130.7 | 1.22 |
+| hover-other | 13.1 | 0.42 |
+| hover-field | 23.9 | 0.43 |
+| hover-away | 25.0 | 0.43 |
+| hover-enter / hover-inside | 0.6 | 0.00 |
+| scroll-inspector | 22.3 | 0.72 |
+| type-char | 17.8 | 0.43 |
+| type-backspace | 17.8 | 0.42 |
+| idle / idle-focused | 0.2 | 0.00 |
+| selection | not reported | 3.05 |
+
+Captures in the outer repository: `app/build/profiles/budget-tab-matrix-20261030-190150-0`,
+`budget-interaction-20261030-190152-0`, and `budget-selection-stress-20261030-190154-0`.
+Their timeline, action and allocation records are retained; redundant captured bytecode was removed to save disk.
+
 ## Current model (2026-10-30)
 
 A frame rebuilds the view by default. Work is skipped in three ways, and one check keeps all of them honest.
@@ -68,8 +95,98 @@ Rules that keep it working:
   reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  The editor's panels are all observing except the BIM, inspection camera, machine control, mission and CNC panels, whose builds
-  keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the rest.
+  The editor's panels are all observing except the BIM, machine control, mission and CNC panels, whose builds
+  keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the others.
+
+## Inspection camera retention (2026-10-30)
+
+The camera now synchronizes its viewport in the editor's explicit submit step, before checking retained dependencies.
+Creation, document replacement, presentation binding, joint/geometry providers, simulation samples and renderer settings
+no longer depend on rebuilding the dock panel. An independent public `view()` still initializes the camera before
+returning its view, preserving callers that submit that view directly; the hosted submit uses its already-sampled frame. A running simulation is sampled before this update; the ordinary build
+and the verification reference use that same logical frame. Unchanged simulation revisions do not recopy pose arrays.
+
+The panel observes its overlay state and binding revision, presentation/host availability, generation and viewport binding identity. Its
+presentation controls observe the view and procedure choices, cursor state, enablement, active instruction and evidence.
+Camera motion and physics revisions belong to the image rather than the surrounding controls. Observing the bound
+viewport's identity also handles disposing and recreating it within the same document generation.
+The binding revision represents the mount lifecycle: dock→overlay→dock must rebuild the cached dock's binding even
+though its final overlay boolean matches its original value. A changed image that cannot request a patch also advances
+that revision, following `requestPatch`'s ordinary rebuild fallback. This makes new samples visible on the first frame
+after returning to a hidden tab, before its previous registration has been rearmed. Otherwise that cached tree can still refer to the old dock
+registration while the viewport's patch handle names the now-unmounted overlay registration. The perspective panel
+observes the camera's controls only while the overlay is shown, rather than invalidating its entire tree on image motion.
+
+`EditorPerspectiveViewport` uses `BuildContext.selfUpdating` and `RenderNode.reconcile`. The explicit update requests a
+patch when the existing paint key changes, so the mounted image keeps its identity and its controls remain retained.
+`InteractionStateSnapshot` retains a self-updating root's registration independently of whether it reads pointer flags.
+Previously its early skip of non-interactive roots also skipped that registration, so a cached custom image could not
+resume patching after unmount/remount. Descendants owned by a self-updating widget still skip separate interaction checks.
+Navigation callbacks do not capture their build root's geometry; they use the viewport's resolved size, so they require
+no special root handles. Disposal clears the patch context. The paint key includes the evaluated presentation revision
+(which includes its geometry fingerprint and simulation state), cosmetic-thread visibility and overlay visibility in
+addition to the existing scene, camera, drag, lighting, sample, size, grid and collision inputs. This closes omissions
+that an ordinary rebuild previously masked; no verification or fingerprint check is bypassed.
+
+`panel-flows` exercises the no-assembly and no-host states, then supplies a one-part assembly and headless host services
+with invalid window/surface handles. It builds the real camera controls, changes disclosure, zoom and a view label, and
+changes image paint independently of controls, then moves the camera into picture-in-picture and back into its dock. It also hides and remounts an unchanged cached
+image, checks that its registration returns without replacing its node, patches it again, and changes paint while hidden
+to verify the first visible frame uses the new sample. The ordinary replay checks image and control identity; the verification
+replay compares each submitting frame with a fresh tree. The fitted Select label records its displayed text after layout;
+that existing feedback is consumed on a separate frame before isolating paint. A temporary state-change trace confirmed
+that only the fitted labels changed state after relabelling, and that subsequent image-patch frames built no dock panels.
+The trace was removed after diagnosis. Identity across verification frames is not a valid assertion:
+`UiContext.verifyRetention` deliberately leaves its fresh reference mounted. The headless fixture does not submit GPU
+work and therefore does not establish pixel equivalence on a desktop GPU.
+
+### Camera validation and cost
+
+All ten UI scripts pass (the settings script reports `Settings tests passed`), all nine retention scenarios pass,
+the normal camera fixture passes eight cycles including image/control identity and redocking, and the strict budgets
+and three 500-cycle memory runs pass. Verification and budget ceilings are unchanged. A temporary Main-only control
+was used to explain refill-counter movement: the closed-camera workloads cannot execute the changed camera/viewport
+code, so restoring only `Main.hx` isolates the production changes those workloads reach. The same updated test harness
+was used on both sides. The control source was restored byte for byte before rebuilding and rerunning the gates.
+
+With census enabled (`--census 1`, 30 cycles, no sampling profiler), actual allocation never increases:
+
+| action / phase | Main control bytes | camera implementation bytes | change |
+|---|---:|---:|---:|
+| hierarchy→sensors, whole frame | 169,264 | 169,112 | −152 |
+| sensors→hierarchy, whole frame | 131,208 | 131,056 | −152 |
+| console→telemetry, whole frame | 115,912 | 115,760 | −152 |
+| telemetry→console, whole frame | 134,792 | 134,640 | −152 |
+| selection, tree/style only | 851,408 | 851,304 | −104 |
+| all ten interaction actions | unchanged | unchanged | 0 |
+
+The interaction census medians include 18,200 bytes for typing a character and 18,456 for backspace. Raw refill-counter
+medians can move in either direction even when actual allocation falls. The independently run, probe-off comparison
+with the starting baseline is below; these are observations, not a claimed latency improvement for closed cameras.
+
+| action | baseline KiB | camera KiB | baseline ms | camera ms |
+|---|---:|---:|---:|---:|
+| hierarchy→sensors | 165.1 | 166.9 | 1.70 | 1.96 |
+| sensors→hierarchy | 129.0 | 127.0 | 1.35 | 1.58 |
+| console→telemetry | 112.5 | 112.5 | 1.16 | 1.37 |
+| telemetry→console | 130.7 | 132.5 | 1.22 | 1.43 |
+| hover-other | 13.1 | 13.1 | 0.42 | 0.66 |
+| hover-field | 23.9 | 22.1 | 0.43 | 0.68 |
+| hover-away | 25.0 | 25.0 | 0.43 | 0.67 |
+| scroll-inspector | 22.3 | 22.3 | 0.72 | 1.16 |
+| type-char | 17.8 | 16.9 | 0.43 | 0.66 |
+| type-backspace | 17.8 | 17.8 | 0.42 | 0.66 |
+| idle / idle-focused | 0.2 | 0.2 | 0.00 | 0.01 |
+| hover-enter / hover-inside | 0.6 | 0.6 | 0.00 | 0.00 |
+| selection | not reported | not reported | 3.05 | 3.42 |
+
+Allocation source attribution comes from the census comparison, not the phase of a TLAB refill. Census timing is not
+comparable with probe-off timing. No raw budget median fell consistently enough here to justify tightening its ceiling.
+The normal eight-cycle fixture (`app/build/profiles/ui-camera-normal`) measures image-patch submit at
+0.115 ms median over seven warm frames. This is headless UI submission, not GPU execution or presentation latency.
+Gate logs are retained in `app/build/profiles/ui-camera-gates`.
+Captures under `app/build/profiles`: `ui-camera-cost-{tab-matrix,interaction,selection-stress}` and
+`ui-camera-census-{after,main-control}-{tab-matrix,interaction,selection-stress}`. Captured bytecode is omitted.
 
 ## Typing allocation (2026-10-30)
 

@@ -23,18 +23,16 @@ class InteractionStateSnapshot {
 		updating = [];
 		updatingBuilds = [];
 		root.walk(function(node) {
-			// Only a node a widget built from interaction state can be stale; routing alone leaves states on others.
-			if (!node.recordsInteraction)
-				return;
-			// A widget that updates itself follows these changes itself, for its whole subtree.
-			var owner = context.updatingOwner(node);
-			if (owner != null) {
-				if (owner == node) {
-					updating.push(node.id);
-					updatingBuilds.push(cast context.updatingBuild(node));
-				}
+			// Keep self-updating registrations alive even when the widget does not read pointer flags (a live image, for example).
+			var build = context.updatingBuild(node);
+			if (build != null) {
+				updating.push(node.id);
+				updatingBuilds.push(build);
 				return;
 			}
+			// Only a node a widget built from interaction state can be stale; routing alone leaves states on others.
+			if (!node.recordsInteraction || context.updatingOwner(node) != null)
+				return;
 			var mask = interactionMask;
 			if (!context.hoverRebuilds(node))
 				mask &= ~StyleState.Hovered;
