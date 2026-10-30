@@ -64,7 +64,9 @@ class NativeCMakeProvider {
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
 			toolchain = new NativeToolchain(context.environment),
-			ccache = NativeCompilerCache.executable(),
+			// On a Windows host ccache is used for MSVC builds with Ninja only: the Visual Studio generator ignores compiler
+			// launchers, and other targets built there are not measured.
+			ccache = Sys.systemName() != "Windows" || windowsNinja ? NativeCompilerCache.executable(context.compilerHome) : null,
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
 		discardCacheOfOtherSource(buildDirectory, source);
 		// MSVC, as the Visual Studio generator would use, even when CC or CXX names another compiler.
