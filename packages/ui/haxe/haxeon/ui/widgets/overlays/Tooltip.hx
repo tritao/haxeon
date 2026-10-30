@@ -93,6 +93,8 @@ class Tooltip implements View {
 			var tooltipNode = root.children[1];
 			tooltipNode.layout.style.visible = state.value;
 			tooltipNode.onResolved(function(_) {
+				// Resolved callbacks run on every frame; a hidden tooltip needs no placement, and showing it rebuilds.
+				if (!tooltipNode.layout.style.visible) return;
 				if (root.resolved == null || anchorNode.resolved == null || tooltipNode.parent == null ||
 					tooltipNode.parent.resolved == null) return;
 				var anchorBounds = root.globalBounds();
@@ -184,6 +186,8 @@ class Tooltip implements View {
 			// The tooltip resolves after its anchor sibling; the parent callback
 			// runs before either child has geometry on a freshly built tree.
 			tip.onResolved(function(_) {
+				// Resolved callbacks run on every frame; a hidden tooltip needs no placement, and showing it rebuilds.
+				if (!tip.layout.style.visible) return;
 				if (root.resolved == null || header.resolved == null) return;
 				var rail = boundsProvider == null ? new haxeon.ui.Rect(0, 0, context.viewportWidth, context.viewportHeight) : boundsProvider();
 				var anchorBounds = root.globalBounds();
