@@ -533,6 +533,49 @@ class RestyleInPlaceTests {
     Sys.println("PASS field: typing patches the field in place, keeping what its caller attached");
   }
 
+  static function verifyDisabledFocus(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), enabled = true;
+    ui.verifyRetentionEvery = 1;
+    var view:View = new RetainedView("focus-disabling", context -> {
+      var button = new Button("Focus", null, () -> {});
+      button.enabled = context.observeBool(() -> enabled);
+      return button;
+    });
+    var build = () -> view;
+    var root = ui.submitCached(build, frame, "focus-initial");
+    ui.focusWidget(root.id);
+    ui.submitCached(build, frame, "focus-settled");
+    enabled = false;
+    root = ui.submitCached(build, frame, "focus-disabled");
+    check(!root.enabled && ui.focus.focusedId == null, "Disabling a retained focus target did not clear focus");
+    check(ui.verifyRetention(build, frame) == null, "A committed focus pass differs from a full rebuild");
+    ui.dispose();
+    Sys.println("PASS verification: a focus pass compares against its committed nodes, including fresh disabled controls");
+  }
+
+  static function verifyPointerFlags(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
+    var flags:Int = haxeon.ui.style.StyleState.Checked;
+    var label = "hovered pressed";
+    var view:View = new RetainedView("flag-verification", _ -> new DecoratedControl("flags", context -> {
+      var node = new RenderNode(context.id("flags"), LayoutVisualKind.Box);
+      node.states = flags;
+      node.semantics = new Semantics(AccessibilityRole.Checkbox, label);
+      return node;
+    }));
+    var build = () -> view;
+    var root = ui.submitCached(build, frame, "flags");
+    // Routing may add pointer flags to a node that did not build from them. Checked still has to compare.
+    root.states |= haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
+    check(ui.verifyRetention(build, frame) == null, "Pointer normalization corrupted combined checked flags");
+    flags = 0;
+    check(ui.verifyRetention(build, frame) != null, "Pointer normalization hid a checked-state mismatch");
+    label = "pressed hovered";
+    check(ui.verifyRetention(build, frame) != null, "Pointer normalization hid hovered/pressed words in a label");
+    ui.dispose();
+    Sys.println("PASS verification: only pointer flag bits are ignored; checked flags and label text still compare");
+  }
+
   /** Verify mode must pass with an honest cache key and catch one that misses an input. */
   static function verifyMode(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts);
@@ -719,6 +762,8 @@ class RestyleInPlaceTests {
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
     verifyMode(fonts);
+    verifyPointerFlags(fonts);
+    verifyDisabledFocus(fonts);
     reconcile(fonts);
     submittedIndex(fonts);
     motion(fonts);

@@ -95,8 +95,8 @@ Rules that keep it working:
   reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  The editor's panels are all observing except the machine control, mission and CNC panels, whose builds
-  keep state of their own and scroll or push into viewports; `panel-flows` (check-ui-retention) covers the others.
+  The editor's panels are all observing except mission and CNC, whose builds still follow running programs by scrolling;
+  `panel-flows` (check-ui-retention) covers the others.
 
 ## Inspection camera retention (2026-10-30)
 
@@ -256,6 +256,69 @@ Raw allocation differences caused by refill attribution must not be interpreted 
 census comparison above covers that distinction. Selection timing varies between captures (3.1 ms in the strict budget
 run); no latency improvement is claimed. Evidence is retained under `app/build/profiles/ui-bim-cost-*`,
 `ui-bim-census-*`, `ui-bim-normal` and `ui-bim-gates`, omitting captured bytecode.
+
+## Machine control retention (2026-10-30)
+
+The document lifecycle already configures the main presentation viewport when it is created or its assembly is replaced.
+Machine control no longer repeats that setup from its build. `MachineControlPanel.update` handles generation changes and
+cancels gestures when simulation, project ownership or document workflows lock editing, before retained dependencies are
+checked. The public standalone `view()` entry point also runs this update. Generation changes clear draft text, errors and
+free-detent choices, so a different document cannot inherit a previous machine's transient edit settings.
+
+The observing panel reads the document generation/revision and the identity of the assembly definition and live pose.
+Session edit/restore APIs replace those records, including live gesture previews that create no history revision. The
+document revision covers initial-pose and dependent-joint edits. Axes are enumerated only when a build is needed, rather
+than constructing an axes array to check retention. Edit locks, viewport/section availability, draft fields, detent choices
+and errors are observed directly. Hobbing controls observe the player binding and their displayed handling/inspection and
+cut state. The enclosure panel observes its controller binding, published status text and enabled actions, rather than
+rebuilding just because a new simulation sample was published.
+
+`MachineAngleControl` uses the same `selfUpdating`/`reconcile` mechanism as Slider. Input updates the value and requests a
+patch; it does not edit the mounted semantics directly. Pointer handlers follow `RenderNode.latest` to the mounted node
+when reading geometry. Gesture bookkeeping updates quietly because it is not a displayed input. The shared slider's
+caller-supplied begin/finish listeners remain attached across its patches, as required by the normal reconcile contract.
+
+The bounded `panel-flows` machine fixture has one linear joint and one rotary joint with detents. It needs neither a
+source generator nor a simulation worker. It covers numeric drafts/errors, external uncommitted pose previews, real
+slider and angle gestures across frame submissions, undo/redo, free turning, keyboard edits, saving the initial pose,
+locking during a gesture and document replacement. Normal replay also checks unchanged panel identity. The separate
+`MachineControlTests` exercise decorated controls on the cached/patch path and compare them with fresh builds.
+
+This fixture exposed a verification formatting defect: a regular expression removed `states=hovered` from
+`states=hovered,checked`, leaving a stray `,checked`. It also removed those words from arbitrary label/value text.
+Verification now asks the inspector to mask only the intended hover/press flag bits before formatting. Checked, selected,
+focused and disabled flags, semantics, labels and values still compare. Regression tests cover mixed pointer/checked flags
+and prove that checked-state and label-text mismatches are reported. The lock fixture also exercises the second layout/build pass that clears focus from a disabled control. Each committed
+pass now records its fingerprints before starting a focus pass. Previously the next pass could compare fresh nodes against
+fingerprints of different nodes with the same IDs from the previous frame. The fingerprint contents and unannounced-edit
+check are unchanged; each pass still checks edits against the nodes actually committed before it. Interaction changes are
+acknowledged after the focus pass, so self-updating widgets receive the blur/focus changes that routing produced after the
+first build. A regression test disables a focused retained button and checks both focus and fresh-build equivalence.
+
+All ten UI suites, all nine verify-every-frame scenarios, strict budgets, three 500-cycle memory runs and 209
+`MachineControlTests` checks pass. The enclosure runtime suite also compiles with the explicit update/context API; its
+large physical hobber fixture is not used for retention coverage. Exact census allocations match the preceding BIM commit
+for every tab and interaction action and for selection tree/style (851,272 bytes). No ceiling is raised or lowered.
+
+Same-machine probe-off comparison with that preceding BIM capture:
+
+| action | BIM KiB | machine KiB | BIM ms | machine ms |
+| --- | ---: | ---: | ---: | ---: |
+| hierarchy → sensors | 165.4 | 165.3 | 1.66 | 1.66 |
+| sensors → hierarchy | 127.0 | 127.0 | 1.30 | 1.29 |
+| console → telemetry | 112.5 | 112.5 | 1.13 | 1.13 |
+| telemetry → console | 132.5 | 132.5 | 1.21 | 1.20 |
+| hover-other | 13.1 | 13.1 | 0.42 | 0.42 |
+| hover-field / hover-away | 23.9 / 25.0 | 23.9 / 25.0 | 0.43 | 0.43 |
+| scroll-inspector | 22.3 | 22.3 | 0.72 | 0.72 |
+| type-char / type-backspace | 17.8 | 17.8 | 0.42 / 0.42 | 0.42 / 0.41 |
+| idle / idle-focused | 0.2 | 0.2 | 0.00 | 0.00 |
+| hover-enter / hover-inside | 0.6 | 0.6 | 0.00 | 0.00 |
+| selection | not reported | not reported | 3.60 | 3.05 |
+
+These standard workloads keep machine control closed and establish regression coverage; no latency reduction is claimed
+from the small timing differences or the variation between selection captures. Evidence is retained under
+`app/build/profiles/ui-machine-cost-*`, `ui-machine-census-*`, `ui-machine-normal` and `ui-machine-gates`, without bytecode.
 
 ## Typing allocation (2026-10-30)
 

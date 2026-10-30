@@ -38,7 +38,7 @@ class UiInspector {
 		return result;
 	}
 
-	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>):String {
+	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>, ignoredInteractionStates:Int = 0):String {
 		var records = snapshot(root, focused);
 		var lines:Array<String> = [];
 		for (record in records) {
@@ -52,9 +52,9 @@ class UiInspector {
 				line += " hidden";
 			if (record.focused)
 				line += " focused";
-			if (record.hovered)
+			if (record.hovered && (ignoredInteractionStates & StyleState.Hovered) == 0)
 				line += " hovered";
-			if (record.pressed)
+			if (record.pressed && (ignoredInteractionStates & StyleState.Pressed) == 0)
 				line += " pressed";
 			if (record.styleType != null)
 				line += " type=" + record.styleType;
@@ -73,8 +73,9 @@ class UiInspector {
 			if (record.estimatedIntermediateTargets > 0)
 				line += " rtTargets=" + Std.string(record.estimatedIntermediateTargets) +
 					" rtBytes=" + number(record.estimatedRenderTargetBytes);
-			if (record.interactionStates != 0)
-				line += " states=" + interactionStateNames(record.interactionStates);
+			var states = record.interactionStates & ~ignoredInteractionStates;
+			if (states != 0)
+				line += " states=" + interactionStateNames(states);
 			if (record.focusable)
 				line += " focusable";
 			if (record.zIndex != 0)

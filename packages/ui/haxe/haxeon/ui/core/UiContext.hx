@@ -377,10 +377,9 @@ class UiContext {
 	function stateStoreDescription(node:RenderNode):String
 		return (node.styleType == null ? "" : node.styleType + " ") + stateStore.describe(node.id);
 
-	static final pointerFlags = ~/ ?(states=)?(hovered|pressed)/g;
-
 	function comparableDump():String
-		return pointerFlags.replace(dumpTree(), "");
+		return UiInspector.dump(root, focus.focusedId,
+			haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed);
 
 	static function describeDifference(live:String, rebuilt:String):String {
 		var left = live.split("\n"), right = rebuilt.split("\n");
@@ -627,7 +626,6 @@ class UiContext {
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedStateRevision = resolvedStateRevision;
 		submittedInteractionRevision = interactionStates.revision;
-		interactionStates.acknowledge();
 		submittedStyleRevision = buildContext.styleRevision;
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
@@ -649,11 +647,15 @@ class UiContext {
 		// A newly mounted focus trap chooses its first target after layout, and a widget that stopped being focusable (disabled)
 		// loses focus here while still on screen. Rebuild once with that focus state before returning the frame for painting;
 		// a widget that left the tree shows nothing stale, so losing its focus needs no second build.
+		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
+		// fingerprints of the previous frame's different nodes with the same IDs.
+		if (verifyRetentionEvery > 0)
+			recordFingerprints(next);
 		if (reconcileNewFocus && focusChanged && (nextFocus != null ||
 			(previousFocus != null && nodesById.exists(previousFocus.value))))
 			return submitInternal(frame, cacheKey, function() return view, false);
-		if (verifyRetentionEvery > 0)
-			recordFingerprints(next);
+		// Focus routing can add changes after the build. Keep them until the focus pass has patched their owners.
+		interactionStates.acknowledge();
 		frameNumber++;
 		var submitEndedAt = Sys.time();
 		var submitEndAllocatedAt = AllocationProbe.now();
