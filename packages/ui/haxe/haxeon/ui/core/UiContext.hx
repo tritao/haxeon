@@ -444,7 +444,9 @@ class UiContext {
 			buildContext.beginFrame();
 			queueInteractionPatches();
 		}
-		buildContext.applyPatches();
+		// Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
+		buildContext.takeRetainedEdits(currentNodesById);
+		buildContext.applyPatches(submittedTopology);
 		diagnosticStage = 4;
 		var viewStartedAt = Sys.time();
 		var viewAllocatedAt = AllocationProbe.now();

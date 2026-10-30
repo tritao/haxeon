@@ -29,6 +29,15 @@ class RenderTreeTopology {
 		return index < 0 ? 0 : parents[index];
 	}
 
+	/** Original child slot when a retained builder has already reparented the live child into its new root. */
+	public function childPosition(parent:Int, child:Int):Int {
+		var index = indices.get(parent);
+		if (index < 0) return -1;
+		var offset = offsets[index];
+		for (slot in 0...counts[index]) if (children[offset + slot] == child) return slot;
+		return -1;
+	}
+
 	public function sameChildren(node:RenderNode):Bool {
 		var index = indices.get(node.id.value);
 		if (index < 0 || counts[index] != node.children.length) return false;

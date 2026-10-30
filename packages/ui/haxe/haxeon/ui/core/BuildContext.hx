@@ -76,6 +76,7 @@ class BuildContext {
 	final selfUpdatingBuilds:Map<Int, SelfUpdatingBuild> = new Map();
 	/** Stable membership storage: iterating the map would copy its keys on every frame. */
 	final selfUpdatingIds:Array<Int> = [];
+	var updatingRegistrations:Int = 0;
 	var pendingPatches:Array<SelfUpdatingBuild> = [];
 	/** True while a patch runs: its IDs are claimed later, when the retained tree that holds them is claimed. */
 	var patching:Bool = false;
@@ -380,10 +381,10 @@ class BuildContext {
 	 * (State.updateQuietly).
 	 */
 	public function selfUpdating(id:WidgetId, build:Void->RenderNode):RenderNode {
-		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.copy());
+		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy());
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
-		var root = build();
+		var root = buildUpdating(entry);
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
 		entry.built = root.snapshotBuilt();
@@ -451,14 +452,24 @@ class BuildContext {
 	public function rearm(id:WidgetId, entry:SelfUpdatingBuild):Bool {
 		if (!updateInPlace || entry.root == null || entry.epoch != updatingEpoch) return false;
 		var current = selfUpdatingBuilds.get(id.value);
-		if (current == entry) return true;
 		if (current != null && current.root != entry.root) return false;
-		registerSelfUpdatingBuild(id.value, entry);
+		var dependencies = entry.dependencies;
+		if (dependencies != null) {
+			if (dependencies.stateIds != null) {
+				for (index in 0...dependencies.stateIds.length)
+					if (stateStore.valueRevision(dependencies.stateIds[index]) != dependencies.stateRevisions[index]) return false;
+			}
+			if (dependencies.observed != null && !dependencies.observed.current()) return false;
+			if (dependencies.children != null && !dependencies.children.matches(this)) return false;
+		}
+		if (current != entry) registerSelfUpdatingBuild(id.value, entry);
+		else updatingRegistrations++;
+		retainUpdatingState(entry);
 		return true;
 	}
 
 	/** Rebuilds the pending self-updating widgets and reconciles them with the retained tree; runs after beginFrame, before the root builds. */
-	public function applyPatches():Void {
+	public function applyPatches(?topology:RenderTreeTopology):Void {
 		if (pendingPatches.length == 0)
 			return;
 		var work = pendingPatches;
@@ -476,7 +487,7 @@ class BuildContext {
 			textStyleStack = entry.textStyleStack;
 			patching = true;
 			try {
-				var fresh = entry.build();
+				var fresh = buildUpdating(entry);
 				// The frame comparison walks the tree it is given, which now holds the result, so hand it what was replaced:
 				// the old nodes below the root, and for the root a stand-in of how it was (or the root itself, if replaced).
 				var inPlace = old.canReconcile(fresh);
@@ -490,7 +501,7 @@ class BuildContext {
 				}
 				recordPriors(old, old, inPlace);
 				if (inPlace) {
-					var before = old.reconcile(fresh, entry.built);
+					var before = old.reconcile(fresh, entry.built, topology);
 					if (!patchPriors.exists(old.id.value))
 						patchPriors.set(old.id.value, before);
 				} else {
@@ -511,6 +522,57 @@ class BuildContext {
 			styleParent = savedParent;
 			textStyleStack = savedStack;
 		}
+	}
+
+	/** Each reconciled build owns its current dependencies and resources, even when its enclosing cache stays unchanged. */
+	function buildUpdating(entry:SelfUpdatingBuild):RenderNode {
+		var stateMark = stateStore.beginUsage(), intMark = observed.intCount, stringMark = observed.stringCount;
+		var registrationMark = updatingRegistrations;
+		var previous = entry.dependencies;
+		if (previous != null && entry.root != null && updatingStatesChanged(entry)) previous.stateInvalidationRevision++;
+		try {
+			var root = entry.build();
+			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark, previous == null ? null : previous.stateIds);
+			var reads = observed.intCount == intMark && observed.stringCount == stringMark ? null : observed.since(intMark, stringMark);
+			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this, root);
+			if (usedStates != null || reads != null || children != null || previous != null) {
+				var dependencies = previous == null ? new UpdatingDependencies() : previous;
+				var allStates = children == null ? usedStates : children.appendStateIds(usedStates);
+				if (entry.root != null && !haxeon.Equality.equals(dependencies.allStateIds, allStates)) {
+					requestBuildFeedback();
+				}
+				dependencies.stateIds = usedStates;
+				dependencies.stateRevisions = usedStates == null ? null : stateRevisions(usedStates, dependencies.stateRevisions);
+				dependencies.observed = reads;
+				dependencies.children = children;
+				dependencies.allStateIds = allStates;
+				entry.dependencies = dependencies;
+			}
+			stateStore.finishUsage(stateMark);
+			observed.truncate(intMark, stringMark);
+			return root;
+		} catch (error:Dynamic) {
+			stateStore.finishUsage(stateMark);
+			observed.truncate(intMark, stringMark);
+			throw error;
+		}
+	}
+
+	public function updatingStatesChanged(entry:SelfUpdatingBuild):Bool {
+		var dependencies = entry.dependencies;
+		if (dependencies == null) return false;
+		if (dependencies.stateIds != null)
+			for (index in 0...dependencies.stateIds.length)
+				if (stateStore.valueRevision(dependencies.stateIds[index]) != dependencies.stateRevisions[index]) return true;
+		return dependencies.children != null && dependencies.children.statesChanged(this);
+	}
+
+	/** Hidden dock caches keep the latest patched resources alive without rearming unmounted widgets. */
+	public function retainUpdatingState(entry:SelfUpdatingBuild):Void {
+		var dependencies = entry.dependencies;
+		if (dependencies == null) return;
+		if (dependencies.stateIds != null) stateStore.retain(dependencies.stateIds, false);
+		if (dependencies.children != null) dependencies.children.retainState(this);
 	}
 
 	/** Keeps the nodes of `node`'s subtree as priors for the frame comparison, except `root` itself when `skipRoot`. */
@@ -590,6 +652,7 @@ class BuildContext {
 	function registerSelfUpdatingBuild(id:Int, entry:SelfUpdatingBuild):Void {
 		if (!selfUpdatingBuilds.exists(id)) selfUpdatingIds.push(id);
 		selfUpdatingBuilds.set(id, entry);
+		updatingRegistrations++;
 	}
 
 	/** Retire builders whose widgets are absent from the committed render tree. */
@@ -767,12 +830,19 @@ class BuildContext {
 		observed.clear();
 
 	/** Returns state IDs touched after a retained subtree build marker. */
-	public function stateIdsUsedSince(marker:Int):Array<Int>
-		return stateStore.usedIdsSince(marker);
+	public function stateIdsUsedSince(marker:Int, ?previous:Array<Int>):Array<Int>
+		return stateStore.usedIdsSince(marker, previous);
 
 	/** Current change revisions of the given widget states, for detecting changes inside a retained subtree. */
-	public function stateRevisions(ids:Array<Int>):Array<Int>
+	public function stateRevisions(ids:Array<Int>, ?previous:Array<Int>):Array<Int> {
+		if (previous != null && previous.length == ids.length) {
+			var same = true;
+			for (index in 0...ids.length)
+				if (stateStore.valueRevision(ids[index]) != previous[index]) {same = false; break;}
+			if (same) return previous;
+		}
 		return [for (id in ids) stateStore.valueRevision(id)];
+	}
 
 	/** Keeps state-backed resources alive for a retained subtree this frame. */
 	public function retainStateIds(ids:Array<Int>):Void
@@ -782,6 +852,8 @@ class BuildContext {
 	public function claimRetainedTree(root:RenderNode):Void {
 		if (root == null)
 			throw "A retained render subtree is required";
+		// As for id(), a patch's IDs are claimed with its completed retained tree.
+		if (patching) return;
 		root.walk(function(node) {
 			if (!claimed.add(node.id.value))
 				throw 'Duplicate retained widget ID ${node.id.value}';
@@ -821,6 +893,7 @@ class SelfUpdatingBuild {
 	public final scope:KeyScope;
 	public final styleParent:Null<ComputedStyle>;
 	public final textStyleStack:Array<ResolvedTextStyle>;
+	public var dependencies:Null<UpdatingDependencies>;
 	public var root:Null<RenderNode> = null;
 	public var pending:Bool = false;
 	public var epoch:Int = 0;
@@ -857,4 +930,15 @@ private class RetainedEditCache {
 		prior = result;
 		return result;
 	}
+}
+
+/** Dependencies of a composite or stateful updater; leaf controls need no additional capture record. */
+class UpdatingDependencies {
+	public var stateInvalidationRevision:Int = 0;
+	public var allStateIds:Null<Array<Int>>;
+	public var stateIds:Null<Array<Int>>;
+	public var stateRevisions:Null<Array<Int>>;
+	public var observed:Null<Dependencies>;
+	public var children:Null<InteractionStateSnapshot>;
+	public function new() {}
 }

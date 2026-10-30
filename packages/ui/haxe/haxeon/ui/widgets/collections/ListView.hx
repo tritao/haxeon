@@ -208,9 +208,11 @@ class ListView implements View {
 			root.semantics = semantics;
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
-			root.onResolved(geometry -> {
-				// ScrollView records these metrics later in the same geometry walk. Rebuild the window before publication.
-				if (!controller.hasMetrics || controller.viewportHeight != geometry.height || controller.offsetY != builtOffset) context.requestBuildFeedback();
+			viewport.onResolved(geometry -> {
+				// Compare the actual scroll viewport: its parent can differ by a float32 rounding step.
+				// ScrollView records these metrics later in the same geometry walk.
+				if (!controller.hasMetrics || controller.viewportHeight != geometry.height || controller.offsetY != builtOffset)
+					context.requestBuildFeedback();
 			});
 			return root;
 		});

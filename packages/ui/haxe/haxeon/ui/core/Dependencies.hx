@@ -66,6 +66,14 @@ class Dependencies {
 		return true;
 	}
 
+	/** Reads below a self-updating boundary are checked through that boundary's current build. */
+	public function truncate(intMark:Int, stringMark:Int):Void {
+		intReads.resize(intMark);
+		intValues.resize(intMark);
+		stringReads.resize(stringMark);
+		stringValues.resize(stringMark);
+	}
+
 	public function clear():Void {
 		intReads.resize(0);
 		intValues.resize(0);

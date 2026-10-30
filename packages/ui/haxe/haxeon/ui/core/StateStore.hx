@@ -86,28 +86,42 @@ class StateStore {
 		return frameUseOrder.length;
 
 	/** Returns state IDs first touched after a usage marker. */
-	public function usedIdsSince(marker:Int):Array<Int> {
+	public function usedIdsSince(marker:Int, ?previous:Array<Int>):Array<Int> {
 		var start = marker < 0 ? 0 : marker > frameUseOrder.length ? frameUseOrder.length : marker;
-		var result:Array<Int> = [];
+		var result:Null<Array<Int>> = null, count = 0;
 		seenScratch.clear();
 		for (index in start...frameUseOrder.length) {
 			var id = frameUseOrder[index];
-			if (seenScratch.add(id))
-				result.push(id);
+			if (!seenScratch.add(id)) continue;
+			if (result == null && (previous == null || count >= previous.length || previous[count] != id))
+				result = previous == null ? [] : previous.slice(0, count);
+			if (result != null) result.push(id);
+			count++;
 		}
-		return result;
+		if (result != null) return result;
+		return previous == null ? [] : count == previous.length ? previous : previous.slice(0, count);
+	}
+
+	/** Finish an independently retained build without copying its state reads into its enclosing cache. */
+	var usageCaptures:Int = 0;
+	public function beginUsage():Int {
+		usageCaptures++;
+		return frameUseOrder.length;
+	}
+	public function finishUsage(marker:Int):Void {
+		frameUseOrder.resize(marker);
+		usageCaptures--;
 	}
 
 	/** Keeps state-backed resources for a retained, temporarily detached subtree. */
-	public function retain(ids:Array<Int>):Void {
+	public function retain(ids:Array<Int>, recordUsage:Bool = true):Void {
 		if (ids == null)
 			return;
 		for (id in ids)
-			if (values.exists(id))
-				if (frameActive) {
-					frameUsed.add(id);
-					frameUseOrder.push(id);
-				}
+			if (values.exists(id)) {
+				if (frameActive) frameUsed.add(id);
+				if (recordUsage && (frameActive || usageCaptures > 0)) frameUseOrder.push(id);
+			}
 	}
 
 	/** Marks an initialized state as used by the current render tree. */
@@ -247,9 +261,7 @@ class StateStore {
 	}
 
 	function markUsed(id:WidgetId):Void {
-		if (frameActive) {
-			frameUsed.add(id.value);
-			frameUseOrder.push(id.value);
-		}
+		if (frameActive) frameUsed.add(id.value);
+		if (frameActive || usageCaptures > 0) frameUseOrder.push(id.value);
 	}
 }

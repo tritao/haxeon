@@ -222,6 +222,8 @@ private class Gauge implements View {
   public var painted = "";
   public var clicked = "";
   public var asText = false;
+  public var offset = 0.0;
+  public var labelNode:Null<RenderNode>;
   public var id:Null<haxeon.ui.core.WidgetId> = null;
 
   public function new() {}
@@ -242,6 +244,8 @@ private class Gauge implements View {
         node.on(UiEventKind.Click, function(_) clicked = "level " + shown);
         var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
         label.layout.text = "level " + shown;
+        label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -offset);
+        labelNode = label;
         node.add(label);
         return node;
       });
@@ -281,6 +285,41 @@ private class DecoratedGauge implements View {
     node.add(new RenderNode(context.id("caller-child"), LayoutVisualKind.Box));
     return node;
   }
+}
+
+private class UpdatingResources implements View {
+  public var enabled = false;
+  public var generation = 0;
+  public var reading = 0;
+  public var created = 0;
+  public var disposed = 0;
+  public var rootId:Null<haxeon.ui.core.WidgetId>;
+  public var childId:Null<haxeon.ui.core.WidgetId>;
+  public var value:Null<haxeon.ui.core.State<Int>>;
+  public function new() {}
+  public function build(context:BuildContext):RenderNode return context.withScope(new Key("updating-resources"), () -> {
+    var id = context.id("owner");
+    rootId = id;
+    return context.selfUpdating(id, () -> {
+      var root = new RenderNode(id, LayoutVisualKind.Box);
+      if (enabled) root.add(new RetainedView("nested", _ -> new DecoratedControl("inner", context -> {
+        var child = context.id("child");
+        childId = child;
+        return context.selfUpdating(child, () -> {
+          var resource = context.resourceState(context.id("resource-" + generation), () -> {created++; return generation;}, _ -> disposed++);
+          var state = context.state(context.id("value"), 0);
+          value = state;
+          var seen = context.observeInt(() -> reading);
+          var node = new RenderNode(child, LayoutVisualKind.Box);
+          var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+          label.layout.text = resource.value + ":" + state.value + ":" + seen;
+          node.add(label);
+          return node;
+        });
+      })).build(context));
+      return root;
+    });
+  });
 }
 
 class RestyleInPlaceTests {
@@ -584,10 +623,12 @@ class RestyleInPlaceTests {
     ui.buildContext.environment.reducedMotion = true;
     ui.verifyRetentionEvery = 1;
     var controller = new ScrollController(), height = 480, selected = -1, notifications = 0;
+    var fractional = false;
     var view:View = new RetainedView("resolved-list", context -> {
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();
-      style.height = LayoutAxis.fixed(context.observeInt(() -> height));
+      var requested = context.observeInt(() -> height);
+      style.height = LayoutAxis.fixed(context.observeBool(() -> fractional) ? requested / 3.14159 : requested);
       var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
       list.selectionProvider = () -> selected;
       list.onSelectionChanged = index -> {selected = index; notifications++;};
@@ -600,6 +641,11 @@ class RestyleInPlaceTests {
       check(controller.viewportHeight == height, "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + height);
       check(ui.verifyRetention(build, frame) == null, "Resolved list window differs from a fresh build");
     }
+    fractional = true;
+    ui.submitCached(build, frame, "fractional-list");
+    check(controller.viewportHeight > 0 && ui.verifyRetention(build, frame) == null, "Fractional list viewport did not settle");
+    fractional = false;
+    ui.submitCached(build, frame, "list-height-480");
     controller.jumpTo(0, 240);
     var scrolled = ui.submitCached(build, frame, "list-height-480"), found = false;
     scrolled.walk(node -> {if (node.layout.text == "row-30") found = true;});
@@ -858,10 +904,79 @@ class RestyleInPlaceTests {
     Sys.println("PASS membership: rebuilding reparents retained nodes without false input changes; a real reordering still submits and verifies");
   }
 
+  static function editedComposite(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), gauge = new Gauge();
+    var view:View = new RetainedView("edited-composite", _ -> gauge), frame = new LayoutFrame(200, 100);
+    var build = () -> view;
+    ui.submitCached(build, frame, "edited-composite");
+    var label = gauge.labelNode;
+    if (label == null) throw "Missing composite child";
+    gauge.offset = 20;
+    ui.buildContext.willEditRetained(label);
+    label.layout.style.transform = haxeon.ui.Transform2D.identity().translated(0, -gauge.offset);
+    check(ui.buildContext.requestPatch(cast gauge.id), "Composite updater was not registered");
+    ui.submitCached(build, frame, "edited-composite");
+    check(ui.verifyRetention(build, frame) == null, "Announced child edit was lost when its owner reconciled");
+    ui.dispose();
+    Sys.println("PASS editing: an announced child edit keeps its original native prior when its composite owner also patches");
+  }
+
+  static function updatingResources(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), widget = new UpdatingResources(), caller = new UpdatingResources(), builds = 0;
+    caller.enabled = true;
+    var view:View = new RetainedView("resource-panel", _ -> {
+      builds++;
+      return new DecoratedControl("resource-host", context -> {
+        var node = widget.build(context);
+        node.add(context.withScope(new Key("caller"), () -> caller.build(context)));
+        return node;
+      });
+    });
+    var frame = new LayoutFrame(200, 100), key = "resources";
+    function submit():RenderNode return ui.submitCached(() -> view, frame, key);
+    var root = submit();
+    widget.enabled = true;
+    check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was not registered");
+    submit();
+    check(ui.buildContext.requestPatch(cast widget.rootId), "Composite owner was not rearmed");
+    submit();
+    check(ui.root != null && ui.root.children.length == 3 && ui.root.children[0].id.equals(cast widget.childId),
+      "A newly materialized retained child displaced its caller decoration");
+    key = "resources-next";
+    submit();
+    check(builds == 1 && widget.created == 1 && widget.disposed == 0, "Patched resources were not retained independently");
+    widget.generation++;
+    check(ui.buildContext.requestPatch(cast widget.childId), "Nested updater was not registered");
+    submit();
+    key = "resources-again";
+    submit();
+    check(builds == 1 && widget.created == 2 && widget.disposed == 1, "Replaced nested resources did not settle their lifetime");
+    widget.reading++;
+    key = "external-reading";
+    var refreshed = submit();
+    check(builds == 2 && refreshed.children[0].children[0].layout.text == "1:0:1", "Patched observed reads did not invalidate their enclosing cache");
+    var value = widget.value;
+    if (value == null) throw "Missing owned state";
+    value.update(7);
+    refreshed = submit();
+    check(builds == 3 && refreshed.children[0].children[0].layout.text == "1:7:1", "Owned state revisions stopped invalidating retained caches");
+    widget.enabled = false;
+    check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was lost after a rebuild");
+    submit();
+    check(widget.disposed == 2, "Removed child resources were not disposed");
+    check(caller.created == 1 && caller.disposed == 0, "A caller-owned updater lost its resources across owner patches");
+    ui.dispose();
+    check(caller.created == caller.disposed, "A caller-owned updater leaked resources");
+    check(widget.created == widget.disposed, "Composite updater leaked resources");
+    Sys.println("PASS updating resources: nested patches retain current dependencies, replace and dispose resources, and invalidate on observed and widget-state changes");
+  }
+
   public static function main():Int {
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
+    editedComposite(fonts);
+    updatingResources(fonts);
     verifyMode(fonts);
     verifyPointerFlags(fonts);
     verifyDisabledFocus(fonts);

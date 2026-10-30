@@ -95,8 +95,7 @@ Rules that keep it working:
   reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  The editor's panels are all observing except CNC, whose build still follows a running program by scrolling;
-  `panel-flows` (check-ui-retention) covers the others.
+  All editor panels now declare their external dependencies; `panel-flows` (check-ui-retention) covers the five panels added here.
 
 ## Inspection camera retention (2026-10-30)
 
@@ -573,3 +572,99 @@ Stage 1 (measured with `dock-workspace` and `panel-hit:*` build probes, tab-matr
   Realistic gain is about 0.1 ms, below the 0.15 ms keep threshold and inside measurement noise on a shared machine, so stage 3 is a no-go.
 
 Conclusion: the remaining tab-switch cost is spread thinly over hundreds of nodes and over native layout and shaping of content that really changed, not over work a retained subtree can skip. Revisit only if the tree grows much larger or a frame with many independent panes becomes common; then a retention keyed on the pane's tab list, active tab, label widths and drag preview, with the drop-target registrations replayed on a hit, is where to start.
+
+
+## CNC retention and composite updaters (2026-10-30)
+
+CNC source resets, selection resets, executing-line following and failure-disclosure resets now run in an explicit
+`CncPanel.update` before retention is checked. `ToolpathPlayer.sourceText` returns the immutable program without splitting
+and rejoining it. A reusable structural presentation captures the source and displayed execution inputs; generated
+`Structural.changedMask`/`assignChanged` compare and publish them without a maintained equality field list. Builds read this captured presentation, so the retained and reference builds use the same execution sample. Printer-link
+text is observed at the dock boundary. The controlled list selection keeps the highlighted row and restart selection in
+agreement after source replacement.
+
+The CNC content owns a stable self-updating box. Changed execution samples request its ordinary reconcile patch, while
+unchanged samples reuse it and its dock. If an unmounted registration cannot accept a patch, a binding revision forces a
+build on return, as for the inspection camera. The wrapper does not retain caller arguments independently: replacing a
+caller-supplied printer line or theme builds a new binding normally.
+
+Live hobbing telemetry is a reusable structural value separate from the completed inspection result. The existing semantic
+projection fills a second reusable telemetry value; generated comparisons decide whether to request a patch. Inspection
+identity is compared separately: `HobbingStock.finish` publishes the result after generating its traces and qualifications.
+The report keeps its plot, disclosure and scroll state while telemetry changes. CNC tool/spindle and print
+layer/temperature status methods cache the strings they display, using their displayed primitive inputs, so asking for an
+unchanged status does not allocate arrays or strings.
+
+Composite patches exposed two framework lifetime requirements that leaf controls did not exercise. Each self-updating
+build now owns its current observed reads, state IDs/revisions and nested updater registrations. Enclosing caches retain
+that mutable boundary rather than the obsolete descendants from its first build. Ordinary state updates still invalidate
+the enclosing cache; quiet updates plus `requestPatch` retain their existing meaning. Hidden dock caches retain the latest
+owned resources without rearming unmounted widgets. A changed state-membership set requests the existing bounded build
+feedback pass, so resources removed by a patch are disposed before the frame is published. Stable capture arrays are reused,
+and stateless leaves need no additional dependency record. Boundary capture walks directly and stops at each owner's built children; caller-added updating children retain their independent boundaries. The default one-element typography stack can be shared because
+push/pop scopes are balanced; non-default stacks are copied as before.
+Nested retained views can move an existing child into the fresh builder before reconciliation. Reconcile recovers its slot
+from the existing committed `RenderTreeTopology`, rather than introducing another topology record. Added builder children
+precede caller decorations even when the earlier build had no children. Cached subtree IDs, like fresh IDs, are claimed
+with the completed tree rather than during a patch; reusing a nested updater still records its ownership boundary.
+
+An announced edit must also precede its owner's patch when capturing priors. Scrolling first changed an existing translated
+child, then the composite builder replaced it with a new child using the same offset. Recording the edited child as the
+prior lost the native transform update. `UiContext` now consumes announced priors before patches run, retaining the later
+collection for edits made during building. A focused test reproduced the native incremental-tree mismatch before the fix;
+it passes afterward. Fingerprint checks and native/full-build comparisons are unchanged.
+
+List window feedback now compares the actual scroll viewport, where `ScrollView` records its metrics, rather than its
+parent box. Float32 layout can give these two boxes slightly different heights; comparing them exactly never converged.
+Comparing the same viewport on both sides preserves exact checks and covers fractional sizes without a tolerance.
+
+The bounded CNC fixture uses three physical Cartesian slides, explicit small box support hulls, and a finite rapid/dwell
+program. It avoids source generation, CAD, stock cutting and the mill project. It exercises source replacement, controlled
+selection, real execution and following, feed hold/resume, speed override, completion, hiding/remounting, reset and clearing. The existing hobbing report tests cover the
+telemetry/result split (42 checks); direct mill callers explicitly update before submitting their views.
+
+Same-machine exact census, 30 cycles with the first three cycles omitted, relative to the preceding mission commit:
+
+| action / phase | before bytes | after bytes | change bytes |
+|---|---:|---:|---:|
+| hierarchy→sensors, complete action | 169112 | 165408 | -3704 |
+| sensors→hierarchy, complete action | 131056 | 130432 | -624 |
+| console→telemetry, complete action | 115760 | 115320 | -440 |
+| telemetry→console, complete action | 134640 | 134152 | -488 |
+| hover-other | 13592 | 13592 | 0 |
+| hover-field | 22080 | 22080 | 0 |
+| hover-away | 23584 | 23584 | 0 |
+| inspector scroll | 19336 | 19336 | 0 |
+| typing / backspace | 18200 / 18456 | 18200 / 18456 | 0 |
+| idle / focused idle | 880 | 880 | 0 |
+| selection, tree/style | 851272 | 846840 | -4432 |
+| selection, summed measured submit phases | 880208 | 875776 | -4432 |
+
+The durable tab reduction lowers its allocation ceiling from 217 to 214 KiB. Exact census avoids attributing TLAB refill
+noise to the code; the ordinary budget capture remains the source for probe-off latency and allocation medians.
+
+
+Probe-off medians on this machine, relative to the preceding mission checkpoint (interaction before times span its two
+same-code captures; timings are descriptive, not a claimed speedup):
+
+| action | before KiB | after KiB | before frame ms | after frame ms |
+|---|---:|---:|---:|---:|
+| hierarchy→sensors | 165.3 | 162.4 | 1.71 | 1.76 |
+| sensors→hierarchy | 127.0 | 126.7 | 1.34 | 1.36 |
+| console→telemetry | 112.5 | 112.3 | 1.16 | 1.17 |
+| telemetry→console | 132.5 | 132.2 | 1.22 | 1.23 |
+| hover-other | 13.1 | 13.1 | 0.43–0.64 | 0.42 |
+| hover-field | 23.9 | 23.9 | 0.44–0.67 | 0.43 |
+| hover-away | 25.0 | 24.9 | 0.44–0.66 | 0.43 |
+| inspector scroll | 22.3 | 22.3 | 0.73–1.15 | 0.72 |
+| typing / backspace | 17.8 | 17.8 | 0.42–0.43 | 0.42 |
+| idle / focused idle | 0.2 | 0.2 | 0.00–0.01 | 0.00 |
+| selection | not reported | not reported | 3.13 | 3.17 |
+
+Small probe-off hover allocation differences reflect TLAB-refill attribution; exact interaction counts are unchanged,
+so no interaction ceiling is changed. The added ownership checks preserve correct composite lifetimes; tab and selection timing medians are
+higher in this capture, and no general frame-time speedup is claimed. The ten UI suites, all nine retention scenarios,
+strict budgets (including retention again), an ordinary eight-cycle panel replay, and three 500-cycle memory replays pass. The latter retain exactly two workspace listeners,
+148 widget resources and 209 style entries; post-warmup RSS growth is 6.09 / 6.09 / 5.94 MiB. Normal panel-flow replay
+contains 5413 frames, including real CNC hold/resume, override and completion. Captures are retained in the outer
+repository under `app/build/profiles/ui-cnc-cost-*`, `ui-cnc-census-*`, `ui-cnc-normal` and `ui-cnc-gates`, without bytecode.

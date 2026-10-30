@@ -328,7 +328,7 @@ class RenderNode {
 	 * Properties of the node other than these (focusable, enabled, cursor, tab index, command scope) come from the widget
 	 * instance, which a rebuild keeps. Returns a stand-in for the node as it was, for the frame comparison.
 	 */
-	public function reconcile(fresh:RenderNode, built:BuiltNode):RenderNode {
+	public function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
 		if (fresh == this || fresh.replacedBy != null)
 			throw "A reconcile requires a fresh render node";
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
@@ -357,7 +357,7 @@ class RenderNode {
 		decorationCacheKeys = swapBuilt(decorationCacheKeys, madeDecorations, fresh.decorationCacheKeys);
 		decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
 		basePaintKeyResolved = false;
-		swapChildren(fresh, built.children);
+		swapChildren(fresh, built.children, topology);
 		// New callbacks may have captured their build root; it now resolves to the instance kept in the tree.
 		fresh.replacedBy = this;
 		return prior;
@@ -390,7 +390,7 @@ class RenderNode {
 	 * Replaces the children the builder made (`built`) by those of `fresh`, each in the place of the one before it; children
 	 * callers added stay where they are. `built` becomes the new build's children.
 	 */
-	function swapChildren(fresh:RenderNode, built:Array<RenderNode>):Void {
+	function swapChildren(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
 		var count = fresh.children.length;
 		var position = -1;
 		// Each new child is taken from the front of the new build's list as it is detached, and recorded in `built` over the
@@ -400,9 +400,19 @@ class RenderNode {
 			if (index < count) {
 				var child = fresh.children[0].detach();
 				built[index] = child;
-				if (old.parent != this) continue;
-				old.replaceWith(child);
-				position = children.indexOf(child);
+				if (old.parent == this) {
+					old.replaceWith(child);
+					position = children.indexOf(child);
+				} else if (topology != null) {
+					// A retained child can already be in the fresh build; its committed slot still belongs to the builder.
+					var slot = topology.childPosition(id.value, old.id.value);
+					if (slot < 0) continue;
+					if (children == NoChildren) children = [];
+					position = Std.int(Math.min(slot, children.length));
+					child.parent = this;
+					children.insert(position, child);
+					layout.children.insert(position, child.layout);
+				}
 			} else if (old.parent == this) {
 				position = children.indexOf(old) - 1;
 				old.detach();
@@ -411,7 +421,7 @@ class RenderNode {
 		for (index in built.length...count) {
 			var child = fresh.children[0].detach();
 			built.push(child);
-			if (position < 0 || children == NoChildren) {
+			if (children == NoChildren) {
 				add(child);
 				position = children.length - 1;
 			} else {

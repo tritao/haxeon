@@ -571,8 +571,10 @@ private class DockPanelCache {
 	}
 
 	public function retain(context:BuildContext):Void {
-		for (entry in entries)
+		for (entry in entries) {
 			context.retainStateIds(entry.stateIds);
+			entry.interactions.retainState(context);
+		}
 	}
 }
 
@@ -585,7 +587,7 @@ private class DockPanelCacheEntry {
 	public final targets:Array<DockDropTarget>;
 	public final tabTargets:Array<DockTabDropTarget>;
 	final stateRevisions:Array<Int>;
-	final interactions:InteractionStateSnapshot;
+	public final interactions:InteractionStateSnapshot;
 	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
 	public final observed:haxeon.ui.core.Dependencies;
 
