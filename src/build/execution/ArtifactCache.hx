@@ -22,11 +22,11 @@ class ArtifactCache {
 	final cacheRoot:String;
 
 	public function new() {
-		var cacheOverride = Sys.getEnv("HAXEON_ARTIFACT_CACHE");
+		var cacheOverride = ProcessRunner.environmentValue("HAXEON_ARTIFACT_CACHE");
 		if (cacheOverride != null && cacheOverride.length > 0)
 			cacheRoot = Path.normalize(cacheOverride);
 		else {
-			var home = Sys.systemName() == "Windows" ? Sys.getEnv("USERPROFILE") : Sys.getEnv("HOME");
+			var home = Sys.systemName() == "Windows" ? ProcessRunner.environmentValue("USERPROFILE") : ProcessRunner.environmentValue("HOME");
 			if (home == null || home.length == 0)
 				home = Sys.getCwd();
 			cacheRoot = Path.join([home, ".haxeon", "cache", "artifacts"]);
@@ -119,7 +119,7 @@ class ArtifactCache {
 	}
 
 	public static function isShareable(action:ExecutionAction):Bool {
-		if (Sys.getEnv("HAXEON_DISABLE_ARTIFACT_CACHE") == "1"
+		if (ProcessRunner.environmentValue("HAXEON_DISABLE_ARTIFACT_CACHE") == "1"
 			|| action.outputs.length == 0
 			|| action.directoryOutputs.length > 0
 			|| action.alwaysRun)

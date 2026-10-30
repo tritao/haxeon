@@ -24,6 +24,7 @@ import build.execution.ActionResult;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionPlan;
+import build.execution.ProcessRunner;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.Executor;
 import build.execution.JobServer;
@@ -65,6 +66,7 @@ class BuildSystemMain {
 		testArtifactAndPlanDeterminism();
 		testExecutorOrderingAndFailure();
 		testExecutorBackendSelection();
+		testLaunchEnvironmentCopies();
 		testIndependentProcessActionsRunConcurrently();
 		#if (target.threaded && !eval)
 		testIndependentActionsRunConcurrently();
@@ -364,6 +366,25 @@ class BuildSystemMain {
 			backend = ExecutionBackendFactory.create(environment, 1, _ -> {});
 		expect(backend.name() == "native", "the native executor should be selected behind a replaceable backend boundary");
 		removeTree(root);
+	}
+
+	/**
+	 * A launch sets its process's variables in this process and restores the previous values. On HashLink for Windows,
+	 * Sys.getEnv returns a String over the C runtime's copy, which Sys.putEnv frees, so a saved value must be a copy.
+	 */
+	static function testLaunchEnvironmentCopies():Void {
+		var name = "HAXEON_TEST_LAUNCH_ENVIRONMENT";
+		Sys.putEnv(name, "original value");
+		var saved = ProcessRunner.environmentValue(name);
+		Sys.putEnv(name, "a replacement long enough to need new storage for the variable");
+		expect(saved == "original value", 'a value read through ProcessRunner should outlive the variable being set again, got "$saved"');
+		Sys.putEnv(name, "original value");
+		// HashLink itself is a program that is sure to start on Windows, where cmd's quoting rules get in the way.
+		var windows = Sys.systemName() == "Windows",
+			status = ProcessRunner.run(windows ? Sys.executablePath() : "sh", windows ? ["--version"] : ["-c", "exit 0"], null, [name => "launch override"],
+				false);
+		expect(status == 0, 'the launch should succeed, got $status');
+		expect(ProcessRunner.environmentValue(name) == "original value", "a launch should restore the variable it overrode");
 	}
 
 	static function testIndependentProcessActionsRunConcurrently():Void {
