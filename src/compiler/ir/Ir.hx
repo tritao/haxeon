@@ -99,6 +99,8 @@ enum IrInstruction {
 	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
 	ToVirtual(output:IrValue, value:IrValue);
+	/** The same object as an instance of one of its base classes: a reinterpretation, never checked or copied. */
+	Upcast(output:IrValue, value:IrValue);
 	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);

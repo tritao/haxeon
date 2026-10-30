@@ -249,6 +249,13 @@ class CfgVerifier {
 						default: throw 'CFG closure call requires a function value';
 					}
 					define(out, defined, available, block.id);
+				case Upcast(out, value):
+					require(value, available, block.id);
+					switch [value.type, out.type] {
+						case [Obj(_), Obj(_)]:
+						default: throw 'CFG upcast requires object values';
+					}
+					define(out, defined, available, block.id);
 				case ToVirtual(out, value):
 					require(value, available, block.id);
 					switch out.type {

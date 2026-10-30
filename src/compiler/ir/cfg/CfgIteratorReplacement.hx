@@ -186,7 +186,7 @@ class CfgIteratorReplacement {
 			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
 				BeginTry(_, _), EndTry(_), Catch(_), LoadLocal(_, _), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): [];
 			case ToDyn(_, value), IntToFloat(_, value), IntToInt64(_, value), FloatToInt(_, value), FloatToFloat(_, value), SafeCast(_, value),
-				StoreLocal(_, value), GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), FieldGet(_, value, _), ArraySize(_, value),
+				StoreLocal(_, value), GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), Upcast(_, value), FieldGet(_, value, _), ArraySize(_, value),
 				IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value), EnumIndex(_, value), EnumField(_, value, _, _),
 				MemoryLoad(_, value, _, _): [value];
 			case Add(_, a, b), Sub(_, a, b), Mul(_, a, b), Div(_, a, b), Mod(_, a, b), BitAnd(_, a, b), BitXor(_, a, b), BitOr(_, a, b), ShiftLeft(_, a, b),

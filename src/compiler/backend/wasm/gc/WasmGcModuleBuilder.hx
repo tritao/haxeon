@@ -314,7 +314,7 @@ class WasmGcModuleBuilder {
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _), EndTry(_), Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
-						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _):
+						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):

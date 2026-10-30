@@ -64,7 +64,7 @@ class IrStaticNullChecks {
 						if (output == null || origins.exists(output.id))
 							continue;
 						var source:Null<String> = switch instruction.value {
-							case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value): origins.get(value.id);
+							case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value), Upcast(_, value): origins.get(value.id);
 							case Phi(_, inputs):
 								var name:Null<String> = null;
 								for (input in inputs) {

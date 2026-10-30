@@ -168,7 +168,7 @@ class FrontendCompilation {
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
-			IrGenerator.bindValueClasses(typedNew.classes);
+			IrGenerator.bindClasses(typedNew.classes);
 			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);

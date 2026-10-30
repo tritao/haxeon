@@ -30,7 +30,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
-		IrGenerator.bindValueClasses(typed.classes);
+		IrGenerator.bindClasses(typed.classes);
 		var objects = objectsFrom(typed);
 		IrGenerator.bindFlatValueObjects(objects);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];

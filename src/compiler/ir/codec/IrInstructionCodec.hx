@@ -56,6 +56,7 @@ class IrInstructionCodec {
 		"InstanceClosure" => true,
 		"CallClosure" => true,
 		"ToVirtual" => true,
+		"Upcast" => true,
 		"MethodCall" => true,
 		"NewObject" => true,
 		"FieldGet" => true,
@@ -239,6 +240,8 @@ class IrInstructionCodec {
 				writeValues(output, arguments);
 			case ToVirtual(outputValue, value):
 				writeTwoValues(output, "ToVirtual", outputValue, value);
+			case Upcast(outputValue, value):
+				writeTwoValues(output, "Upcast", outputValue, value);
 			case MethodCall(value, object, name, arguments):
 				begin(output, "MethodCall", 4);
 				writeValue(output, value);
@@ -426,6 +429,9 @@ class IrInstructionCodec {
 			case "ToVirtual":
 				arity(2);
 				ToVirtual(readValue(input, values), readValue(input, values));
+			case "Upcast":
+				arity(2);
+				Upcast(readValue(input, values), readValue(input, values));
 			case "MethodCall":
 				arity(4);
 				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values));

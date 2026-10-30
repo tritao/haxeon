@@ -899,6 +899,9 @@ class HlLower {
 						}
 						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
+					case Upcast(output, value):
+						// HashLink accepts a subclass register wherever its base class is expected.
+						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case ToVirtual(output, value):
 						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case MethodCall(output, object, methodName, arguments):

@@ -442,14 +442,14 @@ class IrInliner {
 
 	/** The function a call resolves to when it can be inlined, else null. */
 	function calleeOf(instruction:IrInstruction):Null<IrFunction> {
-		var target:Null<String> = null, argumentCount = -1;
+		var target:Null<String> = null, actuals:Array<IrValue> = null;
 		switch instruction {
 			case Call(_, functionName, arguments):
 				target = functionName;
-				argumentCount = arguments.length;
+				actuals = arguments;
 			case MethodCall(_, object, methodName, arguments):
 				target = resolveMethod(object, methodName);
-				argumentCount = arguments.length + 1;
+				actuals = [object].concat(arguments);
 			default:
 		}
 		if (target == null || !byName.exists(target))
@@ -468,8 +468,11 @@ class IrInliner {
 				frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
-		if (original.arguments.length != argumentCount || !looksInlinable(original))
+		if (original.arguments.length != actuals.length || !looksInlinable(original))
 			return null;
+		for (index in 0...actuals.length)
+			if (!bindable(actuals[index].type, original.arguments[index].type))
+				return null;
 		var candidate = inlinedVersion(target);
 		if (candidate == null || !fits(candidate))
 			return null;
@@ -664,9 +667,8 @@ class IrInliner {
 			default:
 				throw "Inliner expected a call";
 		}
-		var source = callee.blocks[0], values:Map<Int, IrValue> = [];
-		for (argumentIndex in 0...callee.arguments.length)
-			values.set(callee.arguments[argumentIndex].id, resolve(actuals[argumentIndex], substitutions));
+		var source = callee.blocks[0], values:Map<Int, IrValue> = [], copies:Array<Located<IrInstruction>> = [];
+		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies, call.provenance, nextValue);
 		for (located in source.instructions) {
 			var output = IrOperands.output(located.value);
 			if (output != null)
@@ -681,7 +683,6 @@ class IrInliner {
 		var noBlocks = function(id:Int):Int {
 			throw "A straight-line callee has no blocks to remap";
 		};
-		var copies:Array<Located<IrInstruction>> = [];
 		for (located in source.instructions)
 			copies.push(new Located(remap(located.value, use, noBlocks), located.provenance));
 		var terminator = source.terminator;
@@ -703,6 +704,32 @@ class IrInliner {
 		}
 		return nextValue;
 	}
+
+	/**
+	 * Binds the callee's parameters to the caller's arguments. A call passes an object of a subclass where its parameter
+	 * takes the base class; spliced in, that value is upcast first, so the body keeps the types it was verified with.
+	 */
+	static function bindArguments(callee:IrFunction, actuals:Array<IrValue>, values:Map<Int, IrValue>, upcasts:Array<Located<IrInstruction>>,
+			provenance:SourceProvenance, nextValue:Int):Int {
+		for (index in 0...callee.arguments.length) {
+			var formal = callee.arguments[index], actual = actuals[index];
+			if (IrVerifier.sameType(actual.type, formal.type))
+				values.set(formal.id, actual);
+			else {
+				var upcast = new IrValue(nextValue++, formal.name, formal.type);
+				upcasts.push(new Located(Upcast(upcast, actual), provenance));
+				values.set(formal.id, upcast);
+			}
+		}
+		return nextValue;
+	}
+
+	/** Whether a caller's argument can stand for a callee's parameter: the same type, or an object where its base class is taken. */
+	static function bindable(actual:IrType, formal:IrType):Bool
+		return IrVerifier.sameType(actual, formal) || switch [actual, formal] {
+			case [Obj(_), Obj(_)]: true;
+			default: false;
+		};
 
 	static function resolve(value:IrValue, substitutions:Map<Int, IrValue>):IrValue {
 		var current = value, steps = 0;
@@ -765,9 +792,8 @@ class IrInliner {
 			default:
 				throw "Inliner expected a call";
 		}
-		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [];
-		for (argumentIndex in 0...callee.arguments.length)
-			values.set(callee.arguments[argumentIndex].id, actuals[argumentIndex]);
+		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [], upcasts:Array<Located<IrInstruction>> = [];
+		nextValue = bindArguments(callee, actuals, values, upcasts, call.provenance, nextValue);
 		// Every definition first, so phis and back edges can refer to values defined later in block order.
 		for (block in callee.blocks) {
 			blockIds.set(block.id, nextBlock++);
@@ -823,6 +849,8 @@ class IrInliner {
 			continuation.instructions.push(head.instructions[rest]);
 		continuation.terminator = head.terminator;
 		head.instructions.resize(position);
+		for (upcast in upcasts)
+			head.instructions.push(upcast);
 		head.terminator = new Located(Jump(cloned[0].id), call.provenance);
 		// Everything that used to leave the head now leaves the continuation, so successor phis name the new predecessor.
 		var successors:Array<Int> = [];
@@ -923,6 +951,7 @@ class IrInliner {
 			case InstanceClosure(out, name, receiver): InstanceClosure(use(out), name, use(receiver));
 			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
 			case ToVirtual(out, value): ToVirtual(use(out), use(value));
+			case Upcast(out, value): Upcast(use(out), use(value));
 			case MethodCall(out, object, name, arguments): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)]);
 			case NewObject(out, typeName): NewObject(use(out), typeName);
 			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);

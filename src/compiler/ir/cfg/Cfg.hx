@@ -68,6 +68,7 @@ enum CfgInstruction {
 	InstanceClosure(output:CfgValue, functionName:String, receiver:CfgValue);
 	CallClosure(output:CfgValue, closure:CfgValue, arguments:Array<CfgValue>);
 	ToVirtual(output:CfgValue, value:CfgValue);
+	Upcast(output:CfgValue, value:CfgValue);
 	MethodCall(output:CfgValue, object:CfgValue, methodName:String, arguments:Array<CfgValue>);
 	NewObject(output:CfgValue, typeName:String);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);

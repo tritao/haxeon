@@ -361,6 +361,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function upcast(value:CfgValue, type:IrType):CfgValue {
+		var out = temporary(type);
+		emit(Upcast(out, value));
+		return out;
+	}
+
 	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType):CfgValue {
 		var out = temporary(result);
 		emit(MethodCall(out, object, methodName, args));

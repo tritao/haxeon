@@ -245,7 +245,7 @@ class IrInitializationCalls {
 						case _:
 					}
 					var inputs = switch instruction.value {
-						case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value): [value];
+						case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value), Upcast(_, value): [value];
 						case Phi(_, values): [for (input in values) input.value];
 						case _: [];
 					};

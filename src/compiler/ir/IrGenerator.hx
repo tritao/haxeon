@@ -47,6 +47,7 @@ class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
 	static var valueClasses:Map<String, Bool> = [];
+	static var classBases:Map<String, String> = [];
 	static var headerlessValueClasses:Bool = true;
 	static var flatValueObjects:Map<String, IrObject> = [];
 	static var dynamicObjectLiterals:Bool = true;
@@ -66,12 +67,34 @@ class IrGenerator {
 	}
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
-	/** Supply the program's value classes (see `isHeaderlessValueClass`). */
-	public static function bindValueClasses(classes:Array<TypedClass>):Void {
+	/** Supply the program's classes: which are value classes (see `isHeaderlessValueClass`) and what each extends (see `isUpcast`). */
+	public static function bindClasses(classes:Array<TypedClass>):Void {
 		valueClasses = [];
-		for (classDecl in classes)
+		classBases = [];
+		for (classDecl in classes) {
 			if (classDecl.isValue)
 				valueClasses.set(Std.string(classDecl.name), true);
+			if (classDecl.base != null)
+				classBases.set(Std.string(classDecl.name), classDecl.base);
+		}
+	}
+
+	/** Whether `source` is an object type extending the object type `target`, so the conversion cannot fail. */
+	static function isUpcast(source:IrType, target:IrType):Bool {
+		var targetName = switch target {
+			case Obj(name): name;
+			default: return false;
+		};
+		var current = switch source {
+			case Obj(name): classBases.get(name);
+			default: return false;
+		};
+		while (current != null) {
+			if (current == targetName)
+				return true;
+			current = classBases.get(current);
+		}
+		return false;
 	}
 
 	/** Flat value objects also have a selected native field layout for RawPtr aggregate copies. */
@@ -1532,7 +1555,8 @@ class IrGenerator {
 					target)) source; else if (IrTypeTools.nullableElement(source.type) != null
 					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source,
 						target); else if (source.type == Dyn) checkedCast(builder, source,
-					target); else if (target == Dyn) builder.toDyn(source); else if (referenceCastType(source.type) && referenceCastType(target))
+					target); else if (target == Dyn) builder.toDyn(source); else if (isUpcast(source.type, target)) builder.upcast(source,
+					target); else if (referenceCastType(source.type) && referenceCastType(target))
 					checkedCast(builder, builder.toDyn(source),
 					target); else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
 					builder.intToFloat(source); else if ((source.type == F64

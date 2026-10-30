@@ -504,6 +504,9 @@ class SsaBuilder {
 				case ToVirtual(out, value):
 					var result = define(out);
 					emit(target, ToVirtual(result, resolve(value)), provenance);
+				case Upcast(out, value):
+					var result = define(out);
+					emit(target, Upcast(result, resolve(value)), provenance);
 				case MethodCall(out, object, methodName, args):
 					var result = define(out);
 					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)]), provenance);

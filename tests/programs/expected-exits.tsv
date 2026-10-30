@@ -402,3 +402,4 @@ generic-dynamic-argument	42
 enum-equality	42
 gc-dump-paths	42
 structural-ops	42
+inherited-closure-inline	42

@@ -374,6 +374,12 @@ class IrVerifier {
 				}
 				if (!sameType(out.type, functionType.result))
 					throw 'Wrong IR closure result type';
+			case Upcast(out, value):
+				require(values, value);
+				switch out.type {
+					case Obj(_) if (compatibleType(value.type, out.type, objects, interfaces) && !sameType(value.type, out.type)):
+					default: throw 'IR upcast from ${value.type} to ${out.type} is not to a base class';
+				}
 			case ToVirtual(out, value):
 				require(values, value);
 				switch out.type {
@@ -612,7 +618,7 @@ class IrVerifier {
 			throw 'IR value ${value.id} has the wrong type';
 	}
 
-	static function sameType(left:IrType, right:IrType):Bool
+	public static function sameType(left:IrType, right:IrType):Bool
 		return switch left {
 			case Obj(a): switch right {
 					case Obj(b): a == b;
