@@ -49,6 +49,9 @@ class ListView implements View {
 	public var onItemActivated:Null<Int->Void>;
 	/** Opt in for launcher lists whose primary click invokes the selected item. */
 	public var activateOnClick:Bool = false;
+	/** Optional observed owner selection; -1 clears it. Only input notifies the owner. */
+	public var selectionProvider:Null<Void->Int> = null;
+	public var onScroll:Null<UiEvent->Void> = null;
 
 	final fallbackViewportHeight:Float;
 	var selectedState:Null<State<Int>>;
@@ -126,6 +129,7 @@ class ListView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
+			context.observeInt(() -> model.revision());
 			ensureModelMetrics();
 			var state:State<Int> = context.state(context.id("selected-index"), selectedIndex);
 			selectedState = state;
@@ -134,16 +138,25 @@ class ListView implements View {
 			if (state.value >= 0 && !itemEnabled(state.value))
 				state.update(-1);
 			selectedIndex = state.value;
+			var provider = selectionProvider;
+			if (provider != null) {
+				var desired = context.observeInt(provider);
+				if (desired < -1 || desired >= cachedCount || desired >= 0 && !itemEnabled(desired)) desired = -1;
+				selectedIndex = desired;
+				if (state.value != desired) state.updateQuietly(desired);
+			}
 			itemIds = new Map();
 			itemKeys = new Map();
 
-			var viewportHeight = controller.viewportHeight > 0.0 ? controller.viewportHeight :
+			var viewportHeight = controller.hasMetrics ? Math.max(1.0, controller.viewportHeight) :
 				(viewportStyle.height.sizing == LayoutSizing.Fixed ? viewportStyle.height.value :
 				fallbackViewportHeight);
 			var window = requiredExtentIndex();
 			measureWindowPreservingAnchor(window, viewportHeight);
 			materializedFirst = window.first;
 			materializedLast = window.last;
+			var builtOffset = controller.offsetY;
+			context.observeInt(() -> controller.revision);
 
 			var rowViews:Array<KeyedView> = [];
 			if (window.count > 0) {
@@ -184,6 +197,7 @@ class ListView implements View {
 				ScrollAxis.Vertical, controller);
 			// The rows built depend on the offset.
 			scroll.contentFollowsOffset = true;
+			scroll.onScroll = onScroll;
 			var root = new RenderNode(context.id("list"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
@@ -194,6 +208,10 @@ class ListView implements View {
 			root.semantics = semantics;
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
+			root.onResolved(geometry -> {
+				// ScrollView records these metrics later in the same geometry walk. Rebuild the window before publication.
+				if (!controller.hasMetrics || controller.viewportHeight != geometry.height || controller.offsetY != builtOffset) context.requestBuildFeedback();
+			});
 			return root;
 		});
 	}

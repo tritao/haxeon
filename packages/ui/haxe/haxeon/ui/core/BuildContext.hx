@@ -281,6 +281,18 @@ class BuildContext {
 		textStyleStack = [ResolvedTextStyle.fromTheme(theme)];
 	}
 
+	var buildFeedbackRequested = false;
+
+	/** Resolved constraints changed which children a view must build; settle them before publishing the frame. */
+	public function requestBuildFeedback():Void
+		buildFeedbackRequested = true;
+
+	public function consumeBuildFeedback():Bool {
+		var requested = buildFeedbackRequested;
+		buildFeedbackRequested = false;
+		return requested;
+	}
+
 	public function requestLayoutFeedback():Void
 		layoutFeedbackRequested = true;
 

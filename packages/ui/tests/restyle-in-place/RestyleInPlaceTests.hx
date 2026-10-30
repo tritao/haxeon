@@ -36,6 +36,7 @@ import haxeon.ui.widgets.controls.RadioOption;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 
 /** A control the way a container uses one: built, then given a listener, a style change and an overlay child by its caller. */
@@ -60,6 +61,19 @@ private class DecoratedControl implements View {
     node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
     return node;
   }
+}
+
+private class WindowItems implements haxeon.ui.widgets.collections.ListViewModel {
+  public function new() {}
+  public function count():Int return 40;
+  public function keyAt(index:Int):String return "row-" + index;
+  public function estimatedExtent():Float return 20;
+  public function extentIsUniform():Bool return true;
+  public function extentAt(index:Int):Float return 20;
+  public function extentRevisionAt(index:Int):Int return 0;
+  public function totalExtent():Null<Float> return 800;
+  public function revision():Int return 0;
+  public function buildItem(index:Int):View return new Text("row-" + index);
 }
 
 /** Records the controls' actual drawing, including caller paint, without depending on native resource IDs. */
@@ -533,6 +547,93 @@ class RestyleInPlaceTests {
     Sys.println("PASS field: typing patches the field in place, keeping what its caller attached");
   }
 
+  static function buildFeedbackFocus(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
+    ui.verifyRetentionEvery = 1;
+    var revealed = false, target = 0;
+    var view:View = new DecoratedControl("feedback-focus", context -> {
+      var root = new RenderNode(context.id("feedback-root"), LayoutVisualKind.Box);
+      var id = context.id("late-target");
+      target = id.value;
+      if (revealed) {
+        var style = new LayoutStyle();
+        style.width = LayoutAxis.fixed(20); style.height = LayoutAxis.fixed(20);
+        var child = new RenderNode(id, LayoutVisualKind.Box, style);
+        child.focusable = true;
+        child.states = context.interactionStates.get(id);
+        root.add(child);
+      } else {
+        context.requestFocusAfterLayout(id);
+        root.onResolved(_ -> {
+          revealed = true;
+          context.requestBuildFeedback();
+        });
+      }
+      return root;
+    });
+    ui.submitCached(() -> view, frame, "feedback-focus");
+    var focused = ui.focus.focusedId;
+    check(focused != null && focused.value == target, "Build feedback consumed deferred focus before its target was built");
+    check(ui.verifyRetention(() -> view, frame) == null, "Focus after build feedback differs from a fresh build");
+    ui.dispose();
+    Sys.println("PASS feedback: deferred focus waits until resolved build feedback has materialized its target");
+  }
+
+  static function resolvedList(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 600);
+    ui.buildContext.environment.reducedMotion = true;
+    ui.verifyRetentionEvery = 1;
+    var controller = new ScrollController(), height = 480, selected = -1, notifications = 0;
+    var view:View = new RetainedView("resolved-list", context -> {
+      var style = new LayoutStyle();
+      style.width = LayoutAxis.grow();
+      style.height = LayoutAxis.fixed(context.observeInt(() -> height));
+      var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
+      list.selectionProvider = () -> selected;
+      list.onSelectionChanged = index -> {selected = index; notifications++;};
+      return list;
+    });
+    var build = () -> view;
+    for (nextHeight in [480, 137, 341, 1, 480]) {
+      height = nextHeight;
+      ui.submitCached(build, frame, "list-height-" + height);
+      check(controller.viewportHeight == height, "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + height);
+      check(ui.verifyRetention(build, frame) == null, "Resolved list window differs from a fresh build");
+    }
+    controller.jumpTo(0, 240);
+    var scrolled = ui.submitCached(build, frame, "list-height-480"), found = false;
+    scrolled.walk(node -> {if (node.layout.text == "row-30") found = true;});
+    check(found, "A retained list did not materialize the newly scrolled window");
+    controller.jumpTo(0, 0);
+    ui.submitCached(build, frame, "list-height-480");
+    for (next in [8, -1, 1000, 3]) {
+      selected = next;
+      var root = ui.submitCached(build, frame, "list-selection-" + selected), count = 0;
+      root.walk(node -> {
+        if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem &&
+          (node.semantics.states & haxeon.ui.semantics.AccessibilityState.Selected) != 0) count++;
+      });
+      check(count == (selected < 0 || selected >= 40 ? 0 : 1), "Controlled list selection is stale");
+      check(notifications == 0, "External list selection notified its owner");
+    }
+    var root = ui.root;
+    if (root == null) throw "Missing controlled list";
+    var row:Null<RenderNode> = null;
+    root.walk(node -> {
+      if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem && node.semantics.positionInSet == 1) row = node;
+    });
+    var target = row;
+    if (target == null) throw "Missing first list row";
+    var bounds = target.globalBounds();
+    ui.pointerDown(bounds.x + 10, bounds.y + 10, 0);
+    ui.pointerUp(bounds.x + 10, bounds.y + 10, 0);
+    ui.submitCached(build, frame, "list-input");
+    check(selected == 0 && notifications == 1, "Controlled list input did not notify its owner exactly once");
+    check(ui.verifyRetention(build, frame) == null, "Controlled list input differs from a fresh build");
+    ui.dispose();
+    Sys.println("PASS list: resolved windows settle before publication through grow, shrink and a one-pixel viewport; controlled selection matches fresh builds");
+  }
+
   static function verifyDisabledFocus(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), enabled = true;
     ui.verifyRetentionEvery = 1;
@@ -764,6 +865,8 @@ class RestyleInPlaceTests {
     verifyMode(fonts);
     verifyPointerFlags(fonts);
     verifyDisabledFocus(fonts);
+    resolvedList(fonts);
+    buildFeedbackFocus(fonts);
     reconcile(fonts);
     submittedIndex(fonts);
     motion(fonts);

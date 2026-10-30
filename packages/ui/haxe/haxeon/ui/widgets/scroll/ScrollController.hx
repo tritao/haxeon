@@ -17,7 +17,9 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	public var viewportHeight(default, null):Float;
 	public var contentWidth(default, null):Float;
 	public var contentHeight(default, null):Float;
-	var hasMetrics:Bool;
+	public var hasMetrics(default, null):Bool;
+	/** Changes to scroll offsets, targets or resolved viewport/content metrics. */
+	public var revision(default, null):Int = 0;
 	var changed:ScrollController->Void;
 
 	public function new(offsetX:Float = 0.0, offsetY:Float = 0.0) {
@@ -120,6 +122,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) ||
 			!finiteNonNegative(contentWidth) || !finiteNonNegative(contentHeight))
 			throw "Scroll metrics must be finite and non-negative";
+		if (!hasMetrics || this.viewportWidth != viewportWidth || this.viewportHeight != viewportHeight ||
+			this.contentWidth != contentWidth || this.contentHeight != contentHeight) revision++;
 		this.viewportWidth = viewportWidth;
 		this.viewportHeight = viewportHeight;
 		this.contentWidth = contentWidth;
@@ -137,6 +141,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	}
 
 	function notifyChanged():Void {
+		revision++;
 		if (changed != null)
 			changed(this);
 	}

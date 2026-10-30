@@ -399,7 +399,7 @@ class UiContext {
 	}
 
 	function submitInternal(frame:LayoutFrame, cacheKey:Null<String>, build:Void->View,
-			reconcileNewFocus:Bool = true):RenderNode {
+			reconcileNewFocus:Bool = true, buildFeedbackPass:Int = 0):RenderNode {
 		var submitStartedAt = Sys.time();
 		diagnosticStage = 1;
 		ensureLive();
@@ -409,20 +409,20 @@ class UiContext {
 		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
 		var styleCacheMissesBefore = buildContext.styleResolver.cacheMisses;
 		diagnosticStage = 2;
-		if (reconcileNewFocus)
+		if (reconcileNewFocus && buildFeedbackPass == 0)
 			gestures.advance(frame.deltaSeconds);
 		diagnosticStage = 3;
-		if (reconcileNewFocus)
+		if (reconcileNewFocus && buildFeedbackPass == 0)
 			animations.advance(frame.deltaSeconds);
 		buildContext.setViewport(frame.width, frame.height);
 		buildContext.setEnvironmentViewport(frame.width, frame.height);
 		var hoverPaintNodes = -1;
-		var reuse = reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame);
-		if (!reuse && reconcileNewFocus && cacheKey != null) {
+		var reuse = buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null && canReuseSubmittedFrame(cacheKey, frame);
+		if (!reuse && buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null) {
 			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
 			reuse = hoverPaintNodes >= 0;
 		}
-		var patchOnly = !reuse && reconcileNewFocus && cacheKey != null && planInteractionPatches(cacheKey, frame);
+		var patchOnly = !reuse && buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null && planInteractionPatches(cacheKey, frame);
 		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
@@ -587,6 +587,13 @@ class UiContext {
 		var previousTopology = submittedTopology;
 		submittedTopology = nextTopology;
 		nextTopology = previousTopology;
+		if (buildContext.consumeBuildFeedback()) {
+			if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
+			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
+			root = next;
+			if (verifyRetentionEvery > 0) recordFingerprints(next);
+			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
+		}
 		syncWindowDecorations(next);
 		diagnosticStage = 9;
 		var previousFocus = focus.focusedId;
@@ -653,7 +660,7 @@ class UiContext {
 			recordFingerprints(next);
 		if (reconcileNewFocus && focusChanged && (nextFocus != null ||
 			(previousFocus != null && nodesById.exists(previousFocus.value))))
-			return submitInternal(frame, cacheKey, function() return view, false);
+			return submitInternal(frame, cacheKey, function() return view, false, buildFeedbackPass);
 		// Focus routing can add changes after the build. Keep them until the focus pass has patched their owners.
 		interactionStates.acknowledge();
 		frameNumber++;

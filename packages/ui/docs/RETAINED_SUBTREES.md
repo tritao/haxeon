@@ -95,7 +95,7 @@ Rules that keep it working:
   reconciles).
 - Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
 - Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  The editor's panels are all observing except mission and CNC, whose builds still follow running programs by scrolling;
+  The editor's panels are all observing except CNC, whose build still follows a running program by scrolling;
   `panel-flows` (check-ui-retention) covers the others.
 
 ## Inspection camera retention (2026-10-30)
@@ -319,6 +319,79 @@ Same-machine probe-off comparison with that preceding BIM capture:
 These standard workloads keep machine control closed and establish regression coverage; no latency reduction is claimed
 from the small timing differences or the variation between selection captures. Evidence is retained under
 `app/build/profiles/ui-machine-cost-*`, `ui-machine-census-*`, `ui-machine-normal` and `ui-machine-gates`, without bytecode.
+
+## Mission retention (2026-10-30)
+
+Mission presentation now reads its installed mission/job records, chosen controller, execution state and startup progress
+through observed dependencies. `MissionController` exposes allocation-free selection/mission/player and active-step reads;
+checking a retained panel does not construct its former program array, progress record or view-state snapshot. The player's
+`progressPhase`, `startupAxis` and `startupPhase` expose the same inputs used by progress/status presentation. The panel
+and status card do not format robot status labels merely to check retention. Installed source records are replaced through
+the document lifecycle; their binding and the document generation/revision cover authored metadata. The viewport observes whether work
+exists and no longer allocates a mission snapshot merely to decide whether to show its status card. `MissionStatusView`
+records its dependencies at its build boundary, so its containing panel/card is retainable. A newly supplied card still
+uses its caller's current optional action and callback; it does not hide those constructor inputs behind another cache.
+
+`MissionPanel.update` runs before cache checks, including the public standalone editor `view()` path. It resets transient
+selection/following on source replacement and moves the scroll controller when the current step changes. Builds only read
+that presentation and populate the list's derived model cache. A wheel event pauses following immediately, before smooth
+scrolling advances; keyboard/scrollbar/direct offset changes are also noticed by the update step. Following again cancels
+any outstanding smooth-scroll target before returning to the current step. Selecting a detail without a scene target still
+requests a frame.
+
+The shared list now has an optional observed `selectionProvider`, like the tree's controlled selection. Invalid/disabled
+indices render unselected, synchronization updates only private state quietly, and input alone notifies the owner. This
+keeps row highlighting aligned with the mission detail after program changes, following and document replacement. The
+list observes its model revision and the scroll controller's revision, which advances on published scroll changes and
+resolved metrics. A retained list therefore materializes a newly scrolled window instead of translating only its old rows.
+
+The first real mission fixture exposed fallback-height virtualization: the first build used 300 pixels, but native layout
+resolved a taller viewport, so an immediate full rebuild materialized an additional row. `BuildContext.requestBuildFeedback`
+now lets a resolved constraint request another build before publication. The list requests it when its resolved viewport
+or a layout-clamped offset differs from the inputs its window used. Scroll metrics invalidate only the retained content
+that observed them; normal retention and the incremental layout transaction remain in use. Build feedback is bounded to
+eight passes and fails explicitly on non-convergence. Frame time/animations advance only on the initial build. Intermediate
+layout passes record fingerprints for the next comparison, but focus requests, focus events and resource disposal wait
+until the children have settled. A regression test requests focus for a target that is revealed by build feedback.
+Verification still compares the first published frame; there is no settling-frame exception for the list.
+
+The `panel-flows` fixture uses one grounded box, one controller and a digital loopback. It executes actual signal mission
+steps without a source generator, CAD, motion planner or background playback. It covers the empty/unchanged panel,
+authored program selection, row details, replacement, progress following, wheel interruption and resumption, completion,
+reset, a missing-input failure and clearing. The card also checks adding/replacing/removing a caller action without an
+execution-state change. Normal replay checks unchanged heading identity. The restyle suite separately
+checks grow/shrink/one-pixel resolved windows, scrolling through an outer cache with an unchanged key, controlled selection,
+clearing, unavailable indices and exactly-once input notifications against fresh builds.
+
+All ten UI suites, all nine verify-every-frame editor scenarios, strict budgets, the ordinary eight-cycle panel replay and
+all three 500-cycle memory runs pass. Exact census medians match the preceding machine-control commit for all four tab
+transitions, all ten interaction actions, and selection tree/style (851,272 bytes); the captured selection phase sum is
+also unchanged at 880,872 bytes. An initially unconditional mission-card dependency added 80 bytes in headless selection
+frames; observing it only where a real viewport builds that card removes that unused dependency. No ceiling is changed.
+
+Same-machine probe-off comparison against that preceding commit, after rebasing onto upstream `727ebf0c`:
+
+| action | machine KiB | mission KiB | machine ms | mission ms |
+| --- | ---: | ---: | ---: | ---: |
+| hierarchy → sensors | 165.3 | 165.3 | 1.66 | 1.71 |
+| sensors → hierarchy | 127.0 | 127.0 | 1.29 | 1.34 |
+| console → telemetry | 112.5 | 112.5 | 1.13 | 1.16 |
+| telemetry → console | 132.5 | 132.5 | 1.20 | 1.22 |
+| hover-other | 13.1 | 13.1 | 0.42 | 0.43–0.64 |
+| hover-field | 23.9 | 23.9 | 0.43 | 0.44–0.67 |
+| hover-away | 25.0 | 25.0 | 0.43 | 0.44–0.66 |
+| scroll-inspector | 22.3 | 22.3 | 0.72 | 0.73–1.15 |
+| type-char / type-backspace | 17.8 | 17.8 | 0.42 / 0.41 | 0.42–0.43 |
+| idle / idle-focused | 0.2 | 0.2 | 0.00 | 0.00–0.01 |
+| hover-enter / hover-inside | 0.6 | 0.6 | 0.00 | 0.00 |
+| selection | not reported | not reported | 3.05 | 3.13 |
+
+These standard scenarios keep mission closed; they establish regression coverage rather than a claimed speedup. The
+interaction range records two unchanged-code after runs: hover/scroll slowed in the first capture and returned close to
+the earlier timings in an isolated repeat. Both captures are kept. Exact allocations are unchanged; no raw refill-counter
+change justifies tightening a ceiling. All gates were repeated after the rebase, including the compiler suites
+(608 passed, 0 failed). Captures are retained under `app/build/profiles/ui-mission-cost-*`, `ui-mission-census-*`,
+`ui-mission-interaction-repeat`, `ui-mission-normal` and `ui-mission-gates`, without bytecode.
 
 ## Typing allocation (2026-10-30)
 
