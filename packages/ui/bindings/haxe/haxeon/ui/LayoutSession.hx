@@ -8,6 +8,7 @@ import haxe.io.Bytes;
 
 /** Batched bridge from a Haxe-owned render tree to NativeKit layout/rendering. */
 class LayoutSession {
+	static final measureCost:Bool = Sys.getEnv("HAXEON_UI_LAYOUT_COST") == "1";
 	var value:nkui_layout_session;
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
@@ -66,13 +67,16 @@ class LayoutSession {
 		ensureLive();
 		if (frame == null)
 			throw "Layout session frame cannot be null";
+		var encodeStarted = measureCost ? Sys.time() : 0.0;
 		var transactionBytes:Bytes = transaction.encodeInto(root);
+		var encodeFinished = measureCost ? Sys.time() : 0.0;
 		collectMeasureContents(root);
 		refreshMeasureCallback();
 		var nativeFrame = frame.nativeValue();
 		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
 			transaction.byteLength(), nativeFrame),
 			"layoutSession.submit");
+		var decodeStarted = measureCost ? Sys.time() : 0.0;
 		var result = NativeKitUI.nkui_layout_session_get_resolved_items(value);
 		UiResult.check(result.status, "layoutSession.resolvedItems");
 		var bytes:Bytes = result.out_buffer;
@@ -81,6 +85,12 @@ class LayoutSession {
 			throw "Native layout returned a truncated geometry snapshot";
 		resolved.resize(0);
 		decodeResolvedItems(bytes, recordBytes);
+		var decodeFinished = measureCost ? Sys.time() : 0.0;
+		if (measureCost) {
+			Sys.println("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted)
+				+ " decode=" + (decodeFinished - decodeStarted));
+			Sys.stdout().flush();
+		}
 		return resolved;
 	}
 

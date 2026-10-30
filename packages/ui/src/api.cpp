@@ -14,6 +14,7 @@
 #include "compositor/compositor.h"
 #include "prepare/image_pixels.h"
 #include "layout/layout_engine.h"
+#include "layout/layout_cost.h"
 #include "layout/layout_render_compiler.h"
 #include "prepare/nanovg_path.h"
 #include "prepare/text_engine.h"
@@ -2550,9 +2551,11 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     auto *state = pinned_state.get();
     std::unique_lock<std::mutex> session_lock(state->mutex);
+    const double parse_started = nkui::layout_cost_time();
     std::vector<nkui::LayoutNode> nodes;
     if (!read_layout_transaction(transaction, transaction_bytes, nodes))
         return NKUI_ERROR_INVALID_TRANSACTION;
+    const double parse_finished = nkui::layout_cost_time();
     const bool has_text = std::any_of(nodes.begin(), nodes.end(), [](const nkui::LayoutNode &node) {
         return node.visual_kind == nkui::LayoutVisualKind::Text && !node.text.empty();
     });
@@ -2568,10 +2571,15 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     state->snapshot = std::move(snapshot);
     state->submitted = true;
+    const double hash_started = nkui::layout_cost_time();
     if (const uint64_t hash = hash_layout_snapshot(state->snapshot); hash != state->snapshot_hash) {
         state->snapshot_hash = hash;
         ++state->render_epoch;
     }
+    const double hash_finished = nkui::layout_cost_time();
+    if (nkui::layout_cost_enabled())
+        std::fprintf(stderr, "layout-cost native nodes=%zu parse=%.9f hash=%.9f\n",
+                     nodes.size(), parse_finished - parse_started, hash_finished - hash_started);
     std::lock_guard<std::mutex> lists_lock(lists_mutex);
     for (auto it = state->custom_paints.begin(); it != state->custom_paints.end();) {
         const auto *item = state->snapshot.find(it->first);

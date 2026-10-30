@@ -1,4 +1,7 @@
 #include "layout/layout_engine.h"
+#include "layout/layout_cost.h"
+
+#include <cstdio>
 
 #include "prepare/text_engine.h"
 
@@ -673,6 +676,7 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
         return false;
     }
 
+    const double prepare_started = layout_cost_time();
     auto &state = *this;
     std::size_t required_elements = nodes.size();
     for (const auto &node : nodes) {
@@ -839,6 +843,7 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
     };
     assign_layers(assign_layers, root, 0);
 
+    const double solve_started = layout_cost_time();
     Clay_SetLayoutDimensions({width, height});
     Clay_BeginLayout();
     append_node(state, root, layers);
@@ -849,6 +854,7 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
         return false;
     }
 
+    const double snapshot_started = layout_cost_time();
     std::vector<LayoutRect> node_bounds(nodes.size());
     for (std::size_t index = 0; index < nodes.size(); ++index) {
         const Clay_ElementData data = Clay_GetElementData(state.element_ids[index]);
@@ -1109,6 +1115,11 @@ bool LayoutEngine::Impl::layout(const std::vector<LayoutNode> &nodes, float widt
     for (std::size_t order = 0; order < paint_indices.size(); ++order)
         out.items[paint_indices[order]].paint_order = order + 1;
 
+    const double snapshot_finished = layout_cost_time();
+    if (layout_cost_enabled())
+        std::fprintf(stderr, "layout-cost backend nodes=%zu prepare=%.9f solve=%.9f snapshot=%.9f\n",
+                     nodes.size(), solve_started - prepare_started, snapshot_started - solve_started,
+                     snapshot_finished - snapshot_started);
     return true;
 }
 

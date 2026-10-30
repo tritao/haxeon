@@ -76,6 +76,8 @@ Rules that keep it working:
 Status 2026-09-30: **stopped after stage 1 and a bound on stage 3; the design below was not implemented as written.** See
 "Outcome". Its verify mode and the dock chrome measurements led to the model above.
 
+See [LAYOUT_COST.md](LAYOUT_COST.md) for the 2026-10-30 per-frame encode, parse, Clay, snapshot, hash and decode breakdown.
+
 ## What the numbers say
 
 Measured on the headless `tab-matrix` workload (320 nodes) after the allocation work in `app/tests/performance/README.md`:
