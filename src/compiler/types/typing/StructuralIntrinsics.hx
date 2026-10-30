@@ -53,7 +53,7 @@ class StructuralIntrinsics {
 					if (fields[index].name == field)
 						return IntegerLiteral(1 << index, span);
 				fail("E1009", 'Class "${declaration.name}" has no stored field "$field"', span);
-				return IntegerLiteral(0, span);
+				return null;
 			case "allFieldsMask":
 				expectArguments(name, arguments, 1, span);
 				var count = storedFields(classNamed(session, typeName(arguments[0], name, span), span), span).length;
@@ -127,7 +127,7 @@ class StructuralIntrinsics {
 				return BlockExpression(statements, Variable(hash, span), span);
 			default:
 				fail("E1007", 'Unknown function "$name"', span);
-				return NullLiteral(span);
+				return null;
 		}
 	}
 
