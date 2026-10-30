@@ -64,120 +64,125 @@ class BinaryControl implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.id(toggle ? "toggle" : "checkbox");
-			var flags = context.interactionStates.get(nodeId);
-			flags = StyleStateUtil.withState(flags, StyleState.Checked, checked);
-			flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
-			var target = new StyleTarget(toggle ? "toggle" : "checkbox", key, key,
-				null, [toggle ? "toggle" : "checkbox"], flags);
-			var computed = context.styleResolver.resolve(target, context.inheritedStyle, context.theme.styles,
-				context.styleSheet, style, context.environment);
-			var node = new RenderNode(nodeId,
-				LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key,
-				null, [toggle ? "toggle" : "checkbox"]);
-			node.states = flags;
-			node.computedStyle = computed;
-			node.focusable = enabled;
-			node.enabled = enabled;
-			var semantics = new Semantics(toggle ? AccessibilityRole.Switch : AccessibilityRole.Checkbox,
-				accessibilityLabel == null ? label : accessibilityLabel,
-				indeterminate ? "mixed" : checked ? "true" : "false");
-			semantics.actions = toggle ? AccessibilityAction.Toggle : AccessibilityAction.Activate;
+			// Hover and press change only how the control looks, so it restyles itself and the panel around it stays cached.
+			return context.selfRestyling(nodeId, function() return buildControl(context, nodeId));
+		});
+	}
+
+	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+		var flags = context.interactionStates.get(nodeId);
+		flags = StyleStateUtil.withState(flags, StyleState.Checked, checked);
+		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+		var target = new StyleTarget(toggle ? "toggle" : "checkbox", key, key,
+			null, [toggle ? "toggle" : "checkbox"], flags);
+		var computed = context.styleResolver.resolve(target, context.inheritedStyle, context.theme.styles,
+			context.styleSheet, style, context.environment);
+		var node = new RenderNode(nodeId,
+			LayoutVisualKind.Box, computed.toLayoutStyle());
+		node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key,
+			null, [toggle ? "toggle" : "checkbox"]);
+		node.states = flags;
+		node.computedStyle = computed;
+		node.focusable = enabled;
+		node.enabled = enabled;
+		var semantics = new Semantics(toggle ? AccessibilityRole.Switch : AccessibilityRole.Checkbox,
+			accessibilityLabel == null ? label : accessibilityLabel,
+			indeterminate ? "mixed" : checked ? "true" : "false");
+		semantics.actions = toggle ? AccessibilityAction.Toggle : AccessibilityAction.Activate;
+		if (checked)
+			semantics.states |= AccessibilityState.Checked;
+		if (!enabled)
+			semantics.states |= AccessibilityState.Disabled;
+		node.semantics = semantics;
+
+		var indicatorStyle = new LayoutStyle();
+		indicatorStyle.width = LayoutAxis.fixed(toggle ? 34.0 : 19.0);
+		indicatorStyle.height = LayoutAxis.fixed(toggle ? 19.0 : 19.0);
+		if (!toggle) {
+			indicatorStyle.radiusTopLeft = indicatorStyle.radiusTopRight = 4.0;
+			indicatorStyle.radiusBottomLeft = indicatorStyle.radiusBottomRight = 4.0;
+		} else {
+			indicatorStyle.radiusTopLeft = indicatorStyle.radiusTopRight = 10.0;
+			indicatorStyle.radiusBottomLeft = indicatorStyle.radiusBottomRight = 10.0;
+			indicatorStyle.padding = new Insets(2.0, 2.0, 2.0, 2.0);
+			indicatorStyle.childAlignY = LayoutAlignmentY.Center;
+		}
+		var indicatorTarget = new StyleTarget(toggle ? "toggle-indicator" : "checkbox-indicator",
+			key + ":indicator", null, null, null, flags);
+		var indicatorComputed = context.styleResolver.resolve(indicatorTarget, null,
+			context.theme.styles, context.styleSheet, indicatorStyle, context.environment);
+		var indicator = new RenderNode(context.id("indicator"),
+			toggle ? LayoutVisualKind.Box : LayoutVisualKind.Custom,
+			indicatorComputed.toLayoutStyle());
+		indicator.setStyleIdentity(toggle ? "toggle-indicator" : "checkbox-indicator",
+			key + ":indicator", null, null, [toggle ? "toggle" : "checkbox"]);
+		indicator.states = flags;
+		indicator.computedStyle = indicatorComputed;
+		if (toggle) {
+			var thumbStyle = new LayoutStyle();
+			thumbStyle.width = LayoutAxis.fixed(15.0);
+			thumbStyle.height = LayoutAxis.fixed(15.0);
+			thumbStyle.radiusTopLeft = thumbStyle.radiusTopRight = 7.5;
+			thumbStyle.radiusBottomLeft = thumbStyle.radiusBottomRight = 7.5;
+			var thumbComputed = context.styleResolver.resolve(
+				new StyleTarget("toggle-thumb", key + ":thumb", null, null, ["toggle"], flags),
+				null, context.theme.styles, context.styleSheet, thumbStyle, context.environment);
+			var thumb = new RenderNode(context.id("thumb"), LayoutVisualKind.Box,
+				thumbComputed.toLayoutStyle());
+			thumb.setStyleIdentity("toggle-thumb", key + ":thumb", null, null, ["toggle"]);
+			thumb.states = flags;
+			thumb.computedStyle = thumbComputed;
+			indicator.add(thumb);
+		}
+		if (!toggle) {
+			indicator.onPaint(function(canvas, _) {
+				if (!checked && !indeterminate)
+					return;
+				var mark = checked ? Color.rgba(1.0, 1.0, 1.0, 1.0) : context.theme.tokens.textPrimary;
+				if(indeterminate){canvas.fillRect(new Rect(4,8,11,3),mark);return;}
+				canvas.withState(function(target) {
+					target.translate(5.5, 10.5);
+					target.rotate(0.7853981634);
+					target.fillRect(new Rect(-2.5, -1.1, 5.0, 2.2), mark);
+				});
+				canvas.withState(function(target) {
+					target.translate(11.0, 8.5);
+					target.rotate(-0.7853981634);
+					target.fillRect(new Rect(-5.5, -1.1, 11.0, 2.2), mark);
+				});
+			}, "checked:" + checked + ":mixed:" + indeterminate);
+		}
+		node.add(indicator);
+		var labelNode = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+		labelNode.layout.text = label;
+		labelNode.applyTextStyle(context.resolveTextRole(TextRole.Label).withTextColor(
+			context.theme.textRoleColor(TextRole.Label, enabled)));
+		var fontSource = computed.source(StyleProperty.FontSize);
+		var letterSource = computed.source(StyleProperty.LetterSpacing);
+		if (fontSource != null && fontSource.layer != "framework")
+			labelNode.layout.textStyle.fontSize = computed.get(StyleProperty.FontSize);
+		if (letterSource != null && letterSource.layer != "framework")
+			labelNode.layout.textStyle.letterSpacing = computed.get(StyleProperty.LetterSpacing);
+		node.add(labelNode);
+
+		var invalidation:State<Bool> = context.state(node.id, checked);
+		var activate = function(event:UiEvent) {
+			if (!enabled)
+				return;
+			indeterminate = false;
+			checked = !checked;
+			semantics.value = checked ? "true" : "false";
 			if (checked)
 				semantics.states |= AccessibilityState.Checked;
-			if (!enabled)
-				semantics.states |= AccessibilityState.Disabled;
-			node.semantics = semantics;
-
-			var indicatorStyle = new LayoutStyle();
-			indicatorStyle.width = LayoutAxis.fixed(toggle ? 34.0 : 19.0);
-			indicatorStyle.height = LayoutAxis.fixed(toggle ? 19.0 : 19.0);
-			if (!toggle) {
-				indicatorStyle.radiusTopLeft = indicatorStyle.radiusTopRight = 4.0;
-				indicatorStyle.radiusBottomLeft = indicatorStyle.radiusBottomRight = 4.0;
-			} else {
-				indicatorStyle.radiusTopLeft = indicatorStyle.radiusTopRight = 10.0;
-				indicatorStyle.radiusBottomLeft = indicatorStyle.radiusBottomRight = 10.0;
-				indicatorStyle.padding = new Insets(2.0, 2.0, 2.0, 2.0);
-				indicatorStyle.childAlignY = LayoutAlignmentY.Center;
-			}
-			var indicatorTarget = new StyleTarget(toggle ? "toggle-indicator" : "checkbox-indicator",
-				key + ":indicator", null, null, null, flags);
-			var indicatorComputed = context.styleResolver.resolve(indicatorTarget, null,
-				context.theme.styles, context.styleSheet, indicatorStyle, context.environment);
-			var indicator = new RenderNode(context.id("indicator"),
-				toggle ? LayoutVisualKind.Box : LayoutVisualKind.Custom,
-				indicatorComputed.toLayoutStyle());
-			indicator.setStyleIdentity(toggle ? "toggle-indicator" : "checkbox-indicator",
-				key + ":indicator", null, null, [toggle ? "toggle" : "checkbox"]);
-			indicator.states = flags;
-			indicator.computedStyle = indicatorComputed;
-			if (toggle) {
-				var thumbStyle = new LayoutStyle();
-				thumbStyle.width = LayoutAxis.fixed(15.0);
-				thumbStyle.height = LayoutAxis.fixed(15.0);
-				thumbStyle.radiusTopLeft = thumbStyle.radiusTopRight = 7.5;
-				thumbStyle.radiusBottomLeft = thumbStyle.radiusBottomRight = 7.5;
-				var thumbComputed = context.styleResolver.resolve(
-					new StyleTarget("toggle-thumb", key + ":thumb", null, null, ["toggle"], flags),
-					null, context.theme.styles, context.styleSheet, thumbStyle, context.environment);
-				var thumb = new RenderNode(context.id("thumb"), LayoutVisualKind.Box,
-					thumbComputed.toLayoutStyle());
-				thumb.setStyleIdentity("toggle-thumb", key + ":thumb", null, null, ["toggle"]);
-				thumb.states = flags;
-				thumb.computedStyle = thumbComputed;
-				indicator.add(thumb);
-			}
-			if (!toggle) {
-				indicator.onPaint(function(canvas, _) {
-					if (!checked && !indeterminate)
-						return;
-					var mark = checked ? Color.rgba(1.0, 1.0, 1.0, 1.0) : context.theme.tokens.textPrimary;
-					if(indeterminate){canvas.fillRect(new Rect(4,8,11,3),mark);return;}
-					canvas.withState(function(target) {
-						target.translate(5.5, 10.5);
-						target.rotate(0.7853981634);
-						target.fillRect(new Rect(-2.5, -1.1, 5.0, 2.2), mark);
-					});
-					canvas.withState(function(target) {
-						target.translate(11.0, 8.5);
-						target.rotate(-0.7853981634);
-						target.fillRect(new Rect(-5.5, -1.1, 11.0, 2.2), mark);
-					});
-				}, "checked:" + checked + ":mixed:" + indeterminate);
-			}
-			node.add(indicator);
-			var labelNode = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-			labelNode.layout.text = label;
-			labelNode.applyTextStyle(context.resolveTextRole(TextRole.Label).withTextColor(
-				context.theme.textRoleColor(TextRole.Label, enabled)));
-			var fontSource = computed.source(StyleProperty.FontSize);
-			var letterSource = computed.source(StyleProperty.LetterSpacing);
-			if (fontSource != null && fontSource.layer != "framework")
-				labelNode.layout.textStyle.fontSize = computed.get(StyleProperty.FontSize);
-			if (letterSource != null && letterSource.layer != "framework")
-				labelNode.layout.textStyle.letterSpacing = computed.get(StyleProperty.LetterSpacing);
-			node.add(labelNode);
-
-			var invalidation:State<Bool> = context.state(node.id, checked);
-			var activate = function(event:UiEvent) {
-				if (!enabled)
-					return;
-				indeterminate = false;
-				checked = !checked;
-				semantics.value = checked ? "true" : "false";
-				if (checked)
-					semantics.states |= AccessibilityState.Checked;
-				else
-					semantics.states &= ~AccessibilityState.Checked;
-				var previous:Bool = invalidation.value;
-				invalidation.update(!previous);
-				if (onChange != null)
-					onChange(checked);
-			};
-			node.onActivate(activate);
-			return node;
-		});
+			else
+				semantics.states &= ~AccessibilityState.Checked;
+			var previous:Bool = invalidation.value;
+			invalidation.update(!previous);
+			if (onChange != null)
+				onChange(checked);
+		};
+		node.onActivate(activate);
+		return node;
 	}
 
 	static function defaultStyle():LayoutStyle {

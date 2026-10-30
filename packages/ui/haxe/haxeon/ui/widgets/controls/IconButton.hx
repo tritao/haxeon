@@ -41,32 +41,37 @@ class IconButton implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var id = context.id("icon-button");
-			var flags = StyleStateUtil.withState(context.interactionStates.get(id),
-				StyleState.Disabled, !enabled);
-			var computed = context.resolveStyle(new StyleTarget("button", key, key,
-				["icon-button"], ["button", "icon-button"], flags), style);
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("button", key, key, ["icon-button"],
-				["button", "icon-button"]);
-			node.states = flags;
-			node.computedStyle = computed;
-			node.focusable = enabled;
-			node.enabled = enabled;
-			var semantics = new Semantics(AccessibilityRole.Button, label);
-			semantics.actions = AccessibilityAction.Activate;
-			if (!enabled)
-				semantics.states |= AccessibilityState.Disabled;
-			node.semantics = semantics;
-			if (enabled && onClick != null) {
-				var activate = function(_:UiEvent) {
-					onClick();
-				};
-				node.onActivate(activate);
-			}
-			var foreground = context.theme.buttonLabelColor(enabled,
-				node.layout.style.background);
-			node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
-			return node;
+			// Hover and press change only how the button looks, so it restyles itself and the panel around it stays cached.
+			return context.selfRestyling(id, function() return buildButton(context, id));
 		});
+	}
+
+	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
+		var flags = StyleStateUtil.withState(context.interactionStates.get(id),
+			StyleState.Disabled, !enabled);
+		var computed = context.resolveStyle(new StyleTarget("button", key, key,
+			["icon-button"], ["button", "icon-button"], flags), style);
+		var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+		node.setStyleIdentity("button", key, key, ["icon-button"],
+			["button", "icon-button"]);
+		node.states = flags;
+		node.computedStyle = computed;
+		node.focusable = enabled;
+		node.enabled = enabled;
+		var semantics = new Semantics(AccessibilityRole.Button, label);
+		semantics.actions = AccessibilityAction.Activate;
+		if (!enabled)
+			semantics.states |= AccessibilityState.Disabled;
+		node.semantics = semantics;
+		if (enabled && onClick != null) {
+			var activate = function(_:UiEvent) {
+				onClick();
+			};
+			node.onActivate(activate);
+		}
+		var foreground = context.theme.buttonLabelColor(enabled,
+			node.layout.style.background);
+		node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
+		return node;
 	}
 }

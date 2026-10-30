@@ -10,54 +10,94 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.Checkbox;
+import haxeon.ui.widgets.controls.IconButton;
+import haxeon.ui.widgets.controls.Radio;
+import haxeon.ui.widgets.controls.RadioGroup;
+import haxeon.ui.widgets.controls.RadioOption;
+import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 
-/** A button the way Tabs uses one: built, then given a listener and a style change by its caller. */
-private class DecoratedButton implements View {
+/** A control the way a container uses one: built, then given a listener, a style change and an overlay child by its caller. */
+private class DecoratedControl implements View {
   public var presses = 0;
+  public final key:String;
+  final make:BuildContext->RenderNode;
 
-  public function new() {}
+  public function new(key:String, make:BuildContext->RenderNode) {
+    this.key = key;
+    this.make = make;
+  }
 
   public function build(context:BuildContext):RenderNode {
-    var node = new Button("Decorated", null, null, "decorated").build(context);
+    var node = make(context);
     node.on(UiEventKind.PointerDown, function(_) presses++);
     node.layout.style.zIndex = 3;
     // As DockWorkspace does with tab buttons: an overlay child added by the caller.
     var overlayStyle = new LayoutStyle();
-    overlayStyle.width = LayoutAxis.fixed(6.0);
-    overlayStyle.height = LayoutAxis.fixed(6.0);
+    overlayStyle.width = LayoutAxis.fixed(5.5);
+    overlayStyle.height = LayoutAxis.fixed(7.5);
     node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
     return node;
   }
 }
 
-/** One UI with a retained panel of buttons. */
+/** One UI with a retained panel of controls: buttons, or the other controls that restyle themselves. */
 private class Rig {
   public final ui:UiContext;
-  public final frame:LayoutFrame = new LayoutFrame(240.0, 200.0);
-  public final decorated = new DecoratedButton();
+  public final frame:LayoutFrame;
+  public final decorated:Array<DecoratedControl>;
   public var panelBuilds = 0;
   public var clicks = 0;
+  public var checked = false;
+  public var toggled = false;
+  public var chosen = "";
   final view:View;
 
-  /** `scrolling` puts the buttons in a scroll view that overflows, with motion on, so the scrollbar fades frame by frame. */
-  public function new(fonts:FontCollection, restyleInPlace:Bool, scrolling:Bool = false) {
+  /**
+   * `scrolling` puts the buttons in a scroll view that overflows, with motion on, so the scrollbar fades frame by frame.
+   * `controls` fills the panel with icon buttons, checkboxes, switches and radio options instead of buttons.
+   */
+  public function new(fonts:FontCollection, restyleInPlace:Bool, scrolling:Bool = false, controls:Bool = false) {
     ui = new UiContext(null, fonts);
     ui.buildContext.environment.reducedMotion = !scrolling;
     ui.buildContext.restyleInPlace = restyleInPlace;
+    frame = new LayoutFrame(240.0, controls ? 460.0 : 200.0);
     var rig = this;
+    decorated = controls ? [
+      new DecoratedControl("decorated-icon", function(context) return new IconButton("decorated-icon", IconName.Search, "Decorated icon", function() rig.clicks++).build(context)),
+      new DecoratedControl("decorated-check", function(context) {
+        var checkbox:View = new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++);
+        return checkbox.build(context);
+      }),
+      new DecoratedControl("decorated-radio", function(context) return new Radio("decorated-radio", "Decorated radio", "d", false, function(_) rig.clicks++).build(context)),
+    ] : [
+      new DecoratedControl("decorated", function(context) return new Button("Decorated", null, null, "decorated").build(context)),
+    ];
     var panel = new RetainedView("panel", function(_) {
       rig.panelBuilds++;
-      var column = new Column("column", [
+      var items:Array<KeyedView> = controls ? [
+        new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", function() rig.clicks++)),
+        new KeyedView("check", new Checkbox("check", "Check", rig.checked, function(value) rig.checked = value)),
+        new KeyedView("toggle", new Toggle("toggle", "Toggle", rig.toggled, function(value) rig.toggled = value)),
+        new KeyedView("radio", new Radio("radio", "Radio", "r", false, function(_) rig.clicks++)),
+        new KeyedView("group", new RadioGroup("group", [new RadioOption("alpha", "Alpha", "a"), new RadioOption("beta", "Beta", "b")], "a",
+          function(value) rig.chosen = value)),
+        new KeyedView("disabled", new Radio("disabled", "Disabled", "x", false, function(_) rig.clicks++, null, false)),
+      ] : [
         new KeyedView("one", new Button("One", null, function() rig.clicks++, "one")),
         new KeyedView("two", new Button("Two", null, function() rig.clicks++, "two")),
-        new KeyedView("decorated", rig.decorated),
-        new KeyedView("three", new Button("Three", null, function() rig.clicks++, "three")),
-        new KeyedView("four", new Button("Four", null, function() rig.clicks++, "four")),
-      ]);
+      ];
+      for (control in rig.decorated) items.push(new KeyedView(control.key, control));
+      if (!controls) {
+        items.push(new KeyedView("three", new Button("Three", null, function() rig.clicks++, "three")));
+        items.push(new KeyedView("four", new Button("Four", null, function() rig.clicks++, "four")));
+      }
+      var column = new Column("column", items);
       if (!scrolling) return column;
       var style = new LayoutStyle();
       style.width = LayoutAxis.fixed(200.0);
@@ -93,17 +133,28 @@ class RestyleInPlaceTests {
     return out.toString();
   }
 
-  static function center(root:RenderNode, key:String):{x:Float, y:Float} {
+  /** The node of a control that restyles itself, by its key. */
+  static function control(root:RenderNode, key:String):RenderNode {
     var found:Null<RenderNode> = null;
-    root.walk(function(node) { if (node.styleType == "button" && node.styleKey == key) found = node; });
-    check(found != null, "No button " + key);
-    var bounds = found.globalBounds();
+    root.walk(function(node) {
+      if (node.styleKey == key && (node.styleType == "button" || node.styleType == "checkbox" || node.styleType == "toggle"
+        || node.styleType == "radio")) found = node;
+    });
+    check(found != null, "No control " + key);
+    return cast found;
+  }
+
+  static function center(root:RenderNode, key:String):{x:Float, y:Float} {
+    var bounds = control(root, key).globalBounds();
     return {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2};
   }
 
-  /** Drives both rigs through `script`, requiring the patched tree to match the full rebuild after every frame. */
-  static function run(fonts:FontCollection, scrolling:Bool, script:Array<{action:String, key:String}>):Void {
-    var patched = new Rig(fonts, true, scrolling), reference = new Rig(fonts, false, scrolling);
+  /**
+   * Drives both rigs through `script`, requiring the patched tree to match the full rebuild after every frame.
+   * `rebuilds` is how many times the retained panel may build in the patched rig: once, plus once per step that changes what it shows.
+   */
+  static function run(fonts:FontCollection, name:String, scrolling:Bool, controls:Bool, rebuilds:Int, script:Array<{action:String, key:String}>):Void {
+    var patched = new Rig(fonts, true, scrolling, controls), reference = new Rig(fonts, false, scrolling, controls);
     var patchedRoot = patched.submit(), referenceRoot = reference.submit();
     check(signature(patchedRoot) == signature(referenceRoot), "The first frames differ");
     var changed = 0, waitsChanged = 0;
@@ -117,6 +168,8 @@ class RestyleInPlaceTests {
           case "move": rig.ui.pointerMove(at.x, at.y);
           case "down": rig.ui.pointerDown(at.x, at.y, 0);
           case "up": rig.ui.pointerUp(at.x, at.y, 0);
+          // Released away from the control it was pressed on: nothing activates.
+          case "release": rig.ui.pointerUp(-20.0, -20.0, 0);
           case "wait":
           default: rig.ui.pointerMove(-20.0, -20.0);
         }
@@ -132,19 +185,22 @@ class RestyleInPlaceTests {
       }
       if (Sys.args().indexOf("--trace") >= 0) Sys.println(step.action + " " + step.key + ": panel builds +" + (patched.panelBuilds - buildsBefore));
     }
-    var name = scrolling ? "scrolling" : "buttons";
     check(changed >= 6, name + ": pointer changes did not restyle anything (" + changed + ")");
     if (scrolling) check(waitsChanged >= 3, "The scrollbar did not fade frame by frame (" + waitsChanged + ")");
     check(patched.clicks == reference.clicks, "Clicks differ: " + patched.clicks + " vs " + reference.clicks);
-    check(patched.decorated.presses == reference.decorated.presses,
-      "A listener added after build was lost: " + patched.decorated.presses + " vs " + reference.decorated.presses);
-    var decoratedNode:Null<RenderNode> = null;
-    patchedRoot.walk(function(node) { if (node.styleKey == "decorated" && node.styleType == "button") decoratedNode = node; });
-    check(decoratedNode != null && decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost");
-    var overlays = 0;
-    decoratedNode.walk(function(node) { if (node.layout.style.width.value == 6.0 && node.layout.style.height.value == 6.0) overlays++; });
-    check(overlays == 1, "A child added after build was lost or duplicated (" + overlays + ")");
-    check(patched.panelBuilds == 1, name + ": pointer changes rebuilt the retained panel " + patched.panelBuilds + " times");
+    check(patched.checked == reference.checked && patched.toggled == reference.toggled && patched.chosen == reference.chosen,
+      name + ": activations differ from the full rebuild");
+    for (index in 0...patched.decorated.length) {
+      var key = patched.decorated[index].key;
+      check(patched.decorated[index].presses == reference.decorated[index].presses,
+        "A listener added after build was lost on " + key + ": " + patched.decorated[index].presses + " vs " + reference.decorated[index].presses);
+      var decoratedNode = control(patchedRoot, key);
+      check(decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost on " + key);
+      var overlays = 0;
+      decoratedNode.walk(function(node) { if (node.layout.style.width.value == 5.5 && node.layout.style.height.value == 7.5) overlays++; });
+      check(overlays == 1, "A child added after build was lost or duplicated on " + key + " (" + overlays + ")");
+    }
+    check(patched.panelBuilds == rebuilds, name + ": the retained panel built " + patched.panelBuilds + " times, expected " + rebuilds);
     check(reference.panelBuilds > patched.panelBuilds, name + ": the reference did not rebuild the panel");
     Sys.println("PASS " + name + ": " + script.length + " steps match a full rebuild (" + changed + " changed the tree); panel builds patched="
       + patched.panelBuilds + " reference=" + reference.panelBuilds);
@@ -244,7 +300,7 @@ class RestyleInPlaceTests {
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
     verifyMode(fonts);
-    run(fonts, false, [
+    run(fonts, "buttons", false, false, 1, [
       {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},
       {action: "down", key: "decorated"}, {action: "up", key: "decorated"}, {action: "move", key: "one"},
       {action: "down", key: "one"}, {action: "move", key: "two"}, {action: "up", key: "two"},
@@ -253,11 +309,29 @@ class RestyleInPlaceTests {
     ]);
     // The scrollbar fades in on hover, waits, and fades out once the pointer leaves: every frame of it must match.
     var wait = {action: "wait", key: "one"};
-    run(fonts, true, [
+    run(fonts, "scrolling", true, false, 1, [
       {action: "move", key: "one"}, wait, wait, wait, wait, {action: "move", key: "two"}, wait,
       {action: "down", key: "two"}, {action: "up", key: "two"}, wait,
       {action: "away", key: "one"}, wait, wait, wait, wait, wait, wait, wait, wait, wait,
       {action: "move", key: "one"}, wait, wait,
+    ]);
+    // Icon buttons, checkboxes, switches and radio options follow hover and press without rebuilding the panel. Pressing and
+    // releasing elsewhere activates nothing; only the last click, on a checkbox, changes what the panel shows, so it builds twice.
+    // The group's keyed options and the disabled option are covered as well.
+    run(fonts, "controls", false, true, 2, [
+      {action: "move", key: "icon"}, {action: "move", key: "check"}, {action: "move", key: "toggle"}, {action: "move", key: "radio"},
+      {action: "move", key: "alpha"}, {action: "move", key: "beta"}, {action: "move", key: "disabled"}, {action: "move", key: "decorated-icon"},
+      {action: "down", key: "decorated-icon"}, {action: "release", key: "decorated-icon"}, {action: "move", key: "decorated-check"},
+      {action: "down", key: "decorated-check"}, {action: "release", key: "decorated-check"}, {action: "move", key: "decorated-radio"},
+      {action: "down", key: "decorated-radio"}, {action: "release", key: "decorated-radio"},
+      {action: "move", key: "check"}, {action: "down", key: "check"}, {action: "release", key: "check"},
+      {action: "move", key: "toggle"}, {action: "down", key: "toggle"}, {action: "release", key: "toggle"},
+      {action: "move", key: "beta"}, {action: "down", key: "beta"}, {action: "release", key: "beta"}, {action: "away", key: "icon"},
+      {action: "move", key: "icon"}, {action: "down", key: "icon"}, {action: "up", key: "icon"}, {action: "move", key: "radio"},
+      {action: "down", key: "radio"}, {action: "up", key: "radio"}, {action: "move", key: "decorated-icon"},
+      {action: "down", key: "decorated-icon"}, {action: "up", key: "decorated-icon"}, {action: "move", key: "decorated-radio"},
+      {action: "down", key: "decorated-radio"}, {action: "up", key: "decorated-radio"}, {action: "move", key: "decorated-check"},
+      {action: "down", key: "decorated-check"}, {action: "up", key: "decorated-check"},
     ]);
     // The frame comparison and local style resolution name LayoutStyle fields by hand; each must name every one.
     check(RenderNode.styleFieldsClassified(), "A LayoutStyle field is in no invalidation group of the frame comparison");
