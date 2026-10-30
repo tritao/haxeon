@@ -1,11 +1,14 @@
 #include "layout/layout_engine.h"
 #include "layout/layout_cost.h"
+#include "layout/layout_id_index.h"
 
 #include <cstdio>
 
 #include "prepare/text_engine.h"
 
+#ifndef NKUI_LAYOUT_LINEAR_REFERENCE
 #define CLAY_IMPLEMENTATION
+#endif
 #include "clay.h"
 
 #include <algorithm>
@@ -202,6 +205,8 @@ struct LayoutEngine::Impl {
     std::vector<std::size_t> context_order;
     std::vector<int32_t> layers;
     std::unordered_map<TextLayoutId, LayoutTextLayout> text_layouts;
+    LayoutIdIndex snapshot_items;
+    LayoutIdIndex snapshot_baselines;
     struct MeasureCacheKey {
         uint32_t node_id = 0;
         uint32_t version = 0;
@@ -903,6 +908,15 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
         out.text_layouts.push_back(entry.second);
     }
 
+#ifndef NKUI_LAYOUT_LINEAR_REFERENCE
+    state.snapshot_items.reset(nodes.size());
+    for (std::size_t index = 0; index < nodes.size(); ++index)
+        state.snapshot_items.insert(nodes[index].id, index);
+    state.snapshot_baselines.reset(out.text_layouts.size());
+    for (std::size_t index = 0; index < out.text_layouts.size(); ++index)
+        if (out.text_layouts[index].has_baseline)
+            state.snapshot_baselines.insert(out.text_layouts[index].node_id, index);
+#endif
     out.items.resize(nodes.size());
     out.child_indices.clear();
     out.child_indices.reserve(nodes.size() > 0 ? nodes.size() - 1 : 0);
@@ -1012,13 +1026,19 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
         }
         if (has_child)
             item.content_bounds = {left, top, right - left, bottom - top};
+#ifdef NKUI_LAYOUT_LINEAR_REFERENCE
         const auto text_layout = std::find_if(
             out.text_layouts.begin(), out.text_layouts.end(), [&](const LayoutTextLayout &layout) {
                 return layout.node_id == node.id && layout.has_baseline;
             });
-        if (text_layout != out.text_layouts.end()) {
+        const auto *baseline = text_layout == out.text_layouts.end() ? nullptr : &*text_layout;
+#else
+        const auto baseline_index = state.snapshot_baselines.find(node.id);
+        const auto *baseline = baseline_index == LayoutIdIndex::missing ? nullptr : &out.text_layouts[baseline_index];
+#endif
+        if (baseline) {
             item.has_baseline = true;
-            item.baseline = item.bounds.y + text_layout->first_line_baseline;
+            item.baseline = item.bounds.y + baseline->first_line_baseline;
         }
         const auto measured = state.frame_measurements.find(node.id);
         if (measured != state.frame_measurements.end() && measured->second.has_baseline &&
@@ -1060,11 +1080,17 @@ bool LayoutEngine::Impl::layout(const LayoutNodeView &nodes, float width, float 
         if (command) {
             append_primitive(out, *command);
             auto &primitive = out.primitives.back();
-            const auto item =
+#ifdef NKUI_LAYOUT_LINEAR_REFERENCE
+            const auto found =
                 std::find_if(out.items.begin(), out.items.end(), [&](const LayoutItem &value) {
                     return value.id == primitive.node_id;
                 });
-            if (item != out.items.end()) {
+            const auto *item = found == out.items.end() ? nullptr : &*found;
+#else
+            const auto item_index = state.snapshot_items.find(primitive.node_id);
+            const auto *item = item_index == LayoutIdIndex::missing ? nullptr : &out.items[item_index];
+#endif
+            if (item) {
                 primitive.transform = item->transform;
                 primitive.visible = item->visible;
                 if (primitive.kind == LayoutPrimitiveKind::ClipBegin) {

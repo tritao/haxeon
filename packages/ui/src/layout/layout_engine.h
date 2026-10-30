@@ -11,13 +11,6 @@ namespace nkui {
 class TextEngine;
 class FontCollection;
 
-struct LayoutInputChanges {
-    bool topology = true;
-    bool layers = true;
-    bool topology_validated = false;
-    std::vector<std::size_t> nodes;
-};
-
 /**
  * Private NativeKit layout boundary. Clay and its types are deliberately
  * hidden in the implementation; callers submit NativeKit-owned nodes and

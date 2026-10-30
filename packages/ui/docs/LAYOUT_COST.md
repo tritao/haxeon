@@ -221,3 +221,68 @@ scroll-inspector 22.9→22.3; typing 17.8→17.8. No budget ceiling changed.
 Validation: all ten UI scripts PASS, all nine every-frame retention scenarios PASS, performance budgets PASS, all three
 500-cycle memory runs PASS, native layout invariants/render compiler/session tests PASS, compiler suites 608 passed,
 0 failed. The missing-delta and rejected rotated-clip diagnostics in the regression tests are intentional negative cases.
+
+### Item 3: indexed snapshot lookups
+
+Snapshot construction builds two reusable flat indices once per snapshot: node ID → output-item index, and node ID → first
+text layout with a baseline. Geometry and Clay-command resolution use these indices instead of scanning text layouts or
+items. The first-match rule matches the former linear searches, including multiple measured text layouts for a node.
+The table uses open addressing at at most half occupancy, accepts 64-bit text-layout IDs, and retains its capacity between
+frames. No node-owned hash entries are allocated. IDs are nonzero by the existing layout contract.
+
+The render compiler had the same text-layout scan and four `snapshot.find` call sites, some repeated for every primitive.
+It now builds item and text-layout indices in reusable `LayoutRenderFrame` scratch. Parent traversal reads the indexed
+item's parent ID, eliminating a separately allocated parent-ID map. Snapshot order, primitives, clipping and paint order
+are unchanged. The general `LayoutSnapshot.find` helper remains available for occasional callers outside these loops.
+
+`nativekit_ui_layout_snapshot_index_test` compares indexed output with a separately compiled, test-only linear-search
+engine. Both engines use the same implementation except for the two lookups; production has no runtime bypass. Defaulted
+C++ equality compares every snapshot payload field (including text bytes, lines, baselines, geometry, transforms, clipping,
+primitives and paint order). Every exported 96-byte resolved record is also compared with `memcmp` through the same encoder
+used by the C API. The test covers 1,201 nodes / 600 labels over 104 frames, including text/transform changes, floating
+layers and clipping. Index regressions cover growth, collisions, first-match duplicates, missing IDs, reset and 64-bit IDs.
+The regression runs in `test-haxeon-layout.sh` and is registered with CTest, including sanitizer builds.
+
+Paired native measurements on this machine, probes enabled, 4 warmup frames then 100 samples per engine: median snapshot
+**0.425 ms linear → 0.178 ms indexed (−58%)** at 1,201 nodes. This compares the former searches with the indexed path in
+one process, alternating engines so both have the same warmup and fixture. Reproduce with:
+
+```sh
+cmake --build out/packages/ui/native --target nativekit_ui_layout_snapshot_index_test
+HAXEON_UI_LAYOUT_COST=1 out/packages/ui/native/nativekit_ui_layout_snapshot_index_test > /tmp/snapshot-index.log 2>&1
+```
+
+The `snapshot-index engine=… frame=…` markers identify the following `layout-cost backend` record; omit frames 0–3 and
+take the median `snapshot` value independently for each engine. The saved paired log is
+`/home/joao/dev/materia-cache/claude-scratch/ui-bridge-evidence/snapshot-index-reference.log`.
+
+Final same-machine measurements: three fixed sequential 60-cycle repeats after the compiler run completed. Captures are
+`ui-bridge-final-{interaction,tab-matrix,selection-stress}` and `ui-bridge-final-r{2,3}-{interaction,tab-matrix,selection-stress}`.
+Use the report command above for each capture. The after rows below take the median over all active frames from all three
+repeats (1,062 / 708 / 177 frames), using that tool's `read_submissions` and `frame_costs`; no repeats are discarded. The
+first interaction repeat had a cross-phase timing spike; retaining it makes this table more conservative than the earlier
+single final capture. Baseline remains the original sequential 60-cycle run. Phase medians in ms per active layout frame
+(selection still sums two submits):
+
+| scenario | passes/frame | nodes | encode | parse | prepare | Clay solve | snapshot | hash | decode | bridge sum |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| interaction before | 1 | 350–351 | 0.147 | 0.047 | 0.046 | 0.138 | 0.082 | 0.020 | 0.053 | 0.293 |
+| interaction after | 1 | 350–351 | 0.020 | 0.001 | 0.003 | 0.142 | 0.076 | 0.020 | 0.012 | 0.036 |
+| tab-matrix before | 1 | 344–485 | 0.155 | 0.048 | 0.057 | 0.181 | 0.082 | 0.020 | 0.086 | 0.346 |
+| tab-matrix after | 1 | 344–485 | 0.051 | 0.034 | 0.022 | 0.184 | 0.077 | 0.020 | 0.048 | 0.155 |
+| selection-stress before | 2 | 350 | 0.303 | 0.097 | 0.098 | 0.286 | 0.162 | 0.040 | 0.134 | 0.632 |
+| selection-stress after | 2 | 350 | 0.101 | 0.056 | 0.027 | 0.296 | 0.156 | 0.040 | 0.067 | 0.251 |
+
+Bridge work falls 88% / 55% / 60%. Snapshot improves in all three scenarios; hash is unchanged to the displayed precision.
+Solve code is unchanged. Its combined medians are 4 / 3 / 10 microseconds higher than the single baseline; individual final
+repeat medians span 0.137–0.206 / 0.182–0.191 / 0.285–0.311 ms. These small aggregate differences sit within substantial
+wall-clock run variation; the measurements do not establish a solver regression, and should not be read as a solver speedup. Probe-off final allocation
+medians (KiB) are 165.1 / 127.0 / 112.5 / 132.5 for the four tab actions, 13.1 / 23.9 / 25.0 for the three rebuilding
+hovers, 22.3 for inspector scroll and 17.8 for both typing actions. Every action remains at or below the fresh baseline,
+including idle and pointer-only actions. Budget ceilings are unchanged.
+
+Final validation: all ten UI scripts PASS (the snapshot regression is included in haxeon-layout); all nine retention
+scenarios PASS; performance budgets PASS; all three 500-cycle memory runs PASS; native invariants, render compiler,
+snapshot index and transaction tests PASS; compiler suites **608 passed, 0 failed**. The final compiler run's GC owner
+stress test was slow (the native child remained active), then completed normally; no runtime or test changes were made.
+Verification checks and all budget ceilings remain unchanged.

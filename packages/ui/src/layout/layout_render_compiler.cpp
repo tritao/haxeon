@@ -334,6 +334,13 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
 
     out.reset();
     out.text_engine_source_ = text_engine_source;
+    out.snapshot_items_.reset(snapshot.items.size());
+    for (std::size_t index = 0; index < snapshot.items.size(); ++index)
+        out.snapshot_items_.insert(snapshot.items[index].id, index);
+    const auto snapshot_item = [&](uint32_t id) -> const LayoutItem * {
+        const auto index = out.snapshot_items_.find(id);
+        return index == LayoutIdIndex::missing ? nullptr : &snapshot.items[index];
+    };
     {
         std::size_t pass_capacity = 1;
         if (custom_paints)
@@ -365,37 +372,34 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             std::array<float, 6> cache_to_world{};
             LayoutRect outer_clip{};
         };
-        std::unordered_map<uint32_t, uint32_t> parent_ids;
-        for (const auto &item : snapshot.items)
-            parent_ids[item.id] = item.parent_id;
-        const auto belongs_to = [&parent_ids](uint32_t node_id, uint32_t root_id) {
-            for (std::size_t depth = 0; node_id && depth <= parent_ids.size(); ++depth) {
+        const auto belongs_to = [&snapshot, &snapshot_item](uint32_t node_id, uint32_t root_id) {
+            for (std::size_t depth = 0; node_id && depth <= snapshot.items.size(); ++depth) {
                 if (node_id == root_id)
                     return true;
-                const auto found = parent_ids.find(node_id);
-                if (found == parent_ids.end() || found->second == node_id)
+                const auto *item = snapshot_item(node_id);
+                if (!item || item->parent_id == node_id)
                     return false;
-                node_id = found->second;
+                node_id = item->parent_id;
             }
             return false;
         };
         std::vector<RasterRoot> raster_roots;
         if (raster_paint_nodes) {
             for (const uint32_t node_id : *raster_paint_nodes) {
-                const auto *item = snapshot.find(node_id);
+                const auto *item = snapshot_item(node_id);
                 if (!item || item->visual_kind == LayoutVisualKind::Custom)
                     continue;
                 bool has_cached_parent = false;
                 uint32_t parent = item->parent_id;
-                for (std::size_t depth = 0; parent && depth <= parent_ids.size(); ++depth) {
+                for (std::size_t depth = 0; parent && depth <= snapshot.items.size(); ++depth) {
                     if (raster_paint_nodes->contains(parent)) {
                         has_cached_parent = true;
                         break;
                     }
-                    const auto found = parent_ids.find(parent);
-                    if (found == parent_ids.end() || found->second == parent)
+                    const auto *parent_item = snapshot_item(parent);
+                    if (!parent_item || parent_item->parent_id == parent)
                         break;
-                    parent = found->second;
+                    parent = parent_item->parent_id;
                 }
                 if (has_cached_parent)
                     continue;
@@ -553,7 +557,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             if (composite_content_slot < kFirstTransientRenderTargetSlot)
                 return fail(error, primitive_index, "custom render-target limit exceeded");
             const auto &primitive = snapshot.primitives[primitive_index];
-            const auto *scene_item = snapshot.find(primitive.node_id);
+            const auto *scene_item = snapshot_item(primitive.node_id);
             const uint32_t content_revision =
                 scene_item ? scene_item->content_revision : primitive.content_revision;
             const uint32_t composite_revision =
@@ -632,7 +636,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             const auto found = custom_paints->find(primitive.node_id);
             if (found == custom_paints->end() || !found->second)
                 return true;
-            const auto *scene_item = snapshot.find(primitive.node_id);
+            const auto *scene_item = snapshot_item(primitive.node_id);
             const uint32_t content_revision =
                 scene_item ? scene_item->content_revision : primitive.content_revision;
             const bool has_composite =
@@ -789,6 +793,9 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             // again and reuses its storage on subsequent frames.
             out.text_layout_ids_.resize(snapshot.primitives.size(), 0);
             out.text_raster_scales_.resize(snapshot.primitives.size(), 0.0f);
+            out.snapshot_text_layouts_.reset(snapshot.text_layouts.size());
+            for (std::size_t index = 0; index < snapshot.text_layouts.size(); ++index)
+                out.snapshot_text_layouts_.insert(snapshot.text_layouts[index].id, index);
             std::size_t root_cursor = 0;
             for (std::size_t index = 0; index < snapshot.primitives.size(); ++index) {
                 const auto &primitive = snapshot.primitives[index];
@@ -798,15 +805,11 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     return fail(error, index, "layout text preparation input is invalid");
                 const LayoutTextLayout *text_layout = nullptr;
                 if (primitive.text_layout_id) {
-                    const auto found =
-                        std::find_if(snapshot.text_layouts.begin(), snapshot.text_layouts.end(),
-                                 [&primitive](const LayoutTextLayout &candidate) {
-                                     return candidate.id == primitive.text_layout_id;
-                                 });
-                    if (found == snapshot.text_layouts.end() ||
-                        primitive.text_line_index >= found->lines.size())
+                    const auto found = out.snapshot_text_layouts_.find(primitive.text_layout_id);
+                    if (found == LayoutIdIndex::missing ||
+                        primitive.text_line_index >= snapshot.text_layouts[found].lines.size())
                         return fail(error, index, "layout text layout ID is invalid");
-                    text_layout = &*found;
+                    text_layout = &snapshot.text_layouts[found];
                     if (!text->has_layout(text_layout->id))
                         return fail(error, index, "layout text resource is unavailable");
                 } else {
@@ -897,7 +900,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             // so nested scrollbars cannot paint beyond their scrolled viewport.
             // Cached subtrees retain local scissors; their outer clip belongs
             // to the composite, so scrolling does not change cached pixels.
-            const auto *scene_item = active_raster_root == no_raster_root ? snapshot.find(primitive.node_id) : nullptr;
+            const auto *scene_item = active_raster_root == no_raster_root ? snapshot_item(primitive.node_id) : nullptr;
             const bool has_primitive_clip = scene_item || !clips.empty();
             LayoutRect primitive_clip = scene_item ? scene_item->clip_bounds : LayoutRect{};
             if (!clips.empty() && (!scene_item || active_raster_root != no_raster_root))

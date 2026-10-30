@@ -11,6 +11,13 @@
 
 namespace nkui {
 
+struct LayoutInputChanges {
+    bool topology = true;
+    bool layers = true;
+    bool topology_validated = false;
+    std::vector<std::size_t> nodes;
+};
+
 enum class LayoutVisualKind : uint8_t {
     Box = 1,
     Text,

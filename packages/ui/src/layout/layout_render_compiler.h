@@ -3,6 +3,7 @@
 
 #include "compositor/render_plan.h"
 #include "layout/layout_types.h"
+#include "layout/layout_id_index.h"
 #include "render/frame_resources.h"
 
 #include <cstddef>
@@ -73,6 +74,8 @@ class LayoutRenderFrame {
     TextEngine *text_engine_source_ = nullptr;
     std::vector<std::shared_ptr<PreparedPath>> paths_;
     // Retain capacity across frames; IDs link atlas preparation to publication.
+    LayoutIdIndex snapshot_items_;
+    LayoutIdIndex snapshot_text_layouts_;
     std::vector<TextLayoutId> text_layout_ids_;
     std::vector<float> text_raster_scales_;
 };

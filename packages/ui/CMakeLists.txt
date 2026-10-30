@@ -334,6 +334,18 @@ if(NK_BUILD_TESTS)
         nkui_nanovg_core nkui_skribidi nkui_sheenbidi NativeKit::nativekit)
     add_test(NAME nativekit_ui_layout_render_compiler
         COMMAND nativekit_ui_layout_render_compiler_test)
+    add_executable(nativekit_ui_layout_snapshot_index_test
+        tests/layout_snapshot_index.cpp
+        tests/linear_layout_engine.cpp
+        src/layout/clay_layout_backend.cpp
+        src/prepare/text_engine.cpp
+        src/prepare/system_fonts.cpp)
+    target_include_directories(nativekit_ui_layout_snapshot_index_test PRIVATE
+        src include "${NKUI_VENDOR_DIR}/clay")
+    target_compile_definitions(nativekit_ui_layout_snapshot_index_test PRIVATE
+        NKUI_TEST_FONT_PATH="${NKUI_VENDOR_DIR}/skribidi/example/data/IBMPlexSans-Regular.ttf")
+    target_link_libraries(nativekit_ui_layout_snapshot_index_test PRIVATE nkui_skribidi nkui_sheenbidi NativeKit::nativekit)
+    add_test(NAME nativekit_ui_layout_snapshot_index COMMAND nativekit_ui_layout_snapshot_index_test)
     add_executable(nativekit_ui_layout_session_test
         tests/layout_session.cpp)
     target_compile_definitions(nativekit_ui_layout_session_test PRIVATE
@@ -433,6 +445,7 @@ if(NK_BUILD_TESTS)
         nativekit_ui_layout_invariants_test
         nativekit_ui_layout_render_compiler_test
         nativekit_ui_layout_session_test
+        nativekit_ui_layout_snapshot_index_test
         nativekit_ui_public_renderer_smoke_test
         nativekit_ui_path_cache_retention_test
         nativekit_ui_session_render_smoke_test)
@@ -445,7 +458,8 @@ if(NK_BUILD_TESTS)
             nativekit_ui_clay_state_capacity_test
             nativekit_ui_layout_engine_test
             nativekit_ui_layout_invariants_test
-            nativekit_ui_layout_session_test)
+            nativekit_ui_layout_session_test
+            nativekit_ui_layout_snapshot_index_test)
             if(TARGET ${target})
                 target_compile_options(${target} PRIVATE
                     -fsanitize=address,undefined -fno-omit-frame-pointer)
