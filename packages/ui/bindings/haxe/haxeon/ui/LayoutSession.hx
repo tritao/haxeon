@@ -1,5 +1,7 @@
 package haxeon.ui;
 
+import haxeon.ui.debug.RenderCost;
+
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import NativeKitUI;
@@ -260,17 +262,25 @@ class LayoutSession {
 	/** Executes the last submitted tree through the existing renderer backend. */
 	public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
 		ensureLive();
+		var started = RenderCost.time();
 		updateRenderablePaints();
+		if (RenderCost.enabled) RenderCost.renderable += Sys.time() - started;
+		var nativeStarted = RenderCost.time();
 		UiResult.check(NativeKitUI.nkui_layout_session_render_frame(renderer.nativeHandle(), value,
 			surface.nativeHandle(), frame.nativeValue(), false), "layoutSession.render");
+		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}
 
 	/** Composites the last submitted tree over the current surface contents. */
 	public function renderOverlay(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
 		ensureLive();
+		var started = RenderCost.time();
 		updateRenderablePaints();
+		if (RenderCost.enabled) RenderCost.renderable += Sys.time() - started;
+		var nativeStarted = RenderCost.time();
 		UiResult.check(NativeKitUI.nkui_layout_session_render_frame(renderer.nativeHandle(), value,
 			surface.nativeHandle(), frame.nativeValue(), true), "layoutSession.renderOverlay");
+		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}
 
 	public function dispose():Void {
@@ -358,7 +368,9 @@ class LayoutSession {
 				geometry.height <= 0.0 || geometry.clipBounds.width <= 0.0 ||
 				geometry.clipBounds.height <= 0.0)
 				continue;
+			var started = RenderCost.time(), encodedBefore = RenderCost.encode;
 			var displayList = content.paint(geometry);
+			if (RenderCost.enabled) RenderCost.callbacks += Sys.time() - started - (RenderCost.encode - encodedBefore);
 			setCustomPaint(nodeId, displayList);
 		}
 	}

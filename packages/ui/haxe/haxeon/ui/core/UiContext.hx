@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.ui.debug.RenderCost;
+
 import haxeon.platform.Surface as PlatformSurface;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
 
@@ -434,6 +436,7 @@ class UiContext {
 			diagnosticStage = 0;
 			return cast root;
 		}
+		var buildCostStartedAt = RenderCost.time();
 		buildContext.beginLayoutSubmission();
 		// Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
 		previousNodesById.clear();
@@ -594,6 +597,8 @@ class UiContext {
 			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
 			root = next;
 			if (verifyRetentionEvery > 0) recordFingerprints(next);
+			if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
+				nativeLayoutEndedAt, Sys.time(), nodeCount);
 			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
 		}
 		syncWindowDecorations(next);
@@ -664,6 +669,8 @@ class UiContext {
 		if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild()) || (reconcileNewFocus && focusChanged &&
 			(nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value))))) {
 			if (buildFeedbackPass >= 7) throw "UI interaction feedback did not converge after 8 passes";
+			if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
+				nativeLayoutEndedAt, Sys.time(), nodeCount);
 			return submitInternal(frame, cacheKey, view == null ? build : function() return view, false, buildFeedbackPass + 1);
 		}
 		// Routing can add changes after the build. Keep them until the feedback pass has patched their owners.
@@ -690,6 +697,8 @@ class UiContext {
 			syncAllocatedAt - compareAllocatedAt, nativeLayoutStartAllocatedAt - syncAllocatedAt);
 		lastFrameMetrics.setSubmitAllocations(viewBuiltAllocatedAt - viewAllocatedAt, nativeLayoutStartAllocatedAt - viewBuiltAllocatedAt,
 			nativeLayoutEndAllocatedAt - nativeLayoutStartAllocatedAt, submitEndAllocatedAt - nativeLayoutEndAllocatedAt);
+		if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
+			nativeLayoutEndedAt, submitEndedAt, nodeCount);
 		diagnosticStage = 0;
 		return next;
 	}
@@ -750,6 +759,7 @@ class UiContext {
 	}
 
 	public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
+		RenderCost.begin();
 		var renderStartedAt = Sys.time();
 		var renderStartAllocatedAt = AllocationProbe.now();
 		diagnosticStage = 20;
@@ -916,6 +926,7 @@ class UiContext {
 			lastFrameMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
 				renderEndAllocatedAt - nativeRenderStartAllocatedAt);
 		}
+		if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(), submittedNodeCount);
 		diagnosticStage = 0;
 	}
 

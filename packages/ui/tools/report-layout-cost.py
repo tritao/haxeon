@@ -2,10 +2,10 @@
 """Summarize opt-in layout submit diagnostics from profile-editor launch logs."""
 
 import argparse
-import bisect
-import json
 from pathlib import Path
 import statistics
+
+from ui_cost_report import frame_index, read_frames
 
 
 def read_submissions(path):
@@ -35,24 +35,10 @@ def read_submissions(path):
 
 
 def frame_costs(path, submissions):
-    timeline = path.parent / "frame-timeline.jsonl"
-    frames = [json.loads(line) for line in timeline.read_text().splitlines() if line.strip()]
-    starts = [frame["startedAtSeconds"] for frame in frames]
-    measured = set()
-    seen = set()
-    for index, frame in enumerate(frames):
-        action = frame["action"]
-        if action == "initial" or action.startswith(("setup:", "warm:", "verify:")):
-            continue
-        cycle = frame.get("cycle")
-        if (cycle is None and action in seen) or (cycle is not None and cycle > 0):
-            measured.add(index)
-        seen.add(action)
+    frames, starts, measured = read_frames(path)
     grouped = {}
     for row in submissions:
-        index = bisect.bisect_right(starts, row["started"]) - 1
-        if index < 0:
-            raise ValueError(f"{path}: submission precedes the first frame")
+        index = frame_index(path, starts, row["started"])
         if row["started"] > starts[index] + frames[index]["frameSeconds"] + 0.00001:
             raise ValueError(f"{path}: submission is outside the recorded frame")
         if index not in measured:

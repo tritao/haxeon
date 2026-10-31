@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.ui.debug.RenderCost;
+
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -705,6 +707,7 @@ class RenderNode {
 	function paintContent(canvas:Canvas):Bool {
 		if (resolved == null || !resolved.visible || !hasPaintHandler())
 			return false;
+		var started = RenderCost.time(), encodedBefore = RenderCost.encode;
 		var style = computedStyle;
 		var styleDecorations = style == null ? null : style.getReadOnly(StyleProperty.Decorations);
 		if (styleDecorations != null)
@@ -718,6 +721,7 @@ class RenderNode {
 		if (paintHandlers != null)
 			for (handler in paintHandlers)
 				handler(canvas, resolved);
+		if (RenderCost.enabled) RenderCost.callbacks += Sys.time() - started - (RenderCost.encode - encodedBefore);
 		return true;
 	}
 

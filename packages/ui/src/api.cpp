@@ -25,6 +25,7 @@
 #endif
 #include "render/frame_resources.h"
 #include "render/render_plan_executor.h"
+#include "render/render_cost.h"
 #include "render/ui_renderer.h"
 
 #include <list>
@@ -670,6 +671,8 @@ void NK_CALL finish_render_submission(void *data) {
 }
 
 void execute_render_submission(RenderSubmission &submission) {
+    nkui::RenderCostFrame render_cost_frame(submission.frame);
+    nkui::RenderCostProbe render_cost("worker", {"bind", "backend", "atlas_upload", "execute", "cleanup", "completion"});
     const uint64_t execution_started_at_ns = nk_time_now_ns();
     record_render_submission_value(submission.renderer,
                                    &nkui_renderer_stats::render_submission_queue_latency_ns,
@@ -685,6 +688,7 @@ void execute_render_submission(RenderSubmission &submission) {
         /* A failed bind may follow a surface-destroy callback while a prior
            frame left the context current on this thread. */
         nk_graphics_unbind_frame_target(&submission.frame_target);
+    render_cost.mark(0);
     nkui::UiRenderer *renderer_impl = nullptr;
     bool new_backend = false;
     nkgpu_frame_timing gpu_timing{};
@@ -722,6 +726,7 @@ void execute_render_submission(RenderSubmission &submission) {
             }
         }
 
+        render_cost.mark(1);
         if (renderer_impl && success) {
             if (submission.session_owner) {
                 std::scoped_lock upload_lock(resources_mutex, submission.session_owner->mutex);
@@ -734,6 +739,7 @@ void execute_render_submission(RenderSubmission &submission) {
                     if (success)
                         success = renderer_impl->uploadAtlases(*engine, new_backend);
             }
+            render_cost.mark(2);
             if (success) {
                 nkui::RenderExecutionError execution_error{};
                 success = nkui::execute_render_plan(
@@ -750,6 +756,7 @@ void execute_render_submission(RenderSubmission &submission) {
                                  renderer_impl->lastError(), nkgpu_last_error());
             }
         }
+        render_cost.mark(3);
         if (renderer_impl && success && renderer_impl->gpuRenderer().id) {
             gpu_timing.struct_size = sizeof(gpu_timing);
             have_gpu_timing =
@@ -776,6 +783,8 @@ void execute_render_submission(RenderSubmission &submission) {
         nk_graphics_unbind_frame_target(&submission.frame_target);
     }
 
+    render_cost.mark(4);
+    render_cost.success = success;
     const uint64_t execution_finished_at_ns = nk_time_now_ns();
     record_render_submission_value(submission.renderer,
                                    &nkui_renderer_stats::render_submission_execution_ns,
@@ -794,6 +803,7 @@ void execute_render_submission(RenderSubmission &submission) {
            completion until PLATFORM drains it or runtime shutdown closes it. */
         retain_orphan_completion(completion);
     }
+    render_cost.mark(5);
 }
 
 void cancel_render_completion_on_platform(RenderCompletion &completion) noexcept {
@@ -4563,6 +4573,9 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                                                         nk_surface surface,
                                                         const nkui_frame_info *frame_info,
                                                         nk_bool load_existing) {
+    nkui::RenderCostFrame render_cost_frame;
+    nkui::RenderCostProbe render_cost("frontend", {"acquire", "custom_plans", "reuse_check",
+        "layout_plan", "resources", "atlas_upload", "seal", "execute", "enqueue"});
     if (!frame_info || frame_info->struct_size < sizeof(*frame_info) ||
         !std::isfinite(frame_info->logical_width) || !std::isfinite(frame_info->logical_height) ||
         !std::isfinite(frame_info->pixel_scale) || frame_info->logical_width <= 0.0f ||
@@ -4593,6 +4606,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         }
         frame_guard.frame = frame;
         frame_acquired_at_ns = nk_time_now_ns();
+        render_cost_frame.set(frame);
     } else {
         if (nk_surface_make_current(surface) != NK_OK ||
             nk_surface_get_frame_target(surface, &frame_target) != NK_OK)
@@ -4626,6 +4640,11 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         renderer_slot->backend_device = frame_target.device;
         renderer_slot->backend_native_device = frame_target.native_device;
     }
+    if (render_cost.enabled()) {
+        render_cost.nodes = session_state->snapshot.items.size();
+        render_cost.primitives = session_state->snapshot.primitives.size();
+    }
+    render_cost.mark(0);
     const nkui::ResourceId main_target =
         nkui::make_resource_id(nkui::ResourceKind::RenderTarget, 1, 1);
     bool has_backdrop = false;
@@ -4713,6 +4732,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             if (policy >= NKUI_LAYOUT_CACHE_AUTO)
                 raster_paint_nodes.insert(node_id);
     }
+    render_cost.mark(1);
     const auto enqueue_sealed = [&](std::shared_ptr<const nkui::SealedRenderPlan> sealed_plan,
                                     std::vector<nkui::TextEngine *> engines,
                                     std::vector<std::shared_ptr<nkui::TextEngine>> owners) {
@@ -4731,8 +4751,11 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         resources_lock.unlock();
         sessions_lock.unlock();
         cpu_lock.unlock();
-        if (!enqueue_render_submission(submission))
+        const bool enqueued = enqueue_render_submission(submission);
+        render_cost.mark(8);
+        if (!enqueued)
             return NKUI_ERROR_RENDERING;
+        render_cost.success = true;
         frame_guard.handed_off = true;
         return NKUI_OK;
     };
@@ -4803,6 +4826,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 miss = &nkui_renderer_stats::render_plan_miss_unsettled;
         }
         if (!miss) {
+            render_cost.reused = true;
+            render_cost.mark(2);
             ++renderer_slot->stats.render_plan_reuses;
             accumulate_render_plan_stats(renderer_slot->stats, previous.plan->plan());
             renderer_slot->stats.render_plan_commands += previous.render_plan_commands;
@@ -4811,6 +4836,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         }
         ++(renderer_slot->stats.*miss);
     }
+    render_cost.mark(2);
     ++renderer_slot->stats.render_plan_compiles;
     const uint64_t commands_before = renderer_slot->stats.render_plan_commands;
     const uint64_t custom_bytes_before = renderer_slot->stats.custom_paint_bytes;
@@ -4822,6 +4848,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             &raster_paint_nodes, &custom_composites))
         return NKUI_ERROR_INVALID_TRANSACTION;
 
+    render_cost.mark(3);
     if (has_backdrop)
         append_backdrop_window_composite(session_state->frame.plan(), compile_target, main_target,
                                          load_existing != 0);
@@ -5325,6 +5352,11 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                 sealable = false;
         }
     }
+    if (render_cost.enabled()) {
+        render_cost.passes = plan.passes.size();
+        for (const auto &pass : plan.passes) render_cost.commands += pass.commands.size();
+    }
+    render_cost.mark(4);
     auto *session_text_engine = session_state->frame.text_engine();
     session_state->reusable_plan.valid = false;
     if (!sealable && threaded)
@@ -5342,12 +5374,14 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             if (!renderer_slot->renderer->uploadAtlases(*engine, new_backend))
                 return NKUI_ERROR_RENDERING;
     }
+    render_cost.mark(5);
     if (sealable) {
         nkui::RenderPlanSealError seal_error;
         auto sealed = nkui::SealedRenderPlan::seal(std::move(session_state->frame.plan()),
                                                    std::move(owned_resources), &seal_error);
         if (!sealed)
             return NKUI_ERROR_OUT_OF_MEMORY;
+        render_cost.mark(6);
         if (threaded) {
             if (session_text_engine)
                 text_engines.push_back(session_text_engine);
@@ -5391,6 +5425,8 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         nkui::RenderExecutionError execution_error{};
         const bool sealed_executed = nkui::execute_render_plan(*renderer_slot->renderer, *sealed,
                                                                {main_target, frame_target}, &execution_error);
+        render_cost.mark(7);
+        render_cost.success = sealed_executed;
         if (!sealed_executed)
             std::fprintf(stderr, "UIKit render execution failed: pass %u command %u: %s\n",
                          execution_error.pass_index, execution_error.command_index,
@@ -5398,9 +5434,12 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         return sealed_executed ? NKUI_OK : renderer_slot->renderer->resourceLimited()
             ? NKUI_ERROR_RESOURCE_LIMIT : NKUI_ERROR_RENDERING;
     }
+    render_cost.mark(6);
     /* Frames that composite a live surface producer keep the borrowed path. */
     const bool executed = nkui::execute_render_plan(*renderer_slot->renderer, plan, frame_resources,
                                                     {main_target, frame_target});
+    render_cost.mark(7);
+    render_cost.success = executed;
     return executed ? NKUI_OK : renderer_slot->renderer->resourceLimited()
         ? NKUI_ERROR_RESOURCE_LIMIT : NKUI_ERROR_RENDERING;
 }

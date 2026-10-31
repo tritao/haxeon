@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 import NativeKitUI;
+import haxeon.ui.debug.RenderCost;
 
 /** Typed retained display list. Resources referenced by the list stay alive natively until it is cleared or replaced. */
 class DisplayList {
@@ -21,7 +22,9 @@ class DisplayList {
 	/** Replaces this list with the command stream encoded by canvas. */
 	public function update(canvas:Canvas):Void {
 		ensureLive();
+		var started = RenderCost.time();
 		canvas.submitTo(value);
+		if (RenderCost.enabled) RenderCost.encode += Sys.time() - started;
 	}
 
 	/** Removes all commands and releases the list's retained resource references. */

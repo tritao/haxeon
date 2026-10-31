@@ -201,17 +201,29 @@ int main() {
     bool success = nk_window_create(&options, &window) == NK_OK;
     if (success) success = nkgpu_surface_create(window, 64, 64, &surface) == NKGPU_OK;
     if (success) success = nk_window_activate(window) == NK_OK;
-    bool ready = false;
-    for (int attempt = 0; success && !ready && attempt < 500; ++attempt) {
+    struct FrameTest { bool complete = false; bool success = false; } test;
+    if (success) success = nk_surface_set_frame_mode(surface, NK_SURFACE_FRAME_ON_DEMAND) == NK_OK;
+    if (success) success = nk_surface_set_frame_callback(surface,
+        [](nk_surface surface, int32_t width, int32_t height, void *data) {
+            auto &test = *static_cast<FrameTest *>(data);
+            if (width != 64 || height != 64) {
+                nk_surface_request_frame(surface);
+                return;
+            }
+            test.success = run(surface, false) && run(surface, true) &&
+                           raster_reuse(surface, false) && raster_reuse(surface, true);
+            test.complete = true;
+        }, &test) == NK_OK;
+    if (success) success = nk_surface_request_frame(surface) == NK_OK;
+    const double deadline = nk_time_seconds() + 15.0;
+    while (success && !test.complete && nk_time_seconds() < deadline) {
         nk_event event{}; event.struct_size = sizeof(event);
         success = nk_poll_event(&event) == NK_OK;
         nk_event_release(&event);
-        ready = nk_surface_make_current(surface) == NK_OK;
-        if (!ready) nk_wait_events_timeout(.01);
+        if (!test.complete) nk_wait_events_timeout(.01);
     }
-    if (success && ready) success = run(surface, false) && run(surface, true) &&
-                                  raster_reuse(surface, false) && raster_reuse(surface, true);
-    else success = false;
+    success = success && test.complete && test.success;
+    if (surface) nk_surface_set_frame_callback(surface, nullptr, nullptr);
     if (surface) nk_surface_destroy(surface);
     if (window) nk_window_destroy(window);
     nk_shutdown();

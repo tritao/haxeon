@@ -1,4 +1,5 @@
 #include "render_plan_executor.h"
+#include "render/render_cost.h"
 
 #include <algorithm>
 #include <atomic>
@@ -212,6 +213,11 @@ std::pair<int, int> surface_request_size(const RenderPlan &plan, ResourceId surf
 bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                          const FrameResources &resources, const WindowTarget &window,
                          RenderExecutionError *error) {
+    RenderCostProbe render_cost("executor", {"schedule", "begin", "dependencies", "draw", "submit"});
+    if (render_cost.enabled()) {
+        render_cost.passes = plan.passes.size();
+        for (const auto &pass : plan.passes) render_cost.commands += pass.commands.size();
+    }
     if (!renderer.valid() || !is_resource_id(window.id, ResourceKind::RenderTarget) ||
         window.frame_target.struct_size < sizeof(window.frame_target) ||
         window.frame_target.width <= 0 || window.frame_target.height <= 0)
@@ -220,6 +226,7 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
     RenderPlanScheduleError schedule_error{};
     if (!schedule_render_plan(plan, pass_order, &schedule_error))
         return fail(error, schedule_error.pass_index, 0, schedule_error.message);
+    render_cost.mark(0);
     /*
      * A live surface producer renders through callbacks, which a sealed
      * submission batch cannot carry, so those frames are drawn inline.
@@ -241,6 +248,7 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                 renderer.abortFrame();
         }
     } frame_guard{renderer};
+    render_cost.mark(1);
     std::unordered_set<uint32_t> internal_targets;
     for (const auto &pass : plan.passes)
         internal_targets.insert(pass.target.value);
@@ -292,6 +300,7 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
         renderer.markSurfaceCurrent(dependency.producer, generation, description);
         rendered_producers.insert(dependency.producer.value);
     }
+    render_cost.mark(2);
     static std::atomic<uint64_t> next_execution_serial{1};
     const uint64_t execution_serial = next_execution_serial.fetch_add(1, std::memory_order_relaxed);
     std::unordered_map<uint32_t, uint64_t> target_runtime_hashes;
@@ -430,8 +439,11 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
             return fail(error, pass_index, static_cast<uint32_t>(pass.commands.size()),
                         renderer.lastError());
     }
+    render_cost.mark(3);
     if (!renderer.endFrame())
         return fail(error, static_cast<uint32_t>(plan.passes.size()), 0, renderer.lastError());
+    render_cost.mark(4);
+    render_cost.success = true;
     frame_guard.complete = true;
     if (error)
         *error = {};
