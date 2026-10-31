@@ -49,7 +49,8 @@ class LambdaName {
 	 */
 	public static function variant(identity:String, ordinal:Int):String {
 		var position = identity.lastIndexOf("#");
-		return identity.substring(0, position) + "~" + ordinal + identity.substring(position);
+		// An identity without an ordinal (none is built today) keeps all of itself rather than losing its last character.
+		return position < 0 ? identity + "~" + ordinal : identity.substring(0, position) + "~" + ordinal + identity.substring(position);
 	}
 
 	public static inline function is(name:String):Bool

@@ -36,6 +36,8 @@ class LambdaNameMain {
 		expect(copy == "$lambda:demo.Main.run:run~1#2" && PositionalName.ordinal(copy) == 2 && PositionalName.group(copy) != PositionalName.group(name),
 			"a copy of a lambda is a sibling group of its own and keeps a numeric ordinal");
 
+		expect(LambdaName.variant("run", 2) == "run~2", "a variant of an identity without an ordinal keeps the whole identity");
+
 		expect(LambdaName.enclosing("$lambda:") == null
 			&& LambdaName.enclosing("$lambda:x") == null, "a malformed name has no enclosing function");
 		expect(LambdaName.outermost("$lambda:x") == "$lambda:x", "a malformed name is returned unchanged");
