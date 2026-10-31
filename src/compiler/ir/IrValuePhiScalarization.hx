@@ -14,7 +14,7 @@ class IrValuePhiScalarization {
 		program.functions = [for (fn in program.functions) rewriteFunction(fn, objects, table, layouts)];
 	}
 
-	static function rewriteFunction(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
+	public static function rewriteFunction(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
 			layouts:IrInlineValueLayout):IrFunction {
 		function valueName(type:IrType):Null<String> return switch type {
 			case Obj(name) if (objects.exists(name) && objects.get(name).isValue): name;

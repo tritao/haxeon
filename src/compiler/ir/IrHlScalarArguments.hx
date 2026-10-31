@@ -42,7 +42,12 @@ class IrHlScalarArguments {
 			for (fn in program.functions) if (candidates.exists(fn.name)) {
 				var retained = false;
 				for (arg in fn.arguments) if (isValue(arg.type, objects) && !fieldOnly(fn, arg, objects, candidates, methods, methodNames)) retained = true;
-				var specialized = IrScalarReplacement.rewrite(rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames), IrObjectTable.of(objects), true, true);
+				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
+				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames);
+				// Scalar call rewriting can introduce value constructions into a join. Split those joins before
+				// judging whether the specialized callee can keep its value arguments and result in registers.
+				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
+				var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
 				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, objects, _ -> 0);
 				for (block in specialized.blocks) for (located in block.instructions) switch located.value {
 					case NewObject(out, name):

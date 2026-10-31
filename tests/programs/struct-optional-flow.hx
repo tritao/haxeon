@@ -61,10 +61,22 @@ class OtherChooser extends VirtualChooser {
   public function new() super();
   override public function choose(value:Null<Choice>):Int return value == null ? 1 : value.n + 1;
 }
+class ChoiceBox {
+  public var value:Null<Choice>;
+  public function new(value:Null<Choice>) this.value = value;
+}
+function mergedChoiceAround(value:Null<Choice>, fallback:Choice, callback:Void->Void):Choice {
+  var saved = mergedChoice(value, fallback);
+  callback();
+  return saved;
+}
 class ChoiceEffects {
   public static var count:Int = 0;
   public static function preferred(value:Choice):Choice { count++; return value; }
 }
+function makeChoice(n:Int, text:String):Choice return new Choice(n, text);
+function mergedChoice(value:Null<Choice>, fallback:Choice):Choice
+  return value == null ? fallback : makeChoice(value.n, value.text);
 function applyChoice(chooser:Chooser, value:Choice):Int return chooser.choose(value, value).n;
 function applyVirtualChoice(chooser:VirtualChooser, value:Null<Choice>):Int return chooser.choose(value);
 function invokeNullChooser(chooser:Chooser, value:Choice):Int return chooser.choose(value, ChoiceEffects.preferred(value)).n;
@@ -135,6 +147,15 @@ function main():Int {
   var chooser = new Chooser(), choice = new Choice(42, "managed"), choiceBefore = hl.Gc.totalAllocated(), choiceTotal = 0;
   for (i in 0...10000) choiceTotal += applyChoice(chooser, choice);
   if (choiceTotal != 420000 || hl.Gc.totalAllocated() - choiceBefore > 4096) return 37;
+  var mergedBefore = hl.Gc.totalAllocated(), mergedTotal = 0;
+  for (i in 0...10000) mergedTotal += mergedChoice(choice, chooser.fallback).n;
+  if (mergedTotal != 420000 || hl.Gc.totalAllocated() - mergedBefore > 4096) return 45;
+  if (mergedChoice(null, chooser.fallback).n != 1) return 46;
+  var choiceBox = new ChoiceBox(choice);
+  var mergedSnapshot = mergedChoiceAround(choiceBox.value, chooser.fallback, function() { choiceBox.value = null; hl.Gc.major(); });
+  if (mergedSnapshot.n != 42 || mergedSnapshot.text != "managed" || choiceBox.value != null) return 47;
+  try { mergedChoiceAround(choice, chooser.fallback, function() { throw "expected"; }); return 48; }
+  catch (error:Dynamic) { if (error != "expected") return 49; }
   if (chooser.choose(null).n != 1 || chooser.choose(choice).text != "managed") return 38;
   var virtualChooser:VirtualChooser = new OtherChooser();
   if (applyVirtualChoice(virtualChooser, choice) != 43 || applyVirtualChoice(virtualChooser, null) != 1) return 39;

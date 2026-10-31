@@ -426,6 +426,14 @@ virtual dispatch. On the exploratory all-five-value UI build, this reduced the 3
 2,994 to 1,315 and the tab-matrix census from 4,997 to 1,654. HashLink per-action results still exceed the class baseline
 for multiple actions, so further work is required before accepting the conversion.
 
+HashLink scalar ABI selection now splits value joins introduced by call rewriting before testing whether a candidate can
+stay in registers. On the same all-five-value prototype, the 30-cycle interaction census counted 192 Rect, 146 Insets,
+1,309 Color, 807 LayoutAxis and 132 Transform2D boxes. The four tab transitions measured 125.5, 182.2, 143.0 and
+143.5 KiB; hover away, enter, field, inside and other measured 26.5, 2.6, 23.3, 0.6 and 14.3 KiB; idle and focused
+idle were 0.2 KiB each, inspector scroll was 21.7 KiB, and backspace and character input were 18.7 KiB each. Wasm GC
+allocated 6,138, 13,168, 6,136 and 6,138 objects over 120 measured frames in full, editing, static and text-heavy modes.
+These prototype measurements still do not meet the HashLink acceptance rule.
+
 Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
 leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
 nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be
