@@ -6,7 +6,8 @@ Date: 2026-10-30
 
 Proposed. Stage 1 starts after the current retention and render work in `packages/ui` lands. The component model
 (decision 2) is confirmed or revised by the stage 3 experiment. The discussion behind this record, including the comparison
-with GPUI and the per-frame arena question, is summarized in `packages/ui/docs/ARCHITECTURE_NOTES.md`.
+with GPUI and the per-frame arena question, is summarized in `packages/ui/docs/ARCHITECTURE_NOTES.md`. The language and
+compiler features it needs are in `docs/UI_LANGUAGE_FEATURES.md`.
 
 ## Context
 

@@ -106,3 +106,4 @@ expected result is bindings for leaf widgets and live values, small re-running s
 2. Apply the queued cleanups: lazy state initial values, a hobbing-player revision, one per-frame camera update, required
    BIM width, BIM default selection, the structural dock label key.
 3. Start ADR 0002 stage 1: signals under `State` and `observe*`.
+4. Language and compiler features the design needs, in order: `haxeon/docs/UI_LANGUAGE_FEATURES.md`.
