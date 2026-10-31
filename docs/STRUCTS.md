@@ -274,6 +274,26 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
   `Structural.assignChanged` writes the fields of its target, so a holder of immutable struct fields still updates
   them by replacement.
 
+The flow analyzer can infer construction as effect-free when it writes only the fresh receiver, does not let that
+receiver escape, and its initializers and callees are effect-free. It tracks nested constructors in the same purity
+fixpoint as other functions, so a getter that constructs a value can preserve a caller's nullable field refinements.
+Effectful or unsupported constructors and initializers invalidate those refinements, including after incremental edits.
+The proof covers exact non-generic declarations without inherited initialization.
+
+An exploratory compact native-geometry representation now compiles through those getter refinements. It reduced the
+hierarchy-to-sensors median from 180.5 to 166.7 KiB in the all-five-value prototype, but inspector scroll rose to
+38.6 KiB, above its 33 KiB ceiling, so the representation is not accepted. Its 30-cycle interaction census includes
+13,504 Rect and 6,536 Transform2D boxes; generated structural equality calls still materialize getter results on
+HashLink. The next compiler change must remove those temporary boxes and then remeasure the same workload.
+With only Rect and Insets converted, the same 120-frame Wasm GC Showcase measured 6,496, 13,528, 6,496 and 6,496
+objects in full, editing, static and text-heavy modes; the corresponding class baselines were 8,654, 15,482, 8,654 and
+8,656.
+The 30-cycle interaction census remained 192 Rect and 146 Insets boxes, plus 487 Color, 1,007 LayoutAxis and 1,722
+Transform2D class allocations.
+The HashLink tab transition medians were 112.7, 162.1, 126.9 and 131.0 KiB; hover away, enter, field, inside and other
+were 25.0, 2.6, 22.2, 0.6 and 13.2 KiB; idle actions were 0.2 KiB, inspector scroll was 21.6 KiB, and both typing actions
+were 17.9 KiB. This intermediate Rect/Insets state still exceeds the class baseline on some actions.
+
 On Wasm32, ordinary struct fields currently use boxed backing storage. Replacing a field copies the new value into its
 existing backing place, including nested value fields, so a receiver already bound to that place sees changes made by a
 callback. A field's first assignment adopts its newly copied value. This does not add a box per replacement; value reads

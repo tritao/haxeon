@@ -42,6 +42,56 @@ class NullableStructIncrementalMain {
 		if (new IrInterpreter(scalar.compile("Main").ir).run("main") != 4) throw "initial scalar optional call failed";
 		scalar.update("Value.hx", "struct Value { public var x:Int; public var y:Int; public function new(x:Int) { this.x = x + 3; y = 3; } }");
 		if (new IrInterpreter(scalar.compile("Main").ir).run("main") != 7) throw "scalar optional call retained its previous layout";
+		var purity = new Compiler();
+		purity.update("Value.hx", "struct Inner { public final text:String; public function new(text:String) this.text = text; } "
+			+ "struct Value { public final x:Int; public final inner:Inner; public function new(x:Int) { this.x = x; inner = new Inner('ok'); } }");
+		purity.update("Holder.hx", "class Holder { public static var changed:Bool = false; public var value:Null<Value>; public var copy(get, never):Value; "
+			+ "public function new() value = new Value(4); function get_copy():Value return new Value(7); }");
+		purity.update("Main.hx", "function main():Int { var h = new Holder(); return h.value != null && h.copy.inner.text == 'ok' ? h.value.x : 0; }");
+		if (new IrInterpreter(purity.compile("Main").ir).run("main") != 4) throw "pure nested value construction lost a field refinement";
+		purity.update("Value.hx", "struct Inner { public final text:String; public function new(text:String) this.text = text; } "
+			+ "struct Value { public final x:Int; public final inner:Inner; public function new(x:Int) { this.x = x; inner = new Inner('ok'); Holder.changed = true; } }");
+		var impureRejected = false;
+		try purity.compile("Main") catch (error:CompileError) impureRejected = error.diagnostic.code == "E1005";
+		if (!impureRejected) throw "incremental purity ignored a newly effectful constructor";
+		var closure = new Compiler();
+		closure.update("Main.hx", "struct Value { public final x:Int; public function new(x:Int) this.x = x; } "
+			+ "class Holder { public var value:Null<Value>; public function new() value = new Value(4); } "
+			+ "function main():Int { var h = new Holder(); var make = function():Value return new Value(7); "
+			+ "if (h.value != null) { var result = make(); if (result.x == 7) return h.value.x; } return 0; }");
+		if (new IrInterpreter(closure.compile("Main").ir).run("main") != 4) throw "pure construction in a closure lost a field refinement";
+		var alias = new Compiler();
+		alias.update("Main.hx", "class Cell { public var x:Int; public function new() x = 0; } "
+			+ "struct Value { public final cell:Cell; public function new(cell:Cell) { this.cell = cell; cell.x++; } } "
+			+ "class Holder { public var value:Null<Value>; public var copy(get, never):Value; public var cell:Cell; "
+			+ "public function new() { cell = new Cell(); value = new Value(cell); } function get_copy():Value return new Value(cell); } "
+			+ "function main():Int { var h = new Holder(); return h.value != null && h.copy.cell.x > 0 ? h.value.cell.x : 0; }");
+		var aliasRejected = false;
+		try alias.compile("Main") catch (error:CompileError) aliasRejected = error.diagnostic.code == "E1005";
+		if (!aliasRejected) throw "constructor mutation through an argument preserved a nullable field refinement";
+		var direct = new Compiler();
+		direct.update("Main.hx", "struct Value { public final x:Int; public function new(x:Int) this.x = x; } "
+			+ "class Holder { public var value:Null<Value>; public function new() value = new Value(4); } "
+			+ "class Mutator { public function new(holder:Holder) holder.value = null; } "
+			+ "function main():Int { var h = new Holder(); if (h.value != null) { new Mutator(h); return h.value.x; } return 0; }");
+		var directRejected = false;
+		try direct.compile("Main") catch (error:CompileError) directRejected = error.diagnostic.code == "E1005";
+		if (!directRejected) throw "direct effectful construction preserved a nullable field refinement";
+		var pureDirect = new Compiler();
+		pureDirect.update("Main.hx", "struct Value { public final x:Int; public function new(x:Int) this.x = x; } "
+			+ "class Holder { public var value:Null<Value>; public function new() value = new Value(4); } "
+			+ "class Pure { public final value:Int; public function new(value:Int) this.value = value; } "
+			+ "function main():Int { var h = new Holder(); if (h.value != null) { var p = new Pure(7); return h.value.x + p.value; } return 0; }");
+		if (new IrInterpreter(pureDirect.compile("Main").ir).run("main") != 11) throw "pure direct class construction lost a field refinement";
+		var initializer = new Compiler();
+		initializer.update("Main.hx", "class Effects { public static function change():Int { Holder.changed = true; return 1; } } "
+			+ "struct Value { public final x:Int = Effects.change(); public function new() {} } "
+			+ "class Holder { public static var changed:Bool = false; public var value:Null<Value>; public var copy(get, never):Value; "
+			+ "public function new() value = new Value(); function get_copy():Value return new Value(); } "
+			+ "function main():Int { var h = new Holder(); return h.value != null && h.copy.x == 1 ? h.value.x : 0; }");
+		var initializerRejected = false;
+		try initializer.compile("Main") catch (error:CompileError) initializerRejected = error.diagnostic.code == "E1005";
+		if (!initializerRejected) throw "effectful struct field initializer preserved a nullable field refinement";
 		Sys.println("PASS: inline optional fields follow incremental method and layout edits");
 	}
 }

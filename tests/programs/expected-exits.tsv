@@ -420,3 +420,4 @@ struct-phi-snapshots	42
 struct-linear-place-alias	42
 struct-fresh-receiver	42
 struct-nested-constructors	42
+struct-constructor-flow	42

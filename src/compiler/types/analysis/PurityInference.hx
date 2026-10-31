@@ -14,6 +14,7 @@ import compiler.syntax.Ast;
  */
 class PurityInference {
 	public static inline var TO_STRING = "$to-string";
+	static inline var FRESH_CONSTRUCTOR = "$fresh-constructor:";
 
 	final signatures:Map<String, AstFunction>;
 	final isAnnotatedPure:String->Bool;
@@ -146,6 +147,15 @@ class PurityInference {
 			if (declaration != null && !fn.isStatic && isValueClass(declaration) && ReceiverMutationInference.isReadOnly(declaration, fn))
 				receiverFacts.set(ReceiverMutationInference.PREFIX + name, true);
 		}
+		// A constructor writes its fresh receiver, but that is not an observable effect if it cannot
+		// escape and all initialization and called functions are pure. Keep these facts inside the
+		// same dependency fixpoint as ordinary functions; only synthetic construction facts are published.
+		for (name => declaration in classes) {
+			var key = inference.freshConstructorKey(name), fn = signatures.get(name + ".new");
+			if (key == null || (fn != null && fn.isExtern == true)) continue;
+			var found = inference.constructorDependencies(fn, name, declaration);
+			if (found != null) dependencies.set(key, found);
+		}
 		for (name => fn in signatures) {
 			if (fn.isExtern == true || isAnnotatedPure(name))
 				continue;
@@ -188,7 +198,7 @@ class PurityInference {
 		}
 		var result = receiverFacts;
 		for (name in dependencies.keys())
-			if (inference.isCandidate(name))
+			if (StringTools.startsWith(name, FRESH_CONSTRUCTOR) || inference.isCandidate(name))
 				result.set(name, true);
 		return result;
 	}
@@ -237,6 +247,46 @@ class PurityInference {
 			for (overrideKey in family)
 				result.set(overrideKey, true);
 		return result;
+	}
+
+	/** Stable synthetic fact for construction, including unsupported types which cannot have a positive fact. */
+	public static function constructorFact(name:String):String return FRESH_CONSTRUCTOR + name;
+
+	/** Only analyze exact, non-generic declarations with no inherited initialization. */
+	public function freshConstructorKey(name:String):Null<String> {
+		var declaration = classes.get(name);
+		if (declaration == null || declaration.isExtern == true || declaration.base != null || declaration.typeParameters.length != 0)
+			return null;
+		return constructorFact(name);
+	}
+
+	/** A direct stored field of the fresh receiver; properties and static fields may have visible effects. */
+	public function freshField(owner:String, name:String):Bool {
+		var declaration = classes.get(owner);
+		if (declaration == null) return false;
+		for (field in declaration.fields)
+			if (!field.isStatic && field.name == name)
+				return field.writeAccess != SetAccess && field.writeAccess != DynamicAccess;
+		return false;
+	}
+
+	function constructorDependencies(fn:Null<AstFunction>, owner:String, declaration:AstClass):Null<Map<String, Bool>> {
+		var walker = new PurityWalker(this, owner + ".new");
+		walker.freshReceiver = owner;
+		walker.declare("this");
+		if (fn != null) for (argument in fn.arguments) {
+			if (argument.defaultValue != null && !walker.value(argument.defaultValue)) return null;
+			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
+		}
+		for (field in declaration.fields) {
+			// A non-inline static initializer can publish state on first class use; its scheduling is
+			// outside this fresh receiver proof.
+			if (field.isStatic && !field.isInline && field.initializer != null) return null;
+			if (field.initializer != null && !walker.value(field.initializer)) return null;
+		}
+		return fn == null || walker.statements(fn.statements) ? walker.dependencies : null;
 	}
 
 	/** The known concrete class of a declared type, when it names a class this program declares -
@@ -343,6 +393,9 @@ private class PurityWalker {
 
 	/** When set, element and plain field stores are recorded here instead of rejected (see `localBodyStores`). */
 	public var stores:Null<{fields:Map<String, Bool>, indexed:Bool}> = null;
+
+	/** When analyzing construction, direct stores to this fresh receiver do not affect prior state. */
+	public var freshReceiver:Null<String> = null;
 
 	final inference:PurityInference;
 	final functionName:String;
@@ -478,12 +531,15 @@ private class PurityWalker {
 					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
 						isStringArrayType(type), isMapType(type));
 				pure;
+			case Assignment(name, value, _) if (freshReceiver != null && freshAssignment(name)): expression(value);
 			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name) && expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
 			case Increment(name, _, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 			case Increment(name, _, _): isLocal(name);
 			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key) && expression(value);
 			case IndexAssignment(target, key, value, _) if (stores != null): recordIndexedStore(); expression(target) && expression(key) && expression(value);
+			case FieldAssignment(Variable("this", _), field, value, _) if (freshReceiver != null && inference.freshField(freshReceiver, field)):
+				expression(value);
 			case FieldAssignment(object, field, value, _) if (stores != null && !inference.mayHaveSetter(field)): recordFieldStore(field); expression(object) && expression(value);
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
@@ -519,19 +575,34 @@ private class PurityWalker {
 		};
 	}
 
+	function freshAssignment(name:String):Bool {
+		if (freshReceiver == null) return false;
+		var field = StringTools.startsWith(name, "this.") ? name.substr(5) : name;
+		return field.indexOf(".") < 0 && (!isLocal(name) || StringTools.startsWith(name, "this."))
+			&& inference.freshField(freshReceiver, field);
+	}
+
 	function expression(value:AstExpression):Bool {
 		return switch value {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
-				NativeLayoutQuery(_, _, _, _), NewMap(_, _, _), Lambda(_, _, _, _):
+				NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
 				true;
-			case ErrorExpression(_), ClosureCall(_, _, _), New(_, _, _), NewGeneric(_, _, _, _), MapComprehension(_, _, _, _, _, _, _):
+			case Lambda(_, _, _, _): freshReceiver == null;
+			case New(typeName, arguments, _):
+				var key = inference.freshConstructorKey(typeName);
+				if (key == null || !all(arguments)) return false;
+				dependencies.set(key, true);
+				true;
+			case ErrorExpression(_), ClosureCall(_, _, _), NewGeneric(_, _, _, _), MapComprehension(_, _, _, _, _, _, _):
 				false;
+			case Variable("this", _) if (freshReceiver != null): false;
 			case Variable(name, _):
 				if (StringTools.startsWith(name, "this.")) {
 					var parts = name.split("."), pure = true;
 					for (index in 1...parts.length) if (!readsProperty(parts[index])) pure = false;
 					pure;
 				} else isLocal(name) || readsProperty(name);
+			case Member(Variable("this", _), name, _) if (freshReceiver != null): readsProperty(name);
 			case Member(object, "length", _) if (isStringReceiver(object) || isArrayReceiver(object)): expression(object);
 			case Member(object, name, _): readsProperty(name) && expression(object);
 			case Add(left, right, _): // `+` may convert an object operand through its toString, unless both sides are numbers.
@@ -602,6 +673,7 @@ private class PurityWalker {
 			case MethodCall(object, name, arguments, _)
 				if (isStringOperation(name) && isStringReceiver(object) || name == "join" && isStringArrayReceiver(object)): expression(object) && all(arguments);
 			case MethodCall(object, name, arguments, _) if (stores != null && isArrayStorageOperation(name) && isArrayReceiver(object)): stores.indexed = true; expression(object) && all(arguments);
+			case MethodCall(Variable("this", _), _, _, _) if (freshReceiver != null): false;
 			case MethodCall(object, name, arguments, _):
 				var key = switch object {
 					case Variable("this", _): inference.resolveOwnMethod(name, functionName);
@@ -881,10 +953,7 @@ private class PurityWalker {
 	function classNameOfType(type:Null<AstType>):Null<String>
 		return inference.classNameOfType(type);
 
-	/** `new T(...)` always taints its enclosing statement impure (constructors are not analysed),
-	 * so tracking a class name from one would never be consulted; only literal shapes are worth
-	 * inferring here.
-	 */
+	/** Infer iterable shapes from literals, not from arbitrary constructor results. */
 	function isIterableInitializer(initializer:AstExpression):Bool
 		return switch initializer {
 			case ArrayLiteral(_, _), MapLiteral(_, _), NewArray(_, _, _), NewMap(_, _, _): true;

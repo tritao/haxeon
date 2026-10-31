@@ -167,8 +167,15 @@ class ExpressionTyper {
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
 			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span, scope);
 			case NewGeneric(typeName, typeArguments, arguments, span):
-				callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
-			case New(typeName, arguments, span): callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
+				var constructed = callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
+				if (!session.isPureCall(compiler.types.analysis.PurityInference.constructorFact(typeName)))
+					session.invalidateUnknownCall(scope);
+				constructed;
+			case New(typeName, arguments, span):
+				var constructed = callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
+				if (!session.isPureCall(compiler.types.analysis.PurityInference.constructorFact(typeName)))
+					session.invalidateUnknownCall(scope);
+				constructed;
 			case NewArray(element, length, span): typeNewArray(element, length, span, scope, lowerType);
 			case NewMap(key, value, span): typeNewMap(key, value, span, lowerType);
 			case Index(array, offset, span): typeIndex(array, offset, span, scope);
