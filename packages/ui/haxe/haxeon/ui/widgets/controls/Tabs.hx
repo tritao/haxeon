@@ -18,6 +18,7 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
@@ -99,102 +100,111 @@ class Tabs implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var state:State<String> = context.state(context.id("selected-tab"), selectedKey);
-			var active:String = selectionMode == TabsSelectionMode.Controlled ?
-				selectedKey : state.value;
-			if (!isEnabled(active))
-				active = firstEnabled();
-			// Syncing during the build: this build already uses `active`, so bumping the revision would only make every cache
-			// around the tabs rebuild them again on the next frame.
-			if (active != state.value)
-				state.updateQuietly(active);
-			selectedKey = active;
-			var select = function(next:String) {
-				if (next == selectedKey)
-					return;
-				selectedKey = next;
-				state.update(next);
-				if (hasChangeHandler)
-					onChange(next);
-			};
-
 			var rootId = context.id("tabs");
-			var rootFlags = context.interactionStates.get(rootId);
-			var rootComputed = context.styleResolver.resolve(
-				new StyleTarget("tabs", key.value, key.value, null, ["tabs"], rootFlags),
-				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-			var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-			root.setStyleIdentity("tabs", key.value, key.value, null, ["tabs"]);
-			root.states = rootFlags;
-			root.computedStyle = rootComputed;
-			var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");
-			tabsSemantics.orientation = AccessibilityOrientation.Horizontal;
-			root.semantics = tabsSemantics;
-			var stripView = new TabsStripView(function(buildContext) {
-				var strip = buildStrip(buildContext, rootComputed, active, select);
-				var transform:Null<(RenderNode, BuildContext)->RenderNode> = transformHeaderStrip;
-				return transform == null ? scrollStrip(strip, buildContext, active) : transform(strip, buildContext);
-			});
-			var revision:Null<Void->String> = headerRevision;
-			var strip = revision == null ? stripView.build(context) :
-				new RetainedView("tab-headers", function(_) return stripView,
-					function() return context.theme.tokens.tabHeaderHeight + ":" + active.length + ":" + active + revision()).build(context);
-			strip.layout.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-			if (headerTrailing != null) {
-				var headerStyle = new LayoutStyle();
-				headerStyle.width = LayoutAxis.grow();
-				headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-				headerStyle.direction = LayoutDirection.LeftToRight;
-				headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
-				var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
-				header.hitTestSelf = false;
-				strip.layout.style.width = LayoutAxis.grow();
-				header.add(strip);
-				header.add(context.withScope(new Key("header-actions"), function() return headerTrailing.build(context)));
-				root.add(header);
-			} else root.add(strip);
-
-			var selectedItem:Null<TabItem> = null;
-			for (item in items)
-				if (item.key == active) {
-					selectedItem = item;
-					break;
-				}
-			if (selectedItem != null) {
-				var item:TabItem = cast selectedItem;
-				var panel = context.withScope(new Key("panel:" + item.key), function() {
-					var panelStyle = new LayoutStyle();
-					panelStyle.width = LayoutAxis.stretch();
-					panelStyle.height = LayoutAxis.grow();
-					var node = new RenderNode(context.id("tab-panel"), LayoutVisualKind.Box,
-						panelStyle);
-					node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
-					var content = context.withStyleParent(rootComputed, function() {
-						return context.withScope(new Key("content"),
-							function() return item.content.build(context));
-					});
-					content.layout.style.width = LayoutAxis.stretch();
-					node.add(content);
-					// A quiet content boundary is independent of the active-tab accent.
-					var dividerStyle = new LayoutStyle();
-					dividerStyle.width = LayoutAxis.stretch();
-					dividerStyle.height = LayoutAxis.fixed(1.0);
-					dividerStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
-					dividerStyle.zIndex = 1;
-					dividerStyle.background = context.theme.tokens.border;
-					var divider = new RenderNode(context.id("tab-content-divider"), LayoutVisualKind.Box, dividerStyle);
-					divider.hitTestSelf = false;
-					node.add(divider);
-					return node;
-				});
-				root.add(panel);
-			}
-			return root;
+			return context.selfUpdating(rootId, function() return buildControl(context, rootId), false);
 		});
 	}
 
+	function buildControl(context:BuildContext, rootId:WidgetId):RenderNode {
+		var state:State<String> = context.state(context.id("selected-tab"), selectedKey);
+		var active:String = selectionMode == TabsSelectionMode.Controlled ?
+			selectedKey : state.value;
+		if (!isEnabled(active))
+			active = firstEnabled();
+		// Syncing during the build: this build already uses `active`, so bumping the revision would only make every cache
+		// around the tabs rebuild them again on the next frame.
+		if (active != state.value)
+			state.updateQuietly(active);
+		selectedKey = active;
+		var select = function(next:String) {
+			if (next == selectedKey)
+				return;
+			if (selectionMode == TabsSelectionMode.Controlled) {
+				if (hasChangeHandler) onChange(next);
+				return;
+			}
+			selectedKey = next;
+			state.updateQuietly(next);
+			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(next);
+			if (hasChangeHandler)
+				onChange(next);
+		};
+
+		var rootFlags = context.interactionStates.get(rootId);
+		var rootComputed = context.styleResolver.resolve(
+			new StyleTarget("tabs", key.value, key.value, null, ["tabs"], rootFlags),
+			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
+		var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
+		root.setStyleIdentity("tabs", key.value, key.value, null, ["tabs"]);
+		root.states = rootFlags;
+		root.computedStyle = rootComputed;
+		var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");
+		tabsSemantics.orientation = AccessibilityOrientation.Horizontal;
+		root.semantics = tabsSemantics;
+		var stripView = new TabsStripView(function(buildContext) {
+			var strip = buildStrip(buildContext, rootComputed, active, select, rootId);
+			var transform:Null<(RenderNode, BuildContext)->RenderNode> = transformHeaderStrip;
+			return transform == null ? scrollStrip(strip, buildContext, active) : transform(strip, buildContext);
+		});
+		var revision:Null<Void->String> = headerRevision;
+		var strip = revision == null ? stripView.build(context) :
+			new RetainedView("tab-headers", function(_) return stripView,
+				function() return context.theme.tokens.tabHeaderHeight + ":" + active.length + ":" + active + revision()).build(context);
+		strip.layout.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
+		if (headerTrailing != null) {
+			var headerStyle = new LayoutStyle();
+			headerStyle.width = LayoutAxis.grow();
+			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
+			headerStyle.direction = LayoutDirection.LeftToRight;
+			headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
+			var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
+			header.hitTestSelf = false;
+			strip.layout.style.width = LayoutAxis.grow();
+			header.add(strip);
+			header.add(context.withScope(new Key("header-actions"), function() return headerTrailing.build(context)));
+			root.add(header);
+		} else root.add(strip);
+
+		var selectedItem:Null<TabItem> = null;
+		for (item in items)
+			if (item.key == active) {
+				selectedItem = item;
+				break;
+			}
+		if (selectedItem != null) {
+			var item:TabItem = cast selectedItem;
+			var panel = context.withScope(new Key("panel:" + item.key), function() {
+				var panelStyle = new LayoutStyle();
+				panelStyle.width = LayoutAxis.stretch();
+				panelStyle.height = LayoutAxis.grow();
+				var node = new RenderNode(context.id("tab-panel"), LayoutVisualKind.Box,
+					panelStyle);
+				node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
+				var content = context.withStyleParent(rootComputed, function() {
+					return context.withScope(new Key("content"),
+						function() return item.content.build(context));
+				});
+				content.layout.style.width = LayoutAxis.stretch();
+				node.add(content);
+				// A quiet content boundary is independent of the active-tab accent.
+				var dividerStyle = new LayoutStyle();
+				dividerStyle.width = LayoutAxis.stretch();
+				dividerStyle.height = LayoutAxis.fixed(1.0);
+				dividerStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
+				dividerStyle.zIndex = 1;
+				dividerStyle.background = context.theme.tokens.border;
+				var divider = new RenderNode(context.id("tab-content-divider"), LayoutVisualKind.Box, dividerStyle);
+				divider.hitTestSelf = false;
+				node.add(divider);
+				return node;
+			});
+			root.add(panel);
+		}
+		return root;
+	}
+
 	function buildStrip(context:BuildContext, rootComputed:ComputedStyle, active:String,
-			select:String->Void):RenderNode {
+			select:String->Void, rootId:WidgetId):RenderNode {
 		var stripStyle = new LayoutStyle();
 		stripStyle.width = LayoutAxis.grow();
 		stripStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
@@ -242,7 +252,7 @@ class Tabs implements View {
 				var close = item.onClose;
 				if (close != null) close();
 			}, "capture");
-			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode);
+			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode, rootId);
 			var indicatorStyle = new LayoutStyle();
 			indicatorStyle.width = LayoutAxis.grow();
 			indicatorStyle.height = LayoutAxis.fixed(2.0);
@@ -340,7 +350,7 @@ class Tabs implements View {
 		return viewport;
 	}
 
-	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode):RenderNode {
+	function buildClosableHeader(context:BuildContext, item:TabItem, buttonNode:RenderNode, rootId:WidgetId):RenderNode {
 		var rowStyle = new LayoutStyle();
 		rowStyle.direction = LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
@@ -376,16 +386,21 @@ class Tabs implements View {
 		closeNode.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
 		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
 		// changing a node of the submitted tree behind the frame's back.
-		closeNode.layout.style.visible = hover.value || focused.value;
+		closeNode.layout.style.visible = context.observeBool(() -> hover.value || focused.value);
+		var setFlag = function(state:State<Bool>, value:Bool) {
+			if (state.value == value) return;
+			state.updateQuietly(value);
+			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
+		};
 		row.on(UiEventKind.HoverEnter, function(event) {
-			if (event.target.equals(row.id)) hover.update(true);
+			if (event.target.equals(row.id)) setFlag(hover, true);
 		});
 		row.on(UiEventKind.HoverLeave, function(event) {
-			if (event.target.equals(row.id)) hover.update(false);
+			if (event.target.equals(row.id)) setFlag(hover, false);
 		});
 		for (node in [buttonNode, closeNode]) {
-			node.on(UiEventKind.Focus, function(_) focused.update(true));
-			node.on(UiEventKind.Blur, function(_) focused.update(false));
+			node.on(UiEventKind.Focus, function(_) setFlag(focused, true));
+			node.on(UiEventKind.Blur, function(_) setFlag(focused, false));
 		}
 		slot.add(closeNode);
 		row.add(slot);

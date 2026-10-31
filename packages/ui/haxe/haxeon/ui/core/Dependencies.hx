@@ -7,16 +7,20 @@ package haxeon.ui.core;
  * revision.
  */
 class Dependencies {
-	final intReads:Array<Void->Int>;
-	final intValues:Array<Int>;
-	final stringReads:Array<Void->Null<String>>;
-	final stringValues:Array<Null<String>>;
+	static final NoIntReads:Array<Void->Int> = [];
+	static final NoIntValues:Array<Int> = [];
+	static final NoStringReads:Array<Void->Null<String>> = [];
+	static final NoStringValues:Array<Null<String>> = [];
+	var intReads:Array<Void->Int>;
+	var intValues:Array<Int>;
+	var stringReads:Array<Void->Null<String>>;
+	var stringValues:Array<Null<String>>;
 
 	public function new() {
-		intReads = [];
-		intValues = [];
-		stringReads = [];
-		stringValues = [];
+		intReads = NoIntReads;
+		intValues = NoIntValues;
+		stringReads = NoStringReads;
+		stringValues = NoStringValues;
 	}
 
 	public var intCount(get, never):Int;
@@ -28,11 +32,13 @@ class Dependencies {
 		return stringReads.length;
 
 	public function addInt(read:Void->Int, value:Int):Void {
+		if (intReads == NoIntReads) {intReads = []; intValues = [];}
 		intReads.push(read);
 		intValues.push(value);
 	}
 
 	public function addString(read:Void->Null<String>, value:Null<String>):Void {
+		if (stringReads == NoStringReads) {stringReads = []; stringValues = [];}
 		stringReads.push(read);
 		stringValues.push(value);
 	}

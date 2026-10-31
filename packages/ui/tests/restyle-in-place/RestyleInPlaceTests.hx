@@ -287,6 +287,105 @@ private class DecoratedGauge implements View {
   }
 }
 
+private class TabsRig {
+  public final ui:UiContext;
+  public final tabs:haxeon.ui.widgets.controls.Tabs;
+  public final decorated:DecoratedControl;
+  public var panelBuilds = 0;
+  public var changes = 0;
+  public var closes = 0;
+  final view:View;
+  final patched:Bool;
+  final frame = new LayoutFrame(320, 240);
+  var submissions = 0;
+  public function new(fonts:FontCollection, patched:Bool) {
+    this.patched = patched;
+    ui = new UiContext(null, fonts);
+    ui.buildContext.updateInPlace = patched;
+    ui.buildContext.environment.reducedMotion = true;
+    var first = new haxeon.ui.widgets.controls.TabItem("first", "First", new RetainedView("first-page", _ -> new Text("First page")));
+    var second = new haxeon.ui.widgets.controls.TabItem("second", "Second", new RetainedView("second-page", _ -> new Text("Second page")));
+    var disabled = new haxeon.ui.widgets.controls.TabItem("disabled", "Disabled", new Text("Disabled page"), false);
+    first.onClose = () -> closes++;
+    second.onClose = () -> closes++;
+    var style = new LayoutStyle();
+    style.width = LayoutAxis.fixed(280);
+    style.height = LayoutAxis.fixed(200);
+    tabs = new haxeon.ui.widgets.controls.Tabs("local-tabs", [first, disabled, second], "first", _ -> changes++, style);
+    tabs.headerRevision = () -> "headers";
+    decorated = new DecoratedControl("tabs-host", context -> tabs.build(context));
+    view = new RetainedView("tabs-panel", _ -> {panelBuilds++; return decorated;},
+      patched ? null : () -> Std.string(panelBuilds));
+  }
+  public function submit():RenderNode return ui.submitCached(() -> view, frame, patched ? "tabs" : "tabs:" + submissions++);
+}
+
+private class PopupRig implements View {
+  public final ui:UiContext;
+  public final popup:haxeon.ui.widgets.controls.SelectionPopup;
+  public var result:Null<haxeon.ui.widgets.controls.SelectionPopup.SelectionPopupResult>;
+  public var caller:Null<RenderNode>;
+  public var panelBuilds = 0;
+  public var chosen = 0;
+  public var active = 0;
+  public var selections = 0;
+  public var closes = 0;
+  public var presses = 0;
+  public var backgroundWheels = 0;
+  final view:View;
+  final patched:Bool;
+  final frame = new LayoutFrame(240, 240);
+  var submissions = 0;
+  public function new(fonts:FontCollection, patched:Bool) {
+    this.patched = patched;
+    ui = new UiContext(null, fonts);
+    ui.buildContext.updateInPlace = patched;
+    ui.buildContext.environment.reducedMotion = true;
+    var options:Array<haxeon.ui.widgets.controls.SelectOption<Dynamic>> = [for (index in 0...24)
+      new haxeon.ui.widgets.controls.SelectOption<Dynamic>("option-" + index, "Option " + index, index, index != 3)];
+    var next = function(index:Int, direction:Int):Int {
+      var candidate = index;
+      for (_ in 0...options.length) {
+        candidate = (candidate + direction + options.length) % options.length;
+        if (options[candidate].enabled) return candidate;
+      }
+      return index;
+    };
+    popup = new haxeon.ui.widgets.controls.SelectionPopup(options, [for (index in 0...24) index], 0, 0,
+      0, 0, 8, 8, 150, 36, 150, 36,
+      index -> {chosen = index; active = index; selections++;}, () -> closes++, index -> active = index,
+      index -> index >= 0 && index < options.length && options[index].enabled, next);
+    view = new RetainedView("popup-panel", _ -> {panelBuilds++; return this;},
+      patched ? null : () -> Std.string(panelBuilds));
+  }
+  public function build(context:BuildContext):RenderNode {
+    var style = new LayoutStyle();
+    style.width = LayoutAxis.fixed(150);
+    style.height = LayoutAxis.fixed(36);
+    style.clipToParent = false;
+    var root = new RenderNode(context.id("popup-anchor"), LayoutVisualKind.Box, style);
+    root.on(UiEventKind.Scroll, _ -> backgroundWheels++);
+    var menu = popup.build(context, root);
+    result = menu;
+    menu.node.layout.style.zIndex = 11;
+    menu.node.on(UiEventKind.PointerDown, _ -> presses++);
+    menu.node.onPaint((canvas, _) -> canvas.fillRect(new Rect(1, 1, 2, 2), Color.rgba(0.2, 0.3, 0.4, 1)), "caller-popup");
+    var overlay = new LayoutStyle();
+    overlay.width = LayoutAxis.fixed(3);
+    overlay.height = LayoutAxis.fixed(3);
+    overlay.positioning = haxeon.ui.LayoutPositioning.Absolute;
+    caller = new RenderNode(context.id("popup-caller"), LayoutVisualKind.Box, overlay);
+    menu.node.add(caller);
+    return root;
+  }
+  public function menu():haxeon.ui.widgets.controls.SelectionPopup.SelectionPopupResult {
+    var value = result;
+    if (value == null) throw "Popup is not built";
+    return value;
+  }
+  public function submit():RenderNode return ui.submitCached(() -> view, frame, patched ? "popup" : "popup:" + submissions++);
+}
+
 private class UpdatingResources implements View {
   public var enabled = false;
   public var generation = 0;
@@ -904,6 +1003,88 @@ class RestyleInPlaceTests {
     Sys.println("PASS membership: rebuilding reparents retained nodes without false input changes; a real reordering still submits and verifies");
   }
 
+  static function tabsAndPopup(fonts:FontCollection):Void {
+    var patched = new TabsRig(fonts, true), reference = new TabsRig(fonts, false);
+    var root = patched.submit(); reference.submit();
+    var caller = root.children[root.children.length - 1], steps = 0;
+    function compareTabs():Void {
+      var left = patched.submit(), right = reference.submit();
+      steps++;
+      check(left == root && left.children.indexOf(caller) >= 0 && left.layout.style.zIndex == 3,
+        "Tabs lost their root or caller additions at step " + steps);
+      check(signature(left) == signature(right), "Tabs differ from a full rebuild at step " + steps);
+      check(patched.tabs.selectedKey == reference.tabs.selectedKey && patched.changes == reference.changes
+        && patched.closes == reference.closes && patched.decorated.presses == reference.decorated.presses,
+        "Tab callbacks or selection differ at step " + steps);
+    }
+    for (name in ["second", "first", "second"]) {
+      for (rig in [patched, reference]) {
+        var current = rig.ui.root;
+        if (current == null) throw "Missing tabs";
+        var target = control(current, name), bounds = target.globalBounds();
+        rig.ui.pointerMove(bounds.x + 10, bounds.y + bounds.height / 2);
+      }
+      compareTabs();
+      for (rig in [patched, reference]) {
+        var current = rig.ui.root;
+        if (current == null) throw "Missing tabs";
+        var bounds = control(current, name).globalBounds();
+        rig.ui.pointerDown(bounds.x + 10, bounds.y + bounds.height / 2, 0);
+        rig.ui.pointerUp(bounds.x + 10, bounds.y + bounds.height / 2, 0);
+      }
+      compareTabs();
+    }
+    for (key in [UiKey.Right, UiKey.Left, UiKey.Right]) {
+      for (rig in [patched, reference]) {rig.ui.key(UiEventKind.KeyDown, key); rig.ui.key(UiEventKind.KeyUp, key);}
+      compareTabs();
+    }
+    check(patched.panelBuilds == 1, "Local tabs rebuilt their enclosing panel");
+    check(patched.decorated.presses > 0, "Tabs did not invoke the caller listener");
+    patched.ui.dispose(); reference.ui.dispose();
+
+    var popup = new PopupRig(fonts, true), rebuilt = new PopupRig(fonts, false);
+    popup.submit(); rebuilt.submit();
+    var node = popup.menu().node, added = popup.caller, popupSteps = 0;
+    function comparePopup():Void {
+      var left = popup.submit(), right = rebuilt.submit();
+      popupSteps++;
+      check(popup.menu().node == node && node.children.indexOf(cast added) >= 0 && node.layout.style.zIndex == 11,
+        "Popup lost its root or caller additions at step " + popupSteps);
+      check(signature(left) == signature(right), "Popup differs from a full rebuild at step " + popupSteps
+        + ":\n--- patched\n" + signature(left) + "--- reference\n" + signature(right));
+      check(paintTrace(node).same(paintTrace(rebuilt.menu().node)), "Popup caller paint differs at step " + popupSteps);
+      check(popup.active == rebuilt.active && popup.chosen == rebuilt.chosen && popup.selections == rebuilt.selections
+        && popup.closes == rebuilt.closes && popup.presses == rebuilt.presses, "Popup callbacks differ at step " + popupSteps);
+    }
+    for (rig in [popup, rebuilt]) rig.ui.focusWidget(rig.menu().optionNodes[0].id);
+    comparePopup();
+    for (key in [UiKey.Down, UiKey.Down, UiKey.Down, UiKey.End, UiKey.Up, UiKey.Home]) {
+      for (rig in [popup, rebuilt]) {rig.ui.key(UiEventKind.KeyDown, key); rig.ui.key(UiEventKind.KeyUp, key);}
+      comparePopup();
+    }
+    for (rig in [popup, rebuilt]) {
+      var option = rig.menu().optionNodes[4], resolved = option.resolved;
+      if (resolved == null) throw "Missing popup option geometry";
+      var bounds = resolved.clippedViewportBounds();
+      rig.ui.pointerDown(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0);
+      rig.ui.pointerUp(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0);
+    }
+    comparePopup();
+    check(popup.chosen == 4 && popup.selections == 1, "Popup did not select exactly once");
+    check(popup.presses > 0, "Popup did not invoke the caller listener");
+    for (rig in [popup, rebuilt]) {
+      var bounds = rig.menu().node.globalBounds();
+      rig.ui.scroll(bounds.x + 5, bounds.y + bounds.height / 2, 0, 60);
+    }
+    comparePopup();
+    check(popup.backgroundWheels == 0 && rebuilt.backgroundWheels == 0, "Popup wheel input reached its enclosing view");
+    for (rig in [popup, rebuilt]) rig.ui.key(UiEventKind.KeyDown, UiKey.Escape);
+    comparePopup();
+    check(popup.panelBuilds == 1, "Popup navigation rebuilt its enclosing panel");
+    popup.ui.dispose(); rebuilt.ui.dispose();
+    Sys.println("PASS tabs/popup: switching retained tabs and navigating, selecting and scrolling a popup keep roots and caller additions and match fresh builds");
+  }
+
   static function editedComposite(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), gauge = new Gauge();
     var view:View = new RetainedView("edited-composite", _ -> gauge), frame = new LayoutFrame(200, 100);
@@ -933,7 +1114,8 @@ class RestyleInPlaceTests {
       });
     });
     var frame = new LayoutFrame(200, 100), key = "resources";
-    function submit():RenderNode return ui.submitCached(() -> view, frame, key);
+    var factories = 0;
+    function submit():RenderNode return ui.submitCached(() -> {factories++; return view;}, frame, key);
     var root = submit();
     widget.enabled = true;
     check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was not registered");
@@ -960,9 +1142,13 @@ class RestyleInPlaceTests {
     value.update(7);
     refreshed = submit();
     check(builds == 3 && refreshed.children[0].children[0].layout.text == "1:7:1", "Owned state revisions stopped invalidating retained caches");
+    check(widget.value == value, "A live state handle changed across patches and complete builds");
     widget.enabled = false;
+    key = "resources-remove";
+    var previousFactories = factories;
     check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was lost after a rebuild");
     submit();
+    check(factories == previousFactories + 1, "A complete frame repeated its build to settle already tracked resource membership");
     check(widget.disposed == 2, "Removed child resources were not disposed");
     check(caller.created == 1 && caller.disposed == 0, "A caller-owned updater lost its resources across owner patches");
     ui.dispose();
@@ -975,6 +1161,7 @@ class RestyleInPlaceTests {
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
+    tabsAndPopup(fonts);
     editedComposite(fonts);
     updatingResources(fonts);
     verifyMode(fonts);

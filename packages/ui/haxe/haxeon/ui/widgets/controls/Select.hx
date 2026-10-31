@@ -127,12 +127,14 @@ class Select<T> implements View {
 				if (triggerNode != null)
 					context.requestFocus(triggerNode.id);
 			};
-			var setActive = function(index:Int) {
+			var setActive = function(index:Int, reveal:Bool = true) {
 				var current:Int = activeState.value;
 				if (isEnabledIndex(index)) {
-					if (index != current)
-						activeState.update(index);
-					popupVisibility.ensure(index);
+					if (index != current) {
+						activeState.updateQuietly(index);
+						if (!context.updateInPlace) activeState.update(index);
+					}
+					if (reveal) popupVisibility.ensure(index);
 				}
 			};
 			var focusOption = function(index:Int) {
@@ -275,7 +277,7 @@ class Select<T> implements View {
 					popupTriggerWidth, popupTriggerHeight, fallbackWidth(),
 					triggerHeightFallback(),
 					function(index:Int) { selectOption(index); }, close,
-					function(index:Int) { setActive(index); },
+					function(index:Int) { setActive(index, false); },
 					function(index:Int) return isEnabledIndex(index),
 					function(index:Int, direction:Int) return nextEnabled(index, direction));
 				var popupResult = popup.build(context, root);

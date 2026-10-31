@@ -5,7 +5,7 @@ class State<T> {
 	final store:StateStore;
 	public final id:WidgetId;
 
-	@:allow(haxeon.ui.core.BuildContext)
+	@:allow(haxeon.ui.core.StateStore)
 	private function new(store:StateStore, id:WidgetId) {
 		this.store = store;
 		this.id = id;

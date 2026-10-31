@@ -59,10 +59,10 @@ are edits that have no build to reconcile.
   Properties that come from the widget instance (focusable, enabled, cursor, tab index) are not reapplied. A build whose node
   changed kind cannot be reconciled and replaces the node (`replacedBy`, followed by the caches that held it), without what callers
   added; the root of the whole tree is left to the next full build. `Button`, `IconButton`, `Checkbox`, `Toggle`, `Radio`,
-  `TextField`, `Slider` and `ProgressBar` use it. A widget qualifies when its build makes the same kind of node every time.
+  `TextField`, `Slider`, `ProgressBar`, `Tabs` and `SelectionPopup` use it. A widget qualifies when its build makes the same kind of node every time.
   A closure that captures its build root calls `RenderNode.latest(root)` when it needs the node: reconcile forwards that
   discarded build root to the instance kept in the tree. Descendant captures remain valid because the built children are
-  swapped into the tree. `Tabs` and `SelectionPopup` still build with their panel.
+  swapped into the tree.
   Children are swapped rather than patched field by field because the new build's closures refer to the nodes it made
   (`TextField`'s pointer handlers read `textNode.resolved`), so those must be the ones in the tree; a hand-kept list of node
   properties to copy would also go stale with every new one.
@@ -668,3 +668,75 @@ strict budgets (including retention again), an ordinary eight-cycle panel replay
 148 widget resources and 209 style entries; post-warmup RSS growth is 6.09 / 6.09 / 5.94 MiB. Normal panel-flow replay
 contains 5413 frames, including real CNC hold/resume, override and completion. Captures are retained in the outer
 repository under `app/build/profiles/ui-cnc-cost-*`, `ui-cnc-census-*`, `ui-cnc-normal` and `ui-cnc-gates`, without bytecode.
+
+## Tabs and selection popup reconciliation (2026-10-31)
+
+Tabs retain their root and reconcile local selection and close-button visibility. Controlled selection remains owned by the
+caller: it reports the requested key, and the caller supplies the next selection. Scheduling an additional local patch in
+that case would build the old composite immediately before the caller rebuilds it. Optional retained headers observe close
+visibility, so quiet hover/focus updates cannot leave their close controls stale.
+
+SelectionPopup retains its root and its public option-node/visibility bridge while reconciling option selection and keyboard
+navigation. Select and ComboBox route active-option changes through that bridge; committing a value, closing and changing a
+query still update their enclosing control. The popup uses ScrollView's existing retained scrolling and resource lifetime,
+rather than binding a controller to discarded roots. Revealing the active row is a one-shot navigation request stored with the controller, allowing
+subsequent manual scrolling even across enclosing builds. Wheel input is owned by the popup even at its scroll limits.
+
+Composite updaters may declare `buildsFromHover=false` when their only hover reads are stylesheet resolution or live paint.
+Style rules still request a rebuild; otherwise hover repaints the node directly. The default remains conservative for widgets
+that compute additional content from hover. This prevents a composite boundary from turning plain descendant hover into a
+whole-panel rebuild. Resource membership changes request a complete settling build only outside an active complete frame;
+that frame already records and releases resources through StateStore's existing frame lifetime. Empty observation and
+interaction captures share immutable empty arrays. State-ID and revision lists reuse unchanged snapshots; changed lists
+reserve their final size. StateStore interns its stable handles until their stored values are released. These changes avoid
+adding allocation churn when a controlled pane registers its updater again during an ordinary complete build.
+
+The decorated-control tests switch tabs with pointer and keyboard input, skip disabled choices, navigate and select popup
+options, scroll and close the popup. Every step compares against a fresh build and checks stable roots, caller styles,
+children, listeners and paint. Scrolling also tests stationary-pointer hover: old paths can reference replaced objects, so
+event routing updates the current node through UiContext's existing ID index. Post-layout hover and focus changes settle
+through bounded submission feedback before paint; paint-only changes invalidate the custom list rather than layout-input
+revisions after submission. AccessibilityContract now verifies every frame, including real Select/ComboBox rebuilds and
+scrolling. Verification comparisons and fingerprints remain unchanged.
+
+Same-machine exact allocation census, probes and verification off, 30 cycles before (`30cf5c5e`, editor `f3251e58e`)
+and after. These are allocator-counted bytes rather than the runtime's coarser allocation-block accounting. Closed-popup
+interaction actions not listed here are unchanged, including hover, scrolling and idle. The complete-submit selection
+figure sums its measured view, tree/style, native-layout and reconciliation phases within each frame before taking the median.
+
+| action | before bytes | after bytes |
+|---|---:|---:|
+| hierarchy→sensors | 165408 | 165168 |
+| sensors→hierarchy | 130432 | 130120 |
+| console→telemetry | 115320 | 115056 |
+| telemetry→console | 134152 | 133944 |
+| type-char | 18200 | 18152 |
+| type-backspace | 18456 | 18408 |
+| selection, measured submit phases | 876440 | 869288 |
+
+Captures under the outer repository's `app/build/profiles`: `ui-cnc-census-*` (before) and `ui-controls-census-*` (after).
+Bytecode copies are removed after analysis. The hierarchy→sensors ceiling is lowered from 214 to 213.8 KiB; no ceiling is
+raised. The allocation savings are small: the purpose is independently updating decorated controls without adding cost to
+existing editor actions. This change claims no frame-time improvement.
+
+Probe-off budget medians from the same machine (`ui-cnc-cost-*` before, `ui-controls-cost-*` after):
+
+| action | before KiB | after KiB | before ms | after ms |
+|---|---:|---:|---:|---:|
+| hierarchy→sensors | 162.4 | 161.1 | 1.76 | 1.73 |
+| sensors→hierarchy | 126.7 | 126.6 | 1.36 | 1.34 |
+| console→telemetry | 112.3 | 112.0 | 1.17 | 1.16 |
+| telemetry→console | 132.2 | 130.0 | 1.23 | 1.24 |
+| hover-field | 23.9 | 24.1 | 0.43 | 0.48 |
+| hover-other | 13.1 | 13.1 | 0.42 | 0.44 |
+| hover-away | 24.9 | 24.9 | 0.43 | 0.46 |
+| scroll-inspector | 22.3 | 22.3 | 0.72 | 0.76 |
+| typing / backspace | 17.8 | 17.8 | 0.42 | 0.43 |
+| selection | — | — | 3.17 | 3.09 |
+
+Runtime allocation-block refill attribution moves the hover-field median by 0.2 KiB despite an identical 22080-byte exact
+census. The census establishes that no action allocates more; neither the apparent refill savings on tab transitions nor
+the small timing differences are attributed as improvements. All ten UI suites, all nine editor retention scenarios, the
+strict lowered budgets and three independent 500-cycle memory captures pass. Memory growth after warmup is 5.47 MiB in
+each final capture, with listeners=2, widget resources=148 and style entries=209 stable. Final logs and source hashes are in
+`app/build/profiles/ui-controls-gates`.

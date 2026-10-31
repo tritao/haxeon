@@ -49,6 +49,7 @@ import haxeon.ui.widgets.collections.VirtualList;
 class AccessibilityContract {
 	public static function run(fonts:FontCollection):Int {
 		var context = new UiContext(LayoutSession.create(), fonts);
+		context.verifyRetentionEvery = 1;
 		var frame = new LayoutFrame(256.0, 192.0);
 		var changes = 0;
 		var tabs = new Tabs("accessibility-tabs", [
@@ -525,9 +526,10 @@ class AccessibilityContract {
 		selectRoot = root.children[0];
 		viewport = selectRoot.children[1].children[0];
 		content = viewport.children[0];
-		if (content.children.length < options.length)
+		var optionContent = content.children[0];
+		if (optionContent.children.length < options.length)
 			return false;
-		var lastOption = content.children[options.length - 1];
+		var lastOption = optionContent.children[options.length - 1];
 		var endContent:ResolvedLayoutItem = cast content.resolved;
 		var focusedId = context.focus.focusedId;
 		if (focusedId == null || !focusedId.equals(lastOption.id))

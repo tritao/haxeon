@@ -8,14 +8,17 @@ import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
-import haxeon.ui.Transform2D;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextWrap;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.State;
+import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityAction;
@@ -55,8 +58,8 @@ class SelectionPopupResult {
 class SelectionPopup {
 	final options:Array<SelectOption<Dynamic>>;
 	final visibleIndices:Array<Int>;
-	final selectedValue:Dynamic;
-	final activeIndex:Int;
+	public var selectedValue:Dynamic;
+	public var activeIndex(default, null):Int;
 	final rootX:Float;
 	final rootY:Float;
 	final triggerX:Float;
@@ -97,9 +100,33 @@ class SelectionPopup {
 	}
 
 	public function build(context:BuildContext, root:RenderNode):SelectionPopupResult {
+		var dropdownId = context.id("options");
+		var valueState = context.state(dropdownId, selectedValue);
 		var optionNodes:Array<RenderNode> = [];
-		var scrollController:ScrollController = null;
 		var visibility = new SelectionPopupVisibility();
+		var request = function() {
+			valueState.updateQuietly(selectedValue);
+			if (!context.updateInPlace || !context.requestPatch(dropdownId)) valueState.update(selectedValue);
+		};
+		var ensure = function(index:Int) {
+			activeIndex = index;
+			visibility.ensure(index);
+			request();
+		};
+		var dropdown = context.selfUpdating(dropdownId,
+			function() return buildControl(context, dropdownId, optionNodes, visibility, ensure, request), false);
+		root.add(dropdown);
+		root.onPointerDownOutside(function(event) {
+			if (event.button == 0) onClose();
+		});
+		return new SelectionPopupResult(dropdown, optionNodes, ensure);
+	}
+
+	function buildControl(context:BuildContext, dropdownId:WidgetId, optionNodes:Array<RenderNode>,
+			visibility:SelectionPopupVisibility, ensure:Int->Void, request:Void->Void):RenderNode {
+		optionNodes.resize(0);
+		var scrollController:Null<ScrollController> = null;
+		visibility.ensure = function(_:Int) {};
 		var width = triggerWidth > 0.0 ? triggerWidth : fallbackWidth;
 		var height = triggerHeight > 0.0 ? triggerHeight : fallbackHeight;
 		var edge = Math.min(8.0, context.viewportWidth * 0.5);
@@ -135,7 +162,6 @@ class SelectionPopup {
 		dropdownStyle.childGap = 2.0;
 		dropdownStyle.radiusTopLeft = dropdownStyle.radiusTopRight = 5.0;
 		dropdownStyle.radiusBottomLeft = dropdownStyle.radiusBottomRight = 5.0;
-		var dropdownId = context.id("options");
 		var dropdownComputed = context.resolveStyle(new StyleTarget("selection-popup", "options",
 			"options", null, ["selection-popup"], context.interactionStates.get(dropdownId)), dropdownStyle);
 		var dropdown = new RenderNode(dropdownId, LayoutVisualKind.Custom,
@@ -167,60 +193,58 @@ class SelectionPopup {
 			listSemantics.actions = AccessibilityAction.ScrollForward |
 				AccessibilityAction.ScrollBackward;
 		dropdown.semantics = listSemantics;
+		// A menu owns wheel input even at its limits or when all options fit.
+		// Otherwise its enclosing scroll view moves underneath the open popup.
+		var ownWheel = function(event:UiEvent) {
+			if (!event.defaultPrevented && scrollController != null)
+				scrollController.scrollBy(0.0, event.deltaY);
+			event.preventDefault();
+			event.stopPropagation();
+		};
+		dropdown.on(UiEventKind.Scroll, ownWheel);
 		var optionParent = dropdown;
 		if (needsScroll) {
+			var scrollState = context.resourceState(context.id("option-scroll"),
+				function() return new SelectionPopupScrollState(activeIndex), function(_) {}).value;
+			if (scrollState.activeIndex != activeIndex) {
+				scrollState.activeIndex = activeIndex;
+				scrollState.revealPending = true;
+			}
+			scrollController = scrollState.controller;
+			var controller:ScrollController = scrollController;
 			var viewportStyle = new LayoutStyle();
 			viewportStyle.width = LayoutAxis.grow();
 			viewportStyle.height = LayoutAxis.fixed(optionViewportHeight);
 			viewportStyle.clipVertical = true;
-			var scrollViewport = new RenderNode(context.id("option-viewport"),
-				LayoutVisualKind.Box, viewportStyle);
-			var storedScroll:State<ScrollController> = context.state(scrollViewport.id,
-				new ScrollController());
-			scrollController = storedScroll.value;
-			scrollController.bind(function(value) { storedScroll.update(value); });
 			var contentStyle = new LayoutStyle();
 			contentStyle.width = LayoutAxis.grow();
 			contentStyle.height = LayoutAxis.fit();
 			contentStyle.direction = LayoutDirection.TopToBottom;
 			contentStyle.childGap = 2.0;
-			contentStyle.transform = Transform2D.identity().translated(0.0,
-				-scrollController.offsetY);
-			var optionContent = new RenderNode(context.id("option-content"),
-				LayoutVisualKind.Box, contentStyle);
-			scrollViewport.add(optionContent);
-			dropdown.add(scrollViewport);
-			optionParent = optionContent;
-			scrollViewport.onResolved(function(geometry) {
-				scrollController.updateMetrics(geometry.width, geometry.height,
-					geometry.contentBounds.width, geometry.contentBounds.height);
-			});
+			optionParent = new RenderNode(context.id("option-content"), LayoutVisualKind.Box, contentStyle);
+			var scroll = new ScrollView("option-viewport", new SelectionPopupContent(optionParent),
+				viewportStyle, ScrollAxis.Vertical, controller);
+			scroll.showScrollbar = false;
+			scroll.onScroll = ownWheel;
+			dropdown.add(scroll.build(context));
 			visibility.ensure = function(index:Int) {
-				if (scrollController == null || scrollController.viewportHeight <= 0.0)
-					return;
+				scrollState.activeIndex = index;
+				scrollState.revealPending = true;
+				if (controller.viewportHeight <= 0.0) return;
 				var position = visiblePosition(index);
-				if (position < 0)
-					return;
+				scrollState.revealPending = false;
+				if (position < 0) return;
 				var optionTop = position * (rowHeight + 2.0);
 				var optionBottom = optionTop + rowHeight;
-				var target = scrollController.offsetY;
-				if (optionTop < target)
-					target = optionTop;
-				else if (optionBottom > target + optionViewportHeight)
-					target = optionBottom - optionViewportHeight;
-				if (target != scrollController.offsetY) {
-					scrollController.jumpTo(scrollController.offsetX, target);
-				}
+				var target = controller.offsetY;
+				if (optionTop < target) target = optionTop;
+				else if (optionBottom > target + optionViewportHeight) target = optionBottom - optionViewportHeight;
+				if (target != controller.offsetY && controller.jumpTo(controller.offsetX, target)) context.requestLayoutFeedback();
 			};
+			// ScrollView updates metrics on its translated content before this child resolves.
+			optionParent.onResolved(function(_) { if (scrollState.revealPending) visibility.ensure(scrollState.activeIndex); });
 		}
-		// A menu owns wheel input even at its limits or when all options fit.
-		// Otherwise its enclosing scroll view moves underneath the open popup.
-		dropdown.on(UiEventKind.Scroll, function(event) {
-			if (!event.defaultPrevented && scrollController != null)
-				scrollController.scrollBy(0.0, event.deltaY);
-			event.preventDefault();
-			event.stopPropagation();
-		});
+
 		for (position in 0...visibleIndices.length) {
 			var originalIndex = visibleIndices[position];
 			var option:SelectOption<Dynamic> = options[originalIndex];
@@ -231,7 +255,7 @@ class SelectionPopup {
 			// on every row, so the text lines up whether or not that row is the selected one.
 			optionStyle.padding = new Insets(26.0, 5.0, 9.0, 5.0);
 			var optionButton = new Button(option.label, optionStyle,
-				function() { onSelect(originalIndex); }, option.key);
+				function() { selectedValue = option.value; activeIndex = originalIndex; onSelect(originalIndex); request(); }, option.key);
 			optionButton.classes = ["selection-option"];
 			optionButton.ellipsizeLabel = true;
 			optionButton.variant = ButtonVariant.Navigation;
@@ -271,19 +295,14 @@ class SelectionPopup {
 				if (next < 0)
 					return;
 				onActive(next);
-				visibility.ensure(next);
+				ensure(next);
 				var nextPosition = visiblePosition(next);
 				if (nextPosition >= 0 && nextPosition < optionNodes.length)
 					context.requestFocus(optionNodes[nextPosition].id);
 				event.preventDefault();
 			});
 		}
-		root.add(dropdown);
-		root.onPointerDownOutside(function(event) {
-			if (event.button == 0)
-				onClose();
-		});
-		return new SelectionPopupResult(dropdown, optionNodes, visibility.ensure);
+		return dropdown;
 	}
 
 	/** Include the check gutter, row padding and popup padding in the natural width. */
@@ -333,4 +352,18 @@ class SelectionPopup {
 
 	static function sameValue(left:Dynamic, right:Dynamic):Bool
 		return left == right;
+}
+
+
+private class SelectionPopupContent implements View {
+	final node:RenderNode;
+	public function new(node:RenderNode) this.node = node;
+	public function build(context:BuildContext):RenderNode return node;
+}
+
+private class SelectionPopupScrollState {
+	public final controller = new ScrollController();
+	public var activeIndex:Int;
+	public var revealPending = true;
+	public function new(activeIndex:Int) this.activeIndex = activeIndex;
 }

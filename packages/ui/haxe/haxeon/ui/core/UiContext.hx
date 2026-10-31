@@ -598,6 +598,8 @@ class UiContext {
 		}
 		syncWindowDecorations(next);
 		diagnosticStage = 9;
+		interactionStates.acknowledge();
+		var routedInteractionRevision = interactionStates.revision;
 		var previousFocus = focus.focusedId;
 		focus.rebuild(next);
 		var requestedFocus = pendingFocus;
@@ -621,7 +623,7 @@ class UiContext {
 			}
 			return path;
 		});
-		events.setRoot(next);
+		events.setRoot(next, nodesById);
 		gestures.setRoot(next);
 		updateCursor();
 		if (nextFocus != null && (previousFocus == null || !previousFocus.equals(nextFocus)))
@@ -653,17 +655,18 @@ class UiContext {
 			accessibilityBridge.coordinateScale = platformCoordinateScale;
 			accessibilityBridge.update(next, focus.focusedId);
 		}
-		// A newly mounted focus trap chooses its first target after layout, and a widget that stopped being focusable (disabled)
-		// loses focus here while still on screen. Rebuild once with that focus state before returning the frame for painting;
-		// a widget that left the tree shows nothing stale, so losing its focus needs no second build.
+		// Layout can move a different node under a stationary pointer, and a newly mounted focus trap chooses its target here.
+		// Settle those routed states before painting, using the same bounded feedback as viewport-dependent builds.
 		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
 		// fingerprints of the previous frame's different nodes with the same IDs.
 		if (verifyRetentionEvery > 0)
 			recordFingerprints(next);
-		if (reconcileNewFocus && focusChanged && (nextFocus != null ||
-			(previousFocus != null && nodesById.exists(previousFocus.value))))
-			return submitInternal(frame, cacheKey, function() return view, false, buildFeedbackPass);
-		// Focus routing can add changes after the build. Keep them until the focus pass has patched their owners.
+		if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild()) || (reconcileNewFocus && focusChanged &&
+			(nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value))))) {
+			if (buildFeedbackPass >= 7) throw "UI interaction feedback did not converge after 8 passes";
+			return submitInternal(frame, cacheKey, view == null ? build : function() return view, false, buildFeedbackPass + 1);
+		}
+		// Routing can add changes after the build. Keep them until the feedback pass has patched their owners.
 		interactionStates.acknowledge();
 		frameNumber++;
 		var submitEndedAt = Sys.time();
@@ -1171,11 +1174,27 @@ class UiContext {
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
 			var owner = buildContext.updatingOwner(node);
-			if (owner != null) {
+			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
 		return true;
+	}
+
+	function routedInteractionNeedsBuild():Bool {
+		var rebuild = false;
+		for (change in interactionStates.changes()) {
+			var node = currentNodesById.get(change.id);
+			if (node == null) continue;
+			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
+			else if (node.hasPaintHandler()) {
+				// Layout is already submitted; only the custom list depends on this paint-only routed change.
+				customPaintKeys.remove(node.id.value);
+			}
+		}
+		return rebuild;
 	}
 
 	/** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
@@ -1185,7 +1204,8 @@ class UiContext {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
 			var owner = buildContext.updatingOwner(node);
-			if (owner != null) {
+			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
 			} else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);

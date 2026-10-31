@@ -725,6 +725,12 @@ class FrameworkSmoke {
 
 	@:access(haxeon.ui.core.TextInputBridge)
 	static function main():Int {
+		var result = run();
+		if (result != 0) Sys.println("FAIL: FrameworkSmoke check " + result);
+		return result;
+	}
+
+	static function run():Int {
 		var originalTypography = new haxeon.ui.core.ResolvedTextStyle(
 			new TextStyle(16.0), new ParagraphStyle(TextWrap.WordCharacter), Color.fromBytes(0, 0, 0));
 		var mergedTypography = originalTypography.merge(new TextStyleOverride(null, 20.0, null,
@@ -2878,6 +2884,7 @@ class FrameworkSmoke {
 		if (narrowMenuBounds == null || narrowMenuBounds.x < 7.9 ||
 			narrowMenuBounds.x + narrowMenuBounds.width > 172.1) return 1023;
 
+		context.pointerLeave();
 		var tooltip = new Tooltip("tooltip-smoke", new Button("Anchor"), new Text("Hint"));
 		var tooltipFrame = new LayoutFrame(256.0, 192.0);
 		var tooltipRoot = context.submit(tooltip, tooltipFrame);
@@ -3995,17 +4002,23 @@ class FrameworkSmoke {
 		navigationTokens.navigationBackground = Color.rgba(0.11, 0.12, 0.13, 1.0);
 		navigationTokens.navigationHover = Color.rgba(0.31, 0.32, 0.33, 1.0);
 		context.setTheme(new Theme(navigationTokens));
+		context.pointerLeave();
 		var navigationButton = new Button("Navigation");
 		navigationButton.variant = ButtonVariant.Navigation;
 		var navigationRoot = context.submit(navigationButton, themedFrame);
 		if (navigationRoot.styleClasses.indexOf("navigation") < 0 ||
 			navigationRoot.layout.style.background.red != 0.11)
-			return 240;
+			throw "FrameworkSmoke: navigation button initial background";
 		var navigationGeometry:ResolvedLayoutItem = cast navigationRoot.resolved;
 		context.pointerMove(navigationGeometry.x + 2.0, navigationGeometry.y + 2.0);
 		navigationRoot = context.submit(navigationButton, themedFrame);
 		if (navigationRoot.layout.style.background.red != 0.31)
 			return 241;
+		var navigationReplacement = new Button("Navigation replacement");
+		navigationReplacement.variant = ButtonVariant.Navigation;
+		var replacementRoot = context.submit(navigationReplacement, themedFrame);
+		if (replacementRoot.layout.style.background.red != 0.31)
+			throw "A newly mounted button under a stationary pointer must resolve its hover style before paint";
 
 		// Remaining widgets resolve through the same application cascade, including
 		// paint-only properties consumed by their retained custom painters.

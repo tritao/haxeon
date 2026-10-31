@@ -9,6 +9,7 @@ import haxeon.ui.style.StyleStateUtil;
 /** Capture/target/bubble dispatch with per-pointer hover and pointer capture. */
 class EventDispatcher {
 	var root:Null<RenderNode>;
+	var nodesById:Null<Map<Int, RenderNode>>;
 	final focus:FocusManager;
 	final interactionStates:InteractionStateStore;
 	var commandRegistry:Null<CommandRegistry>;
@@ -89,11 +90,13 @@ class EventDispatcher {
 				setState(node, StyleState.Hovered, false);
 		hoverPaths.clear();
 		root = null;
+		nodesById = null;
 		hitTestProvider = null;
 	}
 
-	public function setRoot(root:Null<RenderNode>):Void {
+	public function setRoot(root:Null<RenderNode>, ?nodesById:Map<Int, RenderNode>):Void {
 		this.root = root;
+		this.nodesById = nodesById;
 		if (capturedIds.size() > 0) {
 			var stale:Array<Int> = [];
 			for (pointerId in capturedIds.keys()) {
@@ -622,6 +625,12 @@ class EventDispatcher {
 	}
 
 	function setState(node:RenderNode, state:StyleState, enabled:Bool):Void {
+		var current = nodesById != null ? nodesById.get(node.id.value) : root == null ? null : root.find(node.id);
+		if (current != null && current != node) {
+			// Previous hover paths can still point at nodes replaced by this submission.
+			node.routeStates(StyleStateUtil.withState(node.states, state, enabled));
+			node = current;
+		}
 		var next = StyleStateUtil.withState(node.states, state, enabled);
 		if (next == node.states)
 			return;

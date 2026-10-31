@@ -177,8 +177,11 @@ class BuildContext {
 	 * unless a stylesheet rule matches the node on hover it builds the same; one that does more with hover updates itself
 	 * (selfUpdating). Custom paint that reads hover as it paints is repainted by the frame instead (UiContext).
 	 */
-	public function hoverRebuilds(node:RenderNode):Bool
-		return !updateInPlace || updatingOwner(node) != null || hasHoverStyle(node);
+	public function hoverRebuilds(node:RenderNode):Bool {
+		var owner = updatingOwner(node);
+		var entry = owner == null ? null : updatingBuild(owner);
+		return !updateInPlace || (entry != null && entry.buildsFromHover) || hasHoverStyle(node);
+	}
 
 	/** Conservative guard for retained hover. Conditional rules are included even when inactive. */
 	public function hasHoverStyle(node:RenderNode):Bool {
@@ -378,13 +381,16 @@ class BuildContext {
 	 * the new build. So `build` must not leave state in closures that outlives the build, other than through the nodes it makes,
 	 * and a closure that captures the root resolves it through RenderNode.latest when it runs: reconcile keeps the old root.
 	 * A widget that changes its own state during interaction keeps it out of the revision that ancestors' caches watch
-	 * (State.updateQuietly).
+	 * (State.updateQuietly). Set buildsFromHover=false when hover is read only by style resolution or live paint.
 	 */
-	public function selfUpdating(id:WidgetId, build:Void->RenderNode):RenderNode {
+	public function selfUpdating(id:WidgetId, build:Void->RenderNode, buildsFromHover:Bool = true):RenderNode {
+		// Old entries can still belong to hidden caches; only their immutable state snapshots are reused.
+		var previous = selfUpdatingBuilds.get(id.value);
 		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy());
+		entry.buildsFromHover = buildsFromHover;
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
-		var root = buildUpdating(entry);
+		var root = buildUpdating(entry, previous == null ? null : previous.dependencies);
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
 		entry.built = root.snapshotBuilt();
@@ -525,10 +531,10 @@ class BuildContext {
 	}
 
 	/** Each reconciled build owns its current dependencies and resources, even when its enclosing cache stays unchanged. */
-	function buildUpdating(entry:SelfUpdatingBuild):RenderNode {
+	function buildUpdating(entry:SelfUpdatingBuild, ?prior:UpdatingDependencies):RenderNode {
 		var stateMark = stateStore.beginUsage(), intMark = observed.intCount, stringMark = observed.stringCount;
 		var registrationMark = updatingRegistrations;
-		var previous = entry.dependencies;
+		var previous = entry.dependencies == null ? prior : entry.dependencies;
 		if (previous != null && entry.root != null && updatingStatesChanged(entry)) previous.stateInvalidationRevision++;
 		try {
 			var root = entry.build();
@@ -536,13 +542,13 @@ class BuildContext {
 			var reads = observed.intCount == intMark && observed.stringCount == stringMark ? null : observed.since(intMark, stringMark);
 			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this, root);
 			if (usedStates != null || reads != null || children != null || previous != null) {
-				var dependencies = previous == null ? new UpdatingDependencies() : previous;
-				var allStates = children == null ? usedStates : children.appendStateIds(usedStates);
-				if (entry.root != null && !haxeon.Equality.equals(dependencies.allStateIds, allStates)) {
+				var dependencies = entry.dependencies == null ? new UpdatingDependencies() : entry.dependencies;
+				var allStates = children == null ? usedStates : children.appendStateIds(usedStates, previous == null ? null : previous.allStateIds);
+				if (!stateStore.frameActive && entry.root != null && !haxeon.Equality.equals(dependencies.allStateIds, allStates)) {
 					requestBuildFeedback();
 				}
 				dependencies.stateIds = usedStates;
-				dependencies.stateRevisions = usedStates == null ? null : stateRevisions(usedStates, dependencies.stateRevisions);
+				dependencies.stateRevisions = usedStates == null ? null : stateRevisions(usedStates, previous == null ? null : previous.stateRevisions);
 				dependencies.observed = reads;
 				dependencies.children = children;
 				dependencies.allStateIds = allStates;
@@ -780,7 +786,7 @@ class BuildContext {
 
 	public function state<T>(id:WidgetId, initial:T):State<T> {
 		stateStore.initialize(id, initial);
-		return new State<T>(stateStore, id);
+		return stateStore.handle(id);
 	}
 
 	/** Captures state usage so a retained subtree can keep its resources mounted. */
@@ -841,7 +847,10 @@ class BuildContext {
 				if (stateStore.valueRevision(ids[index]) != previous[index]) {same = false; break;}
 			if (same) return previous;
 		}
-		return [for (id in ids) stateStore.valueRevision(id)];
+		var result:Array<Int> = [];
+		result.resize(ids.length);
+		for (index in 0...ids.length) result[index] = stateStore.valueRevision(ids[index]);
+		return result;
 	}
 
 	/** Keeps state-backed resources alive for a retained subtree this frame. */
@@ -865,7 +874,7 @@ class BuildContext {
 		if (!stateStore.contains(id))
 			throw 'Widget state has not been initialized for ${stateStore.describe(id)}';
 		stateStore.touch(id);
-		return new State<T>(stateStore, id);
+		return stateStore.handle(id);
 	}
 
 	/** Lazily creates resource-backed state and releases it when its widget unmounts. */
@@ -879,7 +888,7 @@ class BuildContext {
 			stateStore.onUnmount(id, function() { dispose(value); });
 		} else
 			stateStore.touch(id);
-		var result:State<Dynamic> = new State<Dynamic>(stateStore, id);
+		var result:State<Dynamic> = stateStore.handle(id);
 		return cast result;
 	}
 
@@ -896,6 +905,7 @@ class SelfUpdatingBuild {
 	public var dependencies:Null<UpdatingDependencies>;
 	public var root:Null<RenderNode> = null;
 	public var pending:Bool = false;
+	public var buildsFromHover:Bool = true;
 	public var epoch:Int = 0;
 	/** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
 	public var built:Null<BuiltNode> = null;

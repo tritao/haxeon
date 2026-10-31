@@ -3,6 +3,7 @@ package haxeon.ui.core;
 /** Haxe-owned per-widget state retained while views are rebuilt. */
 class StateStore {
 	final values:Map<Int, Dynamic>;
+	final handles:Map<Int, State<Dynamic>> = new Map();
 	// Store revision at each state's last update, so retained subtrees can tell which of their own states changed.
 	final valueRevisions:Map<Int, Int> = new Map();
 	final disposers:Map<Int, Void->Void>;
@@ -14,7 +15,7 @@ class StateStore {
 	/** Scratch for usedIdsSince, reused so collecting a subtree's states allocates only the result. */
 	final seenScratch:IdSet = new IdSet(256);
 	final frameUseOrder:Array<Int>;
-	var frameActive:Bool;
+	public var frameActive(default, null):Bool;
 	public var revision(default, null):Int;
 
 	public function new() {
@@ -26,6 +27,16 @@ class StateStore {
 		frameUseOrder = [];
 		frameActive = false;
 		revision = 0;
+	}
+
+	@:allow(haxeon.ui.core.BuildContext)
+	function handle<T>(id:WidgetId):State<T> {
+		var result = handles.get(id.value);
+		if (result == null) {
+			result = new State<Dynamic>(this, id);
+			handles.set(id.value, result);
+		}
+		return cast result;
 	}
 
 	/** Resolve hash collisions without aliasing state belonging to another scoped path. */
@@ -88,18 +99,24 @@ class StateStore {
 	/** Returns state IDs first touched after a usage marker. */
 	public function usedIdsSince(marker:Int, ?previous:Array<Int>):Array<Int> {
 		var start = marker < 0 ? 0 : marker > frameUseOrder.length ? frameUseOrder.length : marker;
-		var result:Null<Array<Int>> = null, count = 0;
+		var count = 0, same = previous != null;
 		seenScratch.clear();
 		for (index in start...frameUseOrder.length) {
 			var id = frameUseOrder[index];
 			if (!seenScratch.add(id)) continue;
-			if (result == null && (previous == null || count >= previous.length || previous[count] != id))
-				result = previous == null ? [] : previous.slice(0, count);
-			if (result != null) result.push(id);
+			if (previous == null || count >= previous.length || previous[count] != id) same = false;
 			count++;
 		}
-		if (result != null) return result;
-		return previous == null ? [] : count == previous.length ? previous : previous.slice(0, count);
+		if (previous != null && same && previous.length == count) return previous;
+		var result:Array<Int> = [];
+		result.resize(count);
+		seenScratch.clear();
+		var position = 0;
+		for (index in start...frameUseOrder.length) {
+			var id = frameUseOrder[index];
+			if (seenScratch.add(id)) result[position++] = id;
+		}
+		return result;
 	}
 
 	/** Finish an independently retained build without copying its state reads into its enclosing cache. */
@@ -152,6 +169,7 @@ class StateStore {
 			disposers.remove(id);
 			managed.remove(id);
 			values.remove(id);
+			handles.remove(id);
 			valueRevisions.remove(id);
 		}
 		frameUsed.clear();
@@ -252,6 +270,7 @@ class StateStore {
 		frameUsed.clear();
 		frameActive = false;
 		values.clear();
+		handles.clear();
 		valueRevisions.clear();
 		paths.clear();
 		pathIds.resize(0);
