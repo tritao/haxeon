@@ -347,7 +347,10 @@ class FrontendCompilation {
 				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
 				var sourceOwner = origin != null
 					&& initializerModule(origin, owners) != null ? origin.substr(0, origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
-				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner) && !supersededByRetyping) {
+				// Even when the generic origin is unchanged, a specialization can depend on a changed type's
+				// representation. Its cached body and optional-value helpers are no longer valid in that case.
+				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner)
+					&& !invalidated.exists(cached) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
 					retainedSpecializations.set(cached, true);
@@ -363,7 +366,7 @@ class FrontendCompilation {
 					if (typedByName.exists(parent))
 						continue;
 					for (nested => fn in state.typedFunctions) {
-						if (valid.exists(nested))
+						if (valid.exists(nested) || invalidated.exists(nested))
 							continue;
 						if (fn.origin == parent || StringTools.startsWith(nested, "$lambda:" + parent + ":")) {
 							valid.set(nested, true);

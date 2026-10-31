@@ -92,6 +92,22 @@ class NullableStructIncrementalMain {
 		var initializerRejected = false;
 		try initializer.compile("Main") catch (error:CompileError) initializerRejected = error.diagnostic.code == "E1005";
 		if (!initializerRejected) throw "effectful struct field initializer preserved a nullable field refinement";
+		// The generic origin stays unchanged while its specialization depends on the representation of Point.
+		// Both directions must discard invalidated bodies, including their optional-value helpers and closures.
+		var transition = new Compiler();
+		var pointBody = " Point { public final x:Int; public function new(x:Int) this.x = x; }";
+		transition.update("Point.hx", "@:structural struct" + pointBody);
+		transition.update("Holder.hx", "class Holder { public var value:Null<Point>; public function new() value = new Point(7); "
+			+ "public function invoke():Int { var f:Null<Point>->Int = function(v:Null<Point>) return v == null ? 0 : v.x; return f(value); } }");
+		transition.update("Generic.hx", "class Generic { public static function keep<T>(v:T):T { var f:T->T = function(x:T) return x; return f(v); } public static function box<T>(v:T):Dynamic return v; }");
+		transition.update("Main.hx", "function main():Int { var h = new Holder(); var p:Null<Point> = Generic.keep(h.value); "
+			+ "var d:Dynamic = Generic.box(p); var empty:Null<Point> = null; var absent:Null<Point> = Generic.keep(empty); "
+			+ "return (p == null ? 0 : p.x) + h.invoke() + (absent == null ? 1 : 0); }");
+		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "initial generic optional value failed";
+		transition.update("Point.hx", "@:structural class" + pointBody);
+		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "struct-to-class retained an obsolete specialization";
+		transition.update("Point.hx", "@:structural struct" + pointBody);
+		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "class-to-struct retained an obsolete specialization";
 		Sys.println("PASS: inline optional fields follow incremental method and layout edits");
 	}
 }
