@@ -287,6 +287,39 @@ matches heap-field references exactly. A place must retain its owner and array g
 addressing an old backing store. A nullable by-value cycle such as `struct Node { var next:Null<Node>; }` has no finite
 inline layout and is rejected.
 
+### Proposed: allocation-free optional value flow
+
+The UI migration exposed an allocation boundary that stage 1a deliberately leaves boxed. A `Null<Rect>` can travel
+from an inline field through a local, a typed callback and another inline field. On Wasm GC, a prototype converting
+only `Rect` and `Insets` increased the fixed-time Showcase's 120-frame object count from 8,654 to 19,936; a per-function
+instrumentation attributes 6,480 allocations each to the optional `CanvasState.clip` getter and its `copyFrom` caller.
+On HashLink, an interaction census recorded 23,217 `@haxeon.ui.Rect` and 9,811 `@haxeon.ui.Insets` allocations over
+30 cycles after that prototype. The prior class census recorded 7,511 `Rect` and 70 `Insets` allocations. These are
+whole-capture counts, not per-action counts. The prototype also raised the measured inspector-scroll median from
+22.3 to 29.4 KiB, and the hierarchy-to-sensors median from 158.2 to 182.1 KiB. The conversion is not accepted on this
+evidence. The allocation-instrumented Wasm counts include generated `struct.new` and `array.new` instructions; they do
+not establish byte sizes or cover separately encoded function bodies.
+
+The proposed extension is to retain optional value copies as a first-class operation until representation lowering,
+rather than expanding each copy into a nullable branch and a boxed payload before field storage is planned. Fuse a
+field-to-field copy into a snapshot of the presence flag and all flattened leaves followed by the destination stores.
+This must evaluate owners in source order, preserve null errors and side effects, handle overlapping or identical places,
+and preserve nested optionals and managed references. Ordinary escape boundaries still materialize a box.
+
+For nonescaping optional locals and direct and eligible typed closure calls, extend scalar value flow with a presence
+flag and flattened payload. Wasm GC can pass and return those components using the existing scalar ABI; HashLink needs
+an explicitly designed scalar calling convention or an equivalent proven specialization for typed calls and returns.
+Closures, virtual dispatch, recursion, exceptions and reentrant mutation must retain snapshot and writeback semantics;
+dynamic, reflection, native and unsupported call boundaries must continue to box. Packed arrays remain a separate
+design because of the collector and growth constraints above. The implementation must also address non-optional
+HashLink value temporaries at calls and inline-field copies without depending on UI-specific rewrites or making values
+mutable. No claim is made that optional-field fusion alone removes all of the measured allocations.
+
+Before adopting this extension, add cross-target semantic tests for absent and present copies, nested managed fields,
+aliases, side effects, typed closures, exceptions and reentrancy, plus allocation tests for field copies and calls. Repeat
+the UI per-action and Wasm GC measurements against the same baseline; no action may allocate more. This is a proposal,
+not a change to the representation implemented in stage 1a.
+
 ## Representation on Wasm GC
 
 Wasm GC cannot embed one struct type inside another, so the backend recursively flattens struct fields into their holder.
