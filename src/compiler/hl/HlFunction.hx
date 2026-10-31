@@ -54,6 +54,8 @@ enum HlInstruction {
 	ToInt(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);
 	UnsafeCast(destination:Int, source:Int);
+	/** Address of a register, valid only while its owning frame remains active. */
+	Ref(destination:Int, source:Int);
 	Unref(destination:Int, reference:Int);
 	Setref(reference:Int, source:Int);
 	RefOffset(destination:Int, reference:Int, index:Int);

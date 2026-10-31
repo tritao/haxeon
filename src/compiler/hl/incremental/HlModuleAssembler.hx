@@ -446,9 +446,10 @@ class HlModuleAssembler {
 	 * The functions whose lowered code calls, or makes a closure of, the slot a function in `moved` left (see
 	 * `moveChangedSignatures`), retired functions aside. Each is lowered again in the same build, wherever its source is, so
 	 * it calls the function's new slot: a caller the edit did not touch, in another file say, would otherwise keep reaching
-	 * the code left in the old slot.
+	 * the code left in the old slot. Removed callers keep their cached code and its old slot, whose adapter preserves
+	 * the call for any closures that are still alive; their stale IR cannot be lowered against the new signature.
 	 */
-	function callersOfMoved(moved:Array<String>, tag:String):Array<String> {
+	function callersOfMoved(moved:Array<String>, tag:String, present:Map<String, Bool>):Array<String> {
 		var oldSlots:Map<Int, Bool> = [];
 		for (name in moved) {
 			var lowered = loweredFunctions.get(RetiredName.movedFunction(name, tag));
@@ -457,7 +458,7 @@ class HlModuleAssembler {
 		}
 		var callers:Array<String> = [];
 		for (name => fn in loweredFunctions)
-			if (!RetiredName.is(name) && referencesAny(fn, oldSlots))
+			if (present.exists(name) && !RetiredName.is(name) && referencesAny(fn, oldSlots))
 				callers.push(name);
 		callers.sort(Reflect.compare);
 		return callers;
@@ -722,7 +723,7 @@ class HlModuleAssembler {
 			for (name in moves.adapted)
 				regenerate(name);
 			if (moves.moved.length > 0)
-				for (name in callersOfMoved(moves.moved, tag))
+				for (name in callersOfMoved(moves.moved, tag, [for (fn in program.functions) fn.name => true]))
 					regenerate(name);
 			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true]));
 		}

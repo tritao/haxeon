@@ -1389,6 +1389,22 @@ class HlLower {
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
+		if (name == compiler.ir.IrHlScalarRef.CHECK_RECEIVER) {
+			instructions.push(HlInstruction.NullCheck(requireRegister(arguments[0], registers)));
+			return true;
+		}
+		if (name == compiler.ir.IrHlScalarRef.ADDRESS) {
+			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			return true;
+		}
+		if (name == compiler.ir.IrHlScalarRef.LOAD) {
+			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			return true;
+		}
+		if (name == compiler.ir.IrHlScalarRef.STORE) {
+			instructions.push(HlInstruction.Setref(requireRegister(arguments[0], registers), requireRegister(arguments[1], registers)));
+			return true;
+		}
 		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64" || name == "__array_push_bool"
 			|| name == "__array_push_bytes" || name == "__array_push_ref";
 		var get = name == "__bytes_get", set = name == "__bytes_set";

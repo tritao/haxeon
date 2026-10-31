@@ -79,6 +79,8 @@ class IrAllocationReport {
 
 	/** How a runtime native relates to the heap, or null when it never allocates. */
 	public static function classifyNative(name:String):Null<{kind:String, what:String}> {
+		if (name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE || name == IrHlScalarRef.CHECK_RECEIVER)
+			return null;
 		if (!StringTools.startsWith(name, "__"))
 			return {kind: Unknown, what: "unresolved call " + name};
 		var body = name.substr(2);

@@ -14,6 +14,15 @@ class IrStaticNullChecks {
 		var helpers:Map<String, IrFunction> = [];
 		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 		var store = cache != null ? cache : new IrStaticCheckCache();
+		var valueTypes:Map<String, Bool> = [], valueNames:Array<String> = [];
+		if (objects != null) for (object in objects) if (object.isValue) { valueTypes.set(object.name, true); valueNames.push(object.name); }
+		valueNames.sort(Reflect.compare);
+		var valueShape = haxe.Json.stringify(valueNames);
+		if (store.valueShape != valueShape) {
+			store.copies = [];
+			store.helpers = [];
+			store.valueShape = valueShape;
+		}
 		var result:Array<IrFunction> = [];
 		var byName = [for (fn in functions) fn.name => fn],
 			reachable:Map<String, Bool> = [],
@@ -36,7 +45,7 @@ class IrStaticNullChecks {
 			if (known != null && known.source == fn) {
 				nextCopies.set(fn.name, known);
 				for (name in known.statics)
-					helpers.set(name, store.helpers.get("__static$nonnull$" + name));
+					helpers.set(name, store.helpers.get(name));
 				result.push(known.result);
 				continue;
 			}
@@ -96,31 +105,35 @@ class IrStaticNullChecks {
 					};
 					if (receiver != null && origins.exists(receiver.id)) {
 						var name = origins.get(receiver.id),
-							helperName = "__static$nonnull$" + name;
-						if (!helpers.exists(name)) {
+							valueType = switch receiver.type { case Obj(typeName) if (valueTypes.exists(typeName)): receiver.type; default: null; },
+							helperName = valueType == null ? "__static$nonnull$" + name : "$static$nonnull$value$" + haxe.Json.stringify([name, Std.string(valueType)]);
+						if (!helpers.exists(helperName)) {
 							var knownHelper = store.helpers.get(helperName);
 							if (knownHelper != null)
-								helpers.set(name, knownHelper);
+								helpers.set(helperName, knownHelper);
 							else {
 								var builder = new IrBuilder(),
-									value = builder.argument("value", Dyn),
+									value = builder.argument("value", valueType == null ? Dyn : valueType),
 									missing = builder.createBlock(),
 									present = builder.createBlock();
-								builder.branch(builder.equal(value, builder.constNull(Dyn)), missing, present);
+								builder.branch(builder.equal(value, builder.constNull(value.type)), missing, present);
 								builder.select(missing);
 								builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 								builder.select(present);
 								builder.returnValue(builder.constVoid());
 								var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks);
-								helpers.set(name, created);
+								helpers.set(helperName, created);
 								store.helpers.set(helperName, created);
 							}
 						}
-						used.set(name, true);
-						var boxed = new IrValue(nextId++, "staticReceiver", Dyn),
-							unused = new IrValue(nextId++, "staticCheck", Void);
-						copy.instructions.push(new Located(ToDyn(boxed, receiver), instruction.provenance));
-						copy.instructions.push(new Located(Call(unused, helperName, [boxed]), instruction.provenance));
+						used.set(helperName, true);
+						var actual = receiver;
+						if (valueType == null) {
+							actual = new IrValue(nextId++, "staticReceiver", Dyn);
+							copy.instructions.push(new Located(ToDyn(actual, receiver), instruction.provenance));
+						}
+						var unused = new IrValue(nextId++, "staticCheck", Void);
+						copy.instructions.push(new Located(Call(unused, helperName, [actual]), instruction.provenance));
 					}
 					copy.instructions.push(instruction);
 				}
@@ -144,6 +157,7 @@ class IrStaticNullChecks {
 class IrStaticCheckCache {
 	public var copies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 	public var helpers:Map<String, IrFunction> = [];
+	public var valueShape:String = "";
 
 	public function new() {}
 }

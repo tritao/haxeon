@@ -549,6 +549,7 @@ class FrontendCompilation {
 		var semantic = context.cachedSemanticProgram;
 		if (context.livePatching && !context.isWasmTarget() && semantic != null)
 			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
+		if (!context.isWasmTarget()) compiler.ir.IrHlScalarArguments.rewrite(ir);
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
 		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);

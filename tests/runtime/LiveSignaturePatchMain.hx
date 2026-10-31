@@ -53,6 +53,17 @@ class LiveSignaturePatchMain {
 	}
 
 	static function main():Void {
+		var wasEnabled = compiler.ir.IrInliner.enabled;
+		run();
+		if (wasEnabled) {
+			// A removed lambda still calls the old signature when its code was not inlined.
+			compiler.ir.IrInliner.enabled = false;
+			run();
+			compiler.ir.IrInliner.enabled = wasEnabled;
+		}
+	}
+
+	static function run():Void {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program(1));
 		var build = compiler.compile("Main"),

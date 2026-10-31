@@ -82,6 +82,20 @@ class StaticNullCheckReuseMain {
 		var pruned = byName(IrStaticNullChecks.run(unreachable, null, cache));
 		expect(pruned.get("readA") == unreachable[1], "an unreachable function is passed through");
 		sameAsUncached(IrStaticNullChecks.run(unreachable, null, cache), unreachable);
+		// A value static must keep the initialization guard without boxing on every field read.
+		var valueObject:IrObject = {name: "Box", isValue: true, base: null, interfaces: [], fields: [{name: "v", type: I32}], methods: []};
+		var valueChecked = IrStaticNullChecks.run(sources, [valueObject], cache);
+		var read = byName(valueChecked).get("readA"), boxed = false, typedHelper = false;
+		for (block in read.blocks) for (located in block.instructions) switch located.value {
+			case ToDyn(_, _): boxed = true;
+			case Call(_, name, args) if (StringTools.startsWith(name, "$static$nonnull$value$") && Type.enumEq(args[0].type, Obj("Box"))):
+				typedHelper = true;
+			default:
+		}
+		expect(!boxed && typedHelper, "value static checks keep their typed reference without a dynamic box");
+		var referenceObject:IrObject = {name: "Box", isValue: false, base: null, interfaces: [], fields: [{name: "v", type: I32}], methods: []};
+		var referenceChecked = IrStaticNullChecks.run(sources, [referenceObject], cache);
+		expect(byName(referenceChecked).exists("__static$nonnull$S.a"), "changing a value to a reference invalidates cached checks");
 		Sys.println("static null-check reuse OK");
 	}
 }

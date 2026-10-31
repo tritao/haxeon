@@ -108,6 +108,10 @@ class IrVerifier {
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
 			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {
+		if (IrHlScalarRef.element(fn.result) != null) throw "A scalar stack reference cannot be returned";
+		for (arg in fn.arguments)
+			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrHlScalarArguments.PREFIX))
+				throw "A scalar stack reference cannot cross an ordinary function boundary";
 		var graph = new IrGraph(fn),
 			values:Map<Int, IrType> = [],
 			definitions:Map<Int, {block:Int, position:Int}> = [];
@@ -119,6 +123,7 @@ class IrVerifier {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
+				verifyScalarReferenceUse(instruction);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -179,6 +184,25 @@ class IrVerifier {
 						throw "IR branch condition is not Bool";
 				case Jump(_):
 			}
+		}
+	}
+
+	static function verifyScalarReferenceUse(instruction:IrInstruction):Void {
+		var output = IrOperands.output(instruction);
+		if (output != null && IrHlScalarRef.element(output.type) != null) switch instruction {
+			case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
+			default: throw "Only a scalar address operation can create a stack reference";
+		}
+		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
+			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
+			case Call(_, name, _) if (StringTools.startsWith(name, IrHlScalarArguments.PREFIX)):
+			default: throw "A scalar stack reference cannot escape its call";
+		}
+		switch instruction {
+			case Phi(_, inputs):
+				for (input in inputs) if (IrHlScalarRef.element(input.value.type) != null)
+					throw "A scalar stack reference cannot be merged";
+			default:
 		}
 	}
 
@@ -319,6 +343,27 @@ class IrVerifier {
 						&& !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
+				if (name == IrHlScalarRef.CHECK_RECEIVER) {
+					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
+					if (args.length != 1 || out.type != Void || !isReference(args[0].type)) throw "Invalid scalar receiver check";
+					require(values, args[0]);
+					return;
+				}
+				if (name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) {
+					switch instruction {
+						case CNativeCall(_, _, _): throw "A scalar reference intrinsic is not a C native";
+						default:
+					}
+					var expected = name == IrHlScalarRef.STORE ? 2 : 1;
+					if (args.length != expected) throw 'Wrong scalar reference intrinsic arity for $name';
+					for (arg in args) require(values, arg);
+					var element = IrHlScalarRef.element(name == IrHlScalarRef.ADDRESS ? out.type : args[0].type);
+					if (element == null || element == Void || IrHlScalarRef.element(element) != null
+						|| !sameType(name == IrHlScalarRef.ADDRESS ? args[0].type : name == IrHlScalarRef.LOAD ? out.type : args[1].type, element)
+						|| (name == IrHlScalarRef.STORE && out.type != Void))
+						throw 'Invalid scalar reference intrinsic type for $name';
+					return;
+				}
 				if (!signatures.exists(name))
 					throw 'Unknown IR call "$name"';
 				var signature = signatures.get(name);

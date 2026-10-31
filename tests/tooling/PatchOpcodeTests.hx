@@ -83,6 +83,7 @@ class PatchOpcodeTests {
 			{instruction: ToInt(0, 1), opcode: 62, operands: [0, 1]},
 			{instruction: SafeCast(0, 1), opcode: 63, operands: [0, 1]},
 			{instruction: UnsafeCast(0, 1), opcode: 64, operands: [0, 1]},
+			{instruction: Ref(0, 1), opcode: 87, operands: [0, 1]},
 			{instruction: Unref(0, 1), opcode: 88, operands: [0, 1]},
 			{instruction: Setref(0, 1), opcode: 89, operands: [0, 1]},
 			{instruction: RefOffset(0, 1, 2), opcode: 97, operands: [0, 1, 2]},

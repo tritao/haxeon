@@ -62,6 +62,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var ToInt = 62;
 	var SafeCast = 63;
 	var UnsafeCast = 64;
+	var Ref = 87;
 	var Unref = 88;
 	var Setref = 89;
 	var RefOffset = 97;

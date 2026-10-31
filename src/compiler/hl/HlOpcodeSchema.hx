@@ -11,7 +11,7 @@ class HlOpcodeSchema {
 			case HlOpcode.Label: 0;
 			case HlOpcode.NullCheck, HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.EndTrap, HlOpcode.New: 1;
 			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.String, HlOpcode.StaticClosure, HlOpcode.GetGlobal, HlOpcode.SetGlobal,
-				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToInt, HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.Unref, HlOpcode.Setref,
+				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToInt, HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.Ref, HlOpcode.Unref, HlOpcode.Setref,
 				HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.ArraySize, HlOpcode.RefData, HlOpcode.Type, HlOpcode.JTrue, HlOpcode.JNull, HlOpcode.Call0,
 				HlOpcode.EnumAlloc, HlOpcode.EnumIndex: 2;
 			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr, HlOpcode.UShr, HlOpcode.And,

@@ -136,6 +136,7 @@ class IrInlineCache {
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.staticChecks.copies = staticChecks.copies;
 		result.staticChecks.helpers = staticChecks.helpers;
+		result.staticChecks.valueShape = staticChecks.valueShape;
 		for (name => entry in positionalPrints)
 			result.positionalPrints.set(name, entry);
 		result.positionalNatives = positionalNatives;
@@ -383,7 +384,7 @@ class IrInliner {
 		var consultedObjects:Map<String, Bool> = [];
 		objectFrames.push(consultedObjects);
 		table.consulted = consultedObjects;
-		var result = allowInline ? inlineCalls(original) : original;
+		var result = allowInline ? inlineCalls(original) : packedValueFields ? IrScalarReplacement.rewrite(original, table, false, true) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, table);
 		if (IrStrengthReduction.enabled)

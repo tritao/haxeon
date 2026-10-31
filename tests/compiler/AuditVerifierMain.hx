@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrVerifier;
+import compiler.ir.IrHlScalarRef;
 
 class AuditVerifierMain {
 	static function rejected(program:IrProgram, expected:String):Void {
@@ -40,6 +41,13 @@ class AuditVerifierMain {
 	}
 
 	static function main():Void {
+		var refBuilder = new IrBuilder(), initialValue = refBuilder.constInt(0),
+			stackRef = refBuilder.call(IrHlScalarRef.ADDRESS, [initialValue], IrHlScalarRef.type(I32));
+		refBuilder.returnValue(stackRef);
+		var refProgram = new IrProgram("main");
+		refProgram.functions.push(new IrFunction("main", [], stackRef.type, refBuilder.blocks));
+		rejected(refProgram, "scalar stack reference cannot be returned");
+
 		var builder = new IrBuilder(),
 			condition = builder.argument("condition", Bool),
 			yes = builder.createBlock(),

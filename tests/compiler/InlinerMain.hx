@@ -6,9 +6,38 @@ import compiler.ir.IrInliner.InlineMemo;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrVerifier;
+import compiler.ir.IrHlScalarArguments;
 
 class InlinerMain {
 	static function main():Void {
+		var scalarCalls = Frontend.compile("struct Pair { public var x:Int; public var y:Int; "
+			+ "public function new(x:Int, y:Int) { this.x = x; this.y = y; } } "
+			+ "function read(value:Pair):Int return value.x + value.y; "
+			+ "function loop(value:Pair):Int { var total = 0; for (i in 0...4) total += read(value); return total; } "
+			+ "function main():Int return loop(new Pair(1, 2));");
+		IrHlScalarArguments.rewrite(scalarCalls);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(scalarCalls, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(scalarCalls);
+		expect(allocations(programFunction(scalarCalls, "loop")) == 0,
+			"a direct scalar argument does not allocate a temporary when ordinary inlining is disabled");
+		expect(allocations(programFunction(scalarCalls, "$hl:scalar-arguments:read")) == 0,
+			"the specialized callee keeps its value argument in scalar slots");
+		var nestedCalls = Frontend.compile("struct Inner { public var n:Int; public var label:String; "
+			+ "public function new(n:Int, label:String) { this.n = n; this.label = label; } } "
+			+ "struct Outer { public var inner:Inner; public var extra:Int; "
+			+ "public function new(inner:Inner) { this.inner = inner; extra = 1; } } "
+			+ "function read(value:Outer):Int { if (value.extra > 0) value.inner.n += 1; "
+			+ "return value.inner.n + value.inner.label.length; } "
+			+ "function main():Int return read(new Outer(new Inner(1, 'a')));");
+		IrHlScalarArguments.rewrite(nestedCalls);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(nestedCalls, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(nestedCalls);
+		expect(allocations(programFunction(nestedCalls, "$hl:scalar-arguments:read")) == 0,
+			"a nested managed value argument stays scalar across a branch");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

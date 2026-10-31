@@ -24,7 +24,7 @@ typedef ScalarReplacementResult = {
 @:allow(compiler.ir.IrNestedScalarReplacement)
 class IrScalarReplacement {
 	/** Run independently of inlining, without mutating the source function held by incremental compilation. */
-	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false):IrFunction {
+	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false, constructFields = false):IrFunction {
 		var blocks:Array<IrBlock> = [], next = 0;
 		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
 		for (block in fn.blocks) {
@@ -38,11 +38,15 @@ class IrScalarReplacement {
 			blocks.push(copy);
 		}
 		var result = run(blocks, objects, next, forcePhis);
+		if (constructFields)
+			constructInPlace(blocks, objects, result.nextValue, result.substitutions);
 		if (!result.substitutions.keys().hasNext()) {
 			// Even a never-read value can have lost its allocation and writes.
 			var changed = false;
 			for (index in 0...blocks.length)
 				if (blocks[index].instructions.length != fn.blocks[index].instructions.length) changed = true;
+				else for (position in 0...blocks[index].instructions.length)
+					if (blocks[index].instructions[position] != fn.blocks[index].instructions[position]) changed = true;
 			if (!changed) return fn;
 		}
 		var bindings = IrInliner.substitute(blocks, result.substitutions, fn.debugBindings);

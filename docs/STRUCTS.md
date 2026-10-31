@@ -327,7 +327,7 @@ matches heap-field references exactly. A place must retain its owner and array g
 addressing an old backing store. A nullable by-value cycle such as `struct Node { var next:Null<Node>; }` has no finite
 inline layout and is rejected.
 
-### Proposed: allocation-free optional value flow
+### Allocation-free optional value flow
 
 The UI migration exposed an allocation boundary that stage 1a deliberately leaves boxed. A `Null<Rect>` can travel
 from an inline field through a local, a typed callback and another inline field. On Wasm GC, a prototype converting
@@ -340,7 +340,59 @@ whole-capture counts, not per-action counts. The prototype also raised the measu
 evidence. The allocation-instrumented Wasm counts include generated `struct.new` and `array.new` instructions; they do
 not establish byte sizes or cover separately encoded function bodies.
 
-The proposed extension is to retain optional value copies as a first-class operation until representation lowering,
+#### Implemented: non-optional HashLink value temporaries
+
+Eligible direct calls, including statically known typed closures and monomorphic methods, specialize non-optional
+value arguments into scalar parameters. Results use references to caller-owned scalar slots; the references are confined
+to the call and cannot escape. This uses HashLink's existing reference instructions, avoiding a new VM calling convention.
+Calls that cannot be proven safe retain their original boxed ABI, including calls that exceed the VM's 32-argument JIT
+limit. Inline-field construction and copies are scalar-replaced even when ordinary function inlining is disabled.
+Typed static-initialization checks preserve the value representation instead of converting it to Dynamic.
+
+With the Rect/Insets prototype on the baseline machine, the HashLink interaction census over 30 cycles changed from
+23,217 to 16,539 boxed `Rect` allocations and from 9,811 to 779 boxed `Insets` allocations. The hierarchy-to-sensors
+median changed from 182.1 to 162.6 KiB and inspector-scroll from 29.4 to 21.6 KiB. The 120-frame Wasm GC Showcase
+count remained 19,936 objects in full mode and 26,762 in editing mode, as this step targets HashLink. These are
+intermediate measurements: the class baseline and remaining optional flow still determine acceptance.
+
+The per-action HashLink medians below are KiB allocated per action on the same machine. The prototype converts only
+`Rect` and `Insets`; step A adds the non-optional lowering above. Selection-stress does not report per-action bytes.
+
+| Scenario / action | Classes | Prototype | Step A |
+| --- | ---: | ---: | ---: |
+| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 |
+| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 |
+| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 |
+| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 |
+| interaction / hover away | 24.9 | 25.0 | 25.2 |
+| interaction / hover enter | 2.6 | 2.6 | 2.6 |
+| interaction / hover field | 22.1 | 24.0 | 22.2 |
+| interaction / hover inside | 0.6 | 0.6 | 0.6 |
+| interaction / hover other | 13.1 | 13.2 | 13.2 |
+| interaction / idle | 0.2 | 0.2 | 0.2 |
+| interaction / idle focused | 0.2 | 0.2 | 0.2 |
+| interaction / scroll inspector | 22.3 | 29.4 | 21.6 |
+| interaction / type backspace | 17.8 | 17.9 | 17.9 |
+| interaction / type character | 17.8 | 17.9 | 17.9 |
+
+The interaction allocation census counts whole 30-cycle captures, including startup:
+
+| Type | Classes | Prototype | Step A |
+| --- | ---: | ---: | ---: |
+| Rect | 7,511 | 23,217 | 16,539 |
+| Insets | 70 | 9,811 | 779 |
+| Color | 487 | 487 | 487 |
+| LayoutAxis | 1,007 | 1,007 | 1,007 |
+| Transform2D | 1,722 | 1,722 | 1,722 |
+
+| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A |
+| --- | ---: | ---: | ---: |
+| Full | 8,654 | 19,936 | 19,936 |
+| Editing | 15,482 | 26,762 | 26,762 |
+
+#### Proposed: optional field copies and scalar optional flow
+
+The extension is to retain optional value copies as a first-class operation until representation lowering,
 rather than expanding each copy into a nullable branch and a boxed payload before field storage is planned. Fuse a
 field-to-field copy into a snapshot of the presence flag and all flattened leaves followed by the destination stores.
 This must evaluate owners in source order, preserve null errors and side effects, handle overlapping or identical places,

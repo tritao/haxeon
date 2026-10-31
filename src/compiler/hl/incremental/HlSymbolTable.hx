@@ -283,6 +283,10 @@ class HlSymbolTable {
 			return typeIndices.get(key);
 		ensureWritable();
 		switch type {
+			case Abstract(_) if (compiler.ir.IrHlScalarRef.element(type) != null):
+				var index = internReference(compiler.ir.IrHlScalarRef.element(type));
+				typeIndices.set(key, index);
+				return index;
 			case Function(arguments, result):
 				return internFunction(arguments, result);
 			case Enum(name):

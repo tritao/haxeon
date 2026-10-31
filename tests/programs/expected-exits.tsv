@@ -413,3 +413,4 @@ struct-flat-storage	42
 struct-closure-abi	42
 struct-closure-dynamic	42
 struct-virtual-abi	42
+struct-call-snapshots	42
