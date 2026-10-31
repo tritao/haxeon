@@ -271,6 +271,46 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
   `Structural.assignChanged` writes the fields of its target, so a holder of immutable struct fields still updates
   them by replacement.
 
+## Equality and hashing
+
+Decided 2026-10-31, not yet implemented. Value equality is a capability a type declares, as in Rust (`derive`) and Swift
+(`Equatable`/`Hashable` with synthesis), rather than something every struct gets implicitly as in Go or C#'s
+`ValueType.Equals`:
+
+- **Equality is part of a type's contract.** Implicit equality makes every field, including private and cached ones,
+  part of `==` and `hash`; adding such a field, or one whose type cannot be compared, silently changes or breaks
+  comparisons far from the declaration. A declaration puts that decision, and its errors, at the type.
+- **Custom equality is needed.** `Semantics.same` excludes a field and `Mask` compares its image by identity. A declared
+  capability can be derived or written by hand, and every consumer uses the one implementation.
+- **Declaring later never breaks anyone; removing implicit equality does.**
+
+The rules:
+
+1. **`@:structural` derives** equality, hashing and the field operations (`Structural.changedMask`, `assignChanged`,
+   `fieldBit`, `allFieldsMask`) for a struct or a class. Derived equality compares each field with that field type's
+   declared equality (below); derived hashing agrees with it.
+2. **A type may instead implement `function equals(other:T):Bool` and `function hash():Int`**, as a pair: one without
+   the other is an error, as is combining them with `@:structural`. Field operations are not available on such a type.
+3. **One equality per type, used everywhere.** For a struct with declared equality, `==`, `!=`, map keys,
+   `haxeon.Equality.equals`, `Structural.hash` and the derived equality of every type that contains it all use that
+   implementation. This replaces the stage 1a split, where a struct's `==` applied each field's own `==` while
+   `Equality.equals` and `Structural.hash` compared deeply.
+4. **A field's declared equality** is: for primitives and integer enum abstracts, `==` (floats follow IEEE: `NaN` is
+   unequal to itself and `0.0 == -0.0`, and hashing maps `-0.0` to `0.0`); for structs and `@:structural` or
+   custom-equality classes, their declared equality; for `Null<T>`, equal when both are absent or both present and
+   equal; for strings, content; for enums, constructor and payload by the same rules; for arrays, maps and anonymous
+   structures, element by element as `Equality.equals` already does; for other class instances, identity.
+5. **`==` on a struct without declared equality is a compile error** naming the type and suggesting `@:structural`.
+   Copying stays implicit: a struct is a value, and Haxeon has no moves, so Rust's `Clone`/`Copy` split has no
+   counterpart. Nor does `PartialEq`/`Eq`: there is one equality, with IEEE floats.
+6. **Classes keep identity `==`.** `@:structural` or a custom pair gives a class content equality through
+   `Equality.equals`, `Structural.hash` and containing types, never through `==`.
+
+Implementation, after the UI value-type conversion: the `==` diagnostic, the `equals`/`hash` pair and its checks, the
+shared equality used by `==`, `EqualityGenerator` and `StructuralIntrinsics`, and migration of the struct fixtures
+(`struct-value-semantics.hx`, `struct-field-equality.hx` and those comparing structs without `@:structural`). Then
+`Semantics.same` becomes a custom pair, or derived once a per-field exclusion exists.
+
 ## Nullable structs
 
 `null` is excluded from struct values, but "absent" is a real state: an optional color or clip rectangle. A `Null<S>`

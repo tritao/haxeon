@@ -22,7 +22,7 @@ data descriptions; cyclic runtime object graphs are not supported.
 
 ## Structural classes
 
-A class marked `@:structural` (or a value class) is also accepted by
+A class or struct marked `@:structural` (or a legacy value class) is also accepted by
 `haxeon.Structural`, whose operations are generated from the class's stored
 instance fields, in declaration order, at each call site. Adding a field to the
 class updates every one of them; a field type they cannot handle is a compile
@@ -40,6 +40,12 @@ error rather than a silent omission.
 - `Structural.fieldBit(Type, "field")` and `Structural.allFieldsMask(Type)`:
   compile-time constants for those masks. A misspelled field is an error, so a
   hand-written group of fields can be checked against `allFieldsMask` in a test.
+
+Today every struct is accepted without the annotation, and a struct's `==` applies each field's own `==` while
+`Equality.equals` and `hash` compare deeply. The decided direction (STRUCTS.md, "Equality and hashing") makes value
+equality declared: `@:structural` derives it, or a type implements an `equals`/`hash` pair; that one equality is used by
+`==`, maps, `Equality.equals` and `Structural.hash`; and `==` on a struct without it is a compile error. Mark structs
+that are compared `@:structural` now.
 
 A structural class may not extend another class: the base's fields would be
 left out. `LayoutStyle` in the UI package uses these for its copy, its restyle
