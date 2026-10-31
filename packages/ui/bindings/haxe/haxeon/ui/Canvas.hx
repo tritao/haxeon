@@ -193,7 +193,7 @@ class Canvas {
 
 	/** Adds one filled rectangle using a transient path and solid paint resource. */
 	public function fillRect(rect:Rect, color:Color):Void {
-		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0)
+		if (color == null || rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Filled rectangle requires positive bounds and a color";
 		if (retainRectangles) {
 			if (paintedRects == null) {
@@ -271,7 +271,7 @@ class Canvas {
 
 	/** Adds a filled rectangle when its bounds and color are valid. */
 	public function fillRectIfPositive(rect:Rect, color:Color):Bool {
-		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0)
+		if (color == null || rect.width <= 0.0 || rect.height <= 0.0)
 			return false;
 		fillRect(rect, color);
 		return true;
@@ -283,7 +283,7 @@ class Canvas {
 	 * Rotated/skewed borders retain vector antialiasing.
 	 */
 	public function drawRectBorder(rect:Rect, width:Float, color:Color):Void {
-		if (rect == null || color == null || !Math.isFinite(rect.x) || !Math.isFinite(rect.y) ||
+		if (color == null || !Math.isFinite(rect.x) || !Math.isFinite(rect.y) ||
 			!Math.isFinite(rect.width) || !Math.isFinite(rect.height) ||
 			rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(width) || width < 0.0)
 			throw "Rectangular border requires finite positive bounds, nonnegative width, and a color";
@@ -292,7 +292,7 @@ class Canvas {
 
 	/** Adds a rounded solid rectangle and retains its temporary path and paint. */
 	public function fillRoundedRect(rect:Rect, radius:Float, color:Color):Void {
-		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0 ||
+		if (color == null || rect.width <= 0.0 || rect.height <= 0.0 ||
 			!Math.isFinite(radius) || radius < 0.0)
 			throw "Rounded rectangle requires positive bounds, a finite radius, and a color";
 		var path = new PathBuilder().roundRect(rect.x, rect.y, rect.width, rect.height, radius).build();
@@ -318,7 +318,7 @@ class Canvas {
 	 */
 	public function fillLinearGradientRect(rect:Rect, startX:Float, startY:Float,
 			endX:Float, endY:Float, stops:Array<GradientStop>):Void {
-		if (rect == null || rect.width <= 0.0 || rect.height <= 0.0)
+		if (rect.width <= 0.0 || rect.height <= 0.0)
 			throw "Gradient rectangle requires positive bounds";
 		var path = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
 			.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
@@ -353,7 +353,7 @@ class Canvas {
 	 */
 	public function drawBoxShadow(rect:Rect, offsetX:Float, offsetY:Float, blurRadius:Float,
 		spread:Float, radii:Array<Float>, color:Color):Void {
-		if (rect == null || color == null || rect.width <= 0.0 || rect.height <= 0.0 ||
+		if (color == null || rect.width <= 0.0 || rect.height <= 0.0 ||
 			!Math.isFinite(offsetX) || !Math.isFinite(offsetY) || !Math.isFinite(blurRadius) ||
 			blurRadius < 0.0 || !Math.isFinite(spread) || radii == null || radii.length != 4)
 			throw "Box shadow requires positive bounds, finite parameters, four radii, and a color";

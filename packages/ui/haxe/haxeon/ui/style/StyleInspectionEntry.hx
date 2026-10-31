@@ -25,7 +25,7 @@ class StyleInspectionEntry {
 				var color:Color = cast value;
 				color == null ? "null" : 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})';
 			case "padding":
-				var insets:Insets = cast value;
+				var insets:Null<Insets> = cast value;
 				insets == null ? "null" :
 					'${insets.left}, ${insets.top}, ${insets.right}, ${insets.bottom}';
 			case "width" | "height":

@@ -2,6 +2,7 @@ import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.Image;
 import haxeon.ui.ImageFormat;
+import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
@@ -128,6 +129,19 @@ class LayoutSessionSmoke {
 	}
 
 	static function main():Int {
+		var rect = new Rect(1, 2, 3, 4);
+		var padding = new Insets(1, 2, 3, 4);
+		if (rect != new Rect(1, 2, 3, 4) || rect == new Rect(1, 2, 3, 5)
+			|| padding != new Insets(1, 2, 3, 4) || padding == new Insets(1, 2, 3, 5))
+			throw "Geometry values must compare by field";
+		var optional:Null<Rect> = rect;
+		if (optional == null || optional != rect) throw "Present rectangle was lost";
+		optional = null;
+		if (optional != null) throw "Absent rectangle was lost";
+		var optionalPadding:Null<Insets> = padding;
+		if (optionalPadding == null || optionalPadding != padding) throw "Present insets were lost";
+		optionalPadding = null;
+		if (optionalPadding != null) throw "Absent insets were lost";
 		var fontPath = Sys.getEnv("NKUI_TEST_FONT_PATH");
 		if (fontPath == null)
 			return 2;

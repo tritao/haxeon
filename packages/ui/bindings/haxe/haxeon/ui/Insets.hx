@@ -2,7 +2,7 @@ package haxeon.ui;
 
 /** Immutable four-sided inset value. */
 @:structural
-class Insets {
+struct Insets {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;

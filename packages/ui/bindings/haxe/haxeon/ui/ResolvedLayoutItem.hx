@@ -165,19 +165,8 @@ class ResolvedLayoutItem {
 			clipWidth = readFloat(bytes, offset + 36), clipHeight = readFloat(bytes, offset + 40);
 		var contentX = readFloat(bytes, offset + 44), contentY = readFloat(bytes, offset + 48),
 			contentWidth = readFloat(bytes, offset + 52), contentHeight = readFloat(bytes, offset + 56);
-		// Rect and Transform2D are immutable. Siblings inherit one clip, and nearly every node has the identity transform,
-		// so a batch of items repeats the same few values: share them instead of allocating one per item.
-		var clip = lastClip;
-		if (clip == null || clip.x != clipX || clip.y != clipY || clip.width != clipWidth || clip.height != clipHeight) {
-			clip = new Rect(clipX, clipY, clipWidth, clipHeight);
-			lastClip = clip;
-		}
-		var content = lastContent;
-		if (content == null || content.x != contentX || content.y != contentY || content.width != contentWidth
-			|| content.height != contentHeight) {
-			content = new Rect(contentX, contentY, contentWidth, contentHeight);
-			lastContent = content;
-		}
+		var clip = new Rect(clipX, clipY, clipWidth, clipHeight);
+		var content = new Rect(contentX, contentY, contentWidth, contentHeight);
 		var a = readFloat(bytes, offset + 60), b = readFloat(bytes, offset + 64), c = readFloat(bytes, offset + 68),
 			d = readFloat(bytes, offset + 72), tx = readFloat(bytes, offset + 76), ty = readFloat(bytes, offset + 80);
 		var transform = a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 && tx == 0.0 && ty == 0.0 ? IdentityTransform : new Transform2D(a, b, c, d, tx, ty);
@@ -188,8 +177,6 @@ class ResolvedLayoutItem {
 	}
 
 	static final IdentityTransform:Transform2D = Transform2D.identity();
-	static var lastClip:Null<Rect> = null;
-	static var lastContent:Null<Rect> = null;
 
 	static inline function contains(rect:Rect, x:Float, y:Float):Bool
 		return x >= rect.x && y >= rect.y && x <= rect.x + rect.width && y <= rect.y + rect.height;

@@ -319,7 +319,7 @@ class StyleResolver {
 			value.min + "," + value.max + "," + value.growWeight;
 
 	static function insetsKey(value:Insets):String
-		return value == null ? "null" : value.left + "," + value.top + "," + value.right + "," + value.bottom;
+		return value.left + "," + value.top + "," + value.right + "," + value.bottom;
 
 	static function transformKey(value:Transform2D):String
 		return value == null ? "null" : value.a + "," + value.b + "," + value.c + "," +

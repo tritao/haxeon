@@ -21,11 +21,9 @@ class Padding implements View {
 			throw "Padding requires a child view";
 		this.key = new Key(key);
 		this.child = child;
-		this.insets = insets == null ? new Insets(0.0, 0.0, 0.0, 0.0) :
-			new Insets(insets.left, insets.top, insets.right, insets.bottom);
+		this.insets = insets == null ? new Insets(0.0, 0.0, 0.0, 0.0) : insets;
 		this.style = style == null ? new LayoutStyle() : style.copy();
-		this.style.padding = new Insets(this.insets.left, this.insets.top,
-			this.insets.right, this.insets.bottom);
+		this.style.padding = this.insets;
 	}
 
 	public function build(context:BuildContext):RenderNode {
