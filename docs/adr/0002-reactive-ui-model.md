@@ -70,6 +70,11 @@ values changes, and updates the existing nodes. This record makes that idea the 
    The costs: strings, text, callbacks and object references do not fit native records and need side tables, and raw
    records are harder to inspect than objects. With the incremental bridge, the speed gain is small; the case rests on
    deleting the transaction code. Adopted only if the stage 2 prototype shows a net simplification.
+   Records are `Flat` structs from `docs/STRUCTS.md`, the design written for Beartooth's world components: one C layout
+   inline in GC memory and in native memory, in-place field writes through `NativeSpan` and `p.ref`, and inferred flatness
+   that splits native from managed fields, as Beartooth's world splits native from managed columns. That makes the side
+   tables a compiler-derived split rather than hand-written bookkeeping, and the prototype depends on `STRUCTS.md`
+   stages 2 and 3.
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
    rules read hover, on the two nodes involved. This replaces `InteractionStateSnapshot` and `hoverRebuilds`.
@@ -111,6 +116,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
+0. **Structs for small values (independent, any time).** `Rect`, `Insets`, then `Color`, `LayoutAxis` and `Transform2D`
+   become `struct`s, stored inline in `LayoutStyle` and free as temporaries. Go: allocation budgets fall and nothing gets
+   slower. Prerequisites and the nullable-field question are in `docs/UI_LANGUAGE_FEATURES.md`.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Go: gates pass and no action allocates more.
