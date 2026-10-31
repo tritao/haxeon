@@ -651,7 +651,8 @@ class TextField implements View {
 				var changed = false;
 				var textEdited = false;
 				var previousRevision = editor.documentRevision();
-				if (command && event.key == UiKey.A)
+				// Select-all is exactly Ctrl+A (Cmd+A on macOS); Shift/Alt variants belong to the application keymap.
+				if (command && event.key == UiKey.A && (event.modifiers & (UiModifier.Shift | UiModifier.Alt)) == 0)
 					changed = editor.selectAll();
 				else if (command && event.key == UiKey.C)
 					copyCurrentSelection(context, editor);
