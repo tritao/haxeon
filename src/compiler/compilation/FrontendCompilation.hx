@@ -549,8 +549,12 @@ class FrontendCompilation {
 		var semantic = context.cachedSemanticProgram;
 		if (context.livePatching && !context.isWasmTarget() && semantic != null)
 			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
+		// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
+		// further value joins, so it needs a second pass after that rewrite.
+		if (context.isWasmTarget()) compiler.ir.IrValuePhiScalarization.rewrite(ir);
 		if (!context.isWasmTarget()) {
 			compiler.ir.IrValueConstructors.rewrite(ir);
+			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 			compiler.ir.IrHlScalarArguments.rewrite(ir);
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 		}

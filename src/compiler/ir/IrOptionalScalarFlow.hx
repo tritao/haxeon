@@ -16,6 +16,8 @@ class IrOptionalScalarFlow {
 	final wrappers:Map<String, IrObject> = [];
 	var candidates:Map<String, IrFunction> = [];
 	final functions:Map<String, IrFunction> = [];
+	final receiverChecks:Map<String, IrFunction> = [];
+	final methodCache:Map<String, Null<String>> = [];
 
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
@@ -41,6 +43,9 @@ class IrOptionalScalarFlow {
 			rewritten.push(!signature && hasOptional(fn) && eligible(fn) ? transform(fn, false) : fn);
 		}
 		for (fn in originals) if (candidates.exists(fn.name)) rewritten.push(transform(fn, true));
+		var checkNames = [for (name in receiverChecks.keys()) name];
+		checkNames.sort(Reflect.compare);
+		for (name in checkNames) rewritten.push(receiverChecks.get(name));
 		var names = [for (name in wrappers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) declarations.push(wrappers.get(name));
@@ -107,10 +112,43 @@ class IrOptionalScalarFlow {
 		}
 		return null;
 	}
+	/** Resolve class dispatch only when every possible subclass has the same implementation. */
+	function resolvedMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Null<String> {
+		if (exact.exists(receiver.id)) return method(exact.get(receiver.id), name);
+		var typeName = switch receiver.type { case Obj(value): value; default: return null; };
+		var root = objects.get(typeName);
+		if (root == null || root.isValue) return null;
+		var key = typeName.length + ":" + typeName + name;
+		if (methodCache.exists(key)) return methodCache.get(key);
+		var target = method(typeName, name);
+		if (target != null) for (object in objects) {
+			var parent:Null<String> = object.name, depth = 0;
+			while (parent != null && parent != typeName && depth++ < 256) {
+				var entry = objects.get(parent);
+				parent = entry == null ? null : entry.base;
+			}
+			if (depth >= 256 || (parent == typeName && method(object.name, name) != target)) { target = null; break; }
+		}
+		methodCache.set(key, target);
+		return target;
+	}
 	function hasCandidateMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Bool {
-		var target = method(exact.get(receiver.id), name);
+		var target = resolvedMethod(exact, receiver, name);
 		return target != null && candidates.exists(target);
 	}
+	function receiverCheck(typeName:String):String {
+		var name = "$optional-scalar:check-receiver:" + typeName;
+		if (!receiverChecks.exists(name)) {
+			var b = new IrBuilder(), receiver = b.argument("receiver", Obj(typeName));
+			var missing = b.createBlock(), present = b.createBlock();
+			b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
+			b.select(missing); b.terminate(Throw(b.toDyn(b.constString("Null access"))));
+			b.select(present); b.returnValue(b.constVoid());
+			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks));
+		}
+		return name;
+	}
+
 	function aliases(fn:IrFunction):Map<Int, OptionalAlias> {
 		var result:Map<Int, OptionalAlias> = [], changed = true;
 		while (changed) {
@@ -226,7 +264,7 @@ class IrOptionalScalarFlow {
 						var binding:OptionalClosure = cast bindings.get(closure.id), actual = binding.receiver == null ? args : [binding.receiver].concat(args);
 						if (!canPassAliases(binding.name, actual, alias)) return false;
 					case MethodCall(_, receiver, name, args) if (!alias.exists(receiver.id) && (hasCandidateMethod(exact, receiver, name) || hasAlias(args, alias))):
-						var target = method(exact.get(receiver.id), name);
+						var target = resolvedMethod(exact, receiver, name);
 						if (target == null || !canPassAliases(target, [receiver].concat(args), alias)) return false;
 					default:
 						// Unsupported reference-representation operations remain explicit box/unbox boundaries.
@@ -495,8 +533,13 @@ class IrOptionalScalarFlow {
 						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
 						emitCall(target, out, name, actual, located);
 					case MethodCall(out, receiver, name, arguments) if (!alias.exists(receiver.id) && hasCandidateMethod(exact, receiver, name)):
+						// Method arguments have already been evaluated; preserve the null error at the original call.
+						if (!exact.exists(receiver.id)) switch receiver.type {
+							case Obj(typeName): add(target, Call(new IrValue(next++, "$optional-receiver-check", Void), receiverCheck(typeName), [receiver]), located);
+							default:
+						}
 						var actual = [for (argument in [receiver].concat(arguments)) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
-						emitCall(target, out, method(exact.get(receiver.id), name), actual, located);
+						emitCall(target, out, resolvedMethod(exact, receiver, name), actual, located);
 					case Call(out, name, arguments) if (hasAlias(arguments, alias)):
 						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
 						if (components.exists(out.id)) {

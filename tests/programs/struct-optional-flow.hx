@@ -39,6 +39,35 @@ class PointHolder {
   public final point:FlatPoint;
   public function new(point:FlatPoint) this.point = point;
 }
+@:structural
+struct Choice {
+  public final n:Int;
+  public final text:String;
+  public function new(n:Int, text:String) { this.n = n; this.text = text; }
+}
+class Chooser {
+  public var fallback:Choice;
+  public function new() fallback = new Choice(1, "fallback");
+  public function choose(value:Null<Choice>, ?preferred:Choice):Choice {
+    var result = value == null ? fallback : value;
+    return preferred == null ? result : preferred;
+  }
+}
+class VirtualChooser {
+  public function new() {}
+  public function choose(value:Null<Choice>):Int return value == null ? 0 : value.n;
+}
+class OtherChooser extends VirtualChooser {
+  public function new() super();
+  override public function choose(value:Null<Choice>):Int return value == null ? 1 : value.n + 1;
+}
+class ChoiceEffects {
+  public static var count:Int = 0;
+  public static function preferred(value:Choice):Choice { count++; return value; }
+}
+function applyChoice(chooser:Chooser, value:Choice):Int return chooser.choose(value, value).n;
+function applyVirtualChoice(chooser:VirtualChooser, value:Null<Choice>):Int return chooser.choose(value);
+function invokeNullChooser(chooser:Chooser, value:Choice):Int return chooser.choose(value, ChoiceEffects.preferred(value)).n;
 class NativeHolder {
   public var value:Null<NativeShape>;
   public function new() {}
@@ -103,6 +132,15 @@ function snapshotBeforeLaterArgument(v:Null<Value>):Int {
   return plainWithIgnored(v, invokeSideEffect(function() { v.n = 9; }));
 }
 function main():Int {
+  var chooser = new Chooser(), choice = new Choice(42, "managed"), choiceBefore = hl.Gc.totalAllocated(), choiceTotal = 0;
+  for (i in 0...10000) choiceTotal += applyChoice(chooser, choice);
+  if (choiceTotal != 420000 || hl.Gc.totalAllocated() - choiceBefore > 4096) return 37;
+  if (chooser.choose(null).n != 1 || chooser.choose(choice).text != "managed") return 38;
+  var virtualChooser:VirtualChooser = new OtherChooser();
+  if (applyVirtualChoice(virtualChooser, choice) != 43 || applyVirtualChoice(virtualChooser, null) != 1) return 39;
+  try { invokeNullChooser(null, choice); return 40; } catch (_:Dynamic) {}
+  if (ChoiceEffects.count != 1) return 41;
+
   var pointHolder = new PointHolder(new FlatPoint(1, 2));
   var expectedHash = haxeon.Structural.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
   var pointHash = haxeon.Structural.mix(haxeon.Structural.mix(17, haxeon.Structural.hashFloat(1)), haxeon.Structural.hashFloat(2));

@@ -419,6 +419,13 @@ and isolated value phis can also be scalar-replaced without ordinary inlining. C
 and exception order; recursive and unsupported exception-handler bodies retain their calls. Native-layout optional values
 also use scalar flow, preserving narrow integer and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
 
+Value joins are scalarized before choosing the call ABI on all targets, and again after HashLink call lowering when that
+creates new joins. Optional-value methods on class receivers can use scalar flow when every possible subclass selects the
+same implementation. The lowering preserves the receiver null error after argument evaluation; overriding methods keep
+virtual dispatch. On the exploratory all-five-value UI build, this reduced the 30-cycle interaction Color census from
+2,994 to 1,315 and the tab-matrix census from 4,997 to 1,654. HashLink per-action results still exceed the class baseline
+for multiple actions, so further work is required before accepting the conversion.
+
 Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
 leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
 nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be
