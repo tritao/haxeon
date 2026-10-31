@@ -301,6 +301,32 @@ class IrOptionalFieldStorage {
 			for (located in block.instructions) {
 				var instruction = located.value;
 				switch instruction {
+					case Call(out, name, arguments) if (StringTools.startsWith(name, COPY_PREFIX)):
+						var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
+						if (fields.length != 4 || arguments.length != 2 || out.type != Void)
+							throw 'Invalid optional field copy "$name"';
+						var target = plans.get(key(fields[0], fields[1])), source = plans.get(key(fields[2], fields[3]));
+						if (target == null || source == null || !Type.enumEq(target.type, source.type) || target.slots.length != source.slots.length)
+							throw 'Incompatible optional field copy "$name"';
+						var destination = arguments[0], origin = arguments[1];
+						if (!Type.enumEq(destination.type, Obj(target.owner))) {
+							var base = new IrValue(next++, "$optional-copy-target", Obj(target.owner));
+							replacement.instructions.push(new Located(Upcast(base, destination), located.provenance)); destination = base;
+						}
+						if (!Type.enumEq(origin.type, Obj(source.owner))) {
+							var base = new IrValue(next++, "$optional-copy-source", Obj(source.owner));
+							replacement.instructions.push(new Located(Upcast(base, origin), located.provenance)); origin = base;
+						}
+						var snapshot:Array<IrValue> = [];
+						for (slot in source.slots) {
+							var value = new IrValue(next++, "$optional-copy-slot", slot.type);
+							replacement.instructions.push(new Located(FieldGet(value, origin, IrInlineValueLayout.slotName(source.field, slot)), located.provenance));
+							snapshot.push(value);
+						}
+						for (index in 0...target.slots.length)
+							replacement.instructions.push(new Located(FieldSet(destination, IrInlineValueLayout.slotName(target.field, target.slots[index]), snapshot[index]), located.provenance));
+						instruction = ConstVoid(out);
+						changed = true;
 					case FieldGet(out, object, field):
 						var plan = find(object.type, field);
 						if (plan != null) {
@@ -441,6 +467,10 @@ class IrOptionalFieldStorage {
 	}
 
 	static function key(owner:String, field:String):String return owner.length + ":" + owner + ":" + field;
+	static inline final COPY_PREFIX = "$optional-field:copy:";
+	public static function isCopyName(name:String):Bool return StringTools.startsWith(name, COPY_PREFIX);
+	public static function copyName(targetOwner:String, targetField:String, sourceOwner:String, sourceField:String):String
+		return COPY_PREFIX + haxe.Json.stringify([targetOwner, targetField, sourceOwner, sourceField]);
 	public static function placeSetterName(owner:String, field:String, path:Array<String>):String {
 		var name = "$optional-field:place-set:" + key(owner, field);
 		for (part in path) name += ":" + part.length + ":" + part;

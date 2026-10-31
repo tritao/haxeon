@@ -356,61 +356,64 @@ count remained 19,936 objects in full mode and 26,762 in editing mode, as this s
 intermediate measurements: the class baseline and remaining optional flow still determine acceptance.
 
 The per-action HashLink medians below are KiB allocated per action on the same machine. The prototype converts only
-`Rect` and `Insets`; step A adds the non-optional lowering above. Selection-stress does not report per-action bytes.
+`Rect` and `Insets`; step A adds non-optional lowering and step B adds optional field-copy fusion. Selection-stress
+does not report per-action bytes.
 
-| Scenario / action | Classes | Prototype | Step A |
-| --- | ---: | ---: | ---: |
-| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 |
-| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 |
-| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 |
-| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 |
-| interaction / hover away | 24.9 | 25.0 | 25.2 |
-| interaction / hover enter | 2.6 | 2.6 | 2.6 |
-| interaction / hover field | 22.1 | 24.0 | 22.2 |
-| interaction / hover inside | 0.6 | 0.6 | 0.6 |
-| interaction / hover other | 13.1 | 13.2 | 13.2 |
-| interaction / idle | 0.2 | 0.2 | 0.2 |
-| interaction / idle focused | 0.2 | 0.2 | 0.2 |
-| interaction / scroll inspector | 22.3 | 29.4 | 21.6 |
-| interaction / type backspace | 17.8 | 17.9 | 17.9 |
-| interaction / type character | 17.8 | 17.9 | 17.9 |
+| Scenario / action | Classes | Prototype | Step A | Step B |
+| --- | ---: | ---: | ---: | ---: |
+| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 | 112.7 |
+| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 | 162.1 |
+| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 | 126.9 |
+| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 | 131.0 |
+| interaction / hover away | 24.9 | 25.0 | 25.2 | 25.0 |
+| interaction / hover enter | 2.6 | 2.6 | 2.6 | 2.6 |
+| interaction / hover field | 22.1 | 24.0 | 22.2 | 22.2 |
+| interaction / hover inside | 0.6 | 0.6 | 0.6 | 0.6 |
+| interaction / hover other | 13.1 | 13.2 | 13.2 | 13.2 |
+| interaction / idle | 0.2 | 0.2 | 0.2 | 0.2 |
+| interaction / idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
+| interaction / scroll inspector | 22.3 | 29.4 | 21.6 | 21.6 |
+| interaction / type backspace | 17.8 | 17.9 | 17.9 | 17.9 |
+| interaction / type character | 17.8 | 17.9 | 17.9 | 17.9 |
 
 The interaction allocation census counts whole 30-cycle captures, including startup:
 
-| Type | Classes | Prototype | Step A |
-| --- | ---: | ---: | ---: |
-| Rect | 7,511 | 23,217 | 16,539 |
-| Insets | 70 | 9,811 | 779 |
-| Color | 487 | 487 | 487 |
-| LayoutAxis | 1,007 | 1,007 | 1,007 |
-| Transform2D | 1,722 | 1,722 | 1,722 |
+| Type | Classes | Prototype | Step A | Step B |
+| --- | ---: | ---: | ---: | ---: |
+| Rect | 7,511 | 23,217 | 16,539 | 16,539 |
+| Insets | 70 | 9,811 | 779 | 779 |
+| Color | 487 | 487 | 487 | 487 |
+| LayoutAxis | 1,007 | 1,007 | 1,007 | 1,007 |
+| Transform2D | 1,722 | 1,722 | 1,722 | 1,722 |
 
-| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A |
-| --- | ---: | ---: | ---: |
-| Full | 8,654 | 19,936 | 19,936 |
-| Editing | 15,482 | 26,762 | 26,762 |
+| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A | Step B |
+| --- | ---: | ---: | ---: | ---: |
+| Full | 8,654 | 19,936 | 19,936 | 6,976 |
+| Editing | 15,482 | 26,762 | 26,762 | 13,802 |
 
-#### Proposed: optional field copies and scalar optional flow
+#### Implemented: optional field-to-field copies
 
-The extension is to retain optional value copies as a first-class operation until representation lowering,
-rather than expanding each copy into a nullable branch and a boxed payload before field storage is planned. Fuse a
-field-to-field copy into a snapshot of the presence flag and all flattened leaves followed by the destination stores.
-This must evaluate owners in source order, preserve null errors and side effects, handle overlapping or identical places,
-and preserve nested optionals and managed references. Ordinary escape boundaries still materialize a box.
+Nullable value copies remain explicit in the typed tree until the destination is known. A direct field-to-field copy
+snapshots the source presence flag and every flattened leaf before writing the destination slots. Owner expressions run
+in source order, and source and destination null errors occur at their original accesses. This preserves nested optionals,
+managed references, side effects, and overlapping or identical places. Other copies keep their boxed representation.
+
+The interaction census was unchanged in step B. The Wasm GC Showcase counts fell by 12,960 objects in both scenarios,
+removing the paired clip getter and copy allocations measured in the prototype. These totals are below the class baseline;
+per-action acceptance still needs the optional local and call flow below.
+
+#### Proposed: scalar optional flow
 
 For nonescaping optional locals and direct and eligible typed closure calls, extend scalar value flow with a presence
 flag and flattened payload. Wasm GC can pass and return those components using the existing scalar ABI; HashLink needs
 an explicitly designed scalar calling convention or an equivalent proven specialization for typed calls and returns.
 Closures, virtual dispatch, recursion, exceptions and reentrant mutation must retain snapshot and writeback semantics;
 dynamic, reflection, native and unsupported call boundaries must continue to box. Packed arrays remain a separate
-design because of the collector and growth constraints above. The implementation must also address non-optional
-HashLink value temporaries at calls and inline-field copies without depending on UI-specific rewrites or making values
-mutable. No claim is made that optional-field fusion alone removes all of the measured allocations.
+design because of the collector and growth constraints above. Non-optional HashLink temporaries and direct optional field copies are implemented above.
 
-Before adopting this extension, add cross-target semantic tests for absent and present copies, nested managed fields,
-aliases, side effects, typed closures, exceptions and reentrancy, plus allocation tests for field copies and calls. Repeat
-the UI per-action and Wasm GC measurements against the same baseline; no action may allocate more. This is a proposal,
-not a change to the representation implemented in stage 1a.
+Scalar optional flow still needs cross-target tests for absent and present values, nested managed fields, aliases, side
+effects, typed closures, exceptions and reentrancy, plus allocation tests for calls. Repeat the UI per-action and Wasm GC
+measurements against the same baseline; no action may allocate more.
 
 ## Representation on Wasm GC
 

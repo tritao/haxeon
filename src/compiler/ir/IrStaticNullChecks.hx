@@ -98,12 +98,14 @@ class IrStaticNullChecks {
 				var copy = new IrBlock(block.id);
 				copy.terminator = block.terminator;
 				for (instruction in block.instructions) {
-					var receiver:Null<IrValue> = switch instruction.value {
+					var receivers:Array<IrValue> = switch instruction.value {
 						case FieldGet(_, value, _), FieldSet(value, _, _), ArrayGet(_, value, _), ArraySet(value, _, _), ArraySize(_, value),
-							IteratorNew(_, value), MethodCall(_, value, _, _), EnumIndex(_, value), EnumField(_, value, _, _): value;
-						case _: null;
+							IteratorNew(_, value), MethodCall(_, value, _, _), EnumIndex(_, value), EnumField(_, value, _, _): [value];
+						// The copy reads the source before it writes the destination, even when both are null statics.
+						case Call(_, name, arguments) if (IrOptionalFieldStorage.isCopyName(name) && arguments.length == 2): [arguments[1], arguments[0]];
+						case _: [];
 					};
-					if (receiver != null && origins.exists(receiver.id)) {
+					for (receiver in receivers) if (origins.exists(receiver.id)) {
 						var name = origins.get(receiver.id),
 							valueType = switch receiver.type { case Obj(typeName) if (valueTypes.exists(typeName)): receiver.type; default: null; },
 							helperName = valueType == null ? "__static$nonnull$" + name : "$static$nonnull$value$" + haxe.Json.stringify([name, Std.string(valueType)]);

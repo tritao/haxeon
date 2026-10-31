@@ -96,6 +96,18 @@ class StaticNullCheckReuseMain {
 		var referenceObject:IrObject = {name: "Box", isValue: false, base: null, interfaces: [], fields: [{name: "v", type: I32}], methods: []};
 		var referenceChecked = IrStaticNullChecks.run(sources, [referenceObject], cache);
 		expect(byName(referenceChecked).exists("__static$nonnull$S.a"), "changing a value to a reference invalidates cached checks");
+		var b = new IrBuilder(), dst = new IrValue(100, "dst", Obj("Box")), src = new IrValue(101, "src", Obj("Box"));
+		b.blocks[0].instructions.push(new Located(GlobalGet(dst, "S.dst"), SourceProvenance.generated("test")));
+		b.blocks[0].instructions.push(new Located(GlobalGet(src, "S.src"), SourceProvenance.generated("test")));
+		b.call(compiler.ir.IrOptionalFieldStorage.copyName("Box", "v", "Box", "v"), [dst, src], Void);
+		b.returnValue(b.constVoid());
+		var init = new IrFunction("__init", [], Void, b.blocks), checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
+		var checks:Array<String> = [];
+		for (block in checked.blocks) for (located in block.instructions) switch located.value {
+			case Call(_, name, _) if (StringTools.startsWith(name, "__static$nonnull$")): checks.push(name);
+			default:
+		}
+		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst", "optional copies check source before destination");
 		Sys.println("static null-check reuse OK");
 	}
 }

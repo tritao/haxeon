@@ -22,7 +22,7 @@ class ValueCopy {
 			case TNullable(element):
 				var nullableLayout = layoutOf(session, element, []);
 				if (nullableLayout != null)
-					return copyNullable(value, type, element, nullableLayout);
+					return new TypedExpression(TCopy(value, nullableLayout), type, value.span);
 			default:
 		}
 		var layout = layoutOf(session, type, []);
@@ -30,7 +30,7 @@ class ValueCopy {
 	}
 
 	/** Evaluate once, preserve absence, and give a present nullable its own value storage. */
-	static function copyNullable(value:TypedExpression, nullable:CompilerType, element:CompilerType, layout:ValueCopyLayout):TypedExpression {
+	public static function copyNullable(value:TypedExpression, nullable:CompilerType, element:CompilerType, layout:ValueCopyLayout):TypedExpression {
 		var span = value.span,
 			name = '$' + 'nullable-copy:${span.start}',
 			held = new TypedExpression(TLocal(name), nullable, span),

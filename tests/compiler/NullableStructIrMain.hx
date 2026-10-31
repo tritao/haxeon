@@ -35,6 +35,21 @@ class NullableStructIrMain {
 		if (alreadyPublished.length != 0) throw "an existing optional field was treated as a newly published field";
 		var added = IrProgramAssembler.liveInitializersFrom(typed, _ -> true, (_, _) -> false);
 		if (added.length != 1) throw "a new optional field did not get its live initializer";
+		var copied = Frontend.compile("struct Child { public var text:String; } "
+			+ "struct Value { public var nested:Null<Child>; public var n:Int; } "
+			+ "class Holder { public var value:Null<Value>; public function new() {} } "
+			+ "function copy(a:Holder, b:Holder):Void a.value = b.value; function main():Int return 42;");
+		var copy = [for (fn in copied.functions) if (fn.name == "copy") fn][0], reads = 0, writes = 0, wrote = false;
+		if (copy == null) throw "missing optional field copy";
+		for (block in copy.blocks) for (located in block.instructions) switch located.value {
+			case FieldGet(_, _, _):
+				if (wrote) throw "optional copy read a source slot after writing the destination";
+				reads++;
+			case FieldSet(_, _, _): wrote = true; writes++;
+			case NewObject(_, _) | ToDyn(_, _) | Call(_, _, _): throw "optional field copy allocated or called an accessor";
+			default:
+		}
+		if (reads != 4 || writes != reads) throw 'optional field copy did not snapshot all nested slots: $reads reads, $writes writes';
 		Sys.println("PASS: shared IR retains nullable struct payload types");
 	}
 }

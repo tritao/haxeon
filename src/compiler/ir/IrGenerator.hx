@@ -367,8 +367,20 @@ class IrGenerator {
 						builder.fieldSet(cell, "value", loweredValue);
 					}
 				case TFieldAssign(object, name, value, _):
-					var projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
-					if (optionalPlace != null) {
+					var projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object),
+						copy = optionalFieldCopy(value), targetOwner = optionalStoredFieldOwner(lowerType(object.type), name);
+					if (projection == null && optionalPlace == null && copy != null && targetOwner != null
+						&& sameIrType(lowerType(value.type), lowerType(copy.value.type))) {
+						var sourceOwner = optionalStoredFieldOwner(lowerType(copy.owner.type), copy.field);
+						if (sourceOwner != null && optionalFieldPlace(copy.owner) == null && flatRawPointerProjection(copy.owner) == null) {
+							var operands = lowerOperands([object, copy.owner], builder, localTypes);
+							if (!builder.isTerminated())
+								builder.call(IrOptionalFieldStorage.copyName(targetOwner, name, sourceOwner, copy.field), operands, Void);
+						} else {
+							var operands = lowerOperands([object, value], builder, localTypes);
+							if (!builder.isTerminated()) builder.fieldSet(operands[0], name, operands[1]);
+						}
+					} else if (optionalPlace != null) {
 						var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
 							assigned = lowerExpression(value, builder, localTypes);
 						if (!builder.isTerminated()) {
@@ -1208,6 +1220,30 @@ class IrGenerator {
 			default: false;
 		};
 
+	static function optionalFieldCopy(expression:TypedExpression):Null<{owner:TypedExpression, field:String, value:TypedExpression}> {
+		return switch expression.expression {
+			case TCopy(value, _) if (isNullableValueType(value.type)):
+				switch value.expression {
+					case TField(owner, field): {owner: owner, field: field, value: value};
+					default: null;
+				}
+			default: null;
+		};
+	}
+
+	/** A logical optional field that will be represented by inline slots. */
+	static function optionalStoredFieldOwner(type:IrType, field:String):Null<String> {
+		var name = switch type { case Obj(value): value; default: return null; };
+		while (name != null) {
+			var object = inlineValueObjects.get(name);
+			if (object == null) return null;
+			for (candidate in object.fields) if (candidate.name == field)
+				return switch candidate.type { case Nullable(Obj(value)) if (valueClasses.exists(value)): name; default: null; };
+			name = object.base;
+		}
+		return null;
+	}
+
 	static function nullableFieldComparedWithNull(left:TypedExpression, right:TypedExpression):Null<{owner:TypedExpression, field:String}> {
 		var candidate = isNullExpression(left) ? right : isNullExpression(right) ? left : null;
 		if (candidate == null || !isNullableValueType(candidate.type))
@@ -1475,7 +1511,12 @@ class IrGenerator {
 
 	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
-			case TCopy(value, layout): copyValue(builder, lowerExpression(value, builder, localTypes), layout, localTypes);
+			case TCopy(value, layout):
+				switch expression.type {
+					case TNullable(element):
+						lowerExpression(compiler.types.typing.ValueCopy.copyNullable(value, expression.type, element, layout), builder, localTypes);
+					default: copyValue(builder, lowerExpression(value, builder, localTypes), layout, localTypes);
+				}
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
 			case TFloatLiteral(value): builder.constFloat(value, lowerType(expression.type));
 			case TStringLiteral(value): builder.constString(value);
