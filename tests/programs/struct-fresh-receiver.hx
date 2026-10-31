@@ -43,6 +43,9 @@ function main():Int {
   total = 0; before = hl.Gc.totalAllocated();
   for (i in 0...10000) total += copyValue(managed).inspect(callback);
   if (total != 130000 || hl.Gc.totalAllocated() - before > 4096) return 8;
+  total = 0; before = hl.Gc.totalAllocated();
+  for (i in 0...10000) total += makeValue(5).inspect(callback);
+  if (total != 130000 || hl.Gc.totalAllocated() - before > 4096) return 10;
   var box = new SnapshotBox(makeValue(4));
   var temporary = makeValue(5).inspect(function() { box.value = makeValue(9); });
   if (temporary != 13 || box.value.number != 9) return 1;

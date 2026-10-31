@@ -456,6 +456,16 @@ field, inside and other were 26.5, 2.6, 25.0, 0.6 and 14.3 KiB; both idle action
 remeasured Rect/Insets Wasm GC Showcase used 6,532, 13,562, 6,522 and 6,522 objects over 120 frames in full, editing,
 static and text-heavy modes respectively, below the class counts of 8,654, 15,482, 8,654 and 8,656.
 
+Nested straight-line value constructors are prepared before expanding their callers, with recursive cycles left as calls
+and a bound on expanded body size. This lets newly constructed nested managed values stay scalar without ordinary
+inlining; tests cover side-effect order, exceptions and allocation. The 120-frame Rect/Insets Wasm GC Showcase measured
+6,532, 13,558, 6,518 and 6,508 objects in full, editing, static and text-heavy modes respectively, all below the class
+baselines. The 30-cycle interaction census remains 192 Rect and 146 Insets boxes, with 487 Color, 1,007 LayoutAxis and
+1,722 Transform2D class allocations. The four HashLink tab transition medians were 112.7, 162.1, 126.9 and 131.0 KiB;
+hover away, enter, field, inside and other were 25.0, 0.6, 22.2, 0.6 and 13.2 KiB; both idle actions were 0.2 KiB,
+inspector scroll was 21.6 KiB, and backspace and character input were 17.9 KiB each. Some still exceed the class baseline,
+so conversion acceptance remains open. Wasm GC uses its own lowering and is not changed by this HashLink optimization.
+
 Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
 leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
 nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be

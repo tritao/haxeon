@@ -56,6 +56,18 @@ class InlinerMain {
 			"a read-only receiver stays scalar through its own nested method");
 		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42,
 			"a scalar fresh receiver preserves its result");
+		var nestedConstructors = Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
+			+ "struct Parent { public final child:Child; public function new(text:String) child = new Child(text); } "
+			+ "function make():Parent return new Parent('managed'); function main():Int return make().child.text.length;");
+		compiler.ir.IrValueConstructors.rewrite(nestedConstructors);
+		compiler.ir.IrValuePhiScalarization.rewrite(nestedConstructors);
+		IrHlScalarArguments.rewrite(nestedConstructors);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(nestedConstructors, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(nestedConstructors);
+		expect(allocations(programFunction(nestedConstructors, "$hl:scalar-arguments:make")) == 0,
+			"nested value constructors stay scalar when ordinary inlining is disabled");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

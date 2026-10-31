@@ -28,7 +28,40 @@ class IrValueConstructors {
 				} else constructors.set(fn.name, fn);
 			}
 		}
-		program.functions = [for (fn in program.functions) expand(expandStraightLine(fn, straight), constructors)];
+		// Prepare nested straight-line bodies first. Expanding only the caller once leaves constructor calls
+		// introduced by an outer constructor boxed even when the complete value never escapes.
+		var prepared = prepareStraightLine(straight), branches:Map<String, IrFunction> = [];
+		for (name => fn in constructors) branches.set(name, expandStraightLine(fn, prepared));
+		program.functions = [for (fn in program.functions) expand(expandStraightLine(fn, prepared), branches)];
+	}
+
+	/** Expand acyclic nested constructor bodies once, with a size bound to avoid exponential code growth. */
+	static function prepareStraightLine(constructors:Map<String, IrFunction>):Map<String, IrFunction> {
+		var prepared:Map<String, IrFunction> = [], visiting:Map<String, Bool> = [];
+		function prepare(name:String):Null<IrFunction> {
+			if (prepared.exists(name)) return prepared.get(name);
+			if (visiting.exists(name)) return null;
+			var fn = constructors.get(name);
+			if (fn == null) return null;
+			visiting.set(name, true);
+			var children:Map<String, IrFunction> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case Call(_, child, _) if (child != name && constructors.exists(child)):
+					var nested = prepare(child);
+					if (nested != null) children.set(child, nested);
+				default:
+			}
+			var result = expandStraightLine(fn, children), count = 0;
+			for (block in result.blocks) count += block.instructions.length;
+			if (count > 256) result = fn;
+			visiting.remove(name);
+			prepared.set(name, result);
+			return result;
+		}
+		var names = [for (name in constructors.keys()) name];
+		names.sort(Reflect.compare);
+		for (name in names) prepare(name);
+		return prepared;
 	}
 
 	static function expand(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
