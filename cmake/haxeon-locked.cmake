@@ -1,0 +1,48 @@
+# Runs a command while holding the cross-process lock of a shared native CMake tree (see build/native/NativeCache):
+#
+#   cmake -DLOCK=<file> -DHOLDER=<text> [-DWAIT=<seconds>] -P haxeon-locked.cmake <command> [<arguments>...]
+#
+# The lock is an operating system file lock, so it is released when this process ends, however it ends; a killed build
+# never blocks the next one. HOLDER is written beside the lock so a build that times out can name who has it.
+if(NOT DEFINED WAIT)
+  set(WAIT 240)
+endif()
+get_filename_component(directory "${LOCK}" DIRECTORY)
+file(MAKE_DIRECTORY "${directory}")
+file(LOCK "${LOCK}" GUARD PROCESS TIMEOUT 0 RESULT_VARIABLE locked)
+if(NOT locked STREQUAL "0")
+  set(holder "unknown")
+  if(EXISTS "${LOCK}.holder")
+    file(READ "${LOCK}.holder" holder)
+    string(STRIP "${holder}" holder)
+  endif()
+  message(STATUS "haxeon: waiting for another build to finish with ${LOCK} (held by: ${holder})")
+  file(LOCK "${LOCK}" GUARD PROCESS TIMEOUT ${WAIT} RESULT_VARIABLE locked)
+  if(NOT locked STREQUAL "0")
+    message(FATAL_ERROR "Timed out after ${WAIT} s waiting for the native build lock ${LOCK}, held by: ${holder}")
+  endif()
+endif()
+file(WRITE "${LOCK}.holder" "${HOLDER}\n")
+
+# Everything after the script path is the command.
+set(command "")
+set(seen FALSE)
+set(skip FALSE)
+math(EXPR last "${CMAKE_ARGC} - 1")
+foreach(index RANGE 1 ${last})
+  set(argument "${CMAKE_ARGV${index}}")
+  if(seen)
+    if(skip)
+      set(skip FALSE)
+    else()
+      list(APPEND command "${argument}")
+    endif()
+  elseif(argument STREQUAL "-P")
+    set(seen TRUE)
+    set(skip TRUE)
+  endif()
+endforeach()
+execute_process(COMMAND ${command} RESULT_VARIABLE status)
+if(NOT status EQUAL 0)
+  message(FATAL_ERROR "${command} exited with ${status}")
+endif()

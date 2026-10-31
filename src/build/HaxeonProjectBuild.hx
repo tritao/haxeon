@@ -5,6 +5,7 @@ import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
+import build.native.NativeCache;
 import build.BuildEnvironment.BuildProfile;
 import haxe.io.Path;
 import project.ProjectDiscovery;
@@ -42,7 +43,8 @@ class HaxeonProjectBuild {
 			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
-			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session));
+			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session,
+				NativeCache.root(home, environment)));
 		if (compilerOnly)
 			execution = compilerExecution(execution);
 		timings.addElapsed("plan and lower", lowerStarted);

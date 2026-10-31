@@ -19,6 +19,9 @@ class LoweringContext {
 	/** Lower CMake packages onto workspace-wide trees keyed by (source, target) instead of per package. */
 	public final sharedNative:Bool;
 
+	/** Directory of the CMake trees that project builds share (NativeCache), or null when each project builds its own. */
+	public final nativeCache:Null<String>;
+
 	/** Build for `haxeon run --watch --live`: the compiler keeps the history patches address the running module by. */
 	public final live:Bool;
 
@@ -26,7 +29,8 @@ class LoweringContext {
 	public final session:Null<BuildSession>;
 
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
-			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession) {
+			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession, ?nativeCache:String) {
+		this.nativeCache = nativeCache;
 		this.session = session;
 		this.sharedNative = sharedNative == true;
 		this.live = live == true;
