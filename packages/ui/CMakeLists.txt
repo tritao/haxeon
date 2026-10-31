@@ -556,6 +556,12 @@ if(NK_BUILD_EXAMPLES)
                 LABELS "ui;haxe;framework"
                 TIMEOUT 120
                 ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
+            add_test(NAME nativekit_ui_key_chords
+                COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/tools/test-key-chords.sh")
+            set_tests_properties(nativekit_ui_key_chords PROPERTIES
+                LABELS "ui;haxe;framework"
+                TIMEOUT 120
+                ENVIRONMENT "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR};HAXEON_DIR=${NKUI_HAXEON_DIR}")
             if(NKUI_SHOWCASE_XVFB_RUN)
                 add_test(NAME nativekit_ui_explorer_smoke
                     COMMAND ${NKUI_SHOWCASE_XVFB_RUN} -a

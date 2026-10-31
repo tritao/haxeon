@@ -56,6 +56,8 @@ class TreeView implements View {
 	/** Synchronize external state after retained selection/expansion loads, before rows materialize. */
 	public var onStateReady:Null<TreeView->Void>;
 	public var onItemActivated:Null<String->Void>;
+	/** Enter or double-click on any row, branches included. Return true to consume the activation; false (or unset) keeps the default toggle/open. */
+	public var onActivate:Null<(String, UiEvent)->Bool>;
 	/** Event-aware activation for callers that need pointer or keyboard modifiers. */
 	public var onItemActivatedWithEvent:Null<String->UiEvent->Void>;
 	/** Primary row clicks, including repeated clicks on the selected item. */
@@ -470,7 +472,7 @@ class TreeView implements View {
 					var row = new TreeViewRow("row", nodeKey, item, entry, indentWidth, verticalGuidesOnly,
 						compactLeafIndent, isSelected(nodeKey), guideOpacity,
 						function() { select(nodeKey); },
-						function(event) { if (entry.hasChildren) toggleExpanded(nodeKey); else activateItem(nodeKey, event); },
+						function(event) { if (requestActivate(nodeKey, event)) return; if (entry.hasChildren) toggleExpanded(nodeKey); else activateItem(nodeKey, event); },
 						function() { toggleExpanded(nodeKey); },
 						function(event) {
 							// Modified clicks only change the selection; they neither open nor expand.
@@ -478,6 +480,7 @@ class TreeView implements View {
 							select(nodeKey);
 							var count = clicks.value.register(nodeKey, event);
 							if (onItemClicked != null) onItemClicked(nodeKey, count);
+							if (count == 2 && requestActivate(nodeKey, event)) return;
 							if (entry.hasChildren) {
 								// Single-click expansion applies to every click, including the
 								// second click recognized as part of a double-click sequence.
@@ -580,6 +583,11 @@ class TreeView implements View {
 		var target = itemIds.get(nextKey);
 		if (target != null)
 			context.requestFocus(target);
+	}
+
+	function requestActivate(nodeKey:String, event:UiEvent):Bool {
+		var handler = onActivate;
+		return handler != null && handler(nodeKey, event);
 	}
 
 	function activateItem(nodeKey:String, event:UiEvent):Void {
