@@ -65,10 +65,17 @@ class NativeCache {
 	/** The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. */
 	public static function treeRoot(root:String, layout:TargetLayout, environment:BuildEnvironment, resolvedPackage:ResolvedPackage, source:String,
 			target:String):String {
-		var fullSource = canonical(source);
-		if (Sys.systemName() == "Windows")
-			fullSource = fullSource.toLowerCase();
-		var key = Sha256.encode([fullSource, target, environment.target.toString(), Std.string(environment.profile)].join("\n")).substr(0, 10),
+		// What decides a tree's configuration: the source, the target and profile, the haxeon home (CMAKE_PROJECT_INCLUDE and
+		// the pinned tools come from it) and the compilers. The configure arguments are the same for every project that
+		// reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing else
+		// of a project belongs here.
+		var fullSource = canonical(source), home = scriptHome == null ? "" : canonical(scriptHome),
+			compilers = [for (name in ["CC", "CXX", "VCToolsVersion", "VisualStudioVersion"]) name + "=" + Std.string(Sys.getEnv(name))].join(",");
+		var identity = [fullSource, target, environment.target.toString(), Std.string(environment.profile), home, compilers].join("\n");
+		// Case-insensitive file systems (Windows, macOS) reach one directory by several spellings.
+		if (Sys.systemName() == "Windows" || Sys.systemName() == "Mac")
+			identity = identity.toLowerCase();
+		var key = Sha256.encode(identity).substr(0, 10),
 			name = new EReg("[^A-Za-z0-9_.]+", "g").replace(resolvedPackage.name, "-");
 		return Path.join([root, layout.targetDirectory(), name + "-" + key]);
 	}
