@@ -14,6 +14,24 @@ struct FlatPacket {
   public var count:Int32;
 }
 
+struct FlatIntLeaf {
+  public var count:Int;
+}
+
+struct FlatIntRoot {
+  public var child:FlatIntLeaf;
+}
+
+class PointerCounter {
+  public var calls:Int = 0;
+  final pointer:RawPtr<FlatIntRoot>;
+  public function new(pointer:RawPtr<FlatIntRoot>) this.pointer = pointer;
+  public function next():RawPtr<FlatIntRoot> {
+    calls++;
+    return pointer;
+  }
+}
+
 class NativeSpanHolder < T > {
   final span:NativeSpan<T>;
 
@@ -68,6 +86,13 @@ function main():Int {
   pointer.ref.prefix = -654;
   pointer.ref.child.delta = 2345;
   pointer.ref.child.ratio = 3.25;
+  var intPointer:RawPtr<FlatIntRoot> = arena.alloc(1);
+  intPointer.ref.child.count = 13;
+  var oldCount = intPointer.ref.child.count++;
+  if (oldCount != 13 || intPointer.load().child.count != 14) return 2;
+  if (intPointer.ref.child.count-- != 14 || intPointer.load().child.count != 13) return 3;
+  var counter = new PointerCounter(intPointer);
+  if (counter.next().ref.child.count++ != 13 || counter.calls != 1 || intPointer.load().child.count != 14) return 4;
   var projected:FlatPacket = pointer.ref;
   var span:NativeSpan<FlatPacket> = new NativeSpan<FlatPacket>(pointer,
     2), component = new NativeSpanComponent<FlatPacket>(span),

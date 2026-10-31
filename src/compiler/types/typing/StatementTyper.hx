@@ -434,6 +434,7 @@ class StatementTyper {
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
+		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
@@ -511,6 +512,7 @@ class StatementTyper {
 			return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
+		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);

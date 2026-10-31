@@ -4,14 +4,14 @@ import compiler.ir.Ir.IrType;
 
 /** Rules about IR types that more than one stage needs. */
 class IrTypeTools {
-	/** Whether values of this type are boxed dynamic values: `Dyn`, or a nullable primitive (which is one). */
+	/** Whether values currently use a boxed dynamic representation: `Dyn` or a nullable. */
 	public static function isDynamic(type:IrType):Bool
 		return switch type {
 			case Dyn, Nullable(_): true;
 			default: false;
 		};
 
-	/** The primitive a `Nullable` holds, or null for any other type. */
+	/** The value a `Nullable` holds, or null for any other type. */
 	public static function nullableElement(type:IrType):Null<IrType>
 		return switch type {
 			case Nullable(element): element;
@@ -51,7 +51,7 @@ class IrTypeTools {
 
 	/**
 	 * Whether a value of type `actual` may stand where `expected` is required without an operation. Equal types may, and a
-	 * nullable primitive may stand where a `Dyn` is required. The reverse needs a `SafeCast`, which also converts a box of
+	 * nullable may stand where a `Dyn` is required. The reverse needs a `SafeCast`, which also converts a box of
 	 * another kind, so that a value typed as `Null<Int>` really is an Int box (or null).
 	 */
 	public static function compatible(expected:IrType, actual:IrType):Bool

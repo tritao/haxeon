@@ -749,7 +749,7 @@ class ExpressionTyper {
 		return switch name {
 			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat" | "forward" | "from" | "hiddenUnless" |
 				"hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata" | "noCompletion" | "noInline" | "op" | "optional" | "portable" |
-				"privateAccess" | "pure" | "renamedFrom" | "repr" | "value" | "wire": true;
+				"privateAccess" | "pure" | "renamedFrom" | "repr" | "structural" | "value" | "wire": true;
 			case _: false;
 		};
 
@@ -1760,6 +1760,7 @@ class ExpressionTyper {
 					default:
 				}
 				FinalFieldRules.rejectInstanceMutation(session, object, name, span);
+				ValuePlaceRules.requireWritable(session, object, span);
 				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:
@@ -1977,6 +1978,12 @@ class ExpressionTyper {
 		return operation == 2 ? enumIdentityComparison(result) : result;
 	}
 
+	/** Compare already-typed fields with the same operator resolution as a source-level `==`. */
+	public function compareKnownValues(left:TypedExpression, right:TypedExpression, span:SourceSpan):TypedExpression {
+		var overloaded = callResolver.typeAbstractOperator("==", [left, right], span, new Scope());
+		return overloaded == null ? compareTyped(left, right, 2, span, false) : overloaded;
+	}
+
 	/**
 	 * `==` on two values of an enum with payload constructors compares by identity, as in Haxe: `Circle(1) == Circle(1)` is
 	 * false for two separately built values. A constructor without fields denotes one value, so `Dot == Dot` is true however
@@ -2048,13 +2055,42 @@ class ExpressionTyper {
 			else if (sameType(right.type, TNull) && isNullable(left.type))
 				right = coerce(right, left.type, "null comparison", "E1009");
 		}
+		// Equality observes nullable operands without binding new locations. In particular, retain the local in a
+		// null test so flow narrowing can recognize it; nullable struct copies are made at actual bindings instead.
+		if (operation == 2 && isNullable(left.type) && TypeRelations.equals(left.type, right.type)) {
+			if (session.relations.isNullableValueClass(left.type) && !isNullOperand(left) && !isNullOperand(right)) {
+				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			}
+			return new TypedExpression(TEqual(left, right), TBool, span);
+		}
+		if (operation == 2) {
+			var nullableElement:Null<CompilerType> = switch left.type {
+				case TNullable(element) if (session.relations.isValueClass(element) && TypeRelations.equals(element, right.type)): element;
+				default: null;
+			};
+			if (nullableElement != null) {
+				right = coerce(right, left.type, "equality comparison", "E1011");
+				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			}
+			nullableElement = switch right.type {
+				case TNullable(element) if (session.relations.isValueClass(element) && TypeRelations.equals(element, left.type)): element;
+				default: null;
+			};
+			if (nullableElement != null) {
+				left = coerce(left, right.type, "equality comparison", "E1011");
+				ValueEqualityGenerator.request(session, right.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(right.type), [left, right]), TBool, span);
+			}
+		}
 		if (operation == 2 && sameType(left.type, TString) && sameType(right.type, TString))
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && TypeRelations.equals(left.type, right.type) && session.relations.isValueClass(left.type)) {
-			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}
 		if (operation == 2 && session.relations.isAssignable(left.type, right.type)) {
 			left = coerce(left, right.type, "equality comparison", "E1011");

@@ -62,6 +62,8 @@ class TypingSession {
 	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
 	public final equalityRequests:Map<String, EqualityRequest> = [];
+	/** Language `==` on values follows each field's `==`, independently of deep Equality.equals. */
+	public final valueEqualityRequests:Map<String, EqualityRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
@@ -117,6 +119,42 @@ class TypingSession {
 		recordQuery(purityQueries, name, answer);
 		return answer;
 	}
+
+	/** A value method can have global effects without writing its receiver. */
+	public function isReadOnlyReceiver(name:String):Bool {
+		var key = compiler.types.analysis.ReceiverMutationInference.PREFIX + name,
+			answer = inferredPureFunctions.exists(key);
+		recordQuery(purityQueries, key, answer);
+		return answer;
+	}
+
+	/** Whether writes through a binding may update the binding itself rather than a referenced object. */
+	public function mayHoldValue(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
+		if (type != null && type != InferredType) {
+			var resolved:Null<CompilerType> = null;
+			try {
+				resolved = declarations.resolve(type, null, currentContext.typeSubstitutions);
+			} catch (_:compiler.Diagnostic.CompileError) {
+				// The normal typing pass reports invalid or inferred annotations with the right source context.
+				return true;
+			}
+			if (resolved == null) return true;
+			return valueStorageType(resolved);
+		}
+		return switch initializer {
+			case New(name, _, _) if (classDecls.exists(name)): relations.isValueClass(TInstance(NominalKind.Class, name, []));
+			case ArrayLiteral(_, _), ObjectLiteral(_, _), Lambda(_, _, _, _): false;
+			default: true;
+		};
+	}
+
+	function valueStorageType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element), TAbstract(_, _, element): valueStorageType(element);
+			case TInstance(NominalKind.Class, name, _): !classDecls.exists(name) || relations.isValueClass(type);
+			case TDynamic, TTypeParameter(_, _), TInstance(NominalKind.NativeValue, _, _): true;
+			default: false;
+		};
 
 	/** Only closure-written declarations can change during a call; respect local shadowing. */
 	public function closureWritableNames(scope:Scope):Array<String> {

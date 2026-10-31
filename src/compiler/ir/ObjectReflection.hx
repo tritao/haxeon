@@ -23,6 +23,17 @@ class ObjectReflection {
 		var remaining:Array<IrNative> = [],
 			layouts:Null<Array<ReflectedLayout>> = null;
 		for (native in natives) {
+			if (isHashLinkReflection(native.symbol) && objects != null && hasOptionalValueFields(objects)) {
+				if (layouts == null)
+					layouts = layoutsOf(objects, reflectable == null ? [] : reflectable, functions);
+				var affected = affectedLayouts(layouts, objects);
+				if (affected.length > 0) {
+					var fallback = '$' + 'optional-reflect-native:' + native.name;
+					remaining.push({name: fallback, library: native.library, symbol: native.symbol, arguments: native.arguments, result: native.result});
+					functions.push(hashLinkReflection(native, fallback, affected, functions));
+					continue;
+				}
+			}
 			if (!StringTools.startsWith(native.symbol, "__reflect_object_")) {
 				remaining.push(native);
 				continue;
@@ -52,6 +63,73 @@ class ObjectReflection {
 			});
 		}
 		return remaining;
+	}
+
+	static function isHashLinkReflection(symbol:String):Bool
+		return switch symbol {
+			case "__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count",
+				"__reflect_field_name", "__reflect_copy": true;
+			default: false;
+		};
+
+	static function hasOptionalValueFields(objects:Array<IrObject>):Bool {
+		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
+		for (object in objects)
+			for (field in object.fields)
+				switch field.type {
+					case Nullable(Obj(name)) if (values.exists(name)): return true;
+					default:
+				}
+		return false;
+	}
+
+	static function affectedLayouts(layouts:Array<ReflectedLayout>, objects:Array<IrObject>):Array<ReflectedLayout> {
+		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
+		return [for (layout in layouts) {
+			var affected = false;
+			for (field in layout.fields)
+				switch field.type {
+					case Nullable(Obj(name)) if (values.exists(name)): affected = true;
+					default:
+				}
+			if (affected) layout;
+		}];
+	}
+
+	/** Preserve HashLink reflection's logical fields while its object carries inline physical slots. */
+	static function hashLinkReflection(native:IrNative, fallback:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction {
+		var builder = new IrBuilder(), object = builder.argument("object", Dyn),
+			arguments = [for (index in 1...native.arguments.length) builder.argument('argument$index', native.arguments[index])];
+		forEachLayout(builder, object, layouts, (layout, typed) -> {
+			var parameters = [for (index in 1...native.arguments.length) {name: 'argument$index', type: native.arguments[index]}];
+			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>)->Void = switch native.symbol {
+				case "__reflect_field": fieldBody;
+				case "__reflect_field_count": (inner, entry, _, _) -> inner.returnValue(inner.constInt(entry.fields.length));
+				case "__reflect_field_name": fieldNameBody;
+				case "__reflect_delete_field": deleteFieldBody;
+				case "__reflect_copy": (inner, entry, source, _) -> {
+					var result = inner.newObject(entry.name);
+					for (field in entry.fields) inner.fieldSet(result, field.name, inner.fieldGet(source, field.name, field.type));
+					inner.returnValue(inner.toDyn(result));
+				};
+				case "__reflect_has_field": (inner, entry, _, args) -> {
+					forEachField(inner, args[0], entry, _ -> inner.returnValue(inner.constBool(true)));
+					inner.returnValue(inner.constBool(false));
+				};
+				case "__reflect_set_field": (inner, entry, target, args) -> {
+					forEachField(inner, args[0], entry, field -> {
+						inner.fieldSet(target, field.name, field.type == Dyn ? args[1] : inner.safeCast(args[1], field.type));
+						inner.returnValue(inner.constVoid());
+					});
+					inner.returnValue(inner.call(fallback, [inner.toDyn(target)].concat(args), Void));
+				};
+				default: throw 'Unsupported HashLink reflection native "${native.symbol}"';
+			};
+			var helper = layoutFunction('${native.name}.${layout.name}', layout, functions, native.result, parameters, body);
+			builder.returnValue(builder.call(helper, [typed].concat(arguments), native.result));
+		});
+		builder.returnValue(builder.call(fallback, [object].concat(arguments), native.result));
+		return new IrFunction(native.name, builder.arguments, native.result, builder.blocks);
 	}
 
 	/** Reflectable layouts with inherited fields first, ordered so subclasses are tested before their bases. */

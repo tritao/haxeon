@@ -21,6 +21,9 @@ class CaptureAnalysisMain {
 		expect(count(callee.mutableCaptures) == 1, "call-only captured functions must use cells from their declaration");
 		var immutable = analyzeLexically('function main():Int { var box = new Box(1); var read = () -> box.answer(); return read(); }');
 		expect(count(immutable.mutableCaptures) == 0, "immutable receiver captures should remain direct values");
+		var referenceProgram = compiler.Frontend.compile('class Box { public var n:Int; public function new() n = 1; public function bump():Void n++; } function main():Int { var box = new Box(); var update = () -> box.bump(); update(); return box.n; }');
+		for (object in referenceProgram.objects)
+			expect(!StringTools.startsWith(object.name, "$cell:"), "mutating a referenced class must not add a capture cell");
 
 		var exception = analyzeLexically('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
 		expect(count(exception.exceptionCells) == 1 && firstKey(exception.exceptionCells).indexOf("value@") == 0,

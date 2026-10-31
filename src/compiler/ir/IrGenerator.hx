@@ -41,6 +41,7 @@ import compiler.ir.Ir.IrStaticField;
 
 /** Resolved key and value types of a map operation being lowered. */
 private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
+private typedef OptionalFieldPlace = {final owner:TypedExpression; final field:String; final path:Array<String>; @:optional final checkedDepth:Int;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
@@ -50,6 +51,8 @@ class IrGenerator {
 	static var classBases:Map<String, String> = [];
 	static var headerlessValueClasses:Bool = true;
 	static var flatValueObjects:Map<String, IrObject> = [];
+	static var inlineValueObjects:Map<String, IrObject> = [];
+	static var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 
@@ -100,6 +103,7 @@ class IrGenerator {
 	/** Flat value objects also have a selected native field layout for RawPtr aggregate copies. */
 	public static function bindFlatValueObjects(objects:Array<IrObject>):Void {
 		flatValueObjects = [];
+		inlineValueObjects = [for (object in objects) object.name => object];
 		for (object in objects)
 			if (object.isValue && object.nativeLayout != null)
 				flatValueObjects.set(object.name, object);
@@ -255,6 +259,7 @@ class IrGenerator {
 	}
 
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
+		localOptionalPlaces = [];
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
 		for (name => cellClass in fn.cells) {
 			var cellType:IrType = Obj(cellClass);
@@ -329,7 +334,23 @@ class IrGenerator {
 						}
 				case TVar(name, initializer, span):
 					builder.debugLocal(name, span, scopeEnd);
-					initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
+					var place = switch initializer.expression {
+						case TCall("$value.place", [inner]): optionalFieldPlace(inner);
+						default: null;
+					};
+					if (place == null)
+						initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
+					else {
+						var owner = prepareOptionalFieldPlace(place, builder, localTypes), declaring = optionalFieldOwner(owner.type, place.field),
+							receiver = builder.load(owner.name, owner.type);
+						if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+						var getter = optionalPlaceGetter(place, declaring, lowerType(initializer.type));
+						initializeLocal(name, builder.call(getter, [receiver], lowerType(initializer.type)), builder, localTypes);
+						localOptionalPlaces.set(name, {
+							owner: new TypedExpression(TLocal(owner.name), place.owner.type, place.owner.span),
+							field: place.field, path: place.path, checkedDepth: place.path.length + 1
+						});
+					}
 				case TAssign(name, value, _):
 					var loweredValue = lowerExpression(value, builder, localTypes);
 					if (!builder.isTerminated())
@@ -346,8 +367,21 @@ class IrGenerator {
 						builder.fieldSet(cell, "value", loweredValue);
 					}
 				case TFieldAssign(object, name, value, _):
-					var projection = flatRawPointerProjection(object);
-					if (projection != null) {
+					var projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
+					if (optionalPlace != null) {
+						var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
+							assigned = lowerExpression(value, builder, localTypes);
+						if (!builder.isTerminated()) {
+							var path = optionalPlace.path.concat([name]), target = builder.load(owner.name, owner.type);
+							if (isInlineAtomic(lowerType(value.type)))
+								builder.fieldSet(target, optionalSlotName(optionalPlace.field, path, false), assigned);
+							else {
+								var declaring = optionalFieldOwner(owner.type, optionalPlace.field);
+								if (!sameIrType(owner.type, Obj(declaring))) target = builder.upcast(target, Obj(declaring));
+								builder.call(IrOptionalFieldStorage.placeSetterName(declaring, optionalPlace.field, path), [target, assigned], Void);
+							}
+						}
+					} else if (projection != null) {
 						var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
 							layout = field.field.nativeLayout;
 						if (layout == null)
@@ -1111,7 +1145,7 @@ class IrGenerator {
 
 	static function flatRawPointerProjection(expression:TypedExpression):Null<{pointer:TypedExpression, recordName:String, path:Array<String>}> {
 		return switch expression.expression {
-			case TCall("$rawptr.load.flat", [pointer]):
+			case TCall("$rawptr.ref.flat", [pointer]):
 				var recordName = flatValueObjectName(expression.type);
 				recordName == null ? null : {pointer: pointer, recordName: recordName, path: []};
 			case TField(object, name):
@@ -1124,6 +1158,145 @@ class IrGenerator {
 			case TCast(inner), TAbiCast(inner): flatRawPointerProjection(inner);
 			case _: null;
 		};
+	}
+
+	/** Find a field place inside a nullable value field without materializing an independent value copy. */
+	static function optionalFieldPlace(expression:TypedExpression):Null<OptionalFieldPlace> {
+		return switch expression.expression {
+			case TLocal(name) if (localOptionalPlaces.exists(name)): localOptionalPlaces.get(name);
+			case TCellLocal(name, cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
+				optionalCellPlace(name, cellClass, false, expression.span);
+			case TCellCaptured(name, cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
+				optionalCellPlace(name, cellClass, true, expression.span);
+			case TCall("$value.place", [inner]): optionalFieldPlace(inner);
+			case TCast(inner), TAbiCast(inner):
+				switch inner.expression {
+					case TCellLocal(name, cellClass) if (isNullableValueType(inner.type)):
+						optionalCellPlace(name, cellClass, false, inner.span);
+					case TCellCaptured(name, cellClass) if (isNullableValueType(inner.type)):
+						optionalCellPlace(name, cellClass, true, inner.span);
+					case TField(owner, field) if (isNullableValueType(inner.type)):
+						var parent = optionalFieldPlace(owner);
+						parent == null ? {owner: owner, field: field, path: []} : {
+							owner: parent.owner, field: parent.field, path: parent.path.concat([field]), checkedDepth: parent.checkedDepth
+						};
+					default: optionalFieldPlace(inner);
+				}
+			case TField(parent, field) if (isValueType(expression.type) || isNullableValueType(expression.type)):
+				var place = optionalFieldPlace(parent);
+				place == null ? null : {owner: place.owner, field: place.field, path: place.path.concat([field]), checkedDepth: place.checkedDepth};
+			default: null;
+		};
+	}
+
+	static function optionalCellPlace(name:String, cellClass:String, captured:Bool, span:compiler.Source.SourceSpan):OptionalFieldPlace {
+		var marker = new TypedExpression(TLocal(name), TDynamic, span),
+			owner = new TypedExpression(TCall(captured ? "$optional-cell-captured" : "$optional-cell-local", [marker]),
+				TInstance(NominalKind.Class, cellClass, []), span);
+		return {owner: owner, field: "value", path: []};
+	}
+
+	static function isNullableValueType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(TInstance(NominalKind.Class, name, _)): valueClasses.exists(name);
+			default: false;
+		};
+
+	static function isValueType(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): valueClasses.exists(name);
+			default: false;
+		};
+
+	static function nullableFieldComparedWithNull(left:TypedExpression, right:TypedExpression):Null<{owner:TypedExpression, field:String}> {
+		var candidate = isNullExpression(left) ? right : isNullExpression(right) ? left : null;
+		if (candidate == null || !isNullableValueType(candidate.type))
+			return null;
+		return switch candidate.expression {
+			case TField(owner, field): {owner: owner, field: field};
+			default: null;
+		};
+	}
+
+	static function isInlineAtomic(type:IrType):Bool
+		return switch type {
+			case Obj(name): !valueClasses.exists(name);
+			case Nullable(Obj(name)): !valueClasses.exists(name);
+			default: true;
+		};
+
+	static function optionalSlotName(field:String, path:Array<String>, presence:Bool):String
+		return IrInlineValueLayout.slotName(field, {path: path, type: presence ? Bool : Void, isPresence: presence, nativeLayout: null});
+
+	static function optionalFieldOwner(type:IrType, field:String):String {
+		var name = switch type { case Obj(value): value; default: throw 'Optional field owner must be an object'; };
+		while (name != null) {
+			var object = inlineValueObjects.get(name);
+			if (object == null) break;
+			for (candidate in object.fields)
+				if (candidate.name == field) return name;
+			name = object.base;
+		}
+		throw 'Unknown optional field "$field"';
+	}
+
+	static function optionalPlaceGetter(place:OptionalFieldPlace, declaring:String, requested:IrType):String {
+		if (place.path.length == 0) return IrOptionalFieldStorage.placeGetterName(declaring, place.field, []);
+		var owner = inlineValueObjects.get(declaring), type:Null<IrType> = null;
+		if (owner == null) throw 'Missing optional field owner "$declaring"';
+		for (field in owner.fields) if (field.name == place.field) type = field.type;
+		for (part in place.path) {
+			var name = switch type {
+				case Obj(value), Nullable(Obj(value)): value;
+				default: throw 'Invalid optional place path';
+			}, object = inlineValueObjects.get(name), next:Null<IrType> = null;
+			if (object == null) throw 'Missing optional place value "$name"';
+			for (field in object.fields) if (field.name == part) next = field.type;
+			if (next == null) throw 'Missing optional place field "$name.$part"';
+			type = next;
+		}
+		return switch [type, requested] {
+			case [Nullable(Obj(name)), Obj(other)] if (name == other):
+				IrOptionalFieldStorage.placeUnwrappedGetterName(declaring, place.field, place.path);
+			default: IrOptionalFieldStorage.placeGetterName(declaring, place.field, place.path);
+		};
+	}
+
+	/** Evaluate and validate the receiver before evaluating a write's right-hand side. */
+	static function prepareOptionalFieldPlace(place:OptionalFieldPlace, builder:CfgBuilder, localTypes:Map<String, IrType>):{name:String, type:IrType} {
+		var owner = lowerExpression(place.owner, builder, localTypes), ownerName = '$' + 'optional-place-owner:${owner.id}';
+		localTypes.set(ownerName, owner.type);
+		builder.store(ownerName, owner);
+		var declaring = inlineValueObjects.get(optionalFieldOwner(owner.type, place.field)), fieldType:Null<IrType> = null;
+		if (declaring == null) throw 'Missing optional field owner';
+		for (field in declaring.fields) if (field.name == place.field) fieldType = field.type;
+		if (fieldType == null) throw 'Missing optional field "${place.field}"';
+		var path:Array<String> = [];
+		for (index in 0...place.path.length + 1) {
+			switch fieldType {
+				case Nullable(Obj(name)) if (valueClasses.exists(name)):
+					if (place.checkedDepth == null || index >= place.checkedDepth) {
+						var flag = builder.fieldGet(builder.load(ownerName, owner.type), optionalSlotName(place.field, path, true), Bool),
+							present = builder.createBlock(), missing = builder.createBlock();
+						builder.branch(flag, present, missing);
+						builder.select(missing);
+						builder.throwValue(builder.toDyn(builder.constString("Null access")));
+						builder.select(present);
+					}
+					fieldType = Obj(name);
+				default:
+			}
+			if (index < place.path.length) {
+				var name = switch fieldType { case Obj(value): value; default: throw "Invalid optional field path"; },
+					object = inlineValueObjects.get(name), component = place.path[index], next:Null<IrType> = null;
+				if (object == null || !object.isValue) throw 'Invalid optional value path through "$name"';
+				for (field in object.fields) if (field.name == component) next = field.type;
+				if (next == null) throw 'Unknown optional value field "$name.$component"';
+				path.push(component);
+				fieldType = next;
+			}
+		}
+		return {name: ownerName, type: owner.type};
 	}
 
 	static function flatFieldAtPath(recordName:String, path:Array<String>):{offset:Int, field:IrObjectField} {
@@ -1234,27 +1407,75 @@ class IrGenerator {
 	/** Origin reason on the instructions of a value copy, so a later pass can recognize and drop unneeded ones. */
 	public static inline var ValueCopyReason = "value-copy";
 
-	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout):CfgValue {
+	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
 		var previous = builder.beginGenerated(ValueCopyReason);
-		var copy = copyFields(builder, source, layout);
+		var copy = copyFields(builder, source, layout, localTypes);
 		builder.restoreSource(previous);
 		return copy;
 	}
 
-	static function copyFields(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout):CfgValue {
-		var copy = builder.newObject(layout.name);
-		for (field in layout.fields) {
-			var value = builder.fieldGet(source, field.name, lowerType(field.type));
-			if (field.nested != null)
-				value = copyFields(builder, value, field.nested);
-			builder.fieldSet(copy, field.name, value);
+	static function copyFields(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
+		if (!copyMayBranch(layout)) {
+			var direct = builder.newObject(layout.name);
+			for (field in layout.fields) {
+				var value = builder.fieldGet(source, field.name, lowerType(field.type));
+				if (field.nested != null)
+					value = copyFields(builder, value, field.nested, localTypes);
+				builder.fieldSet(direct, field.name, value);
+			}
+			return direct;
 		}
-		return copy;
+		var copy = builder.newObject(layout.name), sourceName = '$' + 'copy-source:${source.id}',
+			copyName = '$' + 'copy-result:${copy.id}', objectType:IrType = Obj(layout.name);
+		localTypes.set(sourceName, objectType);
+		localTypes.set(copyName, objectType);
+		builder.store(sourceName, source);
+		builder.store(copyName, copy);
+		for (field in layout.fields) {
+			var fieldType = lowerType(field.type), value = builder.fieldGet(builder.load(sourceName, objectType), field.name, fieldType),
+				nested = field.nested;
+			if (nested != null) {
+				var nullable = switch field.type { case TNullable(_): true; default: false; };
+				if (nullable) {
+					var valueName = '$' + 'copy-nullable:${value.id}', missing = builder.createBlock(),
+						present = builder.createBlock(), done = builder.createBlock();
+					localTypes.set(valueName, fieldType);
+					builder.store(valueName, value);
+					builder.branch(builder.equal(value, builder.constNull(fieldType)), missing, present);
+					builder.select(missing);
+					builder.fieldSet(builder.load(copyName, objectType), field.name, builder.constNull(fieldType));
+					builder.jump(done);
+					builder.select(present);
+					var unwrapped = abiBoundaryCast(builder, builder.load(valueName, fieldType), Obj(nested.name)),
+						copied = copyFields(builder, unwrapped, nested, localTypes);
+					builder.fieldSet(builder.load(copyName, objectType), field.name, abiBoundaryCast(builder, copied, fieldType));
+					builder.jump(done);
+					builder.select(done);
+					continue;
+				}
+				value = copyFields(builder, value, nested, localTypes);
+			}
+			builder.fieldSet(builder.load(copyName, objectType), field.name, value);
+		}
+		return builder.load(copyName, objectType);
+	}
+
+	static function copyMayBranch(layout:ValueCopyLayout):Bool {
+		for (field in layout.fields)
+			if (field.nested != null) {
+				switch field.type {
+					case TNullable(_): return true;
+					default:
+				}
+				if (copyMayBranch(field.nested))
+					return true;
+			}
+		return false;
 	}
 
 	static function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
-			case TCopy(value, layout): copyValue(builder, lowerExpression(value, builder, localTypes), layout);
+			case TCopy(value, layout): copyValue(builder, lowerExpression(value, builder, localTypes), layout, localTypes);
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));
 			case TFloatLiteral(value): builder.constFloat(value, lowerType(expression.type));
 			case TStringLiteral(value): builder.constString(value);
@@ -1406,6 +1627,19 @@ class IrGenerator {
 			case TNot(value): builder.equal(lowerExpression(value, builder, localTypes), builder.constBool(false));
 			case TAnd(left, right): lowerLogical(left, right, true, builder, localTypes);
 			case TOr(left, right): lowerLogical(left, right, false, builder, localTypes);
+			case TEqual(a, b) if (nullableFieldComparedWithNull(a, b) != null):
+				var field = nullableFieldComparedWithNull(a, b);
+				if (field == null) throw "Missing nullable field comparison";
+				var place = optionalFieldPlace(field.owner), present:CfgValue;
+				if (place == null) {
+					var owner = lowerExpression(field.owner, builder, localTypes);
+					present = builder.fieldGet(owner, optionalSlotName(field.field, [], true), Bool);
+				} else {
+					var owner = prepareOptionalFieldPlace(place, builder, localTypes);
+					present = builder.fieldGet(builder.load(owner.name, owner.type),
+						optionalSlotName(place.field, place.path.concat([field.field]), true), Bool);
+				}
+				builder.equal(present, builder.constBool(false));
 			case TEqual(a, b): var operands = lowerOperands([a, b], builder, localTypes),
 					left = operands[0],
 					right = operands[1]; if (isNullableEnumExpression(a) || isNullableEnumExpression(b)) return lowerNullableEnumEquality(a, b, left, right,
@@ -1433,7 +1667,17 @@ class IrGenerator {
 					default: throw "RawPtr.load signedness must be constant";
 				};
 				builder.memoryLoad(lowerExpression(pointer, builder, localTypes), lowerType(expression.type), width, isSigned);
-			case TCall("$rawptr.load.flat", [pointer]):
+			case TCall("$optional-cell-local", [marker]):
+				var name = switch marker.expression { case TLocal(value): value; default: throw "Invalid local cell place"; },
+					type = lowerType(expression.type);
+				builder.load('$' + 'cell:$name', type);
+			case TCall("$optional-cell-captured", [marker]):
+				var name = switch marker.expression { case TLocal(value): value; default: throw "Invalid captured cell place"; },
+					owner = requireLocalType(localTypes, "this", 'Captured cell "$name" has no environment');
+				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
+			case TCall("$value.place", [value]):
+				lowerExpression(value, builder, localTypes);
+			case TCall("$rawptr.load.flat", [pointer]), TCall("$rawptr.ref.flat", [pointer]):
 				var name = flatValueObjectName(expression.type);
 				if (name == null)
 					throw 'RawPtr flat load lost its concrete value record type: ${expression.type}';
@@ -1488,6 +1732,15 @@ class IrGenerator {
 					lowerExpression(args[0], builder, localTypes),
 					builder.typeValue(lowerType(args[1].type))
 				], Bool);
+			case TCall(name, args) if (StringTools.startsWith(name, "$generic:") && args.length > 0 && optionalFieldPlace(args[0]) != null):
+				var place = optionalFieldPlace(args[0]);
+				if (place == null) throw "Missing optional generic receiver";
+				var owner = prepareOptionalFieldPlace(place, builder, localTypes),
+					arguments = lowerOperands(args.slice(1), builder, localTypes), declaring = optionalFieldOwner(owner.type, place.field),
+					receiver = builder.load(owner.name, owner.type);
+				if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+				builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
+					lowerType(expression.type));
 			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
@@ -1551,6 +1804,26 @@ class IrGenerator {
 			case TCast(value), TAbiCast(value):
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
+				// A nullable value class is currently represented as a nullable payload pointer. A cast to the
+				// non-null value must raise a language exception before reading it: linear memory address zero
+				// can be readable and a Wasm GC null dereference is an uncatchable engine trap.
+				var unwrapValue = switch value.type {
+					case TNullable(TInstance(NominalKind.Class, name, _)):
+						valueClasses.exists(name) && sameIrType(target, Obj(name));
+					default: false;
+				};
+				if (unwrapValue) {
+					var sourceName = '$' + 'nullable-unwrapped:${source.id}',
+						sourceType = source.type,
+						missing = builder.createBlock(), present = builder.createBlock();
+					localTypes.set(sourceName, sourceType);
+					builder.store(sourceName, source);
+					builder.branch(builder.equal(source, builder.constNull(source.type)), missing, present);
+					builder.select(missing);
+					builder.throwValue(builder.toDyn(builder.constString("Null access")));
+					builder.select(present);
+					source = builder.load(sourceName, sourceType);
+				}
 				if (sameIrType(source.type,
 					target)) source; else if (IrTypeTools.nullableElement(source.type) != null
 					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source,
@@ -2014,16 +2287,25 @@ class IrGenerator {
 			case TNewMap(key, value): builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
 			case TMethodCall(object, name, args):
-				var operands:Array<TypedExpression> = [object];
-				for (argument in args)
-					operands.push(argument);
-				var loweredOperands = lowerOperands(operands, builder, localTypes),
-					receiver = loweredOperands[0],
-					callArgs:Array<CfgValue> = [];
-				for (index in 1...loweredOperands.length)
-					callArgs.push(loweredOperands[index]);
-				var separator = IrGenerator.lastSeparator(name);
-				builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
+				var place = optionalFieldPlace(object);
+				if (place != null) {
+					var owner = prepareOptionalFieldPlace(place, builder, localTypes), arguments = lowerOperands(args, builder, localTypes),
+						declaring = optionalFieldOwner(owner.type, place.field), receiver = builder.load(owner.name, owner.type);
+					if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+					builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
+						lowerType(expression.type));
+				} else {
+					var operands:Array<TypedExpression> = [object];
+					for (argument in args)
+						operands.push(argument);
+					var loweredOperands = lowerOperands(operands, builder, localTypes),
+						receiver = loweredOperands[0],
+						callArgs:Array<CfgValue> = [];
+					for (index in 1...loweredOperands.length)
+						callArgs.push(loweredOperands[index]);
+					var separator = IrGenerator.lastSeparator(name);
+					builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
+				}
 			case TSuperCall(owner, args):
 				// Arguments may branch; load `this` in the block that performs the call.
 				var loweredArguments = lowerOperands(args, builder, localTypes);
@@ -2056,11 +2338,33 @@ class IrGenerator {
 				builder.globalSet(owner + "." + name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixField(object, name, delta):
-				var receiver = lowerExpression(object, builder, localTypes),
-					oldValue = builder.fieldGet(receiver, name, lowerType(expression.type)),
-					one = incrementOne(expression.type, builder);
-				builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
-				oldValue;
+				var projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
+				if (optionalPlace != null) {
+					var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
+						field = optionalSlotName(optionalPlace.field, optionalPlace.path.concat([name]), false),
+						oldValue = builder.fieldGet(builder.load(owner.name, owner.type), field, lowerType(expression.type)),
+						one = incrementOne(expression.type, builder);
+					builder.fieldSet(builder.load(owner.name, owner.type), field,
+						delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+					oldValue;
+				} else if (projection != null) {
+					var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
+						layout = field.field.nativeLayout;
+					if (layout == null || layout.inlineRecord || (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8))
+						throw 'Unsupported Flat increment field "${projection.recordName}.${name}"';
+					var pointer = lowerExpression(projection.pointer, builder, localTypes),
+						address = flatFieldPointer(pointer, field.offset, builder),
+						oldValue = builder.memoryLoad(address, field.field.type, layout.size, layout.signed),
+						one = incrementOne(expression.type, builder);
+					builder.memoryStore(address, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one), layout.size);
+					oldValue;
+				} else {
+					var receiver = lowerExpression(object, builder, localTypes),
+						oldValue = builder.fieldGet(receiver, name, lowerType(expression.type)),
+						one = incrementOne(expression.type, builder);
+					builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+					oldValue;
+				}
 			case TPostfixIndex(array, index, delta):
 				var operands = lowerOperands([array, index], builder, localTypes),
 					receiver = operands[0],
@@ -2546,10 +2850,9 @@ class IrGenerator {
 				}
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
-			// Struct and @:value instances are stored inline in HashLink value fields. Keep
-			// Null<V> boxed so nullable captures/cells can represent the absent state instead
-			// of writing a null pointer into a packed inline field.
-			case TNullable(TInstance(NominalKind.Class, name, _)) if (valueClasses.exists(name)): Dyn;
+			// Preserve the payload type in IR so stored optionals can acquire a flag and inline layout. The
+			// existing backends still use the boxed dynamic representation until that lowering is implemented.
+			case TNullable(TInstance(NominalKind.Class, name, _)) if (valueClasses.exists(name)): Nullable(Obj(name));
 			case TNullable(element): TypeRelations.isReference(element) ? lowerType(element) : nullablePrimitive(lowerType(element));
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));

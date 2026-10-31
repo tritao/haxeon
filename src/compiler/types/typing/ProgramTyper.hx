@@ -238,6 +238,8 @@ class ProgramTyper {
 			typedFunctions.push(codec);
 		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
+		for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues))
+			typedFunctions.push(equality);
 		for (equality in EqualityGenerator.generate(session))
 			typedFunctions.push(equality);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
@@ -340,6 +342,8 @@ class ProgramTyper {
 			BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields', classDecl.span);
 		if (isStruct && classDecl.typeParameters.length > 0)
 			BodyTyper.fail("E1022", 'Generic struct "${classDecl.name}" is not supported yet', classDecl.span);
+		if (isValue)
+			validateFiniteValueLayout(classDecl, [], []);
 		if ((isValue || isNativeValue) && classDecl.base != null)
 			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
 		if ((isValue && !isStruct || isNativeValue) && classDecl.interfaces.length > 0)
@@ -372,10 +376,6 @@ class ProgramTyper {
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
-			if (!field.isStatic && session.relations.isNullableValueClass(type))
-				BodyTyper.fail("E1022",
-					'Field "${classDecl.name}.${field.name}" cannot be Null<V> for value class V: value fields are stored inline and cannot be null',
-					field.span);
 			var initializer:Null<TypedExpression> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
@@ -454,6 +454,36 @@ class ProgramTyper {
 			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions),
 			span: classDecl.span
 		};
+	}
+
+	/** A nullable value still contains its payload inline, so it cannot break a by-value cycle. */
+	function validateFiniteValueLayout(declaration:AstClass, visiting:Array<String>, complete:Map<String, Bool>):Void {
+		var cycle = visiting.indexOf(declaration.name);
+		if (cycle >= 0)
+			BodyTyper.fail("E1022", 'Value layout contains a by-value cycle: ${visiting.slice(cycle).concat([declaration.name]).join(" -> ")}',
+				declaration.span);
+		if (complete.exists(declaration.name))
+			return;
+		var path = visiting.concat([declaration.name]);
+		for (field in declaration.fields) {
+			if (field.isStatic || !EqualityGenerator.hasStoredField(field))
+				continue;
+			var type = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field), field.span);
+			validateFiniteValueField(type, path, complete);
+		}
+		complete.set(declaration.name, true);
+	}
+
+	function validateFiniteValueField(type:CompilerType, visiting:Array<String>, complete:Map<String, Bool>):Void {
+		switch type {
+			case TNullable(element): validateFiniteValueField(element, visiting, complete);
+			case TAbstract(_, _, representation): validateFiniteValueField(representation, visiting, complete);
+			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
+				var nested = session.declarations.classes.get(name);
+				if (nested != null)
+					validateFiniteValueLayout(nested, visiting, complete);
+			default:
+		}
 	}
 
 	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {

@@ -137,8 +137,15 @@ class PurityInference {
 			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool):Map<String, Bool> {
 		var inference = new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName),
 			dependencies:Map<String, Map<String, Bool>> = [],
+			receiverFacts:Map<String, Bool> = [],
 			operatorMethods:Array<String> = [],
 			stringMethods:Array<String> = [];
+		// Receiver writes are a separate property from global purity and its abstract-operator restrictions.
+		for (name => fn in signatures) {
+			var owner = compiler.QualifiedName.parent(name), declaration = owner == null ? null : classes.get(owner);
+			if (declaration != null && !fn.isStatic && isValueClass(declaration) && ReceiverMutationInference.isReadOnly(declaration, fn))
+				receiverFacts.set(ReceiverMutationInference.PREFIX + name, true);
+		}
 		for (name => fn in signatures) {
 			if (fn.isExtern == true || isAnnotatedPure(name))
 				continue;
@@ -157,7 +164,7 @@ class PurityInference {
 		}
 		for (name in operatorMethods)
 			if (!dependencies.exists(name))
-				return [];
+				return receiverFacts;
 		var stringsPure = true;
 		// Greatest fixpoint: recursive functions without effects remain pure.
 		var changed = true;
@@ -177,13 +184,19 @@ class PurityInference {
 			}
 			for (name in operatorMethods)
 				if (!dependencies.exists(name))
-					return [];
+					return receiverFacts;
 		}
-		var result:Map<String, Bool> = [];
+		var result = receiverFacts;
 		for (name in dependencies.keys())
 			if (inference.isCandidate(name))
 				result.set(name, true);
 		return result;
+	}
+
+	static function isValueClass(declaration:AstClass):Bool {
+		if (declaration.isStruct == true) return true;
+		for (metadata in declaration.metadata) if (metadata.name == "value") return true;
+		return false;
 	}
 
 	static function isOperatorMethod(fn:AstFunction, owner:Null<String>, abstracts:Map<String, AstAbstract>):Bool {

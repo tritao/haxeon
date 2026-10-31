@@ -612,6 +612,8 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		if (session.relations.isValueClass(receiver.type) && !session.isPureCall(methodKey) && !session.isReadOnlyReceiver(methodKey))
+			ValuePlaceRules.requireWritable(session, receiver, span);
 		if (functionTypeParameters(method).length > 0) {
 			var preset = copyMap(substitutions),
 				parameters = functionTypeParameters(method);
@@ -934,7 +936,7 @@ class CallResolver {
 		}
 		if (receiver != null)
 			for (index in firstMember...parts.length - 1)
-				receiver = typeCallMemberWithFlow(receiver, parts[index], span, scope);
+				receiver = typeCallMemberWithFlow(receiver, parts[index], BodyTyper.referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var expectedEnumName = enumName(expectedType);
@@ -1147,6 +1149,13 @@ class CallResolver {
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "$value.place") {
+			if (arguments.length != 1)
+				throw "Invalid compiler-generated place binding";
+			var value = typeExpressionValue(arguments[0], scope);
+			ValuePlaceRules.requireWritable(session, value, span);
+			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
+		}
 		if (name == "Equality.equals" || name == "haxeon.Equality.equals") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);

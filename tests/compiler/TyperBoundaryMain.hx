@@ -35,7 +35,7 @@ class TyperBoundaryMain {
 			+ "class H { public var v:V; public function new() v = new V(1); } function main():Int { var h = new H(); h.v = null; return 0; }", "E1002",
 			"");
 		assertDiagnostic(value + "class H { public var v:V; public function new(?v:V) this.v = v; } function main():Int { return 0; }", "E1002", "");
-		assertDiagnostic(value + "class H { public var v:Null<V>; public function new() {} } function main():Int { return 0; }", "E1022", "cannot be Null<V>");
+		Typer.type(parse("NullableValueField.hx", value + "class H { public var v:Null<V>; public function new() {} } function main():Int { return 0; }"));
 		// `inline` on functions and methods is recorded on the typed function (the inliner uses it as a hint).
 		var inlineProgram = Typer.type(parse("InlineFlag.hx",
 			"inline function f():Int return 1; function g():Int return 2; " +

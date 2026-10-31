@@ -182,7 +182,7 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
 			context.assignedDeclarations.set(declaration, true);
-		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments);
+		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments, session.mayHoldValue);
 		for (binding in lambdaStorage.closureWrites.keys())
 			context.storage.closureWrites.set(binding, true);
 		for (capture in captures) {

@@ -6,6 +6,46 @@ compiling while code migrates.
 
 ## Implemented so far
 
+Stage 1a (2026-10-31): temporary receivers are rejected for field
+writes, compound assignments, increments and methods not proven receiver-read-only. Getter and call-result chains identify
+the source expression that produced the copy. A method can have unrelated global effects and still be called on a temporary
+when receiver-effect analysis proves that it does not write the receiver. Its result is tracked alongside purity facts so
+incremental compilation invalidates callers when that answer changes. Compound-assignment receiver
+bindings preserve places instead of introducing value copies. `RawPtr.ref` and `RawPtr.load()` have distinct internal
+operations, so loading a value does not accidentally create a writable pointer place. Postfix increments through a
+native pointer update the pointed-to field, including nested fields, and evaluate the pointer expression once.
+
+`@:structural` is accepted on structs as built-in metadata. `Structural.copy` binds an ordinary value copy, including
+final fields and nested values, without invoking a constructor or assigning fields after construction. `assignChanged`
+binds its target as a place, evaluates it once, and snapshots the before/after values using ordinary copies. Fieldwise
+`==` and `Equality.equals` were already implemented before this work; the earlier status below predates those changes.
+Language `==` now applies each field's own `==`: ordinary class and array fields compare by identity, payload enum fields
+use enum identity semantics, and abstract comparison operators are honoured. Deep `Equality.equals` remains a separate
+operation. A layout-edit test checks that incremental compilation regenerates the fieldwise comparison.
+Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
+HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
+value raises a catchable null-access error when cast to its non-null struct. A focused program covers these behaviours,
+including nested managed fields, on HashLink, Wasm32 and Wasm GC. Locals, parameters, returns and array elements retain
+their existing boxed representation; fields store a presence flag and recursively flattened payload inline. The compiler
+rejects direct and indirect by-value layout cycles, including cycles through `Null<S>`; references and arrays break cycles.
+Captured value bindings use shared cells when a field write or mutating receiver can change them, including nullable values;
+known reference-type receivers continue to be captured directly. Tests cover writes inside and outside closures.
+
+The stage 1a checkpoint passed: the full driver reported 617 passed and 0 failed (baseline: 608 passed), the compiler
+reached a self-hosting fixed point, and 390 fixtures agreed across HashLink, Wasm32 and Wasm GC (14 existing skips).
+The standalone Wasm backend suite passed; its runtime-freshness check was skipped because a wasm32-capable clang was not
+configured. The nullable-field and capture fixtures also passed on all three targets with inlining disabled. Mutating
+methods called on `p.ref` still change a loaded copy; this native-memory gap belongs to stage 3. The native-place probe
+returns 4 instead of 0 after fixing postfix increments; it returned 6 with a compiler built from pristine `27da944b`.
+
+Equality audit: `ExpressionTyper.compareOperands` already requested deep structural equality for both `struct`
+and legacy `@:value class` at the starting revision. That rejected value types containing ordinary class references and
+compared array and payload-enum fields deeply. The new fieldwise operation accepts those class fields and uses their
+ordinary reference equality; arrays and payload enums now also follow their own `==`. `struct-value-semantics.hx` covers
+ordinary, nested, legacy and native-width value equality; `struct-field-equality.hx` covers the changed field behaviour.
+The other value-copy/map/array/escape fixtures compare scalar fields or absence. No production value declarations occur
+in `src` or `stdlib`; the separate UI migration remains outside this work.
+
 Checked on 2026-10-29: a `struct` with fields, a constructor and non-virtual methods compiles and runs with copy semantics
 (`var w = v; w.x = 6` leaves `v` alone). Measured per 1,000 operations, against a `class` of the same shape:
 
@@ -233,12 +273,19 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
 
 ## Nullable structs
 
-`null` is excluded from struct values, but "absent" is a real state: an optional color, an optional clip rectangle.
-`Null<S>` is a language-level optional, as C#'s `Nullable<T>` and Swift's `Optional<T>` are: the value is stored inline
-together with a presence flag, `== null` tests the flag, and reading the value of an absent one is the same error as any
-null access. This applies to fields, array elements and locals alike; today `Null<S>` is allowed in locals,
-parameters and returns (as a pointer) but rejected as a field (E1022). A library option type would spread through every API
-that uses it, and a sentinel value would make absence indistinguishable from a real value.
+`null` is excluded from struct values, but "absent" is a real state: an optional color or clip rectangle. A `Null<S>`
+field stores a presence flag and the value inline in its holder. Testing null reads the flag, assigning null clears the
+flag and zeroes the payload, and reading an absent value raises the usual null-access error. Locals, parameters and returns
+keep their existing representation and convert at field boundaries. Shared IR retains `Nullable(Obj(S))` until field
+lowering expands each optional into the flag and recursively flattened payload slots. Field reads and writes convert at
+the boundary; methods called on a field place use a specialized receiver so their writes remain visible through aliases.
+
+Arrays of structs, including `Null<S>` elements, keep their existing boxed element representation in stage 1a. Inline
+struct arrays are later work: HashLink's packed-array allocator and packed move are possible building blocks, but an
+interior element pointer must not escape into a heap field, because the incremental collector accepts interior roots but
+matches heap-field references exactly. A place must retain its owner and array growth must not leave a pending write
+addressing an old backing store. A nullable by-value cycle such as `struct Node { var next:Null<Node>; }` has no finite
+inline layout and is rejected.
 
 ## Representation on Wasm GC
 
@@ -433,8 +480,8 @@ point green.
    - Checkpoint: value-class tests pass when rewritten with `struct`, and the
      Wasm parity suite runs them.
 1a. **Copies and optionals.**
-   - The temporary-write error; immutable structs (all fields `final`); `Null<S>` fields and array elements with an
-     inline presence flag.
+   - The temporary-write error; immutable structs (all fields `final`); `Null<S>` fields with an inline presence flag.
+     Array elements retain their existing boxed representation until inline struct arrays are implemented later.
    - Checkpoint: the error fires on getter and call-result chains, and `Null<S>` programs give the same results on all
      targets.
 1b. **Wasm GC representation.**

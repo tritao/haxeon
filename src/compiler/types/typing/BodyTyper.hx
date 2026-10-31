@@ -266,7 +266,7 @@ class BodyTyper {
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
-		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.closureWrites.set(binding, true);
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
@@ -1435,7 +1435,16 @@ class BodyTyper {
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
 		return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
 
+	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
+	@:allow(compiler.types.typing.CallResolver)
+	static function referencePrefixSpan(name:String, span:SourceSpan):SourceSpan {
+		var size = haxe.io.Bytes.ofString(name).length;
+		return span.start + size <= span.end && span.file.slice(span.start, span.start + size) == name
+			? new SourceSpan(span.file, span.start, span.start + size, span.isBareReference, span.referenceName) : span;
+	}
+
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		span = referencePrefixSpan(name, span);
 		var type = scope.resolve(name);
 		return if (type != null) {
 			if (!scope.privateMapUseIsKnown(name, span))
@@ -1626,14 +1635,14 @@ class BodyTyper {
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
-								classObject = typedMemberWithFlow(classObject, parts[index], span, scope);
+								classObject = typedMemberWithFlow(classObject, parts[index], referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 							return classObject;
 						}
 						classEnd--;
 					}
 					var object = typeExpression(Variable(objectName, span), scope);
 					for (index in 1...parts.length)
-						object = typedMemberWithFlow(object, parts[index], span, scope);
+						object = typedMemberWithFlow(object, parts[index], referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 					object;
 				}
 			}
@@ -1858,7 +1867,7 @@ class BodyTyper {
 			if (pointee != null) {
 				if (flatRawPointerPointee(typedObject.type) == null)
 					fail("E1022", 'RawPtr.ref requires a Flat struct pointee; "$pointee" has no writable Flat field layout', span);
-				return new TypedExpression(TCall("$rawptr.load.flat", [typedObject]), pointee, span);
+				return new TypedExpression(TCall("$rawptr.ref.flat", [typedObject]), pointee, span);
 			}
 		}
 		switch typedObject.expression {

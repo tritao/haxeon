@@ -403,3 +403,8 @@ enum-equality	42
 gc-dump-paths	42
 structural-ops	42
 inherited-closure-inline	42
+struct-immutable-copy	42
+struct-writable-places	42
+nullable-struct-copy	42
+nullable-struct-storage	42
+struct-field-equality	42

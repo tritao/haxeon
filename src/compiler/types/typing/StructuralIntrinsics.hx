@@ -60,7 +60,14 @@ class StructuralIntrinsics {
 				return IntegerLiteral(count >= 32 ? -1 : (1 << count) - 1, span);
 			case "copy":
 				expectArguments(name, arguments, 1, span);
-				var declaration = classOf(session, typeOf(arguments[0]), name, span);
+				var type = typeOf(arguments[0]);
+				var declaration = classOf(session, type, name, span);
+				// Binding a value to a local is its ordinary copy, including final and nested fields.
+				// Do not reconstruct it through a constructor or write its fields after construction.
+				if (session.relations.isValueClass(type)) {
+					var source = hold("copy-source", span);
+					return BlockExpression([VarDeclaration(source, null, arguments[0], span)], Variable(source, span), span);
+				}
 				if (declaration.typeParameters.length > 0)
 					fail("E1009", '$name does not support generic class "${declaration.name}"', span);
 				var source = hold("copy-source", span), result = hold("copy-result", span);
@@ -94,7 +101,7 @@ class StructuralIntrinsics {
 					target = hold("target", span), before = hold("before", span), after = hold("after", span), mask = hold("mask", span),
 					fields = maskedFields(declaration, name, span);
 				var statements:Array<AstStatement> = [
-					VarDeclaration(target, null, arguments[0], span),
+					VarDeclaration(target, null, Call("$value.place", [arguments[0]], span), span),
 					VarDeclaration(before, null, arguments[1], span),
 					VarDeclaration(after, null, arguments[2], span),
 					VarDeclaration(mask, IntType, IntegerLiteral(0, span), span)

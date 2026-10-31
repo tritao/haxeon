@@ -130,14 +130,19 @@ class IrProgramAssembler {
 	 * `publishedField(class, field)` whether it has the field; a class it lacks needs no migration.
 	 */
 	public static function liveInitializersFrom(typed:TypedProgram, published:String->Bool, publishedField:(String, String)->Bool):Array<IrFunction> {
-		var functions:Array<IrFunction> = [];
+		var functions:Array<IrFunction> = [], values:Map<String, Bool> = [for (entry in typed.classes) if (entry.isValue) entry.name => true];
 		for (classDecl in typed.classes) {
 			if (classDecl.isValue || classDecl.isNativeValue || !published(classDecl.name))
 				continue;
 			var statements:Array<TypedStatement> = [];
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic || initializer == null || !hasPhysicalStorage(field) || publishedField(classDecl.name, field.name))
+				var publishedName = switch IrGenerator.lowerType(field.type) {
+					case Nullable(Obj(name)) if (values.exists(name)):
+						IrInlineValueLayout.slotName(field.name, {path: [], type: Bool, isPresence: true, nativeLayout: null});
+					default: field.name;
+				};
+				if (field.isStatic || initializer == null || !hasPhysicalStorage(field) || publishedField(classDecl.name, publishedName))
 					continue;
 				statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, classDecl.name, []), field.span), field.name,
 					initializer, field.span));
@@ -478,6 +483,13 @@ class IrProgramAssembler {
 			allFunctions.push(fn);
 		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
+		if (objects != null) {
+			var optionalStorage = new IrOptionalFieldStorage(objects);
+			if (optionalStorage.hasFields()) {
+				allFunctions = optionalStorage.rewrite(allFunctions);
+				objects = optionalStorage.physicalObjects(objects);
+			}
+		}
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,

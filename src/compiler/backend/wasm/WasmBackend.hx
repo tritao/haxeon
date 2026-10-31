@@ -41,7 +41,7 @@ class WasmBackend implements Backend {
 	}
 
 	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
-		// Wasm has no use for the distinction between a nullable primitive and a dynamic value.
+		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
 		program = WasmDynamicCalls.run(IrNullableErasure.run(compiler.ir.IrInstrumentation.strip(program)));
 		var target = WasmTarget.forBackend(options.target, options.debugNames);

@@ -1132,6 +1132,44 @@ class TestMain {
 			'MessagePack.decode requires an expected result type');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Equality.equals(new Thing(), new Thing()) ? 1 : 0;',
 			'Structural equality does not support type "TInstance(class,Thing,[])"');
+		var temporaryStruct = 'struct Value { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
+			+ 'struct Nested { public var value:Value; public function new() value = new Value(1); } '
+			+ 'class Holder { public var value(get, never):Value; public var nested(get, never):Nested; public function new() {} '
+			+ 'function get_value():Value return new Value(1); function get_nested():Nested return new Nested(); } '
+			+ 'function make():Value return new Value(1); function nest():Nested return new Nested(); ';
+		for (test in [
+			{write: 'make().x = 2', origin: 'make()'},
+			{write: 'make().x += 2', origin: 'make()'},
+			{write: 'make().x++', origin: 'make()'},
+			{write: '++make().x', origin: 'make()'},
+			{write: 'make().bump()', origin: 'make()'},
+			{write: 'nest().value.x = 2', origin: 'nest()'},
+			{write: 'nest().value.bump()', origin: 'nest()'},
+			{write: 'holder.value.x = 2', origin: 'holder.value'},
+			{write: 'holder.nested.value.x++', origin: 'holder.nested'},
+			{write: 'holder.value.bump()', origin: 'holder.value'},
+			{write: 'new Value(1).bump()', origin: 'new Value(1)'}
+		]) {
+			expectCompileError(temporaryStruct + 'function main():Int { var holder = new Holder(); ${test.write}; return 0; }',
+				'Cannot mutate temporary struct copy produced by "${test.origin}"; bind it to a local first');
+		}
+		expectCompileError('class Global { public static var calls:Int = 0; } struct V { public var x:Int; public function new() x = 0; public function update():Void { Global.calls++; x++; } } function make():V return new V(); function main():Int { make().update(); return 0; }',
+			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
+		expectCompileError('struct Node { public var next:Null<Node>; } function main():Int return 42;',
+			'Value layout contains a by-value cycle: Node -> Node');
+		expectCompileError('struct A { public var b:Null<B>; } struct B { public var a:A; } function main():Int return 42;',
+			'Value layout contains a by-value cycle: A -> B -> A');
+		Frontend.compile('class Link { public var next:Null<Link>; } struct Node { public var link:Link; public var children:Array<Node>; } function main():Int return 42;');
+		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var copy = haxeon.Structural.copy(new Fixed(1)); copy.x = 2; return 0; }',
+			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
+		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
+			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
+		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Structural.assignChanged(a, a, b); }',
+			'haxeon.Structural.assignChanged cannot assign final field "x" of "Fixed"');
+		expectCompileError('struct Inner { public var x:Int; public function new(x:Int) this.x = x; } struct Fixed { public final child:Inner; public function new() this.child = new Inner(1); } function main():Int { var a = new Fixed(); a.child.x = 2; return 0; }',
+			'Final field "Fixed.child" can only be assigned through this in the constructor of "Fixed"');
+		expectCompileError(temporaryStruct + 'function main():Int { haxeon.Structural.assignChanged(make(), new Value(1), new Value(2)); return 0; }',
+			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Structural.hash(new Thing());',
 			'haxeon.Structural.hash expects a value class or a class marked @:structural, got "Thing"');
 		expectCompileError('@:structural class Base { public var a:Int = 0; public function new() {} } @:structural class Derived extends Base { public var b:Int = 0; } function main():Int return haxeon.Structural.allFieldsMask(Derived);',

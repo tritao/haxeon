@@ -6,9 +6,9 @@ import compiler.ir.IrFunction.IrDebugBinding;
 import compiler.ir.SourceProvenance.Located;
 
 /**
- * Rewrites a program so that no type mentions `Nullable`: each becomes `Dyn`, which has the same representation. The Wasm
- * backends and the C header emitter have no use for the distinction, so they receive the erased program. A function that
- * never mentions a nullable primitive is returned as is, so its identity survives for the caches keyed on it.
+ * Rewrites a program so that no type mentions `Nullable`: each becomes `Dyn`, its current boxed representation. The Wasm
+ * backends and C header emitter still receive the erased program. Shared IR retains nullable struct payload types so a
+ * future inline-storage lowering can use them before erasure. Unaffected functions keep their identity for caches.
  */
 class IrNullableErasure {
 	public static function run(program:IrProgram):IrProgram {

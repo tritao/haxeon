@@ -290,6 +290,15 @@ class HlSymbolTable {
 			case Virtual(name):
 				throw 'Virtual type "$name" must be registered before use';
 			case Nullable(element):
+				// Nullable value objects retain their payload type in IR, but still use the previous Dyn ABI.
+				// HashLink's HNULL describes primitive boxes, not an inline nullable HSTRUCT.
+				switch element {
+					case Obj(_):
+						var dynamicIndex = internType(Dyn);
+						typeIndices.set(key, dynamicIndex);
+						return dynamicIndex;
+					default:
+				}
 				// HashLink's own Null<T>: the same boxed representation as a dynamic value, with the primitive recorded.
 				var parameter = internType(element);
 				var nullIndex = types.length;
