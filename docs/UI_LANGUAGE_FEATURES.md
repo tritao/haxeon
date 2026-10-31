@@ -92,7 +92,7 @@ GC"):
 A `@:pure` contract for derived computations and component setup: no writes to signals, and no writes to fields reachable
 from outside the function. Every panel that was hard to retain (inspection camera, BIM, machine control, mission, CNC) was
 hard because its build changed state; verify mode found that indirectly, this finds it at compile time. Useful under the
-current model too, so it can start first.
+current model too, so it can start first. Design: [PURITY.md](PURITY.md).
 
 ## General allocation work
 
