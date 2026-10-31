@@ -64,7 +64,8 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		context:BuildContext, enabled:Bool, apply:PropertyValue->Void):View {
 		var root:Dynamic = switch value { case Custom(_, data): data; default: new Array<Dynamic>(); };
 		var base = display(root);
-		var draftState:State<StructuredPropertyDrafts> = context.state(context.id(key + ":drafts"), new StructuredPropertyDrafts(base));
+		var draftState:State<StructuredPropertyDrafts> = context.lazyState(context.id(key + ":drafts"),
+			function() return new StructuredPropertyDrafts(base));
 		var found = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
 		if (found != null && found.base != base) {
 			found = new StructuredPropertyDrafts(base);

@@ -789,6 +789,15 @@ class BuildContext {
 		return stateStore.handle(id);
 	}
 
+	/** Like `state`, but calls `create` only when the state is first initialized, so later builds allocate no discarded value. */
+	public function lazyState<T>(id:WidgetId, create:Void->T):State<T> {
+		if (stateStore.contains(id))
+			stateStore.touch(id);
+		else
+			stateStore.initialize(id, create());
+		return stateStore.handle(id);
+	}
+
 	/** Captures state usage so a retained subtree can keep its resources mounted. */
 	public function stateUsageMarker():Int
 		return stateStore.usageMarker();

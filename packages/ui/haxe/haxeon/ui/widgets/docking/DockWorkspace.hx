@@ -43,10 +43,6 @@ import haxeon.ui.theme.TextRole;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
-	/** Whether the tab-label width cache's key names every field of the text styles it measures with (see its keyFieldsComplete). */
-	public static function labelKeyComplete():Bool
-		return DockTextWidthCache.keyFieldsComplete();
-
 	public static inline final DividerExtent = 8.0;
 	public static inline final MinimumHorizontalExtent = 190.0;
 	public final key:String;
@@ -102,13 +98,13 @@ class DockWorkspace implements View {
 		mount.invalidate = function() context.commands.refresh();
 		interaction = mount.interaction;
 		interaction.beginFrame();
-		var labelWidths:DockTextWidthCache = context.state(
-			context.id("tab-label-width-cache"), new DockTextWidthCache()).value;
-		var panelCache:DockPanelCache = context.state(
-			context.id("panel-tree-cache:" + key), new DockPanelCache()).value;
+		var labelWidths:DockTextWidthCache = context.lazyState(
+			context.id("tab-label-width-cache"), function() return new DockTextWidthCache()).value;
+		var panelCache:DockPanelCache = context.lazyState(
+			context.id("panel-tree-cache:" + key), function() return new DockPanelCache()).value;
 		panelCache.retain(context);
-		var paneCache:DockPanelCache = context.state(
-			context.id("pane-tree-cache:" + key), new DockPanelCache()).value;
+		var paneCache:DockPanelCache = context.lazyState(
+			context.id("pane-tree-cache:" + key), function() return new DockPanelCache()).value;
 		paneCache.retain(context);
 		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
 		var content = buildNode(model.root, context, [], "layout",
@@ -481,9 +477,8 @@ private class DockPanelView implements View {
 		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
 		// changes: a neighbour closing, or the panel moving to another split.
 		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
-			var widthBuilder = content.buildWithWidth;
-			var view = widthBuilder == null ? content.build(context) :
-				widthBuilder(context, availableWidth);
+			var widthBuilder = content.buildWithWidth, builder = content.build;
+			var view = widthBuilder != null ? widthBuilder(context, availableWidth) : builder != null ? builder(context) : null;
 			if (view == null)
 				view = new Text("Panel returned no content: " + descriptor.id);
 			buildStarted = observed ? Sys.time() : 0.0;
@@ -680,15 +675,42 @@ private class DockDropTargetView implements View {
 }
 
 /** Bounded measured-width cache for tab labels during repeated workspace builds. */
+/** What a tab label's measured width depends on; hashed and compared by field, so a new style field joins the key. */
+@:structural
+private class DockTextWidthKey {
+	public var label:String;
+	public var textStyle:TextStyle;
+	public var paragraphStyle:ParagraphStyle;
+
+	public function new() {
+		label = "";
+		textStyle = new TextStyle();
+		paragraphStyle = new ParagraphStyle();
+	}
+}
+
+private class DockTextWidthEntry {
+	public final key:DockTextWidthKey;
+	public final width:Float;
+
+	public function new(key:DockTextWidthKey, width:Float) {
+		this.key = key;
+		this.width = width;
+	}
+}
+
 private class DockTextWidthCache {
 	static inline var MAX_ENTRIES:Int = 128;
 	var fonts:Null<FontCollection>;
-	final widths:Map<String, Float>;
+	final buckets:Map<Int, Array<DockTextWidthEntry>>;
+	/** Holds the label and styles being looked up, so a hit allocates nothing; entries keep copies. */
+	final scratch:DockTextWidthKey;
 	var entryCount:Int;
 
 	public function new() {
 		fonts = null;
-		widths = new Map();
+		buckets = new Map();
+		scratch = new DockTextWidthKey();
 		entryCount = 0;
 	}
 
@@ -696,46 +718,36 @@ private class DockTextWidthCache {
 		paragraphStyle:ParagraphStyle):Float {
 		if (this.fonts != fonts) {
 			this.fonts = fonts;
-			widths.clear();
+			buckets.clear();
 			entryCount = 0;
 		}
-		var key = cacheKey(label, textStyle, paragraphStyle);
-		var cached:Null<Float> = widths.get(key);
-		if (cached != null)
-			return cached;
+		scratch.label = label;
+		scratch.textStyle = textStyle;
+		scratch.paragraphStyle = paragraphStyle;
+		var hash = haxeon.Structural.hash(scratch);
+		var bucket = buckets.get(hash);
+		if (bucket != null)
+			for (index in 0...bucket.length)
+				if (haxeon.Equality.equals(bucket[index].key, scratch))
+					return bucket[index].width;
 		var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
 		var width = layout.measure().width;
 		layout.dispose();
 		if (entryCount >= MAX_ENTRIES) {
-			widths.clear();
+			buckets.clear();
 			entryCount = 0;
+			bucket = null;
 		}
-		widths.set(key, width);
+		var key = new DockTextWidthKey();
+		key.label = label;
+		key.textStyle = haxeon.Structural.copy(textStyle);
+		key.paragraphStyle = haxeon.Structural.copy(paragraphStyle);
+		if (bucket == null) {
+			bucket = [];
+			buckets.set(hash, bucket);
+		}
+		bucket.push(new DockTextWidthEntry(key, width));
 		entryCount++;
 		return width;
-	}
-
-	/**
-	 * The key below spells out every field of TextStyle and ParagraphStyle, since two labels measure alike only when all of them
-	 * match. This lists them so a test can require that they are all of the classes' fields: a new field fails it until the key
-	 * and this list both name it.
-	 */
-	static function keyFieldsComplete():Bool {
-		var text = haxeon.Structural.fieldBit(TextStyle, "font") | haxeon.Structural.fieldBit(TextStyle, "fontSize")
-			| haxeon.Structural.fieldBit(TextStyle, "letterSpacing");
-		var paragraph = haxeon.Structural.fieldBit(ParagraphStyle, "wrap") | haxeon.Structural.fieldBit(ParagraphStyle, "alignment")
-			| haxeon.Structural.fieldBit(ParagraphStyle, "lineHeight") | haxeon.Structural.fieldBit(ParagraphStyle, "direction")
-			| haxeon.Structural.fieldBit(ParagraphStyle, "tabWidth");
-		return text == haxeon.Structural.allFieldsMask(TextStyle) && paragraph == haxeon.Structural.allFieldsMask(ParagraphStyle);
-	}
-
-	static function cacheKey(label:String, textStyle:TextStyle,
-		paragraphStyle:ParagraphStyle):String {
-		return label.length + ":" + label + "|font=" + Std.string(textStyle.font) +
-			"|size=" + textStyle.fontSize + "|letter=" + textStyle.letterSpacing +
-			"|wrap=" + Std.string(paragraphStyle.wrap) +
-			"|align=" + Std.string(paragraphStyle.alignment) +
-			"|line=" + (paragraphStyle.lineHeight == null ? "none" : Std.string(paragraphStyle.lineHeight)) +
-			"|direction=" + Std.string(paragraphStyle.direction) + "|tabs=" + paragraphStyle.tabWidth;
 	}
 }

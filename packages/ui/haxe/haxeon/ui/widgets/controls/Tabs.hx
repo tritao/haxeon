@@ -215,7 +215,7 @@ class Tabs implements View {
 		var tabDragState:Null<State<TabDragState>> = null;
 		if (onTabDragStart != null || onTabDragMove != null || onTabDragEnd != null ||
 			onTabDragCancel != null)
-			tabDragState = context.state(context.id("tab-drag"), new TabDragState());
+			tabDragState = context.lazyState(context.id("tab-drag"), function() return new TabDragState());
 		for (item in items) {
 			var buttonStyle = new LayoutStyle();
 			buttonStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
@@ -313,7 +313,7 @@ class Tabs implements View {
 
 	/** Keep intrinsic header widths; overflow belongs to a clipped viewport, not the labels. */
 	function scrollStrip(strip:RenderNode, context:BuildContext, active:String):RenderNode {
-		var state = context.state(context.id("tab-scroll-state"), new TabsScrollState()).value;
+		var state = context.lazyState(context.id("tab-scroll-state"), function() return new TabsScrollState()).value;
 		strip.layout.style.width = LayoutAxis.fit();
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.stretch();

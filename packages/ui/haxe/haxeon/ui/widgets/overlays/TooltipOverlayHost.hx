@@ -9,7 +9,8 @@ class TooltipOverlayHost implements View {
 	final content:View;
 	public function new(content:View) this.content = content;
 	public function build(context:BuildContext):RenderNode {
-		var lifted = context.state(context.id("lifted-tooltips"), new Array<{tip:RenderNode, anchor:RenderNode}>()).value;
+		var lifted = context.lazyState(context.id("lifted-tooltips"),
+			function() return new Array<{tip:RenderNode, anchor:RenderNode}>()).value;
 		// Retained anchors must recover their tooltip before being reused.
 		for (entry in lifted) entry.anchor.add(entry.tip.detach());
 		lifted.resize(0);

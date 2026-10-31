@@ -52,7 +52,8 @@ The UI package uses them beyond `LayoutStyle`: `Color`, `Insets`, `LayoutAxis`, 
 - `Semantics.same`: the value compares through `sameValue` and a deferred source is not a field to compare.
 - `Mask.isEqual`: its image is compared by identity, which `Equality` does not do for a plain class.
 - Decorations and effects extend a base class, which a structural class may not do.
-- String keys that spell out the fields of `Color`, `LayoutAxis`, `Insets`, `Transform2D`, `TextStyle` and `ParagraphStyle`
-  (the style cache and the dock's label widths): a hash could collide. Each is paired with a field list that a test checks
-  against `Structural.allFieldsMask`, so a new field fails the test until the key names it.
+- String keys that spell out the fields of `Color`, `LayoutAxis`, `Insets` and `Transform2D` (the style cache): a hash
+  could collide. They are paired with a field list that a test checks against `Structural.allFieldsMask`, so a new field
+  fails the test until the key names it. The dock's label widths instead use a structural key class, looked up by
+  `Structural.hash` and confirmed with `Equality.equals`, which needs no field list.
 

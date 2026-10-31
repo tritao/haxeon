@@ -949,7 +949,6 @@ class RestyleInPlaceTests {
       && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Vec2])),
       "CustomEffectDefinition equality is wrong");
     check(haxeon.ui.style.StyleResolver.valueKeysComplete(), "A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys");
-    check(haxeon.ui.widgets.docking.DockWorkspace.labelKeyComplete(), "A TextStyle or ParagraphStyle field is missing from the tab label width key");
     semanticsFields();
     Sys.println("PASS values: text, paragraph, rectangle, shortcut and effect parameter equality is generated; hand-written keys and Semantics.same name every field");
   }

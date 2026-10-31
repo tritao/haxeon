@@ -408,9 +408,8 @@ class TreeView implements View {
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
-			var clickId = context.id("click-sequence");
-			var clicks:State<PointerClickSequence> = context.stateStore.contains(clickId)
-				? context.existingState(clickId) : context.state(clickId, new PointerClickSequence());
+			var clicks:State<PointerClickSequence> = context.lazyState(context.id("click-sequence"),
+				function() return new PointerClickSequence());
 			var expansion:State<Map<String, Bool>> = context.state(
 				context.id("expanded-state"), expandedKeys);
 			expandedState = expansion;
