@@ -14,6 +14,9 @@ incremental compilation invalidates callers when that answer changes. Compound-a
 bindings preserve places instead of introducing value copies. `RawPtr.ref` and `RawPtr.load()` have distinct internal
 operations, so loading a value does not accidentally create a writable pointer place. Postfix increments through a
 native pointer update the pointed-to field, including nested fields, and evaluate the pointer expression once.
+Receiver-effect analysis follows statically dispatched methods on the same struct, including recursive cycles, and treats
+primitive field arguments as values rather than aliases. Property getters remain effectful unless their dependencies are
+proven pure; a method or getter that can write the receiver still requires a writable place.
 
 `@:structural` is accepted on structs as built-in metadata. `Structural.copy` binds an ordinary value copy, including
 final fields and nested values, without invoking a constructor or assigning fields after construction. `assignChanged`

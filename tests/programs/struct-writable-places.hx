@@ -4,9 +4,11 @@ struct Value {
   public function bump():Void x++;
   public function read():Int return x;
   public function effectRead():Int { Global.calls++; return x; }
+  public function forwardRead():Int return Global.observe(this.x + x - 42);
+  public function forwardVia():Int return forwardRead();
 }
 
-class Global { public static var calls:Int = 0; }
+class Global { public static var calls:Int = 0; public static function observe(value:Int):Int { calls++; return value; } }
 
 struct Nested {
   public var value:Value;
@@ -28,6 +30,8 @@ function make():Value return new Value(42);
 function main():Int {
   if (make().read() != 42) return 1;
   if (make().effectRead() != 42 || Global.calls != 1) return 9;
+  if (make().forwardRead() != 42 || Global.calls != 2) return 10;
+  if (make().forwardVia() != 42 || Global.calls != 3) return 11;
   var holder = new Holder();
   holder.nested.value.x += 2;
   if (holder.nested.value.x != 3) return 2;

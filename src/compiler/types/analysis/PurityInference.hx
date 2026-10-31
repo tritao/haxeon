@@ -526,7 +526,12 @@ private class PurityWalker {
 				true;
 			case ErrorExpression(_), ClosureCall(_, _, _), New(_, _, _), NewGeneric(_, _, _, _), MapComprehension(_, _, _, _, _, _, _):
 				false;
-			case Variable(name, _): isLocal(name) || readsProperty(name);
+			case Variable(name, _):
+				if (StringTools.startsWith(name, "this.")) {
+					var parts = name.split("."), pure = true;
+					for (index in 1...parts.length) if (!readsProperty(parts[index])) pure = false;
+					pure;
+				} else isLocal(name) || readsProperty(name);
 			case Member(object, "length", _) if (isStringReceiver(object) || isArrayReceiver(object)): expression(object);
 			case Member(object, name, _): readsProperty(name) && expression(object);
 			case Add(left, right, _): // `+` may convert an object operand through its toString, unless both sides are numbers.
