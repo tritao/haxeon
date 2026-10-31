@@ -6,7 +6,8 @@ import compiler.backend.Backend.BackendTarget;
 import sys.io.File;
 
 class NullReassignmentMain {
-	static final prefix = 'class Box { public var value:Int=42; public var child:Null<Box>; public function new() {} } '
+	static final prefix = 'class Box { public var value:Int=42; public var child:Null<Box>; public function new() {} public function bump():Void value++; } '
+		+ 'struct Counter { public var value:Int=41; public function new() {} public function bump():Void value++; } '
 		+ 'class Hooks { public static var saved:Null<Void->Void>; public static function fire():Void {var call=saved;if(call!=null) call();} } '
 		+ 'class Holder { public var slot:Null<Box>=new Box(); public final saved:Null<Box>=new Box(); public function new() {} } '
 		+ 'function invoke(call:Void->Void):Void call(); function invokeGeneric<T>(call:Void->Void, value:T):T {call();return value;} '
@@ -15,6 +16,9 @@ class NullReassignmentMain {
 		+ 'function maybe(flag:Bool):Void { if(flag) throw "stop"; } '
 		+ 'function clear(h:Holder):Void { h.slot=null; throw "stop"; } ';
 	static final valid = [
+		'var h=new Holder(); var x=h.slot; if(x==null) return 1; Hooks.saved=()->{x.value=42;}; Hooks.fire(); return x.value;',
+		'var h=new Holder(); var x=h.slot; if(x==null) return 1; x.value=41; var bump=()->x.bump(); invoke(bump); return x.value;',
+		'var x:Null<Counter>=new Counter(); if(x==null) return 1; var bump=()->x.bump(); invoke(bump); return x.value;',
 		'var x:Null<Box>=new Box(); if(x==null) return 1; var saved=x; x=null; return saved.value;',
 		'var x:Null<Box>=new Box(); x=null; x=new Box(); return x.value;',
 		'var x:Null<Box>=new Box(); x=null; if(x==null) x=new Box(); return x.value;',
@@ -43,6 +47,8 @@ class NullReassignmentMain {
 		'var x:Null<Int>=42; var y=x; x=null; if(y==null) return 1; return y;'
 	];
 	static final invalid = [
+		'var h=new Holder(); var x=h.slot; if(x==null) return 1; x.child=new Box(); if(x.child==null) return 1; Hooks.saved=()->{x.child=null;}; Hooks.fire(); return x.child.value;',
+		'var x:Null<Counter>=new Counter(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;',
 		'var x:Null<Box>=new Box(); if(x==null) return 1; var items=[2,1]; items.sort((a,b)->{x=null;return a-b;}); return x.value;',
 		'var x:Null<Box>=new Box(); Hooks.saved=()->{x=null;}; if(x==null) return 1; var forward=()->Hooks.fire(); forward(); return x.value;',
 		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; for(i in 0...2) {var value=x.value;invoke(reset);} return 42;',

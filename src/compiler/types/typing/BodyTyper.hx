@@ -349,9 +349,31 @@ class BodyTyper {
 	}
 
 	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
-		var id = scope.requireId(name);
-		context.storage.bind(LexicalStorageAnalysis.key(name, span), id, type);
+		var id = scope.requireId(name), declaration = LexicalStorageAnalysis.key(name, span);
+		// Refine conservative receiver writes once their type is known. Whole assignments keep their storage and flow effects.
+		if (context.storage.candidateKind(declaration) == MutableCapture && !context.assignedDeclarations.exists(declaration)) {
+			if (referenceCapture(type)) {
+				context.storage.closureWrites.remove(declaration);
+				return;
+			}
+			if (valueCapture(type)) context.storage.closureWrites.remove(declaration);
+		}
+		context.storage.bind(declaration, id, type);
 	}
+
+	function referenceCapture(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element): referenceCapture(element);
+			case TInstance(NominalKind.Class, name, _): session.classDecls.exists(name) && !session.relations.isValueClass(type);
+			case TFunction(_, _), TAbstract(_, _, _), TDynamic, TNativeAbstract(_): false;
+			default: compiler.types.TypeRelations.isReference(type);
+		};
+
+	function valueCapture(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element): valueCapture(element);
+			default: session.relations.isValueClass(type);
+		};
 
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];

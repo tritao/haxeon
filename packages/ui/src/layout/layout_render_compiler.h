@@ -39,6 +39,11 @@ class LayoutRenderFrame {
     LayoutRenderFrame(const LayoutRenderFrame &) = delete;
     LayoutRenderFrame &operator=(const LayoutRenderFrame &) = delete;
 
+    void invalidate_node(uint32_t id) { segments_.erase(id); }
+    void clear_segments() { segments_.clear(); }
+    std::size_t reused_segments() const { return reused_segments_; }
+    std::size_t compiled_segments() const { return compiled_segments_; }
+
     const RenderPlan &plan() const { return plan_; }
     RenderPlan &plan() { return plan_; }
     const FrameResources &resources() const { return resources_; }
@@ -65,14 +70,37 @@ class LayoutRenderFrame {
     friend class LayoutRenderCompiler;
 
     void reset();
+    void append_pass(RenderPass pass);
+
+    struct Segment {
+        LayoutPrimitiveKind kind{};
+        uint32_t line = 0;
+        uint32_t content_revision = 0;
+        uint32_t geometry_revision = 0;
+        uint32_t composite_revision = 0;
+        float pixel_scale = 0.0f;
+        LayoutTransform transform{};
+        LayoutRect clip{};
+        bool has_clip = false;
+        uint64_t publication = 0;
+        uint64_t font_generation = 0, atlas_generation = 0;
+        GlyphWindow window{};
+        RenderCommand command{};
+        std::shared_ptr<const PreparedPath> path;
+        std::shared_ptr<const PreparedGlyphs> glyphs;
+    };
+    std::unordered_map<uint32_t, std::vector<Segment>> segments_;
+    std::size_t reused_segments_ = 0;
+    std::size_t compiled_segments_ = 0;
 
     RenderPlan plan_;
+    std::vector<std::vector<RenderCommand>> command_buffers_;
     FrameResources resources_;
     OwnedFrameResources owned_resources_;
     bool sealable_ = true;
     std::unique_ptr<TextEngine> text_engine_;
     TextEngine *text_engine_source_ = nullptr;
-    std::vector<std::shared_ptr<PreparedPath>> paths_;
+    std::vector<std::shared_ptr<const PreparedPath>> paths_;
     // Retain capacity across frames; IDs link atlas preparation to publication.
     LayoutIdIndex snapshot_items_;
     LayoutIdIndex snapshot_text_layouts_;
@@ -99,7 +127,8 @@ class LayoutRenderCompiler {
                  bool load_existing = false, TextEngine *text_engine_source = nullptr,
                  const CustomPaintPlans *custom_paints = nullptr,
                  const RasterPaintNodes *raster_paint_nodes = nullptr,
-                 const CustomPaintComposites *custom_composites = nullptr) const;
+                 const CustomPaintComposites *custom_composites = nullptr,
+                 bool incremental = false, bool verify = false) const;
 
   private:
     std::shared_ptr<FontCollection> fonts_;

@@ -252,6 +252,7 @@ import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHostPendingResources;
 
 class FrameworkSmoke {
+	@:access(haxeon.ui.core.UiContext)
 	static function decorationNormalizationValid(fonts:FontCollection):Bool {
 		var session=LayoutSession.create();
 		var context=new UiContext(session,fonts);
@@ -259,11 +260,13 @@ class FrameworkSmoke {
 		// normalize its native kind before layout reuse compares either frame.
 		var undecorated=context.submit(new DecoratedButtonSmoke(false),new LayoutFrame(256,192));
 		if(undecorated.layout.visualKind!=LayoutVisualKind.Box) throw "Undecorated button must stay Box";
+		if (context.submittedPaintNodes.indexOf(undecorated) >= 0) throw "Plain box entered the painter index";
 		context.key(UiEventKind.KeyDown,UiKey.Tab);
 		if(context.focus.focusedId==null || !context.focus.focusedId.equals(undecorated.id))
 			throw "Tab must enter an unfocused interface";
 		var decorated=context.submit(new DecoratedButtonSmoke(true),new LayoutFrame(256,192));
 		if(decorated.layout.visualKind!=LayoutVisualKind.Custom) throw "Decorated button must become Custom";
+		if (context.submittedPaintNodes.indexOf(decorated) < 0) throw "Decorated box missing from the painter index";
 		var outlineCanvas=new Canvas();
 		outlineCanvas.fillRect(new Rect(0,0,10,10),Color.fromBytes(255,0,0));
 		var outlineList=DisplayList.create(); outlineCanvas.update(outlineList);
@@ -271,6 +274,9 @@ class FrameworkSmoke {
 		session.clearCustomPaint(decorated.id.value); outlineList.dispose();
 		var plainAgain=context.submit(new DecoratedButtonSmoke(false),new LayoutFrame(256,192));
 		if(plainAgain.layout.visualKind!=LayoutVisualKind.Box) throw "Removed decoration must restore Box";
+		if (context.submittedPaintNodes.indexOf(plainAgain) >= 0) throw "Removed decoration stayed in the painter index";
+		context.releaseRetained();
+		if (context.submittedPaintNodes.length != 0) throw "Released tree retained its painter index";
 		context.dispose();
 		return true;
 	}
@@ -758,6 +764,8 @@ class FrameworkSmoke {
 			return 271;
 		if (!retainedRectanglesFollowThePaint())
 			return 278;
+		if (!retainedPaintFingerprintFollowsInputs())
+			throw "Retained paint fingerprint missed a content or interaction change";
 		if (!hostPendingResourcesValid())
 			return 273;
 		if (!coordinateMathValid())
@@ -4599,6 +4607,33 @@ class FrameworkSmoke {
 		var swept = count(canvas.retainedRects) == 10 && count(canvas.paintedRects) == 0;
 		canvas.releaseRetained();
 		return first.keys().hasNext() && reused && swept && count(canvas.retainedRects) == 0;
+	}
+
+	@:access(haxeon.ui.core.RenderNode)
+	static function retainedPaintFingerprintFollowsInputs():Bool {
+		var node = new RenderNode(new WidgetId(913), LayoutVisualKind.Custom);
+		node.onPaint(function(_, _) {}, "first");
+		var first = node.retainedPaintKey();
+		if (first == null || node.retainedPaintKey() != first) return false;
+		node.states = StyleState.Hovered;
+		var hovered = node.retainedPaintKey();
+		if (hovered == first) return false;
+		node.states = 0;
+		var normal = node.retainedPaintKey();
+		if (normal == hovered) return false;
+		var before = new ComputedStyle();
+		var decorated = new ComputedStyle();
+		decorated.set(StyleProperty.Decorations, new DecorationChain([
+			new BorderDecoration(Color.fromBytes(255, 0, 0), 2)
+		]), null);
+		node.computedStyle = decorated;
+		node.syncRevisions(node, haxeon.ui.style.StyleDiff.compare(before, decorated));
+		var styled = node.retainedPaintKey();
+		if (styled == normal) return false;
+		node.onPaint(function(_, _) {}, "second");
+		if (node.retainedPaintKey() == styled) return false;
+		node.invalidatePaint();
+		return node.retainedPaintKey() != null;
 	}
 
 	static function hostPendingResourcesValid():Bool {

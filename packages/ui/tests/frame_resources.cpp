@@ -63,6 +63,14 @@ int main() {
     owned.reset();
     if (owned.text(temporary) || owned.source_identity(temporary).value != temporary.value)
         return 7;
+    const auto binding_address = reinterpret_cast<uintptr_t>(resources.path(path));
     resources.reset();
+    if (resources.path(path) || resources.content_generation(path) || resources.text(text)) return 8;
+    if (!resources.bind_path(path, recorder.data(), 0, 43) ||
+        reinterpret_cast<uintptr_t>(resources.path(path)) != binding_address || resources.content_generation(path) != 43)
+        return 9;
+    resources.reset();
+    resources.reset();
+    if (resources.path(path) || resources.content_generation(path)) return 10;
     return !resources.path(path) && !resources.text(text) && !resources.surface(surface) ? 0 : 3;
 }

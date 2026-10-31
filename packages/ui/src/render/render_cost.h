@@ -18,6 +18,17 @@ inline bool render_cost_enabled() {
     return enabled;
 }
 
+inline bool render_verification_enabled() {
+    static const bool enabled = [] {
+        const auto enabled = [](const char *name) {
+            const char *value = std::getenv(name);
+            return value && std::strtol(value, nullptr, 10) > 0;
+        };
+        return enabled("HAXEON_UI_VERIFY_RETENTION") || enabled("HAXEON_UI_VERIFY_RENDER");
+    }();
+    return enabled;
+}
+
 inline double render_cost_time() {
     return render_cost_enabled()
         ? std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count()
@@ -75,6 +86,10 @@ class RenderCostProbe {
         last_ = now;
     }
 
+    void add(std::size_t phase, double seconds) {
+        if (enabled_) values_[phase] += seconds;
+    }
+
     ~RenderCostProbe() {
         if (!enabled_)
             return;
@@ -83,9 +98,9 @@ class RenderCostProbe {
         for (std::size_t index = 0; index < count_; ++index) measured += values_[index];
         char line[2048];
         auto used = std::snprintf(line, sizeof(line),
-            "render-cost %s id=%llu started=%.9f nodes=%zu primitives=%zu passes=%zu commands=%zu reused=%d success=%d total=%.9f other=%.9f",
+            "render-cost %s id=%llu started=%.9f nodes=%zu primitives=%zu passes=%zu commands=%zu reused=%d success=%d segments_compiled=%zu segments_reused=%zu meshes_compiled=%zu meshes_reused=%zu mesh_cache_bytes=%zu total=%.9f other=%.9f",
             stage_, static_cast<unsigned long long>(render_cost_frame()), wall_started_,
-            nodes, primitives, passes, commands, reused, success, total, total - measured);
+            nodes, primitives, passes, commands, reused, success, segments_compiled, segments_reused, meshes_compiled, meshes_reused, mesh_cache_bytes, total, total - measured);
         for (std::size_t index = 0; index < count_ && used >= 0 &&
                 static_cast<std::size_t>(used) < sizeof(line); ++index) {
             const auto wrote = std::snprintf(line + used, sizeof(line) - used,
@@ -100,6 +115,8 @@ class RenderCostProbe {
     bool enabled() const { return enabled_; }
     std::size_t nodes = 0, primitives = 0, passes = 0, commands = 0;
     bool reused = false, success = false;
+    std::size_t segments_compiled = 0, segments_reused = 0;
+    std::size_t meshes_compiled = 0, meshes_reused = 0, mesh_cache_bytes = 0;
 
   private:
     bool enabled_;
@@ -108,6 +125,26 @@ class RenderCostProbe {
     std::array<double, 10> values_{};
     std::size_t count_ = 0;
     double wall_started_ = 0.0, started_ = 0.0, last_ = 0.0;
+};
+
+inline uint64_t &render_cost_draw_count() {
+    static thread_local uint64_t count = 0;
+    return count;
+}
+
+inline RenderCostProbe *&render_cost_mesh_probe() {
+    static thread_local RenderCostProbe *probe = nullptr;
+    return probe;
+}
+
+class RenderCostMeshScope {
+  public:
+    explicit RenderCostMeshScope(RenderCostProbe &probe) : previous_(render_cost_mesh_probe()) {
+        if (probe.enabled()) render_cost_mesh_probe() = &probe;
+    }
+    ~RenderCostMeshScope() { render_cost_mesh_probe() = previous_; }
+  private:
+    RenderCostProbe *previous_;
 };
 
 } // namespace nkui

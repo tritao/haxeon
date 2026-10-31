@@ -14,6 +14,10 @@
 
 namespace nkui {
 
+struct RenderPlan;
+class FrameResources;
+
+
 struct SurfaceDescriptor;
 
 /** Native-owned shader sources and execution contract for one custom effect. */
@@ -127,6 +131,11 @@ struct UiStreamBufferConfig {
 class UiRenderer {
   public:
     virtual ~UiRenderer() = default;
+    /** Encode backend commands per pass while the executor exclusively owns the frame. */
+    virtual bool encodePassCommands() { return true; }
+    virtual bool prepareCommands(const RenderPlan &, const FrameResources &, int, int) { return true; }
+    virtual void selectPreparedCommand(std::size_t, std::size_t) {}
+    virtual std::array<uint64_t, 3> geometryCacheStats() const { return {}; }
 
     virtual bool initialize() = 0;
     virtual bool valid() const = 0;

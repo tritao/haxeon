@@ -1,4 +1,6 @@
 #include "render/ui_renderer.h"
+#include "render/retained_geometry.h"
+#include "render/command_state.h"
 #include "nativekit.h"
 #include "nativekit_window.h"
 #include "nativekit_time.h"
@@ -23,6 +25,42 @@ bool check(bool value, const char *message, nkui::UiRenderer *renderer = nullptr
         renderer ? renderer->lastError() : nk_last_error());
     return value;
 }
+bool command_state_boundaries() {
+    std::vector<uint8_t> source, compact;
+    const auto record = [&](uint32_t opcode, std::initializer_list<uint32_t> words) {
+        for (const uint32_t value : {opcode, static_cast<uint32_t>(8 + words.size() * 4)})
+            for (unsigned shift = 0; shift < 32; shift += 8) source.push_back(value >> shift);
+        for (const auto value : words)
+            for (unsigned shift = 0; shift < 32; shift += 8) source.push_back(value >> shift);
+    };
+    for (const uint32_t pipeline : {1u, 1u, 2u, 1u}) {
+        record(NKGPU_COMMAND_APPLY_PIPELINE, {pipeline});
+        record(NKGPU_COMMAND_APPLY_UNIFORMS, {0, 4, 123});
+        record(NKGPU_COMMAND_APPLY_IMAGE, {0, 7});
+        record(NKGPU_COMMAND_DRAW, {0, 3, 1});
+    }
+    record(NKGPU_COMMAND_APPLY_GRAPHICS_IMAGE, {0, 7});
+    record(NKGPU_COMMAND_DRAW, {0, 3, 1});
+    if (!nkui::compact_gpu_commands(source, compact)) return false;
+    unsigned pipelines = 0, uniforms = 0, images = 0, external = 0, draws = 0;
+    const auto read = [&](std::size_t offset) {
+        return uint32_t(compact[offset]) | uint32_t(compact[offset + 1]) << 8 |
+            uint32_t(compact[offset + 2]) << 16 | uint32_t(compact[offset + 3]) << 24;
+    };
+    for (std::size_t offset = 0; offset < compact.size(); offset += read(offset + 4)) {
+        switch (read(offset)) {
+        case NKGPU_COMMAND_APPLY_PIPELINE: ++pipelines; break;
+        case NKGPU_COMMAND_APPLY_UNIFORMS: ++uniforms; break;
+        case NKGPU_COMMAND_APPLY_IMAGE: ++images; break;
+        case NKGPU_COMMAND_APPLY_GRAPHICS_IMAGE: ++external; break;
+        case NKGPU_COMMAND_DRAW: ++draws; break;
+        }
+    }
+    if (!check(pipelines == 3 && uniforms == 3 && images == 1 && external == 1 && draws == 5,
+               "command state lost shader uniforms, image type or draw order")) return false;
+    source.pop_back();
+    return check(!nkui::compact_gpu_commands(source, compact), "truncated owned command accepted");
+}
 const float identity[6] = {1, 0, 0, 1, 0, 0};
 nkui::PreparedTexture texture(uint32_t token, std::vector<uint8_t> pixels) {
     nkui::PreparedTexture result{};
@@ -37,9 +75,60 @@ bool pixels_match(bool swapped = false) {
     if (swapped) std::swap(left, right);
     return left[0] > 240 && left[2] < 10 && right[0] < 10 && right[2] > 240;
 }
-bool raster_reuse(nk_surface surface, bool recorded) {
+bool retained_geometry_storage() {
+    nkui::RetainedGeometry cache(128 * 1024);
+    nkui::GeometryMesh mesh;
+    mesh.stride = 16; mesh.vertices.resize(4096, 37); mesh.indices = {0, 1, 2};
+    std::vector<nkui::GeometryMesh> source{mesh};
+    nkui::GeometryKey key;
+    nkui::RetainedGeometry candidates(128 * 1024);
+    for (uint64_t frame = 1; frame < 200; ++frame) {
+        candidates.begin(frame); key.generation = frame;
+        if (!check(!candidates.find(key) && !candidates.admit(key) && candidates.size_bytes() == 0,
+                   "one-frame geometry consumed retained pages")) return false;
+    }
+    candidates.begin(200); key.generation = 1000;
+    if (candidates.find(key) || candidates.admit(key)) return false;
+    candidates.begin(201);
+    if (!check(!candidates.find(key) && candidates.admit(key) && candidates.insert(key, source),
+               "stable geometry was not admitted after reuse")) return false;
+    key.generation = 1;
+    cache.begin(1);
+    auto *entry = cache.insert(key, source);
+    if (!check(entry && cache.matches(*entry, source), "geometry storage round trip")) return false;
+    source.front().vertices.front() ^= 1;
+    if (!check(!cache.matches(*entry, source), "geometry byte mismatch was accepted")) return false;
+    source.front().vertices.front() ^= 1;
+    for (uint64_t frame = 2; frame < 150; ++frame) {
+        cache.begin(frame);
+        for (uint64_t index = 0; index < 12; ++index) {
+            key.generation = frame * 12 + index;
+            std::fill(source.front().vertices.begin(), source.front().vertices.end(), static_cast<uint8_t>(key.generation));
+            entry = cache.insert(key, source);
+            if (!check(entry && cache.matches(*entry, source) && cache.find(key) == entry,
+                       "geometry eviction/reuse damaged bytes")) return false;
+        }
+        for (uint64_t index = 0; index < 12; ++index) {
+            key.generation = frame * 12 + index;
+            std::fill(source.front().vertices.begin(), source.front().vertices.end(), static_cast<uint8_t>(key.generation));
+            entry = cache.find(key);
+            if (!check(entry && cache.matches(*entry, source), "current-frame geometry was overwritten")) return false;
+        }
+        if (!check(cache.size_bytes() == 128 * 1024, "geometry storage exceeded budget")) return false;
+    }
+    cache.begin(151);
+    key.generation = 0;
+    source.front().vertices.resize(65537);
+    if (!check(cache.insert(key, source) == nullptr, "oversized geometry did not fall back")) return false;
+    return true;
+}
+
+bool raster_reuse(nk_surface surface, bool recorded, bool encoded = false) {
     auto renderer = nkui::create_ui_renderer(surface);
     if (!check(renderer && renderer->initialize(), "initialize raster reuse", renderer.get())) return false;
+    const auto begin = [&] {
+        return renderer->beginFrame(recorded) && (!encoded || renderer->encodePassCommands());
+    };
     auto red = texture(1, {255, 0, 0, 255});
     auto blue = texture(2, {0, 0, 255, 255});
     auto white = texture(3, {255, 255, 255, 255});
@@ -51,7 +140,7 @@ bool raster_reuse(nk_surface surface, bool recorded) {
     for (uint64_t key = 1; key <= 144; ++key) {
         bool hit = false;
         const bool swapped = key % 2 == 0;
-        if (!check(renderer->beginFrame(recorded) &&
+        if (!check(begin() &&
                    renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                    renderer->beginRasterPass(target, key, 64, 64, hit) && !hit &&
                    renderer->drawImage(swapped ? blue : red, 0, 0, 32, 64, identity) &&
@@ -78,7 +167,7 @@ bool raster_reuse(nk_surface surface, bool recorded) {
     // A hit protects the oldest entry while another key needs a replacement.
     const auto protected_target = nkui::make_resource_id(nkui::ResourceKind::RenderTarget, 1, 0x8001);
     bool hit = false;
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                renderer->beginRasterPass(protected_target, 17, 64, 64, hit) && hit &&
                renderer->beginRasterPass(target, 145, 64, 64, hit) && !hit &&
                renderer->drawImage(blue, 0, 0, 64, 64, identity) && renderer->endPass() &&
@@ -86,7 +175,7 @@ bool raster_reuse(nk_surface surface, bool recorded) {
                renderer->compositeImage(protected_target, 0, 0, 64, 64, identity, 1, {1, 1}) &&
                renderer->endFrame() && pixels_match(), "current-frame raster was recycled", renderer.get())) return false;
     // A recycled target must be cleared, not retain the unused right half.
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                renderer->beginRasterPass(target, 146, 64, 64, hit) &&
                !hit && renderer->drawImage(red, 0, 0, 32, 64, identity) && renderer->endPass() &&
                renderer->beginWindowPass(64, 64, true) &&
@@ -98,11 +187,11 @@ bool raster_reuse(nk_surface surface, bool recorded) {
     if (!check(right[0] > 240 && right[1] > 240 && right[2] > 240,
                "recycled raster retained old pixels", renderer.get())) return false;
     // Aborting a replacement cannot publish its unfinished contents as a hit.
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                renderer->beginRasterPass(target, 147, 64, 64, hit) &&
                !hit, "begin aborted replacement", renderer.get())) return false;
     renderer->abortFrame();
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                renderer->beginRasterPass(target, 147, 64, 64, hit) &&
                !hit && renderer->drawImage(red, 0, 0, 32, 64, identity) &&
                renderer->drawImage(blue, 32, 0, 32, 64, identity) && renderer->endPass() &&
@@ -111,7 +200,7 @@ bool raster_reuse(nk_surface surface, bool recorded) {
                renderer->endFrame() && pixels_match(), "retry aborted replacement", renderer.get())) return false;
     // An incompatible size still allocates correctly and renders at its new extent.
     const auto before_resize = renderer->stats();
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) && renderer->endPass() &&
                renderer->beginRasterPass(target, 148, 32, 32, hit) && !hit &&
                renderer->drawImage(red, 0, 0, 16, 32, identity) &&
                renderer->drawImage(blue, 16, 0, 16, 32, identity) && renderer->endPass() &&
@@ -123,10 +212,13 @@ bool raster_reuse(nk_surface surface, bool recorded) {
                "raster size change", renderer.get())) return false;
     return true;
 }
-bool run(nk_surface surface, bool recorded) {
+bool run(nk_surface surface, bool recorded, bool encoded = false) {
     nkui::UiStreamBufferConfig config{64, 64, 64, 8192};
     auto renderer = nkui::create_ui_renderer(surface, nullptr, config);
     if (!check(renderer && renderer->initialize(), "initialize", renderer.get())) return false;
+    const auto begin = [&] {
+        return renderer->beginFrame(recorded) && (!encoded || renderer->encodePassCommands());
+    };
     auto red = texture(1, {255, 0, 0, 255});
     auto blue = texture(2, {0, 0, 255, 255});
     // Both streams must support a single mesh larger than a normal page.
@@ -139,7 +231,7 @@ bool run(nk_surface surface, bool recorded) {
     nkui::SurfaceMeshView mesh{vertices, indices, {1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1}};
     nkui::UiRendererStats high_water{};
     for (int frame = 0; frame < 6; ++frame) {
-        if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true),
+        if (!check(begin() && renderer->beginWindowPass(64, 64, true),
                    "begin frame", renderer.get())) return false;
         if (!check(renderer->drawSurfaceMesh(mesh), "oversized mesh", renderer.get())) return false;
         for (int index = 0; index < 10; ++index) {
@@ -165,12 +257,12 @@ bool run(nk_surface surface, bool recorded) {
     renderer = nkui::create_ui_renderer(surface, nullptr, config);
     if (!check(renderer->initialize(), "initialize bounded renderer", renderer.get())) return false;
     for (int attempt = 0; attempt < 3; ++attempt) {
-        if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) &&
+        if (!check(begin() && renderer->beginWindowPass(64, 64, true) &&
                    renderer->drawImage(red, 0, 0, 32, 64, identity), "first bounded draw", renderer.get())) return false;
         if (!check(!renderer->drawImage(blue, 32, 0, 32, 64, identity) && renderer->resourceLimited(),
                    "budget exhaustion was not recoverable", renderer.get())) return false;
         renderer->abortFrame();
-        if (!check(renderer->beginFrame(recorded) && !renderer->resourceLimited() &&
+        if (!check(begin() && !renderer->resourceLimited() &&
                    renderer->beginWindowPass(64, 64, true) &&
                    renderer->drawImage(red, 0, 0, 64, 64, identity) && renderer->endFrame(),
                    "retry after budget exhaustion", renderer.get())) return false;
@@ -178,14 +270,14 @@ bool run(nk_surface surface, bool recorded) {
     renderer.reset();
     config.memory_budget_bytes = 8192;
     renderer = nkui::create_ui_renderer(surface, nullptr, config);
-    if (!check(renderer->initialize() && renderer->beginFrame(recorded) &&
+    if (!check(renderer->initialize() && begin() &&
                renderer->beginWindowPass(64, 64, true) &&
                renderer->drawImage(red, 0, 0, 32, 64, identity), "allocation failure setup", renderer.get())) return false;
     nkgpu_test_fail_next_buffer_creation();
     if (!check(!renderer->drawImage(blue, 32, 0, 32, 64, identity) && renderer->resourceLimited(),
                "allocation failure classification", renderer.get())) return false;
     renderer->abortFrame();
-    if (!check(renderer->beginFrame(recorded) && renderer->beginWindowPass(64, 64, true) &&
+    if (!check(begin() && renderer->beginWindowPass(64, 64, true) &&
                renderer->drawImage(red, 0, 0, 32, 64, identity) &&
                renderer->drawImage(blue, 32, 0, 32, 64, identity) && renderer->endFrame() && pixels_match(),
                "retry after allocation failure", renderer.get())) return false;
@@ -193,6 +285,7 @@ bool run(nk_surface surface, bool recorded) {
 }
 }
 int main() {
+    if (!retained_geometry_storage() || !command_state_boundaries()) return 1;
     nk_init_options init{}; init.struct_size = sizeof(init); init.api_version = NK_API_VERSION;
     if (nk_init(&init) != NK_OK) return 1;
     nk_window_options options{}; options.struct_size = sizeof(options);
@@ -210,8 +303,8 @@ int main() {
                 nk_surface_request_frame(surface);
                 return;
             }
-            test.success = run(surface, false) && run(surface, true) &&
-                           raster_reuse(surface, false) && raster_reuse(surface, true);
+            test.success = run(surface, false) && run(surface, true) && run(surface, false, true) &&
+                           raster_reuse(surface, false) && raster_reuse(surface, true) && raster_reuse(surface, false, true);
             test.complete = true;
         }, &test) == NK_OK;
     if (success) success = nk_surface_request_frame(surface) == NK_OK;

@@ -4,6 +4,9 @@
 #include "prepare/nanovg_path.h"
 #include "prepare/text_engine.h"
 #include "prepare/text_raster.h"
+#include "render/render_plan_bytes.h"
+
+#include <cstdio>
 
 #include <algorithm>
 #include <array>
@@ -11,6 +14,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <iterator>
 #include <unordered_set>
 
 namespace nkui {
@@ -138,10 +142,11 @@ void hash_string(uint64_t &hash, const std::string &value) {
 
 uint64_t primitive_content_generation(const LayoutPrimitive &primitive,
                                       const TextEngine *text = nullptr,
-                                      uint64_t glyph_generation = 0) {
+                                      uint64_t glyph_generation = 0, float pixel_scale = 1.0f) {
     uint64_t hash = kContentHashOffset;
     hash_u32(hash, static_cast<uint32_t>(primitive.kind));
     hash_u32(hash, primitive.node_id);
+    hash_float(hash, pixel_scale);
     if (!(primitive.kind == LayoutPrimitiveKind::Text && primitive.text_layout_id &&
           glyph_generation))
         hash_u32(hash, primitive.content_revision);
@@ -289,11 +294,30 @@ void LayoutRenderFrame::reset() {
     resources_.reset();
     owned_resources_.reset();
     sealable_ = true;
-    plan_ = {};
+    reused_segments_ = compiled_segments_ = 0;
+    command_buffers_.clear();
+    for (auto pass = plan_.passes.rbegin(); pass != plan_.passes.rend(); ++pass) {
+        pass->commands.clear();
+        command_buffers_.push_back(std::move(pass->commands));
+    }
+    plan_.passes.clear();
+    plan_.dependencies.clear();
+    plan_.isolated_layers = plan_.bounded_layers = 0;
     paths_.clear();
     text_layout_ids_.clear();
     text_raster_scales_.clear();
     text_engine_source_ = nullptr;
+}
+
+void LayoutRenderFrame::append_pass(RenderPass pass) {
+    if (!command_buffers_.empty()) {
+        auto &commands = command_buffers_.back();
+        commands.insert(commands.end(), std::make_move_iterator(pass.commands.begin()),
+                        std::make_move_iterator(pass.commands.end()));
+        pass.commands.swap(commands);
+        command_buffers_.pop_back();
+    }
+    plan_.passes.push_back(std::move(pass));
 }
 
 LayoutRenderCompiler::LayoutRenderCompiler() : fonts_(std::make_shared<FontCollection>()) {}
@@ -325,7 +349,8 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                                    TextEngine *text_engine_source,
                                    const CustomPaintPlans *custom_paints,
                                    const RasterPaintNodes *raster_paint_nodes,
-                                   const CustomPaintComposites *custom_composites) const {
+                                   const CustomPaintComposites *custom_composites,
+                                   bool incremental, bool verify) const {
     if (error)
         *error = {};
     if (!is_resource_id(main_target, ResourceKind::RenderTarget) || !std::isfinite(pixel_scale) ||
@@ -333,6 +358,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
         return fail(error, 0, "invalid layout render input");
 
     out.reset();
+    if (!incremental) out.clear_segments();
     out.text_engine_source_ = text_engine_source;
     out.snapshot_items_.reset(snapshot.items.size());
     for (std::size_t index = 0; index < snapshot.items.size(); ++index)
@@ -350,7 +376,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                     pass_capacity += custom_plan->passes.size();
             }
         out.plan_.passes.reserve(pass_capacity);
-        out.plan_.passes.push_back({main_target, {}, load_existing, {}});
+        out.append_pass({main_target, {}, load_existing, {}});
         std::vector<LayoutRect> clips;
         uint32_t transient_slot = 1;
         uint32_t transient_target_slot =
@@ -542,6 +568,8 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             options.preserve_bounded_target_local_commands =
                 preserve_bounded_target_local_commands;
             options.cache_revision = cache_revision;
+            if (primitive.content_revision && primitive.geometry_revision && primitive.composite_revision)
+                options.retained_node_id = primitive.node_id;
             RenderPlanEmbedError embed_error;
             if (!append_embedded_render_plan(custom_plan, options, out.plan_, &embed_error))
                 return fail(error, primitive_index,
@@ -584,7 +612,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 content_pass.target_descriptor.width = std::max(1, static_cast<int>(width));
                 content_pass.target_descriptor.height = std::max(1, static_cast<int>(height));
             }
-            out.plan_.passes.push_back(std::move(content_pass));
+            out.append_pass(std::move(content_pass));
             const std::size_t content_pass_index = out.plan_.passes.size() - 1;
             if (!append_custom_plan(content_plan, primitive_index, content_target,
                                     content_pass_index, &content_transform, &content_clip,
@@ -599,7 +627,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 RenderPass continuation;
                 continuation.target = main_target;
                 continuation.load_existing = true;
-                out.plan_.passes.push_back(std::move(continuation));
+                out.append_pass(std::move(continuation));
                 current_main_pass = out.plan_.passes.size() - 1;
                 destination_target = main_target;
                 destination_pass = current_main_pass;
@@ -704,7 +732,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             raster_pass.target_descriptor.logical_height = local_bounds.height;
             raster_pass.target_descriptor.width = static_cast<int>(raster_width);
             raster_pass.target_descriptor.height = static_cast<int>(raster_height);
-            out.plan_.passes.push_back(std::move(raster_pass));
+            out.append_pass(std::move(raster_pass));
             const std::size_t raster_pass_index = out.plan_.passes.size() - 1;
             const std::array<float, 6> local_transform{1, 0, 0, 1, 0, 0};
             if (!append_custom_plan(*found->second, primitive_index, raster_target,
@@ -722,7 +750,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             // or partially revealing the painter can reuse its local pixels.
             if (has_node_clip) set_scissor(composite, node_clip, pixel_scale);
             continuation.commands.push_back(std::move(composite));
-            out.plan_.passes.push_back(std::move(continuation));
+            out.append_pass(std::move(continuation));
             current_main_pass = out.plan_.passes.size() - 1;
             return true;
         };
@@ -737,7 +765,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             pass.kind = RenderPassKind::Raster;
             pass.target_descriptor.logical_width = root.bounds.width;
             pass.target_descriptor.logical_height = root.bounds.height;
-            out.plan_.passes.push_back(std::move(pass));
+            out.append_pass(std::move(pass));
             root.outer_clip = clips.empty() ? LayoutRect{} : clips.back();
             active_raster_root = root_index;
             current_main_pass = out.plan_.passes.size() - 1;
@@ -759,7 +787,7 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             if (root.outer_clip.width > 0.0f && root.outer_clip.height > 0.0f)
                 set_scissor(composite, root.outer_clip, pixel_scale);
             continuation.commands.push_back(std::move(composite));
-            out.plan_.passes.push_back(std::move(continuation));
+            out.append_pass(std::move(continuation));
             current_main_pass = out.plan_.passes.size() - 1;
             active_raster_root = no_raster_root;
             active_raster_target = {};
@@ -796,6 +824,8 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             out.snapshot_text_layouts_.reset(snapshot.text_layouts.size());
             for (std::size_t index = 0; index < snapshot.text_layouts.size(); ++index)
                 out.snapshot_text_layouts_.insert(snapshot.text_layouts[index].id, index);
+            const uint64_t preparation_atlas = text->atlas_generation_key();
+            bool reused_atlas = false;
             std::size_t root_cursor = 0;
             for (std::size_t index = 0; index < snapshot.primitives.size(); ++index) {
                 const auto &primitive = snapshot.primitives[index];
@@ -838,9 +868,36 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 if (!raster_scale.key)
                     return fail(error, index, "layout text raster scale is invalid");
                 out.text_raster_scales_[index] = raster_scale.value;
+                bool prepared = false;
+                if (incremental) {
+                    const auto cached = out.segments_.find(primitive.node_id);
+                    if (cached != out.segments_.end())
+                        for (const auto &segment : cached->second)
+                            if (segment.kind == LayoutPrimitiveKind::Text && segment.line == primitive.text_line_index &&
+                                segment.glyphs && segment.glyphs->layout_id == layout_id &&
+                                segment.glyphs->pixel_scale == raster_scale.value &&
+                                segment.font_generation == text->font_collection_generation() &&
+                                segment.atlas_generation == preparation_atlas &&
+                                text->prepared_glyphs_current(*segment.glyphs)) {
+                                prepared = reused_atlas = true;
+                                break;
+                            }
+                }
+                if (prepared) continue;
                 if (!text->prepare_glyph_atlas(layout_id, text_layout ?
                         static_cast<int32_t>(primitive.text_line_index) : -1, raster_scale.value, GlyphMode::Alpha))
                     return fail(error, index, "layout glyph atlas preparation failed");
+            }
+            if (reused_atlas && text->atlas_generation_key() != preparation_atlas) {
+                // A new label can repack or evict atlas entries after a reused label was visited.
+                // Settle all current lines before any cached or fresh UVs are published.
+                for (std::size_t index = 0; index < snapshot.primitives.size(); ++index) {
+                    if (!out.text_layout_ids_[index]) continue;
+                    const auto &primitive = snapshot.primitives[index];
+                    if (!text->prepare_glyph_atlas(out.text_layout_ids_[index], primitive.text_layout_id ?
+                            static_cast<int32_t>(primitive.text_line_index) : -1, out.text_raster_scales_[index], GlyphMode::Alpha))
+                        return fail(error, index, "layout glyph atlas settlement failed");
+                }
             }
         }
 
@@ -905,6 +962,61 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             LayoutRect primitive_clip = scene_item ? scene_item->clip_bounds : LayoutRect{};
             if (!clips.empty() && (!scene_item || active_raster_root != no_raster_root))
                 primitive_clip = scene_item ? intersect(primitive_clip, clips.back()) : clips.back();
+            const LayoutTransform segment_transform = draw_transform_for(primitive, active_raster_root);
+            const LayoutRect segment_clip = has_primitive_clip ? clip_for(primitive_clip) : LayoutRect{};
+            LayoutRenderFrame::Segment *segment = nullptr;
+            if (incremental && primitive.content_revision && primitive.geometry_revision &&
+                primitive.composite_revision) {
+                auto &segments = out.segments_[primitive.node_id];
+                if (!segments.empty() && (segments.front().content_revision != primitive.content_revision ||
+                    segments.front().geometry_revision != primitive.geometry_revision ||
+                    segments.front().composite_revision != primitive.composite_revision))
+                    segments.clear();
+                for (auto &entry : segments)
+                    if (entry.kind == primitive.kind && entry.line == primitive.text_line_index) {
+                        segment = &entry;
+                        break;
+                    }
+                if (!segment) {
+                    segments.emplace_back();
+                    segment = &segments.back();
+                    segment->kind = primitive.kind;
+                    segment->line = primitive.text_line_index;
+                }
+            } else if (incremental) {
+                out.invalidate_node(primitive.node_id);
+            }
+            const auto matches_segment = [&](uint64_t publication) {
+                if (!segment) return false;
+                const auto old_transform = transform_array(segment->transform);
+                const auto next_transform = transform_array(segment_transform);
+                const std::array<float, 4> old_clip{segment->clip.x, segment->clip.y,
+                                                  segment->clip.width, segment->clip.height};
+                const std::array<float, 4> next_clip{segment_clip.x, segment_clip.y,
+                                                   segment_clip.width, segment_clip.height};
+                return segment && segment->content_revision == primitive.content_revision &&
+                    segment->geometry_revision == primitive.geometry_revision &&
+                    segment->composite_revision == primitive.composite_revision &&
+                    segment->pixel_scale == pixel_scale &&
+                    !std::memcmp(old_transform.data(), next_transform.data(), sizeof(float) * 6) &&
+                    segment->has_clip == has_primitive_clip &&
+                    !std::memcmp(old_clip.data(), next_clip.data(), sizeof(float) * 4) &&
+                    segment->publication == publication;
+            };
+            const auto remember_segment = [&](const RenderCommand &command, uint64_t publication) {
+                ++out.compiled_segments_;
+                if (!segment) return;
+                segment->content_revision = primitive.content_revision;
+                segment->geometry_revision = primitive.geometry_revision;
+                segment->composite_revision = primitive.composite_revision;
+                segment->pixel_scale = pixel_scale;
+                segment->transform = segment_transform;
+                segment->has_clip = has_primitive_clip;
+                segment->clip = segment_clip;
+                segment->publication = publication;
+                segment->command = command;
+                segment->command.resource = {};
+            };
             if (primitive.kind == LayoutPrimitiveKind::Rectangle) {
                 if (primitive.bounds.width <= 0.0f || primitive.bounds.height <= 0.0f) {
                     close_raster_if_last(index);
@@ -912,34 +1024,43 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 }
                 if (transient_slot > kMaxTransientSlot)
                     return fail(error, index, "layout render resource limit exceeded");
-                auto prepared = std::make_shared<PreparedPath>();
-                NanoVGPath path;
-                append_rounded_rect(path, primitive.bounds, primitive);
-                PathPreparationParams params;
-                params.device_pixel_ratio = pixel_scale;
-                const LayoutTransform draw_transform = draw_transform_for(primitive, active_raster_root);
-                params.transform = device_transform(draw_transform, pixel_scale);
-                PreparedGeometry geometry;
-                if (!path.valid() || !prepared || !prepare_fill(path, params, geometry) ||
-                    !prepared->set(PreparedPathKind::Fill, geometry, solid_paint(primitive.color)))
-                    return fail(error, index, "layout rectangle preparation failed");
                 const ResourceId id = make_resource_id(ResourceKind::Path, kTransientGeneration,
                                                        static_cast<uint16_t>(transient_slot++));
-                auto generation_primitive = primitive;
-                generation_primitive.transform = draw_transform;
-                const uint64_t content_generation =
-                    primitive_content_generation(generation_primitive);
-                if (!out.resources_.bind_path(id, *prepared, 0, content_generation))
+                RenderCommand command;
+                std::shared_ptr<const PreparedPath> prepared;
+                if (matches_segment(0) && segment->path) {
+                    prepared = segment->path;
+                    command = segment->command;
+                    ++out.reused_segments_;
+                } else {
+                    auto path_resource = std::make_shared<PreparedPath>();
+                    NanoVGPath path;
+                    append_rounded_rect(path, primitive.bounds, primitive);
+                    PathPreparationParams params;
+                    params.device_pixel_ratio = pixel_scale;
+                    params.transform = device_transform(segment_transform, pixel_scale);
+                    PreparedGeometry geometry;
+                    if (!path.valid() || !prepare_fill(path, params, geometry) ||
+                        !path_resource->set(PreparedPathKind::Fill, geometry, solid_paint(primitive.color)))
+                        return fail(error, index, "layout rectangle preparation failed");
+                    prepared = std::move(path_resource);
+                    auto generation_primitive = primitive;
+                    generation_primitive.transform = segment_transform;
+                    command.kind = RenderCommandKind::Path;
+                    command.content_generation = primitive_content_generation(generation_primitive, nullptr, 0, pixel_scale);
+                    if (has_primitive_clip) set_scissor(command, segment_clip, pixel_scale);
+                    if (primitive.content_revision && primitive.geometry_revision && primitive.composite_revision)
+                        command.retained_node_id = primitive.node_id;
+                    remember_segment(command, 0);
+                    if (segment) segment->path = prepared;
+                }
+                command.resource = id;
+                if (!out.resources_.bind_path(id, *prepared, 0, command.content_generation))
                     return fail(error, index, "layout path resource binding failed");
-                out.paths_.push_back(std::move(prepared));
-                if (!out.owned_resources_.bind_path(id, out.paths_.back(), 0, content_generation))
+                if (!out.owned_resources_.bind_path(id, prepared, 0, command.content_generation))
                     out.sealable_ = false;
-                RenderCommand command{RenderCommandKind::Path, id};
-                command.content_generation = content_generation;
-                if (has_primitive_clip)
-                    set_scissor(command, clip_for(primitive_clip), pixel_scale);
-                out.plan_.passes[current_main_pass].commands.push_back(std::move(command));
                 out.paths_.push_back(std::move(prepared));
+                out.plan_.passes[current_main_pass].commands.push_back(std::move(command));
                 if (!append_custom_for_primitive(index))
                     return false;
                 close_raster_if_last(index);
@@ -970,7 +1091,15 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                                         primitive.bounds.x;
                     window = {std::min(left, right), std::max(left, right)};
                 }
-                auto snapshot = primitive.text_layout_id
+                std::shared_ptr<const PreparedGlyphs> snapshot;
+                if (segment && segment->glyphs && matches_segment(segment->publication) &&
+                    segment->glyphs->layout_id == layout_id && segment->glyphs->pixel_scale == raster_scale &&
+                    segment->font_generation == text->font_collection_generation() &&
+                    segment->atlas_generation == atlas_generation &&
+                    segment->window.min_x == window.min_x && segment->window.max_x == window.max_x &&
+                    text->prepared_glyphs_current(*segment->glyphs))
+                    snapshot = segment->glyphs;
+                else snapshot = primitive.text_layout_id
                                     ? text->published_glyphs_for_line(
                                           layout_id, primitive.text_line_index, 0.0f, 0.0f,
                                           raster_scale, GlyphMode::Alpha, tint, {}, GlyphPreparation::PreparedAtlas,
@@ -982,25 +1111,38 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
                 const ResourceId id =
                     make_resource_id(ResourceKind::TextLayout, kTransientGeneration,
                                      static_cast<uint16_t>(transient_slot++));
-                auto generation_primitive = primitive;
-                generation_primitive.transform = draw_transform;
-                const uint64_t content_generation = primitive_content_generation(
-                    generation_primitive, text,
-                    snapshot->publication_key);
-                if (!out.resources_.bind_text(id, *snapshot, content_generation))
+                RenderCommand command;
+                if (matches_segment(snapshot->publication_key) && segment->glyphs == snapshot) {
+                    command = segment->command;
+                    ++out.reused_segments_;
+                } else {
+                    auto generation_primitive = primitive;
+                    generation_primitive.transform = draw_transform;
+                    command = {RenderCommandKind::GlyphBatch, {}, primitive.bounds.x, primitive.bounds.y,
+                               primitive.bounds.width, primitive.bounds.height};
+                    command.content_generation = primitive_content_generation(generation_primitive, text,
+                                                                               snapshot->publication_key, pixel_scale);
+                    command.transform = device_transform(draw_transform, pixel_scale);
+                    if (has_primitive_clip) set_scissor(command, segment_clip, pixel_scale);
+                    if (primitive.content_revision && primitive.geometry_revision && primitive.composite_revision)
+                        command.retained_node_id = primitive.node_id;
+                    remember_segment(command, snapshot->publication_key);
+                    if (segment) {
+                        segment->glyphs = snapshot;
+                        segment->window = window;
+                        segment->font_generation = text->font_collection_generation();
+                        segment->atlas_generation = text->atlas_generation_key();
+                    }
+                }
+                if (segment) {
+                    segment->font_generation = text->font_collection_generation();
+                    segment->atlas_generation = text->atlas_generation_key();
+                }
+                command.resource = id;
+                if (!out.resources_.bind_text(id, *snapshot, command.content_generation))
                     return fail(error, index, "layout text resource binding failed");
-                if (!out.owned_resources_.bind_text(id, std::move(snapshot), content_generation))
+                if (!out.owned_resources_.bind_text(id, std::move(snapshot), command.content_generation))
                     out.sealable_ = false;
-                RenderCommand command{RenderCommandKind::GlyphBatch,
-                                      id,
-                                      primitive.bounds.x,
-                                      primitive.bounds.y,
-                                      primitive.bounds.width,
-                                      primitive.bounds.height};
-                command.content_generation = content_generation;
-                command.transform = device_transform(draw_transform, pixel_scale);
-                if (has_primitive_clip)
-                    set_scissor(command, clip_for(primitive_clip), pixel_scale);
                 out.plan_.passes[current_main_pass].commands.push_back(std::move(command));
                 if (!append_custom_for_primitive(index))
                     return false;
@@ -1013,6 +1155,23 @@ bool LayoutRenderCompiler::compile(const LayoutSnapshot &snapshot, ResourceId ma
             return fail(error, snapshot.primitives.size(), "layout clip stack is unbalanced");
         if (frame_text && frame_text->atlas_generation_key() != atlas_generation)
             return fail(error, 0, "glyph publication changed the prepared atlas");
+    }
+    if (incremental && verify) {
+        LayoutRenderFrame reference;
+        if (!compile(snapshot, main_target, pixel_scale, reference, error, load_existing,
+                     out.text_engine(), custom_paints, raster_paint_nodes, custom_composites))
+            return false;
+        RenderPlanBytes actual, expected;
+        actual.frame(out.plan(), out.resources());
+        expected.frame(reference.plan(), reference.resources());
+        if (actual.bytes != expected.bytes) {
+            const auto limit = std::min(actual.bytes.size(), expected.bytes.size());
+            std::size_t offset = 0;
+            while (offset < limit && actual.bytes[offset] == expected.bytes[offset]) ++offset;
+            std::fprintf(stderr, "UI incremental render differs from full compile: byte=%zu size=%zu/%zu\n",
+                         offset, actual.bytes.size(), expected.bytes.size());
+            return fail(error, 0, "incremental render differs from full compile");
+        }
     }
     return true;
 }

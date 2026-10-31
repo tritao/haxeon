@@ -1,4 +1,10 @@
 #include "ui_renderer.h"
+#include "render/render_cost.h"
+#include "render/retained_geometry.h"
+#include "render/command_state.h"
+#include "compositor/render_plan.h"
+#include "render/frame_resources.h"
+#include <bit>
 
 #include "frame_resources.h"
 #include "prepare/text_raster.h"
@@ -29,6 +35,10 @@ class UiRendererImpl final : public UiRenderer {
     bool lost() const override;
     nkgpu_renderer gpuRenderer() const override;
     bool beginFrame(bool record, const nk_surface_frame_target *frame_target) override;
+    bool encodePassCommands() override;
+    bool prepareCommands(const RenderPlan &, const FrameResources &, int, int) override;
+    void selectPreparedCommand(std::size_t, std::size_t) override;
+    std::array<uint64_t, 3> geometryCacheStats() const override;
     bool beginWindowPass(int width, int height, bool clear) override;
     bool beginTargetPass(ResourceId target, int width, int height, bool load_existing) override;
     bool beginEffectPass(ResourceId target, uint64_t cache_key, int width, int height,
@@ -162,6 +172,13 @@ struct UiRendererImpl::State {
         nkgpu_pipeline pipeline{};
     };
 
+    std::unique_ptr<RetainedGeometry> geometry;
+    std::vector<std::vector<RetainedGeometry::Entry *>> prepared_commands;
+    RetainedGeometry::Entry *prepared_command = nullptr;
+    std::vector<GeometryMesh> *preparing = nullptr;
+    int prepare_width = 0, prepare_height = 0;
+    AtlasTextureKey prepare_atlas{};
+
     nkgpu_renderer renderer{};
     nkgpu_shader solid_shader{};
     nkgpu_shader path_shader{};
@@ -244,7 +261,12 @@ struct UiRendererImpl::State {
     /* Sealed-submission recording for the frame in progress. */
     nkgpu_batch batch{};
     bool recording = false;
+    bool encoding_pass = false;
     std::vector<uint8_t> record_commands;
+    std::vector<uint8_t> compact_commands;
+    std::vector<uint8_t> packet_scratch;
+    std::vector<uint32_t> packet_images;
+    std::vector<uint8_t> *packet_output = nullptr;
     nk_surface_frame_target frame_target{};
     bool has_frame_target = false;
 };
@@ -488,9 +510,13 @@ void append_record(std::vector<uint8_t> &bytes, uint32_t opcode,
         append_u32(bytes, word);
 }
 
+std::vector<uint8_t> &command_bytes(UiRendererImpl::State &state) {
+    return state.packet_output ? *state.packet_output : state.record_commands;
+}
+
 bool emit_pipeline(UiRendererImpl::State &state, nkgpu_pipeline pipeline) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_PIPELINE, {pipeline.id});
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_PIPELINE, {pipeline.id});
         return true;
     }
     return gpu_result(state, nkgpu_apply_pipeline(state.renderer, pipeline));
@@ -498,8 +524,8 @@ bool emit_pipeline(UiRendererImpl::State &state, nkgpu_pipeline pipeline) {
 
 bool emit_vertex_buffer(UiRendererImpl::State &state, uint32_t slot, nkgpu_buffer buffer,
                         uint32_t offset) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_VERTEX_BUFFER,
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_VERTEX_BUFFER,
                       {slot, buffer.id, offset});
         return true;
     }
@@ -507,32 +533,32 @@ bool emit_vertex_buffer(UiRendererImpl::State &state, uint32_t slot, nkgpu_buffe
 }
 
 bool emit_index_buffer(UiRendererImpl::State &state, nkgpu_buffer buffer, uint32_t offset) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_INDEX_BUFFER, {buffer.id, offset});
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_INDEX_BUFFER, {buffer.id, offset});
         return true;
     }
     return gpu_result(state, nkgpu_apply_index_buffer(state.renderer, buffer, offset));
 }
 
 bool emit_image(UiRendererImpl::State &state, uint32_t slot, nkgpu_image image) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_IMAGE, {slot, image.id});
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_IMAGE, {slot, image.id});
         return true;
     }
     return gpu_result(state, nkgpu_apply_image(state.renderer, slot, image));
 }
 
 bool emit_graphics_image(UiRendererImpl::State &state, uint32_t slot, nk_graphics_image image) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_GRAPHICS_IMAGE, {slot, image.id});
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_GRAPHICS_IMAGE, {slot, image.id});
         return true;
     }
     return gpu_result(state, nkgpu_apply_graphics_image(state.renderer, slot, image));
 }
 
 bool emit_sampler(UiRendererImpl::State &state, uint32_t slot, nkgpu_sampler sampler) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_SAMPLER, {slot, sampler.id});
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_SAMPLER, {slot, sampler.id});
         return true;
     }
     return gpu_result(state, nkgpu_apply_sampler(state.renderer, slot, sampler));
@@ -540,12 +566,12 @@ bool emit_sampler(UiRendererImpl::State &state, uint32_t slot, nkgpu_sampler sam
 
 bool emit_uniforms(UiRendererImpl::State &state, uint32_t slot, const uint8_t *data,
                    uint32_t size) {
-    if (state.recording) {
-        append_u32(state.record_commands, NKGPU_COMMAND_APPLY_UNIFORMS);
-        append_u32(state.record_commands, 8 + 8 + size);
-        append_u32(state.record_commands, slot);
-        append_u32(state.record_commands, size);
-        state.record_commands.insert(state.record_commands.end(), data, data + size);
+    if (state.recording || state.encoding_pass) {
+        append_u32(command_bytes(state), NKGPU_COMMAND_APPLY_UNIFORMS);
+        append_u32(command_bytes(state), 8 + 8 + size);
+        append_u32(command_bytes(state), slot);
+        append_u32(command_bytes(state), size);
+        command_bytes(state).insert(command_bytes(state).end(), data, data + size);
         return true;
     }
     return gpu_result(state, nkgpu_apply_uniform_data(state.renderer, slot, data, size));
@@ -553,8 +579,8 @@ bool emit_uniforms(UiRendererImpl::State &state, uint32_t slot, const uint8_t *d
 
 bool emit_scissor(UiRendererImpl::State &state, uint32_t enabled, int32_t x, int32_t y,
                   int32_t width, int32_t height) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_APPLY_SCISSOR,
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_APPLY_SCISSOR,
                       {enabled, static_cast<uint32_t>(x), static_cast<uint32_t>(y),
                        static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
         return true;
@@ -563,8 +589,9 @@ bool emit_scissor(UiRendererImpl::State &state, uint32_t enabled, int32_t x, int
 }
 
 bool emit_draw(UiRendererImpl::State &state, uint32_t base, uint32_t count, uint32_t instances) {
-    if (state.recording) {
-        append_record(state.record_commands, NKGPU_COMMAND_DRAW, {base, count, instances});
+    if (render_cost_enabled() && !state.packet_output) ++render_cost_draw_count();
+    if (state.recording || state.encoding_pass) {
+        append_record(command_bytes(state), NKGPU_COMMAND_DRAW, {base, count, instances});
         return true;
     }
     return gpu_result(state, nkgpu_draw(state.renderer, base, count, instances));
@@ -589,7 +616,8 @@ bool reserve_stream(UiRendererImpl::State &state, nkgpu_buffer base, uint32_t by
         }
         const uint64_t capacity = std::max<uint64_t>(pool.page_bytes, aligned);
         if (capacity > uint64_t{INT32_MAX} ||
-            capacity > state.stream_config.memory_budget_bytes - state.stream_bytes) {
+            capacity > state.stream_config.memory_budget_bytes - state.stream_bytes -
+                (state.geometry ? state.geometry->size_bytes() : 0)) {
             state.resource_limited = true;
             return fail(state, "UI stream buffer memory budget exceeded");
         }
@@ -619,8 +647,35 @@ bool draw_mesh(UiRendererImpl::State &state, nkgpu_pipeline pipeline,
                nkgpu_sampler second_sampler = {}, nk_graphics_image second_external_image = {}) {
     if (vertices.empty() || indices.empty())
         return true;
-    if (!state.in_pass || indices.size() > UINT32_MAX || vertices.size() > UINT32_MAX)
+    if ((!state.in_pass && !state.preparing) || indices.size() > UINT32_MAX || vertices.size() > UINT32_MAX)
         return fail(state, "invalid UI mesh or pass state");
+    if (state.preparing) {
+        GeometryMesh mesh;
+        mesh.pipeline = pipeline; mesh.sampler = sampler; mesh.image = image;
+        mesh.atlas = state.prepare_atlas; mesh.stride = sizeof(Vertex);
+        const auto *data = reinterpret_cast<const uint8_t *>(vertices.data());
+        mesh.vertices.assign(data, data + vertices.size() * sizeof(Vertex));
+        mesh.indices = indices;
+        if (fragment_uniform_size) {
+            const auto *data = static_cast<const uint8_t *>(fragment_uniforms);
+            mesh.fragment_uniforms.assign(data, data + fragment_uniform_size);
+        }
+        const std::array<float, 4> viewport{static_cast<float>(state.prepare_width),
+                                          static_cast<float>(state.prepare_height), 0, 0};
+        const auto *uniforms = static_cast<const uint8_t *>(vertex_uniforms ? vertex_uniforms : viewport.data());
+        const auto size = vertex_uniforms ? vertex_uniform_size : sizeof(viewport);
+        mesh.vertex_uniforms.assign(uniforms, uniforms + size);
+        state.preparing->push_back(std::move(mesh));
+        return true;
+    }
+    auto *cost = render_cost_mesh_probe();
+    double cost_started = cost ? render_cost_time() : 0;
+    const auto mark = [&](std::size_t phase) {
+        if (!cost) return;
+        const auto now = render_cost_time();
+        cost->add(phase, now - cost_started);
+        cost_started = now;
+    };
     uint32_t vertex_offset = 0;
     uint32_t index_offset = 0;
     const size_t vertex_bytes = vertices.size() * sizeof(Vertex);
@@ -632,14 +687,18 @@ bool draw_mesh(UiRendererImpl::State &state, nkgpu_pipeline pipeline,
     // the selected handles, so rolling to a new page never invalidates prior draws.
     if (!reserve_stream(state, vertex_buffer.id ? vertex_buffer : state.solid_vertices,
                         static_cast<uint32_t>(vertex_bytes), vertices_page) ||
-        !reserve_stream(state, state.indices, static_cast<uint32_t>(index_bytes), indices_page) ||
-        !gpu_result(state, nkgpu_buffer_append(state.renderer, vertices_page,
+        !reserve_stream(state, state.indices, static_cast<uint32_t>(index_bytes), indices_page))
+        return false;
+    mark(0);
+    if (!gpu_result(state, nkgpu_buffer_append(state.renderer, vertices_page,
                         reinterpret_cast<const uint8_t *>(vertices.data()),
                         static_cast<uint32_t>(vertex_bytes), &vertex_offset)) ||
         !gpu_result(state, nkgpu_buffer_append(state.renderer, indices_page,
                         reinterpret_cast<const uint8_t *>(indices.data()),
-                        static_cast<uint32_t>(index_bytes), &index_offset)) ||
-        !emit_pipeline(state, pipeline) ||
+                        static_cast<uint32_t>(index_bytes), &index_offset)))
+        return false;
+    mark(1);
+    if (!emit_pipeline(state, pipeline) ||
         !emit_vertex_buffer(state, 0, vertices_page, vertex_offset) ||
         !emit_index_buffer(state, indices_page, index_offset))
         return false;
@@ -653,6 +712,7 @@ bool draw_mesh(UiRendererImpl::State &state, nkgpu_pipeline pipeline,
         (second_sampler.id && !emit_sampler(state, 1, second_sampler)))
         return false;
     ++state.stats.binding_changes;
+    mark(2);
     const std::array<float, 4> viewport = {static_cast<float>(state.width),
                                            static_cast<float>(state.height), 0.0f, 0.0f};
     const void *vertex_data = vertex_uniforms ? vertex_uniforms : viewport.data();
@@ -664,10 +724,65 @@ bool draw_mesh(UiRendererImpl::State &state, nkgpu_pipeline pipeline,
         !emit_uniforms(state, 1, static_cast<const uint8_t *>(fragment_uniforms),
                        static_cast<uint32_t>(fragment_uniform_size)))
         return false;
+    mark(3);
     if (!emit_draw(state, 0, static_cast<uint32_t>(indices.size()), 1))
         return false;
+    mark(4);
     ++state.stats.draws;
     state.stats.transient_bytes += vertex_bytes + index_bytes;
+    return true;
+}
+
+bool encode_retained_geometry(UiRendererImpl::State &state, const RetainedGeometry::Entry &entry,
+                              const std::vector<uint32_t> &images) {
+    std::size_t mesh_index = 0;
+    for (const auto &mesh : entry.meshes) {
+        const nkgpu_image image{images[mesh_index++]};
+        if (!emit_pipeline(state, mesh.pipeline) ||
+            !emit_vertex_buffer(state, 0, state.geometry->buffer(mesh.vertices), mesh.vertices.offset) ||
+            !emit_index_buffer(state, state.geometry->buffer(mesh.indices), mesh.indices.offset) ||
+            (image.id && !emit_image(state, 0, image)) ||
+            (mesh.sampler.id && !emit_sampler(state, 0, mesh.sampler)) ||
+            !emit_uniforms(state, 0, mesh.vertex_uniforms.data(), mesh.vertex_uniforms.size()) ||
+            (!mesh.fragment_uniforms.empty() && !emit_uniforms(state, 1, mesh.fragment_uniforms.data(), mesh.fragment_uniforms.size())) ||
+            !emit_draw(state, 0, mesh.count, 1)) return false;
+    }
+    return true;
+}
+
+bool draw_retained_geometry(UiRendererImpl::State &state, RetainedGeometry::Entry &entry) {
+    auto &images = state.packet_images;
+    images.clear();
+    for (const auto &mesh : entry.meshes) {
+        nkgpu_image image = mesh.image;
+        if (mesh.atlas.texture.value) {
+            const auto atlas = state.atlases.find(mesh.atlas);
+            if (atlas == state.atlases.end()) return fail(state, "retained glyph atlas is unavailable");
+            image = atlas->second.image;
+        }
+        images.push_back(image.id);
+    }
+    if (!state.encoding_pass && !state.recording) {
+        if (!encode_retained_geometry(state, entry, images)) return false;
+    } else {
+        const bool rebuild = entry.commands.empty() || entry.images != images;
+        if (rebuild || render_verification_enabled()) {
+            auto &commands = rebuild ? entry.commands : state.packet_scratch;
+            commands.clear();
+            state.packet_output = &commands;
+            const bool encoded = encode_retained_geometry(state, entry, images);
+            state.packet_output = nullptr;
+            if (!encoded) return false;
+            if (!rebuild && commands != entry.commands)
+                return fail(state, "retained GPU commands differ from full encoding");
+            if (rebuild) entry.images = images;
+        }
+        state.record_commands.insert(state.record_commands.end(), entry.commands.begin(), entry.commands.end());
+        if (render_cost_enabled()) render_cost_draw_count() += entry.meshes.size();
+    }
+    state.stats.pipeline_changes += entry.meshes.size();
+    state.stats.binding_changes += entry.meshes.size();
+    state.stats.draws += entry.meshes.size();
     return true;
 }
 
@@ -1654,6 +1769,7 @@ UiRendererImpl::~UiRendererImpl() {
     if (state_->in_frame)
         endFrame();
     if (state_->renderer.id)
+        state_->geometry.reset();
         nkgpu_renderer_destroy(state_->renderer);
     delete state_;
 }
@@ -1867,6 +1983,85 @@ bool UiRendererImpl::lost() const {
            renderer_state == NKGPU_RENDERER_LOST;
 }
 
+bool UiRendererImpl::prepareCommands(const RenderPlan &plan, const FrameResources &resources,
+                                      int width, int height) {
+    if (!state_->in_frame || state_->in_pass) return fail(*state_, "geometry preparation requires a frame between passes");
+    for (auto &pass : state_->prepared_commands) pass.clear();
+    state_->prepared_commands.resize(plan.passes.size());
+    const auto available = state_->stream_config.memory_budget_bytes - state_->stream_bytes;
+    const auto budget = std::min<uint64_t>(4 * 1024 * 1024, std::min<uint64_t>(available,
+                                                      state_->stream_config.memory_budget_bytes / 4));
+    if (!state_->geometry && budget >= 128 * 1024) state_->geometry = std::make_unique<RetainedGeometry>(budget);
+    if (!state_->geometry) return true;
+    state_->geometry->limit(budget);
+    state_->geometry->begin(state_->frame_serial);
+    const bool verify = render_verification_enabled();
+    for (std::size_t pass_index = 0; pass_index < plan.passes.size(); ++pass_index) {
+        const auto &pass = plan.passes[pass_index];
+        auto &prepared = state_->prepared_commands[pass_index];
+        prepared.resize(pass.commands.size(), nullptr);
+        const int pass_width = pass.target_descriptor.width > 0 ? pass.target_descriptor.width :
+            pass.target_descriptor.logical_width > 0 ? static_cast<int>(std::ceil(pass.target_descriptor.logical_width)) : width;
+        const int pass_height = pass.target_descriptor.height > 0 ? pass.target_descriptor.height :
+            pass.target_descriptor.logical_height > 0 ? static_cast<int>(std::ceil(pass.target_descriptor.logical_height)) : height;
+        for (std::size_t command_index = 0; command_index < pass.commands.size(); ++command_index) {
+            const auto &command = pass.commands[command_index];
+            if (!command.retained_node_id || !command.content_generation ||
+                (command.kind != RenderCommandKind::Path && command.kind != RenderCommandKind::StrokePath &&
+                 command.kind != RenderCommandKind::GlyphBatch)) continue;
+            const auto *path = command.kind != RenderCommandKind::GlyphBatch ? resources.path(command.resource) : nullptr;
+            const auto *glyphs = command.kind == RenderCommandKind::GlyphBatch ? resources.text(command.resource) : nullptr;
+            if ((path && !path->path->textures().empty()) || (!path && !glyphs)) continue;
+            GeometryKey key;
+            key.generation = command.content_generation; key.kind = static_cast<uint32_t>(command.kind);
+            key.width = pass_width; key.height = pass_height;
+            const std::array<float, 11> placement{command.x, command.y, command.width, command.height, command.opacity,
+                command.transform[0], command.transform[1], command.transform[2], command.transform[3], command.transform[4], command.transform[5]};
+            for (std::size_t index = 0; index < placement.size(); ++index) key.placement[index] = std::bit_cast<uint32_t>(placement[index]);
+            auto *entry = state_->geometry->find(key);
+            if (entry && !verify) { prepared[command_index] = entry; continue; }
+            if (!entry && !state_->geometry->admit(key)) continue;
+            std::vector<GeometryMesh> meshes;
+            state_->preparing = &meshes; state_->prepare_width = pass_width; state_->prepare_height = pass_height;
+            state_->prepare_atlas = {};
+            const bool ready = path ? drawPath(*path->path, path->operation_index, command.transform.data(), command.opacity) :
+                drawGlyphs(*glyphs, command.transform.data(), command.x, command.y, command.opacity);
+            state_->preparing = nullptr; state_->prepare_atlas = {};
+            if (!ready) return false;
+            if (entry) {
+                if (!state_->geometry->matches(*entry, meshes)) {
+                    std::fprintf(stderr, "UI retained GPU geometry differs from full preparation: node=%u pass=%zu command=%zu\n",
+                                 command.retained_node_id, pass_index, command_index);
+                    return fail(*state_, "retained GPU geometry differs from full preparation");
+                }
+            } else entry = state_->geometry->insert(key, meshes);
+            prepared[command_index] = entry;
+        }
+    }
+    if (!state_->geometry->upload(state_->renderer)) {
+        state_->resource_limited = state_->geometry->last_result == NKGPU_ERROR_OUT_OF_MEMORY;
+        return gpu_result(*state_, state_->geometry->last_result);
+    }
+    return true;
+}
+
+std::array<uint64_t, 3> UiRendererImpl::geometryCacheStats() const {
+    return state_->geometry ? std::array<uint64_t, 3>{state_->geometry->hits, state_->geometry->misses,
+                                                     state_->geometry->size_bytes()} : std::array<uint64_t, 3>{};
+}
+
+void UiRendererImpl::selectPreparedCommand(std::size_t pass, std::size_t command) {
+    state_->prepared_command = pass < state_->prepared_commands.size() && command < state_->prepared_commands[pass].size()
+        ? state_->prepared_commands[pass][command] : nullptr;
+}
+
+bool UiRendererImpl::encodePassCommands() {
+    if (!state_ || !state_->in_frame || state_->in_pass || state_->recording)
+        return state_ ? fail(*state_, "pass encoding requires an immediate frame between passes") : false;
+    state_->encoding_pass = true;
+    return true;
+}
+
 bool UiRendererImpl::beginFrame(bool record, const nk_surface_frame_target *frame_target) {
     if (!valid() || state_->in_frame)
         return fail(*state_, "invalid UI frame state");
@@ -1878,7 +2073,9 @@ bool UiRendererImpl::beginFrame(bool record, const nk_surface_frame_target *fram
     ++state_->frame_serial;
     if (!state_->frame_serial)
         ++state_->frame_serial;
+    state_->prepared_command = nullptr;
     state_->recording = record;
+    state_->encoding_pass = false;
     state_->has_frame_target = frame_target != nullptr;
     if (frame_target)
         state_->frame_target = *frame_target;
@@ -2154,12 +2351,15 @@ bool UiRendererImpl::drawPath(const PreparedPathData &path, uint32_t operation_i
 
 bool UiRendererImpl::drawPath(const PreparedPathData &path, uint32_t operation_index,
                               const float transform[6], float opacity) {
-    if (!state_->in_pass || !transform || operation_index >= path.operations().size() ||
+    if ((!state_->in_pass && !state_->preparing) || !transform || operation_index >= path.operations().size() ||
         !std::isfinite(opacity) || opacity < 0.0f || opacity > 1.0f)
         return fail(*state_, "invalid path draw");
     for (int index = 0; index < 6; ++index)
         if (!std::isfinite(transform[index]))
             return fail(*state_, "path transform is not finite");
+
+    if (state_->prepared_command && !state_->preparing)
+        return draw_retained_geometry(*state_, *state_->prepared_command);
 
     const auto &operation = path.operations()[operation_index];
     nkgpu_image paint_image{};
@@ -2503,12 +2703,14 @@ void align_native_alpha_glyph(std::array<GlyphVertex, 4> &corners,
 
 bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transform[6],
                                 float origin_x, float origin_y, float opacity) {
-    if (!state_->in_pass || !transform || !std::isfinite(opacity) || opacity < 0.0f ||
+    if ((!state_->in_pass && !state_->preparing) || !transform || !std::isfinite(opacity) || opacity < 0.0f ||
         opacity > 1.0f || !std::isfinite(glyphs.pixel_scale) || glyphs.pixel_scale <= 0.0f)
         return fail(*state_, "invalid glyph draw");
     if (!std::isfinite(origin_x) || !std::isfinite(origin_y) ||
         !std::all_of(transform, transform + 6, [](float value) { return std::isfinite(value); }))
         return fail(*state_, "invalid glyph transform");
+    if (state_->prepared_command && !state_->preparing)
+        return draw_retained_geometry(*state_, *state_->prepared_command);
     const bool axis_aligned = transform[1] == 0.0f && transform[2] == 0.0f &&
                               transform[0] > 0.0f && transform[3] > 0.0f;
     for (const auto &batch : glyphs.batches) {
@@ -2552,7 +2754,9 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
                 right = std::max(right, vertex.x);
                 bottom = std::max(bottom, vertex.y);
             }
-            if (right <= 0.0f || bottom <= 0.0f || left >= state_->width || top >= state_->height)
+            if (right <= 0.0f || bottom <= 0.0f ||
+                left >= (state_->preparing ? state_->prepare_width : state_->width) ||
+                top >= (state_->preparing ? state_->prepare_height : state_->height))
                 continue;
             const uint32_t base = static_cast<uint32_t>(vertices.size());
             vertices.insert(vertices.end(), corners.begin(), corners.end());
@@ -2561,6 +2765,7 @@ bool UiRendererImpl::drawGlyphs(const PreparedGlyphs &glyphs, const float transf
         }
         // Linear sampling is exact at aligned texel centers and also handles
         // transformed glyphs correctly; integer zoom alone cannot choose it.
+        if (state_->preparing) state_->prepare_atlas = {batch.atlas, batch.atlas_generation};
         if (!draw_mesh(*state_, pipeline, vertices, indices, nullptr, 0, atlas->second.image,
                        state_->glyph_sampler, state_->glyph_vertices))
             return false;
@@ -2879,8 +3084,21 @@ bool UiRendererImpl::endPass() {
             if (!appended)
                 return false;
         }
-    } else if (!gpu_result(*state_, nkgpu_end_pass(state_->renderer))) {
-        return false;
+    } else {
+        if (state_->encoding_pass && !state_->record_commands.empty()) {
+            RenderCostProbe submission_cost("gpu_submit", {"compact", "replay"});
+            submission_cost.success = false;
+            if (!compact_gpu_commands(state_->record_commands, state_->compact_commands))
+                return fail(*state_, "invalid owned GPU command stream");
+            submission_cost.mark(0);
+            const bool submitted = gpu_result(*state_, nkgpu_submit_commands(state_->renderer,
+                state_->compact_commands.data(), static_cast<uint32_t>(state_->compact_commands.size())));
+            submission_cost.mark(1);
+            submission_cost.success = submitted;
+            state_->record_commands.clear();
+            if (!submitted) return false;
+        }
+        if (!gpu_result(*state_, nkgpu_end_pass(state_->renderer))) return false;
     }
     state_->in_pass = false;
     return true;
@@ -2891,6 +3109,7 @@ bool UiRendererImpl::endFrame() {
         return true;
     if (state_->in_pass && !endPass())
         return false;
+    state_->encoding_pass = false;
     if (state_->recording) {
         const bool sealed = gpu_result(*state_, nkgpu_batch_seal(state_->batch));
         const bool submitted =
@@ -2926,6 +3145,7 @@ void UiRendererImpl::abortFrame() {
     state_->record_commands.clear();
     nkgpu_frame_abort(state_->renderer);
     state_->recording = false;
+    state_->encoding_pass = false;
     state_->in_pass = false;
     state_->in_frame = false;
     state_->has_frame_target = false;

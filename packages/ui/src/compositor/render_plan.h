@@ -77,6 +77,8 @@ struct RenderCommand {
     bool custom_payload = false;
     /** Optional source revision for layout-produced prepared resources. */
     uint64_t content_generation = 0;
+    /** Versioned retained-scene owner; zero keeps the immediate geometry path. */
+    uint32_t retained_node_id = 0;
     BoxShadowDescriptor box_shadow{};
     RectBorderDescriptor rect_border{};
     /** Logical content excludes the padding from whole-pixel target allocation. */
@@ -137,6 +139,7 @@ struct RenderPlanEmbedOptions {
     bool preserve_bounded_target_local_commands = false;
     /** Optional retained-scene revision that must invalidate embedded caches. */
     uint32_t cache_revision = 0;
+    uint32_t retained_node_id = 0;
 };
 
 struct RenderPlanEmbedError {

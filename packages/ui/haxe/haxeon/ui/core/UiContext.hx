@@ -111,6 +111,7 @@ class UiContext {
 	final previousNodesById:Map<Int, RenderNode>;
 	final currentNodesById:Map<Int, RenderNode>;
 	final submittedNodes:Array<RenderNode> = [];
+	final submittedPaintNodes:Array<RenderNode> = [];
 	var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
 	var nextTopology:RenderTreeTopology = new RenderTreeTopology();
 	final resolvedById:Map<Int, ResolvedLayoutItem>;
@@ -532,6 +533,7 @@ class UiContext {
 			resolvedGeometryReusedNodes = 0;
 			diagnosticStage = 7;
 			submittedNodes.resize(0);
+			submittedPaintNodes.resize(0);
 			nextTopology.clear();
 			next.walk(function(node) {
 				submittedNodes.push(node);
@@ -554,6 +556,8 @@ class UiContext {
 					resolvedGeometryChangedNodes++;
 				// Resolved callbacks still run when geometry is retained.
 				node.setResolved(item);
+				if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom || node.cachePolicy != CachePolicy.None)
+					submittedPaintNodes.push(node);
 				nextTopology.append(node);
 			});
 			if (missing) {
@@ -715,6 +719,7 @@ class UiContext {
 		ensureLive();
 		root = null;
 		submittedNodes.resize(0);
+		submittedPaintNodes.resize(0);
 		submittedTopology.clear();
 		nextTopology.clear();
 		inspectionNode = null;
@@ -771,13 +776,13 @@ class UiContext {
 		var paintSkippedNodes = 0;
 		var emptyPaintNodes = 0;
 		diagnosticStage = 22;
-		root.walk(function(node) {
+		for (node in submittedPaintNodes) {
 			var nodeId = node.id.value;
 			if (node.resolved != null && node.cachePolicy != CachePolicy.None)
 				session.setCachePolicy(node.id.value, node.cachePolicy);
 			if (!node.hasPaintHandler() || node.resolved == null) {
 				clearCustomPaintBindings(node.id.value);
-				return;
+				continue;
 			}
 			if (node.resolved.visible &&
 				(node.resolved.width <= 0.0 || node.resolved.height <= 0.0))
@@ -787,7 +792,7 @@ class UiContext {
 			if (!node.resolved.visible || node.resolved.width <= 0.0 || node.resolved.height <= 0.0 ||
 				node.resolved.clipBounds.width <= 0.0 || node.resolved.clipBounds.height <= 0.0) {
 				clearCustomPaintBindings(nodeId);
-				return;
+				continue;
 			}
 			var displayList = customLists.get(nodeId);
 			var contentReused = displayList != null && canReuseCustomPaint(node);
@@ -875,7 +880,7 @@ class UiContext {
 			}
 			if (contentReused)
 				paintSkippedNodes++;
-		});
+		}
 		diagnosticStage = 23;
 		var stale = stalePaintNodes;
 		stale.resize(0);

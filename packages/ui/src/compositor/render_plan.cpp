@@ -392,6 +392,7 @@ bool append_embedded_render_plan(const RenderPlan &source, const RenderPlanEmbed
                     revisioned_cache_key(command.content_generation, options.cache_revision);
                 place_main_command(command, options);
                 command.custom_payload = true;
+                if (options.retained_node_id) command.retained_node_id = options.retained_node_id;
                 destination.passes[destination_main_index].commands.push_back(std::move(command));
             }
             continue;
@@ -464,6 +465,7 @@ bool append_embedded_render_plan(const RenderPlan &source, const RenderPlanEmbed
             command.scissor_width *= options.pixel_scale;
             command.scissor_height *= options.pixel_scale;
             command.custom_payload = true;
+            if (options.retained_node_id) command.retained_node_id = options.retained_node_id;
         }
         destination.passes.push_back(std::move(pass));
     }

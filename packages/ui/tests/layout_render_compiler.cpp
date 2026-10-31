@@ -2,6 +2,7 @@
 #include "layout/layout_render_compiler.h"
 #include "render/render_plan_executor.h"
 #include "render/sealed_render_plan.h"
+#include "render/render_plan_bytes.h"
 #include "render/ui_renderer.h"
 
 #include <algorithm>
@@ -33,9 +34,10 @@ class RecordingRenderer final : public UiRenderer {
     bool valid() const override { return true; }
     bool lost() const override { return false; }
     nkgpu_renderer gpuRenderer() const override { return {}; }
-    bool beginFrame(bool record, const nk_surface_frame_target *) override {
+    bool beginFrame(bool record, const nk_surface_frame_target *target) override {
         ++frame_count;
         recorded_frame = record;
+        provided_frame_target = target != nullptr;
         return true;
     }
     bool beginWindowPass(int, int, bool) override {
@@ -157,6 +159,7 @@ class RecordingRenderer final : public UiRenderer {
   public:
     uint32_t frame_count = 0;
     bool recorded_frame = false;
+    bool provided_frame_target = false;
     uint32_t pass_count = 0;
     uint32_t path_count = 0;
     uint32_t text_count = 0;
@@ -268,6 +271,50 @@ int main() {
     if (frame.plan().passes.size() != 1 || frame.plan().passes.front().commands.size() < 3 ||
         !frame.text_engine())
         return 7;
+
+    {
+        auto retained = snapshot;
+        for (auto &item : retained.items)
+            item.content_revision = item.geometry_revision = item.composite_revision = 1;
+        for (auto &primitive : retained.primitives)
+            primitive.content_revision = primitive.geometry_revision = primitive.composite_revision = 1;
+        LayoutRenderFrame incremental;
+        const auto compile_retained = [&] {
+            return compiler.compile(retained, main_target, 1.5f, incremental, &compile_error, false,
+                                    engine.text_engine(), nullptr, nullptr, nullptr, true, true);
+        };
+        if (!compile_retained() || !incremental.compiled_segments() || incremental.reused_segments())
+            return 101;
+        if (!compile_retained() || incremental.compiled_segments() || !incremental.reused_segments())
+            return 102;
+        auto rectangle = std::find_if(retained.primitives.begin(), retained.primitives.end(),
+            [](const auto &primitive) { return primitive.kind == LayoutPrimitiveKind::Rectangle; });
+        if (rectangle == retained.primitives.end()) return 103;
+        rectangle->color.red *= 0.5f;
+        ++rectangle->content_revision;
+        if (!compile_retained() || incremental.compiled_segments() != 1 || !incremental.reused_segments())
+            return 104;
+        // An ancestor can change resolved geometry without a local scene revision.
+        rectangle->bounds.width += 5;
+        incremental.invalidate_node(rectangle->node_id);
+        if (!compile_retained() || incremental.compiled_segments() != 1 || !incremental.reused_segments())
+            return 105;
+        // Deliberately omit the resolved change: byte verification must reject the stale segment.
+        rectangle->bounds.width += 5;
+        if (compile_retained()) return 106;
+        incremental.invalidate_node(rectangle->node_id);
+        if (!compile_retained()) return 107;
+        incremental.clear_segments();
+        if (!compile_retained() || incremental.reused_segments()) return 108;
+        RenderPlan positive, negative;
+        positive.passes.push_back({main_target, {}, false, {RenderCommand{RenderCommandKind::Path}}});
+        negative = positive;
+        negative.passes.front().commands.front().x = -0.0f;
+        RenderPlanBytes positive_bytes, negative_bytes;
+        positive_bytes.write(positive);
+        negative_bytes.write(negative);
+        if (positive_bytes.bytes == negative_bytes.bytes) return 109;
+    }
 
     uint32_t path_commands = 0;
     uint32_t text_commands = 0;
@@ -1215,8 +1262,8 @@ int main() {
         backend.pass_count != 1 || backend.path_count != path_commands ||
         backend.text_count != text_commands || backend.commit_count != 1)
         return 12;
-    /* Plans without a live producer are recorded into a sealed batch. */
-    if (!backend.recorded_frame)
+    /* Execution already owns the acquired frame target and does not record a second batch. */
+    if (backend.recorded_frame || !backend.provided_frame_target)
         return 65;
 
     /*
@@ -1642,6 +1689,7 @@ int main() {
         for (unsigned index = 0; index < 16; ++index) {
             LayoutPrimitive text;
             text.kind = LayoutPrimitiveKind::Text;
+            text.content_revision = text.geometry_revision = text.composite_revision = 1;
             text.node_id = 200 + index;
             text.visible = true;
             text.bounds = {0, static_cast<float>(index * 40), 2000, 80};
@@ -1666,8 +1714,13 @@ int main() {
             growing_snapshot.primitives.push_back(std::move(text));
         }
         LayoutRenderFrame growing_frame;
+        auto warm_snapshot = growing_snapshot;
+        warm_snapshot.primitives.resize(1);
+        if (!compiler.compile(warm_snapshot, main_target, 1.0f, growing_frame, &compile_error, false,
+                              retained ? &retained_engine : nullptr, nullptr, nullptr, nullptr, true)) return 110;
+        const auto batches_before_growth = growing_frame.text_engine()->stats().prepared_batch_count;
         if (!compiler.compile(growing_snapshot, main_target, 1.0f, growing_frame, &compile_error, false,
-                              retained ? &retained_engine : nullptr))
+                              retained ? &retained_engine : nullptr, nullptr, nullptr, nullptr, true))
             return 65;
         const auto uploads = growing_frame.text_engine()->atlas_uploads(true);
         bool grew = false;
@@ -1697,8 +1750,11 @@ int main() {
             return 68;
         // Atlas preparation must not allocate geometry for discarded early drafts.
         // Each label's batches are generated exactly once, after all atlas growth.
-        if (growing_frame.text_engine()->stats().prepared_batch_count != emitted_batches)
+        if (growing_frame.text_engine()->stats().prepared_batch_count - batches_before_growth != emitted_batches)
             return 70;
+        if (!compiler.compile(growing_snapshot, main_target, 1.0f, growing_frame, &compile_error, false,
+                              retained ? &retained_engine : nullptr, nullptr, nullptr, nullptr, true, true) ||
+            !growing_frame.reused_segments()) return 111;
 
     }
 

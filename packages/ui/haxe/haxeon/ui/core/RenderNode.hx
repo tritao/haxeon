@@ -58,11 +58,13 @@ class RenderNode {
 
 	/** Invalidate a retained custom display list without changing geometry or text. */
 	public function invalidatePaint():Void {
+		paintKeyResolved = false;
 		contentRevision++;
 		invalidationFlags = UiDirtyFlag.NeedsPaint;
 	}
 
 	inline function set_states(value:Int):Int {
+		if (states != value || !recordsInteraction) paintKeyResolved = false;
 		recordsInteraction = true;
 		return states = value;
 	}
@@ -109,8 +111,8 @@ class RenderNode {
 	var resolvedHandlers:Null<Array<ResolvedLayoutItem->Void>>;
 	var paintHandlers:Null<Array<Canvas->ResolvedLayoutItem->Void>>;
 	var paintCacheKeys:Null<Array<Null<String>>>;
-	var basePaintKey:Null<String>;
-	var basePaintKeyResolved:Bool = false;
+	var paintKey:Null<String>;
+	var paintKeyResolved:Bool = false;
 	var decorations:Null<Array<Decoration>>;
 	var decorationCacheKeys:Null<Array<Null<String>>>;
 	/** Shared by every node without classes or tags; never mutated. */
@@ -358,7 +360,7 @@ class RenderNode {
 		paintHandlers = swapBuilt(paintHandlers, madePaint, fresh.paintHandlers);
 		decorationCacheKeys = swapBuilt(decorationCacheKeys, madeDecorations, fresh.decorationCacheKeys);
 		decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
-		basePaintKeyResolved = false;
+		paintKeyResolved = false;
 		swapChildren(fresh, built.children, topology);
 		// New callbacks may have captured their build root; it now resolves to the instance kept in the tree.
 		fresh.replacedBy = this;
@@ -572,7 +574,7 @@ class RenderNode {
 		}
 		paintHandlers.push(handler);
 		paintCacheKeys.push(cacheKey);
-		basePaintKeyResolved = false;
+		paintKeyResolved = false;
 		return this;
 	}
 
@@ -594,7 +596,7 @@ class RenderNode {
 		}
 		decorations.push(decoration);
 		decorationCacheKeys.push(cacheKey);
-		basePaintKeyResolved = false;
+		paintKeyResolved = false;
 		return this;
 	}
 
@@ -651,17 +653,18 @@ class RenderNode {
 	/** Returns the complete opt-in fingerprint for safe retained paint reuse. */
 	@:allow(haxeon.ui.core.UiContext)
 	function retainedPaintKey():Null<String> {
+		if (paintKeyResolved) return paintKey;
+		paintKeyResolved = true;
+		paintKey = null;
 		if (!hasPaintHandler()) return null;
-		if (!basePaintKeyResolved) {
-			basePaintKey = buildBasePaintKey();
-			basePaintKeyResolved = true;
-		}
-		if (basePaintKey == null) return null;
+		var base = buildBasePaintKey();
+		if (base == null) return null;
 		var style = computedStyle == null ? null : computedStyle.getReadOnly(StyleProperty.Decorations);
 		var result = style != null && style.decorations.length > 0
-			? basePaintKey + "|style-decorations:" + style.key() : basePaintKey;
-		// Hover alone repaints this node without rebuilding it (BuildContext.hoverRebuilds), so the key says whether it was hovered.
-		return recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
+			? base + "|style-decorations:" + style.key() : base;
+		// Existing content revisions and routed states invalidate the complete local fingerprint.
+		paintKey = recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
+		return paintKey;
 	}
 
 	function buildBasePaintKey():Null<String> {
@@ -847,8 +850,10 @@ class RenderNode {
 			focusable != previous.focusable || focusTrap != previous.focusTrap ||
 			tabIndex != previous.tabIndex)
 			invalidationFlags |= UiDirtyFlag.NeedsSemantics;
-		if (contentChanged)
+		if (contentChanged) {
+			paintKeyResolved = false;
 			contentRevision++;
+		}
 		if (geometryChanged)
 			geometryRevision++;
 		if (compositeChanged)

@@ -18,13 +18,13 @@ class RenderCost {
 	public static function submit(started:Float, viewStarted:Float, nativeStarted:Float,
 			nativeEnded:Float, ended:Float, nodes:Int):Void {
 		if (!enabled) return;
-		Sys.println('render-cost submit started=$started nodes=$nodes build=${nativeStarted - viewStarted}'
-			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}');
+		Sys.stderr().writeString('render-cost submit started=$started nodes=$nodes build=${nativeStarted - viewStarted}'
+			+ ' layout=${nativeEnded - nativeStarted} other=${viewStarted - started + ended - nativeEnded}\n');
 	}
 
 	public static function render(started:Float, nativeStarted:Float, ended:Float, nodes:Int):Void {
 		if (!enabled) return;
-		Sys.println('render-cost haxe started=$started nodes=$nodes total=${ended - started}'
-			+ ' walk=${nativeStarted - started} callbacks=$callbacks encode=$encode renderable=$renderable native=$nativeCall');
+		Sys.stderr().writeString('render-cost haxe started=$started nodes=$nodes total=${ended - started}'
+			+ ' walk=${nativeStarted - started} callbacks=$callbacks encode=$encode renderable=$renderable native=$nativeCall\n');
 	}
 }

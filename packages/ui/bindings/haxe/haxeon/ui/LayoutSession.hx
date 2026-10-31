@@ -117,11 +117,10 @@ class LayoutSession {
 		transaction.commit();
 		var commitSeconds = measureCost ? Sys.time() - commitStarted : 0.0;
 		if (measureCost) {
-			Sys.println("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted + commitSeconds)
-				+ " decode=" + (decodeFinished - decodeStarted));
-			Sys.println("layout-delta updated=" + transaction.updatedCount() + " removed=" + transaction.removedCount()
-				+ " parents=" + transaction.parentCount() + " resolved=" + count);
-			Sys.stdout().flush();
+			Sys.stderr().writeString("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted + commitSeconds)
+				+ " decode=" + (decodeFinished - decodeStarted) + "\n");
+			Sys.stderr().writeString("layout-delta updated=" + transaction.updatedCount() + " removed=" + transaction.removedCount()
+				+ " parents=" + transaction.parentCount() + " resolved=" + count + "\n");
 		}
 		return resolved;
 	}

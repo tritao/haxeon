@@ -11,8 +11,8 @@ bool FrameResources::bind_path(ResourceId id, const PreparedPathData &path,
                                uint32_t operation_index, uint64_t content_generation) {
     if (!is_resource_id(id, ResourceKind::Path) || operation_index >= path.operations().size())
         return false;
-    paths_[id.value] = {&path, operation_index};
-    content_generations_[id.value] = content_generation;
+    paths_.bind(id.value) = {&path, operation_index};
+    content_generations_.bind(id.value) = content_generation;
     return true;
 }
 
@@ -26,8 +26,8 @@ bool FrameResources::bind_image(ResourceId id, const PreparedTexture &image,
     if (!is_resource_id(id, ResourceKind::Image) || image.width <= 0 || image.height <= 0 ||
         image.pixels.empty())
         return false;
-    images_[id.value] = {&image};
-    content_generations_[id.value] = content_generation;
+    images_.bind(id.value) = {&image};
+    content_generations_.bind(id.value) = content_generation;
     return true;
 }
 
@@ -39,9 +39,9 @@ bool FrameResources::bind_text(ResourceId id, const PreparedGlyphs &glyphs,
         (!is_resource_id(source_identity, ResourceKind::TextLayout) ||
          (source_identity.value != id.value && !content_generation)))
         return false;
-    source_identities_[id.value] = source_identity.value ? source_identity : id;
-    texts_[id.value] = &glyphs;
-    content_generations_[id.value] = content_generation;
+    source_identities_.bind(id.value) = source_identity.value ? source_identity : id;
+    texts_.bind(id.value) = &glyphs;
+    content_generations_.bind(id.value) = content_generation;
     return true;
 }
 
@@ -49,8 +49,8 @@ bool FrameResources::bind_surface(ResourceId id, SurfaceProducer &producer,
                                   uint64_t content_generation) {
     if (!is_resource_id(id, ResourceKind::RenderTarget))
         return false;
-    surfaces_[id.value] = &producer;
-    content_generations_[id.value] = content_generation;
+    surfaces_.bind(id.value) = &producer;
+    content_generations_.bind(id.value) = content_generation;
     return true;
 }
 
@@ -58,54 +58,35 @@ bool FrameResources::bind_graphics_image(ResourceId id, nk_graphics_image image,
                                          uint64_t content_generation) {
     if (!is_resource_id(id, ResourceKind::RenderTarget) || !image.id)
         return false;
-    graphics_images_[id.value] = image;
-    content_generations_[id.value] = content_generation;
+    graphics_images_.bind(id.value) = image;
+    content_generations_.bind(id.value) = content_generation;
     return true;
 }
 
-const PreparedPathRef *FrameResources::path(ResourceId id) const {
-    const auto found = paths_.find(id.value);
-    return found == paths_.end() ? nullptr : &found->second;
-}
-
-const PreparedImageRef *FrameResources::image(ResourceId id) const {
-    const auto found = images_.find(id.value);
-    return found == images_.end() ? nullptr : &found->second;
-}
-
+const PreparedPathRef *FrameResources::path(ResourceId id) const { return paths_.get(id.value); }
+const PreparedImageRef *FrameResources::image(ResourceId id) const { return images_.get(id.value); }
 const PreparedGlyphs *FrameResources::text(ResourceId id) const {
-    const auto found = texts_.find(id.value);
-    return found == texts_.end() ? nullptr : found->second;
+    const auto *value = texts_.get(id.value); return value ? *value : nullptr;
 }
-
 SurfaceProducer *FrameResources::surface(ResourceId id) const {
-    const auto found = surfaces_.find(id.value);
-    return found == surfaces_.end() ? nullptr : found->second;
+    const auto *value = surfaces_.get(id.value); return value ? *value : nullptr;
 }
-
-const nk_graphics_image *FrameResources::graphics_image(ResourceId id) const {
-    const auto found = graphics_images_.find(id.value);
-    return found == graphics_images_.end() ? nullptr : &found->second;
-}
-
+const nk_graphics_image *FrameResources::graphics_image(ResourceId id) const { return graphics_images_.get(id.value); }
 uint64_t FrameResources::content_generation(ResourceId id) const {
-    const auto found = content_generations_.find(id.value);
-    return found == content_generations_.end() ? 0 : found->second;
+    const auto *value = content_generations_.get(id.value); return value ? *value : 0;
 }
-
 ResourceId FrameResources::source_identity(ResourceId id) const {
-    const auto found = source_identities_.find(id.value);
-    return found == source_identities_.end() ? id : found->second;
+    const auto *value = source_identities_.get(id.value); return value ? *value : id;
 }
 
 void FrameResources::reset() {
-    paths_.clear();
-    images_.clear();
-    texts_.clear();
-    surfaces_.clear();
-    graphics_images_.clear();
-    content_generations_.clear();
-    source_identities_.clear();
+    paths_.reset();
+    images_.reset();
+    texts_.reset();
+    surfaces_.reset();
+    graphics_images_.reset();
+    content_generations_.reset();
+    source_identities_.reset();
 }
 
 bool OwnedFrameResources::bind_path(ResourceId id, std::shared_ptr<const PreparedPath> path,

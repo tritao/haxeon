@@ -83,6 +83,27 @@ struct PreparedImageRef {
     const PreparedTexture *image = nullptr;
 };
 
+/** Reuses binding storage; reset expires values immediately and prunes unused slots one frame later. */
+template <class Value> class FrameBindings {
+  public:
+    Value &bind(uint32_t id) {
+        auto &row = rows_[id]; row.frame = frame_; return row.value;
+    }
+    const Value *get(uint32_t id) const {
+        const auto found = rows_.find(id);
+        return found == rows_.end() || found->second.frame != frame_ ? nullptr : &found->second.value;
+    }
+    void reset() {
+        for (auto row = rows_.begin(); row != rows_.end();)
+            if (row->second.frame != frame_) row = rows_.erase(row); else ++row;
+        if (++frame_ == 0) { rows_.clear(); frame_ = 1; }
+    }
+  private:
+    struct Row { Value value{}; uint64_t frame = 0; };
+    uint64_t frame_ = 1;
+    std::unordered_map<uint32_t, Row> rows_;
+};
+
 /**
  * Bindings from resource ids to prepared frame data for immediate execution.
  *
@@ -114,13 +135,13 @@ class FrameResources {
     void reset();
 
   private:
-    std::unordered_map<uint32_t, PreparedPathRef> paths_;
-    std::unordered_map<uint32_t, PreparedImageRef> images_;
-    std::unordered_map<uint32_t, const PreparedGlyphs *> texts_;
-    std::unordered_map<uint32_t, SurfaceProducer *> surfaces_;
-    std::unordered_map<uint32_t, nk_graphics_image> graphics_images_;
-    std::unordered_map<uint32_t, uint64_t> content_generations_;
-    std::unordered_map<uint32_t, ResourceId> source_identities_;
+    FrameBindings<PreparedPathRef> paths_;
+    FrameBindings<PreparedImageRef> images_;
+    FrameBindings<const PreparedGlyphs *> texts_;
+    FrameBindings<SurfaceProducer *> surfaces_;
+    FrameBindings<nk_graphics_image> graphics_images_;
+    FrameBindings<uint64_t> content_generations_;
+    FrameBindings<ResourceId> source_identities_;
 };
 
 /**

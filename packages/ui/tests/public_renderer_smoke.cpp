@@ -3,6 +3,7 @@
 #include "nativekit_gpu.h"
 #include "nativekit_ui.h"
 #include "nativekit_window.h"
+#include "surface_frame.h"
 #include "testing.h"
 
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
@@ -82,8 +83,7 @@ struct PixelBounds {
     int height() const { return max_y >= min_y ? max_y - min_y + 1 : 0; }
 };
 
-int main(int argc, char **argv) {
-    const bool stress_mode = argc > 1 && std::strcmp(argv[1], "--stress") == 0;
+static int run_renderer_tests(nk_surface surface, nk_graphics_api api, bool stress_mode, int width, int height) {
     constexpr uint32_t stress_seed = 0x51B6A7E1u;
     uint32_t stress_random = stress_seed;
     auto next_stress_random = [&]() {
@@ -91,34 +91,6 @@ int main(int argc, char **argv) {
         return stress_random;
     };
     constexpr std::array<float, 6> pixel_scales{1.0f, 1.25f, 1.5f, 2.0f, 1.0f, 2.0f};
-    nk_init_options init{};
-    init.struct_size = sizeof(init);
-    init.api_version = NK_API_VERSION;
-    if (nk_init(&init) != NK_OK)
-        return 1;
-    nk_window_options window_options{};
-    window_options.struct_size = sizeof(window_options);
-    window_options.width = 256;
-    window_options.height = 192;
-    window_options.title = "NativeKit public UI renderer";
-    nk_window window = 0;
-    if (nk_window_create(&window_options, &window) != NK_OK)
-        return 2;
-    nk_surface_options surface_options{};
-    surface_options.struct_size = sizeof(surface_options);
-    surface_options.api = nkgpu_default_graphics_api();
-    surface_options.flags = NK_SURFACE_STENCIL;
-    if (surface_options.api == NK_GRAPHICS_OPENGL)
-        surface_options.flags |= NK_SURFACE_FORWARD_COMPATIBLE;
-    surface_options.major_version = 3;
-    if (surface_options.api == NK_GRAPHICS_OPENGL)
-        surface_options.minor_version = 3;
-    surface_options.width = window_options.width;
-    surface_options.height = window_options.height;
-    nk_surface surface = 0;
-    if (nk_surface_create(window, &surface_options, &surface) != NK_OK)
-        return 3;
-
     const nkui_path_element path_elements[] = {
         {NKUI_PATH_MOVE_TO, {12.0f, 12.0f}},
         {NKUI_PATH_LINE_TO, {244.0f, 12.0f}},
@@ -165,7 +137,7 @@ int main(int argc, char **argv) {
         return 4;
 
     bool custom_effect_registered = false;
-    if (surface_options.api == NK_GRAPHICS_OPENGL) {
+    if (api == NK_GRAPHICS_OPENGL) {
         static constexpr char custom_glsl410[] =
             "#version 410\n"
             "uniform vec4 effect_fs_params[5];\n"
@@ -532,29 +504,10 @@ int main(int argc, char **argv) {
 
     bool image_cache_tested = false;
     int result = 0;
-    bool ready = false;
-    int width = 0, height = 0, frames = 0;
+    int frames = 0;
     std::array<uint64_t, 6> resource_highwater{};
     const int frame_limit = stress_mode ? 120 : 30;
     while (!result && frames < frame_limit) {
-        nk_event event{};
-        event.struct_size = sizeof(event);
-        if (nk_poll_event(&event) != NK_OK) {
-            result = 6;
-        } else if (event.kind == NK_EVENT_SURFACE_READY && event.source == surface) {
-            ready = nk_surface_make_current(surface) == NK_OK &&
-                    nk_surface_get_framebuffer_size(surface, &width, &height) == NK_OK;
-        } else if (event.kind == NK_EVENT_SURFACE_RESIZE && event.source == surface &&
-                   event.data_size >= sizeof(nk_surface_resize_event)) {
-            const auto *resize = static_cast<const nk_surface_resize_event *>(event.data);
-            width = resize->framebuffer_width;
-            height = resize->framebuffer_height;
-        }
-        nk_event_release(&event);
-        if (!ready) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            continue;
-        }
         const float pixel_scale = pixel_scales[static_cast<size_t>(frames) % pixel_scales.size()];
         if (stress_mode && frames % 7 == 0) {
             char updated_text[64]{};
@@ -704,8 +657,6 @@ int main(int argc, char **argv) {
                             stable_selection_bytes) != 0)
                 result = 22;
         }
-        if (!result && nk_surface_present(surface) != NK_OK)
-            result = 10;
         if (!result && stress_mode && frames % 9 == 0) {
             nkgpu_renderer gpu_renderer{};
             nkgpu_image color_image{};
@@ -863,7 +814,7 @@ int main(int argc, char **argv) {
             if (nkui_renderer_render_frame(renderer, scale_list, surface, &frame_info) != NKUI_OK)
                 return false;
             bounds = read_text_bounds();
-            return nk_surface_present(surface) == NK_OK;
+            return true;
         };
         PixelBounds native_bounds;
         PixelBounds scaled_bounds;
@@ -1064,9 +1015,8 @@ int main(int argc, char **argv) {
                      static_cast<unsigned long long>(resource_highwater[3]),
                      static_cast<unsigned long long>(resource_highwater[4]),
                      static_cast<unsigned long long>(resource_highwater[5]));
-    if (ready)
         nk_surface_make_current(surface);
-    if (!result && ready) {
+    if (!result) {
         // Most of this paragraph lies outside the framebuffer. Uploading all
         // of its quads overflows the fixed glyph stream even though few show.
         const std::string long_word(100000, 'a');
@@ -1092,7 +1042,7 @@ int main(int argc, char **argv) {
         nkui_display_list_destroy(long_list);
         nkui_resource_destroy(long_text);
     }
-    if (!result && ready) {
+    if (!result) {
         // Scrolling a wrapped paragraph must publish the requested middle
         // visual lines, with their original positions and retained atlas.
         const std::string wrapped_word(100000, 'a');
@@ -1158,6 +1108,41 @@ int main(int argc, char **argv) {
     nkui_resource_destroy(image);
     nkui_resource_destroy(paint);
     nkui_resource_destroy(path);
+    return result;
+}
+
+int main(int argc, char **argv) {
+    const bool stress_mode = argc > 1 && std::strcmp(argv[1], "--stress") == 0;
+    nk_init_options init{};
+    init.struct_size = sizeof(init);
+    init.api_version = NK_API_VERSION;
+    if (nk_init(&init) != NK_OK)
+        return 1;
+    nk_window_options window_options{};
+    window_options.struct_size = sizeof(window_options);
+    window_options.width = 256;
+    window_options.height = 192;
+    window_options.title = "NativeKit public UI renderer";
+    nk_window window = 0;
+    if (nk_window_create(&window_options, &window) != NK_OK)
+        return 2;
+    nk_surface_options surface_options{};
+    surface_options.struct_size = sizeof(surface_options);
+    surface_options.api = nkgpu_default_graphics_api();
+    surface_options.flags = NK_SURFACE_STENCIL;
+    if (surface_options.api == NK_GRAPHICS_OPENGL)
+        surface_options.flags |= NK_SURFACE_FORWARD_COMPATIBLE;
+    surface_options.major_version = 3;
+    if (surface_options.api == NK_GRAPHICS_OPENGL)
+        surface_options.minor_version = 3;
+    surface_options.width = window_options.width;
+    surface_options.height = window_options.height;
+    nk_surface surface = 0;
+    if (nk_surface_create(window, &surface_options, &surface) != NK_OK)
+        return 3;
+
+    const int result = with_surface_frame(window, surface, window_options.width, window_options.height,
+        [&](int width, int height) { return run_renderer_tests(surface, surface_options.api, stress_mode, width, height); });
     nk_surface_destroy(surface);
     nk_window_destroy(window);
     nk_shutdown();

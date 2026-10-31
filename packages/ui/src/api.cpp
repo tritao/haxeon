@@ -305,6 +305,7 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
         return node;
     }
     void release_node(RetainedNode *node) {
+        frame.invalidate_node(node->value->id);
         *node->value = {}; node->children.clear(); node->resolved->valid = false;
         free_nodes.push_back(node);
     }
@@ -353,6 +354,7 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
         bool valid = false;
         /* Set once two builds in a row saw the same inputs, so one-frame promotions such as row textures have settled. */
         bool settled = false;
+        bool borrowed = false;
         uint64_t epoch = 0;
         uint64_t frame_key = 0;
         uint64_t lists_key = 0;
@@ -2833,6 +2835,7 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     const double index_started = nkui::layout_cost_time();
     mutation.publish();
+    if (!patch) state->frame.clear_segments();
     const double index_seconds = nkui::layout_cost_time() - index_started;
     state->snapshot = std::move(snapshot);
     state->resolved_updates_ready = false;
@@ -2941,6 +2944,25 @@ extern "C" nkui_result nkui_layout_session_verify_tree(nkui_layout_session sessi
     return NKUI_OK;
 }
 
+namespace {
+void update_resolved_records(LayoutSessionState &state) {
+    if (state.resolved_updates_ready) return;
+    auto &updates = state.resolved_updates;
+    updates.clear();
+    for (std::size_t index = 0; index < state.snapshot.items.size(); ++index) {
+        const auto record = encode_layout_item(state.snapshot.items[index]);
+        auto &slot = *state.ordered_slots[index];
+        if (!slot.resolved->valid || std::memcmp(&slot.resolved->value, &record, sizeof(record))) {
+            updates.push_back(record);
+            slot.resolved->value = record;
+            slot.resolved->valid = true;
+            state.frame.invalidate_node(slot.value->id);
+        }
+    }
+    state.resolved_updates_ready = true;
+}
+} // namespace
+
 extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_session session,
                                                                uint8_t *out_buffer, uint32_t *inout_bytes) {
     if (!inout_bytes || active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
@@ -2949,20 +2971,7 @@ extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_sess
     if (!state) return NKUI_ERROR_INVALID_HANDLE;
     std::lock_guard<std::mutex> session_lock(state->mutex);
     if (!state->submitted) return NKUI_ERROR_INVALID_ARGUMENT;
-    if (!state->resolved_updates_ready) {
-        auto &updates = state->resolved_updates;
-        updates.clear();
-        for (std::size_t index = 0; index < state->snapshot.items.size(); ++index) {
-            const auto record = encode_layout_item(state->snapshot.items[index]);
-            auto &slot = *state->ordered_slots[index];
-            if (!slot.resolved->valid || std::memcmp(&slot.resolved->value, &record, sizeof(record))) {
-                updates.push_back(record);
-                slot.resolved->value = record;
-                slot.resolved->valid = true;
-            }
-        }
-        state->resolved_updates_ready = true;
-    }
+    update_resolved_records(*state);
     const auto required = state->resolved_updates.size() * sizeof(nkui_layout_item);
     if (required > UINT32_MAX) return NKUI_ERROR_OUT_OF_MEMORY;
     if (!out_buffer) { *inout_bytes = static_cast<uint32_t>(required); return NKUI_OK; }
@@ -4213,7 +4222,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                 command.resource = prepared_id;
                 command.transform = placement_transform(transform);
                 valid = frame_resources.bind_path(prepared_id, *prepared_path, 0,
-                                                  static_cast<uint64_t>(path_handle.id));
+                                                  command.content_generation);
                 if (valid && !owned_resources.bind_path(prepared_id, prepared_paths.back(), 0,
                                                         static_cast<uint64_t>(path_handle.id)))
                     sealable = false;
@@ -4759,11 +4768,34 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         frame_guard.handed_off = true;
         return NKUI_OK;
     };
+    const bool verify_render = nkui::render_verification_enabled();
+    const auto execute_inline = [&](const nkui::RenderPlan &plan, const nkui::FrameResources &resources,
+                                     const std::vector<nkui::TextEngine *> &text_engines) -> nkui_result {
+        const bool new_backend = !renderer_slot->renderer->valid();
+        if (new_backend && (!renderer_slot->renderer->initialize() || !register_custom_effects(*renderer_slot)))
+            return NKUI_ERROR_RENDERING;
+        if (auto *text = session_state->frame.text_engine())
+            if (!renderer_slot->renderer->uploadAtlases(*text, new_backend)) return NKUI_ERROR_RENDERING;
+        for (auto *text : text_engines)
+            if (!renderer_slot->renderer->uploadAtlases(*text, new_backend)) return NKUI_ERROR_RENDERING;
+        render_cost.mark(5);
+        render_cost.mark(6);
+        nkui::RenderExecutionError error{};
+        const bool executed = nkui::execute_render_plan(*renderer_slot->renderer, plan, resources, {main_target, frame_target}, &error);
+        render_cost.mark(7);
+        render_cost.success = executed;
+        if (!executed) {
+            session_state->reusable_plan.valid = false;
+            std::fprintf(stderr, "UIKit render execution failed: pass %u command %u: %s\n",
+                         error.pass_index, error.command_index, error.message ? error.message : "unknown renderer failure");
+        }
+        return executed ? NKUI_OK : renderer_slot->renderer->resourceLimited() ? NKUI_ERROR_RESOURCE_LIMIT : NKUI_ERROR_RENDERING;
+    };
     /* A frame whose layout, display lists, text and targets are exactly those of the last one renders the same plan.
        Compiling it again and publishing every visible row's glyphs again only reproduces it. */
     uint64_t reuse_frame_key = 0;
     uint64_t reuse_lists_key = 0;
-    if (threaded) {
+    {
         reuse_frame_key = mix_render_key(0, compile_target.value);
         reuse_frame_key = mix_render_key(reuse_frame_key, has_backdrop ? 1u : 0u);
         reuse_frame_key = mix_render_key(reuse_frame_key, load_existing ? 1u : 0u);
@@ -4792,7 +4824,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         const auto &previous = session_state->reusable_plan;
         /* The first reason a frame cannot reuse the last plan, counted so a capture shows why it was compiled. */
         uint64_t nkui_renderer_stats::*miss = nullptr;
-        if (!previous.valid || !previous.plan)
+        if (!previous.valid || (!previous.plan && !previous.borrowed))
             miss = &nkui_renderer_stats::render_plan_miss_unsettled;
         else if (previous.epoch != session_state->render_epoch)
             miss = &nkui_renderer_stats::render_plan_miss_epoch;
@@ -4825,16 +4857,18 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
             else if (!previous.settled)
                 miss = &nkui_renderer_stats::render_plan_miss_unsettled;
         }
-        if (!miss) {
+        if (!miss && !verify_render) {
             render_cost.reused = true;
             render_cost.mark(2);
             ++renderer_slot->stats.render_plan_reuses;
-            accumulate_render_plan_stats(renderer_slot->stats, previous.plan->plan());
+            accumulate_render_plan_stats(renderer_slot->stats, previous.borrowed ? session_state->frame.plan() : previous.plan->plan());
             renderer_slot->stats.render_plan_commands += previous.render_plan_commands;
             renderer_slot->stats.custom_paint_bytes += previous.custom_paint_bytes;
-            return enqueue_sealed(previous.plan, previous.text_engines, previous.text_engine_owners);
+            if (threaded) return enqueue_sealed(previous.plan, previous.text_engines, previous.text_engine_owners);
+            render_cost.mark(4);
+            return execute_inline(session_state->frame.plan(), session_state->frame.resources(), previous.text_engines);
         }
-        ++(renderer_slot->stats.*miss);
+        if (miss) ++(renderer_slot->stats.*miss);
     }
     render_cost.mark(2);
     ++renderer_slot->stats.render_plan_compiles;
@@ -4842,12 +4876,17 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     const uint64_t custom_bytes_before = renderer_slot->stats.custom_paint_bytes;
     std::vector<LayoutSessionState::PlanDependency> plan_dependencies;
     nkui::LayoutRenderCompileError compile_error{};
+    update_resolved_records(*session_state);
     if (!session_state->compiler.compile(
             session_state->snapshot, compile_target, frame_info->pixel_scale, session_state->frame,
             &compile_error, load_existing != 0, session_state->engine->text_engine(), &custom_plans,
-            &raster_paint_nodes, &custom_composites))
+            &raster_paint_nodes, &custom_composites, true, verify_render))
         return NKUI_ERROR_INVALID_TRANSACTION;
 
+    if (render_cost.enabled()) {
+        render_cost.segments_compiled = session_state->frame.compiled_segments();
+        render_cost.segments_reused = session_state->frame.reused_segments();
+    }
     render_cost.mark(3);
     if (has_backdrop)
         append_backdrop_window_composite(session_state->frame.plan(), compile_target, main_target,
@@ -5028,11 +5067,15 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
                     nkui::ResourceKind::Path, 0x0FFD, static_cast<uint16_t>(prepared_slot++));
                 command.resource = prepared_id;
                 command.transform = placement_transform(transform);
+                command.content_generation = (static_cast<uint64_t>(PathCacheKeyHash{}(
+                    path_cache_key(path_handle, tessellation, frame_info->pixel_scale, command))) ^
+                    (static_cast<uint64_t>(command.paint.value) << 32)) * UINT64_C(1099511628211);
+                if (!command.content_generation) command.content_generation = 1;
                 frame_stage = "custom path: bind";
                 valid = frame_resources.bind_path(prepared_id, *prepared_path, 0,
-                                                  static_cast<uint64_t>(path_handle.id));
+                                                  command.content_generation);
                 if (valid && !owned_resources.bind_path(prepared_id, custom_paths.back(), 0,
-                                                        static_cast<uint64_t>(path_handle.id)))
+                                                        command.content_generation))
                     sealable = false;
             } else if (command.kind == nkui::RenderCommandKind::Image) {
                 const uint32_t source_resource = command.resource.value;
@@ -5361,87 +5404,58 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     session_state->reusable_plan.valid = false;
     if (!sealable && threaded)
         return NKUI_ERROR_RENDERING;
-    if (!threaded) {
-        const bool new_backend = !renderer_slot->renderer->valid();
-        if (new_backend && !renderer_slot->renderer->initialize())
-            return NKUI_ERROR_RENDERING;
-        if (new_backend && !register_custom_effects(*renderer_slot))
-            return NKUI_ERROR_RENDERING;
-        if (session_text_engine)
-            if (!renderer_slot->renderer->uploadAtlases(*session_text_engine, new_backend))
-                return NKUI_ERROR_RENDERING;
-        for (auto *engine : text_engines)
-            if (!renderer_slot->renderer->uploadAtlases(*engine, new_backend))
-                return NKUI_ERROR_RENDERING;
-    }
-    render_cost.mark(5);
-    if (sealable) {
+    const auto remember_plan = [&](std::shared_ptr<const nkui::SealedRenderPlan> sealed) {
+        auto &reusable = session_state->reusable_plan;
+        /* Glyphs published for this frame move the atlas keys, so the states are taken once it is built. */
+        for (auto &dependency : plan_dependencies) {
+            const auto *dependency_slot =
+                resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
+            if (!dependency_slot)
+                dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
+            if (dependency_slot)
+                dependency.state = plan_dependency_state(*dependency_slot);
+        }
+        const bool same_inputs =
+            reusable.epoch == session_state->render_epoch && reusable.frame_key == reuse_frame_key &&
+            reusable.lists_key == reuse_lists_key && reusable.dependencies.size() == plan_dependencies.size() &&
+            std::equal(reusable.dependencies.begin(), reusable.dependencies.end(),
+                       plan_dependencies.begin(),
+                       [](const auto &left, const auto &right) {
+                           return left.handle.id == right.handle.id && left.state == right.state;
+                       }) &&
+            reusable.session_atlas_key ==
+                (session_text_engine ? session_text_engine->atlas_generation_key() : 0);
+        reusable.settled = (reusable.plan != nullptr || reusable.borrowed) && same_inputs;
+        reusable.valid = sealable;
+        reusable.borrowed = !threaded && sealable;
+        reusable.epoch = session_state->render_epoch;
+        reusable.frame_key = reuse_frame_key;
+        reusable.lists_key = reuse_lists_key;
+        reusable.plan = sealed;
+        reusable.text_engines = text_engines;
+        reusable.text_engine_owners = text_engine_owners;
+        reusable.dependencies = std::move(plan_dependencies);
+        reusable.render_plan_commands = renderer_slot->stats.render_plan_commands - commands_before;
+        reusable.custom_paint_bytes = renderer_slot->stats.custom_paint_bytes - custom_bytes_before;
+        reusable.session_atlas_key = session_text_engine ? session_text_engine->atlas_generation_key() : 0;
+        reusable.session_layout_generation = session_text_engine ? session_text_engine->layout_generation() : 0;
+        reusable.session_font_generation =
+            session_text_engine ? session_text_engine->font_collection_generation() : 0;
+    };
+    if (threaded) {
+        render_cost.mark(5);
         nkui::RenderPlanSealError seal_error;
         auto sealed = nkui::SealedRenderPlan::seal(std::move(session_state->frame.plan()),
-                                                   std::move(owned_resources), &seal_error);
-        if (!sealed)
-            return NKUI_ERROR_OUT_OF_MEMORY;
+                                                  std::move(owned_resources), &seal_error);
+        if (!sealed) return NKUI_ERROR_OUT_OF_MEMORY;
         render_cost.mark(6);
-        if (threaded) {
-            if (session_text_engine)
-                text_engines.push_back(session_text_engine);
-            auto &reusable = session_state->reusable_plan;
-            /* Glyphs published for this frame move the atlas keys, so the states are taken once it is built. */
-            for (auto &dependency : plan_dependencies) {
-                const auto *dependency_slot =
-                    resolve_retained(dependency.handle, nkui::ResourceKind::TextLayout);
-                if (!dependency_slot)
-                    dependency_slot = resolve_retained(dependency.handle, nkui::ResourceKind::RenderTarget);
-                if (dependency_slot)
-                    dependency.state = plan_dependency_state(*dependency_slot);
-            }
-            const bool same_inputs =
-                reusable.epoch == session_state->render_epoch && reusable.frame_key == reuse_frame_key &&
-                reusable.lists_key == reuse_lists_key && reusable.dependencies.size() == plan_dependencies.size() &&
-                std::equal(reusable.dependencies.begin(), reusable.dependencies.end(),
-                           plan_dependencies.begin(),
-                           [](const auto &left, const auto &right) {
-                               return left.handle.id == right.handle.id && left.state == right.state;
-                           }) &&
-                reusable.session_atlas_key ==
-                    (session_text_engine ? session_text_engine->atlas_generation_key() : 0);
-            reusable.settled = reusable.plan != nullptr && same_inputs;
-            reusable.valid = true;
-            reusable.epoch = session_state->render_epoch;
-            reusable.frame_key = reuse_frame_key;
-            reusable.lists_key = reuse_lists_key;
-            reusable.plan = sealed;
-            reusable.text_engines = text_engines;
-            reusable.text_engine_owners = text_engine_owners;
-            reusable.dependencies = std::move(plan_dependencies);
-            reusable.render_plan_commands = renderer_slot->stats.render_plan_commands - commands_before;
-            reusable.custom_paint_bytes = renderer_slot->stats.custom_paint_bytes - custom_bytes_before;
-            reusable.session_atlas_key = session_text_engine ? session_text_engine->atlas_generation_key() : 0;
-            reusable.session_layout_generation = session_text_engine ? session_text_engine->layout_generation() : 0;
-            reusable.session_font_generation =
-                session_text_engine ? session_text_engine->font_collection_generation() : 0;
-            return enqueue_sealed(std::move(sealed), std::move(text_engines), std::move(text_engine_owners));
-        }
-        nkui::RenderExecutionError execution_error{};
-        const bool sealed_executed = nkui::execute_render_plan(*renderer_slot->renderer, *sealed,
-                                                               {main_target, frame_target}, &execution_error);
-        render_cost.mark(7);
-        render_cost.success = sealed_executed;
-        if (!sealed_executed)
-            std::fprintf(stderr, "UIKit render execution failed: pass %u command %u: %s\n",
-                         execution_error.pass_index, execution_error.command_index,
-                         execution_error.message ? execution_error.message : "unknown renderer failure");
-        return sealed_executed ? NKUI_OK : renderer_slot->renderer->resourceLimited()
-            ? NKUI_ERROR_RESOURCE_LIMIT : NKUI_ERROR_RENDERING;
+        if (session_text_engine) text_engines.push_back(session_text_engine);
+        remember_plan(sealed);
+        return enqueue_sealed(std::move(sealed), std::move(text_engines), std::move(text_engine_owners));
     }
-    render_cost.mark(6);
-    /* Frames that composite a live surface producer keep the borrowed path. */
-    const bool executed = nkui::execute_render_plan(*renderer_slot->renderer, plan, frame_resources,
-                                                    {main_target, frame_target});
-    render_cost.mark(7);
-    render_cost.success = executed;
-    return executed ? NKUI_OK : renderer_slot->renderer->resourceLimited()
-        ? NKUI_ERROR_RESOURCE_LIMIT : NKUI_ERROR_RENDERING;
+    const auto result = execute_inline(plan, frame_resources, text_engines);
+    if (result == NKUI_OK && sealable) remember_plan(nullptr);
+    return result;
 }
 
 extern "C" nkui_result nkui_renderer_render(nkui_renderer renderer, nkui_display_list list,

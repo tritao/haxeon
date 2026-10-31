@@ -740,3 +740,10 @@ the small timing differences are attributed as improvements. All ten UI suites, 
 strict lowered budgets and three independent 500-cycle memory captures pass. Memory growth after warmup is 5.47 MiB in
 each final capture, with listeners=2, widget resources=148 and style entries=209 stable. Final logs and source hashes are in
 `app/build/profiles/ui-controls-gates`.
+
+
+Render retention continues after layout. Native compilation now consumes the same scene revisions and changed resolved
+records to retain per-node path/text segments; the executor retains eligible GPU geometry and command fragments within
+its existing memory budget. Positive `HAXEON_UI_VERIFY_RETENTION` also compares canonical native output and GPU preparation
+with full reference work. The existing Haxe checks are unchanged. See [RENDER_COST.md](RENDER_COST.md) for ownership,
+reset behavior, phase boundaries, measurements and verification coverage.

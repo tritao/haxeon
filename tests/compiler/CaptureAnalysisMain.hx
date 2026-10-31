@@ -25,6 +25,31 @@ class CaptureAnalysisMain {
 		for (object in referenceProgram.objects)
 			expect(!StringTools.startsWith(object.name, "$cell:"), "mutating a referenced class must not add a capture cell");
 
+		var factoryReference = compiler.Frontend.compile('class Box { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
+		for (object in factoryReference.objects)
+			expect(!StringTools.startsWith(object.name, "$cell:"), "inferred reference receivers must not add capture cells");
+
+		for (source in [
+			'function fresh():Array<Int> return [1]; function main():Int { var values=fresh(); var update=()->values.push(2); update(); return values.length; }',
+			'function fresh():Map<String,Int> return new Map<String,Int>(); function main():Int { var values=fresh(); var update=()->values.set("x",1); update(); return 1; }',
+			'function fresh():{n:Int} return {n:1}; function main():Int { var box=fresh(); var update=()->{box.n=2;}; update(); return box.n; }',
+			'interface CounterView { public function bump():Void; } class Box implements CounterView { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():CounterView return new Box(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return 1; }',
+			'function fresh():String return "x"; function main():Int { var text=fresh(); var read=()->text.split(","); return read().length; }'
+		]) {
+			var inferredReference = compiler.Frontend.compile(source);
+			for (object in inferredReference.objects)
+				expect(!StringTools.startsWith(object.name, "$cell:"), "inferred reference containers must not add capture cells");
+		}
+
+		var factoryValue = compiler.Frontend.compile('struct Counter { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Counter return new Counter(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
+		var hasValueCell = false;
+		for (object in factoryValue.objects) if (StringTools.startsWith(object.name, "$cell:")) hasValueCell = true;
+		expect(hasValueCell, "inferred value receivers must keep shared capture storage");
+		var reassignedReference = compiler.Frontend.compile('class Box { public var n:Int=1; public function new() {} } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->{box=fresh();}; update(); return box.n; }');
+		var hasReferenceCell = false;
+		for (object in reassignedReference.objects) if (StringTools.startsWith(object.name, "$cell:")) hasReferenceCell = true;
+		expect(hasReferenceCell, "whole reference assignments must keep shared capture storage");
+
 		var exception = analyzeLexically('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
 		expect(count(exception.exceptionCells) == 1 && firstKey(exception.exceptionCells).indexOf("value@") == 0,
 			"local crossing a throwing edge should require stable storage");

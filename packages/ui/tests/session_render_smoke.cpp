@@ -4,6 +4,7 @@
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
 #include "nativekit_window.h"
+#include "surface_frame.h"
 
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
 #include <GLES3/gl3.h>
@@ -76,6 +77,10 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_u32(bytes, 12, static_cast<uint32_t>(string_offset));
 
     for (uint32_t index = 0; index < node_count; ++index) {
+        const auto revision_offset = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + static_cast<std::size_t>(index) * NKUI_LAYOUT_NODE_RECORD_BYTES;
+        write_u32(bytes, revision_offset + NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET, 1);
+        write_u32(bytes, revision_offset + NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET, 1);
+        write_u32(bytes, revision_offset + NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET, 1);
         const std::size_t offset = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
                                    static_cast<std::size_t>(index) * NKUI_LAYOUT_NODE_RECORD_BYTES;
         write_float(bytes, offset + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
@@ -142,45 +147,8 @@ std::vector<uint8_t> transaction(float width, float height) {
 
 } // namespace
 
-int main() {
-    nk_init_options init{};
-    init.struct_size = sizeof(init);
-    init.api_version = NK_API_VERSION;
-    if (nk_init(&init) != NK_OK) {
-        std::fprintf(stderr, "nk_init failed\n");
-        return 1;
-    }
-
-    constexpr int width = 256;
-    constexpr int height = 192;
-    nk_window_options window_options{};
-    window_options.struct_size = sizeof(window_options);
-    window_options.width = width;
-    window_options.height = height;
-    window_options.title = "NativeKit layout session render";
-    nk_window window = 0;
-    if (nk_window_create(&window_options, &window) != NK_OK) {
-        std::fprintf(stderr, "window create failed\n");
-        return 2;
-    }
-
-    nk_surface_options surface_options{};
-    surface_options.struct_size = sizeof(surface_options);
-    surface_options.api = nkgpu_default_graphics_api();
-    surface_options.flags = NK_SURFACE_STENCIL;
-    if (surface_options.api == NK_GRAPHICS_OPENGL)
-        surface_options.flags |= NK_SURFACE_FORWARD_COMPATIBLE;
-    surface_options.major_version = 3;
-    if (surface_options.api == NK_GRAPHICS_OPENGL)
-        surface_options.minor_version = 3;
-    surface_options.width = width;
-    surface_options.height = height;
-    nk_surface surface = 0;
-    if (nk_surface_create(window, &surface_options, &surface) != NK_OK) {
-        std::fprintf(stderr, "surface create failed\n");
-        return 3;
-    }
-
+static int run_session_tests(nk_surface surface, int framebuffer_width, int framebuffer_height) {
+    constexpr int width = 256, height = 192;
     nkui_resource fonts{};
     nkui_renderer renderer{};
     nkui_display_list list{};
@@ -192,27 +160,6 @@ int main() {
         nkui_layout_session_set_font_collection(session, fonts) != NKUI_OK) {
         std::fprintf(stderr, "resource setup failed\n");
         return 4;
-    }
-
-    bool ready = false;
-    int framebuffer_width = 0;
-    int framebuffer_height = 0;
-    for (int attempt = 0; attempt < 5000 && !ready; ++attempt) {
-        nk_event event{};
-        event.struct_size = sizeof(event);
-        if (nk_poll_event(&event) == NK_OK && event.kind == NK_EVENT_SURFACE_READY &&
-            event.source == surface) {
-            ready = nk_surface_make_current(surface) == NK_OK &&
-                    nk_surface_get_framebuffer_size(surface, &framebuffer_width,
-                                                    &framebuffer_height) == NK_OK;
-        }
-        nk_event_release(&event);
-        if (!ready)
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    if (!ready) {
-        std::fprintf(stderr, "surface never became ready\n");
-        return 5;
     }
 
     const float pixel_scale = 1.0f;
@@ -1076,11 +1023,57 @@ int main() {
     nkui_display_list_destroy(list);
     nkui_renderer_destroy(renderer);
     nkui_resource_destroy(fonts);
-    nk_surface_destroy(surface);
-    nk_window_destroy(window);
-    nk_shutdown();
     if (!result)
         std::printf("PASS: layout-session render path renders primitives, scales, and custom "
                     "paints\n");
+    return result;
+}
+
+int main() {
+    nk_init_options init{};
+    init.struct_size = sizeof(init);
+    init.api_version = NK_API_VERSION;
+    if (nk_init(&init) != NK_OK) {
+        std::fprintf(stderr, "nk_init failed\n");
+        return 1;
+    }
+
+    constexpr int width = 256;
+    constexpr int height = 192;
+    nk_window_options window_options{};
+    window_options.struct_size = sizeof(window_options);
+    window_options.width = width;
+    window_options.height = height;
+    window_options.title = "NativeKit layout session render";
+    nk_window window = 0;
+    if (nk_window_create(&window_options, &window) != NK_OK) {
+        std::fprintf(stderr, "window create failed\n");
+        return 2;
+    }
+
+    nk_surface_options surface_options{};
+    surface_options.struct_size = sizeof(surface_options);
+    surface_options.api = nkgpu_default_graphics_api();
+    surface_options.flags = NK_SURFACE_STENCIL;
+    if (surface_options.api == NK_GRAPHICS_OPENGL)
+        surface_options.flags |= NK_SURFACE_FORWARD_COMPATIBLE;
+    surface_options.major_version = 3;
+    if (surface_options.api == NK_GRAPHICS_OPENGL)
+        surface_options.minor_version = 3;
+    surface_options.width = width;
+    surface_options.height = height;
+    nk_surface surface = 0;
+    if (nk_surface_create(window, &surface_options, &surface) != NK_OK) {
+        std::fprintf(stderr, "surface create failed\n");
+        return 3;
+    }
+
+    const int result = with_surface_frame(window, surface, width, height,
+        [&](int framebuffer_width, int framebuffer_height) {
+            return run_session_tests(surface, framebuffer_width, framebuffer_height);
+        });
+    nk_surface_destroy(surface);
+    nk_window_destroy(window);
+    nk_shutdown();
     return result;
 }

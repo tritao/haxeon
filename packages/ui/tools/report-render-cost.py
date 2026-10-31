@@ -12,7 +12,7 @@ from ui_cost_report import frame_index, read_frames
 
 def read_records(log):
     records = defaultdict(list)
-    integers = {"id", "nodes", "primitives", "passes", "commands", "reused", "success"}
+    integers = {"id", "nodes", "primitives", "passes", "commands", "reused", "success", "segments_compiled", "segments_reused", "meshes_compiled", "meshes_reused", "mesh_cache_bytes"}
     for line in log.read_text().splitlines():
         if not line.startswith("render-cost "):
             continue
@@ -48,7 +48,7 @@ def frame_costs(log):
                 if row["id"] in frontend_ids:
                     raise ValueError(f"{log}: repeated frontend frame ID {row['id']}")
                 frontend_ids[row["id"]] = index
-    for stage in ("executor", "worker"):
+    for stage in ("executor", "worker", "draw", "mesh", "gpu_submit"):
         for row in records[stage]:
             index = frontend_ids.get(row["id"])
             if index is None:
@@ -80,16 +80,30 @@ def frame_costs(log):
             "callbacks": haxe["callbacks"], "display_encode": haxe["encode"],
             "paint_other": haxe["total"] - haxe["native"] - haxe["callbacks"] - haxe["encode"],
             "paint_walk": haxe["walk"], "renderable": haxe["renderable"],
+            "gpu_submit_measured": bool(phases["gpu_submit"]),
+            "gpu_compact": sum(item["compact"] for item in phases["gpu_submit"]),
+            "gpu_replay": sum(item["replay"] for item in phases["gpu_submit"]),
             "native": native["total"], "ffi_probe": haxe["native"] - native["total"],
             "primitives": native["primitives"], "passes": executor["passes"],
             "commands": executor["commands"], "reused": native["reused"],
+            "segments_compiled": native.get("segments_compiled", 0),
+            "segments_reused": native.get("segments_reused", 0),
+            "meshes_compiled": executor.get("meshes_compiled", 0), "meshes_reused": executor.get("meshes_reused", 0),
+            "mesh_cache_bytes": executor.get("mesh_cache_bytes", 0),
         }
         for key in ("acquire", "custom_plans", "reuse_check", "layout_plan", "resources", "atlas_upload", "seal", "enqueue"):
             row[key] = native[key]
-        for key in ("schedule", "begin", "dependencies", "draw", "submit"):
-            row["exec_" + key] = executor[key]
+        for key in ("schedule", "begin", "dependencies", "prepare", "draw", "submit"):
+            row["exec_" + key] = executor.get(key, 0)
         for key in ("bind", "backend", "atlas_upload", "execute", "cleanup", "completion"):
             row["worker_" + key] = sum(record[key] for record in phases["worker"])
+        draw = max(phases["draw"], key=lambda record: record["total"]) if phases["draw"] else {}
+        row["gpu_draws"] = draw.get("commands", 0)
+        for key in ("scissor", "paths", "glyphs", "images", "composites", "decorations"):
+            row["draw_" + key] = draw.get(key, 0)
+        mesh = max(phases["mesh"], key=lambda record: record["total"]) if phases["mesh"] else {}
+        for key in ("reserve", "upload", "bindings", "uniforms", "draw"):
+            row["mesh_" + key] = mesh.get(key, 0)
         result.append(row)
     if not result:
         raise ValueError(f"{log}: no rendered frames after warmup")
@@ -105,15 +119,23 @@ def report(log, rows):
           f"median primitives={statistics.median(row['primitives'] for row in rows):g}, "
           f"passes={statistics.median(row['passes'] for row in rows):g}, "
           f"commands={statistics.median(row['commands'] for row in rows):g}; "
-          f"plan reuses={sum(row['reused'] for row in rows)}")
+          f"plan reuses={sum(row['reused'] for row in rows)}; "
+          f"segments compiled/reused={sum(row['segments_compiled'] for row in rows)}/"
+          f"{sum(row['segments_reused'] for row in rows)}")
     for title, keys in (
         ("Frame breakdown", ("build", "layout", "render", "other", "active_frame", "surface_wait", "wall_frame", "worker")),
         ("Render phases", ("callbacks", "display_encode", "paint_other", "acquire", "custom_plans", "reuse_check",
                            "layout_plan", "resources", "atlas_upload", "seal", "enqueue", "ffi_probe")),
-        ("Executor phases", ("exec_schedule", "exec_begin", "exec_dependencies", "exec_draw", "exec_submit")),
+        ("Executor phases", ("exec_schedule", "exec_begin", "exec_dependencies", "exec_prepare", "exec_draw", "exec_submit")),
+        ("GPU submission", ("gpu_compact", "gpu_replay")),
+        ("Draw phases", ("draw_scissor", "draw_paths", "draw_glyphs", "draw_images", "draw_composites", "draw_decorations")),
+        ("Mesh phases", ("mesh_reserve", "mesh_upload", "mesh_bindings", "mesh_uniforms", "mesh_draw")),
         ("Worker phases", ("worker_bind", "worker_backend", "worker_atlas_upload",
                            "worker_execute", "worker_cleanup", "worker_completion")),
     ):
+        if title == "GPU submission" and not any(row["gpu_submit_measured"] for row in rows):
+            print("GPU submission: not instrumented in this capture")
+            continue
         print(title + " (independent per-frame medians, ms)")
         print("| " + " | ".join(keys) + " |")
         print("|" + "---:|" * len(keys))

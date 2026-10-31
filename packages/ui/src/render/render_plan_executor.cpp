@@ -213,7 +213,11 @@ std::pair<int, int> surface_request_size(const RenderPlan &plan, ResourceId surf
 bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                          const FrameResources &resources, const WindowTarget &window,
                          RenderExecutionError *error) {
-    RenderCostProbe render_cost("executor", {"schedule", "begin", "dependencies", "draw", "submit"});
+    RenderCostProbe render_cost("executor", {"schedule", "begin", "dependencies", "prepare", "draw", "submit"});
+    RenderCostProbe draw_cost("draw", {"scissor", "paths", "glyphs", "images", "composites", "decorations"});
+    RenderCostProbe mesh_cost("mesh", {"reserve", "upload", "bindings", "uniforms", "draw"});
+    RenderCostMeshScope mesh_scope(mesh_cost);
+    const auto draws_before = render_cost_draw_count();
     if (render_cost.enabled()) {
         render_cost.passes = plan.passes.size();
         for (const auto &pass : plan.passes) render_cost.commands += pass.commands.size();
@@ -227,17 +231,10 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
     if (!schedule_render_plan(plan, pass_order, &schedule_error))
         return fail(error, schedule_error.pass_index, 0, schedule_error.message);
     render_cost.mark(0);
-    /*
-     * A live surface producer renders through callbacks, which a sealed
-     * submission batch cannot carry, so those frames are drawn inline.
-     */
-    bool record = true;
-    for (const auto &dependency : plan.dependencies) {
-        if (resources.surface(dependency.producer)) {
-            record = false;
-            break;
-        }
-    }
+    // This executor already runs on the frame's GPU owner. A RenderPlan is
+    // the retained submission; translating it into another command batch here
+    // repeats recording and validation before executing the same commands.
+    const bool record = false;
     if (!renderer.beginFrame(record, &window.frame_target))
         return fail(error, 0, 0, renderer.lastError());
     struct FrameGuard {
@@ -301,6 +298,15 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
         rendered_producers.insert(dependency.producer.value);
     }
     render_cost.mark(2);
+    if (!renderer.prepareCommands(plan, resources, window.frame_target.width, window.frame_target.height))
+        return fail(error, 0, 0, renderer.lastError());
+    if (render_cost.enabled()) {
+        const auto stats = renderer.geometryCacheStats();
+        render_cost.meshes_reused = stats[0]; render_cost.meshes_compiled = stats[1]; render_cost.mesh_cache_bytes = stats[2];
+    }
+    render_cost.mark(3);
+    // Live producers have finished; only plan commands remain in these passes.
+    if (!renderer.encodePassCommands()) return fail(error, 0, 0, renderer.lastError());
     static std::atomic<uint64_t> next_execution_serial{1};
     const uint64_t execution_serial = next_execution_serial.fetch_add(1, std::memory_order_relaxed);
     std::unordered_map<uint32_t, uint64_t> target_runtime_hashes;
@@ -386,9 +392,13 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
         };
         for (uint32_t command_index = 0; command_index < pass.commands.size(); ++command_index) {
             const auto &command = pass.commands[command_index];
+            renderer.selectPreparedCommand(pass_index, command_index);
+            const auto scissor_started = render_cost_time();
             if (!renderer.setScissor(command.has_scissor, command.scissor_x, command.scissor_y,
                                      command.scissor_width, command.scissor_height))
                 return fail(error, pass_index, command_index, renderer.lastError());
+            draw_cost.add(0, render_cost_time() - scissor_started);
+            const auto command_started = render_cost_time();
             bool rendered = false;
             switch (command.kind) {
             case RenderCommandKind::Path:
@@ -432,6 +442,13 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
                                                    command.opacity, command.rect_border);
                 break;
             }
+            if (draw_cost.enabled()) {
+                const std::size_t phase = command.kind == RenderCommandKind::GlyphBatch ? 2 :
+                    command.kind == RenderCommandKind::Image ? 3 :
+                    command.kind == RenderCommandKind::CompositeTarget ? 4 :
+                    (command.kind == RenderCommandKind::Path || command.kind == RenderCommandKind::StrokePath) ? 1 : 5;
+                draw_cost.add(phase, render_cost_time() - command_started);
+            }
             if (!rendered)
                 return fail_command(command_index, renderer.lastError());
         }
@@ -439,11 +456,14 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
             return fail(error, pass_index, static_cast<uint32_t>(pass.commands.size()),
                         renderer.lastError());
     }
-    render_cost.mark(3);
+    render_cost.mark(4);
     if (!renderer.endFrame())
         return fail(error, static_cast<uint32_t>(plan.passes.size()), 0, renderer.lastError());
-    render_cost.mark(4);
+    render_cost.mark(5);
     render_cost.success = true;
+    draw_cost.success = true;
+    mesh_cost.success = true;
+    if (draw_cost.enabled()) draw_cost.commands = render_cost_draw_count() - draws_before;
     frame_guard.complete = true;
     if (error)
         *error = {};
