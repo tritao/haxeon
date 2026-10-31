@@ -104,9 +104,10 @@ private class EllipsisMemo {
   var font:Null<FontFamily> = null;
   var fontSize:Float = 0.0;
   var letterSpacing:Float = 0.0;
-  var alignment:Null<TextAlignment> = null;
+  // `value == null` already marks an empty memo; these values need no nullable representation.
+  var alignment:TextAlignment = TextAlignment.Start;
   var lineHeight:Null<Float> = null;
-  var direction:Null<TextDirection> = null;
+  var direction:TextDirection = TextDirection.Auto;
   var tabWidth:Int = 0;
   public var result:String = "";
 

@@ -30,14 +30,17 @@ class AnimationScheduler {
 
 	/** Compatibility removal for callers that still retain the animation object. */
 	public function remove(animation:Animation):Void {
-		if (animation == null)
+		if (animation == null || active.length == 0)
 			return;
-		var pending:Array<AnimationHandle> = [];
+		var pending:Null<Array<AnimationHandle>> = null;
 		for (handle in active)
-			if (handle.matches(animation))
+			if (handle.matches(animation)) {
+				if (pending == null) pending = [];
 				pending.push(handle);
-		for (handle in pending)
-			removeHandle(handle);
+			}
+		if (pending != null)
+			for (handle in pending)
+				removeHandle(handle);
 	}
 
 	@:allow(haxeon.ui.animation.AnimationHandle)
