@@ -11,7 +11,7 @@ attributes generated from declarations, typed in place and working on every back
 
 ## Needed by the design
 
-### 1. Reactive component bodies (stages 4–5)
+### 1. Reactive component bodies (stages 4–5, if the stage 3 experiment chooses run-once)
 
 A `@:component` function that the compiler understands:
 
@@ -23,7 +23,10 @@ A `@:component` function that the compiler understands:
 Order: diagnostics, then binding inference, then control flow. This is what makes run-once components practical to
 write; do it once the stage 3 experiment confirms the component model.
 
-### 2. Per-field change channels (stage 2)
+Features 2–4 serve the shared node store, which ADR 0002 keeps as an option until its stage 2 prototype. Feature 3 and 4
+are useful to the language on their own; feature 2 is worth building only if the store goes ahead.
+
+### 2. Per-field change channels (stage 2, if the store goes ahead)
 
 Extend `@:structural` so a field names the dirty channel it belongs to:
 
@@ -81,9 +84,11 @@ taken repeatedly. Bindings and handlers attached at mount make this less pressin
 
 ## Order
 
-1. Flat struct arrays and `ref` places (3, 4): they unblock ADR stage 2.
-2. Change channels (2).
-3. Escape analysis (6): already planned and independent.
-4. Purity contracts (5): can start early.
-5. Reactive component bodies (1): after the stage 3 experiment.
+Start with what pays off whatever the experiments decide, then let the ADR's go/no-go results unlock the rest.
+
+1. Purity contracts (5): help the current model and every later stage.
+2. Escape analysis (6): already planned and independent.
+3. Flat struct arrays and `ref` places (3, 4): useful on their own, and needed by the stage 2 store prototype.
+4. Change channels (2): only if the store prototype passes.
+5. Reactive component bodies (1): only if the stage 3 experiment chooses run-once.
 6. The `@:structural` extensions (8–10) and closures (7): when a need appears.

@@ -4,8 +4,21 @@ Date: 2026-10-30
 
 ## Status
 
-Proposed. Stage 1 starts after the current retention and render work in `packages/ui` lands. The component model
-(decision 2) is confirmed or revised by the stage 3 experiment. The discussion behind this record, including the comparison
+Proposed. Stage 1 starts after the current retention and render work in `packages/ui` lands.
+
+The decisions do not carry the same confidence, and the migration treats them differently:
+
+- **Committed:** tracked values (1), interaction state as signals (5), retained rendering with layers (7), semantics and
+  input from the same model (8), verification (9). Mature UI frameworks have converged on each, and each removes
+  mechanisms we have today.
+- **Pending an experiment:** run-once components (2) and their compiler support (3). Stage 3 decides.
+- **Options that must prove themselves:** the shared native store (4) and an incremental layout engine (6). After the
+  incremental bridge, the interaction bridge costs 0.036 ms and Clay's full solve about 0.14 ms, so neither is justified by
+  speed alone. Each gets a prototype and a measured go/no-go before any migration.
+
+The rationale for this record is mostly simplicity, and making near-zero allocation a property of the design rather than
+an optimization target: the current model is already fast (hover and typing about 0.4 ms). The expensive parts have to
+earn their place. The discussion behind this record, including the comparison
 with GPUI and the per-frame arena question, is summarized in `packages/ui/docs/ARCHITECTURE_NOTES.md`. The language and
 compiler features it needs are in `docs/UI_LANGUAGE_FEATURES.md`.
 
@@ -50,18 +63,22 @@ values changes, and updates the existing nodes. This record makes that idea the 
 3. **The compiler supports the model.** Haxeon compiles component bodies so a signal read in a property position becomes a
    binding, and reports a signal read outside any tracking scope (the characteristic bug of run-once components) in
    debug builds.
-4. **Nodes are records in a flat store shared with native code.** Stable handles (index and generation); one record per
+4. **Option: nodes are records in a flat store shared with native code.** Stable handles (index and generation); one record per
    node, with dirty bits per channel: layout, paint, text, semantics, transform. Bindings write fields and set bits;
    native layout and rendering read the same memory. There is no encode, parse or decode. Record layout, change masks and
    channels are generated from `@:structural` declarations, so adding a style property updates all of them.
+   The costs: strings, text, callbacks and object references do not fit native records and need side tables, and raw
+   records are harder to inspect than objects. With the incremental bridge, the speed gain is small; the case rests on
+   deleting the transaction code. Adopted only if the stage 2 prototype shows a net simplification.
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
    rules read hover, on the two nodes involved. This replaces `InteractionStateSnapshot` and `hoverRebuilds`.
-6. **Layout is incremental and native.** The engine caches each node's measurement and solution; a dirty node invalidates
-   itself and its ancestors up to a fixed-size boundary, and the solve reuses the rest. Text measurement is cached by
-   content and style. Layout-dependent geometry is a layout constraint, not feedback: scrollbar track and thumb are solved
-   from content and viewport size, so the selection frame's second pass disappears. Solved geometry is written to the store
-   and readable as signals.
+6. **Layout-dependent geometry is solved in one pass; incremental layout is an option.** Scrollbar track and thumb are
+   solved from content and viewport size inside layout, not by feedback, so the selection frame's second pass disappears.
+   Use the cheapest clean way: a scrollbar constraint in the Clay backend, or native scrollbar geometry after the solve.
+   Solved geometry is readable as signals. A layout engine of our own that caches each node's solution, invalidating a
+   dirty node and its ancestors up to a fixed-size boundary, is considered only if measurements later show layout as the
+   main remaining cost; Clay's full solve is about 0.14 ms today.
 7. **Rendering is retained per node, with layers.** Each node keeps its recorded display-list segment; only paint-dirty nodes
    re-record. Scroll offset, transform and opacity are layer properties: scrolling changes a layer offset, with no
    re-recording and no layout. Animations are signals driven by the frame clock and bound to these properties. This replaces
@@ -85,7 +102,7 @@ values changes, and updates the existing nodes. This record makes that idea the 
 | `bindingRevision` | a scope dirtied while hidden runs when shown |
 | `InteractionStateSnapshot`, `hoverRebuilds` | per-node interaction signals and derived style |
 | `willEditRetained`, `RetainedAnimation` | layer properties and animation signals |
-| `LayoutTransaction` encode / native parse / decode | shared store |
+| `LayoutTransaction` encode / native parse / decode | shared store if its prototype passes; otherwise the incremental bridge stays |
 | second layout pass for scrollbars | scrollbar layout constraint |
 | `UiContext.verifyRetention`, fingerprints | fresh-store comparison; untracked-read checks |
 
@@ -97,9 +114,11 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Go: gates pass and no action allocates more.
-2. **Shared node store.** Move node fields into flat records with dirty channels shared with native, keeping `RenderNode`
-   as a handle-based view over the store so callers are unchanged. Delete the transaction encode and decode. Go: bridge
-   phases at zero, no frame-time regression.
+2. **Shared node store prototype.** Move one channel (paint) into flat records shared with native, keeping `RenderNode`
+   as a handle-based view so callers are unchanged. Compare code size, the side tables needed, debuggability and frame cost
+   against the incremental bridge. Go (migrate the remaining channels and delete the transaction code): a net
+   simplification with no frame-time or allocation regression. No-go: keep the incremental bridge, record why here, and
+   continue with stage 3.
 3. **Component model experiment.** Convert one live panel (CNC or telemetry) to run-once bindings with `Show`/`For`, and
    another to small re-running scopes (Compose style) on the same signals. Compare allocation, frame time and how the
    code reads. Decide decision 2 from the result and amend this record. The expected outcome is bindings for leaf widgets
@@ -107,8 +126,9 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 4. **Compiler support.** Binding inference in component bodies, untracked-read diagnostics.
 5. **Widgets, then panels.** Convert leaf widgets to bindings and delete `selfUpdating`/`reconcile`; convert panels and
    delete retained caches, patch frames and binding revisions. Interaction signals and derived style replace hover handling.
-6. **Incremental native layout.** Per-node layout caches over the store; scrollbar constraint; remove layout feedback for
-   it. Clay is replaced, or kept only for its algorithms.
+6. **One layout pass for scrollbars.** Solve scrollbar geometry inside layout by the cheapest clean route and remove its
+   feedback. Go: selection runs one layout pass with identical geometry. A layout engine of our own needs its own record,
+   and only when measurements show layout as the main remaining cost.
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
@@ -117,13 +137,14 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 - Authors learn four things: signal, binding, `Show`/`For`, effect. Most of the mechanisms listed under Context are
   deleted.
 - Steady-state updates write fields; allocation happens on mount and unmount, not per interaction.
-- The layout bridge disappears, and layout-dependent geometry costs one pass.
+- Layout-dependent geometry costs one pass. The layout bridge disappears only if the shared store passes its prototype.
 - Code in a component body runs once: a plain `if` over a signal does not update, and must be `Show`. Compiler checks
   limit this; it remains the main learning cost.
 - Debugging moves from "why did this rebuild" to "why did this binding not run". Signal dependency inspection becomes a
   required tool.
 - External mutable models need revision adapters; deeply nested ones need more work.
-- The work is large: reactive core, store, native incremental layout, retained display lists and compiler support.
+- The committed work (reactive core, retained display lists) is moderate. Compiler support, a shared store and a layout
+  engine are large, which is why they are gated on experiments and measurements.
 
 ## Alternatives considered
 
