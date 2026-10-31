@@ -274,6 +274,16 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
   `Structural.assignChanged` writes the fields of its target, so a holder of immutable struct fields still updates
   them by replacement.
 
+On Wasm32, ordinary struct fields currently use boxed backing storage. Replacing a field copies the new value into its
+existing backing place, including nested value fields, so a receiver already bound to that place sees changes made by a
+callback. A field's first assignment adopts its newly copied value. This does not add a box per replacement; value reads
+still make their usual independent copies. Wasm GC uses flattened fields for the same place semantics.
+
+With Rect and Insets converted, the 120-frame Wasm GC Showcase measured 6,508 objects in full mode, 13,536 in editing,
+6,498 in static and 6,502 in text-heavy mode on the baseline machine. The class baselines were 8,654, 15,482, 8,654 and
+8,656 respectively. The Wasm32 change does not alter the Wasm GC lowering; these counts include the full benchmark
+workload and are not per-type allocation counts.
+
 ## Equality and hashing
 
 Decided 2026-10-31, not yet implemented. Value equality is a capability a type declares, as in Rust (`derive`) and Swift

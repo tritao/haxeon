@@ -22,12 +22,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	final allocator:Int;
 	final bytesDataPointer:Int;
 	final cstringCopy:Int;
+	final valueObjects:Map<String, Bool> = [];
 
 	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int) {
 		this.layout = layout;
 		this.allocator = allocator;
 		this.bytesDataPointer = bytesDataPointer;
 		this.cstringCopy = cstringCopy;
+		for (object in layout.program.objects) if (object.isValue && object.nativeLayout == null) valueObjects.set(object.name, true);
 	}
 
 	public function valueType(type:IrType):WasmValueType
@@ -83,7 +85,29 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				return inlineRecordSet(field, objectLocal, valueLocal);
 			return nativeFieldSet(field, objectLocal, valueLocal);
 		}
+		var valueName = switch field.type { case Obj(name) if (valueObjects.exists(name)): name; default: null; };
+		if (valueName != null)
+			return assignValueField([LocalGet(objectLocal)], field.offset, [LocalGet(valueLocal)], valueName, []);
 		return [LocalGet(objectLocal), LocalGet(valueLocal), store(field.type, field.offset)];
+	}
+
+	/** Keep each embedded value place stable when a whole value is assigned to its field. */
+	function assignValueField(parent:Array<WasmInstruction>, offset:Int, source:Array<WasmInstruction>, name:String,
+			visiting:Array<String>):Array<WasmInstruction> {
+		if (visiting.indexOf(name) >= 0) throw 'Cyclic inline Wasm value "$name"';
+		var destination = parent.concat([I32Load(offset)]), result = destination.concat([I32Eqz]);
+		// A zero source is an uninitialized value. Keep the existing null representation.
+		result = result.concat(source).concat([I32Eqz, I32Or, If(null)]);
+		result = result.concat(parent).concat(source).concat([I32Store(offset), Else]);
+		var next = visiting.concat([name]);
+		for (field in layout.object(name).fields) {
+			var childName = switch field.type { case Obj(child) if (valueObjects.exists(child)): child; default: null; };
+			if (childName != null) result = result.concat(assignValueField(destination, field.offset,
+				source.concat([I32Load(field.offset)]), childName, next));
+			else result = result.concat(destination).concat(source).concat([load(field.type, field.offset), store(field.type, field.offset)]);
+		}
+		result.push(End);
+		return result;
 	}
 
 	function nativeFieldGet(field:WasmFieldLayout, destination:Int, objectLocal:Int):Array<WasmInstruction> {
