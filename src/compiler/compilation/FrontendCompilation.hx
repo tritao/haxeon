@@ -329,7 +329,11 @@ class FrontendCompilation {
 			if (generatedByModule.exists(name)) {
 				var lambdaNames = generatedByModule.get(name);
 				for (lambdaName in lambdaNames.keys())
-					valid.set(lambdaName, true);
+					// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
+					// produced by that typing can survive; a formerly capture-free closure may now have another name.
+					if (!LambdaName.is(lambdaName) || !typedByName.exists(LambdaName.outermost(lambdaName)) ||
+							typedByName.exists(lambdaName))
+						valid.set(lambdaName, true);
 			}
 			// An unchanged caller can retain a call to a generated specialization.
 			// Such bodies are absent from this request's typedNew, but must survive

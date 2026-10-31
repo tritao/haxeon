@@ -1,4 +1,6 @@
 import compiler.Compiler;
+import compiler.ir.IrInterpreter;
+import compiler.ir.IrVerifier;
 
 /**
  * Without a semantic index to rebuild (command-line builds), editing one module must not retype or regenerate the
@@ -38,6 +40,31 @@ class IncrementalSnapshotMain {
 			throw 'An indexed compile should still report the edited function and its caller: ${indexedResult.regenerated}';
 		if (indexedResult.regenerated.indexOf("Main.helper") >= 0)
 			throw 'A function whose regenerated IR is unchanged should not be reported: ${indexedResult.regenerated}';
+
+		// A syntactic lambda name has no capture suffix. When captures change, it must not keep a previous body
+		// alive alongside the newly typed closure, even if that old body now calls a constructor with another ABI.
+		for (withIndex in [false, true]) {
+			var closures = new Compiler();
+			var first = "class Main { public function new() {} public function run():Int { "
+				+ "var f = function() return new Counter(); return f().value; } "
+				+ "public static function main():Int return new Main().run(); } "
+				+ "private class Counter { public final value:Int; public function new() value = 1; }";
+			var captured = "class Main { public function new() {} public function run():Int { "
+				+ "var f = function() return new Counter(this); return f().value; } "
+				+ "public static function main():Int return new Main().run(); } "
+				+ "private class Counter { public final value:Int; public function new(owner:Main) value = 2; }";
+			closures.update("Main.hx", first);
+			var initial = closures.compile("Main", null, withIndex);
+			IrVerifier.verify(initial.ir);
+			closures.update("Main.hx", captured);
+			var changedCapture = closures.compile("Main", null, withIndex);
+			IrVerifier.verify(changedCapture.ir);
+			if (new IrInterpreter(changedCapture.ir).run("Main.main") != 2) throw "A changed capture retained an obsolete closure";
+			closures.update("Main.hx", first);
+			var restoredCapture = closures.compile("Main", null, withIndex);
+			IrVerifier.verify(restoredCapture.ir);
+			if (new IrInterpreter(restoredCapture.ir).run("Main.main") != 1) throw "Removing a capture retained an obsolete closure";
+		}
 		Sys.println("PASS: unindexed incremental builds skip snapshot refreshes of unchanged modules");
 	}
 }
