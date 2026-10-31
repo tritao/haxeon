@@ -68,6 +68,24 @@ class InlinerMain {
 		IrVerifier.verify(nestedConstructors);
 		expect(allocations(programFunction(nestedConstructors, "$hl:scalar-arguments:make")) == 0,
 			"nested value constructors stay scalar when ordinary inlining is disabled");
+		var equality = Frontend.compile("@:structural struct Value { public final x:Float; public function new(x:Float) this.x = x; } "
+			+ "class Exact { public final v:Value; public function new(v:Value) this.v = v; } "
+			+ "class Holder { final exact:Null<Exact>; public var value(get, never):Value; public function new() exact = null; "
+			+ "inline function get_value():Value return exact == null ? new Value(4) : exact.v; } "
+			+ "function same(a:Holder, b:Holder):Bool return haxeon.Equality.equals(a.value, b.value); "
+			+ "function main():Int return same(new Holder(), new Holder()) ? 42 : 0;");
+		compiler.ir.IrValueConstructors.rewrite(equality);
+		compiler.ir.IrValuePhiScalarization.rewrite(equality);
+		IrHlScalarArguments.rewrite(equality);
+		compiler.ir.IrValuePhiScalarization.rewrite(equality);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(equality, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(equality);
+		expect(allocations(programFunction(equality, "same")) == 0,
+			"generated equality accepts scalar getter results without allocating with inlining disabled");
+		expect(new compiler.ir.IrInterpreter(equality).run("main") == 42,
+			"scalar generated equality preserves its result");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

@@ -205,7 +205,7 @@ class IrOptionalScalarFlow {
 	function canPassAliases(name:String, arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>):Bool {
 		if (!hasAlias(arguments, aliases)) return true;
 		if (StringTools.startsWith(name, "$") && !StringTools.startsWith(name, "$generic:")
-				&& !StringTools.startsWith(name, "$lambda:") && !StringTools.startsWith(name, "$value$equality:")) return false;
+				&& !StringTools.startsWith(name, "$lambda:") && !StringTools.startsWith(name, "$value$equality:") && !StringTools.startsWith(name, "$equality:")) return false;
 		var called = functions.get(name);
 		if (called == null || called.arguments.length != arguments.length) return false;
 		for (index in 0...arguments.length) if (aliases.exists(arguments[index].id)) {

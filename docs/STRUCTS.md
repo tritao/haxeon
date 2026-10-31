@@ -283,8 +283,14 @@ The proof covers exact non-generic declarations without inherited initialization
 An exploratory compact native-geometry representation now compiles through those getter refinements. It reduced the
 hierarchy-to-sensors median from 180.5 to 166.7 KiB in the all-five-value prototype, but inspector scroll rose to
 38.6 KiB, above its 33 KiB ceiling, so the representation is not accepted. Its 30-cycle interaction census includes
-13,504 Rect and 6,536 Transform2D boxes; generated structural equality calls still materialize getter results on
-HashLink. The next compiler change must remove those temporary boxes and then remeasure the same workload.
+13,504 Rect and 6,536 Transform2D boxes because generated structural equality calls materialized getter results on
+HashLink. Generated equality helpers now use the existing scalar calling convention when their value arguments qualify;
+this also applies to Wasm GC and optional-flow clones. On the same exploratory build the interaction census fell to 192
+Rect, 146 Insets, 1,036 Color, 807 LayoutAxis and zero Transform2D boxes. Inspector scroll fell from 38.6 to 14.7 KiB.
+The four tab transitions measured 123.5, 166.5, 136.4 and 139.7 KiB, still above their class baselines of 110.9,
+158.2, 124.8 and 128.6 KiB, so the all-five-value representation remains exploratory. With Rect and Insets alone, the same
+120-frame instrumented Wasm GC Showcase counted 6,516, 13,540, 6,520 and 6,496 objects in full, editing, static and
+text-heavy modes respectively; the class baselines were 8,654, 15,482, 8,654 and 8,656.
 With only Rect and Insets converted, the same 120-frame Wasm GC Showcase measured 6,496, 13,528, 6,496 and 6,496
 objects in full, editing, static and text-heavy modes; the corresponding class baselines were 8,654, 15,482, 8,654 and
 8,656.
