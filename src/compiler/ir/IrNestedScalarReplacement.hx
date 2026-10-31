@@ -73,7 +73,7 @@ class IrNestedScalarReplacement {
 	}
 
 	public static function tryReplace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String, home:IrBlock,
-			position:Int, hasHandlers:Bool, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
+			position:Int, hasHandlers:Bool, substitutions:Map<Int, IrValue>, nextValue:Int, forcePhis = false):Int {
 		if (!hasFiniteKnownLayout(typeName, objects, [])) return nextValue;
 		var aliases:Map<Int, NestedAlias> = [root.id => {path: [], typeName: typeName}], changed = true;
 		while (changed) {
@@ -97,7 +97,7 @@ class IrNestedScalarReplacement {
 		var layout = new IrInlineValueLayout(objects), slots = layout.slots(Obj(typeName)), fields:Array<IrObjectField> = [];
 		for (slot in slots) {
 			if (slot.isPresence) return nextValue;
-			fields.push({name: slotName(slot.path), type: slot.type, nativeLayout: null});
+			fields.push({name: slotName(slot.path), type: slot.type, nativeLayout: slot.nativeLayout});
 		}
 		var descriptor:IrObject = {name: typeName, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
 		var copies:Array<IrBlock> = [], next = nextValue;
@@ -116,9 +116,7 @@ class IrNestedScalarReplacement {
 						if (nested == null) {
 							var slot = findSlot(slots, path);
 							if (slot == null) return nextValue;
-							var normalized = normalizeStore(copy, value, slot, located, next);
-							next = normalized.next;
-							copy.instructions.push(new Located(FieldSet(root, slotName(path), normalized.value), located.provenance));
+							copy.instructions.push(new Located(FieldSet(root, slotName(path), value), located.provenance));
 						}
 						else {
 							// Snapshot every leaf before writing any destination leaf, including overlapping source and destination.
@@ -141,9 +139,7 @@ class IrNestedScalarReplacement {
 									}
 									leaf = current;
 								}
-								var normalized = normalizeStore(copy, leaf, slot, located, next);
-								next = normalized.next;
-								values.push({name: slotName(slot.path), value: normalized.value});
+								values.push({name: slotName(slot.path), value: leaf});
 							}
 							for (entry in values) copy.instructions.push(new Located(FieldSet(root, entry.name, entry.value), located.provenance));
 						}
@@ -162,7 +158,7 @@ class IrNestedScalarReplacement {
 			localSubstitutions:Map<Int, IrValue> = [for (id => value in substitutions) id => value],
 			result = IrScalarReplacement.replace(copies, copiedGraph, IrScalarReplacement.dominanceFrontiers(copiedGraph),
 				IrScalarReplacement.dominatorChildren(copiedGraph), {object: root, typeName: typeName, block: copiedHome, position: copiedPosition},
-				descriptor, localSubstitutions, next);
+				descriptor, localSubstitutions, next, forcePhis);
 		// The scalar pass can decline an unprofitable phi. Do not publish the temporary flattened form then.
 		if (IrScalarReplacement.allocationPosition(copiedHome, root) >= 0) return nextValue;
 		for (index in 0...blocks.length) {
@@ -240,30 +236,6 @@ class IrNestedScalarReplacement {
 		for (slot in slots)
 			if (!slot.isPresence && slot.path.length == path.length && startsWith(slot.path, path)) return slot;
 		return null;
-	}
-
-	/** Match the truncation and sign extension a native-width field store and subsequent load perform. */
-	static function normalizeStore(block:IrBlock, value:IrValue, slot:IrInlineValueSlot, origin:Located<IrInstruction>,
-			next:Int):{value:IrValue, next:Int} {
-		var native = slot.nativeLayout, width = native == null ? 0 : native.size,
-			bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
-		if (native != null && bits > 0 && width > 0 && width * 8 < bits) {
-			var shift = new IrValue(next++, "$nested-scalar-shift", I32),
-				shifted = new IrValue(next++, "$nested-scalar-truncate", value.type),
-				result = new IrValue(next++, "$nested-scalar-extend", value.type);
-			block.instructions.push(new Located(ConstInt(shift, bits - width * 8), origin.provenance));
-			block.instructions.push(new Located(ShiftLeft(shifted, value, shift), origin.provenance));
-			block.instructions.push(new Located(native.signed ? ShiftRight(result, shifted, shift) : UnsignedShiftRight(result, shifted, shift),
-				origin.provenance));
-			return {value: result, next: next};
-		}
-		if (value.type == F32) {
-			var wide = new IrValue(next++, "$nested-scalar-f64", F64), result = new IrValue(next++, "$nested-scalar-f32", F32);
-			block.instructions.push(new Located(FloatToFloat(wide, value), origin.provenance));
-			block.instructions.push(new Located(FloatToFloat(result, wide), origin.provenance));
-			return {value: result, next: next};
-		}
-		return {value: value, next: next};
 	}
 
 	static function slotName(path:Array<String>):String

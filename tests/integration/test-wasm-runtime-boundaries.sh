@@ -24,7 +24,7 @@ function main():Int {
   return value.status == 0 && value.data.length == 4 && value.data.getInt32(0) == 42 ? 42 : 1;
 }
 HX
-for program in wasm-gc-closures wasm-arena out-buffer; do
+for program in wasm-gc-closures wasm-arena native-memory-flat-struct out-buffer; do
   for target in wasm32 wasm-gc; do
     source="tests/programs/$program.hx"
     [[ "$program" != out-buffer ]] || source="$temporary_dir/out-buffer.hx"
@@ -34,7 +34,7 @@ done
 node - "$temporary_dir" <<'JS'
 const fs = require('fs');
 (async () => {
-  for (const program of ['wasm-gc-closures', 'wasm-arena', 'out-buffer']) {
+  for (const program of ['wasm-gc-closures', 'wasm-arena', 'native-memory-flat-struct', 'out-buffer']) {
     for (const target of ['wasm32', 'wasm-gc']) {
       let instance;
       const allocations = new Set();
@@ -61,4 +61,4 @@ const fs = require('fs');
   }
 })().catch(error => {console.error(error); process.exit(1);});
 JS
-echo 'Wasm runtime boundaries: wasm32 and wasm-gc passed bound methods, arena ownership, nullable output buffers and nullable record pointers'
+echo 'Wasm runtime boundaries: wasm32 and wasm-gc passed bound methods, flat native records, arena ownership and nullable native buffers'

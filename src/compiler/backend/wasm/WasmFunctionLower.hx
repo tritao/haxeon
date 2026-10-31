@@ -200,6 +200,11 @@ class WasmFunctionLower {
 			}
 			body = rooted;
 		}
+		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
+			var gc:WasmGcRepresentation = cast context.representation.values,
+				wrapped = gc.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag);
+			if (wrapped != null) body = wrapped;
+		}
 		body = WasmOptimizer.optimize(body);
 		return new WasmFunction(fn.name, type, locals, body);
 	}
@@ -566,6 +571,10 @@ class WasmFunctionLower {
 
 	function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>, layout:WasmLayout,
 			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Void {
+		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
+			var gc:WasmGcRepresentation = cast context.representation.values, scalar = gc.scalarLocal(instruction, values);
+			if (scalar != null) { emit(body, scalar); return; }
+		}
 		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
@@ -703,6 +712,15 @@ class WasmFunctionLower {
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
 					throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
+				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
+					cast(context.representation.values, WasmGcRepresentation) : null;
+				if (scalarGc != null && scalarGc.hasScalarClosure(closure.type)) {
+					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
+					emit(body, scalarGc.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
+						requiredLocal(values, closure.id), output, output.type == Void ? -1 : requiredLocal(values, output.id),
+						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					return;
+				}
 				var calls = context.representation.calls,
 					instanceType = typeInfo.instanceType,
 					destination = output.type == Void ? -1 : requiredLocal(values, output.id),
@@ -780,6 +798,14 @@ class WasmFunctionLower {
 						LocalSet(requiredLocal(values, output.id))
 					]);
 			case MethodCall(output, object, methodName, arguments):
+				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
+					cast(context.representation.values, WasmGcRepresentation) : null;
+				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
+					emit(body, scalarGc.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output,
+						output.type == Void ? -1 : requiredLocal(values, output.id), arguments,
+						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					return;
+				}
 				switch object.type {
 					case Obj(objectName):
 						var targets = classVirtualTargets(context.program, objectName, methodName, functions),
@@ -1242,6 +1268,27 @@ class WasmFunctionLower {
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
 			case Call(output, name, arguments):
+				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
+					cast(context.representation.values, WasmGcRepresentation) : null;
+				if (gcRepresentation != null && name == compiler.backend.wasm.gc.WasmGcScalarAbi.RETURN_MARKER) {
+					for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
+					return;
+				}
+				if (gcRepresentation != null && name == compiler.backend.wasm.gc.WasmGcScalarAbi.RETHROW_MARKER) {
+					body.push(LocalGet(requiredLocal(values, arguments[1].id)));
+					body.push(If(null));
+					if (context.exceptionTag == null) body.push(Unreachable);
+					else { body.push(LocalGet(requiredLocal(values, arguments[0].id))); body.push(Throw(context.exceptionTag)); }
+					body.push(End);
+					return;
+				}
+				if (gcRepresentation != null && gcRepresentation.hasScalarCall(name)) {
+					var index = functions.get(name);
+					if (index == null) throw 'Missing scalar Wasm GC function "$name"';
+					emit(body, gcRepresentation.scalarCall(name, output, arguments, output.type == Void ? -1 : requiredLocal(values, output.id),
+						[for (argument in arguments) requiredLocal(values, argument.id)], index));
+					return;
+				}
 				var host = WasmModuleSupport.hostCNative(context.program, name);
 				if (host != null)
 					lowerInstruction(body, CNativeCall(output, host.name, arguments), values, functions, layout, allocator, globals, strings, methods,

@@ -23,7 +23,33 @@ typedef ScalarReplacementResult = {
  */
 @:allow(compiler.ir.IrNestedScalarReplacement)
 class IrScalarReplacement {
-	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int):ScalarReplacementResult {
+	/** Run independently of inlining, without mutating the source function held by incremental compilation. */
+	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false):IrFunction {
+		var blocks:Array<IrBlock> = [], next = 0;
+		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
+		for (block in fn.blocks) {
+			var copy = new IrBlock(block.id);
+			for (located in block.instructions) {
+				copy.instructions.push(located);
+				var output = IrOperands.output(located.value);
+				if (output != null && output.id >= next) next = output.id + 1;
+			}
+			copy.terminator = block.terminator;
+			blocks.push(copy);
+		}
+		var result = run(blocks, objects, next, forcePhis);
+		if (!result.substitutions.keys().hasNext()) {
+			// Even a never-read value can have lost its allocation and writes.
+			var changed = false;
+			for (index in 0...blocks.length)
+				if (blocks[index].instructions.length != fn.blocks[index].instructions.length) changed = true;
+			if (!changed) return fn;
+		}
+		var bindings = IrInliner.substitute(blocks, result.substitutions, fn.debugBindings);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+	}
+
+	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, forcePhis = false):ScalarReplacementResult {
 		var substitutions:Map<Int, IrValue> = [];
 		var candidates = findCandidates(blocks, objects);
 		if (candidates.length == 0)
@@ -53,14 +79,24 @@ class IrScalarReplacement {
 			var descriptor = objects.get(candidate.typeName);
 			if (descriptor != null && hasValueField(descriptor, objects)) {
 				nextValue = IrNestedScalarReplacement.tryReplace(blocks, objects, candidate.object, candidate.typeName, candidate.block,
-					candidate.position, hasHandlers, substitutions, nextValue);
+					candidate.position, hasHandlers, substitutions, nextValue, forcePhis);
 				continue;
 			}
+			if (descriptor == null || !knownFields(blocks, candidate.object, descriptor)) continue;
 			if (!usesAreFieldAccesses(blocks, candidate.object, candidate.block, candidate.position, hasHandlers, graph))
 				continue;
-			nextValue = replace(blocks, graph, frontier, children, candidate, descriptor, substitutions, nextValue);
+			nextValue = replace(blocks, graph, frontier, children, candidate, descriptor, substitutions, nextValue, forcePhis);
 		}
 		return {substitutions: substitutions, nextValue: nextValue};
+	}
+
+	static function knownFields(blocks:Array<IrBlock>, object:IrValue, descriptor:IrObject):Bool {
+		var names:Map<String, Bool> = [for (field in descriptor.fields) field.name => true];
+		for (block in blocks) for (located in block.instructions) switch located.value {
+			case FieldGet(_, target, name), FieldSet(target, name, _) if (target.id == object.id && !names.exists(name)): return false;
+			default:
+		}
+		return true;
 	}
 
 	/**
@@ -354,11 +390,13 @@ class IrScalarReplacement {
 		typeName:String,
 		block:IrBlock,
 		position:Int
-	}, descriptor:IrObject, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
+	}, descriptor:IrObject, substitutions:Map<Int, IrValue>, nextValue:Int, forcePhis = false):Int {
 		var object = candidate.object, home = candidate.block;
-		var fieldTypes:Map<String, IrType> = [];
-		for (field in descriptor.fields)
+		var fieldTypes:Map<String, IrType> = [], fields:Map<String, IrObjectField> = [];
+		for (field in descriptor.fields) {
 			fieldTypes.set(field.name, field.type);
+			fields.set(field.name, field);
+		}
 		// Which fields are written where, and which are read at all.
 		var writers:Map<String, Array<Int>> = [], reads:Map<String, Bool> = [];
 		for (block in blocks)
@@ -410,7 +448,7 @@ class IrScalarReplacement {
 		}
 		// Phis cost register moves on every edge, which HashLink's JIT does badly at block boundaries; they only pay off
 		// when the allocation they remove runs repeatedly.
-		if (phis.keys().hasNext() && !inLoop(graph, home.id))
+		if (!forcePhis && phis.keys().hasNext() && !inLoop(graph, home.id))
 			return nextValue;
 		var zeros:Map<String, IrValue> = [],
 			zeroInstructions:Array<Located<IrInstruction>> = [];
@@ -425,7 +463,7 @@ class IrScalarReplacement {
 			zeroInstructions.push(new Located(zeroValue(value, type), allocation.provenance));
 			return value;
 		};
-		var removed:Map<Int, Map<Int, Bool>> = [];
+		var removed:Map<Int, Map<Int, Bool>> = [], inserted:Map<Int, Map<Int, Array<Located<IrInstruction>>>> = [];
 		var markRemoved = function(blockId:Int, position:Int):Void {
 			if (!removed.exists(blockId))
 				removed.set(blockId, []);
@@ -445,9 +483,20 @@ class IrScalarReplacement {
 			if (blockId == home.id)
 				markRemoved(blockId, candidate.position);
 			for (position in start + 1...block.instructions.length) {
-				switch block.instructions[position].value {
+				var located = block.instructions[position];
+				switch located.value {
 					case FieldSet(target, name, value) if (target.id == object.id):
-						current.set(name, resolve(value, substitutions));
+						var stored = resolve(value, substitutions), field = fields.get(name);
+						if (field != null && reads.exists(name)) {
+							var scratch = new IrBlock(block.id), normalized = normalizeStore(scratch, stored, field, located, nextValue);
+							nextValue = normalized.next;
+							stored = normalized.value;
+							if (scratch.instructions.length > 0) {
+								if (!inserted.exists(blockId)) inserted.set(blockId, []);
+								inserted.get(blockId).set(position, scratch.instructions);
+							}
+						}
+						current.set(name, stored);
 						markRemoved(blockId, position);
 					case FieldGet(out, target, name) if (target.id == object.id):
 						var known = current.get(name);
@@ -480,6 +529,8 @@ class IrScalarReplacement {
 				for (name => output in phis.get(block.id))
 					rewritten.push(new Located(Phi(output, phiInputs.get(block.id).get(name)), allocation.provenance));
 			for (position in 0...block.instructions.length) {
+				if (inserted.exists(block.id) && inserted.get(block.id).exists(position))
+					for (instruction in inserted.get(block.id).get(position)) rewritten.push(instruction);
 				if (drop != null && drop.exists(position)) {
 					if (block == home && position == candidate.position)
 						for (zero in zeroInstructions)
@@ -493,6 +544,29 @@ class IrScalarReplacement {
 				block.instructions.push(kept);
 		}
 		return nextValue;
+	}
+
+	/** A scalar replacement must preserve the narrowing of a stored native-width field. */
+	static function normalizeStore(block:IrBlock, value:IrValue, field:IrObjectField, origin:Located<IrInstruction>,
+			next:Int):{value:IrValue, next:Int} {
+		var native = field.nativeLayout, width = native == null ? 0 : native.size,
+			bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
+		if (native != null && bits > 0 && width > 0 && width * 8 < bits) {
+			var shift = new IrValue(next++, "$scalar-shift", I32), shifted = new IrValue(next++, "$scalar-truncate", value.type),
+				result = new IrValue(next++, "$scalar-extend", value.type);
+			block.instructions.push(new Located(ConstInt(shift, bits - width * 8), origin.provenance));
+			block.instructions.push(new Located(ShiftLeft(shifted, value, shift), origin.provenance));
+			block.instructions.push(new Located(native.signed ? ShiftRight(result, shifted, shift) : UnsignedShiftRight(result, shifted, shift),
+				origin.provenance));
+			return {value: result, next: next};
+		}
+		if (value.type == F32) {
+			var wide = new IrValue(next++, "$scalar-f64", F64), result = new IrValue(next++, "$scalar-f32", F32);
+			block.instructions.push(new Located(FloatToFloat(wide, value), origin.provenance));
+			block.instructions.push(new Located(FloatToFloat(result, wide), origin.provenance));
+			return {value: result, next: next};
+		}
+		return {value: value, next: next};
 	}
 
 	/** Whether `id` can reach itself again, that is, whether it runs more than once per call. */

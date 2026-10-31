@@ -11,6 +11,8 @@ import compiler.ir.Ir.IrNative;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
 import compiler.ir.IrVerifier;
+import compiler.ir.IrObjectTable;
+import compiler.ir.IrScalarReplacement;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
@@ -50,6 +52,12 @@ class WasmGcModuleBuilder {
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		IrVerifier.verify(program);
+		var originalProgram = program;
+		var scalarAbi = new WasmGcScalarAbi(program, WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports));
+		program = scalarAbi.rewrite();
+		var fieldLowering = new WasmGcFlattenFields(program, scalarAbi.signatures), inlineValueFields = true;
+		program = fieldLowering.rewrite();
+		scalarAbi.validate(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
@@ -57,6 +65,15 @@ class WasmGcModuleBuilder {
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		if (inlineValueFields) {
+			var added = true;
+			while (added) {
+				added = scalarAbi.retainOriginals(reachable, roots);
+				if (fieldLowering.retainOriginals(reachable, roots)) added = true;
+				if (scalarAbi.retainVirtualTargets(program, reachable, roots)) added = true;
+				if (added) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+			}
+		}
 		validateGcSubset(program, reachable, preferredEntry);
 		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable),
@@ -91,7 +108,7 @@ class WasmGcModuleBuilder {
 							default:
 						}
 
-		var plan = new WasmGcTypePlan(program),
+		var plan = new WasmGcTypePlan(program, inlineValueFields, scalarAbi.signatures, scalarAbi.scalarClosures, scalarAbi.scalarVirtuals),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
 			functions:Map<String, Int> = [],
@@ -155,7 +172,10 @@ class WasmGcModuleBuilder {
 					functionInterop = gcInterop.forFunctionContext(functionContext);
 				return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation, functionInterop, null);
 			});
-		var exceptionTagType:Null<Int> = WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
+		var receiverExceptions = false;
+		for (name => signature in scalarAbi.signatures)
+			if (signature.throwsReceiver && reachable.exists(name)) receiverExceptions = true;
+		var exceptionTagType:Null<Int> = (WasmModuleSupport.hasExceptions(program) || receiverExceptions) ? module.typeIndex({
 			parameters: [representation.values.valueType(Dyn)],
 			results: []
 		}) : null,
@@ -171,7 +191,9 @@ class WasmGcModuleBuilder {
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
-			var type = plan.wasmFunctionType([for (argument in fn.arguments) argument.type], fn.result);
+			var scalarSignature = scalarAbi.signatures.get(fn.name),
+				type = scalarSignature == null ? plan.wasmFunctionType([for (argument in fn.arguments) argument.type], fn.result) :
+					plan.scalarSignatureType(scalarSignature);
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
 		if (usedNatives.exists("__std_string"))
@@ -184,20 +206,26 @@ class WasmGcModuleBuilder {
 			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots);
 		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
+		var scalarLayout = new WasmGcValueLayout(program), scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => {
+			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
+			interfaces: object.interfaces, fields: inlineValueFields ? scalarLayout.fields(object.fields) : object.fields, methods: object.methods
+		}]);
 		for (fn in program.functions) {
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
+			var signature = scalarAbi.signatures.get(fn.name), body = signature != null && signature.throwsReceiver ? fn :
+				IrScalarReplacement.rewrite(fn, scalarObjects, true);
 			try {
 				module.setFunction(functionIndex,
-					WasmFunctionLower.lower(module, fn, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
+					WasmFunctionLower.lower(module, body, gcContext.functions, module.functionType(functionIndex), null, -1, 0, 0, 0, gcContext.globals, [],
 						gcContext.methods, closureTypes, tableSlots, exceptionTag, [], program, representation, staticData.addresses));
 			} catch (error:Dynamic) {
 				throw 'Wasm GC lowering failed in ${fn.name}: ${Std.string(error)}';
 			}
 		}
 		module.exportTable = module.tableMin != null;
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
+		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
 		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
@@ -315,7 +343,8 @@ class WasmGcModuleBuilder {
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _), EndTry(_), Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
-						case Call(_, name, _) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
+						case Call(_, name, _) if (name == WasmGcScalarAbi.RETURN_MARKER || name == WasmGcScalarAbi.RETHROW_MARKER
+							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
@@ -806,19 +835,15 @@ class WasmGcModuleBuilder {
 		}, resultType:IrType = switch closureType {
 			case Function(_, result): result;
 			default: Void;
-		}, key = Std.string(closureType), staticType = module.typeIndex(plan.wasmFunctionType(arguments, resultType)), existing = closureTypes.get(key);
+		}, key = Std.string(closureType), closureSignature = plan.closureFunctionType(closureType),
+			staticType = module.typeIndex(closureSignature), existing = closureTypes.get(key);
 		if (existing == null) {
 			existing = {staticType: staticType, instanceType: null};
 			closureTypes.set(key, existing);
 		}
 		if (includeInstance) {
-			var instanceType = module.typeIndex({
-				parameters: [Ref({nullable: true, heap: Any})].concat([for (argument in arguments) plan.valueType(argument)]),
-				results: switch resultType {
-					case Void: [];
-					default: [plan.valueType(resultType)];
-				}
-			});
+			var instanceType = module.typeIndex({parameters: [Ref({nullable: true, heap: Any})].concat(closureSignature.parameters),
+				results: closureSignature.results});
 			if (existing.instanceType == null)
 				existing.instanceType = instanceType;
 			else if (existing.instanceType != instanceType)
@@ -852,8 +877,9 @@ class WasmGcModuleBuilder {
 				throw 'Wasm GC instance closure target "$targetName" is not reachable';
 			if (functions.exists(thunkName))
 				throw 'Wasm GC closure thunk name collides with function "$thunkName"';
-			var parameters = [Ref({nullable: true, heap: Any})].concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]),
-				results = switch target.result {
+			var scalar = plan.scalarSignatures.get(targetName),
+				parameters = [Ref({nullable: true, heap: Any})].concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]),
+				results = scalar != null ? plan.scalarResultTypes(scalar) : switch target.result {
 					case Void: [];
 					default: [plan.valueType(target.result)];
 				},

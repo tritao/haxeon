@@ -409,3 +409,7 @@ nullable-struct-copy	42
 nullable-struct-storage	42
 struct-field-equality	42
 nested-value-scalar-replace	42
+struct-flat-storage	42
+struct-closure-abi	42
+struct-closure-dynamic	42
+struct-virtual-abi	42

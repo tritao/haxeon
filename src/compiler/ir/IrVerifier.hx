@@ -688,7 +688,7 @@ class IrVerifier {
 			&& name.indexOf("_ref_values") >= 0)
 			&& abiCompatible(actual, expected);
 
-	static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
+	public static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool {
 		if (sameType(actual, expected))
 			return true;
 		if (abiCompatible(actual, expected))

@@ -43,6 +43,60 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		var valueShapeProgram = Frontend.compile("struct Leaf { public var x:Int; public var y:Int; } "
+			+ "struct Nested { public var leaf:Leaf; public var tag:Int; } "
+			+ "struct Standalone { public var value:Int; } "
+			+ "class Holder { public var value:Nested; public var other:Standalone; } function main():Int return 42;");
+		var valueShape = new compiler.backend.wasm.gc.WasmGcValueLayout(valueShapeProgram),
+			leaves = valueShape.leaves(Obj("Nested"));
+		if (leaves.length != 3 || leaves[0].path.join(".") != "leaf.x" || leaves[1].path.join(".") != "leaf.y"
+			|| leaves[2].path.join(".") != "tag" || valueShape.isValue(Nullable(Obj("Nested"))))
+			throw "Wasm GC value layout must flatten nested fields in order and keep optionals distinct";
+		var valuePlan = new compiler.backend.wasm.gc.WasmGcTypePlan(valueShapeProgram),
+			signature = valuePlan.scalarFunctionType([I32, Obj("Nested")], Obj("Leaf"));
+		if (signature.parameters.length != 4 || signature.results.length != 2)
+			throw "Wasm GC value signatures must expand nested parameters and return every leaf";
+		if (valuePlan.usesBytePayload("Standalone") || !valuePlan.usesBytePayload("Nested") || !valuePlan.usesBytePayload("Leaf"))
+			throw "Standalone flat values use GC fields; nested byte views retain their common payload";
+		var copyProgram = Frontend.compile("struct P { public var x:Int; public var y:Int; } "
+			+ "class H { public var p:P; } function work(h:H):Int { var q = h.p; q.x += 1; return q.x; } "
+			+ "function read(h:H):Int return h.p.x; "
+			+ "function main():Int return 42;"),
+			copyAbi = new compiler.backend.wasm.gc.WasmGcScalarAbi(copyProgram),
+			flatCopies = new compiler.backend.wasm.gc.WasmGcFlattenFields(copyAbi.rewrite()).rewrite();
+		if (flatCopies == null) throw "A field-only value copy should have a flat Wasm GC layout";
+		var copyLayout = new compiler.backend.wasm.gc.WasmGcValueLayout(flatCopies),
+			flatPlan = new WasmGcTypePlan(flatCopies, true),
+			copyObjects = compiler.ir.IrObjectTable.of([for (object in flatCopies.objects) object.name => {
+				name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
+				interfaces: object.interfaces, fields: copyLayout.fields(object.fields), methods: object.methods
+			}]);
+		if (flatPlan.usesBytePayload("P") || flatPlan.physicalFields("H").length != 2)
+			throw "A holder must contain the scalar fields of its struct directly";
+		var foundCopyWork = false;
+		for (fn in flatCopies.functions) if (fn.name == "work") {
+			foundCopyWork = true;
+			var lowered = compiler.ir.IrScalarReplacement.rewrite(fn, copyObjects, true);
+			for (block in lowered.blocks) for (located in block.instructions) switch located.value {
+				case NewObject(_, _): throw "Reading and copying an inline value must not allocate a temporary";
+				default:
+			}
+		}
+		if (!foundCopyWork) throw "The inline value-copy fixture has no work function";
+		var fieldReads = 0;
+		for (fn in flatCopies.functions) if (fn.name == "read") for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case FieldGet(_, _, _): fieldReads++;
+			default:
+		}
+		if (fieldReads != 1) throw "A nested scalar field read should lower to one GC field access";
+		var scalarPatchProgram = Frontend.compile("struct V { public var x:Int; } "
+			+ "function keep(v:V):V return v; function main():Int return keep(new V()).x;"),
+			scalarPatch = new WasmBackend().compilePatch(scalarPatchProgram, scalarPatchProgram, ["keep"],
+				{target: WasmGc, debugNames: true}),
+			scalarPatchEntries = WasmPatch.readManifest(scalarPatch.manifest);
+		if (scalarPatchEntries.length != 1 || scalarPatchEntries[0].name != "keep"
+			|| scalarPatchEntries[0].signature.indexOf("Obj(V)") < 0)
+			throw "Wasm GC patch manifests must retain source-level value signatures";
 		if (WasmTarget.forBackend(Wasm32).referenceModel != Linear32)
 			throw "Wasm32 must use the linear32 reference model";
 		var hl = new HlBackend().compile(Frontend.compile("function main():Int return 42;"), {target: HashLink, debugNames: true});

@@ -3,7 +3,9 @@ package compiler.backend.wasm.gc;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrObjectField;
+import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModuleSupport;
@@ -123,7 +125,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				declaration = object;
 		if (declaration != null) {
 			var nativeLayout = declaration.nativeLayout;
-			if (nativeLayout != null)
+			if (nativeLayout != null && plan.usesBytePayload(typeName))
 				body = body.concat([
 					LocalGet(destination),
 					I32Const(nativeLayout.size),
@@ -138,25 +140,213 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+		if (StringTools.startsWith(fieldName, WasmGcScalarAbi.RESULT_FIELD_PREFIX)) {
+			var index = Std.parseInt(fieldName.substr(WasmGcScalarAbi.RESULT_FIELD_PREFIX.length)), results = functionState().scalarResults.get(object.id);
+			if (index == null || results == null || index < 0 || index >= results.length)
+				throw 'Missing scalar Wasm GC call result $fieldName';
+			return [LocalGet(results[index]), LocalSet(destination)];
+		}
 		var objectName = requireObjectName(object.type),
-			typeIndex = plan.objectType(objectName),
-			field:IrObjectField = plan.objectField(objectName, fieldName);
-		if (field.nativeLayout != null)
+			typeIndex = plan.objectType(objectName);
+		if (fieldName == WasmGcFlattenFields.CHECK_FIELD)
+			return [LocalGet(objectLocal), StructGet(typeIndex, 0), Drop];
+		var field:IrObjectField = plan.objectField(objectName, fieldName);
+		if (plan.usesBytePayload(objectName) && field.nativeLayout != null)
 			return field.nativeLayout.inlineRecord ? inlineRecordGet(field, destination, objectName,
 				objectLocal) : nativeFieldGet(field, destination, objectName, objectLocal);
 		var fieldIndex = plan.objectFieldIndex(objectName, fieldName);
 		return [LocalGet(objectLocal), StructGet(typeIndex, fieldIndex), LocalSet(destination)];
 	}
 
+	public function hasScalarCall(name:String):Bool
+		return plan.scalarSignatures.exists(name);
+
+	public function hasScalarClosure(type:IrType):Bool
+		return plan.scalarClosures.exists(Std.string(type));
+
+	public function hasScalarVirtual(receiver:IrType, method:String):Bool
+		return plan.scalarVirtuals.exists(WasmGcScalarAbi.virtualKey(receiver, method));
+
+	/** Turn an uncaught method exception into receiver state plus the original exception. */
+	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>, tag:Null<Int>):Null<Array<WasmInstruction>> {
+		var signature = plan.scalarSignatures.get(fn.name);
+		if (signature == null || !signature.throwsReceiver) return null;
+		if (tag == null) throw 'Scalar method "${fn.name}" has no exception tag';
+		var receiver:Null<IrValue> = null;
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case NewObject(out, _) if (out.id == signature.receiverId): receiver = out;
+			default:
+		}
+		if (receiver == null) throw 'Scalar method "${fn.name}" has no receiver state';
+		var candidate = functionState().scalarLocals.get(receiver), fields = plan.physicalFields(requireObjectName(receiver.type)),
+			exception = allocateLocal(valueType(Dyn)), result:Array<WasmInstruction> = [Try(null)];
+		for (instruction in body) result.push(instruction);
+		result.push(Catch(tag));
+		result.push(LocalSet(exception));
+		for (field in fields) {
+			if (candidate == null) {
+				result.push(LocalGet(scalarValueLocal(locals, receiver.id)));
+				result.push(StructGet(plan.objectType(requireObjectName(receiver.type)), plan.objectFieldIndex(requireObjectName(receiver.type), field.name)));
+			} else result.push(LocalGet(scalarFieldLocal(candidate, field.name)));
+		}
+		if (signature.result != Void) {
+			if (plan.values.isValue(signature.result)) for (slot in plan.values.leaves(signature.result))
+				for (instruction in zeroValue(slot.type)) result.push(instruction);
+			else for (instruction in zeroValue(signature.result)) result.push(instruction);
+		}
+		result.push(LocalGet(exception));
+		result.push(I32Const(1));
+		result.push(Return);
+		result.push(End);
+		result.push(Unreachable);
+		return result;
+	}
+
+	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+			functionIndex:Int):Array<WasmInstruction> {
+		var signature = plan.scalarSignatures.get(name);
+		if (signature == null) throw 'Unknown scalar Wasm GC call "$name"';
+		var body:Array<WasmInstruction> = [for (local in argumentLocals) LocalGet(local)];
+		body.push(Call(functionIndex));
+		if (signature.mutatesReceiver || plan.values.isValue(signature.result)) {
+			var locals:Array<Int> = [for (type in plan.scalarResultTypes(signature)) allocateLocal(type)];
+			var index = locals.length - 1;
+			while (index >= 0) { body.push(LocalSet(locals[index])); index--; }
+			functionState().scalarResults.set(output.id, locals);
+		} else if (output.type != Void) body.push(LocalSet(outputLocal));
+		return body;
+	}
+
+	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue, outputLocal:Int,
+			argumentLocals:Array<Int>):Array<WasmInstruction> {
+		var resultType = switch type { case Function(_, result): result; default: throw "Invalid scalar closure type"; },
+			resultLocals:Array<Int> = [];
+		if (plan.values.isValue(resultType)) {
+			for (part in plan.scalarValueTypes(resultType)) resultLocals.push(allocateLocal(part));
+			functionState().scalarResults.set(output.id, resultLocals);
+		} else if (resultType != Void) resultLocals.push(outputLocal);
+		var body:Array<WasmInstruction> = [LocalGet(closureLocal), StructGet(plan.closureTypeIndex, 0), I32Const(1), I32And, If(null)];
+		for (local in argumentLocals) body.push(LocalGet(local));
+		body = body.concat([LocalGet(closureLocal), StructGet(plan.closureTypeIndex, 0), I32Const(1), I32ShrU, CallIndirect(staticType)]);
+		var index = resultLocals.length - 1;
+		while (index >= 0) { body.push(LocalSet(resultLocals[index])); index--; }
+		body = body.concat([Else, LocalGet(closureLocal), StructGet(plan.closureTypeIndex, 1)]);
+		for (local in argumentLocals) body.push(LocalGet(local));
+		body = body.concat([LocalGet(closureLocal), StructGet(plan.closureTypeIndex, 0), I32Const(1), I32ShrU, CallIndirect(instanceType)]);
+		index = resultLocals.length - 1;
+		while (index >= 0) { body.push(LocalSet(resultLocals[index])); index--; }
+		body.push(End);
+		return body;
+	}
+
+	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue, outputLocal:Int,
+			arguments:Array<IrValue>, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		var virtual = plan.scalarVirtuals.get(WasmGcScalarAbi.virtualKey(receiver.type, method));
+		if (virtual == null) throw 'Missing scalar virtual method "$method"';
+		var resultLocals:Array<Int> = [];
+		if (plan.values.isValue(virtual.signature.result)) {
+			for (part in plan.scalarValueTypes(virtual.signature.result)) resultLocals.push(allocateLocal(part));
+			functionState().scalarResults.set(output.id, resultLocals);
+		} else if (virtual.signature.result != Void) resultLocals.push(outputLocal);
+		var body:Array<WasmInstruction> = [];
+		for (index in 0...virtual.targets.length) {
+			var target = virtual.targets[index], type = plan.objectType(target.typeName), functionIndex = gc.functions.get(target.clone);
+			if (functionIndex == null) throw 'Missing scalar virtual target "${target.clone}"';
+			body = body.concat([LocalGet(receiverLocal), RefTest({nullable: false, heap: Type(type)}), If(null),
+				LocalGet(receiverLocal), RefCast({nullable: false, heap: Type(type)})]);
+			var argumentIndex = 0;
+			for (argument in virtual.signature.arguments) {
+				if (plan.values.isValue(argument)) {
+					for (_ in plan.scalarValueTypes(argument)) body.push(LocalGet(argumentLocals[argumentIndex++]));
+				} else {
+					body = body.concat(virtualArgument(arguments[argumentIndex], argument, argumentLocals[argumentIndex]));
+					argumentIndex++;
+				}
+			}
+			body.push(Call(functionIndex));
+			var resultIndex = resultLocals.length - 1;
+			while (resultIndex >= 0) { body.push(LocalSet(resultLocals[resultIndex])); resultIndex--; }
+			body = body.concat(index < virtual.targets.length - 1 ? [Else] : [Else, Unreachable]);
+		}
+		for (_ in virtual.targets) body.push(End);
+		return body;
+	}
+
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName),
 			field:IrObjectField = plan.objectField(objectName, fieldName);
-		if (field.nativeLayout != null)
+		if (plan.usesBytePayload(objectName) && field.nativeLayout != null)
 			return field.nativeLayout.inlineRecord ? inlineRecordSet(field, objectName, objectLocal,
 				valueLocal) : nativeFieldSet(field, objectName, objectLocal, valueLocal);
 		var fieldIndex = plan.objectFieldIndex(objectName, fieldName);
-		return [LocalGet(objectLocal), LocalGet(valueLocal), StructSet(typeIndex, fieldIndex)];
+		var body:Array<WasmInstruction> = [LocalGet(objectLocal), LocalGet(valueLocal)];
+		appendFieldNarrowing(body, field);
+		body.push(StructSet(typeIndex, fieldIndex));
+		return body;
+	}
+
+	static function appendFieldNarrowing(body:Array<WasmInstruction>, field:IrObjectField):Void {
+		var native = field.nativeLayout;
+		if (field.type == F32) {
+			body.push(F32DemoteF64);
+			body.push(F64PromoteF32);
+			return;
+		}
+		if (native != null) {
+			var bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
+			if (bits > 0 && native.size > 0 && native.size * 8 < bits) {
+				var shift = bits - native.size * 8;
+				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
+				body.push(bits == 64 ? I64Shl : I32Shl);
+				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
+				body.push(bits == 64 ? (native.signed ? I64ShrS : I64ShrU) : (native.signed ? I32ShrS : I32ShrU));
+			}
+		}
+	}
+
+	/** Use mutable scalar locals for nonescaping value places even across handler edges. */
+	public function scalarLocal(instruction:IrInstruction, locals:Map<Int, Int>):Null<Array<WasmInstruction>> {
+		return switch instruction {
+			case NewObject(out, _):
+				var candidate = functionState().scalarLocals.get(out);
+				if (candidate == null) null;
+				else {
+					var body:Array<WasmInstruction> = [];
+					for (field in candidate.declarations) {
+						for (instruction in zeroValue(field.type)) body.push(instruction);
+						body.push(LocalSet(scalarFieldLocal(candidate, field.name)));
+					}
+					body;
+				}
+			case FieldGet(out, owner, name):
+				var candidate = functionState().scalarLocals.get(owner);
+				if (candidate == null) null;
+				else if (name == WasmGcFlattenFields.CHECK_FIELD) [];
+				else [LocalGet(scalarFieldLocal(candidate, name)), LocalSet(scalarValueLocal(locals, out.id))];
+			case FieldSet(owner, name, value):
+				var candidate = functionState().scalarLocals.get(owner);
+				if (candidate == null) null;
+				else {
+					var body:Array<WasmInstruction> = [LocalGet(scalarValueLocal(locals, value.id))];
+					appendFieldNarrowing(body, plan.objectField(candidate.typeName, name));
+					body.push(LocalSet(scalarFieldLocal(candidate, name)));
+					body;
+				}
+			default: null;
+		};
+	}
+
+	static function scalarFieldLocal(candidate:WasmGcScalarLocals.WasmGcScalarLocal, name:String):Int {
+		var local = candidate.fields.get(name);
+		if (local == null) throw 'Missing scalar Wasm GC field "$name"';
+		return local;
+	}
+
+	static function scalarValueLocal(locals:Map<Int, Int>, id:Int):Int {
+		var local = locals.get(id);
+		if (local == null) throw 'Missing scalar Wasm GC value $id';
+		return local;
 	}
 
 	function nativeFieldGet(field:IrObjectField, destination:Int, objectName:String, objectLocal:Int):Array<WasmInstruction> {

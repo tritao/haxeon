@@ -289,8 +289,15 @@ inline layout and is rejected.
 
 ## Representation on Wasm GC
 
-Wasm GC cannot embed one struct type inside another, so how a struct is represented there decides whether it is worth
-using at all on that target. Checked on 2026-10-31 in `WasmGcRepresentation`:
+Wasm GC cannot embed one struct type inside another, so the backend recursively flattens struct fields into their holder.
+It specializes methods on field places, preserving intermediate writes visible to callbacks, and represents nonescaping
+values with scalar locals, including across exception handlers. Direct calls and eligible typed closure and virtual calls
+pass scalar parameters and return multiple values. Scalar receiver methods return their updated fields even on a Haxe
+exception, before the original exception is rethrown. Narrow fields retain their stored-width behaviour. Dynamic,
+external and other reference-representation boundaries still materialize boxes when required; optional locals and array
+elements retain the representations described above. Native-memory operations continue to use linear memory.
+
+The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
 
 - An ordinary value class is a separate Wasm GC struct, referenced from its holder, and every copy (`TCopy`) allocates a
   new one. Scalar replacement removes copies that never leave a function, but a value stored in a field and read back
@@ -307,8 +314,34 @@ Required for structs on Wasm GC:
 - **Byte payloads only where bytes are the point**: data shared with native code or linear memory. Their field access
   should use wide array loads where the engine supports them rather than one byte at a time.
 
-Until these hold, a struct must not be recommended for hot code on Wasm GC, and changes converting classes to structs must
-check Wasm GC allocation as well as HashLink.
+With inlining disabled on this x86-64 machine, an instruction-level Wasm GC allocation census counted the following
+allocations over 100,000 iterations, including setup. Comparing zero iterations confirms that all remaining allocations
+are setup; the field, copies and calls allocate nothing in the loop.
+
+| Workload | Before | After |
+|---|---:|---:|
+| Field read and copy | 200,003 | 1 |
+| Value argument and return | 400,003 | 1 |
+| Static, captured and bound typed closure calls | 600,008 | 7 |
+
+For one million iterations of the same programs, paired on Node 22.21.1 with inlining disabled, three warmups and nine
+samples gave these median times on an Intel i5-13600K. The machine was shared with other work during measurement.
+
+| Workload | Before (ms) | After (ms) |
+|---|---:|---:|
+| Field read and copy | 4.791 | 0.641 |
+| Value argument and return | 18.412 | 0.671 |
+| Static, captured and bound typed closure calls | 27.865 | 9.956 |
+
+The five-sample `scripts/benchmark-wasm-gc.sh` control exercises the Wasm32 linear-memory collector, not the Wasm GC
+backend. Its median times before and after were 0.080/0.096 ms for stress allocation bursts, 0.031/0.035 ms for budgeted
+bursts, 0.789/0.822 ms for deep chains and 1.593/1.673 ms for wide arrays. Allocation counts and bytes were unchanged
+(2,048/32,768 for bursts, 20,000/320,000 for chains and 30,002/600,056 for arrays).
+
+The stage 1b checkpoint passed: the driver reported 622 passed and 0 failed, self-hosting reached a fixed point, and
+395 fixtures agreed across HashLink, Wasm32 and Wasm GC with 14 existing skips, both with and without inlining. The
+standalone Wasm backend and native-memory integration tests passed. The Wasm runtime freshness check was skipped because
+a wasm32-capable clang was not configured.
 
 ## Fixed arrays
 

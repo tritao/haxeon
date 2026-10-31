@@ -75,7 +75,12 @@ function copiesAndBranches():Bool {
   small.value.byte = cast source();
   small.value.signed = cast (source() * 218 + 135);
   small.value.ratio = cast 1.00000003;
-  return small.value.byte == 44 && small.value.signed == -1 && small.value.ratio == 1.0;
+  var direct = new Small();
+  direct.byte = cast source();
+  direct.signed = cast (source() * 218 + 135);
+  direct.ratio = cast 1.00000003;
+  return small.value.byte == 44 && small.value.signed == -1 && small.value.ratio == 1.0
+    && direct.byte == 44 && direct.signed == -1 && direct.ratio == 1.0;
 }
 
 function nestedTotal(count:Int):Int {

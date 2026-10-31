@@ -741,7 +741,7 @@ class IrInliner {
 	}
 
 	/** Rewrites every use of a spliced call's output to the value the callee returned. */
-	function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>, bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
+	public static function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>, bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
 		var use = function(value:IrValue):IrValue return resolve(value, substitutions);
 		var sameBlock = function(id:Int):Int return id;
 		for (block in blocks) {

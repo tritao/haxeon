@@ -37,6 +37,11 @@ typedef WasmGcMapTypePlan = {
 **/
 class WasmGcTypePlan {
 	public final program:IrProgram;
+	public final scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>;
+	public final scalarClosures:Map<String, Bool>;
+	public final scalarVirtuals:Map<String, WasmGcScalarAbi.WasmGcScalarVirtual>;
+	/** Recursive scalar leaves for value locals, signatures and inline holder fields. */
+	public final values:WasmGcValueLayout;
 	public final typeGroups:Array<WasmTypeGroup>;
 	public final objectTypeIndices:Map<String, Int> = [];
 	public final objectFieldIndices:Map<String, Map<String, Int>> = [];
@@ -79,9 +84,13 @@ class WasmGcTypePlan {
 	public static inline final CLOSURE_SIGNATURE_FIELD = 2;
 
 	final objectDeclarations:Map<String, IrObject> = [];
+	/** Records still used as views into a containing byte payload. */
+	final bytePayloadObjects:Map<String, Bool> = [];
 	final enumDeclarations:Map<String, IrEnum> = [];
 	final orderedObjects:Array<IrObject> = [];
 	final flattenedObjectFields:Map<String, Array<IrObjectField>> = [];
+	final physicalObjectFields:Map<String, Array<IrObjectField>> = [];
+	public final inlineValueFields:Bool;
 	final arrayElements:Array<IrType> = [];
 	final iteratorElements:Array<IrType> = [];
 	final collectedValueTypes:Array<IrType> = [];
@@ -93,9 +102,16 @@ class WasmGcTypePlan {
 	final subtypes:Array<WasmSubtype> = [];
 	final plannedFunctionTypes:Map<String, WasmFunctionType> = [];
 
-	public function new(program:IrProgram) {
+	public function new(program:IrProgram, inlineValueFields = false, ?scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>,
+			?scalarClosures:Map<String, Bool>, ?scalarVirtuals:Map<String, WasmGcScalarAbi.WasmGcScalarVirtual>) {
 		this.program = program;
+		this.scalarSignatures = scalarSignatures == null ? [] : scalarSignatures;
+		this.scalarClosures = scalarClosures == null ? [] : scalarClosures;
+		this.scalarVirtuals = scalarVirtuals == null ? [] : scalarVirtuals;
+		this.inlineValueFields = inlineValueFields;
+		values = new WasmGcValueLayout(program);
 		indexDeclarations();
+		planBytePayloads();
 		collectProgramTypes();
 		reserveNamedTypes();
 		reserveRuntimeTypes();
@@ -127,6 +143,29 @@ class WasmGcTypePlan {
 	public function objectType(name:String):Int
 		return requireIndex(objectTypeIndices, name, 'Unknown Wasm GC object type "$name"');
 
+	public function usesBytePayload(name:String):Bool
+		return bytePayloadObjects.exists(name);
+
+	function planBytePayloads():Void {
+		if (inlineValueFields) return;
+		// Until inline record places are flattened, a nested record and each view reachable from it must share bytes.
+		var pending:Array<String> = [];
+		for (object in program.objects) if (object.nativeLayout != null)
+			for (field in object.fields) if (field.nativeLayout != null && field.nativeLayout.inlineRecord) {
+				pending.push(object.name);
+				break;
+			}
+		while (pending.length > 0) {
+			var name = pending.pop();
+			if (bytePayloadObjects.exists(name)) continue;
+			bytePayloadObjects.set(name, true);
+			var object = objectDeclarations.get(name);
+			if (object == null) throw 'Missing Wasm GC record "$name"';
+			for (field in object.fields) if (field.nativeLayout != null && field.nativeLayout.inlineRecord)
+				switch field.type { case Obj(child): pending.push(child); default: throw 'Invalid inline record ${field.name}'; }
+		}
+	}
+
 	public function objectFieldIndex(objectName:String, fieldName:String):Int {
 		var fields = objectFieldIndices.get(objectName);
 		if (fields == null || !fields.exists(fieldName))
@@ -135,12 +174,23 @@ class WasmGcTypePlan {
 	}
 
 	public function objectField(objectName:String, fieldName:String):IrObjectField {
-		var fields = flattenedObjectFields.get(objectName);
+		var fields = physicalObjectFields.get(objectName);
 		if (fields != null)
 			for (field in fields)
 				if (field.name == fieldName)
 					return field;
 		throw 'Unknown field "$objectName.$fieldName" in Wasm GC type plan';
+	}
+
+	public function physicalFields(objectName:String):Array<IrObjectField> {
+		var fields = physicalObjectFields.get(objectName);
+		if (fields == null) throw 'Unknown Wasm GC object "$objectName"';
+		return fields;
+	}
+
+	public function hasPhysicalField(objectName:String, fieldName:String):Bool {
+		var fields = objectFieldIndices.get(objectName);
+		return fields != null && fields.exists(fieldName);
 	}
 
 	/** Returns class type indices that can satisfy a Haxe virtual interface cast. */
@@ -232,6 +282,39 @@ class WasmGcTypePlan {
 			}
 		};
 	}
+
+	/** The unboxed calling convention for direct value arguments and results. */
+	public function scalarFunctionType(arguments:Array<IrType>, result:IrType):WasmFunctionType {
+		var parameters:Array<WasmValueType> = [];
+		for (argument in arguments)
+			for (part in scalarValueTypes(argument)) parameters.push(part);
+		return {parameters: parameters, results: result == Void ? [] : scalarValueTypes(result)};
+	}
+
+	public function scalarSignatureType(signature:WasmGcScalarAbi.WasmGcScalarSignature):WasmFunctionType {
+		var parameters:Array<WasmValueType> = [];
+		for (argument in signature.arguments) for (part in scalarValueTypes(argument)) parameters.push(part);
+		return {parameters: parameters, results: scalarResultTypes(signature)};
+	}
+
+	public function scalarResultTypes(signature:WasmGcScalarAbi.WasmGcScalarSignature):Array<WasmValueType> {
+		var result:Array<WasmValueType> = [];
+		if (signature.mutatesReceiver) for (part in scalarValueTypes(signature.arguments[0])) result.push(part);
+		if (signature.result != Void) for (part in scalarValueTypes(signature.result)) result.push(part);
+		if (signature.throwsReceiver) { result.push(valueType(Dyn)); result.push(I32); }
+		return result;
+	}
+
+	public function scalarValueTypes(type:IrType):Array<WasmValueType> {
+		if (!values.isValue(type)) return [valueType(type)];
+		return [for (slot in values.leaves(type)) valueType(slot.type)];
+	}
+
+	public function closureFunctionType(type:IrType):WasmFunctionType
+		return switch type {
+			case Function(arguments, result): scalarClosures.exists(Std.string(type)) ? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
+			default: throw 'Not a Wasm GC closure type: $type';
+		};
 
 	public function valueType(type:IrType):WasmValueType {
 		return switch type {
@@ -490,10 +573,12 @@ class WasmGcTypePlan {
 			var inherited:Array<IrObjectField> = object.base == null ? [] : flattenedObjectFields.get(object.base).copy();
 			inherited = inherited.concat(object.fields);
 			flattenedObjectFields.set(object.name, inherited);
+			var physical = inlineValueFields ? values.fields(inherited) : inherited;
+			physicalObjectFields.set(object.name, physical);
 			var fieldIndices:Map<String, Int> = [];
-			for (index in 0...inherited.length)
-				if (!fieldIndices.exists(inherited[index].name))
-					fieldIndices.set(inherited[index].name, index + OBJECT_HEADER_FIELDS);
+			for (index in 0...physical.length)
+				if (!fieldIndices.exists(physical[index].name))
+					fieldIndices.set(physical[index].name, index + OBJECT_HEADER_FIELDS);
 			objectFieldIndices.set(object.name, fieldIndices);
 		}
 	}
@@ -566,7 +651,7 @@ class WasmGcTypePlan {
 
 	function defineNamedTypes():Void {
 		for (object in orderedObjects) {
-			var fields = flattenedObjectFields.get(object.name);
+			var fields = physicalObjectFields.get(object.name);
 			if (fields == null)
 				throw 'Missing flattened fields for Wasm GC object "${object.name}"';
 			var baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
@@ -577,7 +662,7 @@ class WasmGcTypePlan {
 						mutable: true
 					}
 				];
-			if (object.nativeLayout != null)
+			if (usesBytePayload(object.name))
 				wasmFields = wasmFields.concat([
 					{type: Value(Ref({nullable: true, heap: Type(byteArrayTypeIndex)})), mutable: true},
 					{type: Value(I32), mutable: true}

@@ -44,17 +44,16 @@ class WasmGcClosureAdapters {
 	/** The Wasm function type a closure of this type is called with, which identifies its signature. */
 	public static function signature(module:WasmModule, plan:WasmGcTypePlan, type:IrType):Int
 		return switch type {
-			case Function(arguments, result): module.typeIndex(plan.wasmFunctionType(arguments, result));
+			case Function(_, _): module.typeIndex(plan.closureFunctionType(type));
 			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
 		};
 
 	/** The function type of an instance closure's target, which takes the receiver first. */
 	public static function instanceType(module:WasmModule, plan:WasmGcTypePlan, type:IrType):Int
 		return switch type {
-			case Function(arguments, result): module.typeIndex({
-					parameters: [Ref({nullable: true, heap: Any})].concat([for (argument in arguments) plan.valueType(argument)]),
-					results: result == Void ? [] : [plan.valueType(result)]
-				});
+			case Function(_, _):
+				var signature = plan.closureFunctionType(type);
+				module.typeIndex({parameters: [Ref({nullable: true, heap: Any})].concat(signature.parameters), results: signature.results});
 			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
 		};
 
