@@ -116,9 +116,11 @@ values changes, and updates the existing nodes. This record makes that idea the 
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
-0. **Structs for small values (independent, any time).** `Rect`, `Insets`, then `Color`, `LayoutAxis` and `Transform2D`
-   become `struct`s, stored inline in `LayoutStyle` and free as temporaries. Go: allocation budgets fall and nothing gets
-   slower. Prerequisites and the nullable-field question are in `docs/UI_LANGUAGE_FEATURES.md`.
+0. **Structs for small values (independent of the other stages).** `Rect`, `Insets`, then `Color`, `LayoutAxis` and
+   `Transform2D` become immutable `struct`s, stored inline in `LayoutStyle` and free as temporaries. Requires
+   `docs/STRUCTS.md` stages 1a (temporary-write error, `Null<S>` fields) and 1b (flattened Wasm GC representation; today
+   a value class allocates more on Wasm GC than a class does). Go: allocation budgets fall on HashLink, Wasm GC allocation
+   does not rise, and nothing gets slower. Details in `docs/UI_LANGUAGE_FEATURES.md`.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Go: gates pass and no action allocates more.

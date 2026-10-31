@@ -214,6 +214,55 @@ pointer escape. Ordinary struct parameters still copy. The proposal is
 deferred: Beartooth's component API uses whole-value `get`/`set`/`update`
 and doesn't need it.
 
+## Immutability and copies
+
+Value types have one well-known trap: a write to a field of a temporary copy changes the copy and is silently lost, as
+in `node.style.padding.left = 4` when `style` or `padding` is reached through a getter or call result. C# rejects it
+(CS1612) and added `readonly struct` for values that should never be edited in place; Swift rejects it through `let`.
+
+- **Writes to a temporary are a compile error.** A field write, compound assignment or mutating method call whose target
+  is not a place (a local, a field of a place, an array element, a `p.ref` place) is rejected, naming the expression that
+  produced the copy.
+- **A struct whose fields are all `final` is immutable.** It can only be replaced as a whole. Small values (colors,
+  rectangles, insets, transforms) should be written this way; the trap above then cannot arise for them, and replacing a
+  whole field is what code holding them does anyway. Mutable structs remain for records edited in place, such as world
+  components and store records.
+- `Structural.copy` of a struct is its ordinary copy, so the final-field restriction on `copy` applies only to classes.
+  `Structural.assignChanged` writes the fields of its target, so a holder of immutable struct fields still updates
+  them by replacement.
+
+## Nullable structs
+
+`null` is excluded from struct values, but "absent" is a real state: an optional color, an optional clip rectangle.
+`Null<S>` is a language-level optional, as C#'s `Nullable<T>` and Swift's `Optional<T>` are: the value is stored inline
+together with a presence flag, `== null` tests the flag, and reading the value of an absent one is the same error as any
+null access. This applies to fields, array elements and locals alike; today `Null<S>` is allowed in locals,
+parameters and returns (as a pointer) but rejected as a field (E1022). A library option type would spread through every API
+that uses it, and a sentinel value would make absence indistinguishable from a real value.
+
+## Representation on Wasm GC
+
+Wasm GC cannot embed one struct type inside another, so how a struct is represented there decides whether it is worth
+using at all on that target. Checked on 2026-10-31 in `WasmGcRepresentation`:
+
+- An ordinary value class is a separate Wasm GC struct, referenced from its holder, and every copy (`TCopy`) allocates a
+  new one. Scalar replacement removes copies that never leave a function, but a value stored in a field and read back
+  costs more on Wasm GC than a class instance does.
+- A flat record with native layout is stored as bytes in an `i8` array payload. Each scalar field read or write is
+  assembled byte by byte, and reading a nested inline record allocates a view object.
+
+Required for structs on Wasm GC:
+
+- **Flattening.** A struct field contributes its scalar fields directly to the holder's Wasm GC struct
+  (`padding_left`, `padding_top`, …), recursively, so reading `holder.padding.left` is one `struct.get`.
+- **Scalarized locals, parameters and returns.** A struct local is one Wasm local per field, passed as several
+  parameters and returned through multi-value returns, so a copy is a set of local moves.
+- **Byte payloads only where bytes are the point**: data shared with native code or linear memory. Their field access
+  should use wide array loads where the engine supports them rather than one byte at a time.
+
+Until these hold, a struct must not be recommended for hot code on Wasm GC, and changes converting classes to structs must
+check Wasm GC allocation as well as HashLink.
+
 ## Fixed arrays
 
 A flat struct field can be a fixed array, `var slots:Int32[4];`.
@@ -354,8 +403,13 @@ headers in, and a build check reports headers that are out of date.
 
 - **Scalar replacement** ([inlining stage 2](INLINING_AND_VALUE_TYPES.md#plan))
   and **construct-in-place** (stage 3). Without them, every struct local on
-  HashLink allocates a heap temporary. Structs work without these stages, but
-  shouldn't be recommended for hot code until they land.
+  HashLink allocates a heap temporary. Both now run inside the inliner
+  (`IrScalarReplacement`; construct-in-place on HashLink, `8e33f0cd`), with one
+  known limit: an object whose class has a value class field is not scalar
+  replaced, which is exactly the nested case (a style holding insets and colors).
+  Lifting that limit is needed before nested structs are recommended for hot code.
+- **Wasm GC representation** (stage 1b above). Without it, structs allocate more
+  on Wasm GC than classes do.
 - **Live patching.** A change to a struct's layout is a structural type
   change, so it remains a reload boundary until the runtime has a non-moving
   type arena ([live patching](LIVE_PATCHING.md)). Migrating stored data
@@ -378,6 +432,14 @@ point green.
      support.
    - Checkpoint: value-class tests pass when rewritten with `struct`, and the
      Wasm parity suite runs them.
+1a. **Copies and optionals.**
+   - The temporary-write error; immutable structs (all fields `final`); `Null<S>` fields and array elements with an
+     inline presence flag.
+   - Checkpoint: the error fires on getter and call-result chains, and `Null<S>` programs give the same results on all
+     targets.
+1b. **Wasm GC representation.**
+   - Flatten struct fields into their holder, scalarize locals, parameters and returns.
+   - Checkpoint: a struct stored in a field, read and copied allocates nothing on Wasm GC, and the parity suite passes.
 2. **`Flat` and `Portable`.**
    - Working out the two properties, asserting them with attributes, and
      using them as constraints, including transitive interface requirements.
