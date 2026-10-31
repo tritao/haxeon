@@ -21,6 +21,9 @@ import haxeon.ui.style.StyleProperty;
 
 /** Produces deterministic, headless snapshots and readable render-tree dumps. */
 class UiInspector {
+	// Dump-only records never expose or mutate these arrays. Public snapshots retain independent arrays.
+	static final NoEntries:Array<StyleInspectionEntry> = [];
+	static final NoRules:Array<StyleSource> = [];
 	/** Inspect one node without traversing its descendants. */
 	public static function nodeSnapshot(node:RenderNode, focused:Null<WidgetId>):UiNodeSnapshot {
 		var result:Array<UiNodeSnapshot> = [];
@@ -29,17 +32,26 @@ class UiInspector {
 	}
 	public static function snapshot(root:Null<RenderNode>, focused:Null<WidgetId>,
 			hovered:Null<WidgetId> = null, pressed:Null<WidgetId> = null):Array<UiNodeSnapshot> {
+		return collect(root, focused, hovered, pressed, true);
+	}
+
+	static function collect(root:Null<RenderNode>, focused:Null<WidgetId>, hovered:Null<WidgetId>,
+			pressed:Null<WidgetId>, includeStyleDetails:Bool):Array<UiNodeSnapshot> {
 		var result:Array<UiNodeSnapshot> = [];
 		if (root != null) {
 			var hoveredOwner = interactionOwner(root, hovered);
 			var pressedOwner = interactionOwner(root, pressed);
-			append(root, 0, 0, focused, hoveredOwner, pressedOwner, result);
+			append(root, 0, 0, focused, hoveredOwner, pressedOwner, result, true, includeStyleDetails);
 		}
 		return result;
 	}
 
 	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>, ignoredInteractionStates:Int = 0):String {
-		var records = snapshot(root, focused);
+		// Dumps do not use inspection entries or rule provenance. Keep the full public snapshot unchanged.
+		return formatDump(collect(root, focused, null, null, false), ignoredInteractionStates);
+	}
+
+	static function formatDump(records:Array<UiNodeSnapshot>, ignoredInteractionStates:Int):String {
 		var lines:Array<String> = [];
 		for (record in records) {
 			var prefix = "";
@@ -93,18 +105,20 @@ class UiInspector {
 
 	static function append(node:RenderNode, parentId:Int, depth:Int,
 			focused:Null<WidgetId>, hovered:Null<WidgetId>, pressed:Null<WidgetId>,
-			output:Array<UiNodeSnapshot>, recursive:Bool = true):Void {
+			output:Array<UiNodeSnapshot>, recursive:Bool = true, includeStyleDetails:Bool = true):Void {
 		var semantics:Null<Semantics> = cast node.semantics;
 		var geometry = node.resolved;
 		var bounds = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.bounds();
 		var clip = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.clipBounds;
 		var content = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.contentBounds;
 		var role = semantics == null ? -1 : cast semantics.role;
-		var styleEntries:Array<StyleInspectionEntry> = [];
-		var matchingStyleRules:Array<StyleSource> = [];
+		var styleEntries:Array<StyleInspectionEntry> = includeStyleDetails ? [] : NoEntries;
+		var matchingStyleRules:Array<StyleSource> = includeStyleDetails ? [] : NoRules;
 		if (node.computedStyle != null) {
-			styleEntries = node.computedStyle.entries();
-			matchingStyleRules = node.computedStyle.matchingStyleRules();
+			if (includeStyleDetails) {
+				styleEntries = node.computedStyle.entries();
+				matchingStyleRules = node.computedStyle.matchingStyleRules();
+			} else node.computedStyle.copyInspectionValues();
 		}
 		var style = node.computedStyle;
 		var effects:Null<EffectChain> = style == null ? null : style.get(StyleProperty.Effects);
@@ -158,7 +172,7 @@ class UiInspector {
 			new UiNodeEffectInfo(effectDescriptions, backdropEffectDescriptions,
 				backdropEffectPasses, maskPasses, isolationReasons, estimatedIntermediateTargets)));
 		if (recursive) for (child in node.children)
-			append(child, node.id.value, depth + 1, focused, hovered, pressed, output);
+			append(child, node.id.value, depth + 1, focused, hovered, pressed, output, true, includeStyleDetails);
 	}
 
 	static function effectPassCount(chain:Null<EffectChain>):Int {

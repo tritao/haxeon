@@ -1,6 +1,7 @@
 # UI value types
 
-This completes stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md).
+This implements the value conversions in stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md); the
+remaining dynamic boxes listed below are still under investigation.
 
 `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `@:structural` structs. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons are fieldwise. Optional values use `Null<T>`,
@@ -17,18 +18,27 @@ and computed width and height share a copy-on-write inline-axis holder. The insp
 transient editor state is discarded on a selection change as before. Retained alternatives have separate state scopes,
 validate dependencies and topology, and rearm their self-updating children before reuse. The verification mode continues
 to compare retained trees to fresh builds.
+The textual tree dump does not consume inspection entries or rule provenance, so it skips building those details while
+still calling the same copy hooks and propagating their failures. Public inspection snapshots still include the entries
+and expose their values to reflection; the dump's rendered output is unchanged. This removed 728 `LayoutAxis` boxes
+from the 30-cycle interaction census (740 to 12).
 
 Struct boxes can still occur at real dynamic and reflective boundaries. For example, inspecting a dynamic style value
 materializes a box; a type census should distinguish `@`-prefixed struct boxes from the former class allocations. The
 compiler scalarizes supported direct and typed calls, optional locals and inline field copies; unsupported or escaping
 values retain the normal boxed ABI. See [STRUCTS.md](../../../docs/STRUCTS.md) for the calling conventions and attribution.
+In particular, `StyleValue.value` is a public `Dynamic` field. Independent boxes can compare differently by dynamic
+identity, and HashLink can change a boxed value through `Reflect`. Sharing boxes across declarations or refreshes would
+therefore change observable behavior. Removing these allocations needs a representation that preserves that boundary,
+not a pool of shared boxes.
 
-The same-machine 30-cycle HashLink census includes startup and counts allocations by type. Entries after conversion are
+The same-machine 30-cycle HashLink census starts after the initial editor frame and includes scenario setup. It counts
+allocations by type. Entries after conversion are
 struct boxes (`@haxeon.ui.*`) at dynamic boundaries. The per-action KiB and Wasm GC Showcase comparisons are in
 [STRUCTS.md](../../../docs/STRUCTS.md).
 
 | Scenario | Rect | Insets | Color | LayoutAxis | Transform2D |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Interaction, classes → final | 7,511 → 0 | 70 → 146 | 487 → 549 | 1,007 → 740 | 1,722 → 0 |
-| Tab matrix, classes → final | 12,586 → 0 | 8 → 0 | 1,185 → 0 | 4,956 → 0 | 351 → 0 |
-| Selection stress, classes → final | 4,307 → 0 | 512 → 9 | 866 → 3 | 5,364 → 0 | 456 → 0 |
+| Interaction, classes → current | 7,511 → 0 | 70 → 146 | 487 → 549 | 1,007 → 12 | 1,722 → 0 |
+| Tab matrix, classes → current | 12,586 → 0 | 8 → 0 | 1,185 → 0 | 4,956 → 0 | 351 → 0 |
+| Selection stress, classes → current | 4,307 → 0 | 512 → 9 | 866 → 3 | 5,364 → 0 | 456 → 0 |

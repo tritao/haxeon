@@ -222,6 +222,14 @@ class ComputedStyle {
 		return result;
 	}
 
+	/** Preserve the copy hooks used by inspection when a textual dump discards the entries themselves. */
+	@:allow(haxeon.ui.debug.UiInspector)
+	function copyInspectionValues():Void {
+		for (property in StyleProperty.all())
+			if (property.copiedOnRead && isSet(property.slot))
+				copyValue(property, valueAt(property.slot));
+	}
+
 	/** Materializes the resolved layout subset without mutating any input style. */
 	public function toLayoutStyle(?base:LayoutStyle):LayoutStyle {
 		var result = base == null ? new LayoutStyle() : base.copy();

@@ -72,7 +72,8 @@ deferred.
 `Color`, `Insets`, `LayoutAxis`, `Rect` and `Transform2D` are immutable `@:structural` structs, with fieldwise equality
 and inline storage in `LayoutStyle`. Optional fields use `Null<S>` with an inline presence flag. The compiler rejects
 writes through temporary values, scalar-replaces eligible values and their callers, and flattens struct fields and locals
-on Wasm GC. Dynamic and otherwise escaping values may still box. See [STRUCTS.md](STRUCTS.md) for the compiler rules and
+on Wasm GC. Dynamic and otherwise escaping values still box; the UI allocation census target remains open. See
+[STRUCTS.md](STRUCTS.md) for the compiler rules and
 measurements and [UI value types](../packages/ui/docs/VALUE_TYPES.md) for the UI boundary and retention changes.
 
 ### 5. Purity contracts (deferred)

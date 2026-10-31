@@ -111,6 +111,17 @@ private class VariantProbe implements View {
   }
 }
 
+private class InspectionDecoration extends haxeon.ui.style.Decoration {
+  public static var copies:Int = 0;
+  public static var fail:Bool = false;
+  public function new() super();
+  override public function copy():haxeon.ui.style.Decoration {
+    copies++;
+    if (fail) throw "inspection copy failed";
+    return this;
+  }
+}
+
 private class StrictVariantProbe implements View {
   public var variant:String = "a";
   public var presses:Int = 0;
@@ -531,6 +542,7 @@ private class UpdatingResources implements View {
 
 @:access(haxeon.ui.core.UiContext)
 @:access(haxeon.ui.style.ComputedStyle)
+@:access(haxeon.ui.debug.UiInspector)
 class RestyleInPlaceTests {
 	static function retainedVariants(fonts:FontCollection):Void {
 		var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
@@ -601,10 +613,44 @@ class RestyleInPlaceTests {
 			haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Dynamic axis replacement lost value or isolation");
 		var entries = constructed.entries();
 		check(entries.length == 2, "Inline axis inspection omitted a property");
+		var description = entries[0].describe();
 		constructed.setAxis(width, LayoutAxis.fixed(13), null);
 		var inspected:LayoutAxis = cast entries[0].value;
-		check(inspected.value == 7 && constructed.get(width).value == 13,
+		var reflected:Null<LayoutAxis> = cast Reflect.field(entries[0], "value");
+		check(inspected.value == 7 && constructed.get(width).value == 13 && entries[0].describe() == description,
 			"Changing an inline axis mutated an existing inspection snapshot");
+		check(Reflect.hasField(entries[0], "value") && Reflect.fields(entries[0]).indexOf("value") >= 0 &&
+			reflected != null && reflected.value == 7, "Reflection lost the inspected axis value");
+		var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
+		constructed.set(haxeon.ui.style.StyleProperty.Decorations,
+			new haxeon.ui.style.DecorationChain([new InspectionDecoration()]), null);
+		node.computedStyle = constructed;
+		InspectionDecoration.copies = 0;
+		var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);
+		var snapshotCopies = InspectionDecoration.copies;
+		check(snapshots.length == 1 && snapshots[0].styleEntries.length == 3 && snapshotCopies == 1,
+			"A public inspection snapshot lost style entries");
+		InspectionDecoration.copies = 0;
+		check(haxeon.ui.debug.UiInspector.dump(node, null) ==
+			haxeon.ui.debug.UiInspector.formatDump(snapshots, 0), "A tree dump changed when unused inspection data was skipped");
+		check(InspectionDecoration.copies == snapshotCopies, "A tree dump skipped an inspection copy hook");
+		InspectionDecoration.fail = true;
+		var snapshotFailed = false, dumpFailed = false;
+		try haxeon.ui.debug.UiInspector.snapshot(node, null) catch (_:Dynamic) snapshotFailed = true;
+		try haxeon.ui.debug.UiInspector.dump(node, null) catch (_:Dynamic) dumpFailed = true;
+		InspectionDecoration.fail = false;
+		check(snapshotFailed && dumpFailed, "A tree dump swallowed an inspection copy failure");
+		var undisturbed = new haxeon.ui.style.ComputedStyle();
+		undisturbed.setAxis(width, LayoutAxis.fixed(23), null);
+		var axisStorage:Dynamic = undisturbed.inlineAxes;
+		check(axisStorage != null && Reflect.field(axisStorage, "widthBox") == null, "The axis was boxed before inspection");
+		node.computedStyle = undisturbed;
+		haxeon.ui.debug.UiInspector.dump(node, null);
+		check(Reflect.field(axisStorage, "widthBox") == null, "A textual dump boxed an unused inspection value");
+		var detailed = haxeon.ui.debug.UiInspector.snapshot(node, null);
+		var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
+		check(detailedAxis.value == 23 && Reflect.field(axisStorage, "widthBox") != null,
+			"Detailed inspection did not materialize its value");
 	}
   static function check(value:Bool, message:String):Void if (!value) throw message;
 

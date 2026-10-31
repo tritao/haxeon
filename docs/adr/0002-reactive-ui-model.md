@@ -132,10 +132,11 @@ values changes, and updates the existing nodes. This record makes that idea the 
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
-0. **Structs for small values — done.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
+0. **Structs for small values — allocation audit in progress.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
    structural structs, stored inline in `LayoutStyle`. Nullable fields have inline presence flags, eligible temporary
    values stay scalar, and Wasm GC flattens their fields. See [UI value types](../../packages/ui/docs/VALUE_TYPES.md)
-   for the retained-holder design and measurements, including the dynamic boundaries that still box.
+   for the retained-holder design and measurements. Dynamic boundaries still box in the interaction and selection
+   censuses, so the zero-allocation census target is not yet met.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates
