@@ -586,8 +586,16 @@ class IrInliner {
 			if (found)
 				break;
 		}
-		if (!found && !IrCopyElision.hasCopies(fn.blocks))
-			return fn;
+		if (!found) for (block in fn.blocks) {
+			for (located in block.instructions) switch located.value {
+				case NewObject(_, name):
+					var object = table.get(name);
+					if (object != null && object.isValue) found = true;
+				default:
+			}
+			if (found) break;
+		}
+		if (!found && !IrCopyElision.hasCopies(fn.blocks)) return fn;
 		var blocks:Array<IrBlock> = [], nextValue = 0, nextBlock = 0;
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
@@ -778,7 +786,7 @@ class IrInliner {
 	 * instructions before the call and jumps into the copy; a fresh continuation block takes the instructions after the
 	 * call and the original terminator, and merges the returned values with a phi.
 	 */
-	function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int):{nextValue:Int, nextBlock:Int} {
+	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int):{nextValue:Int, nextBlock:Int} {
 		var head = blocks[index],
 			call = head.instructions[position],
 			callOutput:IrValue = null,

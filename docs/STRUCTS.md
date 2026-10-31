@@ -414,9 +414,10 @@ and exact-type methods use specialized scalar component carriers; calls across u
 boundaries materialize the logical value. Mutated local places keep their current components across branches, loops,
 callbacks and exception handlers. Value-method specializations preserve receiver writes on both normal and exceptional
 returns. HashLink keeps eligible flat value places in frame registers, including across handlers, and extends its existing
-scalar call convention to the component carriers. Straight-line value constructors and isolated value phis can also be
-scalar-replaced without ordinary inlining. Native-layout optional values also use scalar flow, preserving narrow integer
-and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
+scalar call convention to the component carriers. Bounded value constructors, including validation branches and joins,
+and isolated value phis can also be scalar-replaced without ordinary inlining. Constructor expansion preserves validation
+and exception order; recursive and unsupported exception-handler bodies retain their calls. Native-layout optional values
+also use scalar flow, preserving narrow integer and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
 
 Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
 leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
@@ -432,6 +433,13 @@ and from 759 to 146 Insets boxes; 120-frame Wasm GC Showcase counts fell from 6,
 medians in KiB were 112.7, 162.1, 126.9 and 129.6 for the four tab-matrix transitions; interaction hover away, enter, field,
 inside and other were 25.0, 2.6, 22.2, 0.6 and 13.2; idle and idle focused were 0.2 each, inspector scroll was 21.4,
 and backspace and character input were 17.9 each. They remain intermediate results against the class baseline above.
+
+An exploratory all-five-value UI build after scalar aliases and branching constructor expansion still has HashLink
+regressions. Its 30-cycle interaction census contains 192 Rect, 146 Insets, 2,994 Color, 825 LayoutAxis and 132
+Transform2D boxes. The four tab transitions measured 127.0, 183.5, 143.2 and 145.5 KiB; hover away, enter, field,
+inside and other measured 26.5, 2.6, 25.0, 0.6 and 14.3 KiB; idle and focused idle were 0.2 KiB each, inspector
+scroll was 23.7 KiB, and backspace and character input were 18.7 KiB each. This is an intermediate prototype,
+not acceptance of the UI conversion.
 
 The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
 recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and

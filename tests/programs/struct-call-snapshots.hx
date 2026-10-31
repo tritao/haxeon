@@ -27,6 +27,18 @@ struct WideFloat {
   public function new(x:Float, y:Float, label:String) { this.x = x; this.y = y; this.label = label; }
 }
 
+struct CheckedValue {
+  public final n:Int;
+  public final label:String;
+  public function new(n:Int, label:String) {
+    if (n < 0 || label == null) { CheckedEvents.errors++; throw "invalid"; }
+    this.n = n > 0 ? n : 0;
+    this.label = label;
+  }
+}
+class CheckedEvents { public static var errors:Int = 0; }
+function checkedValue(n:Int, label:String):CheckedValue return new CheckedValue(n, label);
+
 function consume(value:Pair):Int {
   value.x += 1;
   return value.x + value.y;
@@ -110,6 +122,12 @@ function around(value:Value, callback:Void->Void):Value {
 }
 
 function main():Int {
+  var label = "managed", beforeChecked = hl.Gc.totalAllocated(), checkedTotal = 0;
+  for (i in 0...10000) checkedTotal += checkedValue(42, label).n;
+  if (checkedTotal != 420000 || hl.Gc.totalAllocated() - beforeChecked > 4096) return 40;
+  try { checkedValue(-1, label); return 41; } catch (error:Dynamic) { if (error != "invalid") return 43; }
+  if (CheckedEvents.errors != 1 || checkedValue(42, label).label != label) return 44;
+
 	var pair = new Pair(2, 3);
 	if (consume(pair) != 6 || pair.x != 2) return 6;
 	var allocatedBefore = hl.Gc.totalAllocated();
