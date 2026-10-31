@@ -14,7 +14,7 @@ class PlotSeries {
 
 	public function new(id:String, label:String, color:Color, ?lineWidth:Float = 1.5) {
 		if (id == null || id.length == 0 || label == null || label.length == 0 ||
-			color == null || !finite(lineWidth) || lineWidth <= 0.0)
+			!finite(lineWidth) || lineWidth <= 0.0)
 			throw "Plot series require stable labels, a color, and positive line width";
 		this.id = id;
 		this.label = label;

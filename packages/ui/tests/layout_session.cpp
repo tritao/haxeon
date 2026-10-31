@@ -189,8 +189,24 @@ bool incremental(nkui_resource fonts) {
     };
     if (submit(session, full) != NKUI_OK || !matches() ||
         geometry(session, true).size() != 1201 * NKUI_LAYOUT_RESOLVED_ITEM_BYTES) return false;
+    const auto expected_updates = geometry(session, true);
+    uint32_t required = 0;
+    if (nkui_layout_session_get_resolved_updates_into(session, nullptr, 0, &required) != NKUI_ERROR_INVALID_ARGUMENT ||
+        required != expected_updates.size()) return false;
+    std::vector<uint8_t> update_storage(required, 0xa5);
+    uint32_t written = 0;
+    if (nkui_layout_session_get_resolved_updates_into(session, nullptr, 1, &written) != NKUI_ERROR_INVALID_ARGUMENT ||
+        nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required, nullptr) !=
+            NKUI_ERROR_INVALID_ARGUMENT) return false;
+    if (nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required - 1, &written) !=
+            NKUI_ERROR_INVALID_ARGUMENT || written != required || update_storage.front() != 0xa5 ||
+        update_storage.back() != 0xa5) return false;
+    if (nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required, &written) != NKUI_OK ||
+        written != required || update_storage != expected_updates) return false;
     auto patch = patch_from(full, {});
     if (submit(session, patch) != NKUI_OK || !matches() || !geometry(session, true).empty()) return false;
+    if (nkui_layout_session_get_resolved_updates_into(session, update_storage.data(), required, &written) != NKUI_OK ||
+        written != 0) return false;
     const auto record = [](uint32_t index) { return NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + index * NKUI_LAYOUT_NODE_RECORD_BYTES; };
     // Paint-only, geometry, text/visual-kind and floating layer changes must all match a full solve.
     for (int action = 0; action < 4; ++action) {

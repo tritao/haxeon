@@ -56,9 +56,9 @@ class Effect {
 		return left + (right - left) * amount;
 
 	public static function copyColor(value:Color):Color
-		return value == null ? null : Color.rgba(value.red, value.green, value.blue, value.alpha);
+		return value;
 
-	public static function equalColor(left:Color, right:Color):Bool
+	public static function equalColor(left:Null<Color>, right:Null<Color>):Bool
 		return haxeon.Equality.equals(left, right);
 
 	public static function interpolateColor(left:Color, right:Color, amount:Float):Color

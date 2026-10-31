@@ -9,7 +9,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 23;
+	const NKUI_LAYOUT_API_VERSION = 24;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
 	/**
 	 * Per-child cross-axis alignment override; zero inherits the parent.
@@ -697,6 +697,12 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	 * The first submit exports every record; removals and item order follow the submitted tree, not this update buffer.
 	 */
 	extern fn nkui_layout_session_get_resolved_updates(session: nkui_layout_session, out_buffer: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nkui_result;
+	/**
+	 * Copies changed geometry into caller-owned storage. If capacity is insufficient, no records are written,
+	 * `out_bytes` receives the required size, and NKUI_ERROR_INVALID_ARGUMENT is returned. A zero-capacity
+	 * buffer may be null. Repeated reads of the same submit return the same records.
+	 */
+	extern fn nkui_layout_session_get_resolved_updates_into(session: nkui_layout_session, buffer: ptr<u8> @in_array("capacity_bytes"), capacity_bytes: u32, out_bytes: ptr<u32> @out) -> nkui_result;
 	/**
 	 * Returns the root-to-target geometric hit path for a viewport point.
 	 *

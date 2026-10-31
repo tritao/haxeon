@@ -102,7 +102,7 @@ class GpuViewport implements View {
 
 	public function setAppearance(background:Color, gridColor:Color, gridSize:Float = 1.0,
 			gridEnabled:Bool = true):Void {
-		if (background == null || gridColor == null || !finite(gridSize) || gridSize <= 0.0)
+		if (!finite(gridSize) || gridSize <= 0.0)
 			throw "Viewport appearance values are invalid";
 		this.background = background;
 		this.backgroundTop = background;

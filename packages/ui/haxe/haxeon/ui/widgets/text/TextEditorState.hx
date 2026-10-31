@@ -2,7 +2,6 @@ package haxeon.ui.widgets.text;
 
 import haxeon.platform.input.TextEdit;
 
-import haxeon.ui.TextLayout.TextCaret;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 
@@ -395,7 +394,7 @@ class TextEditorState implements SemanticsValueSource {
 		return offsets;
 	}
 
-	public function setRenderColor(color:Color):Void {
+	public function setRenderColor(color:Null<Color>):Void {
 		ensureLive();
 		if (color == null)
 			return;
@@ -654,7 +653,6 @@ class TextEditorState implements SemanticsValueSource {
 		lineStep = Math.max(1.0, lineStep);
 
 		var candidate:TextPosition = null;
-		var candidateCaret:TextCaret = null;
 		// Hit testing at the next baseline handles wrapped visual lines and keeps
 		// the shaping engine's bidi affinity. A small widening probe is useful at
 		// line boundaries where hit testing deliberately favors the current line.
@@ -665,11 +663,10 @@ class TextEditorState implements SemanticsValueSource {
 			if ((direction < 0 && hitCaret.y < currentCaret.y - 0.01) ||
 				(direction > 0 && hitCaret.y > currentCaret.y + 0.01)) {
 				candidate = hit;
-				candidateCaret = hitCaret;
 				break;
 			}
 		}
-		if (candidate == null || candidateCaret == null)
+		if (candidate == null)
 			return false;
 
 		var currentRange = layout.lineRangeAt(current.offset);
@@ -766,7 +763,7 @@ class TextEditorState implements SemanticsValueSource {
 		viewportHeight = height;
 		var metrics = layout.measure();
 		var contentHeight = Math.max(height, metrics.height);
-		var caret = layout.caret(focusPosition());
+		var caret = layout.caretAt(selectionFocusLayoutOffset, selectionFocusAffinity);
 		var top = caret.y + Math.min(caret.ascender, caret.descender);
 		var bottom = caret.y + Math.max(caret.ascender, caret.descender);
 		if (selectionStart != selectionEnd) {

@@ -249,7 +249,7 @@ class StyleResolver {
 	static inline function localFingerprint(local:LayoutStyle):Int
 		return haxeon.Structural.hash(local);
 
-	static function colorFingerprint(seed:Int, value:Color):Int
+	static function colorFingerprint(seed:Int, value:Null<Color>):Int
 		return mix(seed, value == null ? 0 : haxeon.Structural.hash(value));
 
 	static inline function mix(seed:Int, value:Int):Int
@@ -312,17 +312,17 @@ class StyleResolver {
 	}
 
 	static function colorKey(value:Color):String
-		return value == null ? "null" : value.red + "," + value.green + "," + value.blue + "," + value.alpha;
+		return value.red + "," + value.green + "," + value.blue + "," + value.alpha;
 
 	static function axisKey(value:LayoutAxis):String
-		return value == null ? "null" : Std.string(value.sizing) + "," + value.value + "," +
+		return Std.string(value.sizing) + "," + value.value + "," +
 			value.min + "," + value.max + "," + value.growWeight;
 
 	static function insetsKey(value:Insets):String
 		return value.left + "," + value.top + "," + value.right + "," + value.bottom;
 
 	static function transformKey(value:Transform2D):String
-		return value == null ? "null" : value.a + "," + value.b + "," + value.c + "," +
+		return value.a + "," + value.b + "," + value.c + "," +
 			value.d + "," + value.tx + "," + value.ty;
 
 	function applySheet(result:ComputedStyle, target:StyleTarget, sheet:Null<StyleSheet>,
@@ -360,11 +360,11 @@ class StyleResolver {
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "width");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Width, local.width, source);
+			result.setAxis(StyleProperty.Width, local.width, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "height");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Height, local.height, source);
+			result.setAxis(StyleProperty.Height, local.height, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "direction");
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -590,5 +590,5 @@ class StyleResolverCacheEntry {
 			this.applicationRevision == applicationRevision && this.localKey == localKey &&
 			this.environmentIdentity == environmentIdentity &&
 			this.environmentRevision == environmentRevision &&
-			StyleProperty.TextColor.isEqual(this.localTextColor, localTextColor);
+			this.localTextColor == localTextColor;
 }

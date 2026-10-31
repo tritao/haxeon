@@ -102,9 +102,11 @@ class DockWorkspace implements View {
 			context.id("tab-label-width-cache"), function() return new DockTextWidthCache()).value;
 		var panelCache:DockPanelCache = context.lazyState(
 			context.id("panel-tree-cache:" + key), function() return new DockPanelCache()).value;
+		panelCache.bind(model, interaction);
 		panelCache.retain(context);
 		var paneCache:DockPanelCache = context.lazyState(
-			context.id("pane-tree-cache:" + key), function() return new DockPanelCache()).value;
+			context.id("pane-tree-cache:" + key), function() return new DockPanelCache(16, true)).value;
+		paneCache.bind(model, interaction);
 		paneCache.retain(context);
 		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
 		var content = buildNode(model.root, context, [], "layout",
@@ -188,13 +190,7 @@ class DockWorkspace implements View {
 			item.badgeCount = descriptor.badgeCount;
 			items.push(item);
 		}
-		var tabsStyle = new LayoutStyle();
-		// The panel must follow its split pane even when the active tab's content
-		// has a larger intrinsic width (for example, sensor property rows).
-		tabsStyle.width = LayoutAxis.stretch();
-		tabsStyle.height = LayoutAxis.grow();
 		var options = new TabsOptions();
-		options.style = tabsStyle;
 		if (headerActions != null) options.headerTrailing = headerActions([for (panel in visiblePanels) panel.id], selectedId);
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.onTabDragStart = function(panelId, event)
@@ -207,6 +203,12 @@ class DockWorkspace implements View {
 			interaction.cancelTabDrag(panelId, event.pointerId);
 		options.onTabHeaderBuilt = function(panelId, node) {
 			interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
+			// Preview changes invalidate the pane through interaction.revision. A node that has nothing to paint
+			// until then does not need its own layout, style and paint callback in every idle tab header.
+			var tabPreview = interaction.preview;
+			if (tabPreview == null || tabPreview.targetPanelId != panelId ||
+				(tabPreview.zone != DockDropZone.TabBefore && tabPreview.zone != DockDropZone.TabAfter))
+				return;
 			var indicatorStyle = new LayoutStyle();
 			indicatorStyle.width = LayoutAxis.grow();
 			indicatorStyle.height = LayoutAxis.grow();
@@ -215,9 +217,7 @@ class DockWorkspace implements View {
 			var indicator = new RenderNode(context.id("tab-drop-indicator:" + panelId),
 				LayoutVisualKind.Custom, indicatorStyle);
 			indicator.hitTestSelf = false;
-			var tabPreview = interaction.preview;
-			var tabPreviewKey = tabPreview == null ? "none" :
-				tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":" +
+			var tabPreviewKey = tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":" +
 				Std.string(tabPreview.zone);
 			indicator.onPaint(function(canvas, geometry) {
 				var preview = interaction.preview;
@@ -232,9 +232,13 @@ class DockWorkspace implements View {
 			}, "tab-drop-indicator:" + panelId + ":" + tabPreviewKey);
 			node.add(indicator);
 		};
-		return haxeon.ui.widgets.controls.Tabs.withOptions(nodeKey, items, activePanelId, function(next) {
+		var tabs = haxeon.ui.widgets.controls.Tabs.withOptions(nodeKey, items, activePanelId, function(next) {
 			model.activate(next);
 		}, options);
+		// The panel follows its split pane even when the active content has a larger intrinsic width.
+		tabs.style.width = LayoutAxis.stretch();
+		tabs.style.height = LayoutAxis.grow();
+		return tabs;
 	}
 
 	function matchesExpandedGroup(node:DockNode):Bool {
@@ -318,7 +322,11 @@ class DockWorkspace implements View {
 	function paneView(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
 			availableWidth:Float, paneCache:DockPanelCache, create:Void->View):View {
 		var retainable = fillPaneCacheKey(panelIds, activePanelId, context, nodeKey, availableWidth);
-		return new DockPaneView(nodeKey, retainable, paneKeyHash.a, paneKeyHash.b, create, paneCache, interaction);
+		var selected = activePanelId == null && panelIds != null && panelIds.length > 0 ? panelIds[0] : activePanelId;
+		// Length prefixes keep arbitrary panel IDs distinct from split-path components.
+		var cacheKey = nodeKey.length + ":" + nodeKey + ":" +
+			(selected == null ? "-1:" : selected.length + ":" + selected);
+		return new DockPaneView(cacheKey, retainable, paneKeyHash.a, paneKeyHash.b, create, paneCache, interaction);
 	}
 
 	/**
@@ -456,7 +464,8 @@ private class DockPanelView implements View {
 		}
 		var cached = keyed ? panelCache.entry(descriptor.id) : null;
 		var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
-		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
+		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.topologyMatches()
+			&& cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			context.retainObserved(cached.observed);
 			var retained = context.currentRoot(cached.root);
@@ -519,7 +528,8 @@ private class DockPaneView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var cached = retainable ? cache.entry(key) : null;
-		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
+		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.topologyMatches()
+			&& cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			context.retainObserved(cached.observed);
 			var retained = context.currentRoot(cached.root);
@@ -540,7 +550,7 @@ private class DockPaneView implements View {
 			cache.put(key, keyA, keyB, root, usedStates, context.stateRevisions(usedStates),
 				new InteractionStateSnapshot(context.currentRoot(root), context), context.observedSince(intMark, stringMark),
 				interaction.targetsSince(targetMark),
-				interaction.tabTargetsSince(tabMark));
+				interaction.tabTargetsSince(tabMark), context);
 		}
 		return root;
 	}
@@ -548,21 +558,55 @@ private class DockPaneView implements View {
 
 private class DockPanelCache {
 	final entries:Map<String, DockPanelCacheEntry>;
+	final maxEntries:Int;
+	final checkTopology:Bool;
+	/** Bounded caches keep the most recently used keys last. */
+	final recent:Array<String>;
+	var model:Null<DockWorkspaceModel> = null;
+	var interaction:Null<DockWorkspaceInteraction> = null;
 
-	public function new()
+	public function new(maxEntries:Int = 0, checkTopology:Bool = false) {
 		entries = new Map();
+		this.maxEntries = maxEntries;
+		this.checkTopology = checkTopology;
+		recent = [];
+	}
 
-	public function entry(panelId:String):Null<DockPanelCacheEntry>
-		return entries.get(panelId);
+	/** Cached callbacks and drop targets belong to this model and interaction, even if another has the same revision. */
+	public function bind(nextModel:DockWorkspaceModel, nextInteraction:DockWorkspaceInteraction):Void {
+		if (model == nextModel && interaction == nextInteraction) return;
+		entries.clear();
+		recent.resize(0);
+		model = nextModel;
+		interaction = nextInteraction;
+	}
+
+	public function entry(panelId:String):Null<DockPanelCacheEntry> {
+		var found = entries.get(panelId);
+		if (found != null && maxEntries > 0) {
+			recent.remove(panelId);
+			recent.push(panelId);
+		}
+		return found;
+	}
 
 	public function put(panelId:String, keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>,
 			stateRevisions:Array<Int>, interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies,
-			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>):Void {
+			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>, ?context:BuildContext):Void {
 		var previous = entries.get(panelId);
 		if (previous != null && previous.root != root)
 			previous.root.detach();
+		if (maxEntries > 0) {
+			recent.remove(panelId);
+			recent.push(panelId);
+			if (recent.length > maxEntries) {
+				// The current render tree may still own this root; release only the cache's reference.
+				var evicted = recent.shift();
+				if (evicted != null) entries.remove(evicted);
+			}
+		}
 		entries.set(panelId, new DockPanelCacheEntry(keyA, keyB, root, stateIds, stateRevisions,
-			interactions, observed, targets, tabTargets));
+			interactions, observed, targets, tabTargets, checkTopology, context));
 	}
 
 	public function retain(context:BuildContext):Void {
@@ -585,10 +629,15 @@ private class DockPanelCacheEntry {
 	public final interactions:InteractionStateSnapshot;
 	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
 	public final observed:haxeon.ui.core.Dependencies;
+	/** A hidden pane cannot be reused after one of its retained children moved to another tree. */
+	final topologyNodes:Null<Array<RenderNode>>;
+	final topologyParents:Null<Array<Null<RenderNode>>>;
+	final topologyPositions:Null<Array<Int>>;
+	final topologyChildCounts:Null<Array<Int>>;
 
 	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>, stateRevisions:Array<Int>,
 			interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies, ?targets:Array<DockDropTarget>,
-			?tabTargets:Array<DockTabDropTarget>) {
+			?tabTargets:Array<DockTabDropTarget>, checkTopology:Bool = false, ?context:BuildContext) {
 		this.keyA = keyA;
 		this.keyB = keyB;
 		this.root = root;
@@ -598,6 +647,55 @@ private class DockPanelCacheEntry {
 		this.observed = observed;
 		this.targets = targets == null ? [] : targets;
 		this.tabTargets = tabTargets == null ? [] : tabTargets;
+		if (checkTopology) {
+			if (context == null) throw "Pane topology snapshots require a build context";
+			var topologyContext:BuildContext = context;
+			var nodes:Array<RenderNode> = [], parents:Array<Null<RenderNode>> = [], positions:Array<Int> = [],
+				childCounts:Array<Int> = [];
+			function capture(node:RenderNode, variableParent:Bool):Void {
+				var parent = node == root ? null : node.parent;
+				nodes.push(node);
+				parents.push(parent);
+				positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
+				// A nested self-updating widget owns its children and may reconcile them while this pane is live.
+				// Its interaction snapshot tracks that build; retain only the children its caller added afterward.
+				var owner = node == root ? null : topologyContext.updatingBuild(node);
+				childCounts.push(owner == null ? node.children.length : -1);
+				for (child in node.children) {
+					var owned = false;
+					if (owner != null && owner.built != null)
+						for (made in owner.built.children) if (made.id.value == child.id.value) { owned = true; break; }
+					if (!owned) capture(child, owner != null);
+				}
+			}
+			capture(root, false);
+			topologyNodes = nodes;
+			topologyParents = parents;
+			topologyPositions = positions;
+			topologyChildCounts = childCounts;
+		} else {
+			topologyNodes = null;
+			topologyParents = null;
+			topologyPositions = null;
+			topologyChildCounts = null;
+		}
+	}
+
+	public function topologyMatches():Bool {
+		var nodes = topologyNodes, parents = topologyParents, positions = topologyPositions, counts = topologyChildCounts;
+		if (nodes == null) return true;
+		if (parents == null || positions == null || counts == null) throw "Incomplete pane topology snapshot";
+		if (RenderNode.latest(root) != root) return false;
+		for (index in 0...nodes.length) {
+			var node = nodes[index], parent = parents[index];
+			if (counts[index] >= 0 && node.children.length != counts[index]) return false;
+			if (node != root && positions[index] == -2 && (node.parent != parent || parent == null ||
+				parent.children.indexOf(node) < 0)) return false;
+			if (node != root && positions[index] != -2 && (node.parent != parent || parent == null ||
+				positions[index] < 0 || positions[index] >= parent.children.length ||
+				parent.children[positions[index]] != node)) return false;
+		}
+		return true;
 	}
 
 	public function matches(otherA:Int, otherB:Int):Bool
@@ -610,11 +708,9 @@ private class DockPanelCacheEntry {
 	public function statesMatch(context:BuildContext):Bool {
 		// A widget inside the panel changed its own state (a select opening, a section toggling). The
 		// panel's cache key knows nothing about that, so the built tree is stale and must be rebuilt.
-		var current = context.stateRevisions(stateIds);
-		for (index in 0...current.length)
-			if (current[index] != stateRevisions[index])
-				return false;
-		return interactions.matches(context) && observed.current();
+		if (context.stateRevisions(stateIds, stateRevisions) != stateRevisions)
+			return false;
+		return observed.current() && interactions.matches(context);
 	}
 }
 

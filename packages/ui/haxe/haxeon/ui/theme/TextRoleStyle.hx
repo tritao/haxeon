@@ -19,7 +19,7 @@ class TextRoleStyle {
 	public var color:Color;
 
 	public function new(textStyle:TextStyle, paragraphStyle:ParagraphStyle, color:Color) {
-		if (textStyle == null || paragraphStyle == null || color == null)
+		if (textStyle == null || paragraphStyle == null)
 			throw "Text role styles require complete values";
 		this.textStyle = textStyle;
 		this.paragraphStyle = paragraphStyle;

@@ -18,6 +18,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.text.Text;
@@ -60,6 +61,113 @@ private class DecoratedControl implements View {
     overlayStyle.height = LayoutAxis.fixed(7.5);
     node.add(new RenderNode(context.id("caller-overlay"), haxeon.ui.LayoutVisualKind.Box, overlayStyle));
     return node;
+  }
+}
+
+/** Registers listeners during routing to exercise hover preflight and the dispatcher snapshot. */
+@:access(haxeon.ui.core.RenderNode)
+private class HoverRoutingProbe implements View {
+  public final events:Array<String> = [];
+  public var alternate:Bool = false;
+  public function new() {}
+  public function build(context:BuildContext):RenderNode {
+    var rootStyle = new LayoutStyle(); rootStyle.width = LayoutAxis.fixed(160); rootStyle.height = LayoutAxis.fixed(80);
+    var childStyle = new LayoutStyle(); childStyle.width = LayoutAxis.fixed(80); childStyle.height = LayoutAxis.fixed(40);
+    var root = new RenderNode(context.id("hover-root"), LayoutVisualKind.Box, rootStyle);
+    var child = new RenderNode(context.id("hover-child"), alternate ? LayoutVisualKind.Custom : LayoutVisualKind.Box, childStyle);
+    root.add(child);
+    root.on(UiEventKind.HoverEnter, event -> {
+      if (!event.target.equals(root.id)) return;
+      events.push("root");
+      child.on(UiEventKind.HoverEnter, childEvent -> {
+        if (!childEvent.target.equals(child.id)) return;
+        events.push("child");
+        child.on(UiEventKind.HoverEnter, _ -> events.push("added"), "target");
+      }, "target");
+    }, "target");
+    root.onTargetBubble(UiEventKind.HoverEnter, _ -> events.push("direct"));
+    root.on(UiEventKind.HoverEnter, event -> { if (event.target.equals(child.id)) events.push("capture"); }, "capture");
+    root.on(UiEventKind.HoverEnter, event -> { if (event.target.equals(child.id)) events.push("bubble"); });
+    root.on(UiEventKind.HoverLeave, event -> { if (event.target.equals(child.id)) events.push("leave"); });
+    return root;
+  }
+}
+
+private class VariantProbe implements View {
+  public var variant:String = "a";
+  public var aRevision:Int = 0;
+  public var bRevision:Int = 0;
+  public var aBuilds:Int = 0;
+  public var bBuilds:Int = 0;
+  public var capacity:Int = 4;
+  public function new() {}
+  public function build(context:BuildContext):RenderNode {
+    var selected = variant;
+    return new haxeon.ui.core.RetainedVariants("variant-probe", selected, function(ctx) {
+      var revision = ctx.observeInt(function() return selected == "a" ? aRevision : bRevision);
+      if (selected == "a") aBuilds++; else bBuilds++;
+      return new Text(selected + ":" + revision);
+    }, null, capacity).build(context);
+  }
+}
+
+private class StrictVariantProbe implements View {
+  public var variant:String = "a";
+  public var presses:Int = 0;
+  public var patchAccepted:Bool = false;
+  public var counterBuilds:Int = 0;
+  public function new() {}
+  public function build(context:BuildContext):RenderNode {
+    return new haxeon.ui.core.RetainedVariants("strict-variant-probe", variant,
+      function(_) return new StrictVariantCounter(this), null, 2, true).build(context);
+  }
+}
+
+private class SiblingVariantProbe implements View {
+  public function new() {}
+  public function build(context:BuildContext):RenderNode {
+    var root = new RenderNode(context.id("siblings"), LayoutVisualKind.Box);
+    for (name in ["first", "second"]) {
+      var variant = new haxeon.ui.core.RetainedVariants(name, "same", function(ctx) {
+        var id = ctx.id("child");
+        return new StrictVariantLeaf(id);
+      });
+      root.add(variant.build(context));
+    }
+    return root;
+  }
+}
+
+private class StrictVariantLeaf implements View {
+  final id:WidgetId;
+  public function new(id:WidgetId) this.id = id;
+  public function build(context:BuildContext):RenderNode {
+    context.state(id, 0);
+    return new RenderNode(id, LayoutVisualKind.Box);
+  }
+}
+
+private class StrictVariantCounter implements View {
+  final owner:StrictVariantProbe;
+  public function new(owner:StrictVariantProbe) this.owner = owner;
+  public function build(context:BuildContext):RenderNode {
+    var id = context.id("counter");
+    return context.selfUpdating(id, function() {
+      owner.counterBuilds++;
+      var state = context.state(id, 0);
+      var style = new LayoutStyle(); style.width = LayoutAxis.fixed(80); style.height = LayoutAxis.fixed(40);
+      var node = new RenderNode(id, LayoutVisualKind.Box, style);
+      var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+      label.layout.text = Std.string(state.value);
+      node.add(label);
+      node.on(UiEventKind.PointerDown, function(_) {
+        owner.presses++;
+        state.updateQuietly(state.value + 1);
+        owner.patchAccepted = context.requestPatch(id);
+        if (!owner.patchAccepted) state.update(state.value);
+      });
+      return node;
+    });
   }
 }
 
@@ -421,7 +529,83 @@ private class UpdatingResources implements View {
   });
 }
 
+@:access(haxeon.ui.core.UiContext)
+@:access(haxeon.ui.style.ComputedStyle)
 class RestyleInPlaceTests {
+	static function retainedVariants(fonts:FontCollection):Void {
+		var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
+		var first = ui.submit(view, frame);
+		view.variant = "b"; ui.submit(view, frame);
+		view.variant = "a"; var restored = ui.submit(view, frame);
+		check(first == restored && view.aBuilds == 1 && view.bBuilds == 1, "A retained variant was rebuilt or lost its root");
+		view.variant = "b"; ui.submit(view, frame);
+		view.aRevision++;
+		view.variant = "a"; var changed = ui.submit(view, frame);
+		check(view.aBuilds == 2 && changed.layout.text == "a:1", "An inactive variant ignored an observed change");
+		ui.dispose();
+
+		var limited = new VariantProbe(), one = new UiContext(null, fonts), other = new UiContext(null, fonts);
+		limited.capacity = 1;
+		one.submit(limited, frame);
+		other.submit(limited, frame);
+		check(limited.aBuilds == 2, "Different UI contexts shared a retained variant");
+		limited.variant = "b"; one.submit(limited, frame);
+		limited.variant = "a"; one.submit(limited, frame);
+		check(limited.aBuilds == 3, "A variant outside the capacity was not evicted");
+		other.submit(limited, frame);
+		check(limited.aBuilds == 3, "Eviction in one context affected another context");
+		one.dispose(); other.dispose();
+		var siblings = new UiContext(null, fonts);
+		var siblingRoot = siblings.submit(new SiblingVariantProbe(), frame);
+		check(siblingRoot.children[0].id.value != siblingRoot.children[1].id.value,
+			"Sibling variant caches used the same state scope");
+		siblings.dispose();
+
+		var strict = new StrictVariantProbe(), patched = new UiContext(null, fonts);
+		var build:Void->View = function() return strict;
+		var root = patched.submitCached(build, frame, "strict");
+		check(root.children[0].layout.text == "0", "Strict variant did not start from its initial state");
+		patched.pointerDown(10, 10, 0);
+		check(strict.presses == 1, "The updating widget did not receive its pointer event");
+		root = patched.submitCached(build, frame, "strict");
+		check(root.children[0].layout.text == "1", "The quiet updating widget did not patch: text=" + root.children[0].layout.text +
+			" accepted=" + strict.patchAccepted);
+		var changedId = root.id.value;
+		strict.variant = "b"; patched.submit(strict, frame);
+		strict.variant = "a"; root = patched.submit(strict, frame);
+		check(root.children[0].layout.text == "0", "A changed detached variant restored its old quiet widget state: text=" +
+			root.children[0].layout.text + " builds=" + strict.counterBuilds + " old=" + changedId + " new=" + root.id.value);
+		patched.dispose();
+	}
+	static function inlineAxisSnapshots():Void {
+		var width = haxeon.ui.style.StyleProperty.Width;
+		var height = haxeon.ui.style.StyleProperty.Height;
+		var original = new haxeon.ui.style.ComputedStyle();
+		original.setAxis(width, LayoutAxis.fixed(7), null);
+		original.setAxis(height, LayoutAxis.grow(), null);
+		var fork = original.fork();
+		original.setAxis(width, LayoutAxis.fixed(9), null);
+		check(fork.get(width).value == 7 && original.get(width).value == 9, "Inline axes leaked across a fork");
+		var constructed = new haxeon.ui.style.ComputedStyle(fork);
+		fork.setAxis(height, LayoutAxis.fixed(11), null);
+		check(constructed.get(height).sizing == haxeon.ui.LayoutSizing.Grow, "Constructed style lost its axis snapshot");
+		var copy = constructed.copy();
+		check(!haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Copied inline axes compare differently");
+		var dynamicStyle = new haxeon.ui.style.ComputedStyle();
+		dynamicStyle.set(width, LayoutAxis.fixed(7), null);
+		dynamicStyle.set(height, LayoutAxis.grow(), null);
+		check(!haxeon.ui.style.StyleDiff.compare(constructed, dynamicStyle).changed,
+			"Inline and dynamically stored axes compare differently");
+		copy.set(width, LayoutAxis.fixed(3), null);
+		check(copy.get(width).value == 3 && constructed.get(width).value == 7 &&
+			haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Dynamic axis replacement lost value or isolation");
+		var entries = constructed.entries();
+		check(entries.length == 2, "Inline axis inspection omitted a property");
+		constructed.setAxis(width, LayoutAxis.fixed(13), null);
+		var inspected:LayoutAxis = cast entries[0].value;
+		check(inspected.value == 7 && constructed.get(width).value == 13,
+			"Changing an inline axis mutated an existing inspection snapshot");
+	}
   static function check(value:Bool, message:String):Void if (!value) throw message;
 
   /** Everything a user could see or interact with, per node. */
@@ -930,6 +1114,14 @@ class RestyleInPlaceTests {
 
     check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
       && !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)), "Rect equality is wrong");
+    var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, 1);
+    check(haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, 1))
+      && !haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, -1)),
+      "Caret geometry equality ignores a field");
+    var metrics = new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4);
+    check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))
+      && !haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
+      "Text metrics equality ignores a field");
     check(new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 2))
       && !new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 4)) && !new haxeon.ui.core.Shortcut(65, 2).equals(null),
       "Shortcut equality is wrong");
@@ -1084,6 +1276,44 @@ class RestyleInPlaceTests {
     Sys.println("PASS tabs/popup: switching retained tabs and navigating, selecting and scrolling a popup keep roots and caller additions and match fresh builds");
   }
 
+  static function buttonIdentityOwnership(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), left = new Button("Left"), right = new Button("Right");
+    left.classes = ["owned-class"];
+    right.classes = ["owned-class"];
+    left.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
+    right.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
+    var column = new Column("identity-test", [new KeyedView("left", left), new KeyedView("right", right)]);
+    var frame = new LayoutFrame(300, 100), root = ui.submit(column, frame);
+    left.classes[0] = "caller-change";
+    check(root.children[0].styleClasses[0] == "owned-class", "Button did not snapshot its caller's classes");
+    root.children[0].styleClasses[0] = "node-change";
+    check(root.children[1].styleClasses[0] == "owned-class", "Buttons shared a mutable class list");
+    root = ui.submit(column, frame);
+    check(root.children[0].styleClasses[0] == "caller-change", "Button reused an obsolete selector snapshot");
+    ui.dispose();
+  }
+
+  static function hoverRouting(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), probe = new HoverRoutingProbe();
+    ui.submit(probe, new LayoutFrame(200, 100));
+    ui.pointerMove(10, 10);
+    check(probe.events.join(",") == "root,direct,capture,child,added,bubble", "Hover routing lost a phase or a newly added listener");
+    var firstPath = ui.retainedHitPath;
+    ui.pointerMove(11, 11);
+    check(firstPath != null && ui.retainedHitPath == firstPath, "Unchanged hit paths were not retained");
+    ui.pointerLeave();
+    check(probe.events.indexOf("leave") >= 0, "Hover leave did not bubble to its ancestor");
+    probe.alternate = true;
+    ui.submit(probe, new LayoutFrame(200, 100));
+    check(ui.retainedHitPath == null, "A replaced node kept an old hit path alive");
+    ui.releaseRetained();
+    check(ui.retainedHitPath == null, "Releasing the tree retained its hit path");
+    ui.submit(probe, new LayoutFrame(200, 100));
+    ui.pointerMove(10, 10);
+    check(ui.retainedHitPath != null && ui.retainedHitPath != firstPath, "A rebuilt tree reused nodes from its old hit path");
+    ui.dispose();
+  }
+
   static function editedComposite(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), gauge = new Gauge();
     var view:View = new RetainedView("edited-composite", _ -> gauge), frame = new LayoutFrame(200, 100);
@@ -1157,9 +1387,13 @@ class RestyleInPlaceTests {
   }
 
   public static function main():Int {
+    inlineAxisSnapshots();
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();
+    retainedVariants(fonts);
+    buttonIdentityOwnership(fonts);
+    hoverRouting(fonts);
     tabsAndPopup(fonts);
     editedComposite(fonts);
     updatingResources(fonts);

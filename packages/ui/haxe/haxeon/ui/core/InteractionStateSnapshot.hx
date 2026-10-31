@@ -17,8 +17,9 @@ class InteractionStateSnapshot {
 	/** Widgets left out because they update themselves, with the builds that do it, kept alive with the cached subtree. */
 	var updatingBuilds:Array<SelfUpdatingBuild>;
 	var updatingRevisions:Array<Int>;
+	var updatingBuildRevisions:Null<Array<Int>>;
 
-	public function new(root:RenderNode, context:BuildContext, ?boundary:RenderNode) {
+	public function new(root:RenderNode, context:BuildContext, ?boundary:RenderNode, trackBuilds:Bool = false) {
 		if (root == null)
 			throw "Retained interaction snapshots require a render tree";
 		ids = NoIds;
@@ -26,6 +27,7 @@ class InteractionStateSnapshot {
 		masks = NoValues;
 		updatingBuilds = NoBuilds;
 		updatingRevisions = NoValues;
+		updatingBuildRevisions = trackBuilds ? [] : null;
 		capture(root, context, boundary);
 	}
 
@@ -36,6 +38,7 @@ class InteractionStateSnapshot {
 			if (build != null) {
 				if (updatingBuilds.length == 0) {updatingBuilds = []; updatingRevisions = [];}
 				updatingBuilds.push(build);
+				if (updatingBuildRevisions != null) updatingBuildRevisions.push(build.buildRevision);
 				var dependencies = build.dependencies;
 				updatingRevisions.push(dependencies == null ? 0 : dependencies.stateInvalidationRevision);
 				// Callers can append independently updating views after the owner's build was captured.
@@ -69,6 +72,14 @@ class InteractionStateSnapshot {
 		return false;
 	}
 
+	/** Whether a tracked updater rebuilt after capture, including changes deliberately kept out of state revisions. */
+	public function buildsChanged():Bool {
+		if (updatingBuildRevisions == null) return false;
+		for (index in 0...updatingBuilds.length)
+			if (updatingBuilds[index].buildRevision != updatingBuildRevisions[index]) return true;
+		return false;
+	}
+
 	public function appendStateIds(ids:Null<Array<Int>>, ?previous:Array<Int>):Null<Array<Int>> {
 		var count = ids == null ? 0 : ids.length;
 		for (entry in updatingBuilds) {
@@ -98,15 +109,25 @@ class InteractionStateSnapshot {
 		for (entry in updatingBuilds) context.retainUpdatingState(entry);
 	}
 
-	public function matches(context:BuildContext):Bool {
+	public function matches(context:BuildContext, register:Bool = true):Bool {
 		if (statesChanged(context)) return false;
 		for (index in 0...ids.length)
 			if ((context.interactionStates.get(ids[index]) & masks[index]) != values[index])
 				return false;
+		// Check every subtree before replacing any registration: a later mismatch must not leave a partial rearm.
 		for (entry in updatingBuilds) {
 			var root = entry.root;
-			if (root == null || !context.rearm(root.id, entry)) return false;
+			if (root == null || !context.canRearm(root.id, entry)) return false;
 		}
+		if (register) rearmValidated(context);
 		return true;
+	}
+
+	@:allow(haxeon.ui.core.BuildContext)
+	function rearmValidated(context:BuildContext):Void {
+		for (entry in updatingBuilds) {
+			var root = entry.root;
+			if (root != null) context.rearmValidated(root.id, entry);
+		}
 	}
 }

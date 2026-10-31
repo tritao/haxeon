@@ -33,8 +33,6 @@ class SpinnerPainter {
 			kind:SpinnerKind = SpinnerKind.Ring) {
 		if (scheduler == null)
 			throw "Spinner painter requires an animation scheduler";
-		if (color == null)
-			throw "Spinner painter requires a color";
 		if (!isValidKind(kind))
 			throw "Spinner kind is invalid";
 		if (!finite(speed) || speed <= 0.0)

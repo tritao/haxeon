@@ -391,6 +391,8 @@ class BuildContext {
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
 		var root = buildUpdating(entry, previous == null ? null : previous.dependencies);
+		// A retained alternative may still hold the old registration. A complete rebuild also changes its snapshot.
+		if (previous != null) previous.buildRevision++;
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
 		entry.built = root.snapshotBuilt();
@@ -452,13 +454,24 @@ class BuildContext {
 	}
 
 	/**
-	 * Registers a self-updating build again when a retained cache brings its subtree back: unmounted widgets are pruned, but the
-	 * cache kept their nodes. False when the build was released with the tree, in which case the cache must rebuild.
+	 * Registers a cached widget again when its retained subtree returns. During a full build an unclaimed ID still
+	 * belongs only to the previous frame, so a cached variant can replace that registration. An ID already claimed by
+	 * this build, or an ID in an in-place patch, cannot be taken from a different live node.
+	 *
+	 * Validation can be requested without registering anything, so a cache with several updaters either rearms all of
+	 * them or leaves the current registrations alone when any dependency no longer matches.
 	 */
 	public function rearm(id:WidgetId, entry:SelfUpdatingBuild):Bool {
+		if (!canRearm(id, entry)) return false;
+		rearmValidated(id, entry);
+		return true;
+	}
+
+	@:allow(haxeon.ui.core.InteractionStateSnapshot)
+	function canRearm(id:WidgetId, entry:SelfUpdatingBuild):Bool {
 		if (!updateInPlace || entry.root == null || entry.epoch != updatingEpoch) return false;
 		var current = selfUpdatingBuilds.get(id.value);
-		if (current != null && current.root != entry.root) return false;
+		if (current != null && current.root != entry.root && (patching || claimed.has(id.value))) return false;
 		var dependencies = entry.dependencies;
 		if (dependencies != null) {
 			if (dependencies.stateIds != null) {
@@ -466,12 +479,19 @@ class BuildContext {
 					if (stateStore.valueRevision(dependencies.stateIds[index]) != dependencies.stateRevisions[index]) return false;
 			}
 			if (dependencies.observed != null && !dependencies.observed.current()) return false;
-			if (dependencies.children != null && !dependencies.children.matches(this)) return false;
+			if (dependencies.children != null && !dependencies.children.matches(this, false)) return false;
 		}
-		if (current != entry) registerSelfUpdatingBuild(id.value, entry);
+		return true;
+	}
+
+	/** Commit a validated subtree without polling application-owned reads a second time. */
+	@:allow(haxeon.ui.core.InteractionStateSnapshot)
+	function rearmValidated(id:WidgetId, entry:SelfUpdatingBuild):Void {
+		var dependencies = entry.dependencies;
+		if (dependencies != null && dependencies.children != null) dependencies.children.rearmValidated(this);
+		if (selfUpdatingBuilds.get(id.value) != entry) registerSelfUpdatingBuild(id.value, entry);
 		else updatingRegistrations++;
 		retainUpdatingState(entry);
-		return true;
 	}
 
 	/** Rebuilds the pending self-updating widgets and reconciles them with the retained tree; runs after beginFrame, before the root builds. */
@@ -538,6 +558,7 @@ class BuildContext {
 		if (previous != null && entry.root != null && updatingStatesChanged(entry)) previous.stateInvalidationRevision++;
 		try {
 			var root = entry.build();
+			entry.buildRevision++;
 			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark, previous == null ? null : previous.stateIds);
 			var reads = observed.intCount == intMark && observed.stringCount == stringMark ? null : observed.since(intMark, stringMark);
 			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this, root);
@@ -916,6 +937,8 @@ class SelfUpdatingBuild {
 	public var pending:Bool = false;
 	public var buildsFromHover:Bool = true;
 	public var epoch:Int = 0;
+	/** Advances for every completed build, including quiet in-place patches. */
+	public var buildRevision:Int = 0;
 	/** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
 	public var built:Null<BuiltNode> = null;
 

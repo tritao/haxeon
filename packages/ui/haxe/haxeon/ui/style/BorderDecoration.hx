@@ -26,7 +26,7 @@ class BorderDecoration extends Decoration {
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
 		var borderColor = color == null ? style.get(StyleProperty.BorderColor) : color;
 		var borderWidth = width == null ? style.get(StyleProperty.BorderWidth) : width;
-		if (borderColor == null || borderWidth <= 0.0)
+		if (borderWidth <= 0.0)
 			return;
 		if (geometry.width <= 0.0 || geometry.height <= 0.0)
 			return;

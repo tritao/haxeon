@@ -348,13 +348,12 @@ class LayoutTransaction {
 		return finite(value) && value > 0.0;
 
 	static function axisDescription(axis:LayoutAxis):String {
-		if (axis == null) return "null";
 		return "[" + (axis.sizing:Int) + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
 	}
 
 	static function validAxis(axis:LayoutAxis):Bool {
-		var sizing:Int = axis == null ? -1 : cast axis.sizing;
-		if (axis == null || sizing < LayoutSizing.Fit || sizing > LayoutSizing.Percent ||
+		var sizing:Int = cast axis.sizing;
+		if (sizing < LayoutSizing.Fit || sizing > LayoutSizing.Percent ||
 			!finite(axis.value) || axis.value < 0.0 || !finite(axis.min) ||
 			axis.min < 0.0 || !finite(axis.max) || axis.max < 0.0 ||
 			!finite(axis.growWeight) || axis.growWeight <= 0.0)

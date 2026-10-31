@@ -71,7 +71,7 @@ class StyleProperty<T> {
 	public function hasLayoutBinding():Bool
 		return readLayout != null && writeLayout != null;
 
-	// Color, Insets, LayoutAxis and Transform2D are structural classes: their equality is generated from their fields.
+	// These structural values compare through equality generated from their fields.
 	static function colorEqual(left:Color, right:Color):Bool
 		return haxeon.Equality.equals(left, right);
 

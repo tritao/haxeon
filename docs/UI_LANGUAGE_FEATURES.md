@@ -67,25 +67,13 @@ The UI does not need a separate feature for this; it needs `STRUCTS.md` stages 2
 GC objects; native memory operations) and stage 5 for descriptors and annotations. Its stages 3a (scoped places) stays
 deferred.
 
-### 4. Structs for small values, and nullable struct fields
+### 4. Structs for small values, and nullable struct fields — implemented
 
-Independent of the store: `Color`, `Insets`, `LayoutAxis`, `Rect` and `Transform2D` are `@:structural` classes, one GC object
-each. As structs they sit inline in `LayoutStyle` (one object instead of about five) and geometry temporaries cost nothing.
-No UI or editor code mutates their fields in place and no style field is set to `null`, so copy semantics are safe. They
-should be **immutable structs** (all fields `final`), replaced as a whole, which rules out the lost write to a temporary
-copy. Needed, all in `STRUCTS.md` (stages 1a and 1b, "Immutability and copies", "Nullable structs", "Representation on Wasm
-GC"):
-
-- `@:structural` and `haxeon.Equality` accepting `struct`, and an audit of `==`, which becomes fieldwise;
-- the compile error for writes to a temporary copy;
-- **`Null<S>` as a language-level optional** with an inline presence flag: about eight UI fields use `null` for "not set"
-  (`Text.color`, `Icon.color`, `Popup.backdropColor`, `TextField.whitespaceColor`, `Canvas.clip`, some caches), and
-  `Null<S>` fields are rejected today. Not a library option type or a sentinel color;
-- scalar replacement of objects holding value fields (today's scalar replacement skips them, which is the nested style
-  case);
-- **the Wasm GC representation.** Today a value class on Wasm GC is a separate GC struct and every copy allocates, so
-  converting these types would allocate *more* on the web target until struct fields are flattened into their holder and
-  struct locals are scalarized.
+`Color`, `Insets`, `LayoutAxis`, `Rect` and `Transform2D` are immutable `@:structural` structs, with fieldwise equality
+and inline storage in `LayoutStyle`. Optional fields use `Null<S>` with an inline presence flag. The compiler rejects
+writes through temporary values, scalar-replaces eligible values and their callers, and flattens struct fields and locals
+on Wasm GC. Dynamic and otherwise escaping values may still box. See [STRUCTS.md](STRUCTS.md) for the compiler rules and
+measurements and [UI value types](../packages/ui/docs/VALUE_TYPES.md) for the UI boundary and retention changes.
 
 ### 5. Purity contracts (deferred)
 

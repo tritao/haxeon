@@ -8,8 +8,8 @@ class GradientStop {
 	public final color:Color;
 
 	public function new(offset:Float, color:Color) {
-		if (offset < 0.0 || offset > 1.0 || color == null)
-			throw "Gradient stop offset must be in the range 0..1 and include a color";
+		if (offset < 0.0 || offset > 1.0)
+			throw "Gradient stop offset must be in the range 0..1";
 		this.offset = offset;
 		this.color = color;
 	}

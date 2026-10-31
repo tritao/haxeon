@@ -30,6 +30,42 @@ import haxeon.ui.icons.IconName;
 
 /** Descriptor-driven inspector that routes edits through the active document. */
 class PropertyEditor implements View {
+	/** Private input templates: their consumers copy the style before exposing it. */
+	static final GrowInputStyle:LayoutStyle = makeInputStyle(0.0);
+	static final FieldInputStyle:LayoutStyle = makeInputStyle(64.0);
+	static final NumericRowStyle:LayoutStyle = makeNumericRowStyle();
+	var cachedLabelStyle:Null<LayoutStyle> = null;
+	var cachedLabelWidth:Float = 0.0;
+	var cachedLabelStacked:Bool = false;
+
+	static function makeInputStyle(min:Float):LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = LayoutAxis.grow(min);
+		return result;
+	}
+
+	static function makeNumericRowStyle():LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = LayoutAxis.grow();
+		result.direction = LayoutDirection.LeftToRight;
+		result.childAlignY = LayoutAlignmentY.Center;
+		result.childGap = 6.0;
+		return result;
+	}
+
+	/** Used only by privately built text views, which read rather than expose or mutate it. */
+	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent)
+	function labelStyle():LayoutStyle {
+		var cached = cachedLabelStyle;
+		if (cached == null || cachedLabelStacked != stackedRows || cachedLabelWidth != labelWidth) {
+			cached = new LayoutStyle();
+			cached.width = stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(labelWidth);
+			cachedLabelStyle = cached;
+			cachedLabelWidth = labelWidth;
+			cachedLabelStacked = stackedRows;
+		}
+		return cached;
+	}
 	static var nextGeneration:Int = 0;
 	public final key:String;
 	public final descriptors:Array<PropertyDescriptor>;
@@ -147,6 +183,11 @@ class PropertyEditor implements View {
 	function setDraft(descriptor:PropertyDescriptor, value:String):Void
 		drafts.set(descriptor.id, value == null ? "" : value);
 
+	/** A detached inspector may reuse this editor only if no draft, error, or edit has occurred. */
+	@:allow(haxeon.ui.widgets.properties.PropertyInspector)
+	function isPristine():Bool
+		return revision == 0 && !drafts.keys().hasNext() && !errors.keys().hasNext() && !pending.keys().hasNext();
+
 	function draftOrValue(descriptor:PropertyDescriptor, value:PropertyValue):String
 		return drafts.exists(descriptor.id) ? drafts.get(descriptor.id) :
 			registry.editableText(value);
@@ -232,11 +273,9 @@ class PropertyEditor implements View {
 				for (option in descriptor.options)
 					enumOptions.push(new SelectOption<String>(option.key, option.label,
 						option.key, option.enabled));
-				var selectStyle = new LayoutStyle();
-				selectStyle.width = LayoutAxis.grow();
 				var select = new Select<String>(editorKey, enumOptions, selected, function(next) {
 					applyValue(context, descriptor, PropertyValue.Enum(next));
-				}, selectStyle);
+				}, GrowInputStyle);
 				select.enabled = writable;
 				select.accessibilityLabel = accessibleName(descriptor);
 				result = select;
@@ -289,8 +328,6 @@ class PropertyEditor implements View {
 		}
 		if (number == null || descriptor.minimum == null || descriptor.maximum == null)
 			return textField(context, descriptor, value, editorKey, writable);
-		var sliderStyle = new LayoutStyle();
-		sliderStyle.width = LayoutAxis.grow();
 		var step = descriptor.step == null ? 0.01 : descriptor.step;
 		var slider = new Slider(editorKey + ":slider", accessibleName(descriptor), number,
 			descriptor.minimum, descriptor.maximum, step, function(next) {
@@ -298,27 +335,20 @@ class PropertyEditor implements View {
 					applyValue(context, descriptor, PropertyValue.Int(Std.int(next)));
 				else
 					applyValue(context, descriptor, PropertyValue.Float(next));
-			}, sliderStyle);
+			}, GrowInputStyle);
 		slider.enabled = writable;
-		var rowStyle = new LayoutStyle();
-		rowStyle.width = LayoutAxis.grow();
-		rowStyle.direction = LayoutDirection.LeftToRight;
-		rowStyle.childAlignY = LayoutAlignmentY.Center;
-		rowStyle.childGap = 6.0;
 		return new Row(editorKey + ":numeric", [
 			new KeyedView("slider", slider),
 			new KeyedView("text", textField(context, descriptor, value,
 				editorKey + ":text", writable))
-		], rowStyle);
+		], NumericRowStyle);
 	}
 
 	function textField(context:BuildContext, descriptor:PropertyDescriptor,
 			value:PropertyValue, editorKey:String, writable:Bool):View {
-		var fieldStyle = new LayoutStyle();
-		fieldStyle.width = LayoutAxis.grow(64.0);
 		var field = new TextField(editorKey, draftOrValue(descriptor, value), function(next) {
 			setDraft(descriptor, next);
-		}, fieldStyle);
+		}, FieldInputStyle);
 		field.classes = ["property-input"];
 		field.enabled = writable;
 		field.label = accessibleName(descriptor);
@@ -369,6 +399,34 @@ private class PropertyEditorRow implements View {
 }
 
 private class PropertyEditorRowContent implements View {
+	/** Row and detail constructors copy these private templates; text views only read the detail template. */
+	static final RowCenter:LayoutStyle = makeRow(false, false);
+	static final RowStart:LayoutStyle = makeRow(false, true);
+	static final ColumnCenter:LayoutStyle = makeRow(true, false);
+	static final ColumnStart:LayoutStyle = makeRow(true, true);
+	static final DetailTextStyle:LayoutStyle = makeDetail(false);
+	static final DetailColumnStyle:LayoutStyle = makeDetail(true);
+
+	static function makeRow(stacked:Bool, custom:Bool):LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = LayoutAxis.grow();
+		result.height = LayoutAxis.fit();
+		result.direction = stacked ? LayoutDirection.TopToBottom : LayoutDirection.LeftToRight;
+		result.childAlignY = custom ? LayoutAlignmentY.Start : LayoutAlignmentY.Center;
+		result.childGap = 8.0;
+		return result;
+	}
+
+	static function makeDetail(column:Bool):LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = LayoutAxis.grow();
+		if (column) {
+			result.height = LayoutAxis.fit();
+			result.childGap = 2.0;
+		}
+		return result;
+	}
+
 	final owner:PropertyEditor;
 	final descriptor:PropertyDescriptor;
 	final value:PropertyValue;
@@ -382,14 +440,9 @@ private class PropertyEditorRowContent implements View {
 	public function build(context:BuildContext):RenderNode {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
-		var labelStyle = new LayoutStyle();
-		labelStyle.width = owner.stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(owner.labelWidth);
-		var rowStyle = new LayoutStyle();
-		rowStyle.width = LayoutAxis.grow();
-		rowStyle.height = LayoutAxis.fit();
-		rowStyle.direction = owner.stackedRows ? LayoutDirection.TopToBottom : LayoutDirection.LeftToRight;
-		rowStyle.childAlignY = switch descriptor.type { case Custom(_): LayoutAlignmentY.Start; default: LayoutAlignmentY.Center; };
-		rowStyle.childGap = 8.0;
+		var labelStyle = owner.labelStyle();
+		var custom = switch descriptor.type { case Custom(_): true; default: false; };
+		var rowStyle = owner.stackedRows ? (custom ? ColumnStart : ColumnCenter) : (custom ? RowStart : RowCenter);
 		var children:Array<KeyedView> = [
 			new KeyedView("label", new haxeon.ui.widgets.text.HighlightedText(PropertyEditor.accessibleName(descriptor), owner.searchQuery, labelStyle)),
 			new KeyedView("value", owner.editorView(context, descriptor, value))
@@ -414,12 +467,7 @@ private class PropertyEditorRowContent implements View {
 				context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 			return result;
 		}
-		var errorStyle = new LayoutStyle();
-		errorStyle.width = LayoutAxis.grow();
-		var columnStyle = new LayoutStyle();
-		columnStyle.width = LayoutAxis.grow();
-		columnStyle.height = LayoutAxis.fit();
-		columnStyle.childGap = 2.0;
+		var errorStyle = DetailTextStyle;
 		var details:Array<KeyedView> = [new KeyedView("field", row)];
 		if (descriptor.description != null && descriptor.description.length > 0)
 			details.push(new KeyedView("description", new haxeon.ui.widgets.text.HighlightedText(descriptor.description, owner.searchQuery, errorStyle, context.theme.tokens.textSecondary,
@@ -430,7 +478,7 @@ private class PropertyEditorRowContent implements View {
 		if (descriptor.restartRequired)
 			details.push(new KeyedView("restart", new Text("Requires restart", errorStyle)));
 		if (error != null) details.push(new KeyedView("message", new Text(error, errorStyle)));
-		var result = new Column("details-row", details, columnStyle).build(context);
+		var result = new Column("details-row", details, DetailColumnStyle).build(context);
 		if (observed)
 			context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 		return result;

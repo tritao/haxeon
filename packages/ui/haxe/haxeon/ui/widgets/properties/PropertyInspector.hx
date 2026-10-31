@@ -46,6 +46,9 @@ class PropertyInspector implements View {
 	public var onSectionExpanded:Null<String->Bool->Void>;
 	final editors:Map<String, PropertyEditor>;
 	final sectionByDescriptor:Map<String, PropertyEditor>;
+	final initialExpanded:Array<Bool>;
+	final initialScrollX:Float;
+	final initialScrollY:Float;
 
 	public function new(key:String, ?descriptors:Array<PropertyDescriptor>,
 		?style:LayoutStyle, ?registry:PropertyEditorRegistry,
@@ -64,6 +67,9 @@ class PropertyInspector implements View {
 			validateDescriptorSet(descriptors, this.descriptors);
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.controller = controller == null ? new ScrollController() : controller;
+		initialScrollX = this.controller.offsetX;
+		initialScrollY = this.controller.offsetY;
+		initialExpanded = [for (section in this.sections) section.expanded];
 		this.enabled = true;
 		this.labelWidth = 140.0;
 		this.scrollable = true;
@@ -118,6 +124,18 @@ class PropertyInspector implements View {
 			result = result * 31 + (editor == null ? 0 : editor.revision);
 		}
 		return result;
+	}
+
+	/** Whether discarding and rebuilding this inspector would keep all of its transient user state unchanged. */
+	public function isPristine():Bool {
+		if (sections.length != initialExpanded.length || controller.offsetX != initialScrollX ||
+				controller.offsetY != initialScrollY || controller.advance(0.0))
+			return false;
+		for (index in 0...sections.length) {
+			var section = sections[index], editor = editors.get(section.id);
+			if (section.expanded != initialExpanded[index] || editor == null || !editor.isPristine()) return false;
+		}
+		return true;
 	}
 
 	/** Current validation/transaction error for a descriptor, if any. */

@@ -50,7 +50,7 @@ class PlotView implements View {
 
 	public function setAppearance(background:Color, gridColor:Color, axisColor:Color,
 			gridDivisions:Int = 8, padding:Float = 12.0):Void {
-		if (background == null || gridColor == null || axisColor == null || gridDivisions < 1 ||
+		if (gridDivisions < 1 ||
 			!finite(padding) || padding < 0.0)
 			throw "Plot appearance values are invalid";
 		this.background = background;

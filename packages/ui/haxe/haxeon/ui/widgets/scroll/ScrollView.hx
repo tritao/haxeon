@@ -101,10 +101,10 @@ class ScrollView implements View {
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
 
 			visibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
-			viewport.on(UiEventKind.HoverEnter, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(true);
 			});
-			viewport.on(UiEventKind.HoverLeave, function(event) {
+			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(false);
 			});
 
@@ -127,8 +127,8 @@ class ScrollView implements View {
 			horizontalVisibility.value.bindSource(controller);
 			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
 			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
-			viewport.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
-			viewport.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
+			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
+			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
 			var followsOffset = contentFollowsOffset;
 			binding.value.attach(controller, context.animations, function(_) {
 				context.willEditRetained(translatedContent);
@@ -294,8 +294,8 @@ class ScrollView implements View {
 			updatePaint();
 		});
 		updatePaint();
-		track.on(UiEventKind.HoverEnter, function(event) { if (event.target.equals(track.id)) visibility.setHovered(true); });
-		track.on(UiEventKind.HoverLeave, function(event) { if (event.target.equals(track.id)) visibility.setHovered(false); });
+		track.onTargetBubble(UiEventKind.HoverEnter, function(event) { if (event.target.equals(track.id)) visibility.setHovered(true); });
+		track.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(track.id)) visibility.setHovered(false); });
 		thumb.on(UiEventKind.Focus, function(_) visibility.setFocused(true));
 		thumb.on(UiEventKind.Blur, function(_) visibility.setFocused(false));
 		thumb.on(UiEventKind.FocusLost, function(_) visibility.setFocused(false));

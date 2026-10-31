@@ -15,7 +15,7 @@ class ResolvedTextStyle {
 
 	public function new(textStyle:TextStyle, paragraphStyle:ParagraphStyle, textColor:Color,
 			?override:TextStyleOverride) {
-		if (textStyle == null || paragraphStyle == null || textColor == null)
+		if (textStyle == null || paragraphStyle == null)
 			throw "Resolved text styles require complete values";
 		this.textStyle = new TextStyle(
 			override == null || override.fontSize == null ? textStyle.fontSize : override.fontSize,
@@ -48,8 +48,6 @@ class ResolvedTextStyle {
 
 	/** Returns this snapshot with a state-dependent foreground color. */
 	public function withTextColor(color:Color):ResolvedTextStyle {
-		if (color == null)
-			throw "Resolved text colors cannot be null";
 		return new ResolvedTextStyle(textStyle, paragraphStyle, color);
 	}
 

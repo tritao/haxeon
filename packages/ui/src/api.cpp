@@ -2981,6 +2981,17 @@ extern "C" nkui_result nkui_layout_session_get_resolved_updates(nkui_layout_sess
     return NKUI_OK;
 }
 
+extern "C" nkui_result nkui_layout_session_get_resolved_updates_into(
+    nkui_layout_session session, uint8_t *buffer, uint32_t capacity_bytes, uint32_t *out_bytes) {
+    if (!out_bytes || (!buffer && capacity_bytes != 0)) return NKUI_ERROR_INVALID_ARGUMENT;
+    uint32_t size = capacity_bytes;
+    const auto result = nkui_layout_session_get_resolved_updates(session, buffer, &size);
+    *out_bytes = size;
+    // The existing null-buffer form is a successful size query; this form reports insufficient capacity.
+    if (result == NKUI_OK && size > capacity_bytes) return NKUI_ERROR_INVALID_ARGUMENT;
+    return result;
+}
+
 extern "C" nkui_result nkui_layout_session_hit_test(nkui_layout_session session, float x, float y,
                                                     uint8_t *out_path, uint32_t *inout_bytes) {
     if (!inout_bytes || !std::isfinite(x) || !std::isfinite(y))

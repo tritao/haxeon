@@ -432,7 +432,7 @@ class Theme {
 		return enabled ? textRole(role).color : disabledText;
 
 	/** Resolve the foreground against the actual state background, including custom fills. */
-	public function buttonLabelColor(enabled:Bool, background:Color, ?preferred:Color):Color {
+	public function buttonLabelColor(enabled:Bool, background:Null<Color>, ?preferred:Color):Color {
 		if (!enabled) return disabledButtonText;
 		var fill = background == null ? tokens.surface : Color.rgba(
 			background.red * background.alpha + tokens.surface.red * (1 - background.alpha),

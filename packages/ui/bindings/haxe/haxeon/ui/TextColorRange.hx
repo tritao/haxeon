@@ -9,8 +9,8 @@ class TextColorRange {
 	public final color:Color;
 
 	public function new(start:Int, end:Int, color:Color) {
-		if (start < 0 || end <= start || color == null)
-			throw "Text color ranges require a nonempty range and color";
+		if (start < 0 || end <= start)
+			throw "Text color ranges require a nonempty range";
 		this.start = start;
 		this.end = end;
 		this.color = color;

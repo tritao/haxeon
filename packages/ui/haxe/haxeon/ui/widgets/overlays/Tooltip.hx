@@ -26,6 +26,30 @@ class Tooltip implements View {
 	public var startAtAnchorMiddle:Bool = false;
 	static inline final PADDING = 10.0;
 	static inline final EDGE = 6.0;
+	/** Private resolver inputs; resolved nodes own their own mutable styles. */
+	static final DefaultHiddenStyle:LayoutStyle = inlineTooltipStyle(0.0, -28.0, false);
+	static final DefaultVisibleStyle:LayoutStyle = inlineTooltipStyle(0.0, -28.0, true);
+	static final FitRootStyle:LayoutStyle = inlineRootStyle(false);
+	static final FillRootStyle:LayoutStyle = inlineRootStyle(true);
+
+	static function inlineTooltipStyle(x:Float, y:Float, visible:Bool):LayoutStyle {
+		var result = new LayoutStyle();
+		result.positioning = LayoutPositioning.Absolute;
+		result.overlay = true;
+		result.positionX = x;
+		result.positionY = y;
+		result.clipToParent = false;
+		result.visible = visible;
+		return result;
+	}
+
+	static function inlineRootStyle(fill:Bool):LayoutStyle {
+		var result = new LayoutStyle();
+		result.width = fill ? LayoutAxis.grow() : LayoutAxis.fit();
+		result.height = LayoutAxis.fit();
+		result.clipToParent = false;
+		return result;
+	}
 
 	final key:Key;
 	final anchor:View;
@@ -60,18 +84,12 @@ class Tooltip implements View {
 				pointer.dismissRevision = dismissRevision;
 				if (state.value) state.update(false);
 			}
-			var tooltipStyle = new LayoutStyle();
-			tooltipStyle.positioning = LayoutPositioning.Absolute;
-			tooltipStyle.overlay = true;
-			tooltipStyle.positionX = x;
-			tooltipStyle.positionY = y;
-			tooltipStyle.clipToParent = false;
-			tooltipStyle.visible = cast state.value;
+			// Preserve signed zero for explicit coordinates rather than treating -0 as the default +0.
+			var defaultPosition = x == 0.0 && 1.0 / x > 0.0 && y == -28.0;
+			var tooltipStyle = defaultPosition ? (state.value ? DefaultVisibleStyle : DefaultHiddenStyle) :
+				inlineTooltipStyle(x, y, state.value);
 			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, state.value);
-			var rootStyle = new LayoutStyle();
-			rootStyle.width = fillAnchor ? LayoutAxis.grow() : LayoutAxis.fit();
-			rootStyle.height = LayoutAxis.fit();
-			rootStyle.clipToParent = false;
+			var rootStyle = fillAnchor ? FillRootStyle : FitRootStyle;
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.id("stack");
 				var rootComputed = context.resolveStyle(

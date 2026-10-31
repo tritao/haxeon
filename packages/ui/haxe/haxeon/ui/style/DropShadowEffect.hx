@@ -15,8 +15,6 @@ class DropShadowEffect extends Effect {
 		this.offsetY = Effect.requireFinite(offsetY, "Drop-shadow Y offset must be finite");
 		this.sigma = Effect.requireNonNegative(sigma,
 			"Drop-shadow sigma must be finite and non-negative");
-		if (color == null)
-			throw "Drop shadows require a color";
 		this.color = Effect.copyColor(color);
 	}
 

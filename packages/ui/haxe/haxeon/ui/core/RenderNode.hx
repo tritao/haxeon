@@ -33,6 +33,7 @@ import haxeon.ui.semantics.Semantics;
 
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
+	static inline final TargetBubblePhase = "target-bubble";
 	public final id:WidgetId;
 	public final layout:LayoutNode;
 	/** Shared and empty until the first `add`, so leaves allocate no array; change it only through `add`, `remove` and `replaceWith`. */
@@ -173,6 +174,17 @@ class RenderNode {
 		styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
 		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 		return this;
+	}
+
+	/** Takes an independently built class list; the style resolver already owns a separate snapshot. */
+	@:allow(haxeon.ui.widgets.controls.Button)
+	function setStyleIdentityWithOwnedClasses(type:String, key:String, id:String,
+			classes:Array<String>, tags:Array<String>):Void {
+		styleType = type;
+		styleKey = key;
+		styleId = id;
+		styleClasses = classes;
+		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
 	}
 
 	public function add(child:RenderNode):RenderNode {
@@ -469,21 +481,34 @@ class RenderNode {
 	public function applyTextStyle(style:ResolvedTextStyle):RenderNode {
 		if (style == null)
 			throw "Render text styles cannot be null";
-		layout.textColor = style.textColor;
-		layout.textStyle.font = style.textStyle.font;
-		layout.textStyle.fontSize = style.textStyle.fontSize;
-		layout.textStyle.letterSpacing = style.textStyle.letterSpacing;
-		layout.paragraphStyle.wrap = style.paragraphStyle.wrap;
-		layout.paragraphStyle.alignment = style.paragraphStyle.alignment;
-		layout.paragraphStyle.lineHeight = style.paragraphStyle.lineHeight;
-		layout.paragraphStyle.direction = style.paragraphStyle.direction;
-		layout.paragraphStyle.tabWidth = style.paragraphStyle.tabWidth;
+		return applyTextComponents(style.textStyle, style.paragraphStyle, style.textColor);
+	}
+
+	/** Copy complete typography without constructing a temporary ResolvedTextStyle. */
+	@:allow(haxeon.ui.widgets.text.TextField)
+	function applyTextComponents(text:TextStyle, paragraph:ParagraphStyle, color:Color):RenderNode {
+		layout.textColor = color;
+		var ownText = layout.textStyle, ownParagraph = layout.paragraphStyle;
+		haxeon.Structural.assignChanged(ownText, ownText, text);
+		haxeon.Structural.assignChanged(ownParagraph, ownParagraph, paragraph);
 		return this;
 	}
 
 	public function on(kind:String, handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
-		if (kind == null || kind.length == 0 || handler == null ||
-			(phase != "capture" && phase != "target" && phase != "bubble"))
+		if (phase != "capture" && phase != "target" && phase != "bubble")
+			throw "Event handlers require a kind and callback";
+		return addHandler(kind, handler, phase);
+	}
+
+	/** A target-only bubble listener keeps its normal order after target-phase listeners. */
+	@:allow(haxeon.ui.widgets.scroll.ScrollView)
+	@:allow(haxeon.ui.widgets.controls.Tabs)
+	function onTargetBubble(kind:String, handler:UiEvent->Void):RenderNode {
+		return addHandler(kind, handler, TargetBubblePhase);
+	}
+
+	function addHandler(kind:String, handler:UiEvent->Void, phase:String):RenderNode {
+		if (kind == null || kind.length == 0 || handler == null)
 			throw "Event handlers require a kind and callback";
 		if (handlers == null)
 			handlers = [];
@@ -916,6 +941,17 @@ class RenderNode {
 			invokePhase(event, event.phase);
 	}
 
+	/** Whether this node can observe the routed event in its position on the path. */
+	@:allow(haxeon.ui.core.EventDispatcher)
+	function hasEventHandler(kind:String, target:Bool):Bool {
+		var entries = handlers;
+		if (entries != null)
+			for (entry in entries)
+				if (entry.kind == kind && (target ? entry.phase != "capture" :
+					(entry.phase == "capture" || entry.phase == "bubble"))) return true;
+		return false;
+	}
+
 	@:allow(haxeon.ui.core.EventDispatcher)
 	function invokePointerDownOutside(event:UiEvent):Void {
 		if (outsidePointerDownHandlers == null)
@@ -937,7 +973,8 @@ class RenderNode {
 		var index = 0;
 		while (index < entries.length) {
 			var entry = entries[index++];
-			if (entry.phase != phase || entry.kind != event.kind)
+			if (entry.kind != event.kind || (entry.phase != phase &&
+				!(entry.phase == TargetBubblePhase && phase == "bubble" && event.target.equals(id))))
 				continue;
 			entry.handler(event);
 			if (event.immediatePropagationStopped)

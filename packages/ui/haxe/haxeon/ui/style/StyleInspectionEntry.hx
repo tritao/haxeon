@@ -22,14 +22,14 @@ class StyleInspectionEntry {
 			case "background" | "borderColor" | "outlineColor" | "shadowColor" | "textColor" |
 				"progressTrackColor" | "progressFillColor" | "sliderTrackColor" |
 				"sliderFillColor" | "sliderThumbColor":
-				var color:Color = cast value;
+				var color:Null<Color> = cast value;
 				color == null ? "null" : 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})';
 			case "padding":
 				var insets:Null<Insets> = cast value;
 				insets == null ? "null" :
 					'${insets.left}, ${insets.top}, ${insets.right}, ${insets.bottom}';
 			case "width" | "height":
-				var axis:LayoutAxis = cast value;
+				var axis:Null<LayoutAxis> = cast value;
 				axis == null ? "null" : Std.string(axis.sizing) + "(" + Std.string(axis.value) + ")";
 			case "effects" | "backdropEffects":
 				var effects:EffectChain = cast value;

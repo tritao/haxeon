@@ -1,0 +1,34 @@
+# UI value types
+
+This completes stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md).
+
+`Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `@:structural` structs. Their fields are final;
+replace the whole value to change one. Their `==` and `!=` comparisons are fieldwise. Optional values use `Null<T>`,
+including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
+object, and structural style fingerprints and hashes still cover their fields.
+
+The native layout interface uses an output buffer for resolved geometry. The session reuses that buffer and holds on to
+immutable results when their fields have not changed. This keeps the C ABI explicit and avoids rebuilding geometry that
+is already available. The other values continue to cross the native boundary through the existing scalar encoder.
+
+Inlining values enlarges their holders. The conversion therefore also removes unnecessary repeated holder creation:
+retained docking panes and clean inspector alternatives reuse their trees, property controls reuse private style templates,
+and computed width and height share a copy-on-write inline-axis holder. The inspector cache is bounded, and changed
+transient editor state is discarded on a selection change as before. Retained alternatives have separate state scopes,
+validate dependencies and topology, and rearm their self-updating children before reuse. The verification mode continues
+to compare retained trees to fresh builds.
+
+Struct boxes can still occur at real dynamic and reflective boundaries. For example, inspecting a dynamic style value
+materializes a box; a type census should distinguish `@`-prefixed struct boxes from the former class allocations. The
+compiler scalarizes supported direct and typed calls, optional locals and inline field copies; unsupported or escaping
+values retain the normal boxed ABI. See [STRUCTS.md](../../../docs/STRUCTS.md) for the calling conventions and attribution.
+
+The same-machine 30-cycle HashLink census includes startup and counts allocations by type. Entries after conversion are
+struct boxes (`@haxeon.ui.*`) at dynamic boundaries. The per-action KiB and Wasm GC Showcase comparisons are in
+[STRUCTS.md](../../../docs/STRUCTS.md).
+
+| Scenario | Rect | Insets | Color | LayoutAxis | Transform2D |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Interaction, classes → final | 7,511 → 0 | 70 → 146 | 487 → 549 | 1,007 → 740 | 1,722 → 0 |
+| Tab matrix, classes → final | 12,586 → 0 | 8 → 0 | 1,185 → 0 | 4,956 → 0 | 351 → 0 |
+| Selection stress, classes → final | 4,307 → 0 | 512 → 9 | 866 → 3 | 5,364 → 0 | 456 → 0 |

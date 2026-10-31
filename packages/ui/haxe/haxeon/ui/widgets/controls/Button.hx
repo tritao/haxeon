@@ -57,6 +57,9 @@ class Button implements View {
 	public var onClick:Void->Void;
 	/** Optional event-aware activation, useful for positioning a menu by its trigger. */
 	public var onClickEvent:Null<UiEvent->Void>;
+	/** Selector snapshots are immutable inside the resolver; hover commonly alternates between the same states. */
+	var firstTarget:Null<StyleTarget> = null;
+	var otherTargets:Null<Array<StyleTarget>> = null;
 
 	public function new(label:String, ?style:LayoutStyle, ?onClick:Void->Void, ?key:String) {
 		this.label = label == null ? "" : label;
@@ -102,12 +105,12 @@ class Button implements View {
 			resolvedClasses.push("navigation");
 		else if (variant == ButtonVariant.Secondary)
 			resolvedClasses.push("secondary");
-		var target = new StyleTarget("button", key, key, resolvedClasses, ["button"], flags);
+		var target = styleTarget(resolvedClasses, flags);
 		var computed = context.styleResolver.resolve(target, context.inheritedStyle, context.theme.styles,
 			context.styleSheet, style, context.environment);
 		var resolvedStyle = computed.toLayoutStyle();
 		var node = new RenderNode(id, LayoutVisualKind.Box, resolvedStyle);
-		node.setStyleIdentity("button", key, key, resolvedClasses, ["button"]);
+		node.setStyleIdentityWithOwnedClasses("button", key, key, resolvedClasses, ["button"]);
 		node.states = flags;
 		node.computedStyle = computed;
 		node.focusable = enabled;
@@ -135,18 +138,14 @@ class Button implements View {
 			node.add(context.withScope(new Key("label"), function() return labelView.build(context)));
 		} else if (label.length > 0) {
 			var labelNode = context.withScope(new Key("label"), function() {
-				var text = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-				text.layout.text = label;
-				var labelStyle = context.resolveTextRole(TextRole.Button,
-					TextStyleOverride.paragraph(TextWrap.None));
 				var fontSource = computed.source(StyleProperty.FontSize);
 				var letterSource = computed.source(StyleProperty.LetterSpacing);
-				labelStyle = labelStyle.merge(new TextStyleOverride(null,
+				var labelStyle = context.resolveTextRole(TextRole.Button, new TextStyleOverride(null,
 					fontSource != null && fontSource.layer != "framework"
 						? computed.get(StyleProperty.FontSize) : null,
 					letterSource != null && letterSource.layer != "framework"
-						? computed.get(StyleProperty.LetterSpacing) : null));
-				labelStyle = labelStyle.withTextColor(foreground);
+						? computed.get(StyleProperty.LetterSpacing) : null,
+					TextWrap.None, null, null, null, foreground));
 				if (ellipsizeLabel) {
 					var typography = labelStyle.textStyle, paragraph = labelStyle.paragraphStyle;
 					return new MiddleEllipsisText("fitted-label", label, false,
@@ -154,6 +153,8 @@ class Button implements View {
 							paragraph.wrap, paragraph.alignment, paragraph.lineHeight, paragraph.direction,
 							foreground, paragraph.tabWidth)).build(context);
 				}
+				var text = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+				text.layout.text = label;
 				text.applyTextStyle(labelStyle);
 				return text;
 			});
@@ -168,5 +169,27 @@ class Button implements View {
 
 	static function defaultStyle():LayoutStyle {
 		return new LayoutStyle();
+	}
+
+	function styleTarget(resolvedClasses:Array<String>, flags:Int):StyleTarget {
+		var first = firstTarget;
+		if (first != null && targetMatches(first, resolvedClasses, flags)) return first;
+		var others = otherTargets;
+		if (others != null)
+			for (target in others) if (targetMatches(target, resolvedClasses, flags)) return target;
+		var target = new StyleTarget("button", key, key, resolvedClasses, ["button"], flags);
+		if (first == null) firstTarget = target;
+		else {
+			if (others == null) { others = []; otherTargets = others; }
+			if (others.length >= 3) others.shift();
+			others.push(target);
+		}
+		return target;
+	}
+
+	static function targetMatches(target:StyleTarget, classes:Array<String>, flags:Int):Bool {
+		if (target.states != flags || target.classes.length != classes.length) return false;
+		for (index in 0...classes.length) if (target.classes[index] != classes[index]) return false;
+		return true;
 	}
 }

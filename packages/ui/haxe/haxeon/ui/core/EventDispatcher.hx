@@ -486,7 +486,7 @@ class EventDispatcher {
 	function updateHover(pointerId:Int, path:Array<RenderNode>, x:Float, y:Float):Void {
 		var previous = hoverPaths.get(pointerId);
 		if (previous == null)
-			previous = [];
+			previous = NoPath;
 		var common = 0;
 		while (common < previous.length && common < path.length &&
 			previous[common].id.equals(path[common].id))
@@ -494,38 +494,50 @@ class EventDispatcher {
 		var index = previous.length - 1;
 		while (index >= common) {
 			setState(previous[index], StyleState.Hovered, false);
-			dispatchPath(previous.slice(0, index + 1),
-				new UiEvent(UiEventKind.HoverLeave, previous[index].id, x, y,
-					0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
+			if (pathHasHandler(previous, index, UiEventKind.HoverLeave))
+				dispatchPath(previous.slice(0, index + 1),
+					new UiEvent(UiEventKind.HoverLeave, previous[index].id, x, y,
+						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
 			index--;
 		}
 		for (index in common...path.length)
 			{
 			setState(path[index], StyleState.Hovered, true);
-			dispatchPath(path.slice(0, index + 1),
-				new UiEvent(UiEventKind.HoverEnter, path[index].id, x, y,
-					0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
+			if (pathHasHandler(path, index, UiEventKind.HoverEnter))
+				dispatchPath(path.slice(0, index + 1),
+					new UiEvent(UiEventKind.HoverEnter, path[index].id, x, y,
+						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
 			}
 		hoverPaths.set(pointerId, path);
 	}
 
+	/** Skip constructing a routed event and path snapshot only when no node can observe it. */
+	static function pathHasHandler(path:Array<RenderNode>, last:Int, kind:String):Bool {
+		for (index in 0...(last + 1))
+			if (path[index].hasEventHandler(kind, index == last)) return true;
+		return false;
+	}
+
+	// Empty paths are read only inside the dispatcher and need no per-event array.
+	static final NoPath:Array<RenderNode> = [];
+
 	function capturedPath(pointerId:Int):Array<RenderNode> {
 		var id = capturedIds.get(pointerId);
 		if (id == null || root == null)
-			return [];
+			return NoPath;
 		return HitTest.pathTo(root.find(id));
 	}
 
 	function hitPath(x:Float, y:Float):Array<RenderNode> {
 		if (root == null)
-			return [];
+			return NoPath;
 		return hitTestProvider == null ? HitTest.path(root, x, y) : hitTestProvider(x, y);
 	}
 
 	function pressedPath(pointerId:Int):Array<RenderNode> {
 		var id = pressedIds.get(pointerId);
 		if (id == null || root == null)
-			return [];
+			return NoPath;
 		return HitTest.pathTo(root.find(id));
 	}
 

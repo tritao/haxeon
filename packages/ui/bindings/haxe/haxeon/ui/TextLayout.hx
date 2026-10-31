@@ -61,8 +61,6 @@ class TextLayout extends NativeKitUIResource {
 
 	/** Sets the color used when this retained layout is drawn. */
 	public function setColor(value:Color):Void {
-		if (value == null)
-			throw "Text layout color cannot be null";
 		UiResult.check(NativeKitUI.nkui_text_layout_set_color(nativeHandle(), value.nativeValue()),
 			"textLayout.setColor");
 	}
@@ -205,10 +203,15 @@ class TextLayout extends NativeKitUIResource {
 		return result;
 	}
 
-	public function caret(position:TextPosition):TextCaret {
+	public function caret(position:TextPosition):TextCaret
+		return caretAt(position.offset, position.affinity);
+
+	/** Internal scalar boundary for callers that already hold a position's components. */
+	@:allow(haxeon.ui.widgets.text.TextEditorLayout)
+	function caretAt(offset:Int, affinity:Int):TextCaret {
 		var caret = new nkui_text_position();
-		caret.set_offset(position.offset);
-		caret.set_affinity(position.affinity);
+		caret.set_offset(offset);
+		caret.set_affinity(affinity);
 		var result = NativeKitUI.nkui_text_layout_caret(nativeHandle(), caret);
 		UiResult.check(result.status, "textLayout.caret");
 		return new TextCaret(result.out_caret.get_x(), result.out_caret.get_y(), result.out_caret.get_ascender(),
@@ -244,25 +247,36 @@ class TextLayout extends NativeKitUIResource {
 
 	/** Logical rectangles for visual rows intersecting a text and vertical range. */
 	public function lineRects(start:Int, end:Int, minY:Float, maxY:Float):Array<Rect> {
-		if (start < 0 || end < start || !Math.isFinite(minY) || !Math.isFinite(maxY) || maxY < minY)
-			throw "Text line rectangle arguments are invalid";
-		var result = NativeKitUI.nkui_text_layout_get_line_rects(nativeHandle(), start, end,
-			minY, maxY);
-		UiResult.check(result.status, "textLayout.lineRects");
-		var bytes:haxe.io.Bytes = result.out_buffer;
-		var recordBytes = 20;
-		if (bytes.length % recordBytes != 0)
-			throw "Text line geometry contains a truncated rectangle";
+		var bytes = lineRectBuffer(start, end, minY, maxY);
 		var rectangles:Array<Rect> = [];
-		for (index in 0...Std.int(bytes.length / recordBytes)) {
-			var offset = index * recordBytes;
-			if (bytes.getInt32(offset) != recordBytes)
-				throw "Text line geometry returned an unsupported record size";
-			rectangles.push(new Rect(readFloat(bytes, offset + 4), readFloat(bytes, offset + 8),
-				readFloat(bytes, offset + 12), readFloat(bytes, offset + 16)));
-		}
+		for (index in 0...Std.int(bytes.length / lineRectRecordBytes))
+			rectangles.push(lineRectAt(bytes, index * lineRectRecordBytes));
 		return rectangles;
 	}
+
+	// Internal consumers can read the native records directly without constructing a boxed Rect array.
+	@:allow(haxeon.ui.widgets.text.TextEditorLayout)
+	static inline final lineRectRecordBytes:Int = 20;
+
+	@:allow(haxeon.ui.widgets.text.TextEditorLayout)
+	function lineRectBuffer(start:Int, end:Int, minY:Float, maxY:Float):haxe.io.Bytes {
+		if (start < 0 || end < start || !Math.isFinite(minY) || !Math.isFinite(maxY) || maxY < minY)
+			throw "Text line rectangle arguments are invalid";
+		var result = NativeKitUI.nkui_text_layout_get_line_rects(nativeHandle(), start, end, minY, maxY);
+		UiResult.check(result.status, "textLayout.lineRects");
+		var bytes:haxe.io.Bytes = result.out_buffer;
+		if (bytes.length % lineRectRecordBytes != 0)
+			throw "Text line geometry contains a truncated rectangle";
+		for (index in 0...Std.int(bytes.length / lineRectRecordBytes))
+			if (bytes.getInt32(index * lineRectRecordBytes) != lineRectRecordBytes)
+				throw "Text line geometry returned an unsupported record size";
+		return bytes;
+	}
+
+	@:allow(haxeon.ui.widgets.text.TextEditorLayout)
+	static inline function lineRectAt(bytes:haxe.io.Bytes, offset:Int):Rect
+		return new Rect(readFloat(bytes, offset + 4), readFloat(bytes, offset + 8),
+			readFloat(bytes, offset + 12), readFloat(bytes, offset + 16));
 
 	/** Returns range-aware rectangles for each grapheme covered by a selection. */
 	public function selectionRangeRects(start:TextPosition, end:TextPosition):Array<TextRangeRect> {
@@ -406,7 +420,8 @@ class TextLayout extends NativeKitUIResource {
 }
 
 /** Bounds returned by TextLayout.measure. */
-class TextMetrics {
+@:structural
+struct TextMetrics {
 	public final x:Float;
 	public final y:Float;
 	public final width:Float;
@@ -466,7 +481,8 @@ class TextRangeRect {
 }
 
 /** Visual geometry for a text caret. */
-class TextCaret {
+@:structural
+struct TextCaret {
 	public final x:Float;
 	public final y:Float;
 	public final ascender:Float;

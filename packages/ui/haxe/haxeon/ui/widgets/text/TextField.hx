@@ -17,7 +17,6 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.platform.input.TextEdit;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextStyle;
@@ -49,6 +48,8 @@ import haxeon.editor.TextDocument;
 
 /** Text editor composed from a Haxe box and NativeUI text primitive. */
 class TextField implements View {
+	/** Shared only by internal read-only selection paths. */
+	static final NoAdditionalSelections:Array<TextSelection> = [];
 	public final key:String;
 	public var value:String;
 	/** Paint-only whitespace visibility: off, selection, or all. */
@@ -188,11 +189,10 @@ class TextField implements View {
 				TextStyleOverride.fromTextStyle(textStyle));
 			if (textColor != null)
 				resolved = resolved.withTextColor(textColor);
-			var paragraph = new ParagraphStyle(resolved.paragraphStyle.wrap,
-				resolved.paragraphStyle.alignment, resolved.paragraphStyle.lineHeight,
-				resolved.paragraphStyle.direction, tabWidth == null ? resolved.paragraphStyle.tabWidth : tabWidth);
+			// resolveTextRole returns independent typography, so its paragraph can be configured in place.
+			var paragraph = resolved.paragraphStyle;
+			if (tabWidth != null) paragraph.tabWidth = tabWidth;
 			paragraph.wrap = wrap == null ? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap;
-			resolved = new ResolvedTextStyle(resolved.textStyle, paragraph, resolved.textColor);
 			var stored:State<TextEditorState> = acquireState(context, id, value, resolved, document);
 			var editor:TextEditorState = stored.value;
 			// Quiet update plus a patch request: only this field rebuilds. Falls back to a full state update if it is not self-updating.
@@ -213,7 +213,7 @@ class TextField implements View {
 			}
 			if (selectionProvider != null)
 				editor.setAnchoredSelection(selectionProvider());
-			var additionalSelections = additionalSelectionProvider == null ? [] : additionalSelectionProvider();
+			var additionalSelections = additionalSelectionProvider == null ? NoAdditionalSelections : additionalSelectionProvider();
 			var hasAdditionalCaret = false;
 			for (selection in additionalSelections) {
 				if (selection.anchor == selection.focus) hasAdditionalCaret = true;
@@ -233,8 +233,6 @@ class TextField implements View {
 					new StyleSource("local", "text-field", -1, "local"));
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
-			// Painted children read this, not the node: a rebuild keeps the first node and drops the one this build made.
-			var fieldBackground = node.layout.style.background;
 			node.states = flags;
 			node.computedStyle = computed;
 			node.focusable = enabled;
@@ -311,6 +309,8 @@ class TextField implements View {
 				editorContent.add(selectionNode);
 			}
 			if (renderWhitespace != "off") {
+				// The painter retains the value independently of the rebuilt node.
+				var fieldBackground = node.layout.style.background;
 				var whitespaceStyle = new LayoutStyle();
 				whitespaceStyle.width = LayoutAxis.grow();
 				whitespaceStyle.height = LayoutAxis.grow();
@@ -354,8 +354,9 @@ class TextField implements View {
 				textNodeStyle.positioning = LayoutPositioning.Absolute;
 				textNode.layout.intrinsicContent = editor.renderContent;
 			}
-			var textNodeTextStyle = new TextStyle(editor.textStyle.fontSize,
-				editor.textStyle.font, editor.textStyle.letterSpacing);
+			// The text node owns this style; it can also serve as the working copy for computed font overrides.
+			var textNodeTextStyle = textNode.layout.textStyle;
+			haxeon.Structural.assignChanged(textNodeTextStyle, textNodeTextStyle, editor.textStyle);
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			if (textStyle == null && fontSource != null && fontSource.layer != "framework")
@@ -370,8 +371,7 @@ class TextField implements View {
 				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
 					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,
 						textNodeTextStyle.letterSpacing, TextWrap.None, null, null, null, textNodeColor)).build(context);
-			textNode.applyTextStyle(new ResolvedTextStyle(textNodeTextStyle,
-				editor.paragraphStyle, textNodeColor));
+			textNode.applyTextComponents(textNodeTextStyle, editor.paragraphStyle, textNodeColor);
 			if (!showsPlaceholder) {
 				editor.updateStyle(textNodeTextStyle, editor.paragraphStyle);
 				editor.setRenderColor(textNodeColor);
@@ -420,14 +420,8 @@ class TextField implements View {
 				semantics.selectionEnd = editor.selectionEnd;
 				refresh();
 			};
-			var publishSelection = function() {
-				var handler = onSelectionChange;
-				if (handler != null)
-					handler(new TextSelection(editor.selectionAnchor, editor.selectionFocus,
-						editor.selectionAnchorAffinity, editor.selectionFocusAffinity));
-			};
 			var updateState = function(revealCaret:Bool = true) {
-				publishSelection();
+				publishSelection(editor);
 				refreshState(revealCaret);
 			};
 			var delegateEdit = function(intent:TextEditIntent):Bool {
@@ -440,17 +434,6 @@ class TextField implements View {
 				updateState();
 				return true;
 			};
-			var copyCurrentSelection = function():Bool {
-				if (selectionTextProvider != null) {
-					var selectedText = selectionTextProvider();
-					if (selectedText == null) return false;
-					context.clipboard.writeText(selectedText);
-				} else {
-					if (editor.selectionStart == editor.selectionEnd) return false;
-					copySelection(context.clipboard, editor);
-				}
-				return true;
-			};
 			var publishTextChange = function(previousRevision:Int) {
 				if (document == null || onChange != null)
 					value = editor.layoutText();
@@ -459,78 +442,10 @@ class TextField implements View {
 					onEdit(editor.lastEditTransaction);
 				if (editor.documentRevision() != previousRevision && onChange != null)
 					onChange(value);
-				publishSelection();
+				publishSelection(editor);
 				refreshState();
 			};
-			var publishDiagnostics = function(caretRect:Null<Rect>) {
-				if (onDiagnostics == null)
-					return;
-				var compositionText = editor.compositionStart >= 0 &&
-					editor.compositionEnd >= editor.compositionStart
-					? editor.documentOffsets().sliceCodepoints(editor.compositionStart,
-						editor.compositionEnd) : "";
-				onDiagnostics(new TextEditorDiagnostics(key, label == null ? key : label,
-					editor.focused, editor.selectionStart, editor.selectionEnd,
-					editor.selectionFocus, editor.compositionStart, editor.compositionEnd,
-					compositionText, caretRect, context.textInput.platformSupported,
-					context.textInput.platformActive));
-			};
-			var syncCursor = function(geometry:ResolvedLayoutItem) {
-				// Resolved callbacks run on every frame: without a focused editor or a listener, nobody uses the caret.
-				if (!editor.focused && onCaretRect == null && onDiagnostics == null)
-					return;
-				var caret = editor.layout.caret(editor.focusPosition());
-				var topX = geometry.x + caret.x + caret.ascender * caret.slope;
-				var topY = geometry.y + caret.y + caret.ascender - editor.scrollOffsetY;
-				var bottomX = geometry.x + caret.x + caret.descender * caret.slope;
-				var bottomY = geometry.y + caret.y + caret.descender - editor.scrollOffsetY;
-				var transform:Transform2D = cast geometry.transform;
-				var screenTopX = transform.a * topX + transform.c * topY + transform.tx;
-				var screenTopY = transform.b * topX + transform.d * topY + transform.ty;
-				var screenBottomX = transform.a * bottomX + transform.c * bottomY + transform.tx;
-				var screenBottomY = transform.b * bottomX + transform.d * bottomY + transform.ty;
-				var caretRect = new Rect(Math.min(screenTopX, screenBottomX), Math.min(screenTopY, screenBottomY),
-					Math.max(1.0, absolute(screenBottomX - screenTopX)),
-					Math.max(1.0, absolute(screenBottomY - screenTopY)));
-				var caretHandler = onCaretRect;
-				if (caretHandler != null) {
-					var clip = geometry.clipBounds;
-					var visible = geometry.visible && caretRect.x < clip.x + clip.width &&
-						caretRect.x + caretRect.width > clip.x && caretRect.y < clip.y + clip.height &&
-						caretRect.y + caretRect.height > clip.y;
-					caretHandler(visible ? caretRect : null);
-				}
-				publishDiagnostics(caretRect);
-				if (!editor.focused || !context.textInput.isOwner(id) || context.platformSurface == null ||
-					context.platformSurface.isDisposed() ||
-					(context.textInput.platformChecked && !context.textInput.platformSupported))
-					return;
-				// The field can be document-sized inside an ancestor ScrollView. Its
-				// content height is not the viewport: only publish geometry inside
-				// the resolved ancestor clip, converted back into local text space.
-				var visible = geometry.visibleLocalBounds();
-				var visibleTop = editor.scrollOffsetY + visible.y;
-				var visibleBottom = visibleTop + visible.height;
-				// The selection is reported clamped into the text-input window, and its rectangles must lie within what
-				// is reported: those reaching past a clamped edge are left out.
-				var window = editor.surroundingText(2048, 2048);
-				var selectionGeometry:Array<TextRangeRect> = [];
-				if (window.selectionStart != window.selectionEnd)
-					for (rect in editor.layout.selectionRangeRects(editor.anchorPosition(),
-						editor.focusPosition(), visibleTop, visibleBottom))
-						if (rect.start >= window.selectionStart && rect.end <= window.selectionEnd)
-							selectionGeometry.push(transformTextRangeRect(rect, geometry, transform,
-								editor.scrollOffsetY));
-				var compositionGeometry:Array<TextRangeRect> = [];
-				for (rect in editor.compositionRangeRects(visibleTop, visibleBottom))
-					compositionGeometry.push(transformTextRangeRect(rect, geometry, transform,
-						editor.scrollOffsetY));
-				context.textInput.update(window, editor.documentLength(),
-					window.selectionStart, window.selectionEnd, editor.compositionStart,
-					editor.compositionEnd, 0,
-					multiline ? 1 : 0,
-					caretRect, selectionGeometry, compositionGeometry);
-			};
+
 			editorContent.onResolved(function(geometry) {
 				if (multiline) {
 					editor.updateLayout(geometry.width);
@@ -552,7 +467,7 @@ class TextField implements View {
 				if (multiline && !readOnly && editorContent.resolved != null &&
 					editor.resolveCaretReveal(editorContent.resolved.height))
 					refresh();
-				syncCursor(geometry);
+				syncCursor(editor, context, id, geometry);
 			});
 			node.on(UiEventKind.Focus, function(_) {
 				if (!enabled)
@@ -563,9 +478,9 @@ class TextField implements View {
 				refresh();
 				context.textInput.activate(id);
 				if (textNode.resolved != null)
-					syncCursor(cast textNode.resolved);
+					syncCursor(editor, context, id, cast textNode.resolved);
 				else
-					publishDiagnostics(null);
+					publishDiagnostics(editor, context, null);
 			});
 			var blur = function(event:UiEvent) {
 				if (!editor.focused && !editor.draggingSelection)
@@ -577,7 +492,7 @@ class TextField implements View {
 				semantics.states &= ~AccessibilityState.Focused;
 				refresh();
 				context.textInput.deactivate(id);
-				publishDiagnostics(null);
+				publishDiagnostics(editor, context, null);
 			};
 			node.on(UiEventKind.Blur, blur);
 			node.on(UiEventKind.FocusLost, blur);
@@ -654,16 +569,6 @@ class TextField implements View {
 			});
 
 			editor.configureHistory(!historyManagedExternally);
-			var pageStep = function(direction:Int):Int {
-				var height = pageHeightProvider != null ? pageHeightProvider() :
-					editorContent.resolved == null ? 0.0 : editorContent.resolved.height;
-				var caret = editor.layout.caret(editor.focusPosition());
-				var lineHeight = editor.layout.paragraphStyle.lineHeight;
-				var step = lineHeight == null ? Math.abs(caret.descender - caret.ascender) : lineHeight;
-				// Keep one line of overlap between consecutive pages.
-				return direction * (Math.isFinite(height) && height > 0
-					? Std.int(Math.max(1, Math.floor(height / Math.max(1.0, step)) - 1)) : 1);
-			};
 			var handleKey = function(event:UiEvent) {
 				if (!enabled)
 					return;
@@ -718,8 +623,8 @@ class TextField implements View {
 							multiline ? VisualLine(-1, extend) : null;
 						case UiKey.Down: wordNavigation ? Paragraph(1, extend, macWordNavigation) :
 							multiline ? VisualLine(1, extend) : null;
-						case UiKey.PageUp: multiline ? VisualLine(pageStep(-1), extend) : null;
-						case UiKey.PageDown: multiline ? VisualLine(pageStep(1), extend) : null;
+						case UiKey.PageUp: multiline ? VisualLine(pageStep(editor, editorContent, -1), extend) : null;
+						case UiKey.PageDown: multiline ? VisualLine(pageStep(editor, editorContent, 1), extend) : null;
 						case UiKey.Home: LineBoundary(false, extend);
 						case UiKey.End: LineBoundary(true, extend);
 						case _: null;
@@ -752,9 +657,9 @@ class TextField implements View {
 				if (command && event.key == UiKey.A)
 					changed = editor.selectAll();
 				else if (command && event.key == UiKey.C)
-					copyCurrentSelection();
+					copyCurrentSelection(context, editor);
 				else if (command && event.key == UiKey.X) {
-					copyCurrentSelection();
+					copyCurrentSelection(context, editor);
 					if (!readOnly && delegateEdit(Insert(""))) { event.preventDefault(); return; }
 					if (!readOnly) {
 						changed = editor.replace(editor.selectionStart, editor.selectionEnd, "");
@@ -790,9 +695,9 @@ class TextField implements View {
 				else if (wordNavigation && event.key == UiKey.Down)
 					changed = editor.moveCaretByParagraph(1, extend, macWordNavigation);
 				else if (multiline && event.key == UiKey.PageUp)
-					changed = editor.moveCaretVertically(pageStep(-1), extend);
+					changed = editor.moveCaretVertically(pageStep(editor, editorContent, -1), extend);
 				else if (multiline && event.key == UiKey.PageDown)
-					changed = editor.moveCaretVertically(pageStep(1), extend);
+					changed = editor.moveCaretVertically(pageStep(editor, editorContent, 1), extend);
 				else if (multiline && event.key == UiKey.Up)
 					changed = editor.moveCaretVertically(-1, extend);
 				else if (multiline && event.key == UiKey.Down)
@@ -902,6 +807,105 @@ class TextField implements View {
 			return node;
 	}
 
+	/** Publishes the focused caret and visible text-input geometry. */
+	function syncCursor(editor:TextEditorState, context:BuildContext, id:haxeon.ui.core.WidgetId, geometry:ResolvedLayoutItem):Void {
+		// Resolved callbacks run on every frame: without a focused editor or a listener, nobody uses the caret.
+		if (!editor.focused && onCaretRect == null && onDiagnostics == null)
+			return;
+		var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
+		var topX = geometry.x + caret.x + caret.ascender * caret.slope;
+		var topY = geometry.y + caret.y + caret.ascender - editor.scrollOffsetY;
+		var bottomX = geometry.x + caret.x + caret.descender * caret.slope;
+		var bottomY = geometry.y + caret.y + caret.descender - editor.scrollOffsetY;
+		var transform:Transform2D = cast geometry.transform;
+		var screenTopX = transform.a * topX + transform.c * topY + transform.tx;
+		var screenTopY = transform.b * topX + transform.d * topY + transform.ty;
+		var screenBottomX = transform.a * bottomX + transform.c * bottomY + transform.tx;
+		var screenBottomY = transform.b * bottomX + transform.d * bottomY + transform.ty;
+		var caretRect = new Rect(Math.min(screenTopX, screenBottomX), Math.min(screenTopY, screenBottomY),
+			Math.max(1.0, absolute(screenBottomX - screenTopX)),
+			Math.max(1.0, absolute(screenBottomY - screenTopY)));
+		var caretHandler = onCaretRect;
+		if (caretHandler != null) {
+			var clip = geometry.clipBounds;
+			var visible = geometry.visible && caretRect.x < clip.x + clip.width &&
+				caretRect.x + caretRect.width > clip.x && caretRect.y < clip.y + clip.height &&
+				caretRect.y + caretRect.height > clip.y;
+			caretHandler(visible ? caretRect : null);
+		}
+		// Passing an optional value to a listener is an escape boundary; avoid it when no listener exists.
+		if (onDiagnostics != null) publishDiagnostics(editor, context, caretRect);
+		if (!editor.focused || !context.textInput.isOwner(id) || context.platformSurface == null ||
+			context.platformSurface.isDisposed() ||
+			(context.textInput.platformChecked && !context.textInput.platformSupported))
+			return;
+		// The field can be document-sized inside an ancestor ScrollView. Its
+		// content height is not the viewport: only publish geometry inside
+		// the resolved ancestor clip, converted back into local text space.
+		var visible = geometry.visibleLocalBounds();
+		var visibleTop = editor.scrollOffsetY + visible.y;
+		var visibleBottom = visibleTop + visible.height;
+		// The selection is reported clamped into the text-input window, and its rectangles must lie within what
+		// is reported: those reaching past a clamped edge are left out.
+		var window = editor.surroundingText(2048, 2048);
+		var selectionGeometry:Array<TextRangeRect> = [];
+		if (window.selectionStart != window.selectionEnd)
+			for (rect in editor.layout.selectionRangeRects(editor.anchorPosition(),
+				editor.focusPosition(), visibleTop, visibleBottom))
+				if (rect.start >= window.selectionStart && rect.end <= window.selectionEnd)
+					selectionGeometry.push(transformTextRangeRect(rect, geometry, transform,
+						editor.scrollOffsetY));
+		var compositionGeometry:Array<TextRangeRect> = [];
+		for (rect in editor.compositionRangeRects(visibleTop, visibleBottom))
+			compositionGeometry.push(transformTextRangeRect(rect, geometry, transform,
+				editor.scrollOffsetY));
+		context.textInput.update(window, editor.documentLength(),
+			window.selectionStart, window.selectionEnd, editor.compositionStart,
+			editor.compositionEnd, 0,
+			multiline ? 1 : 0,
+			caretRect, selectionGeometry, compositionGeometry);
+	}
+
+	function publishSelection(editor:TextEditorState):Void {
+		var handler = onSelectionChange;
+		if (handler != null)
+			handler(new TextSelection(editor.selectionAnchor, editor.selectionFocus,
+				editor.selectionAnchorAffinity, editor.selectionFocusAffinity));
+	}
+
+	function copyCurrentSelection(context:BuildContext, editor:TextEditorState):Bool {
+		if (selectionTextProvider != null) {
+			var selectedText = selectionTextProvider();
+			if (selectedText == null) return false;
+			context.clipboard.writeText(selectedText);
+		} else {
+			if (editor.selectionStart == editor.selectionEnd) return false;
+			copySelection(context.clipboard, editor);
+		}
+		return true;
+	}
+
+	function publishDiagnostics(editor:TextEditorState, context:BuildContext, caretRect:Null<Rect>):Void {
+		if (onDiagnostics == null) return;
+		var compositionText = editor.compositionStart >= 0 && editor.compositionEnd >= editor.compositionStart
+			? editor.documentOffsets().sliceCodepoints(editor.compositionStart, editor.compositionEnd) : "";
+		onDiagnostics(new TextEditorDiagnostics(key, label == null ? key : label,
+			editor.focused, editor.selectionStart, editor.selectionEnd, editor.selectionFocus,
+			editor.compositionStart, editor.compositionEnd, compositionText, caretRect,
+			context.textInput.platformSupported, context.textInput.platformActive));
+	}
+
+	function pageStep(editor:TextEditorState, editorContent:RenderNode, direction:Int):Int {
+		var height = pageHeightProvider != null ? pageHeightProvider() :
+			editorContent.resolved == null ? 0.0 : editorContent.resolved.height;
+		var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
+		var lineHeight = editor.layout.paragraphStyle.lineHeight;
+		var step = lineHeight == null ? Math.abs(caret.descender - caret.ascender) : lineHeight;
+		// Keep one line of overlap between consecutive pages.
+		return direction * (Math.isFinite(height) && height > 0
+			? Std.int(Math.max(1, Math.floor(height / Math.max(1.0, step)) - 1)) : 1);
+	}
+
 	/** Applies a wheel delta and re-pins to the tail when the view reaches the end again. */
 	static function scrollReadOnly(editor:TextEditorState, deltaY:Float):Bool {
 		var changed = editor.scrollBy(deltaY);
@@ -957,7 +961,7 @@ class TextField implements View {
 		}
 		if (showCaret && active && additional != null && editor.isCaretVisible(timeSeconds))
 			for (selection in additional) if (selection.anchor == selection.focus) {
-				var caret = editor.layout.caret(new TextPosition(selection.focus, selection.focusAffinity));
+				var caret = editor.layout.caretAt(selection.focus, selection.focusAffinity);
 				var topX = caret.x + caret.ascender * caret.slope;
 				var bottomX = caret.x + caret.descender * caret.slope;
 				canvas.fillRectIfPositive(new Rect(Math.min(topX, bottomX), caret.y + Math.min(caret.ascender, caret.descender),
@@ -965,7 +969,7 @@ class TextField implements View {
 			}
 		if (showCaret && active && editor.selectionStart == editor.selectionEnd &&
 				editor.isCaretVisible(timeSeconds)) {
-			var caret = editor.layout.caret(editor.focusPosition());
+			var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
 			var topX = caret.x + caret.ascender * caret.slope;
 			var topY = caret.y + caret.ascender;
 			var bottomX = caret.x + caret.descender * caret.slope;

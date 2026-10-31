@@ -106,10 +106,8 @@ private class RetainedViewEntry {
 
 	public function statesMatch(context:BuildContext):Bool {
 		// See DockPanelCacheEntry: a widget inside changed its own state, so the built tree is stale.
-		var current = context.stateRevisions(stateIds);
-		for (index in 0...current.length)
-			if (current[index] != stateRevisions[index])
-				return false;
-		return interactions.matches(context) && observed.current();
+		if (context.stateRevisions(stateIds, stateRevisions) != stateRevisions)
+			return false;
+		return observed.current() && interactions.matches(context);
 	}
 }

@@ -25,12 +25,28 @@ private class InheritedKeyCache {
 	public function new() {}
 }
 
+/** Copy-on-write storage for local axis values; a style cache fork shares it until an axis changes. */
+private class InlineAxes {
+	public var width:LayoutAxis;
+	public var height:LayoutAxis;
+	/** Materialized only when a dynamic consumer inspects the corresponding value. */
+	public var widthBox:Dynamic = null;
+	public var heightBox:Dynamic = null;
+	public function new(width:LayoutAxis, height:LayoutAxis) {
+		this.width = width;
+		this.height = height;
+	}
+}
+
 /** Authoritative Haxe-side result of style resolution. */
 class ComputedStyle {
 	/** Indexed by `StyleProperty.slot`: null is absent, and `NullValue` stands for a stored null. */
 	var values:Array<Dynamic>;
 	var sources:Array<Null<StyleSource>>;
 	static final NullValue:Dynamic = new InheritedKeyCache();
+	static final AxisValue:Dynamic = new InheritedKeyCache();
+	var inlineAxes:Null<InlineAxes>;
+	var axesShared:Bool;
 	public var matchingRules(default, null):Array<StyleSource>;
 	var shared:Bool;
 	/** The rule list is shared with a fork until either side records a match; `recordMatch` detaches it. */
@@ -43,11 +59,17 @@ class ComputedStyle {
 			values = [];
 			sources = [];
 			matchingRules = [];
+			inlineAxes = null;
 		} else {
 			values = from.values;
 			sources = from.sources;
 			matchingRules = from.matchingRules;
+			inlineAxes = from.inlineAxes;
+			from.shared = true;
+			from.rulesShared = true;
+			from.axesShared = true;
 		}
+		axesShared = from != null;
 		shared = from != null;
 		rulesShared = from != null;
 		inheritedKeyCache = null;
@@ -68,12 +90,76 @@ class ComputedStyle {
 		sources[slot] = source;
 	}
 
+	/** Local layout axes are stored together without crossing the dynamic-value boundary. */
+	@:allow(haxeon.ui.style.StyleResolver)
+	function setAxis(property:StyleProperty<LayoutAxis>, value:LayoutAxis, source:Null<StyleSource>):Void {
+		if (property != StyleProperty.Width && property != StyleProperty.Height)
+			throw "Inline axis storage requires a built-in layout axis";
+		ensureWritable();
+		var axes = inlineAxes;
+		if (axes == null) {
+			axes = new InlineAxes(LayoutAxis.fit(), LayoutAxis.fit());
+			inlineAxes = axes;
+			axesShared = false;
+		} else if (axesShared) {
+			var previous = axes;
+			axes = new InlineAxes(previous.width, previous.height);
+			axes.widthBox = previous.widthBox;
+			axes.heightBox = previous.heightBox;
+			inlineAxes = axes;
+			axesShared = false;
+		}
+		if (property == StyleProperty.Width) {
+			axes.width = value;
+			axes.widthBox = null;
+		} else {
+			axes.height = value;
+			axes.heightBox = null;
+		}
+		var slot = property.slot;
+		if (slot >= values.length) {
+			values.resize(slot + 1);
+			sources.resize(slot + 1);
+		}
+		values[slot] = AxisValue;
+		sources[slot] = source;
+	}
+
+	inline function axisAt(slot:Int):LayoutAxis {
+		var value = values[slot];
+		if (value == AxisValue) {
+			var axes:InlineAxes = cast inlineAxes;
+			return slot == StyleProperty.Width.slot ? axes.width : axes.height;
+		}
+		var dynamicValue:Dynamic = value == NullValue ? null : value;
+		return cast dynamicValue;
+	}
+
 	inline function isSet(slot:Int):Bool
 		return slot < values.length && values[slot] != null;
 
 	inline function valueAt(slot:Int):Dynamic {
 		var value = slot < values.length ? values[slot] : null;
+		if (value == AxisValue) {
+			var axes:InlineAxes = cast inlineAxes;
+			if (slot == StyleProperty.Width.slot) {
+				if (axes.widthBox == null) axes.widthBox = axes.width;
+				return axes.widthBox;
+			}
+			if (axes.heightBox == null) axes.heightBox = axes.height;
+			return axes.heightBox;
+		}
 		return value == NullValue ? null : value;
+	}
+
+	@:allow(haxeon.ui.style.StyleDiff)
+	function sameValue(property:StyleProperty<Dynamic>, other:ComputedStyle):Bool {
+		var slot = property.slot;
+		if ((slot == StyleProperty.Width.slot || slot == StyleProperty.Height.slot) &&
+				(values[slot] == AxisValue || other.values[slot] == AxisValue) &&
+				values[slot] != NullValue && other.values[slot] != NullValue)
+			return haxeon.Equality.equals(axisAt(slot), other.axisAt(slot));
+		return property.isEqual(valueAt(slot), other.valueAt(slot));
 	}
 
 	inline function sourceAt(slot:Int):Null<StyleSource>
@@ -140,11 +226,11 @@ class ComputedStyle {
 	public function toLayoutStyle(?base:LayoutStyle):LayoutStyle {
 		var result = base == null ? new LayoutStyle() : base.copy();
 		if (isSet(StyleProperty.Width.slot)) {
-			var width:LayoutAxis = cast valueAt(StyleProperty.Width.slot);
+			var width = axisAt(StyleProperty.Width.slot);
 			result.width = width;
 		}
 		if (isSet(StyleProperty.Height.slot)) {
-			var height:LayoutAxis = cast valueAt(StyleProperty.Height.slot);
+			var height = axisAt(StyleProperty.Height.slot);
 			result.height = height;
 		}
 		if (isSet(StyleProperty.Direction.slot)) result.direction = cast valueAt(StyleProperty.Direction.slot);
@@ -192,8 +278,14 @@ class ComputedStyle {
 	public function copy():ComputedStyle {
 		var result = new ComputedStyle();
 		for (property in StyleProperty.all())
-			if (isSet(property.slot))
-				result.set(property, copyValue(property, valueAt(property.slot)), sourceAt(property.slot));
+			if (isSet(property.slot)) {
+				if (values[property.slot] == AxisValue) {
+					result.setAxis(cast property, axisAt(property.slot), sourceAt(property.slot));
+					var sourceAxes:InlineAxes = cast inlineAxes, targetAxes:InlineAxes = cast result.inlineAxes;
+					if (property.slot == StyleProperty.Width.slot) targetAxes.widthBox = sourceAxes.widthBox;
+					else targetAxes.heightBox = sourceAxes.heightBox;
+				} else result.set(property, copyValue(property, valueAt(property.slot)), sourceAt(property.slot));
+			}
 		for (source in matchingRules)
 			result.recordMatch(source);
 		return result;

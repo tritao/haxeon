@@ -152,7 +152,7 @@ class ResolvedLayoutItem {
 		return localX >= 0.0 && localY >= 0.0 && localX <= width && localY <= height;
 	}
 
-	public static function decode(bytes:Bytes, offset:Int):ResolvedLayoutItem {
+	public static function decode(bytes:Bytes, offset:Int, ?previous:ResolvedLayoutItem):ResolvedLayoutItem {
 		var recordBytes = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
 		if (offset < 0 || offset > bytes.length || recordBytes > bytes.length - offset)
 			throw "Resolved layout item is outside the geometry snapshot";
@@ -165,18 +165,33 @@ class ResolvedLayoutItem {
 			clipWidth = readFloat(bytes, offset + 36), clipHeight = readFloat(bytes, offset + 40);
 		var contentX = readFloat(bytes, offset + 44), contentY = readFloat(bytes, offset + 48),
 			contentWidth = readFloat(bytes, offset + 52), contentHeight = readFloat(bytes, offset + 56);
-		var clip = new Rect(clipX, clipY, clipWidth, clipHeight);
-		var content = new Rect(contentX, contentY, contentWidth, contentHeight);
 		var a = readFloat(bytes, offset + 60), b = readFloat(bytes, offset + 64), c = readFloat(bytes, offset + 68),
 			d = readFloat(bytes, offset + 72), tx = readFloat(bytes, offset + 76), ty = readFloat(bytes, offset + 80);
-		var transform = a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 && tx == 0.0 && ty == 0.0 ? IdentityTransform : new Transform2D(a, b, c, d, tx, ty);
-		return new ResolvedLayoutItem(bytes.getInt32(offset + 4), flags,
-			readFloat(bytes, offset + 12), readFloat(bytes, offset + 16),
-			readFloat(bytes, offset + 20), readFloat(bytes, offset + 24), clip, content, transform,
-			readFloat(bytes, offset + 84));
+		var identity = a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 && tx == 0.0 && ty == 0.0;
+		var id = bytes.getInt32(offset + 4), x = readFloat(bytes, offset + 12), y = readFloat(bytes, offset + 16),
+			width = readFloat(bytes, offset + 20), height = readFloat(bytes, offset + 24), baseline = readFloat(bytes, offset + 84);
+		// Native updates can repeat unchanged geometry. Keep the immutable prior snapshot before allocating a replacement.
+		if (previous != null && previous.id == id && previous.flags == flags && sameFloat(previous.x, x) && sameFloat(previous.y, y)
+				&& sameFloat(previous.width, width) && sameFloat(previous.height, height) && sameFloat(previous.baseline, baseline)
+				&& sameFloat(previous.clipBounds.x, clipX) && sameFloat(previous.clipBounds.y, clipY)
+				&& sameFloat(previous.clipBounds.width, clipWidth) && sameFloat(previous.clipBounds.height, clipHeight)
+				&& sameFloat(previous.contentBounds.x, contentX) && sameFloat(previous.contentBounds.y, contentY)
+				&& sameFloat(previous.contentBounds.width, contentWidth) && sameFloat(previous.contentBounds.height, contentHeight)
+				&& sameFloat(previous.transform.a, a) && sameFloat(previous.transform.b, identity ? 0.0 : b)
+				&& sameFloat(previous.transform.c, identity ? 0.0 : c) && sameFloat(previous.transform.d, d)
+				&& sameFloat(previous.transform.tx, identity ? 0.0 : tx) && sameFloat(previous.transform.ty, identity ? 0.0 : ty))
+			return previous;
+		var clip = new Rect(clipX, clipY, clipWidth, clipHeight);
+		var content = new Rect(contentX, contentY, contentWidth, contentHeight);
+		var transform = identity ? IdentityTransform : new Transform2D(a, b, c, d, tx, ty);
+		return new ResolvedLayoutItem(id, flags, x, y, width, height, clip, content, transform, baseline);
 	}
 
 	static final IdentityTransform:Transform2D = Transform2D.identity();
+
+	/** Preserve the observable sign of zero when reusing a snapshot. Inputs are finite native floats. */
+	static inline function sameFloat(left:Float, right:Float):Bool
+		return left == right && (left != 0.0 || 1.0 / left == 1.0 / right);
 
 	static inline function contains(rect:Rect, x:Float, y:Float):Bool
 		return x >= rect.x && y >= rect.y && x <= rect.x + rect.width && y <= rect.y + rect.height;

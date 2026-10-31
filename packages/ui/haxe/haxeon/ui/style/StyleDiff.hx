@@ -36,8 +36,7 @@ class StyleDiff {
 		for (property in StyleProperty.all()) {
 			var previousHas = previous != null && previous.has(property);
 			var currentHas = current != null && current.has(property);
-			if (previousHas == currentHas && (!previousHas ||
-				property.isEqual(previous.peek(property), current.peek(property))))
+			if (previousHas == currentHas && (!previousHas || previous.sameValue(property, current)))
 				continue;
 			changed = true;
 			impact |= property.impact;

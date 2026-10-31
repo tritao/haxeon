@@ -280,39 +280,24 @@ fixpoint as other functions, so a getter that constructs a value can preserve a 
 Effectful or unsupported constructors and initializers invalidate those refinements, including after incremental edits.
 The proof covers exact non-generic declarations without inherited initialization.
 
-An exploratory compact native-geometry representation now compiles through those getter refinements. It reduced the
-hierarchy-to-sensors median from 180.5 to 166.7 KiB in the all-five-value prototype, but inspector scroll rose to
-38.6 KiB, above its 33 KiB ceiling, so the representation is not accepted. Its 30-cycle interaction census includes
-13,504 Rect and 6,536 Transform2D boxes because generated structural equality calls materialized getter results on
-HashLink. Generated equality helpers now use the existing scalar calling convention when their value arguments qualify;
-this also applies to Wasm GC and optional-flow clones. On the same exploratory build the interaction census fell to 192
-Rect, 146 Insets, 1,036 Color, 807 LayoutAxis and zero Transform2D boxes. Inspector scroll fell from 38.6 to 14.7 KiB.
-The four tab transitions measured 123.5, 166.5, 136.4 and 139.7 KiB, still above their class baselines of 110.9,
-158.2, 124.8 and 128.6 KiB, so the all-five-value representation remains exploratory. Fresh values copied into inline fields, including closure environments, now stay scalar even when a
-later branch reads the same value or another branch stores it elsewhere. Copies snapshot their leaves before writing,
-and values that escape still keep their existing allocation. In the 30-cycle all-five-value interaction census this
-removed a further 487 Color boxes, from 1,036 to 549; Rect, Insets, LayoutAxis and Transform2D remained 192, 146, 807 and
-zero. Measured tab transitions remained 123.5, 166.5, 136.4 and 139.9 KiB, so the representation still needs work. HashLink frame-owned scalar locals also cover native fields whose register representation exactly matches storage, so full-width value arguments can remain scalar across exception handlers; narrow integers still retain their storage conversion. A 10,000-call handler probe fell from about 320,000 allocated bytes to zero. The same interaction census and per-action medians were unchanged, since that probe's paint path is not exercised by the headless workload. The five-value Wasm GC Showcase measured 6,138, 13,170, 6,134 and 6,136 objects in full, editing, static and text-heavy modes respectively. On the same exploratory five-value build, the 120-frame Wasm GC Showcase counted 6,136, 13,168, 6,138 and 6,136 objects in full, editing, static and text-heavy modes; the corresponding class counts were 8,654, 15,482, 8,654 and 8,656. With Rect and Insets alone, the same
-120-frame instrumented Wasm GC Showcase counted 6,516, 13,540, 6,520 and 6,496 objects in full, editing, static and
-text-heavy modes respectively; the class baselines were 8,654, 15,482, 8,654 and 8,656.
-With only Rect and Insets converted, the same 120-frame Wasm GC Showcase measured 6,496, 13,528, 6,496 and 6,496
-objects in full, editing, static and text-heavy modes; the corresponding class baselines were 8,654, 15,482, 8,654 and
-8,656.
-The 30-cycle interaction census remained 192 Rect and 146 Insets boxes, plus 487 Color, 1,007 LayoutAxis and 1,722
-Transform2D class allocations.
-The HashLink tab transition medians were 112.7, 162.1, 126.9 and 131.0 KiB; hover away, enter, field, inside and other
-were 25.0, 2.6, 22.2, 0.6 and 13.2 KiB; idle actions were 0.2 KiB, inspector scroll was 21.6 KiB, and both typing actions
-were 17.9 KiB. This intermediate Rect/Insets state still exceeds the class baseline on some actions.
+Fresh values copied into inline fields, including closure environments, stay scalar when eligible. Copies snapshot their
+leaves before writing; values at genuine escape boundaries retain their existing allocation. HashLink frame-owned scalar
+locals include full-width native fields across exception handlers, while narrow fields retain their storage conversions.
+
+A same-machine, same-compiler attribution sampled 28 warmed tab transitions. In bytes, the all-five prototype's
+`LayoutStyle` grew from 16,896 to 19,008 with Rect/Insets and 29,240 with all five on console-to-telemetry and
+telemetry-to-console; on the other two transitions it grew from 18,048 to 20,304 and 30,960. In transition order,
+`ResolvedLayoutItem` was 2,960/17,360/6,560/3,440 bytes as classes and 4,736/27,776/10,496/5,504 with Rect/Insets.
+In the all-five prototype `LayoutNode` grew by 1,344–1,416 bytes; `ResolvedLayoutItem` changed by +888, +5,208, +1,968
+and +1,032 bytes respectively. Eliminating `Rect` saved 1,840, 9,280, 3,760 and 2,080 bytes, while eliminating
+`LayoutAxis` saved 1,824, 2,064, 2,064 and 1,824 bytes. These are independent per-type medians, not additive action
+totals. The holder increase exposed unnecessary per-build work, addressed by retaining stable pane and inspector variants
+and by reusing private style templates while preserving immutable full-width values.
 
 On Wasm32, ordinary struct fields currently use boxed backing storage. Replacing a field copies the new value into its
 existing backing place, including nested value fields, so a receiver already bound to that place sees changes made by a
 callback. A field's first assignment adopts its newly copied value. This does not add a box per replacement; value reads
 still make their usual independent copies. Wasm GC uses flattened fields for the same place semantics.
-
-With Rect and Insets converted, the 120-frame Wasm GC Showcase measured 6,508 objects in full mode, 13,536 in editing,
-6,498 in static and 6,502 in text-heavy mode on the baseline machine. The class baselines were 8,654, 15,482, 8,654 and
-8,656 respectively. The Wasm32 change does not alter the Wasm GC lowering; these counts include the full benchmark
-workload and are not per-type allocation counts.
 
 ## Equality and hashing
 
@@ -358,10 +343,10 @@ shared equality used by `==`, `EqualityGenerator` and `StructuralIntrinsics`, an
 
 `null` is excluded from struct values, but "absent" is a real state: an optional color or clip rectangle. A `Null<S>`
 field stores a presence flag and the value inline in its holder. Testing null reads the flag, assigning null clears the
-flag and zeroes the payload, and reading an absent value raises the usual null-access error. Locals, parameters and returns
-keep their existing representation and convert at field boundaries. Shared IR retains `Nullable(Obj(S))` until field
-lowering expands each optional into the flag and recursively flattened payload slots. Field reads and writes convert at
-the boundary; methods called on a field place use a specialized receiver so their writes remain visible through aliases.
+flag and zeroes the payload, and reading an absent value raises the usual null-access error. Eligible nonescaping locals,
+parameters and returns also use a presence flag and flattened leaves. Shared IR retains `Nullable(Obj(S))` until lowering;
+escaping and unsupported boundaries use their boxed representation. Methods called on a field place use a specialized
+receiver so their writes remain visible through aliases.
 
 Arrays of structs, including `Null<S>` elements, keep their existing boxed element representation in stage 1a. Inline
 struct arrays are later work: HashLink's packed-array allocator and packed move are possible building blocks, but an
@@ -400,41 +385,38 @@ median changed from 182.1 to 162.6 KiB and inspector-scroll from 29.4 to 21.6 Ki
 count remained 19,936 objects in full mode and 26,762 in editing mode, as this step targets HashLink. These are
 intermediate measurements: the class baseline and remaining optional flow still determine acceptance.
 
-The per-action HashLink medians below are KiB allocated per action on the same machine. The prototype converts only
-`Rect` and `Insets`; step A adds non-optional lowering, step B adds optional field-copy fusion, and step C adds scalar optional flow. Selection-stress
-does not report per-action bytes.
+The same-machine HashLink medians below are KiB per action. The all-five column is the full-width exploratory
+conversion before removing repeated holder allocations. Selection uses a direct allocation census because the budget
+script does not report that action's bytes. `Gc.totalAllocated` reports reservations in chunks, so tiny differences
+between adjacent actions can move between those actions; direct per-action census confirms the final counts.
 
-| Scenario / action | Classes | Prototype | Step A | Step B | Step C |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 | 112.7 | 112.7 |
-| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 | 162.1 | 162.1 |
-| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 | 126.9 | 128.9 |
-| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 | 131.0 | 131.0 |
-| interaction / hover away | 24.9 | 25.0 | 25.2 | 25.0 | 25.2 |
-| interaction / hover enter | 2.6 | 2.6 | 2.6 | 2.6 | 2.6 |
-| interaction / hover field | 22.1 | 24.0 | 22.2 | 22.2 | 24.0 |
-| interaction / hover inside | 0.6 | 0.6 | 0.6 | 0.6 | 0.6 |
-| interaction / hover other | 13.1 | 13.2 | 13.2 | 13.2 | 13.2 |
-| interaction / idle | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 |
-| interaction / idle focused | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 |
-| interaction / scroll inspector | 22.3 | 29.4 | 21.6 | 21.6 | 21.6 |
-| interaction / type backspace | 17.8 | 17.9 | 17.9 | 17.9 | 17.9 |
-| interaction / type character | 17.8 | 17.9 | 17.9 | 17.9 | 17.9 |
+| Action | Classes | Rect/Insets | All five | Final |
+| --- | ---: | ---: | ---: | ---: |
+| console → telemetry | 110.9 | 112.7 | 125.0 | 77.2 |
+| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.5 |
+| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.6 |
+| telemetry → console | 128.6 | 131.0 | 145.5 | 95.6 |
+| hover away | 24.9 | 25.0 | 26.5 | 14.8 |
+| hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
+| hover field | 22.1 | 22.2 | 25.0 | 13.4 |
+| hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
+| hover other | 13.1 | 13.2 | 14.3 | 10.0 |
+| idle | 0.2 | 0.2 | 0.2 | 0.2 |
+| idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
+| scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
+| type backspace | 17.8 | 17.9 | 18.7 | 16.2 |
+| type character | 17.8 | 17.9 | 18.7 | 16.1 |
+| selection (census) | 927.7 | — | — | 855.9 |
 
-The interaction allocation census counts whole 30-cycle captures, including startup:
+The 120-frame instrumented Wasm GC Showcase counts generated `struct.new` and `array.new` operations; these counts do
+not establish byte sizes or cover separately encoded function bodies.
 
-| Type | Classes | Prototype | Step A | Step B | Step C |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Rect | 7,511 | 23,217 | 16,539 | 16,539 | 5,932 |
-| Insets | 70 | 9,811 | 779 | 779 | 759 |
-| Color | 487 | 487 | 487 | 487 | 487 |
-| LayoutAxis | 1,007 | 1,007 | 1,007 | 1,007 | 1,007 |
-| Transform2D | 1,722 | 1,722 | 1,722 | 1,722 | 1,722 |
-
-| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A | Step B | Step C |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Full | 8,654 | 19,936 | 19,936 | 6,976 | 6,976 |
-| Editing | 15,482 | 26,762 | 26,762 | 13,802 | 13,802 |
+| Showcase scenario | Classes | Rect/Insets | All five | Final |
+| --- | ---: | ---: | ---: | ---: |
+| Full | 8,654 | 6,496 | 6,138 | 5,896 |
+| Editing | 15,482 | 13,528 | 13,168 | 12,837 |
+| Static | 8,654 | 6,496 | 6,136 | 5,896 |
+| Text-heavy | 8,656 | 6,496 | 6,138 | 5,896 |
 
 #### Implemented: optional field-to-field copies
 
@@ -443,11 +425,13 @@ snapshots the source presence flag and every flattened leaf before writing the d
 in source order, and source and destination null errors occur at their original accesses. This preserves nested optionals,
 managed references, side effects, and overlapping or identical places. Other copies keep their boxed representation.
 
-The interaction census was unchanged in step B. The Wasm GC Showcase counts fell by 12,960 objects in both scenarios,
-removing the paired clip getter and copy allocations measured in the prototype. These totals are below the class baseline;
-HashLink per-action acceptance still needs further allocation reductions.
+The interaction census was unchanged in step B. The Wasm GC Showcase counts fell by 12,960 objects in both full and
+editing scenarios, removing the paired clip getter and copy allocations measured in the prototype.
 
 #### Implemented: scalar optional flow
+
+In the Rect/Insets interaction census, step C reduced boxed Rect allocations from 16,539 to 5,932 and Insets from 779
+to 759 over 30 cycles; native-layout optional flow reduced these further.
 
 Nonescaping optional locals carry a presence flag and recursively flattened leaves. Eligible direct calls, typed closures
 and exact-type methods use specialized scalar component carriers; calls across unsupported or reference-representation
@@ -459,69 +443,14 @@ and isolated value phis can also be scalar-replaced without ordinary inlining. C
 and exception order; recursive and unsupported exception-handler bodies retain their calls. Native-layout optional values
 also use scalar flow, preserving narrow integer and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
 
-Value joins are scalarized before choosing the call ABI on all targets, and again after HashLink call lowering when that
-creates new joins. Optional-value methods on class receivers can use scalar flow when every possible subclass selects the
-same implementation. The lowering preserves the receiver null error after argument evaluation; overriding methods keep
-virtual dispatch. On the exploratory all-five-value UI build, this reduced the 30-cycle interaction Color census from
-2,994 to 1,315 and the tab-matrix census from 4,997 to 1,654. HashLink per-action results still exceed the class baseline
-for multiple actions, so further work is required before accepting the conversion.
-
-HashLink scalar ABI selection now splits value joins introduced by call rewriting before testing whether a candidate can
-stay in registers. On the same all-five-value prototype, the 30-cycle interaction census counted 192 Rect, 146 Insets,
-1,309 Color, 807 LayoutAxis and 132 Transform2D boxes. The four tab transitions measured 125.5, 182.2, 143.0 and
-143.5 KiB; hover away, enter, field, inside and other measured 26.5, 2.6, 23.3, 0.6 and 14.3 KiB; idle and focused
-idle were 0.2 KiB each, inspector scroll was 21.7 KiB, and backspace and character input were 18.7 KiB each. Wasm GC
-allocated 6,138, 13,168, 6,136 and 6,138 objects over 120 measured frames in full, editing, static and text-heavy modes.
-These prototype measurements still do not meet the HashLink acceptance rule.
-
-Read-only methods on a fresh, unaliased struct receiver can use scalar parameters even when they call out. The proof
-follows nested value fields and receiver methods, and excludes a receiver whose place could be observed or changed by an
-alias; field-place calls retain their original ABI. With ordinary inlining disabled, a 10,000-call regression test with
-callbacks allocates less than 4 KiB for both scalar and nested managed receivers. With Rect and Insets converted, the
-30-cycle interaction census counted 192 Rect and 146 Insets boxes, alongside 487 Color, 1,007 LayoutAxis and 1,722
-Transform2D class allocations. An exploratory all-five-value UI build
-still exceeds the class baseline: tab transition medians were 125.8, 180.5, 141.5 and 142.4 KiB; hover away, enter,
-field, inside and other were 26.5, 2.6, 25.0, 0.6 and 14.3 KiB; both idle actions were 0.2 KiB, inspector scroll was
-23.5 KiB, and backspace and character input were 18.7 KiB each. This is not an accepted conversion. The separately
-remeasured Rect/Insets Wasm GC Showcase used 6,532, 13,562, 6,522 and 6,522 objects over 120 frames in full, editing,
-static and text-heavy modes respectively, below the class counts of 8,654, 15,482, 8,654 and 8,656.
-
-Nested straight-line value constructors are prepared before expanding their callers, with recursive cycles left as calls
-and a bound on expanded body size. This lets newly constructed nested managed values stay scalar without ordinary
-inlining; tests cover side-effect order, exceptions and allocation. The 120-frame Rect/Insets Wasm GC Showcase measured
-6,532, 13,558, 6,518 and 6,508 objects in full, editing, static and text-heavy modes respectively, all below the class
-baselines. The 30-cycle interaction census remains 192 Rect and 146 Insets boxes, with 487 Color, 1,007 LayoutAxis and
-1,722 Transform2D class allocations. The four HashLink tab transition medians were 112.7, 162.1, 126.9 and 131.0 KiB;
-hover away, enter, field, inside and other were 25.0, 0.6, 22.2, 0.6 and 13.2 KiB; both idle actions were 0.2 KiB,
-inspector scroll was 21.6 KiB, and backspace and character input were 17.9 KiB each. Some still exceed the class baseline,
-so conversion acceptance remains open. Wasm GC uses its own lowering and is not changed by this HashLink optimization.
-
-Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
-leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
-nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be
-removed after its call is made direct; its debug binding is then omitted. Mutating receiver aliases remain
-ineligible for this transformation so their writeback semantics are preserved.
-
-Native-layout optional values now use the same flow as other structs. Scalar stores retain native-width truncation and
-Float32 rounding. Generated structural hashes omit the null check on a non-nullable nested struct, which otherwise
-boxed the inline value. On the Rect/Insets prototype, the 30-cycle interaction census fell from 5,932 to 316 Rect boxes
-and from 759 to 146 Insets boxes; 120-frame Wasm GC Showcase counts fell from 6,976 to 6,496 in full mode and from
-13,802 to 13,322 in editing mode. These remaining boxes include actual dynamic and array escapes. HashLink per-action
-medians in KiB were 112.7, 162.1, 126.9 and 129.6 for the four tab-matrix transitions; interaction hover away, enter, field,
-inside and other were 25.0, 2.6, 22.2, 0.6 and 13.2; idle and idle focused were 0.2 each, inspector scroll was 21.4,
-and backspace and character input were 17.9 each. They remain intermediate results against the class baseline above.
-
-An exploratory all-five-value UI build after scalar aliases and branching constructor expansion still has HashLink
-regressions. Its 30-cycle interaction census contains 192 Rect, 146 Insets, 2,994 Color, 825 LayoutAxis and 132
-Transform2D boxes. The four tab transitions measured 127.0, 183.5, 143.2 and 145.5 KiB; hover away, enter, field,
-inside and other measured 26.5, 2.6, 25.0, 0.6 and 14.3 KiB; idle and focused idle were 0.2 KiB each, inspector
-scroll was 23.7 KiB, and backspace and character input were 18.7 KiB each. This is an intermediate prototype,
-not acceptance of the UI conversion.
+Value joins are split before selecting the scalar call ABI. Eligible read-only fresh receivers, direct closures,
+branching and nested value constructors, native-layout optional values, and structural equality and hashing can also
+remain scalar. Receiver aliases retain writeback semantics; narrow native stores retain truncation and Float32 rounding.
+Dynamic, reflective, native and otherwise unsupported boundaries retain the boxed ABI.
 
 The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
 recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and
-without inlining. The Rect/Insets prototype above remains an intermediate measurement: several HashLink actions still
-allocate more than the class baseline, so it does not yet meet the UI migration's acceptance rule.
+without inlining.
 
 ## Representation on Wasm GC
 

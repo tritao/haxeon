@@ -2,7 +2,7 @@ package haxeon.ui;
 
 /** Six-value affine transform using x'=a*x+c*y+tx and y'=b*x+d*y+ty. */
 @:structural
-class Transform2D {
+struct Transform2D {
 	static inline var InvertibilityEpsilon:Float = 0.000001;
 
 	public final a:Float;
@@ -38,8 +38,6 @@ class Transform2D {
 
 	/** Returns this transform followed by `other` in column-vector notation. */
 	public function multiply(other:Transform2D):Transform2D {
-		if (other == null)
-			throw "Transform multiplication requires another transform";
 		return new Transform2D(
 			a * other.a + c * other.b,
 			b * other.a + d * other.b,

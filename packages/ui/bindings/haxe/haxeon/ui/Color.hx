@@ -6,7 +6,7 @@ import NativeKitUI;
 
 /** Immutable normalized RGBA color value. */
 @:structural
-class Color {
+struct Color {
 	public final red:Float;
 	public final green:Float;
 	public final blue:Float;

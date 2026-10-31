@@ -344,7 +344,7 @@ class TextEditorLayout {
 	public function paragraphCaret(index:Int):TextCaret {
 		ensureLive();
 		if (index < 0 || index >= paragraphLineCount) throw "Paragraph index out of bounds";
-		return caret(new TextPosition(offsets.paragraphRangeAtIndex(index).start, 0));
+		return caretAt(offsets.paragraphRangeAtIndex(index).start, 0);
 	}
 
 	/** Resolved visual rows, including wrapped continuations and the final empty row.
@@ -401,12 +401,14 @@ class TextEditorLayout {
 	/** A paragraph's visual rows relative to its own start and top, followed by the row of a caret after its end. */
 	static function measureRows(record:TextEditorParagraphRecord):Array<TextEditorParagraphRow> {
 		var rows:Array<TextEditorParagraphRow> = [];
-		for (rect in record.layout.lineRects(0, record.end - record.start, -1.0e30, 1.0e30)) {
+		var records = record.layout.lineRectBuffer(0, record.end - record.start, -1.0e30, 1.0e30);
+		for (index in 0...Std.int(records.length / TextLayout.lineRectRecordBytes)) {
+			var rect = TextLayout.lineRectAt(records, index * TextLayout.lineRectRecordBytes);
 			var hit = record.layout.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
 			var range = record.layout.lineRangeAt(hit.offset);
 			rows.push(new TextEditorParagraphRow(range.start, range.end, rect.y, rect.y + rect.height));
 		}
-		var last = record.layout.caret(new TextPosition(record.end - record.start, 0));
+		var last = record.layout.caretAt(record.end - record.start, 0);
 		var length = record.end - record.start;
 		rows.push(new TextEditorParagraphRow(length, length, last.y + Math.min(last.ascender, last.descender),
 			last.y + Math.max(last.ascender, last.descender)));
@@ -451,7 +453,7 @@ class TextEditorLayout {
 		var measuredHasBaseline = hasBaseline && Math.isFinite(baseline) && baseline >= 0.0 &&
 			baseline <= measuredHeight;
 		if (!measuredHasBaseline && paragraphs.length > 0 && paragraphs[0].height > 0.0) {
-			var firstCaret = paragraphs[0].layout.caret(new TextPosition(0, 0));
+			var firstCaret = paragraphs[0].layout.caretAt(0, 0);
 			baseline = firstCaret.y;
 			measuredHasBaseline = Math.isFinite(baseline) && baseline >= 0.0 && baseline <= measuredHeight;
 		}
@@ -502,7 +504,7 @@ class TextEditorLayout {
 				while (rangeIndex < merged.length && merged[rangeIndex].end <= absolute) rangeIndex++;
 				var selected = rangeIndex < merged.length && merged[rangeIndex].start < record.start + token.end;
 				if (mode != "all" && !selected) continue;
-				var caret = record.layout.caret(new TextPosition(token.start, 0));
+				var caret = record.layout.caretAt(token.start, 0);
 				var top = record.y + caret.y + Math.min(caret.ascender, caret.descender);
 				var height = Math.abs(caret.descender - caret.ascender);
 				var left = caret.x, right = caret.x;
@@ -512,7 +514,7 @@ class TextEditorLayout {
 					left = rects[0].x;
 					right = left + Math.max(7, textStyle.fontSize * 0.6);
 				} else {
-					var endCaret = record.layout.caret(new TextPosition(token.end, 0));
+					var endCaret = record.layout.caretAt(token.end, 0);
 					left = Math.min(caret.x, endCaret.x); right = Math.max(caret.x, endCaret.x);
 				}
 				if (top + height <= minY || top >= maxY || right < minX || left > maxX) continue;
@@ -558,7 +560,7 @@ class TextEditorLayout {
 			maxY:Float = 1.0e30, minX:Float = 0.0, maxX:Float = 1.0e30,
 			includeBackground:Bool = true):Void {
 		ensureLive();
-		if (canvas == null || color == null)
+		if (canvas == null)
 			throw "Editor layout paint arguments are invalid";
 		if (includeBackground)
 			paintDecorations(canvas, true, minY, maxY, minX, maxX);
@@ -724,9 +726,17 @@ class TextEditorLayout {
 		ensureLive();
 		if (position == null)
 			throw "Text position cannot be null";
-		var record = paragraphAtOffset(position.offset);
-		var local = clamp(position.offset - record.start, 0, record.end - record.start);
-		var value = record.layout.caret(new TextPosition(local, position.affinity));
+		return caretAt(position.offset, position.affinity);
+	}
+
+	@:allow(haxeon.ui.widgets.text.TextField)
+	@:allow(haxeon.ui.widgets.text.TextEditorState)
+	@:allow(haxeon.ui.widgets.text.TextDecoration)
+	function caretAt(offset:Int, affinity:Int):TextCaret {
+		ensureLive();
+		var record = paragraphAtOffset(offset);
+		var local = clamp(offset - record.start, 0, record.end - record.start);
+		var value = record.layout.caretAt(local, affinity);
 		return new TextCaret(value.x, value.y + record.y, value.ascender, value.descender,
 			value.slope, value.direction);
 	}
@@ -1003,7 +1013,7 @@ class TextEditorLayout {
 			if (record.laidOut || !estimate) measureRecord(record);
 			else record.height = estimatedHeight(record);
 			if (!hasBaseline && record.laidOut) {
-				firstBaseline = record.y + record.layout.caret(new TextPosition(0, 0)).y;
+				firstBaseline = record.y + record.layout.caretAt(0, 0).y;
 				hasBaseline = Math.isFinite(firstBaseline) && firstBaseline >= 0.0;
 			}
 			contentHeight += record.height;
@@ -1019,7 +1029,7 @@ class TextEditorLayout {
 		var metrics = record.layout.measure();
 		var lineHeight = paragraphStyle.lineHeight == null ? 0.0 : paragraphStyle.lineHeight;
 		if (lineHeight <= 0.0) {
-			var caret = record.layout.caret(new TextPosition(0, 0));
+			var caret = record.layout.caretAt(0, 0);
 			lineHeight = Math.abs(caret.descender - caret.ascender);
 		}
 		record.height = Math.max(metrics.height, Math.max(1.0, lineHeight));

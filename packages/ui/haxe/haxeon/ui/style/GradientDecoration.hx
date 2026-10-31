@@ -14,8 +14,6 @@ class GradientDecoration extends Decoration {
 
 	public function new(start:Color, end:Color) {
 		super(DecorationKind.Gradient);
-		if (start == null || end == null)
-			throw "Gradients require colors";
 		this.start = Effect.copyColor(start);
 		this.end = Effect.copyColor(end);
 	}

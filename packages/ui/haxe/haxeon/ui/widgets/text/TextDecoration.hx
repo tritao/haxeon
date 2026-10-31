@@ -15,7 +15,7 @@ class TextDecoration {
 	public final kind:TextDecorationKind;
 
 	public function new(start:Int, end:Int, color:Color, kind:TextDecorationKind) {
-		if (start < 0 || end < start || color == null || kind == null)
+		if (start < 0 || end < start || kind == null)
 			throw "Text decoration arguments are invalid";
 		if (start == end && kind != WholeLineBackground)
 			throw "Only a whole-line decoration may have an empty range";
@@ -29,7 +29,7 @@ class TextDecoration {
 	public function rectangles(layout:TextEditorLayout, minY:Float, maxY:Float):Array<Rect> {
 		var rects:Array<Rect> = [];
 		if (start == end) {
-			var caret = layout.caret(new TextPosition(start, 0));
+			var caret = layout.caretAt(start, 0);
 			var top = caret.y + Math.min(caret.ascender, caret.descender);
 			var height = Math.abs(caret.descender - caret.ascender);
 			if (top + height > minY && top < maxY)

@@ -407,6 +407,27 @@ class FrameworkSmoke {
 		return true;
 	}
 
+	/** Internal row measurement must agree with the public decoded native rectangles. */
+	static function nativeLineRowsMatch(fonts:FontCollection):Bool {
+		var value = "wrapped text with café and several words";
+		var style = new TextStyle(), paragraph = new ParagraphStyle(TextWrap.WordCharacter);
+		var native = TextLayout.create(fonts, value, 80.0, style, paragraph);
+		var editor = new haxeon.ui.widgets.text.TextEditorLayout(fonts, value, 80.0, style, paragraph);
+		editor.caret(new TextPosition(0, 0));
+		var rectangles = native.lineRects(0, Utf8Text.length(value), -1.0e30, 1.0e30), rows = editor.visualRows();
+		if (rectangles.length < 2 || rows.length < rectangles.length) throw "wrapped native lines are missing";
+		for (index in 0...rectangles.length) {
+			var rect = rectangles[index];
+			var hit = native.hitTest(rect.x + rect.width / 2, rect.y + rect.height / 2);
+			var range = native.lineRangeAt(hit.offset), row = rows[index];
+			if (row.start != range.start || Math.abs(row.top - rect.y) > 0.001 ||
+					Math.abs(row.bottom - (rect.y + rect.height)) > 0.001)
+				throw "editor visual row differs from its native line rectangle";
+		}
+		editor.dispose(); native.dispose();
+		return true;
+	}
+
 	/** Without wrapping, a width change leaves left-aligned groups as they are and moves right-to-left ones. An editor
 		resized to each width matches a layout made at that width directly, which never takes the width-change path. */
 	static function unwrappedWidthChangesMatchFreshLayout(fonts:FontCollection):Bool {
@@ -841,6 +862,8 @@ class FrameworkSmoke {
 			return 311;
 		if (!unwrappedWidthChangesMatchFreshLayout(fonts))
 			return 312;
+		if (!nativeLineRowsMatch(fonts))
+			return 313;
 		Sys.println("PASS: external edits and unwrapped width changes relayout to match a fresh layout, and editor values compare by revision");
 		if (!foregroundRangesValid(fonts))
 			return 308;
@@ -921,6 +944,8 @@ class FrameworkSmoke {
 		DockPresentationTests.run(context);
 		if (!dockWorkspaceValid(context))
 			return 231;
+		if (!dockPaneVariantsValid(context))
+			throw "retained dock pane variants lost a tab, callback or moved panel";
 		if (!dockPanelStateFollowsPanel(context))
 			throw "a dock panel's state was rebuilt when the layout around it changed, or kept after it closed";
 		var emptyEditor = new TextEditorState(fonts, "");
@@ -3928,6 +3953,17 @@ class FrameworkSmoke {
 		if (inheritedFieldRoot.children[0].children[0].layout.textStyle.fontSize != 23.0 ||
 			inheritedEditor.textStyle.fontSize != 23.0)
 			return 217;
+		var paragraphField = new TextField("paragraph-field", "edit");
+		paragraphField.wrap = TextWrap.None;
+		paragraphField.tabWidth = 8;
+		var paragraphRoot = context.submit(new DefaultTextStyle(new Column("paragraph-siblings", [
+			new KeyedView("field", paragraphField), new KeyedView("sibling", new Text("Sibling"))
+		]), TextStyleOverride.paragraph(TextWrap.Word, null, null, null, 3)), new LayoutFrame(320.0, 192.0));
+		var fieldParagraph = paragraphRoot.children[0].children[0].children[0].layout.paragraphStyle;
+		var siblingParagraph = paragraphRoot.children[1].layout.paragraphStyle;
+		if (fieldParagraph.wrap != TextWrap.None || fieldParagraph.tabWidth != 8 ||
+			siblingParagraph.wrap != TextWrap.Word || siblingParagraph.tabWidth != 3)
+			throw "A text field changed its sibling's inherited paragraph style";
 		var themedClicks = 0;
 		var themedButton = new Button("Themed", null, function() { themedClicks++; }, "theme-key");
 		themedButton.variant = ButtonVariant.Primary;
@@ -4527,8 +4563,16 @@ class FrameworkSmoke {
 			active.green == theme.tokens.surfaceRaised.green &&
 			inactive.alpha == 0.0 &&
 			indicator.red == theme.tokens.accent.red &&
-			indicator.green == theme.tokens.accent.green &&
-			second.children[1].layout.style.background.alpha == 0.0;
+			indicator.green == theme.tokens.accent.green && second.children.length == 1;
+		var bounds = second.children[0].globalBounds();
+		context.pointerDown(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+		context.pointerUp(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+		root = context.submit(tabs, new LayoutFrame(300.0, 120.0));
+		first = tabStrip(root).children[0];
+		second = tabStrip(root).children[1];
+		result = result && first.children.length == 1 && second.children.length == 2 &&
+			second.children[1].layout.style.background.red == theme.tokens.accent.red &&
+			second.children[1].layout.style.background.green == theme.tokens.accent.green;
 		context.dispose();
 		return result;
 	}
@@ -5118,6 +5162,7 @@ class FrameworkSmoke {
 				new PropertyInspectorSection("physics", "Physics", [massProperty]),
 				new PropertyInspectorSection("display", "Display", [modeProperty, mixedProperty])
 			]);
+		if (!composedInspector.isPristine()) return false;
 		composedInspector.onSectionExpanded = function(id, expanded) {
 			if (id == "display" && !expanded)
 				sectionChanges++;
@@ -5128,7 +5173,7 @@ class FrameworkSmoke {
 			!composedInspector.isSectionExpanded("display"))
 			return false;
 		if (!composedInspector.setSectionExpanded("display", false) || sectionChanges != 1 ||
-			composedInspector.isSectionExpanded("display"))
+			composedInspector.isSectionExpanded("display") || composedInspector.isPristine())
 			return false;
 		composedRoot = uiContext.submit(composedInspector, new LayoutFrame(480.0, 320.0));
 		if (composedRoot == null || composedRoot.children.length == 0 ||
@@ -5918,6 +5963,74 @@ class FrameworkSmoke {
 		return submit() && created == 1 && disposed == 1;
 	}
 
+	/** Returning to a tab may reuse its old pane, including its updating callbacks and drop targets. */
+	static function dockPaneVariantsValid(uiContext:UiContext):Bool {
+		var model = new DockWorkspaceModel();
+		for (id in ["pane-a", "pane-b"]) model.register(new DockPanelDescriptor(id, id));
+		model.setRoot(DockNode.Tabs(["pane-a", "pane-b"], "pane-a"));
+		var workspace = new DockWorkspace("pane-variants", model, [
+			DockPanelContent.observing("pane-a", _ -> new Text("A content")),
+			DockPanelContent.observing("pane-b", _ -> new Text("B content"))
+		]);
+		var frame = new LayoutFrame(640.0, 480.0);
+		function tabs(root:RenderNode):Null<RenderNode> {
+			var found:Null<RenderNode> = null;
+			root.walk(function(node) { if (node.styleType == "tabs") found = node; });
+			return found;
+		}
+		function hasText(root:RenderNode, value:String):Bool {
+			var found = false;
+			root.walk(function(node) { if (node.layout.text == value) found = true; });
+			return found;
+		}
+		function clickTab(root:RenderNode, label:String):Bool {
+			var target:Null<RenderNode> = null;
+			root.walk(function(node) {
+				if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab &&
+					node.semantics.label == label) target = node;
+			});
+			if (target == null) return false;
+			var bounds = target.globalBounds();
+			uiContext.pointerDown(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+			uiContext.pointerUp(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+			return true;
+		}
+		var first = uiContext.submit(workspace, frame), firstTabs = tabs(first);
+		if (firstTabs == null || !hasText(first, "A content") || !clickTab(first, "pane-b")) return false;
+		var second = uiContext.submit(workspace, frame);
+		if (!hasText(second, "B content") || !clickTab(second, "pane-a")) return false;
+		var returned = uiContext.submit(workspace, frame);
+		if (tabs(returned) != firstTabs || !hasText(returned, "A content")) return false;
+		if (!uiContext.buildContext.requestPatch(firstTabs.id)) return false;
+		uiContext.submit(workspace, frame);
+		if (uiContext.verifyRetention(() -> workspace, frame) != null) return false;
+		// Moving retained panel content away invalidates any hidden pane that used its former parent.
+		model.setRoot(DockNode.Split(DockSplitAxis.Horizontal, 0.5,
+			DockNode.Panel("pane-a"), DockNode.Panel("pane-b")));
+		uiContext.submit(workspace, frame);
+		model.setRoot(DockNode.Tabs(["pane-a", "pane-b"], "pane-a"));
+		var moved = uiContext.submit(workspace, frame);
+		if (!hasText(moved, "A content") || uiContext.verifyRetention(() -> workspace, frame) != null) return false;
+		// Matching panel names and revisions do not make callbacks from another model interchangeable.
+		var replacement = new DockWorkspaceModel();
+		for (id in ["pane-a", "pane-b"]) replacement.register(new DockPanelDescriptor(id, id));
+		replacement.setRoot(DockNode.Tabs(["pane-a", "pane-b"], "pane-a"));
+		var replacementWorkspace = new DockWorkspace("pane-variants", replacement, [
+			DockPanelContent.observing("pane-a", _ -> new Text("replacement A")),
+			DockPanelContent.observing("pane-b", _ -> new Text("replacement B"))
+		]);
+		var replacementRoot = uiContext.submit(replacementWorkspace, frame), target:Null<RenderNode> = null;
+		replacementRoot.walk(function(node) {
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab &&
+				node.semantics.label == "pane-b") target = node;
+		});
+		if (!hasText(replacementRoot, "replacement A") || target == null) return false;
+		var bounds = target.globalBounds();
+		uiContext.pointerDown(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+		uiContext.pointerUp(bounds.x + bounds.width * 0.5, bounds.y + bounds.height * 0.5, 0);
+		return replacement.activePanelId == "pane-b" && model.activePanelId == "pane-a";
+	}
+
 	static function dockWorkspaceValid(uiContext:UiContext):Bool {
 		var hierarchyBuilds = 0;
 		var viewportBuilds = 0;
@@ -6187,6 +6300,23 @@ class FrameworkSmoke {
 		if (singletonWorkspace.interaction.preview == null ||
 			!uiContext.events.hasPointerCapture(singletonSourceId))
 			return false;
+		// A header needs a drop indicator only while it is the current tab drop target.
+		var tabPreview = singletonWorkspace.interaction.preview;
+		if (tabPreview == null || tabPreview.targetPanelId != "single-target" ||
+			(tabPreview.zone != DockDropZone.TabBefore && tabPreview.zone != DockDropZone.TabAfter))
+			return false;
+		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
+		var previewTab:Null<RenderNode> = null;
+		singletonRoot.walk(function(node) {
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab &&
+				node.semantics.label == "single-target") previewTab = node;
+		});
+		if (previewTab == null) return false;
+		var sawTabIndicator = false;
+		for (child in previewTab.children)
+			if (child.layout.visualKind == LayoutVisualKind.Custom && child.layout.style.zIndex == 2)
+				sawTabIndicator = true;
+		if (!sawTabIndicator) return false;
 		uiContext.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (singletonWorkspace.interaction.draggingPanelId != null ||
 			singletonWorkspace.interaction.preview != null ||

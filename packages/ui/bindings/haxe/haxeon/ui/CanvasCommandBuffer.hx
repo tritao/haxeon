@@ -76,7 +76,7 @@ class CanvasCommandBuffer {
 	/** Internal display-list encoding; blurSigma is already in renderer sigma units. */
 	public function drawBoxShadow(x:Float, y:Float, width:Float, height:Float, offsetX:Float,
 		 offsetY:Float, blurSigma:Float, spread:Float, radii:Array<Float>, color:Color):Void {
-		if (radii == null || radii.length != 4 || color == null)
+		if (radii == null || radii.length != 4)
 			throw "Box shadow requires four corner radii and a color";
 		header(NativeKitUI.CommandOpcode.DrawBoxShadow, 72);
 		float(x); float(y); float(width); float(height);

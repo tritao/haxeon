@@ -11,6 +11,7 @@ import haxe.io.Bytes;
 /** Batched bridge from a Haxe-owned render tree to NativeKit layout/rendering. */
 class LayoutSession {
 	static final measureCost:Bool = Sys.getEnv("HAXEON_UI_LAYOUT_COST") == "1";
+	static final EmptyBytes:Bytes = Bytes.alloc(0);
 	var value:nkui_layout_session;
 	var disposed:Bool;
 	final transaction:LayoutTransaction;
@@ -22,6 +23,8 @@ class LayoutSession {
 	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
 	public var verifyTransactions:Bool = false;
 	var hitPathBytes:Bytes;
+	/** Reused native geometry output; only the returned prefix is valid after each submit. */
+	var resolvedUpdateBytes:Bytes;
 	var measureCallback:Null<nkui_layout_measure_callbackCallback>;
 	var measureFunction:Null<LayoutMeasureCallback>;
 	final measureContents:Map<Int, LayoutContent>;
@@ -34,6 +37,7 @@ class LayoutSession {
 		transaction = new LayoutTransaction();
 		resolved = [];
 		hitPathBytes = Bytes.alloc(64 * 4);
+		resolvedUpdateBytes = Bytes.alloc(1024);
 		measureCallback = null;
 		measureFunction = null;
 		measureContents = new Map();
@@ -83,17 +87,27 @@ class LayoutSession {
 			"layoutSession.submit");
 		if (verifyTransactions) verifyTree(root);
 		var decodeStarted = measureCost ? Sys.time() : 0.0;
-		var result = NativeKitUI.nkui_layout_session_get_resolved_updates(value);
+		var result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
+		while (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument && result.out_bytes > resolvedUpdateBytes.length) {
+			if (result.out_bytes > 268435456) throw "Native layout geometry exceeds the output buffer limit";
+			var capacity = resolvedUpdateBytes.length;
+			while (capacity < result.out_bytes) capacity *= 2;
+			resolvedUpdateBytes = Bytes.alloc(capacity);
+			result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
+		}
 		UiResult.check(result.status, "layoutSession.resolvedItems");
-		var bytes:Bytes = result.out_buffer;
+		var bytes = resolvedUpdateBytes, length = result.out_bytes;
 		var recordBytes = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
-		if (bytes.length % recordBytes != 0)
+		if (length < 0 || length > bytes.length || length % recordBytes != 0)
 			throw "Native layout returned a truncated geometry snapshot";
 		updatesIndex.clear();
-		var count = Std.int(bytes.length / recordBytes);
+		var count = Std.int(length / recordBytes);
 		updatedItems.resize(count);
 		for (index in 0...count) {
-			var item = ResolvedLayoutItem.decode(bytes, index * recordBytes);
+			var offset = index * recordBytes;
+			var position = transaction.previousPosition(bytes.getInt32(offset + 4));
+			var prior = position < 0 || position >= resolved.length ? null : resolved[position];
+			var item = ResolvedLayoutItem.decode(bytes, offset, prior);
 			updatedItems[index] = item;
 			updatesIndex.set(item.id, index);
 		}
@@ -288,6 +302,7 @@ class LayoutSession {
 		detachMeasureCallback();
 		var status = NativeKitUI.nkui_layout_session_destroy(value);
 		disposed = true;
+		resolvedUpdateBytes = EmptyBytes;
 		UiResult.check(status, "layoutSession.dispose");
 	}
 

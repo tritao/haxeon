@@ -7,7 +7,6 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.Color;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
@@ -217,10 +216,9 @@ class Tabs implements View {
 			onTabDragCancel != null)
 			tabDragState = context.lazyState(context.id("tab-drag"), function() return new TabDragState());
 		for (item in items) {
-			var buttonStyle = new LayoutStyle();
-			buttonStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			var button = new Button(item.displayLabel == null ? item.label : item.displayLabel,
-				buttonStyle, null, item.key);
+				null, null, item.key);
+			button.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			button.onClickEvent = function(event) {
 				if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
 			};
@@ -253,19 +251,21 @@ class Tabs implements View {
 				if (close != null) close();
 			}, "capture");
 			var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode, rootId);
-			var indicatorStyle = new LayoutStyle();
-			indicatorStyle.width = LayoutAxis.grow();
-			indicatorStyle.height = LayoutAxis.fixed(2.0);
-			indicatorStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
-			indicatorStyle.zIndex = 1;
-			indicatorStyle.clipToParent = true;
-			indicatorStyle.background = item.key == active ? context.theme.tokens.accent :
-				Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var indicator = new RenderNode(context.id("tab-indicator:" + item.key),
-				LayoutVisualKind.Box, indicatorStyle);
-			indicator.hitTestSelf = false;
 			header.add(headerContent);
-			header.add(indicator);
+			// Inactive accents are fully transparent and have no layout or hit-test effect.
+			if (item.key == active) {
+				var indicatorStyle = new LayoutStyle();
+				indicatorStyle.width = LayoutAxis.grow();
+				indicatorStyle.height = LayoutAxis.fixed(2.0);
+				indicatorStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
+				indicatorStyle.zIndex = 1;
+				indicatorStyle.clipToParent = true;
+				indicatorStyle.background = context.theme.tokens.accent;
+				var indicator = new RenderNode(context.id("tab-indicator:" + item.key),
+					LayoutVisualKind.Box, indicatorStyle);
+				indicator.hitTestSelf = false;
+				header.add(indicator);
+			}
 			strip.add(header);
 			buttonNodes.push(buttonNode);
 			if (onTabHeaderBuilt != null)
@@ -365,11 +365,10 @@ class Tabs implements View {
 		slotStyle.height = LayoutAxis.fixed(24);
 		var slot = new RenderNode(context.id("tab-close-slot:" + item.key), LayoutVisualKind.Box, slotStyle);
 		slot.hitTestSelf = true;
-		var closeStyle = new LayoutStyle();
-		closeStyle.width = LayoutAxis.fixed(24);
-		closeStyle.height = LayoutAxis.fixed(24);
-		closeStyle.padding = new Insets(4, 4, 4, 4);
-		var close = new Button("", closeStyle, null, "tab-close:" + item.key);
+		var close = new Button("", null, null, "tab-close:" + item.key);
+		close.style.width = LayoutAxis.fixed(24);
+		close.style.height = LayoutAxis.fixed(24);
+		close.style.padding = new Insets(4, 4, 4, 4);
 		close.leadingIcon = haxeon.ui.icons.IconName.Close;
 		close.iconSize = 14;
 		close.variant = ButtonVariant.Navigation;
@@ -392,10 +391,10 @@ class Tabs implements View {
 			state.updateQuietly(value);
 			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
 		};
-		row.on(UiEventKind.HoverEnter, function(event) {
+		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 			if (event.target.equals(row.id)) setFlag(hover, true);
 		});
-		row.on(UiEventKind.HoverLeave, function(event) {
+		row.onTargetBubble(UiEventKind.HoverLeave, function(event) {
 			if (event.target.equals(row.id)) setFlag(hover, false);
 		});
 		for (node in [buttonNode, closeNode]) {

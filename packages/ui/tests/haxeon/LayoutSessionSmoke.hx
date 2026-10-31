@@ -39,6 +39,45 @@ class LayoutSessionSmoke {
 		}
 	}
 
+	static function immutableGeometryReuse():Void {
+		var precise = new ResolvedLayoutItem(1, 1, 0.1, 0.2, 0.3, 0.4,
+			new Rect(0.1, 0.2, 0.3, 0.4), new Rect(0.5, 0.6, 0.7, 0.8),
+			new Transform2D(0.1, 0.2, 0.3, 0.4, 0.5, 0.6), 0.7);
+		if (precise.x != 0.1 || precise.width != 0.3 || precise.clipBounds.x != 0.1
+				|| precise.contentBounds.height != 0.8 || precise.transform.a != 0.1 || precise.baseline != 0.7)
+			throw "Directly constructed geometry lost precision";
+		var size = NativeKitUIConstants.NKUI_LAYOUT_RESOLVED_ITEM_BYTES;
+		var bytes = Bytes.alloc(size);
+		bytes.setInt32(0, size); bytes.setInt32(4, 1);
+		bytes.setInt32(60, 0x3f800000); bytes.setInt32(72, 0x3f800000);
+		var first = ResolvedLayoutItem.decode(bytes, 0);
+		if (ResolvedLayoutItem.decode(bytes, 0, first) != first) throw "Unchanged geometry was not reused";
+		bytes.setInt32(12, 0x3f800000);
+		var changed = ResolvedLayoutItem.decode(bytes, 0, first);
+		if (changed == first || first.x != 0 || changed.x != 1) throw "Changed geometry mutated a prior snapshot";
+		bytes.setInt32(12, -2147483648);
+		var negativeZero = ResolvedLayoutItem.decode(bytes, 0, first);
+		if (negativeZero == first || 1.0 / negativeZero.x >= 0) throw "Reused geometry lost negative zero";
+		// Identity decoding canonicalizes signed zero. A caller-provided previous item must not
+		// bypass that canonicalization, even when it matches the raw record bit for bit.
+		bytes.setInt32(12, 0);
+		bytes.setInt32(64, -2147483648);
+		var priorNegativeTransform = new ResolvedLayoutItem(1, 0, 0, 0, 0, 0,
+			new Rect(0, 0, 0, 0), new Rect(0, 0, 0, 0),
+			new Transform2D(1, negativeZero.x, 0, 1, 0, 0), 0);
+		var canonical = ResolvedLayoutItem.decode(bytes, 0, priorNegativeTransform);
+		if (canonical == priorNegativeTransform || 1.0 / canonical.transform.b <= 0)
+			throw "Reusing geometry skipped identity transform canonicalization";
+		bytes.setInt32(60, 0x40000000);
+		var nonIdentity = ResolvedLayoutItem.decode(bytes, 0);
+		if (1.0 / nonIdentity.transform.b >= 0 || ResolvedLayoutItem.decode(bytes, 0, nonIdentity) != nonIdentity)
+			throw "Non-identity geometry lost or failed to reuse negative zero";
+		bytes.setInt32(8, 4);
+		var rejected = false;
+		try ResolvedLayoutItem.decode(bytes, 0, first) catch (_:Dynamic) rejected = true;
+		if (!rejected) throw "Reusing geometry skipped record validation";
+	}
+
 	static function incremental(fonts:FontCollection):Void {
 		var session = LayoutSession.create();
 		session.setFonts(fonts);
@@ -73,7 +112,9 @@ class LayoutSessionSmoke {
 		next = session.submit(root, frame, changes);
 		if (next.length != 1101 || next[next.length - 1].id != added.id) throw "Added or removed identity was lost";
 		changes.clear();
-		session.submit(root, frame, changes, true);
+		var beforeFull = next[10];
+		var full = session.submit(root, frame, changes, true);
+		if (full[10] != beforeFull) throw "An unchanged full update replaced geometry";
 		session.submit(root, frame, changes);
 		added.text = "日本語🙂 changed";
 		changes.inputs.set(added.id, 0);
@@ -129,6 +170,7 @@ class LayoutSessionSmoke {
 	}
 
 	static function main():Int {
+		immutableGeometryReuse();
 		var rect = new Rect(1, 2, 3, 4);
 		var padding = new Insets(1, 2, 3, 4);
 		if (rect != new Rect(1, 2, 3, 4) || rect == new Rect(1, 2, 3, 5)
@@ -142,6 +184,21 @@ class LayoutSessionSmoke {
 		if (optionalPadding == null || optionalPadding != padding) throw "Present insets were lost";
 		optionalPadding = null;
 		if (optionalPadding != null) throw "Absent insets were lost";
+		var color = Color.rgba(0.25, 0.5, 0.75, 1);
+		var axis = LayoutAxis.fixed(12);
+		var transform = Transform2D.translation(3, 4);
+		if (color != Color.rgba(0.25, 0.5, 0.75, 1) || color == Color.rgba(0.25, 0.5, 0.5, 1)
+			|| axis != LayoutAxis.fixed(12) || axis == LayoutAxis.fixed(13)
+			|| transform != Transform2D.translation(3, 4) || transform == Transform2D.translation(4, 3))
+			throw "Style values must compare by field";
+		var optionalColor:Null<Color> = color;
+		var optionalAxis:Null<LayoutAxis> = axis;
+		var optionalTransform:Null<Transform2D> = transform;
+		if (optionalColor != color || optionalAxis != axis || optionalTransform != transform)
+			throw "Present style values were lost";
+		optionalColor = null; optionalAxis = null; optionalTransform = null;
+		if (optionalColor != null || optionalAxis != null || optionalTransform != null)
+			throw "Absent style values were lost";
 		var fontPath = Sys.getEnv("NKUI_TEST_FONT_PATH");
 		if (fontPath == null)
 			return 2;

@@ -17,7 +17,7 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 23,
+    NKUI_LAYOUT_API_VERSION = 24,
     NKUI_LAYOUT_TRANSACTION_VERSION = 17,
     NKUI_LAYOUT_PATCH_VERSION = 18,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
@@ -432,6 +432,14 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_items(
 NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates(
     nkui_layout_session session, uint8_t *out_buffer NK_OUT_BUFFER(inout_bytes),
     uint32_t *inout_bytes NK_INOUT);
+
+/** Copies changed geometry into caller-owned storage. If capacity is insufficient, no records are written,
+ * `out_bytes` receives the required size, and NKUI_ERROR_INVALID_ARGUMENT is returned. A zero-capacity
+ * buffer may be null. Repeated reads of the same submit return the same records.
+ */
+NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates_into(
+    nkui_layout_session session, uint8_t *buffer NKUI_IN_ARRAY(capacity_bytes), uint32_t capacity_bytes,
+    uint32_t *out_bytes NKUI_OUT);
 
 /** Checks every retained native node and its order against a full transaction without changing the session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_verify_tree(

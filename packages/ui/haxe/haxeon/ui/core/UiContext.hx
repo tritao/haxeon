@@ -13,6 +13,7 @@ import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutChanges;
 import haxeon.ui.LayoutHitTestStats;
+import haxeon.ui.IntIndex;
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
 import haxeon.ui.Renderer;
@@ -94,6 +95,10 @@ class UiContext {
 	var submittedTheme:Null<Theme>;
 	var submittedStyleSheet:Null<StyleSheet>;
 	final hitTestIds:Array<Int>;
+	/** Reused until releaseRetained, so a frame need not allocate another picker closure. */
+	var retainedHitTestProvider:Null<Float->Float->Array<RenderNode>> = null;
+	/** The dispatcher treats paths as immutable; reuse one while all of its node identities still match. */
+	var retainedHitPath:Null<Array<RenderNode>> = null;
 	var disposed:Bool;
 	final stalePaintNodes:Array<Int> = [];
 	var customCanvases:Map<Int, Canvas>;
@@ -114,7 +119,8 @@ class UiContext {
 	final submittedPaintNodes:Array<RenderNode> = [];
 	var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
 	var nextTopology:RenderTreeTopology = new RenderTreeTopology();
-	final resolvedById:Map<Int, ResolvedLayoutItem>;
+	/** Reuses integer storage for the current native result's ID-to-position index. */
+	final resolvedById:IntIndex;
 	var accessibilityBridge:Null<AccessibilityBridge>;
 	var accessibilitySurface:Null<PlatformSurface>;
 	var decorationWindow:Null<WindowHandle>;
@@ -183,7 +189,7 @@ class UiContext {
 		customCompositeBound = new Map();
 		previousNodesById = new Map();
 		currentNodesById = new Map();
-		resolvedById = new Map();
+		resolvedById = new IntIndex();
 		accessibilityBridge = null;
 		accessibilitySurface = null;
 		decorationWindow = null;
@@ -523,8 +529,8 @@ class UiContext {
 		var layoutPass = 0;
 		while (true) {
 			resolvedById.clear();
-			for (item in resolved)
-				resolvedById.set(item.id, item);
+			for (index in 0...resolved.length)
+				resolvedById.set(resolved[index].id, index);
 			missing = false;
 			missingNode = null;
 			nodeCount = 0;
@@ -540,7 +546,8 @@ class UiContext {
 				nodeCount++;
 				mountedHash = mountedHash * 31 + node.id.value;
 				// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
-				var item = resolvedById.get(node.layout.id);
+				var position = resolvedById.get(node.layout.id);
+				var item = position < 0 ? null : resolved[position];
 				if (item == null) {
 					missing = true;
 					if (missingNode == null) missingNode = node;
@@ -620,18 +627,43 @@ class UiContext {
 		if (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)))
 			events.focusEvent(previousFocus, UiEventKind.Blur);
 		root = next;
-		events.setHitTestProvider(function(x:Float, y:Float) {
-			session.hitTestInto(x, y, hitTestIds);
-			var path:Array<RenderNode> = [];
-			path.resize(hitTestIds.length);
-			for (index in 0...hitTestIds.length) {
-				var node = nodesById.get(hitTestIds[index]);
-				if (node == null)
-					return [];
-				path[index] = node;
-			}
-			return path;
-		});
+		// Do not keep an old tree alive if a cached path's nodes were replaced while the pointer was absent.
+		if (retainedHitPath != null)
+			for (node in retainedHitPath)
+				if (nodesById.get(node.id.value) != node) {
+					retainedHitPath = null;
+					break;
+				}
+		var picker = retainedHitTestProvider;
+		if (picker == null) {
+			picker = function(x:Float, y:Float) {
+				session.hitTestInto(x, y, hitTestIds);
+				var cached = retainedHitPath;
+				if (cached != null && cached.length == hitTestIds.length) {
+					var same = true;
+					for (index in 0...hitTestIds.length)
+						if (currentNodesById.get(hitTestIds[index]) != cached[index]) {
+							same = false;
+							break;
+						}
+					if (same) return cached;
+				}
+				var path:Array<RenderNode> = [];
+				path.resize(hitTestIds.length);
+				for (index in 0...hitTestIds.length) {
+					var node = currentNodesById.get(hitTestIds[index]);
+					if (node == null) {
+						retainedHitPath = null;
+						return [];
+					}
+					path[index] = node;
+				}
+				retainedHitPath = path;
+				return path;
+			};
+			retainedHitTestProvider = picker;
+		}
+		events.setHitTestProvider(picker);
 		events.setRoot(next, nodesById);
 		gestures.setRoot(next);
 		updateCursor();
@@ -728,6 +760,8 @@ class UiContext {
 		currentNodesById.clear();
 		resolvedById.clear();
 		events.releaseTree();
+		retainedHitTestProvider = null;
+		retainedHitPath = null;
 		focus.releaseTree();
 		gestures.setRoot(null);
 		buildContext.releaseRetained();
@@ -1429,6 +1463,8 @@ class UiContext {
 		customCompositeGeometries = new Map();
 		customCompositeBound = new Map();
 		events.setHitTestProvider(null);
+		retainedHitTestProvider = null;
+		retainedHitPath = null;
 		session.dispose();
 		clipboard.dispose();
 		textInput.dispose();

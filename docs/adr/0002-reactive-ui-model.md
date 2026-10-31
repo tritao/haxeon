@@ -132,11 +132,10 @@ values changes, and updates the existing nodes. This record makes that idea the 
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
-0. **Structs for small values (independent of the other stages).** `Rect`, `Insets`, then `Color`, `LayoutAxis` and
-   `Transform2D` become immutable `struct`s, stored inline in `LayoutStyle` and free as temporaries. Requires
-   `docs/STRUCTS.md` stages 1a (temporary-write error, `Null<S>` fields) and 1b (flattened Wasm GC representation; today
-   a value class allocates more on Wasm GC than a class does). Go: allocation budgets fall on HashLink, Wasm GC allocation
-   does not rise, and nothing gets slower. Details in `docs/UI_LANGUAGE_FEATURES.md`.
+0. **Structs for small values — done.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
+   structural structs, stored inline in `LayoutStyle`. Nullable fields have inline presence flags, eligible temporary
+   values stay scalar, and Wasm GC flattens their fields. See [UI value types](../../packages/ui/docs/VALUE_TYPES.md)
+   for the retained-holder design and measurements, including the dynamic boundaries that still box.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates
