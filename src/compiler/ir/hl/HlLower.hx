@@ -21,6 +21,7 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
+import compiler.ir.hl.HlScalarValueLocals.HlScalarValueLocal;
 import compiler.ir.SourceProvenance;
 import compiler.compilation.AllocationMeter;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
@@ -567,6 +568,7 @@ class HlLower {
 					case _:
 				}
 			}
+		var scalarOptionals = new HlScalarValueLocals(fn, objects, type -> temporaryRegister(type, registerTypes));
 		var uses:Map<Int, Int> = [];
 		function countUse(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
@@ -668,7 +670,7 @@ class HlLower {
 						EnumIndex(_, value), EnumField(_, value, _, _): value;
 					case _: null;
 				};
-				if (receiver != null)
+				if (receiver != null && scalarOptionals.get(receiver) == null)
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				switch instruction.value {
 					case Phi(_, _):
@@ -923,8 +925,23 @@ class HlLower {
 						} else
 							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
 								requireObjectMethod(object, methodName), methodArguments));
+					case NewObject(output, _) if (scalarOptionals.get(output) != null):
+						var local:HlScalarValueLocal = cast scalarOptionals.get(output);
+						for (field in local.declarations) {
+							var target:Int = cast local.fields.get(field.name);
+							switch field.type {
+								case Bool: instructions.push(HlInstruction.LoadBool(target, false));
+								case I32, I64: instructions.push(HlInstruction.LoadInt(target, internInt(0)));
+								case F32, F64: instructions.push(HlInstruction.LoadFloat(target, symbols.internFloat(0.0)));
+								default: instructions.push(HlInstruction.LoadNull(target));
+							}
+						}
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
+					case FieldGet(output, object, fieldName) if (scalarOptionals.get(object) != null):
+						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
+						var source:Int = cast local.fields.get(fieldName);
+						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), source));
 					case FieldGet(output, object, fieldName):
 						var destination = defineRegister(output, registers, registerTypes),
 							nativeLayout = objectFieldNativeLayout(object, fieldName);
@@ -941,6 +958,10 @@ class HlLower {
 							} else
 								instructions.push(HlInstruction.BitAnd(destination, destination, maskOrShift));
 						}
+					case FieldSet(object, fieldName, value) if (scalarOptionals.get(object) != null):
+						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
+						var destination:Int = cast local.fields.get(fieldName);
+						instructions.push(HlInstruction.Move(destination, requireRegister(value, registers)));
 					case FieldSet(object, fieldName, value):
 						var receiver = requireRegister(object, registers),
 							field = requireObjectField(object, fieldName),

@@ -300,6 +300,8 @@ class TestCatalog {
 				"an added static function that existing methods start calling patches the running module"),
 			hxmlCase("runtime", "live-object-layout", "tests/hxml/live-object-layout-test.hxml", "live-object-layout-test.hl", 0,
 				"fields added to running classes patch existing objects, and edits a patch cannot make reload with reasons"),
+			hxmlCase("runtime", "live-optional-scalar", "tests/hxml/live-optional-scalar-test.hxml", "live-optional-scalar-test.hl", 0,
+				"scalar optional call clones follow edits with and without inlining"),
 			hxmlCase("runtime", "added-lambda-patch", "tests/hxml/added-lambda-patch-test.hxml", "added-lambda-patch-test.hl", 0,
 				"adding a lambda beside others patches the running module and keeps stored closures"),
 			hxmlCase("runtime", "added-class-patch", "tests/hxml/added-class-patch-test.hxml", "added-class-patch-test.hl", 0,

@@ -14,7 +14,8 @@ class IrHlScalarArguments {
 		var candidates:Map<String, IrFunction> = [];
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
-				&& !StringTools.startsWith(fn.name, "$generic:")) continue;
+				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
+				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, argumentCount = 0;
 			if (hasValue) {
 				if (!hasScalarLayout(fn.result, objects)) eligible = false;
@@ -25,8 +26,8 @@ class IrHlScalarArguments {
 				if ((arg.name == "this" && !receiverReadOnly(fn)) || !hasScalarLayout(arg.type, objects)) eligible = false;
 				argumentCount += slots(arg.type, objects).length;
 			} else argumentCount++;
-			// The HashLink JIT's direct-call temporary array holds at most 32 arguments. Dynamic calls retain the original ABI.
-			if (argumentCount > 32) eligible = false;
+			// The HashLink JIT accepts at most 256 arguments per emitted call. Dynamic calls retain the original ABI.
+			if (argumentCount > 256) eligible = false;
 			if (hasValue && eligible) candidates.set(fn.name, fn);
 		}
 		var methodNames:Map<String, Bool> = [];
@@ -42,10 +43,11 @@ class IrHlScalarArguments {
 				var retained = false;
 				for (arg in fn.arguments) if (isValue(arg.type, objects) && !fieldOnly(fn, arg, objects, candidates, methods, methodNames)) retained = true;
 				var specialized = IrScalarReplacement.rewrite(rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames), IrObjectTable.of(objects), true, true);
+				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, objects, _ -> 0);
 				for (block in specialized.blocks) for (located in block.instructions) switch located.value {
 					case NewObject(out, name):
-						for (arg in fn.arguments) if (isValue(arg.type, objects) && out.id == arg.id) retained = true;
-						if (isValue(fn.result, objects) && Type.enumEq(fn.result, Obj(name))) retained = true;
+						for (arg in fn.arguments) if (isValue(arg.type, objects) && out.id == arg.id && scalarLocals.get(out) == null) retained = true;
+						if (isValue(fn.result, objects) && Type.enumEq(fn.result, Obj(name)) && scalarLocals.get(out) == null) retained = true;
 					case Call(out, _, _) | MethodCall(out, _, _, _) | CallClosure(out, _, _):
 						if (isValue(fn.result, objects) && isValue(out.type, objects)) retained = true;
 					default:

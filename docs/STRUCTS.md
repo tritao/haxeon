@@ -345,8 +345,10 @@ not establish byte sizes or cover separately encoded function bodies.
 Eligible direct calls, including statically known typed closures and monomorphic methods, specialize non-optional
 value arguments into scalar parameters. Results use references to caller-owned scalar slots; the references are confined
 to the call and cannot escape. This uses HashLink's existing reference instructions, avoiding a new VM calling convention.
-Calls that cannot be proven safe retain their original boxed ABI, including calls that exceed the VM's 32-argument JIT
-limit. Inline-field construction and copies are scalar-replaced even when ordinary function inlining is disabled.
+Calls that cannot be proven safe retain their original boxed ABI, including calls that exceed the VM's 256-argument JIT
+limit. The VM's temporary argument table now matches its existing 256-argument storage limit; its register allocator
+tracks stack arguments individually instead of using a 32-bit mask. This extends the existing calling convention without
+adding a second VM ABI. Inline-field construction and copies are scalar-replaced even when ordinary function inlining is disabled.
 Typed static-initialization checks preserve the value representation instead of converting it to Dynamic.
 
 With the Rect/Insets prototype on the baseline machine, the HashLink interaction census over 30 cycles changed from
@@ -356,40 +358,40 @@ count remained 19,936 objects in full mode and 26,762 in editing mode, as this s
 intermediate measurements: the class baseline and remaining optional flow still determine acceptance.
 
 The per-action HashLink medians below are KiB allocated per action on the same machine. The prototype converts only
-`Rect` and `Insets`; step A adds non-optional lowering and step B adds optional field-copy fusion. Selection-stress
+`Rect` and `Insets`; step A adds non-optional lowering, step B adds optional field-copy fusion, and step C adds scalar optional flow. Selection-stress
 does not report per-action bytes.
 
-| Scenario / action | Classes | Prototype | Step A | Step B |
-| --- | ---: | ---: | ---: | ---: |
-| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 | 112.7 |
-| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 | 162.1 |
-| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 | 126.9 |
-| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 | 131.0 |
-| interaction / hover away | 24.9 | 25.0 | 25.2 | 25.0 |
-| interaction / hover enter | 2.6 | 2.6 | 2.6 | 2.6 |
-| interaction / hover field | 22.1 | 24.0 | 22.2 | 22.2 |
-| interaction / hover inside | 0.6 | 0.6 | 0.6 | 0.6 |
-| interaction / hover other | 13.1 | 13.2 | 13.2 | 13.2 |
-| interaction / idle | 0.2 | 0.2 | 0.2 | 0.2 |
-| interaction / idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
-| interaction / scroll inspector | 22.3 | 29.4 | 21.6 | 21.6 |
-| interaction / type backspace | 17.8 | 17.9 | 17.9 | 17.9 |
-| interaction / type character | 17.8 | 17.9 | 17.9 | 17.9 |
+| Scenario / action | Classes | Prototype | Step A | Step B | Step C |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| tab-matrix / console → telemetry | 110.9 | 120.7 | 112.7 | 112.7 | 112.7 |
+| tab-matrix / hierarchy → sensors | 158.2 | 182.1 | 162.6 | 162.1 | 162.1 |
+| tab-matrix / sensors → hierarchy | 124.8 | 138.9 | 127.8 | 126.9 | 128.9 |
+| tab-matrix / telemetry → console | 128.6 | 137.8 | 131.0 | 131.0 | 131.0 |
+| interaction / hover away | 24.9 | 25.0 | 25.2 | 25.0 | 25.2 |
+| interaction / hover enter | 2.6 | 2.6 | 2.6 | 2.6 | 2.6 |
+| interaction / hover field | 22.1 | 24.0 | 22.2 | 22.2 | 24.0 |
+| interaction / hover inside | 0.6 | 0.6 | 0.6 | 0.6 | 0.6 |
+| interaction / hover other | 13.1 | 13.2 | 13.2 | 13.2 | 13.2 |
+| interaction / idle | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 |
+| interaction / idle focused | 0.2 | 0.2 | 0.2 | 0.2 | 0.2 |
+| interaction / scroll inspector | 22.3 | 29.4 | 21.6 | 21.6 | 21.6 |
+| interaction / type backspace | 17.8 | 17.9 | 17.9 | 17.9 | 17.9 |
+| interaction / type character | 17.8 | 17.9 | 17.9 | 17.9 | 17.9 |
 
 The interaction allocation census counts whole 30-cycle captures, including startup:
 
-| Type | Classes | Prototype | Step A | Step B |
-| --- | ---: | ---: | ---: | ---: |
-| Rect | 7,511 | 23,217 | 16,539 | 16,539 |
-| Insets | 70 | 9,811 | 779 | 779 |
-| Color | 487 | 487 | 487 | 487 |
-| LayoutAxis | 1,007 | 1,007 | 1,007 | 1,007 |
-| Transform2D | 1,722 | 1,722 | 1,722 | 1,722 |
+| Type | Classes | Prototype | Step A | Step B | Step C |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Rect | 7,511 | 23,217 | 16,539 | 16,539 | 5,932 |
+| Insets | 70 | 9,811 | 779 | 779 | 759 |
+| Color | 487 | 487 | 487 | 487 | 487 |
+| LayoutAxis | 1,007 | 1,007 | 1,007 | 1,007 | 1,007 |
+| Transform2D | 1,722 | 1,722 | 1,722 | 1,722 | 1,722 |
 
-| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A | Step B |
-| --- | ---: | ---: | ---: | ---: |
-| Full | 8,654 | 19,936 | 19,936 | 6,976 |
-| Editing | 15,482 | 26,762 | 26,762 | 13,802 |
+| Wasm GC Showcase objects / 120 frames | Classes | Prototype | Step A | Step B | Step C |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Full | 8,654 | 19,936 | 19,936 | 6,976 | 6,976 |
+| Editing | 15,482 | 26,762 | 26,762 | 13,802 | 13,802 |
 
 #### Implemented: optional field-to-field copies
 
@@ -400,20 +402,23 @@ managed references, side effects, and overlapping or identical places. Other cop
 
 The interaction census was unchanged in step B. The Wasm GC Showcase counts fell by 12,960 objects in both scenarios,
 removing the paired clip getter and copy allocations measured in the prototype. These totals are below the class baseline;
-per-action acceptance still needs the optional local and call flow below.
+HashLink per-action acceptance still needs further allocation reductions.
 
-#### Proposed: scalar optional flow
+#### Implemented: scalar optional flow
 
-For nonescaping optional locals and direct and eligible typed closure calls, extend scalar value flow with a presence
-flag and flattened payload. Wasm GC can pass and return those components using the existing scalar ABI; HashLink needs
-an explicitly designed scalar calling convention or an equivalent proven specialization for typed calls and returns.
-Closures, virtual dispatch, recursion, exceptions and reentrant mutation must retain snapshot and writeback semantics;
-dynamic, reflection, native and unsupported call boundaries must continue to box. Packed arrays remain a separate
-design because of the collector and growth constraints above. Non-optional HashLink temporaries and direct optional field copies are implemented above.
+Nonescaping optional locals carry a presence flag and recursively flattened leaves. Eligible direct calls, typed closures
+and exact-type methods use specialized scalar component carriers; calls across unsupported or reference-representation
+boundaries materialize the logical value. Mutated local places keep their current components across branches, loops,
+callbacks and exception handlers. Value-method specializations preserve receiver writes on both normal and exceptional
+returns. HashLink keeps eligible flat value places in frame registers, including across handlers, and extends its existing
+scalar call convention to the component carriers. Straight-line value constructors and isolated value phis can also be
+scalar-replaced without ordinary inlining. Native-layout optionals and unsupported receiver aliases retain their boxed
+representation; packed arrays remain a separate design.
 
-Scalar optional flow still needs cross-target tests for absent and present values, nested managed fields, aliases, side
-effects, typed closures, exceptions and reentrancy, plus allocation tests for calls. Repeat the UI per-action and Wasm GC
-measurements against the same baseline; no action may allocate more.
+The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
+recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and
+without inlining. The Rect/Insets prototype above remains an intermediate measurement: several HashLink actions still
+allocate more than the class baseline, so it does not yet meet the UI migration's acceptance rule.
 
 ## Representation on Wasm GC
 
@@ -422,8 +427,9 @@ It specializes methods on field places, preserving intermediate writes visible t
 values with scalar locals, including across exception handlers. Direct calls and eligible typed closure and virtual calls
 pass scalar parameters and return multiple values. Scalar receiver methods return their updated fields even on a Haxe
 exception, before the original exception is rethrown. Narrow fields retain their stored-width behaviour. Dynamic,
-external and other reference-representation boundaries still materialize boxes when required; optional locals and array
-elements retain the representations described above. Native-memory operations continue to use linear memory.
+external and other reference-representation boundaries still materialize boxes when required. Eligible optional locals
+use scalar components as described above; array elements retain their boxed representation. Native-memory operations
+continue to use linear memory.
 
 The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
 

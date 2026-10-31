@@ -481,6 +481,10 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
+		if (objects != null) {
+			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
+			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
+		}
 		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
 		if (objects != null) {

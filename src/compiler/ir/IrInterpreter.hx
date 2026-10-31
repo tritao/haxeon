@@ -21,7 +21,7 @@ class IrInterpreter {
 		for (fn in program.functions)
 			functions.set(fn.name, fn);
 		for (field in program.staticFields)
-			globals.set(field.name, null);
+			globals.set(field.name, defaultValue(field.type));
 	}
 
 	public function run(?functionName:String, ?arguments:Array<Dynamic>):Dynamic {
@@ -162,6 +162,18 @@ class IrInterpreter {
 				if (cursor.position >= cursor.values.values.length)
 					throw "Iterator has no next value";
 				cursor.values.values[cursor.position++];
+			case Call(_, name, arguments) if (name == IrHlScalarRef.ADDRESS):
+				new InterpScalarRef(values, arguments[0].id);
+			case Call(_, name, arguments) if (name == IrHlScalarRef.LOAD):
+				var reference:InterpScalarRef = cast value(values, arguments[0]);
+				reference.values.get(reference.id);
+			case Call(_, name, arguments) if (name == IrHlScalarRef.STORE):
+				var reference:InterpScalarRef = cast value(values, arguments[0]);
+				reference.values.set(reference.id, value(values, arguments[1]));
+				null;
+			case Call(_, name, arguments) if (name == IrHlScalarRef.CHECK_RECEIVER):
+				if (value(values, arguments[0]) == null) throw "Null access";
+				null;
 			case Call(_, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				functions.exists(name) ? execute(functions.get(name), args) : executeNative(name, args);
@@ -397,6 +409,12 @@ private class InterpIterator {
 
 	public function new(values:InterpArray)
 		this.values = values;
+}
+
+private class InterpScalarRef {
+	public final values:Map<Int, Dynamic>;
+	public final id:Int;
+	public function new(values:Map<Int, Dynamic>, id:Int) { this.values = values; this.id = id; }
 }
 
 private class InterpEnum {

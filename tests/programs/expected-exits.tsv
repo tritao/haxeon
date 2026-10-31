@@ -415,3 +415,5 @@ struct-closure-dynamic	42
 struct-virtual-abi	42
 struct-call-snapshots	42
 struct-optional-field-copy	42
+struct-optional-flow	42
+struct-phi-snapshots	42

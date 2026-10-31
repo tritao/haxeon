@@ -23,6 +23,13 @@ class NullableStructIncrementalMain {
 		var rejected = false;
 		try effects.compile("Main") catch (error:CompileError) rejected = error.diagnostic.code == "E1027";
 		if (!rejected) throw "cached temporary call ignored a newly mutating method";
+		var scalar = new Compiler();
+		scalar.update("Value.hx", "struct Value { public var x:Int; public function new(x:Int) this.x = x; }");
+		scalar.update("Main.hx", "function pass(v:Null<Value>):Null<Value> return v; "
+			+ "function main():Int { var v:Null<Value> = new Value(4); var result = pass(v); return result == null ? 0 : result.x; }");
+		if (new IrInterpreter(scalar.compile("Main").ir).run("main") != 4) throw "initial scalar optional call failed";
+		scalar.update("Value.hx", "struct Value { public var x:Int; public var y:Int; public function new(x:Int) { this.x = x + 3; y = 3; } }");
+		if (new IrInterpreter(scalar.compile("Main").ir).run("main") != 7) throw "scalar optional call retained its previous layout";
 		Sys.println("PASS: inline optional fields follow incremental method and layout edits");
 	}
 }

@@ -20,6 +20,13 @@ struct Pair {
   public function total():Int return x + y;
 }
 
+struct WideFloat {
+  public var x:Float;
+  public var y:Float;
+  public var label:String;
+  public function new(x:Float, y:Float, label:String) { this.x = x; this.y = y; this.label = label; }
+}
+
 function consume(value:Pair):Int {
   value.x += 1;
   return value.x + value.y;
@@ -39,6 +46,24 @@ function recurse(value:Pair, depth:Int):Int {
 function wide(a0:Int, a1:Int, a2:Int, a3:Int, a4:Int, a5:Int, a6:Int,
     a7:Int, a8:Int, a9:Int, a10:Int, a11:Int, a12:Int, a13:Int, value:Pair):Pair {
   value.x += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13;
+  return value;
+}
+
+function veryWide(a0:Int, a1:Int, a2:Int, a3:Int, a4:Int, a5:Int, a6:Int, a7:Int,
+    a8:Int, a9:Int, a10:Int, a11:Int, a12:Int, a13:Int, a14:Int, a15:Int,
+    a16:Int, a17:Int, a18:Int, a19:Int, a20:Int, a21:Int, a22:Int, a23:Int,
+    a24:Int, a25:Int, a26:Int, a27:Int, a28:Int, a29:Int, value:Pair):Pair {
+  value.x += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14
+    + a15 + a16 + a17 + a18 + a19 + a20 + a21 + a22 + a23 + a24 + a25 + a26 + a27 + a28 + a29;
+  return value;
+}
+
+function veryWideMixed(a0:Int, a1:Int, a2:Int, a3:Int, a4:Int, a5:Int, a6:Int, a7:Int,
+    a8:Int, a9:Int, a10:Int, a11:Int, a12:Int, a13:Int, a14:Int, a15:Int,
+    a16:Int, a17:Int, a18:Int, a19:Int, a20:Int, a21:Int, a22:Int, a23:Int,
+    a24:Int, a25:Int, a26:Int, a27:Int, a28:Int, a29:Int, value:WideFloat):WideFloat {
+  value.x += a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14
+    + a15 + a16 + a17 + a18 + a19 + a20 + a21 + a22 + a23 + a24 + a25 + a26 + a27 + a28 + a29;
   return value;
 }
 
@@ -131,6 +156,28 @@ function main():Int {
 	for (i in 0...10000) sum += wide(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, pair).x;
 	allocated = hl.Gc.totalAllocated() - allocatedBefore;
 	if (sum != 160000 || allocated > 4096) return 14;
+	allocatedBefore = hl.Gc.totalAllocated();
+	sum = 0;
+	for (i in 0...10000)
+		sum += veryWide(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, pair).x;
+	allocated = hl.Gc.totalAllocated() - allocatedBefore;
+	if (sum != 320000 || allocated > 4096) return 18;
+	var wideFloat = new WideFloat(2.5, 3.5, "managed");
+	allocatedBefore = hl.Gc.totalAllocated();
+	var total = 0.0, secondTotal = 0.0;
+	for (i in 0...10000) {
+		var result = veryWideMixed(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, wideFloat);
+		if (result.label != "managed" || result.y != 3.5) return 19;
+		total += result.x;
+		secondTotal += result.y;
+	}
+	allocated = hl.Gc.totalAllocated() - allocatedBefore;
+	if (total != 325000.0 || secondTotal != 35000.0 || allocated > 4096) return 20;
+	var checkedWide = veryWideMixed(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+		1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, wideFloat);
+	if (checkedWide.label != "managed" || checkedWide.y != 3.5) return 19;
 	var processor = new Processor();
 	allocatedBefore = hl.Gc.totalAllocated();
 	sum = 0;

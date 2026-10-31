@@ -43,6 +43,27 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		var optionalProgram = Frontend.compile("struct V { public var x:Int; public var label:String; "
+			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
+			+ "function change(v:Null<V>, callback:Void->Void):Null<V> { "
+			+ "try { if (v != null) v.x++; callback(); } catch (_:Dynamic) {} return v; } "
+			+ "function main():Int { var value:Null<V> = new V(41, 'managed'); "
+			+ "var callback = function() {}; var result = change(value, callback); return result == null ? 0 : result.x; }");
+		var optionalAbi = new compiler.backend.wasm.gc.WasmGcScalarAbi(optionalProgram), optionalAbiProgram = optionalAbi.rewrite(),
+			optionalLowered = new compiler.backend.wasm.gc.WasmGcFlattenFields(optionalAbiProgram, optionalAbi.signatures).rewrite(),
+			optionalPlan = new WasmGcTypePlan(optionalLowered, true, optionalAbi.signatures, optionalAbi.scalarClosures, optionalAbi.scalarVirtuals),
+			optionalCloneFound = false;
+		for (fn in optionalLowered.functions) if (fn.name.indexOf('$' + 'wasm-gc:scalar-function:') == 0
+				&& fn.name.indexOf('$' + 'optional-scalar:change') >= 0) {
+			optionalCloneFound = true;
+			var locals = new compiler.backend.wasm.gc.WasmGcScalarLocals(optionalPlan, fn, _ -> 0);
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case NewObject(out, name) if (StringTools.startsWith(name, compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+					if (locals.get(out) == null) throw "optional value place still allocates in the Wasm GC scalar clone";
+				default:
+			}
+		}
+		if (!optionalCloneFound) throw "missing Wasm GC scalar optional call";
 		var valueShapeProgram = Frontend.compile("struct Leaf { public var x:Int; public var y:Int; } "
 			+ "struct Nested { public var leaf:Leaf; public var tag:Int; } "
 			+ "struct Standalone { public var value:Int; } "

@@ -55,9 +55,16 @@ class WasmGcScalarAbi {
 			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type))
 				instanceMethods.set(fn.name, true);
+		// An optional-flow clone of a value method still mutates its receiver. Treating it as an ordinary
+		// direct function would pass the receiver by value and silently discard its writes.
+		for (fn in program.functions)
+			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
+				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
+				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
 			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:")
-					&& !StringTools.startsWith(fn.name, "$lambda:")) || instanceMethods.exists(fn.name)) continue;
+					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
+					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
 			if (hasValue && safe) {
@@ -74,6 +81,9 @@ class WasmGcScalarAbi {
 		for (fn in program.functions)
 			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type)) methodNames.push(fn.name);
+		for (fn in program.functions)
+			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX) && instanceMethods.exists(fn.name))
+				methodNames.push(fn.name);
 		for (name in methodNames) valueMethods.set(name, true);
 		var candidates:Map<String, Bool> = [];
 		for (name in methodNames) {

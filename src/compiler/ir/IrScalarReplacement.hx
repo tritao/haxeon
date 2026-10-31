@@ -452,7 +452,8 @@ class IrScalarReplacement {
 		}
 		// Phis cost register moves on every edge, which HashLink's JIT does badly at block boundaries; they only pay off
 		// when the allocation they remove runs repeatedly.
-		if (!forcePhis && phis.keys().hasNext() && !inLoop(graph, home.id))
+		if (!forcePhis && !StringTools.startsWith(candidate.typeName, IrOptionalScalarFlow.WRAPPER)
+			&& phis.keys().hasNext() && !inLoop(graph, home.id))
 			return nextValue;
 		var zeros:Map<String, IrValue> = [],
 			zeroInstructions:Array<Located<IrInstruction>> = [];

@@ -1513,8 +1513,8 @@ class IrGenerator {
 		return switch expression.expression {
 			case TCopy(value, layout):
 				switch expression.type {
-					case TNullable(element):
-						lowerExpression(compiler.types.typing.ValueCopy.copyNullable(value, expression.type, element, layout), builder, localTypes);
+					case TNullable(_):
+						builder.call(IrOptionalValueFlow.copyName(layout.name), [lowerExpression(value, builder, localTypes)], lowerType(expression.type));
 					default: copyValue(builder, lowerExpression(value, builder, localTypes), layout, localTypes);
 				}
 			case TIntLiteral(value): builder.constInt(value, lowerType(expression.type));

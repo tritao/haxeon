@@ -3,7 +3,6 @@ package compiler.types.typing;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
-import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.ValueCopyLayout;
 
 /**
@@ -27,21 +26,6 @@ class ValueCopy {
 		}
 		var layout = layoutOf(session, type, []);
 		return layout == null ? value : new TypedExpression(TCopy(value, layout), value.type, value.span);
-	}
-
-	/** Evaluate once, preserve absence, and give a present nullable its own value storage. */
-	public static function copyNullable(value:TypedExpression, nullable:CompilerType, element:CompilerType, layout:ValueCopyLayout):TypedExpression {
-		var span = value.span,
-			name = '$' + 'nullable-copy:${span.start}',
-			held = new TypedExpression(TLocal(name), nullable, span),
-			nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), nullable, span),
-			unwrapped = new TypedExpression(TCast(held), element, span),
-			copied = new TypedExpression(TCopy(unwrapped, layout), element, span),
-			present = new TypedExpression(TNullableWrap(copied), nullable, span),
-			condition = new TypedExpression(TEqual(held, nil), TBool, span),
-			result = new TypedExpression(TConditional(condition, nil, present), nullable, span),
-			statements:Array<TypedStatement> = [TVar(name, value, span)];
-		return new TypedExpression(TBlockExpression(statements, result), nullable, span);
 	}
 
 	/** Results of these are new, unshared instances. */
