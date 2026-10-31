@@ -86,6 +86,28 @@ class InlinerMain {
 			"generated equality accepts scalar getter results without allocating with inlining disabled");
 		expect(new compiler.ir.IrInterpreter(equality).run("main") == 42,
 			"scalar generated equality preserves its result");
+		var capturedValue = Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
+			+ "struct Value { public final child:Child; public final number:Int; public function new(text:String, number:Int) { "
+			+ "child = new Child(text); this.number = number; } } "
+			+ "function make():Value return new Value('managed', 1); "
+			+ "function capture(flag:Bool):Void->Int { var value = make(), extra = value.number; "
+			+ "if (flag) return function() return value.number + value.child.text.length + extra; "
+			+ "return function() return value.number + value.child.text.length + extra; } "
+			+ "function escape():Dynamic { var value = make(); var f = function() return value.number; "
+			+ "if (f() == 0) return null; return value; } "
+			+ "function main():Int return capture(true)() + capture(false)();");
+		compiler.ir.IrValueConstructors.rewrite(capturedValue);
+		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
+		IrHlScalarArguments.rewrite(capturedValue);
+		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(capturedValue, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(capturedValue);
+		expect(allocations(programFunction(capturedValue, "capture")) == 2,
+			"a value copied into either escaping closure remains scalar; only the closure environments allocate");
+		expect(allocations(programFunction(capturedValue, "escape")) >= 2,
+			"a value returned through Dynamic still allocates at its escape boundary");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

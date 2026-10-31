@@ -422,3 +422,4 @@ struct-fresh-receiver	42
 struct-nested-constructors	42
 struct-constructor-flow	42
 struct-structural-equality-flow	42
+struct-inline-store-flow	42

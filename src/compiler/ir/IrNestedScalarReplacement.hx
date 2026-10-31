@@ -8,18 +8,20 @@ private typedef NestedAlias = {final path:Array<String>; final typeName:String;}
 
 /** Scalar-replace a non-escaping value and recursively inline its value fields into independent SSA fields. */
 class IrNestedScalarReplacement {
-	/** Expand a final inline-field copy into leaf reads and writes, then scalar-replace its source. */
+	/** Expand copies of a fresh value into inline fields, snapshot their leaves, and scalar-replace the source.
+	 * Publish the expansion only when all uses can be replaced; genuine escapes keep their original ABI.
+	 */
 	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String, home:IrBlock,
 			position:Int, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
 		if (!hasFiniteKnownLayout(typeName, objects, [])) return nextValue;
-		var store = -1, destination:Null<IrValue> = null, field:Null<String> = null;
-		for (block in blocks) for (index in 0...block.instructions.length) switch block.instructions[index].value {
-			case FieldSet(target, name, value) if (value.id == root.id && target.id != root.id):
-				if (block != home || index <= position || store >= 0 || !IrScalarReplacement.parentSlotIsInline(target, name, typeName, objects)) return nextValue;
-				store = index; destination = target; field = name;
+		var stores = 0;
+		for (block in blocks) for (located in block.instructions) switch located.value {
+			case FieldSet(target, field, value) if (value.id == root.id && target.id != root.id):
+				if (!IrScalarReplacement.parentSlotIsInline(target, field, typeName, objects)) return nextValue;
+				stores++;
 			default:
 		}
-		if (store < 0 || destination == null || field == null) return nextValue;
+		if (stores == 0) return nextValue;
 		var slots = new IrInlineValueLayout(objects).slots(Obj(typeName));
 		for (slot in slots) if (slot.isPresence) return nextValue;
 		var copies:Array<IrBlock> = [], next = nextValue, copiedHome:Null<IrBlock> = null;
@@ -27,7 +29,13 @@ class IrNestedScalarReplacement {
 			var copy = new IrBlock(block.id);
 			for (index in 0...block.instructions.length) {
 				var located = block.instructions[index];
-				if (block != home || index != store) { copy.instructions.push(located); continue; }
+				var destination:Null<IrValue> = null, field:Null<String> = null;
+				switch located.value {
+					case FieldSet(target, name, value) if (value.id == root.id && target.id != root.id):
+						destination = target; field = name;
+					default:
+				}
+				if (destination == null || field == null) { copy.instructions.push(located); continue; }
 				var target = new IrValue(next++, field, Obj(typeName));
 				copy.instructions.push(new Located(FieldGet(target, destination, field), located.provenance));
 				var pending:Array<{target:IrValue, field:String, value:IrValue}> = [];

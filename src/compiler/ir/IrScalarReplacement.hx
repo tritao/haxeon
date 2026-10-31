@@ -104,12 +104,17 @@ class IrScalarReplacement {
 	}
 
 	/**
-	 * For targets where a value class field is stored inline in its parent and reading it yields a pointer into the
-	 * parent (HashLink), `dest.field = new V(...)` allocates a struct only to copy it into place. When the new
-	 * instance is only written and then stored, write its fields straight into the parent's slot instead: take the
-	 * slot with FieldGet, then FieldSet each field (unwritten fields get the zero `New` would have given them).
+	 * For targets where value fields are inline (HashLink), expand copies of a fresh value into field places and
+	 * scalar-replace the source when all of its uses permit it. Reads, multiple stores and branches may use the
+	 * same snapshot. Unsupported escapes retain the original allocation. A simple store-only construction also
+	 * has a direct path that writes its fields into the parent's slot.
 	 */
 	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, substitutions:Map<Int, IrValue>):Int {
+		var stored:Map<Int, Bool> = [];
+		for (block in blocks) for (located in block.instructions) switch located.value {
+			case FieldSet(_, _, value): stored.set(value.id, true);
+			default:
+		}
 		for (block in blocks) {
 			var position = 0;
 			while (position < block.instructions.length) {
@@ -117,14 +122,15 @@ class IrScalarReplacement {
 				switch located.value {
 					case NewObject(object, typeName):
 						var descriptor = objects.get(typeName);
-						if (descriptor != null && descriptor.isValue && hasValueField(descriptor, objects)) {
+						if (descriptor != null && descriptor.isValue && stored.exists(object.id)) {
 							nextValue = IrNestedScalarReplacement.constructInPlace(blocks, objects, object, typeName, block, position, substitutions, nextValue);
 							if (allocationPosition(block, object) < 0) continue;
-						} else if (descriptor != null && descriptor.isValue) {
-							var store = storeOnly(blocks, block, position, object);
-							if (store != null && parentSlotIsInline(store.destination, store.field, typeName, objects)) {
-								nextValue = placeInSlot(block, position, object, descriptor, store, nextValue);
-								continue;
+							if (!hasValueField(descriptor, objects)) {
+								var store = storeOnly(blocks, block, position, object);
+								if (store != null && parentSlotIsInline(store.destination, store.field, typeName, objects)) {
+									nextValue = placeInSlot(block, position, object, descriptor, store, nextValue);
+									continue;
+								}
 							}
 						}
 					default:

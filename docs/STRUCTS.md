@@ -288,7 +288,11 @@ HashLink. Generated equality helpers now use the existing scalar calling convent
 this also applies to Wasm GC and optional-flow clones. On the same exploratory build the interaction census fell to 192
 Rect, 146 Insets, 1,036 Color, 807 LayoutAxis and zero Transform2D boxes. Inspector scroll fell from 38.6 to 14.7 KiB.
 The four tab transitions measured 123.5, 166.5, 136.4 and 139.7 KiB, still above their class baselines of 110.9,
-158.2, 124.8 and 128.6 KiB, so the all-five-value representation remains exploratory. With Rect and Insets alone, the same
+158.2, 124.8 and 128.6 KiB, so the all-five-value representation remains exploratory. Fresh values copied into inline fields, including closure environments, now stay scalar even when a
+later branch reads the same value or another branch stores it elsewhere. Copies snapshot their leaves before writing,
+and values that escape still keep their existing allocation. In the 30-cycle all-five-value interaction census this
+removed a further 487 Color boxes, from 1,036 to 549; Rect, Insets, LayoutAxis and Transform2D remained 192, 146, 807 and
+zero. Measured tab transitions remained 123.5, 166.5, 136.4 and 139.9 KiB, so the representation still needs work. On the same exploratory five-value build, the 120-frame Wasm GC Showcase counted 6,136, 13,168, 6,138 and 6,136 objects in full, editing, static and text-heavy modes; the corresponding class counts were 8,654, 15,482, 8,654 and 8,656. With Rect and Insets alone, the same
 120-frame instrumented Wasm GC Showcase counted 6,516, 13,540, 6,520 and 6,496 objects in full, editing, static and
 text-heavy modes respectively; the class baselines were 8,654, 15,482, 8,654 and 8,656.
 With only Rect and Insets converted, the same 120-frame Wasm GC Showcase measured 6,496, 13,528, 6,496 and 6,496
