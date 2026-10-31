@@ -169,7 +169,16 @@ first. Escapes (bail out): `v` stored into a field or array or global, returned,
 inlined, used as an `InstanceClosure` receiver, `ToVirtual`, `ToDyn`, a `MakeEnum` argument, a phi input, or read in a
 `BeginTry` handler (handler values must dominate the `BeginTry` block). Rewrite: one SSA value per field, forwarded
 within a block and merged with phis at joins; a field read before any write takes the zero default (HashLink `New`
-zero-fills). Nested value fields recurse.
+zero-fills). Nested value fields recurse into independently tracked leaves. Whole nested assignments snapshot their
+source leaves before updating the destination, and narrow native fields retain the truncation and sign extension of
+their stored representation. On HashLink, a freshly constructed nested value assigned to an inline field is also
+constructed in place. Unknown or cyclic layouts, nested optional fields, escapes, and unsafe exception-handler flows
+remain allocated. This keeps the optimization conservative without changing the value's representation at an ABI
+boundary.
+
+On this machine, a HashLink allocation census over 100,000 iterations of a three-level layout value reported 100,000
+`@Layout` allocations (2,400,000 bytes) before nested replacement and zero allocations afterward. Both versions returned
+the same result; the census brackets only the measured loop.
 
 There is no IR-level dead-code elimination, use-def list or alias analysis today, so stage 2 brings a small DCE for
 the dead loads, stores and allocations it leaves behind.

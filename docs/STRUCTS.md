@@ -484,6 +484,9 @@ point green.
      Array elements retain their existing boxed representation until inline struct arrays are implemented later.
    - Checkpoint: the error fires on getter and call-result chains, and `Null<S>` programs give the same results on all
      targets.
+   - Nested scalar replacement now tracks recursive value fields and whole-field copies, including construction into
+     inline HashLink fields. A 100,000-iteration nested-layout census fell from 100,000 allocations (2,400,000 bytes)
+     to zero; see [scalar replacement](INLINING_AND_VALUE_TYPES.md#scalar-replacement) for the limits.
 1b. **Wasm GC representation.**
    - Flatten struct fields into their holder, scalarize locals, parameters and returns.
    - Checkpoint: a struct stored in a field, read and copied allocates nothing on Wasm GC, and the parity suite passes.

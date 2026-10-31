@@ -408,3 +408,4 @@ struct-writable-places	42
 nullable-struct-copy	42
 nullable-struct-storage	42
 struct-field-equality	42
+nested-value-scalar-replace	42

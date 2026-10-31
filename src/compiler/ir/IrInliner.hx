@@ -640,7 +640,7 @@ class IrInliner {
 			bindings = substitute(blocks, substitutions, bindings);
 		var replaced = IrScalarReplacement.run(blocks, table, nextValue);
 		if (packedValueFields)
-			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue)};
+			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue, replaced.substitutions)};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
 		var consult = function(name:String):Void {

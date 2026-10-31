@@ -80,6 +80,15 @@ class InlinerMain {
 		IrInliner.run(slotProgram, new IrInlineCache());
 		IrVerifier.verify(slotProgram);
 		expect(allocations(programFunction(slotProgram, "H.set")) == 0, "storing a new value into an inline field should not allocate");
+		var nestedSlotSource = "@:value class Inner { public var a:Int; public function new() {} } "
+			+ "@:value class Outer { public var inner:Inner; public function new(a:Int) { inner.a = a; } } "
+			+ "class Holder { public var value:Outer; public function new() {} public function set(a:Int):Void { value = new Outer(a); } } "
+			+ "function main():Int { var h = new Holder(); h.set(3); return h.value.inner.a; }";
+		var nestedSlotProgram = Frontend.compile(nestedSlotSource);
+		IrInliner.run(nestedSlotProgram, new IrInlineCache());
+		IrVerifier.verify(nestedSlotProgram);
+		expect(allocations(programFunction(nestedSlotProgram, "Holder.set")) == 0,
+			"constructing a nested value into an inline field should not allocate");
 		IrInliner.packedValueFields = false;
 		var boxedProgram = Frontend.compile(slotSource);
 		IrInliner.run(boxedProgram, new IrInlineCache());

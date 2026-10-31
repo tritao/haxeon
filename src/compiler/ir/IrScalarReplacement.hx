@@ -18,9 +18,10 @@ typedef ScalarReplacementResult = {
  * HashLink's `New` would have given it.
  *
  * An object is left alone when any use is not a field read or a write to one of its own fields (stored, passed to
- * a call, returned, used in a phi, compared), or when its class has a value class field. In a function with exception
+ * a call, returned, used in a phi, compared). In a function with exception
  * handling only objects that live in a single block are replaced, because handler edges would need phis of their own.
  */
+@:allow(compiler.ir.IrNestedScalarReplacement)
 class IrScalarReplacement {
 	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int):ScalarReplacementResult {
 		var substitutions:Map<Int, IrValue> = [];
@@ -50,6 +51,11 @@ class IrScalarReplacement {
 				position: position
 			};
 			var descriptor = objects.get(candidate.typeName);
+			if (descriptor != null && hasValueField(descriptor, objects)) {
+				nextValue = IrNestedScalarReplacement.tryReplace(blocks, objects, candidate.object, candidate.typeName, candidate.block,
+					candidate.position, hasHandlers, substitutions, nextValue);
+				continue;
+			}
 			if (!usesAreFieldAccesses(blocks, candidate.object, candidate.block, candidate.position, hasHandlers, graph))
 				continue;
 			nextValue = replace(blocks, graph, frontier, children, candidate, descriptor, substitutions, nextValue);
@@ -63,7 +69,7 @@ class IrScalarReplacement {
 	 * instance is only written and then stored, write its fields straight into the parent's slot instead: take the
 	 * slot with FieldGet, then FieldSet each field (unwritten fields get the zero `New` would have given them).
 	 */
-	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int):Int {
+	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, substitutions:Map<Int, IrValue>):Int {
 		for (block in blocks) {
 			var position = 0;
 			while (position < block.instructions.length) {
@@ -71,7 +77,10 @@ class IrScalarReplacement {
 				switch located.value {
 					case NewObject(object, typeName):
 						var descriptor = objects.get(typeName);
-						if (descriptor != null && descriptor.isValue && !hasValueField(descriptor, objects)) {
+						if (descriptor != null && descriptor.isValue && hasValueField(descriptor, objects)) {
+							nextValue = IrNestedScalarReplacement.constructInPlace(blocks, objects, object, typeName, block, position, substitutions, nextValue);
+							if (allocationPosition(block, object) < 0) continue;
+						} else if (descriptor != null && descriptor.isValue) {
 							var store = storeOnly(blocks, block, position, object);
 							if (store != null && parentSlotIsInline(store.destination, store.field, typeName, objects)) {
 								nextValue = placeInSlot(block, position, object, descriptor, store, nextValue);
@@ -229,7 +238,7 @@ class IrScalarReplacement {
 				switch block.instructions[position].value {
 					case NewObject(object, typeName):
 						var descriptor = objects.get(typeName);
-						if (descriptor != null && descriptor.isValue && !hasValueField(descriptor, objects))
+						if (descriptor != null && descriptor.isValue)
 							found.push({
 								object: object,
 								typeName: typeName,
@@ -529,7 +538,7 @@ class IrScalarReplacement {
 
 	static function zeroValue(output:IrValue, type:IrType):IrInstruction {
 		return switch type {
-			case F64: ConstFloat(output, 0.0);
+			case F32, F64: ConstFloat(output, 0.0);
 			case Bool: ConstBool(output, false);
 			case I32, I64: ConstInt(output, 0);
 			default: ConstNull(output);
