@@ -108,6 +108,24 @@ class InlinerMain {
 			"a value copied into either escaping closure remains scalar; only the closure environments allocate");
 		expect(allocations(programFunction(capturedValue, "escape")) >= 2,
 			"a value returned through Dynamic still allocates at its escape boundary");
+		var nativeHandler = Frontend.compile("struct Full { public final x:Float; public function new(x:Float) this.x = x; } "
+			+ "struct Narrow { public var n:Int16; public function new() n = 0; } "
+			+ "class Handler { public function new() {} "
+			+ "public function read(v:Full, callback:Void->Void):Float { try { callback(); return v.x; } catch (_:Dynamic) return v.x; } "
+			+ "public function narrow(v:Narrow, callback:Void->Void):Int { try { callback(); return cast v.n; } catch (_:Dynamic) return 0; } } "
+			+ "function noop():Void {} function main():Int { var h = new Handler(); "
+			+ "return h.read(new Full(42), noop) == 42 && h.narrow(new Narrow(), noop) == 0 ? 42 : 0; }");
+		compiler.ir.IrValueConstructors.rewrite(nativeHandler);
+		compiler.ir.IrValuePhiScalarization.rewrite(nativeHandler);
+		IrHlScalarArguments.rewrite(nativeHandler);
+		IrVerifier.verify(nativeHandler);
+		var nativeClone = false, narrowClone = false;
+		for (fn in nativeHandler.functions) {
+			if (fn.name == "$hl:scalar-arguments:Handler.read") nativeClone = true;
+			if (fn.name == "$hl:scalar-arguments:Handler.narrow") narrowClone = true;
+		}
+		expect(nativeClone, "full-width native value arguments stay scalar across exception handlers");
+		expect(!narrowClone, "narrow native fields keep their stored representation across exception handlers");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

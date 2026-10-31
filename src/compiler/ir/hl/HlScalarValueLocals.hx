@@ -51,7 +51,21 @@ class HlScalarValueLocals {
 	static function scalarFields(object:IrObject, objects:Map<String, IrObject>):Bool {
 		if (!object.isValue) return false;
 		for (field in object.fields) {
-			if (field.nativeLayout != null) return false;
+			// Native storage is scalar-safe only when the register has the same representation as the field.
+			// Narrow integer fields still need truncation and sign extension on every store/load.
+			var native = field.nativeLayout;
+			if (native != null) {
+				if (native.inlineRecord) return false;
+				var exact = switch field.type {
+					case I32: native.size == 4;
+					case I64: native.size == 8;
+					case F32: native.size == 4;
+					case F64: native.size == 8;
+					case Bool: native.size == 1;
+					default: false;
+				};
+				if (!exact) return false;
+			}
 			switch field.type {
 				case Obj(name) if (objects.exists(name) && objects.get(name).isValue): return false;
 				case Nullable(Obj(name)) if (objects.exists(name) && objects.get(name).isValue): return false;
