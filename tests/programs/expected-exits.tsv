@@ -418,3 +418,4 @@ struct-optional-field-copy	42
 struct-optional-flow	42
 struct-phi-snapshots	42
 struct-linear-place-alias	42
+struct-fresh-receiver	42

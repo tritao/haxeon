@@ -38,6 +38,24 @@ class InlinerMain {
 		IrVerifier.verify(nestedCalls);
 		expect(allocations(programFunction(nestedCalls, "$hl:scalar-arguments:read")) == 0,
 			"a nested managed value argument stays scalar across a branch");
+		var receiverProgram = Frontend.compile("struct Value { public final n:Int; public function new(n:Int) this.n = n; "
+			+ "public function doubled():Int return n * 2; public function inspect():Int return observe(doubled()); } "
+			+ "function observe(n:Int):Int return n; function make():Value return new Value(21); "
+			+ "function read():Int return make().inspect(); function main():Int return read();");
+		compiler.ir.IrValueConstructors.rewrite(receiverProgram);
+		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
+		IrHlScalarArguments.rewrite(receiverProgram);
+		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
+		IrInliner.packedValueFields = true;
+		IrInliner.run(receiverProgram, new IrInlineCache(), false);
+		IrInliner.packedValueFields = false;
+		IrVerifier.verify(receiverProgram);
+		expect(allocations(programFunction(receiverProgram, "read")) == 0,
+			"a fresh receiver stays scalar through a read-only method that calls out");
+		expect(allocations(programFunction(receiverProgram, "$hl:scalar-arguments:Value.inspect")) == 0,
+			"a read-only receiver stays scalar through its own nested method");
+		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42,
+			"a scalar fresh receiver preserves its result");
 		// This unit suite exercises inlining explicitly, independently of the frontend option.
 		IrInliner.enabled = true;
 		var source = "@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "

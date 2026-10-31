@@ -444,6 +444,18 @@ idle were 0.2 KiB each, inspector scroll was 21.7 KiB, and backspace and charact
 allocated 6,138, 13,168, 6,136 and 6,138 objects over 120 measured frames in full, editing, static and text-heavy modes.
 These prototype measurements still do not meet the HashLink acceptance rule.
 
+Read-only methods on a fresh, unaliased struct receiver can use scalar parameters even when they call out. The proof
+follows nested value fields and receiver methods, and excludes a receiver whose place could be observed or changed by an
+alias; field-place calls retain their original ABI. With ordinary inlining disabled, a 10,000-call regression test with
+callbacks allocates less than 4 KiB for both scalar and nested managed receivers. With Rect and Insets converted, the
+30-cycle interaction census counted 192 Rect and 146 Insets boxes, alongside 487 Color, 1,007 LayoutAxis and 1,722
+Transform2D class allocations. An exploratory all-five-value UI build
+still exceeds the class baseline: tab transition medians were 125.8, 180.5, 141.5 and 142.4 KiB; hover away, enter,
+field, inside and other were 26.5, 2.6, 25.0, 0.6 and 14.3 KiB; both idle actions were 0.2 KiB, inspector scroll was
+23.5 KiB, and backspace and character input were 18.7 KiB each. This is not an accepted conversion. The separately
+remeasured Rect/Insets Wasm GC Showcase used 6,532, 13,562, 6,522 and 6,522 objects over 120 frames in full, editing,
+static and text-heavy modes respectively, below the class counts of 8,654, 15,482, 8,654 and 8,656.
+
 Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
 leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
 nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be

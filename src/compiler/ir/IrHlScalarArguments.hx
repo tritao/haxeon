@@ -11,7 +11,9 @@ class IrHlScalarArguments {
 	public static function rewrite(program:IrProgram):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var methods:Map<String, Null<String>> = [];
-		var candidates:Map<String, IrFunction> = [];
+		var candidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [];
+		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
+		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
@@ -23,7 +25,10 @@ class IrHlScalarArguments {
 			}
 			for (arg in fn.arguments) if (isValue(arg.type, objects)) {
 				hasValue = true;
-				if ((arg.name == "this" && !receiverReadOnly(fn)) || !hasScalarLayout(arg.type, objects)) eligible = false;
+				if (arg.name == "this" && !receiverReadOnly(fn)) {
+					if (receiverSnapshotOnly(fn, arg, objects, null, methods)) freshOnly.set(fn.name, true); else eligible = false;
+				}
+				if (!hasScalarLayout(arg.type, objects)) eligible = false;
 				argumentCount += slots(arg.type, objects).length;
 			} else argumentCount++;
 			// The HashLink JIT accepts at most 256 arguments per emitted call. Dynamic calls retain the original ABI.
@@ -41,9 +46,12 @@ class IrHlScalarArguments {
 			clones = [];
 			for (fn in program.functions) if (candidates.exists(fn.name)) {
 				var retained = false;
-				for (arg in fn.arguments) if (isValue(arg.type, objects) && !fieldOnly(fn, arg, objects, candidates, methods, methodNames)) retained = true;
+				for (arg in fn.arguments) if (isValue(arg.type, objects)) {
+					if (!fieldOnly(fn, arg, objects, candidates, methods, methodNames)) retained = true;
+					if (freshOnly.exists(fn.name) && arg.name == "this" && !receiverSnapshotOnly(fn, arg, objects, candidates, methods)) retained = true;
+				}
 				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames);
+				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames, freshOnly);
 				// Scalar call rewriting can introduce value constructions into a join. Split those joins before
 				// judging whether the specialized callee can keep its value arguments and result in registers.
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
@@ -62,7 +70,7 @@ class IrHlScalarArguments {
 		}
 		if (!candidates.keys().hasNext()) return;
 		var rewritten:Array<IrFunction> = [];
-		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, objects, methods, methodNames));
+		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, objects, methods, methodNames, freshOnly));
 		for (fn in program.functions) if (candidates.exists(fn.name))
 			rewritten.push(clones.get(fn.name));
 		program.functions = rewritten;
@@ -106,7 +114,7 @@ class IrHlScalarArguments {
 						var target = candidates.get(name);
 						for (index in 0...arguments.length)
 							if (aliases.exists(arguments[index].id) && !isValue(target.arguments[index].type, objects)) return false;
-					case MethodCall(_, receiver, method, arguments) if (!aliases.exists(receiver.id) && methodNames.exists(method)):
+					case MethodCall(_, receiver, method, arguments) if (methodNames.exists(method)):
 						var name = resolveMethod(receiver.type, method, objects, methods);
 						if (name == null || !candidates.exists(name)) return false;
 						var target = candidates.get(name);
@@ -133,6 +141,82 @@ class IrHlScalarArguments {
 			default:
 		}
 		return true;
+	}
+
+	/** A fresh receiver is safe to snapshot when the method only reads its fields or calls other safe value methods.
+	 * The first pass discovers possible methods; the candidate fixpoint checks every transitive receiver call.
+	 */
+	static function receiverSnapshotOnly(fn:IrFunction, receiver:IrValue, objects:Map<String, IrObject>,
+			candidates:Null<Map<String, IrFunction>>, methods:Map<String, Null<String>>):Bool {
+		var aliases:Map<Int, Bool> = [receiver.id => true], changed = true;
+		while (changed) {
+			changed = false;
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case FieldGet(out, owner, _) if (aliases.exists(owner.id) && isValue(out.type, objects) && !aliases.exists(out.id)):
+					aliases.set(out.id, true); changed = true;
+				default:
+			}
+		}
+		for (block in fn.blocks) {
+			for (located in block.instructions) {
+				for (input in IrOperands.inputs(located.value)) if (aliases.exists(input.id)) switch located.value {
+					case FieldGet(_, owner, _) if (aliases.exists(owner.id)):
+					case MethodCall(_, owner, method, args) if (aliases.exists(owner.id)):
+						for (arg in args) if (aliases.exists(arg.id)) return false;
+						var name = resolveMethod(owner.type, method, objects, methods);
+						if (name == null || candidates != null && !candidates.exists(name)) return false;
+					default: return false;
+				}
+			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)): return false;
+				default:
+			}
+		}
+		return true;
+	}
+
+	/** Prove that neither a value result nor any nested value place escapes before its one receiver call.
+	 * The receiver is non-null by construction, so its call needs no separate object null check.
+	 */
+	static function freshReceiver(fn:IrFunction, receiver:IrValue, objects:Map<String, IrObject>):Bool {
+		if (!isValue(receiver.type, objects)) return false;
+		var aliases:Map<Int, Bool> = [receiver.id => true], changed = true;
+		while (changed) {
+			changed = false;
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case FieldGet(out, owner, _) if (aliases.exists(owner.id) && isValue(out.type, objects) && !aliases.exists(out.id)):
+					aliases.set(out.id, true); changed = true;
+				default:
+			}
+		}
+		var fresh = false, uses = 0;
+		for (block in fn.blocks) {
+			for (located in block.instructions) {
+				switch located.value {
+					case NewObject(out, _) | Call(out, _, _) | MethodCall(out, _, _, _) | CallClosure(out, _, _)
+						if (out.id == receiver.id): fresh = true;
+					default:
+				}
+				for (input in IrOperands.inputs(located.value)) if (aliases.exists(input.id)) switch located.value {
+					case FieldSet(owner, _, value) if (aliases.exists(owner.id) && !aliases.exists(value.id)):
+					case FieldGet(_, owner, _) if (aliases.exists(owner.id)):
+					case MethodCall(_, owner, _, args) if (owner.id == receiver.id && !hasAlias(args, aliases)): uses++;
+					case Call(_, _, args) if (args.length > 0 && args[0].id == receiver.id && !hasAlias(args.slice(1), aliases)): uses++;
+					default: return false;
+				}
+			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)): return false;
+				default:
+			}
+		}
+		return fresh && uses == 1;
+	}
+
+	static function hasAlias(values:Array<IrValue>, aliases:Map<Int, Bool>):Bool {
+		for (value in values) if (aliases.exists(value.id)) return true;
+		return false;
 	}
 
 	static function nextId(fn:IrFunction):Int {
@@ -201,7 +285,7 @@ class IrHlScalarArguments {
 	}
 
 	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
-			methods:Map<String, Null<String>>, methodNames:Map<String, Bool>):IrFunction {
+			methods:Map<String, Null<String>>, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>):IrFunction {
 		var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [];
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -220,17 +304,21 @@ class IrHlScalarArguments {
 						Call(out, binding.name, binding.receiver == null ? arguments : [binding.receiver].concat(arguments));
 					case MethodCall(out, receiver, method, arguments) if (methodNames.exists(method)):
 						var name = resolveMethod(receiver.type, method, objects, methods);
-						if (name == null || !candidates.exists(name)) located.value;
+						if (name == null || !candidates.exists(name) || (freshOnly.exists(name) && !freshReceiver(fn, receiver, objects))) located.value;
 						else {
-							var checked = new IrValue(next++, "$hl:receiver-check", Void);
-							copy.instructions.push(new Located(Call(checked, IrHlScalarRef.CHECK_RECEIVER, [receiver]), located.provenance));
+							if (!freshReceiver(fn, receiver, objects)) {
+								var checked = new IrValue(next++, "$hl:receiver-check", Void);
+								copy.instructions.push(new Located(Call(checked, IrHlScalarRef.CHECK_RECEIVER, [receiver]), located.provenance));
+							}
 							Call(out, name, [receiver].concat(arguments));
 						}
 					default: located.value;
 				};
 				switch instruction {
-				case Call(out, name, arguments) if (candidates.exists(name)):
+				case Call(out, name, arguments) if (candidates.exists(name)
+					&& (!freshOnly.exists(name) || arguments.length > 0 && freshReceiver(fn, arguments[0], objects))):
 					var target = candidates.get(name), expanded:Array<IrValue> = [];
+					if (target == null) throw 'Missing scalar call target "$name"';
 					for (index in 0...arguments.length) {
 						var arg = arguments[index];
 						if (!isValue(target.arguments[index].type, objects)) { expanded.push(arg); continue; }
