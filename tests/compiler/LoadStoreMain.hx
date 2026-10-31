@@ -128,6 +128,34 @@ class LoadStoreMain {
 		var v1 = b.fieldGet(o, "v", Obj("Value")),
 			v2 = b.fieldGet(o, "v", Obj("Value"));
 		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), IrObjectTable.of(objects))) == 2, "inline value fields must not be forwarded");
+		objects.set("Narrow", {
+			name: "Narrow", isValue: true, base: null, interfaces: [], methods: [],
+			fields: [
+				{name: "small", type: I32, nativeLayout: {size: 2, alignment: 2, offset: 0, signed: true, inlineRecord: false}},
+				{name: "wide", type: I32, nativeLayout: {size: 4, alignment: 4, offset: 4, signed: true, inlineRecord: false}},
+				{name: "fraction", type: F32, nativeLayout: {size: 4, alignment: 4, offset: 8, signed: true, inlineRecord: false}}
+			]
+		});
+		b = new IrBuilder(); o = b.argument("narrow", Obj("Narrow")); stored = b.constInt(65535);
+		b.fieldSet(o, "small", stored);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "small", I32)), IrObjectTable.of(objects))) == 1,
+			"a narrow native store must be loaded back after truncation and sign extension");
+		b = new IrBuilder(); o = b.argument("wide", Obj("Narrow")); stored = b.constInt(65535);
+		b.fieldSet(o, "wide", stored);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "wide", I32)), IrObjectTable.of(objects))) == 0,
+			"a full-width native store can still be forwarded");
+		b = new IrBuilder(); o = b.argument("float", Obj("Narrow")); var f32 = b.argument("fraction", F32);
+		b.fieldSet(o, "fraction", f32);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects))) == 1,
+			"a native Float32 store must be read after rounding");
+		objects.set("ManagedFloat", {
+			name: "ManagedFloat", isValue: true, base: null, interfaces: [], methods: [],
+			fields: [{name: "fraction", type: F32}, {name: "text", type: Bytes}]
+		});
+		b = new IrBuilder(); o = b.argument("managed", Obj("ManagedFloat")); f32 = b.argument("fraction", F32);
+		b.fieldSet(o, "fraction", f32);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects))) == 1,
+			"Float32 storage rounds even in an object without a native layout");
 		// Replacing an inline value also changes primitive fields reached through interior pointers.
 		b = new IrBuilder();
 		o = b.argument("holder", Obj("Box"));

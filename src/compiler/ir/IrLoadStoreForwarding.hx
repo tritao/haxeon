@@ -43,7 +43,8 @@ class IrLoadStoreForwarding {
 							elements = [];
 						} else {
 							fields = [for (entry in fields) if (entry.field != field) entry];
-							fields.push({object: object.id, field: field, value: value});
+							if (!storeNeedsNormalization(object.type, field, objects))
+								fields.push({object: object.id, field: field, value: value});
 						}
 					case FieldGet(out, object, field):
 						if (!plainObject(object.type)) {
@@ -144,6 +145,29 @@ class IrLoadStoreForwarding {
 
 	static function sameType(a:IrType, b:IrType):Bool
 		return Std.string(a) == Std.string(b);
+
+	/** A native-width store may change its input before a later load observes it. */
+	static function storeNeedsNormalization(type:IrType, field:String, objects:Null<IrObjectTable>):Bool {
+		if (objects == null) return false;
+		var name:Null<String> = switch type { case Obj(value): value; default: null; };
+		while (name != null) {
+			var object = objects.get(name);
+			if (object == null) return false;
+			for (entry in object.fields) if (entry.name == field) {
+				// A Float32 field rounds even when its enclosing object has no native layout.
+				if (Type.enumEq(entry.type, F32)) return true;
+				var native = entry.nativeLayout;
+				if (native == null || native.inlineRecord) return false;
+				return switch entry.type {
+					case I32: native.size > 0 && native.size < 4;
+					case I64: native.size > 0 && native.size < 8;
+					default: false;
+				};
+			}
+			name = object.base;
+		}
+		return false;
+	}
 
 	static function plainObject(type:IrType):Bool
 		return switch type {
