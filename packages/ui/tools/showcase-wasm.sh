@@ -85,6 +85,7 @@ if [[ ${NATIVEKIT_HAXEON_SKIP_HXI_CHECK:-0} == 1 ]]; then
 	echo "showcase-wasm: skipped standalone HXI freshness audits"
 else
 	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-wasm-hxi.sh" --check
+	HAXEON_DIR="$haxeon_dir" "$haxeon_dir/packages/platform/tools/update-haxeon-net-wasm-hxi.sh" --check
 	HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-wasm-hxi.sh" --check
 fi
 
@@ -110,6 +111,8 @@ compiler_args=(
 	--root="$haxeon_dir/packages/platform/src"
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap"
+	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net-wasm.hxi"
+	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-wasm.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-showcase-wasm.hxi"

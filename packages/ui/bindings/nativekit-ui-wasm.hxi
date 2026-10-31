@@ -9,7 +9,7 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	const NKUI_EFFECT_PROGRAM_MAX_OPS = 8;
 	const NKUI_GRADIENT_MAX_STOPS = 8;
 	const NKUI_LAYER_COMMAND_VERSION = 2;
-	const NKUI_LAYOUT_API_VERSION = 22;
+	const NKUI_LAYOUT_API_VERSION = 23;
 	const NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16777216;
 	/**
 	 * Per-child cross-axis alignment override; zero inherits the parent.
@@ -141,6 +141,8 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * Stacking order for absolute-positioned nodes, encoded as signed int32.
 	 */
 	const NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 184;
+	const NKUI_LAYOUT_PATCH_HEADER_BYTES = 32;
+	const NKUI_LAYOUT_PATCH_VERSION = 18;
 	const NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96;
 	const NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16;
 	const NKUI_LAYOUT_TRANSACTION_VERSION = 17;
@@ -680,7 +682,7 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_layout_session_get_measure_stats(session: nkui_layout_session, out_stats: ptr<nkui_layout_measure_stats> @out) -> nkui_result;
 	/**
-	 * Copies the resolved geometry for every node in submission order.
+	 * Copies resolved geometry in retained tree order. Full submits preserve submission order; patches use child-list preorder.
 	 *
 	 * The buffer contains `nkui_layout_item` records with `struct_size` set.
 	 * Bounds remain in pre-transform layout coordinates; `transform` maps them to
@@ -690,6 +692,11 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * pass a buffer of that size.
 	 */
 	extern fn nkui_layout_session_get_resolved_items(session: nkui_layout_session, out_buffer: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nkui_result;
+	/**
+	 * Copies only geometry records changed by the last successful submit. Repeated reads return the same records.
+	 * The first submit exports every record; removals and item order follow the submitted tree, not this update buffer.
+	 */
+	extern fn nkui_layout_session_get_resolved_updates(session: nkui_layout_session, out_buffer: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nkui_result;
 	/**
 	 * Returns the root-to-target geometric hit path for a viewport point.
 	 *
@@ -767,11 +774,22 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * transaction. The native side copies all values before returning, so the
 	 * input buffer may be reused. The transaction is bounded by
 	 * NKUI_LAYOUT_MAX_TRANSACTION_BYTES; node capacity grows with submitted data.
+	 * A PATCH_VERSION packet has a 32-byte header: version, updated-node count,
+	 * record size, string offset, removed-ID count, child-list word count, final
+	 * node count, and reserved zero. Updated records retain the full record format;
+	 * their parent field is ignored. After the records come removed uint32 IDs,
+	 * then child-list blocks (parent ID, child count, ordered child IDs), then UTF-8.
+	 * Parent zero's sole child is the root. Only changed parents need a block.
+	 * Patches require a prior successful full submit and are applied atomically.
 	 * Each node transform is applied about its normalized resolved-box origin;
 	 * clipped nodes must have an axis-aligned cumulative transform. The default
 	 * origin is the center of the resolved box.
 	 */
 	extern fn nkui_layout_session_submit(session: nkui_layout_session, transaction: ptr<const<u8>> @in_array("transaction_bytes"), transaction_bytes: u32, frame: ptr<const<nkui_layout_frame_input>>) -> nkui_result;
+	/**
+	 * Checks every retained native node and its order against a full transaction without changing the session.
+	 */
+	extern fn nkui_layout_session_verify_tree(session: nkui_layout_session, transaction: ptr<const<u8>> @in_array("transaction_bytes"), transaction_bytes: u32) -> nkui_result;
 	/**
 	 * Creates an immutable linear gradient paint.
 	 *
@@ -970,6 +988,14 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 * clears ranges; changing the base color preserves overrides.
 	 */
 	extern fn nkui_text_layout_set_color_ranges(layout: nkui_resource, ranges: ptr<const<nkui_text_color_range>> @in_array("count"), count: u32) -> nkui_result;
+	/**
+	 * Projects a single-row layout onto supplied physical x positions, one float32
+	 * little-endian value per logical codepoint boundary (text length + 1).
+	 * Positions must be finite, nonnegative and nondecreasing. Zero bytes restores
+	 * natural layout. Glyphs share the row's existing atlas and color ranges.
+	 * Updating text/layout clears the projection. Invalid input leaves it intact.
+	 */
+	extern fn nkui_text_layout_set_grid_positions(layout: nkui_resource, positions: ptr<const<u8>> @in_array("position_bytes"), position_bytes: u32) -> nkui_result;
 	/**
 	 * Re-shapes an existing layout with new UTF-8 text while retaining its handle and style; null text
 	 * is empty.
