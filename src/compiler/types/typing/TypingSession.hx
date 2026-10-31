@@ -46,7 +46,11 @@ class TypingSession {
 	public var declarations:DeclarationIndex;
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
+	/** Typed lambdas by position and captured bindings: the copies of a switch arm with several patterns capture different locals. */
 	public final lambdaCache:Map<String, TypedExpression> = [];
+
+	/** How many variants (see `lambdaCache`) each lambda position has been typed as. */
+	public final lambdaVariants:Map<String, Int> = [];
 
 	/** Structural conversion helpers already emitted for each origin and target shape. */
 	public final dynamicStructureConversions:Map<String, Bool> = [];

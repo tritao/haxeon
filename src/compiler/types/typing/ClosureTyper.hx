@@ -69,8 +69,6 @@ class ClosureTyper {
 	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
-		if (session.lambdaCache.exists(lambdaKey))
-			return session.lambdaCache.get(lambdaKey);
 		var expectedFunction = expectedFunctionType(expectedType),
 			inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
@@ -159,6 +157,15 @@ class ClosureTyper {
 				});
 			}
 		}
+		// A switch arm with several patterns is typed once per pattern, so one lambda position can capture different bindings:
+		// each distinct set of captures is its own lambda, and the first keeps the name the position gives it.
+		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",");
+		if (session.lambdaCache.exists(variantKey))
+			return session.lambdaCache.get(variantKey);
+		var variant:Int = session.lambdaVariants.exists(lambdaKey) ? session.lambdaVariants.get(lambdaKey) : 0;
+		session.lambdaVariants.set(lambdaKey, variant + 1);
+		if (variant > 0)
+			identity = compiler.semantic.LambdaName.variant(identity, variant);
 		var typedBodyScope = new Scope();
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
@@ -237,7 +244,7 @@ class ClosureTyper {
 					requiredMapValue(lambdaCellKinds, name));
 		var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 			TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
-		session.lambdaCache.set(lambdaKey, lambdaResult);
+		session.lambdaCache.set(variantKey, lambdaResult);
 		return lambdaResult;
 	}
 

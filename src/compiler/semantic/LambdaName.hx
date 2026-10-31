@@ -42,6 +42,16 @@ class LambdaName {
 		return identity.substring(0, ordinal) + "@" + StringTools.hex(hash & 0x7FFFFFFF, 8) + identity.substring(ordinal);
 	}
 
+	/**
+	 * `identity` for the `ordinal`th typing of a lambda written once but compiled again (a switch arm with several patterns is
+	 * typed once per pattern, and the copies can capture different locals): `~<ordinal>` ends the member and anchor, so the copy
+	 * is a sibling group of its own and the positional ordinal stays a plain number.
+	 */
+	public static function variant(identity:String, ordinal:Int):String {
+		var position = identity.lastIndexOf("#");
+		return identity.substring(0, position) + "~" + ordinal + identity.substring(position);
+	}
+
 	public static inline function is(name:String):Bool
 		return StringTools.startsWith(name, PREFIX);
 

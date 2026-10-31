@@ -48,6 +48,7 @@ map-literal	42
 map-comprehension	42
 switch-guard	42
 captured-lambda	42
+switch-case-captured-local	42
 captured-this	42
 mutable-capture	78
 nested-mutable-capture	3

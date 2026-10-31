@@ -32,6 +32,10 @@ class LambdaNameMain {
 			"an adapter's group is its context, whose name may contain colons");
 		expect(!PositionalName.is("demo.Main.run"), "a declared function is not positionally named");
 
+		var copy = LambdaName.of("demo.Main.run", LambdaName.variant("run#2", 1));
+		expect(copy == "$lambda:demo.Main.run:run~1#2" && PositionalName.ordinal(copy) == 2 && PositionalName.group(copy) != PositionalName.group(name),
+			"a copy of a lambda is a sibling group of its own and keeps a numeric ordinal");
+
 		expect(LambdaName.enclosing("$lambda:") == null
 			&& LambdaName.enclosing("$lambda:x") == null, "a malformed name has no enclosing function");
 		expect(LambdaName.outermost("$lambda:x") == "$lambda:x", "a malformed name is returned unchanged");
