@@ -104,6 +104,21 @@ class WasmBackendMain {
 			}
 		}
 		if (!foundCopyWork) throw "The inline value-copy fixture has no work function";
+		// Large generated functions can have a dominator chain deeper than the host interpreter's call stack.
+		var deep = new IrBuilder(), deepValue = deep.newObject("P");
+		deep.fieldSet(deepValue, "x", deep.constInt(42));
+		for (_ in 0...1500) {
+			var next = deep.createBlock();
+			deep.jump(next);
+			deep.select(next);
+		}
+		deep.returnValue(deep.fieldGet(deepValue, "x", I32));
+		var deepFunction = new IrFunction("deep-value-flow", deep.arguments, I32, deep.blocks),
+			deepResult = compiler.ir.IrScalarReplacement.rewrite(deepFunction, copyObjects, true);
+		for (block in deepResult.blocks) for (located in block.instructions) switch located.value {
+			case NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _): throw "Deep value flow must be scalar-replaced";
+			default:
+		}
 		var fieldReads = 0;
 		for (fn in flatCopies.functions) if (fn.name == "read") for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case FieldGet(_, _, _): fieldReads++;

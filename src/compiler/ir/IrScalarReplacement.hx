@@ -475,8 +475,9 @@ class IrScalarReplacement {
 			removed.get(blockId).set(position, true);
 		};
 		// Rename along the dominator tree from the allocation's block.
-		var walk:Int->Map<String, IrValue>->Void = null;
-		walk = function(blockId:Int, incoming:Map<String, IrValue>):Void {
+		var work:Array<{blockId:Int, incoming:Map<String, IrValue>}> = [{blockId: home.id, incoming: []}];
+		while (work.length > 0) {
+			var pending:{blockId:Int, incoming:Map<String, IrValue>} = cast work.pop(), blockId = pending.blockId, incoming = pending.incoming;
 			var block = graph.blocks.get(blockId);
 			if (block == null)
 				throw "Scalar replacement walked to an unknown block";
@@ -518,11 +519,14 @@ class IrScalarReplacement {
 						var known = current.get(name);
 						phiInputs.get(successor).get(name).push({block: blockId, value: known == null ? zeroFor(name) : known});
 					}
-			for (child in children.get(blockId))
-				if (dominates(graph, home.id, child))
-					walk(child, current);
-		};
-		walk(home.id, []);
+			var descendants:Array<Int> = cast children.get(blockId);
+			var index = descendants.length;
+			while (index > 0) {
+				var child = descendants[--index];
+				// Every child in this traversal is already in the allocation block's dominator subtree.
+				work.push({blockId: child, incoming: current});
+			}
+		}
 		// Apply: drop the replaced instructions, add the zero defaults after the allocation, and add the phis.
 		for (block in blocks) {
 			var drop = removed.get(block.id),
