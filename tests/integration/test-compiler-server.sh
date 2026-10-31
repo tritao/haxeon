@@ -63,6 +63,14 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         source('9')
         assert 'reusing compiler session' in build()
         run(9)
+        # Editing a module with inline conditional compilation must compare its active
+        # declarations rather than feeding directives to the ordinary lexer.
+        main.write_text('class Main { public static function main():Int { return #if hl 10 #else 11 #end; } }\n')
+        assert 'reusing compiler session' in build()
+        run(10)
+        main.write_text('class Main { public static function main():Int { return #if hl 12 #else 11 #end; } }\n')
+        assert 'reusing compiler session' in build()
+        run(12)
         obsolete.wait(timeout=5)
         assert not obsolete_state.exists(), 'obsolete worker was not shut down'
         assert unrelated_state.exists() and unrelated.poll() is None, 'another project\'s worker was retired under the limit'

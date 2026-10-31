@@ -12,6 +12,7 @@ import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
+import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Token.TokenKind;
 import haxe.Json;
 import haxe.io.Bytes;
@@ -93,7 +94,7 @@ class CompilerSession {
 			for (path in request.paths) {
 				var before = sourceTexts.get(path);
 				var after = readChanged(path);
-				if (before != null && after != before && hasStructuralDeclaration(path, before, after)) {
+				if (before != null && after != before && hasStructuralDeclaration(path, before, after, Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 					reset();
 					break;
 				}
@@ -113,7 +114,7 @@ class CompilerSession {
 				}
 				if (Path.isAbsolute(path)) {
 					var changed = readChanged(path);
-					if (changed != state.source.text && hasStructuralDeclaration(path, state.source.text, changed)) {
+					if (changed != state.source.text && hasStructuralDeclaration(path, state.source.text, changed, Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
 						// Rebuild that semantic graph until transitive shape invalidation is complete.
 						reset();
@@ -294,11 +295,13 @@ class CompilerSession {
 	function readChanged(path:String):Null<String>
 		return read(path);
 
-	static function hasStructuralDeclaration(path:String, before:String, after:String):Bool
-		return structuralDeclarations(path, before) != structuralDeclarations(path, after);
+	static function hasStructuralDeclaration(path:String, before:String, after:String, defines:Map<String, String>):Bool
+		return structuralDeclarations(path, before, defines) != structuralDeclarations(path, after, defines);
 
-	static function structuralDeclarations(path:String, source:String):String {
-		var tokens = new Lexer(new SourceFile(path, source)).tokenize();
+	static function structuralDeclarations(path:String, source:String, defines:Map<String, String>):String {
+		var file = new SourceFile(path, source);
+		var conditional = ConditionalCompilation.process(file, defines);
+		var tokens = new Lexer(file, conditional.text).tokenize();
 		var result:Array<String> = [];
 		var depth = 0, capturing = false, bodyDepth = 0;
 		for (token in tokens) {

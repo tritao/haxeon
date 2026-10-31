@@ -642,16 +642,21 @@ class Compiler {
 		return true;
 	}
 
+	/** Normalize command-line defines consistently for parsing and session invalidation. */
+	public static function defineMap(values:Array<String>):Map<String, String> {
+		var result:Map<String, String> = [];
+		for (value in values) {
+			var separator = value.indexOf("="), name = separator < 0 ? value : value.substr(0, separator);
+			result.set(name, separator < 0 ? "1" : value.substr(separator + 1));
+		}
+		return result;
+	}
+
 	/** Change semantic build context and invalidate every source-derived cache. */
 	public function configure(identity:String, scopeIdentity:String, values:Array<String>):Void {
 		if (identity == configurationIdentity)
 			return;
-		var nextDefines:Map<String, String> = [];
-		for (value in values) {
-			var separator = value.indexOf("="),
-				name = separator < 0 ? value : value.substr(0, separator);
-			nextDefines.set(name, separator < 0 ? "1" : value.substr(separator + 1));
-		}
+		var nextDefines = defineMap(values);
 		var changed:Map<String, Bool> = [];
 		for (name => value in defines)
 			if (nextDefines.get(name) != value)
