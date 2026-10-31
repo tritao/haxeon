@@ -5,6 +5,7 @@ import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
@@ -20,7 +21,7 @@ private class Items implements TreeViewModel {
   public function new() {}
   public function rootCount():Int return 3;
   public function rootRange(start:Int, count:Int):Array<TreeRootMetadata>
-    return [for (i in start...(start + count)) new TreeRootMetadata("item-" + i, i == 0)];
+    return [for (i in start...(start + count)) new TreeRootMetadata("item-" + i, false)];
   public function rootKeyAt(index:Int):String return "item-" + index;
   public function childCount(key:String):Int return key == "item-0" ? 2 : 0;
   public function childKeyAt(key:String, index:Int):String return key + "-child-" + index;
@@ -48,7 +49,7 @@ class KeyChordTests {
 
   static function fieldValue(root:RenderNode):String {
     var value:Null<String> = null;
-    root.walk(function(node) { if (value == null && node.semantics != null && node.semantics.value != null) value = node.semantics.value; });
+    root.walk(function(node) { var s = node.semantics; if (value == null && s != null) { var v = s.value; if (v != null) value = v; } });
     return value == null ? "" : value;
   }
 
@@ -85,9 +86,12 @@ class KeyChordTests {
     var activated:Array<String> = [];
     var consume = true;
     function enterOn(key:String):Void {
-      var y = rowY(root, key);
-      ui.pointerDown(60, y, 0); ui.pointerUp(60, y, 0);
-      root = ui.submit(tree, frame);
+      var id:Null<WidgetId> = null;
+      root.walk(function(node) {
+        var s = node.semantics;
+        if (s != null && s.role == AccessibilityRole.TreeItem && s.label == key) id = node.id;
+      });
+      var target = id; check(target != null && ui.focusWidget(target), "Row " + key + " did not take focus");
       ui.key(UiEventKind.KeyDown, UiKey.Enter);
       root = ui.submit(tree, frame);
     }
