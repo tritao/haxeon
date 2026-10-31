@@ -1,6 +1,16 @@
 # Purity contracts
 
-Status: design (2026-10-31), not implemented. Feature 5 in [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md).
+Status: deferred design (2026-10-31), not implemented. Feature 5 in [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md).
+
+Deferred in favour of a runtime check: [ADR 0002](adr/0002-reactive-ui-model.md) makes the state the UI depends on
+signals and throws at any signal or `State` write inside a tracking scope (decision 9, stage 1). That reports the bad write
+at its line, with no annotations, which is how Svelte 5, Compose, Vue and Solid handle the same problem; none of them uses
+compile-time purity. This contract is heavier: it spreads to every closure type and interface on the path, needs
+conditional purity for generic code, and still needs trust-me holes (`@:cache`, the harmless-effect allowlist). Revisit it
+if the runtime checks leave real holes, for example verify failures caused by plain-field writes during builds.
+
+Purity *inference* without annotations remains useful on its own for the optimizer (dead call removal, common
+subexpressions, loop-invariant hoisting) and does not need this contract.
 
 ## Why
 

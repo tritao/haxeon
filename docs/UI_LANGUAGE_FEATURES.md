@@ -87,12 +87,16 @@ GC"):
   converting these types would allocate *more* on the web target until struct fields are flattened into their holder and
   struct locals are scalarized.
 
-### 5. Purity contracts (stage 1 onward)
+### 5. Purity contracts (deferred)
 
-A `@:pure` contract for derived computations and component setup: no writes to signals, and no writes to fields reachable
-from outside the function. Every panel that was hard to retain (inspection camera, BIM, machine control, mission, CNC) was
-hard because its build changed state; verify mode found that indirectly, this finds it at compile time. Useful under the
-current model too, so it can start first. Design: [PURITY.md](PURITY.md).
+Every panel that was hard to retain (inspection camera, BIM, machine control, mission, CNC) was hard because its build
+changed state, and verify mode found that indirectly. The first answer is not a language feature: ADR 0002 makes the state
+the UI depends on signals and throws at any signal write inside a tracking scope, at the line that writes (decision 9,
+stage 1), as Svelte 5 and Compose do. A compile-time `@:pure` contract ([PURITY.md](PURITY.md)) is deferred until those
+runtime checks show real holes, such as verify failures caused by plain-field writes during builds.
+
+Purity *inference* without annotations is a separate, smaller idea for the optimizer (dead call removal, common
+subexpressions, loop-invariant hoisting); it needs no user-facing contract.
 
 ## General allocation work
 
@@ -118,11 +122,11 @@ taken repeatedly. Bindings and handlers attached at mount make this less pressin
 
 Start with what pays off whatever the experiments decide, then let the ADR's go/no-go results unlock the rest.
 
-1. Purity contracts (5): help the current model and every later stage.
-2. Escape analysis and construct-in-place (6): already planned, and a precondition for structs in hot code.
-3. Structs for small values (4), after `STRUCTS.md` stages 1a and 1b: copies and optionals, then the Wasm GC
+1. Escape analysis and construct-in-place (6): already planned, and a precondition for structs in hot code.
+2. Structs for small values (4), after `STRUCTS.md` stages 1a and 1b: copies and optionals, then the Wasm GC
    representation. `Rect` and `Insets` can be measured on HashLink before 1b lands, but not merged as a default for Wasm.
-4. `STRUCTS.md` stages 2, 3 and 5 (3): shared with Beartooth, and needed by the stage 2 store prototype.
-5. Change-channel setters (2): only if the store prototype passes.
-6. Reactive component bodies (1): only if the stage 3 experiment chooses run-once.
-7. The `@:structural` extensions (8–10) and closures (7): when a need appears.
+3. `STRUCTS.md` stages 2, 3 and 5 (3): shared with Beartooth, and needed by the stage 2 store prototype.
+4. Change-channel setters (2): only if the store prototype passes.
+5. Reactive component bodies (1): only if the stage 3 experiment chooses run-once.
+6. The `@:structural` extensions (8–10) and closures (7): when a need appears.
+7. Purity contracts (5): only if the runtime read-only checks of ADR 0002 stage 1 leave real holes.

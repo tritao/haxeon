@@ -93,6 +93,12 @@ values changes, and updates the existing nodes. This record makes that idea the 
 9. **Verification stays, and gets stronger.** Debug mode mounts the application fresh into a second store, runs full layout
    and paint, and compares records, geometry and display lists byte for byte. The reactive core rejects untracked reads in
    bindings and store writes that do not come from a binding.
+   **Read-only phases are enforced at runtime.** While a tracking scope runs (a build or component setup, a derived value,
+   a binding, an observed getter), writing a signal or `State` throws at the write, with its stack trace, as Svelte 5
+   (`state_unsafe_mutation`) and Compose do. It costs one flag check per signal write and is on in debug builds and every
+   gate, not only verify runs. State the UI depends on lives in signals (decision 1), so this covers the writes that made
+   panels hard to retain; plain internal fields stay plain and verify mode covers their effect on output. A compile-time
+   purity contract (`docs/PURITY.md`) is deferred until these checks show real holes.
 
 ## Mapping from today
 
@@ -123,7 +129,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    does not rise, and nothing gets slower. Details in `docs/UI_LANGUAGE_FEATURES.md`.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
-   exists. Go: gates pass and no action allocates more.
+   exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates
+   pass and no action allocates more.
 2. **Shared node store prototype.** Move one channel (paint) into flat records shared with native, keeping `RenderNode`
    as a handle-based view so callers are unchanged. Compare code size, the side tables needed, debuggability and frame cost
    against the incremental bridge. Go (migrate the remaining channels and delete the transaction code): a net
