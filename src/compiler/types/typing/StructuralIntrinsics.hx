@@ -155,6 +155,9 @@ class StructuralIntrinsics {
 			case TInstance(NominalKind.Enum, _, _):
 				// Constructors only: consistent with equality, which also compares the arguments.
 				Call("Type.enumIndex", [value], span);
+			case TInstance(NominalKind.Class, _, _) if (session.relations.isValueClass(type)):
+				// A non-nullable value has no null case; checking it would box an otherwise inline field.
+				Call("haxeon.Structural.hash", [value], span);
 			case TInstance(NominalKind.Class, name, _) if (isStructural(session, type)):
 				var held = hold("nested", span);
 				BlockExpression([VarDeclaration(held, null, value, span)],

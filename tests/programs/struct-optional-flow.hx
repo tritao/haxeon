@@ -22,6 +22,35 @@ class OtherProcessor extends Processor {
   public function new() super();
   override public function apply(v:Null<Value>):Int return number(v) + 1;
 }
+struct NativeShape {
+  public var narrow:Int16;
+  public var unsigned:UInt8;
+  public var fraction:Float32;
+  public function new(narrow:Int, fraction:Float) { this.narrow = cast narrow; this.unsigned = 0; this.fraction = cast fraction; }
+}
+@:structural
+struct FlatPoint {
+  public final x:Float;
+  public final y:Float;
+  public function new(x:Float, y:Float) { this.x = x; this.y = y; }
+}
+@:structural
+class PointHolder {
+  public final point:FlatPoint;
+  public function new(point:FlatPoint) this.point = point;
+}
+class NativeHolder {
+  public var value:Null<NativeShape>;
+  public function new() {}
+}
+function changeNative(value:Null<NativeShape>, number:Int, fraction:Float):Null<NativeShape> {
+  if (value != null) { value.narrow = cast number; value.unsigned = cast number; value.fraction = cast fraction; }
+  return value;
+}
+function changeNativeAround(value:Null<NativeShape>, callback:Void->Void):Null<NativeShape> {
+  try { if (value != null) value.narrow = cast 65535; callback(); } catch (_:Dynamic) {}
+  return value;
+}
 function processor(other:Bool):Processor return other ? new OtherProcessor() : new Processor();
 function identity(v:Null<Value>):Null<Value> return v;
 function number(v:Null<Value>):Int return v == null ? 0 : v.n;
@@ -56,6 +85,24 @@ function methodAfterWrite(v:Null<Value>, callback:Void->Void):Null<Value> {
   return v;
 }
 function main():Int {
+  var pointHolder = new PointHolder(new FlatPoint(1, 2));
+  var expectedHash = haxeon.Structural.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
+  var pointHash = haxeon.Structural.mix(haxeon.Structural.mix(17, haxeon.Structural.hashFloat(1)), haxeon.Structural.hashFloat(2));
+  if (expectedHash != haxeon.Structural.mix(17, pointHash)) return 32;
+  for (i in 0...10000) if (haxeon.Structural.hash(pointHolder) == expectedHash) hashTotal++;
+  if (hashTotal != 10000 || hl.Gc.totalAllocated() - hashBefore > 4096) return 31;
+  var nativeHolder = new NativeHolder();
+  nativeHolder.value = new NativeShape(1, 0);
+  var nativeBefore = hl.Gc.totalAllocated(), nativeTotal = 0;
+  for (i in 0...10000) {
+    var updated = changeNative(nativeHolder.value, 65535, 1.00000003);
+    if (updated != null && (cast updated.narrow:Int) == -1 && (cast updated.unsigned:Int) == 255 && updated.fraction == 1.0) nativeTotal++;
+  }
+  if (nativeTotal != 10000 || hl.Gc.totalAllocated() - nativeBefore > 4096) return 27;
+  if (nativeHolder.value == null || (cast nativeHolder.value.narrow:Int) != 1) return 28;
+  var nativeSnapshot = changeNativeAround(nativeHolder.value, function() { nativeHolder.value = null; hl.Gc.major(); throw "expected"; });
+  if (nativeSnapshot == null || (cast nativeSnapshot.narrow:Int) != -1 || nativeHolder.value != null) return 29;
+  if (changeNative(null, 1, 0) != null) return 30;
   var a = new Holder(), b = new Holder();
   a.value = new Value(42, "managed");
   var equal:Null<Value> = new Value(42, "managed");

@@ -46,7 +46,7 @@ class IrOptionalScalarFlow {
 	}
 
 	function optional(type:IrType):Null<String> return switch type {
-		case Nullable(Obj(name)) if (objects.exists(name) && objects.get(name).isValue && objects.get(name).nativeLayout == null): name;
+		case Nullable(Obj(name)) if (objects.exists(name) && objects.get(name).isValue): name;
 		default: null;
 	};
 	function hasOptional(fn:IrFunction):Bool {
@@ -301,6 +301,23 @@ class IrOptionalScalarFlow {
 			for (i in 0...shape.length) if (shape[i].isPresence == presence && IrOptionalValueFlow.samePath(shape[i].path, path)) return i;
 			throw 'Missing optional scalar slot ${path.join(".")}';
 		}
+		function storeSlot(block:IrBlock, holder:IrValue, name:String, index:Int, value:IrValue, from:Located<IrInstruction>):Void {
+			var slot = slots(name)[index], native = slot.nativeLayout, bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
+			if (native != null && bits > 0 && native.size > 0 && native.size * 8 < bits) {
+				var shift = new IrValue(next++, "$optional-shift", I32), shifted = new IrValue(next++, "$optional-truncate", value.type),
+					result = new IrValue(next++, "$optional-extend", value.type);
+				add(block, ConstInt(shift, bits - native.size * 8), from);
+				add(block, ShiftLeft(shifted, value, shift), from);
+				add(block, native.signed ? ShiftRight(result, shifted, shift) : UnsignedShiftRight(result, shifted, shift), from);
+				value = result;
+			} else if (value.type == F32) {
+				var wide = new IrValue(next++, "$optional-f64", F64), rounded = new IrValue(next++, "$optional-f32", F32);
+				add(block, FloatToFloat(wide, value), from);
+				add(block, FloatToFloat(rounded, wide), from);
+				value = rounded;
+			}
+			add(block, FieldSet(holder, "$slot" + index, value), from);
+		}
 		function field(type:IrType, name:String):IrObjectField {
 			var owner = switch type { case Obj(value): value; default: throw "Invalid value field owner"; };
 			while (owner != null) {
@@ -404,9 +421,9 @@ class IrOptionalScalarFlow {
 						if (components.exists(value.id)) {
 							var shape = slots(types.get(value.id)), parts = partsAt(target, value.id, located);
 							for (i in 0...parts.length)
-								add(target, FieldSet(holder, "$slot" + slotIndex(a.typeName, path.concat(shape[i].path), shape[i].isPresence), parts[i]), located);
-						} else if (physical != null) add(target, FieldSet(holder, "$slot" + slotIndex(a.typeName, a.path.concat(physical.path), physical.presence), value), located);
-						else add(target, FieldSet(holder, "$slot" + slotIndex(a.typeName, path, false), value), located);
+								storeSlot(target, holder, a.typeName, slotIndex(a.typeName, path.concat(shape[i].path), shape[i].isPresence), parts[i], located);
+						} else if (physical != null) storeSlot(target, holder, a.typeName, slotIndex(a.typeName, a.path.concat(physical.path), physical.presence), value, located);
+						else storeSlot(target, holder, a.typeName, slotIndex(a.typeName, path, false), value, located);
 					case FieldSet(owner, name, value) if (components.exists(value.id) && inlineOptionalField(owner, name, value.type)):
 						var shape = slots(types.get(value.id)), parts = partsAt(target, value.id, located);
 						for (i in 0...parts.length) add(target, FieldSet(owner, IrInlineValueLayout.slotName(name, shape[i]), parts[i]), located);

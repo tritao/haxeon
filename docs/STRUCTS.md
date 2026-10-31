@@ -412,8 +412,17 @@ boundaries materialize the logical value. Mutated local places keep their curren
 callbacks and exception handlers. Value-method specializations preserve receiver writes on both normal and exceptional
 returns. HashLink keeps eligible flat value places in frame registers, including across handlers, and extends its existing
 scalar call convention to the component carriers. Straight-line value constructors and isolated value phis can also be
-scalar-replaced without ordinary inlining. Native-layout optionals and unsupported receiver aliases retain their boxed
-representation; packed arrays remain a separate design.
+scalar-replaced without ordinary inlining. Native-layout optional values also use scalar flow, preserving narrow integer
+and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
+
+Native-layout optional values now use the same flow as other structs. Scalar stores retain native-width truncation and
+Float32 rounding. Generated structural hashes omit the null check on a non-nullable nested struct, which otherwise
+boxed the inline value. On the Rect/Insets prototype, the 30-cycle interaction census fell from 5,932 to 316 Rect boxes
+and from 759 to 146 Insets boxes; 120-frame Wasm GC Showcase counts fell from 6,976 to 6,496 in full mode and from
+13,802 to 13,322 in editing mode. These remaining boxes include actual dynamic and array escapes. HashLink per-action
+medians in KiB were 112.7, 162.1, 126.9 and 129.6 for the four tab-matrix transitions; interaction hover away, enter, field,
+inside and other were 25.0, 2.6, 22.2, 0.6 and 13.2; idle and idle focused were 0.2 each, inspector scroll was 21.4,
+and backspace and character input were 17.9 each. They remain intermediate results against the class baseline above.
 
 The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
 recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and
