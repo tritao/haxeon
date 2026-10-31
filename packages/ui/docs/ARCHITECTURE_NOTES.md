@@ -80,7 +80,8 @@ and updates the existing nodes. That idea is what the ADR adopts.
 The ADR's target: tracked values (signals) as the only dependency mechanism; components that run once and bind signals to
 node properties, with keyed `Show`/`For`/`Switch` for structure; compiler support to infer bindings and reject untracked
 reads; a flat node store shared with native code, so there is no layout encode or decode; interaction state as signals and
-style rules as derived values; incremental native layout with the scrollbar as a layout constraint; retained per-node
+style rules as derived values; feedback edits to independent nodes (the scrollbar) placed by the layout backend without
+a second solve, with incremental native layout only if layout becomes the main cost; retained per-node
 display lists with scroll, transform and opacity as layer properties; and the same verification against a fresh store.
 
 ## Run-once components versus React/GPUI rebuilding

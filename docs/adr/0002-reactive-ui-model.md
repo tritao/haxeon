@@ -14,7 +14,9 @@ The decisions do not carry the same confidence, and the migration treats them di
 - **Pending an experiment:** run-once components (2) and their compiler support (3). Stage 3 decides.
 - **Options that must prove themselves:** the shared native store (4) and an incremental layout engine (6). After the
   incremental bridge, the interaction bridge costs 0.036 ms and Clay's full solve about 0.14 ms, so neither is justified by
-  speed alone. Each gets a prototype and a measured go/no-go before any migration.
+  speed alone. Each gets a prototype and a measured go/no-go before any migration. Local placement of independent
+  feedback edits (also decision 6) is committed: it is small, lives in our backend and removes the selection frame's
+  second solve.
 
 The rationale for this record is mostly simplicity, and making near-zero allocation a property of the design rather than
 an optimization target: the current model is already fast (hover and typing about 0.4 ms). The expensive parts have to
@@ -78,10 +80,18 @@ values changes, and updates the existing nodes. This record makes that idea the 
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
    rules read hover, on the two nodes involved. This replaces `InteractionStateSnapshot` and `hoverRebuilds`.
-6. **Layout-dependent geometry is solved in one pass; incremental layout is an option.** Scrollbar track and thumb are
-   solved from content and viewport size inside layout, not by feedback, so the selection frame's second pass disappears.
-   Use the cheapest clean way: a scrollbar constraint in the Clay backend, or native scrollbar geometry after the solve.
-   Solved geometry is readable as signals. A layout engine of our own that caches each node's solution, invalidating a
+6. **Feedback edits to independent nodes are placed locally, without another solve; incremental layout is an option.**
+   A geometry callback may still edit layout inputs after the solve. When every edited node is *independent* (absolutely
+   positioned or floating, fixed size, and its parent's size does not depend on it), the layout backend places those nodes
+   and their independent descendants directly: parent origin plus position, fixed size, inherited clip. Otherwise it falls
+   back to a full solve. The scrollbar's track and thumb are such nodes, so the selection frame's second solve disappears
+   while the scrollbar logic stays in Haxe and virtualized lists keep supplying their content extent from Haxe. The same
+   step covers other feedback of this kind, such as scroll-offset clamping (a pure translation) and overlay placement.
+   It lives in our backend, not in Clay, which stays an immediate full solver. Absolute overlays are excluded from their
+   parent's content bounds, so a scrollbar never reads as content overflow. Verify mode compares every local placement
+   with a full solve. Rejected: native scrollbar geometry (moves the formula to C++, cannot see Haxe-provided content
+   extents, serves only scrollbars) and a scrollbar constraint inside Clay (deeper changes to a vendored fork for what the
+   backend can do on top). Solved geometry is readable as signals. A layout engine of our own that caches each node's solution, invalidating a
    dirty node and its ancestors up to a fixed-size boundary, is considered only if measurements later show layout as the
    main remaining cost; Clay's full solve is about 0.14 ms today.
 7. **Rendering is retained per node, with layers.** Each node keeps its recorded display-list segment; only paint-dirty nodes
@@ -114,7 +124,7 @@ values changes, and updates the existing nodes. This record makes that idea the 
 | `InteractionStateSnapshot`, `hoverRebuilds` | per-node interaction signals and derived style |
 | `willEditRetained`, `RetainedAnimation` | layer properties and animation signals |
 | `LayoutTransaction` encode / native parse / decode | shared store if its prototype passes; otherwise the incremental bridge stays |
-| second layout pass for scrollbars | scrollbar layout constraint |
+| second layout pass for scrollbars | local placement of independent feedback edits |
 | `UiContext.verifyRetention`, fingerprints | fresh-store comparison; untracked-read checks |
 
 ## Migration
@@ -143,9 +153,11 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 4. **Compiler support.** Binding inference in component bodies, untracked-read diagnostics.
 5. **Widgets, then panels.** Convert leaf widgets to bindings and delete `selfUpdating`/`reconcile`; convert panels and
    delete retained caches, patch frames and binding revisions. Interaction signals and derived style replace hover handling.
-6. **One layout pass for scrollbars.** Solve scrollbar geometry inside layout by the cheapest clean route and remove its
-   feedback. Go: selection runs one layout pass with identical geometry. A layout engine of our own needs its own record,
-   and only when measurements show layout as the main remaining cost.
+6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
+   backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
+   solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback
+   where it did not need a second solve before. A layout engine of our own needs its own record, and only when
+   measurements show layout as the main remaining cost.
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
@@ -154,7 +166,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 - Authors learn four things: signal, binding, `Show`/`For`, effect. Most of the mechanisms listed under Context are
   deleted.
 - Steady-state updates write fields; allocation happens on mount and unmount, not per interaction.
-- Layout-dependent geometry costs one pass. The layout bridge disappears only if the shared store passes its prototype.
+- Layout-dependent geometry of independent nodes costs one solve plus a local placement. The layout bridge disappears only if the shared store passes its prototype.
 - Code in a component body runs once: a plain `if` over a signal does not update, and must be `Show`. Compiler checks
   limit this; it remains the main learning cost.
 - Debugging moves from "why did this rebuild" to "why did this binding not run". Signal dependency inspection becomes a
