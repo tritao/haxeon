@@ -84,7 +84,9 @@ class NativeCMakeProvider {
 			// launchers, and other targets built there are not measured.
 			ccache = Sys.systemName() != "Windows" || windowsNinja ? NativeCompilerCache.executable(home) : null,
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
-		discardCacheOfOtherSource(buildDirectory, source);
+		// A shared tree is checked under its lock, in the configure step (haxeon-locked.cmake).
+		if (!cached)
+			discardCacheOfOtherSource(buildDirectory, source);
 		// MSVC, as the Visual Studio generator would use, even when CC or CXX names another compiler.
 		if (windowsNinja)
 			for (argument in ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"])
@@ -118,20 +120,21 @@ class NativeCMakeProvider {
 		// Builds in other worktrees and editors use the same shared trees. Each step holds the tree's lock only while it
 		// runs (an OS file lock, released when the process ends), so the Haxe compiles of different builds still overlap.
 		var lockFile = cached ? cacheTree + ".lock" : null,
-			locked = (command:String, arguments:Array<String>) -> {
+			locked = (command:String, arguments:Array<String>, ?extra:Array<String>) -> {
 			if (!cached)
 				return Process(command, arguments, runDirectory, compilerCache);
 			return Process("cmake", [
 				"-DLOCK=" + lockFile,
 				"-DHOLDER=haxeon build " + context.environment.projectRoot,
+			].concat(extra == null ? [] : extra).concat([
 				"-P",
 				Path.join([home, "cmake", "haxeon-locked.cmake"]),
 				command
-			].concat(arguments), runDirectory, compilerCache);
+			]).concat(arguments), runDirectory, compilerCache);
 		};
 		var actions:Array<ExecutionAction> = [
 			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])], 'Configure CMake package $identity',
-				locked("cmake", configureArguments)),
+				locked("cmake", configureArguments, ["-DCACHE_FILE=" + Path.join([buildDirectory, "CMakeCache.txt"]), "-DSOURCE=" + source])),
 			new ExecutionAction(buildId, [configureId], [source], outputs, 'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
 				locked("cmake", [
 					"--build",
