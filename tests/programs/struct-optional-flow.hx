@@ -84,6 +84,24 @@ function methodAfterWrite(v:Null<Value>, callback:Void->Void):Null<Value> {
   try { if (v != null) v.incrementAndCall(callback); } catch (_:Dynamic) {}
   return v;
 }
+function plainValue(v:Value):Int return v.n;
+function relayValue(v:Null<Value>):Int return v == null ? 0 : plainValue(v);
+function relayTypedValue(v:Null<Value>):Int {
+  var callback:Value->Int = plainValue;
+  return v == null ? 0 : callback(v);
+}
+function mutateValue(v:Value, callback:Void->Void):Int { callback(); v.n++; return v.n; }
+function relaySnapshot(v:Null<Value>, callback:Void->Void):Int {
+  if (v == null) return 0;
+  return mutateValue(v, callback) * 100 + v.n;
+}
+function sameValue(v:Null<Value>, expected:Value):Bool return v == expected;
+function plainWithIgnored(v:Value, ignored:Int):Int return v.n;
+function invokeSideEffect(callback:Void->Void):Int { callback(); return 0; }
+function snapshotBeforeLaterArgument(v:Null<Value>):Int {
+  if (v == null) return 0;
+  return plainWithIgnored(v, invokeSideEffect(function() { v.n = 9; }));
+}
 function main():Int {
   var pointHolder = new PointHolder(new FlatPoint(1, 2));
   var expectedHash = haxeon.Structural.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
@@ -109,6 +127,18 @@ function main():Int {
   if (a.value != equal) return 24;
   var firstValue:Value = cast a.value, secondValue:Value = cast equal;
   if (haxeon.Structural.hash(firstValue) != haxeon.Structural.hash(secondValue)) return 25;
+  var expectedValue:Value = cast a.value;
+  var equalityBefore = hl.Gc.totalAllocated(), equalityTotal = 0;
+  for (i in 0...10000) {
+    if (sameValue(a.value, expectedValue)) equalityTotal++;
+    equalityTotal += relayValue(a.value) + relayTypedValue(a.value);
+  }
+  if (equalityTotal != 850000 || hl.Gc.totalAllocated() - equalityBefore > 4096) return 33;
+  if (sameValue(null, expectedValue) || relayValue(null) != 0 || relayTypedValue(null) != 0) return 34;
+  var valueSnapshot = relaySnapshot(a.value, function() { a.value = null; hl.Gc.major(); });
+  if (valueSnapshot != 4342 || a.value != null) return 35;
+  if (snapshotBeforeLaterArgument(new Value(42, "managed")) != 42) return 36;
+  a.value = new Value(42, "managed");
   var before = hl.Gc.totalAllocated(), total = 0;
   for (i in 0...10000) {
     var local = a.value;

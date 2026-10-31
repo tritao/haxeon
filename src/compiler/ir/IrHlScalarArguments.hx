@@ -14,7 +14,7 @@ class IrHlScalarArguments {
 		var candidates:Map<String, IrFunction> = [];
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
-				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
+				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, argumentCount = 0;
 			if (hasValue) {

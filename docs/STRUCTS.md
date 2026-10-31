@@ -418,6 +418,12 @@ scalar call convention to the component carriers. Straight-line value constructo
 scalar-replaced without ordinary inlining. Native-layout optional values also use scalar flow, preserving narrow integer
 and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
 
+Unwrapped optional aliases passed by value to eligible direct calls and known typed closures snapshot their flattened
+leaves before the call. Generated value-equality helpers use the same scalar calling convention, avoiding a box when a
+nullable value is compared with a non-nullable value. A known static closure that no remaining operation observes can be
+removed after its call is made direct; its debug binding is then omitted. Mutating receiver aliases remain
+ineligible for this transformation so their writeback semantics are preserved.
+
 Native-layout optional values now use the same flow as other structs. Scalar stores retain native-width truncation and
 Float32 rounding. Generated structural hashes omit the null check on a non-nullable nested struct, which otherwise
 boxed the inline value. On the Rect/Insets prototype, the 30-cycle interaction census fell from 5,932 to 316 Rect boxes

@@ -15,6 +15,7 @@ class IrOptionalScalarFlow {
 	final layouts:IrInlineValueLayout;
 	final wrappers:Map<String, IrObject> = [];
 	var candidates:Map<String, IrFunction> = [];
+	final functions:Map<String, IrFunction> = [];
 
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
@@ -22,6 +23,7 @@ class IrOptionalScalarFlow {
 	}
 
 	public function rewrite(declarations:Array<IrObject>, originals:Array<IrFunction>):Array<IrFunction> {
+		for (fn in originals) functions.set(fn.name, fn);
 		for (fn in originals) {
 			var signature = optional(fn.result) != null;
 			for (arg in fn.arguments) if (optional(arg.type) != null) signature = true;
@@ -158,6 +160,22 @@ class IrOptionalScalarFlow {
 		return declared != null && optional(declared.type) != null && Type.enumEq(declared.type, type);
 	}
 
+	function hasAlias(arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>):Bool {
+		for (argument in arguments) if (aliases.exists(argument.id)) return true;
+		return false;
+	}
+	function canPassAliases(name:String, arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>):Bool {
+		if (!hasAlias(arguments, aliases)) return true;
+		if (StringTools.startsWith(name, "$") && !StringTools.startsWith(name, "$generic:")
+				&& !StringTools.startsWith(name, "$lambda:") && !StringTools.startsWith(name, "$value$equality:")) return false;
+		var called = functions.get(name);
+		if (called == null || called.arguments.length != arguments.length) return false;
+		for (index in 0...arguments.length) if (aliases.exists(arguments[index].id)) {
+			var formal = called.arguments[index];
+			if (formal.name == "this" || !Type.enumEq(formal.type, arguments[index].type)) return false;
+		}
+		return true;
+	}
 	function eligible(fn:IrFunction):Bool {
 		var nulls:Map<Int, Bool> = [], values:Map<Int, Bool> = [], alias = aliases(fn), bindings = closureBindings(fn), exact = exactTypes(fn);
 		for (arg in fn.arguments) if (optional(arg.type) != null) values.set(arg.id, true);
@@ -202,12 +220,14 @@ class IrOptionalScalarFlow {
 					case SafeCast(out, source) if (alias.exists(out.id) && values.exists(source.id)):
 					case Equal(_, left, right) if ((values.exists(left.id) && nulls.exists(right.id)) || (values.exists(right.id) && nulls.exists(left.id))):
 					case Call(out, name, args) if (IrOptionalValueFlow.isCopyName(name) && values.exists(out.id) && args.length == 1 && values.exists(args[0].id)):
-					case Call(_, name, args) if (candidates.exists(name)):
-						for (arg in args) if (alias.exists(arg.id)) return false;
-					case CallClosure(_, closure, args) if (bindings.exists(closure.id) && candidates.exists(bindings.get(closure.id).name)):
-						for (arg in args) if (alias.exists(arg.id)) return false;
-					case MethodCall(_, receiver, name, args) if (!alias.exists(receiver.id) && hasCandidateMethod(exact, receiver, name)):
-						for (arg in args) if (alias.exists(arg.id)) return false;
+					case Call(_, name, args) if (candidates.exists(name) || hasAlias(args, alias)):
+						if (!canPassAliases(name, args, alias)) return false;
+					case CallClosure(_, closure, args) if (bindings.exists(closure.id) && (candidates.exists(bindings.get(closure.id).name) || hasAlias(args, alias))):
+						var binding:OptionalClosure = cast bindings.get(closure.id), actual = binding.receiver == null ? args : [binding.receiver].concat(args);
+						if (!canPassAliases(binding.name, actual, alias)) return false;
+					case MethodCall(_, receiver, name, args) if (!alias.exists(receiver.id) && (hasCandidateMethod(exact, receiver, name) || hasAlias(args, alias))):
+						var target = method(exact.get(receiver.id), name);
+						if (target == null || !canPassAliases(target, [receiver].concat(args), alias)) return false;
 					default:
 						// Unsupported reference-representation operations remain explicit box/unbox boundaries.
 						for (input in IrOperands.inputs(op)) if (alias.exists(input.id)) return false;
@@ -328,6 +348,30 @@ class IrOptionalScalarFlow {
 			}
 			throw 'Missing value field $name';
 		}
+		function aliasValue(block:IrBlock, source:IrValue, from:Located<IrInstruction>):IrValue {
+			var a:OptionalAlias = cast alias.get(source.id), root = partsAt(block, a.root, from);
+			function build(name:String, path:Array<String>):IrValue {
+				var result = new IrValue(next++, "$optional-alias-copy", Obj(name)), object = objects.get(name);
+				if (object == null) throw 'Missing optional alias value "$name"';
+				add(block, NewObject(result, name), from);
+				for (entry in object.fields) {
+					var pathField = path.concat([entry.name]), child = optional(entry.type);
+					if (child != null) {
+						for (slot in slots(child)) {
+							var index = slotIndex(a.typeName, pathField.concat(slot.path), slot.isPresence);
+							add(block, FieldSet(result, IrInlineValueLayout.slotName(entry.name, slot), root[index]), from);
+						}
+					} else switch entry.type {
+						case Obj(childName) if (objects.exists(childName) && objects.get(childName).isValue):
+							add(block, FieldSet(result, entry.name, build(childName, pathField)), from);
+						default:
+							add(block, FieldSet(result, entry.name, root[slotIndex(a.typeName, pathField, false)]), from);
+					}
+				}
+				return result;
+			}
+			return switch source.type { case Obj(name): build(name, a.path); default: throw "Invalid optional alias value"; };
+		}
 		function readValue(block:IrBlock, source:IrValue, name:String, output:Array<IrValue>, from:Located<IrInstruction>):Void {
 			add(block, ConstBool(output[0], true), from);
 			var shape = slots(name);
@@ -444,12 +488,42 @@ class IrOptionalScalarFlow {
 						var from = partsAt(target, arguments[0].id, located), to = component(out.id);
 						for (i in 0...to.length) substitutions.set(to[i].id, from[i]);
 					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id) && candidates.exists(bindings.get(closure.id).name)):
-						var binding:OptionalClosure = cast bindings.get(closure.id), actual = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
+						var binding:OptionalClosure = cast bindings.get(closure.id), args = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
+						var actual = [for (argument in args) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
 						emitCall(target, out, binding.name, actual, located);
 					case Call(out, name, arguments) if (candidates.exists(name)):
-						emitCall(target, out, name, arguments, located);
+						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
+						emitCall(target, out, name, actual, located);
 					case MethodCall(out, receiver, name, arguments) if (!alias.exists(receiver.id) && hasCandidateMethod(exact, receiver, name)):
-						emitCall(target, out, method(exact.get(receiver.id), name), [receiver].concat(arguments), located);
+						var actual = [for (argument in [receiver].concat(arguments)) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
+						emitCall(target, out, method(exact.get(receiver.id), name), actual, located);
+					case Call(out, name, arguments) if (hasAlias(arguments, alias)):
+						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
+						if (components.exists(out.id)) {
+							var output = new IrValue(next++, "$optional-boundary-result", out.type);
+							add(target, Call(output, name, actual), located); unbox(target, output, out, located);
+						} else add(target, Call(out, name, actual), located);
+					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id) && bindings.get(closure.id).receiver == null
+							&& functions.exists(bindings.get(closure.id).name) && !hasAlias(arguments, alias)):
+						var binding:OptionalClosure = cast bindings.get(closure.id);
+						var boxed = [for (argument in arguments) components.exists(argument.id) ? box(target, argument, located) : argument];
+						if (components.exists(out.id)) {
+							var output = new IrValue(next++, "$optional-boundary-result", out.type);
+							add(target, Call(output, binding.name, boxed), located); unbox(target, output, out, located);
+						} else add(target, Call(out, binding.name, boxed), located);
+					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id) && hasAlias(arguments, alias)):
+						var binding:OptionalClosure = cast bindings.get(closure.id), args = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
+						var actual = [for (argument in args) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
+						if (components.exists(out.id)) {
+							var output = new IrValue(next++, "$optional-boundary-result", out.type);
+							add(target, Call(output, binding.name, actual), located); unbox(target, output, out, located);
+						} else add(target, Call(out, binding.name, actual), located);
+					case MethodCall(out, receiver, name, arguments) if (!alias.exists(receiver.id) && hasAlias(arguments, alias)):
+						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
+						if (components.exists(out.id)) {
+							var output = new IrValue(next++, "$optional-boundary-result", out.type);
+							add(target, MethodCall(output, receiver, name, actual), located); unbox(target, output, out, located);
+						} else add(target, MethodCall(out, receiver, name, actual), located);
 					default:
 						var remapped:Map<Int, IrValue> = [], out = IrOperands.output(op), changed = false;
 						for (input in IrOperands.inputs(op)) if (components.exists(input.id) && !remapped.exists(input.id)) {
@@ -497,6 +571,29 @@ class IrOptionalScalarFlow {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!components.exists(binding.value.id) && !alias.exists(binding.value.id)) binding];
 		debug = IrInliner.substitute(blocks, substitutions, debug);
+		// Remove unobserved static closures after their calls become direct. An
+		// optimized-out debug binding does not keep an allocation alive.
+		var used:Map<Int, Bool> = [], removed:Map<Int, Bool> = [];
+		for (block in blocks) {
+			for (located in block.instructions) {
+				for (input in IrOperands.inputs(located.value)) used.set(input.id, true);
+				switch located.value { case Phi(_, inputs): for (input in inputs) used.set(input.value.id, true); default: }
+			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Return(v), Throw(v), Rethrow(v), Branch(v, _, _): used.set(v.id, true);
+				case Jump(_):
+			}
+		}
+		for (block in blocks) {
+			var keep:Array<Located<IrInstruction>> = [];
+			for (located in block.instructions) switch located.value {
+				case StaticClosure(out, _) if (!used.exists(out.id)): removed.set(out.id, true);
+				default: keep.push(located);
+			}
+			block.instructions.resize(0);
+			for (located in keep) block.instructions.push(located);
+		}
+		debug = [for (binding in debug) if (!removed.exists(binding.value.id)) binding];
 		var result = optional(fn.result) == null ? fn.result : Obj(wrapper(optional(fn.result)).name);
 		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, debug, fn.inlineHint,
 			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention);

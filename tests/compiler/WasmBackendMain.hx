@@ -64,6 +64,25 @@ class WasmBackendMain {
 			}
 		}
 		if (!optionalCloneFound) throw "missing Wasm GC scalar optional call";
+		var equalityProgram = Frontend.compile("@:structural struct V { public var x:Int; public var label:String; "
+			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
+			+ "function same(a:Null<V>, b:V):Bool return a == b; "
+			+ "function main():Int { var a:Null<V> = new V(42, 'managed'); var b = new V(42, 'managed'); return same(a, b) ? 42 : 0; }");
+		var equalityAbi = new compiler.backend.wasm.gc.WasmGcScalarAbi(equalityProgram), equalityRewritten = equalityAbi.rewrite(),
+			equalityLowered = new compiler.backend.wasm.gc.WasmGcFlattenFields(equalityRewritten, equalityAbi.signatures).rewrite(),
+			equalityPlan = new WasmGcTypePlan(equalityLowered, true, equalityAbi.signatures, equalityAbi.scalarClosures, equalityAbi.scalarVirtuals),
+			equalityClone = false;
+		for (fn in equalityLowered.functions) if (fn.name.indexOf('$' + 'wasm-gc:scalar-function:') == 0
+				&& fn.name.indexOf('$' + 'optional-scalar:') >= 0 && fn.name.indexOf('$' + 'value' + '$' + 'equality:') >= 0) {
+			equalityClone = true;
+			var locals = new compiler.backend.wasm.gc.WasmGcScalarLocals(equalityPlan, fn, _ -> 0);
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case NewObject(out, name) if (name == "V" || StringTools.startsWith(name, compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+					if (locals.get(out) == null) throw "nullable value equality still allocates on Wasm GC";
+				default:
+			}
+		}
+		if (!equalityClone) throw "missing scalar nullable value equality";
 		var valueShapeProgram = Frontend.compile("struct Leaf { public var x:Int; public var y:Int; } "
 			+ "struct Nested { public var leaf:Leaf; public var tag:Int; } "
 			+ "struct Standalone { public var value:Int; } "

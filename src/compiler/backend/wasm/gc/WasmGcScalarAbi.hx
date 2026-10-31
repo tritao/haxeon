@@ -62,7 +62,7 @@ class WasmGcScalarAbi {
 				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
 				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
-			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:")
+			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:")
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
