@@ -44,7 +44,7 @@ class DeclaredConformance {
 				ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else switch type {
 				case TInstance(NominalKind.Class, _, _):
-					BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.type(type)}" does not conform to Hashable', span);
+					BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
 				default:
 			}
 		}

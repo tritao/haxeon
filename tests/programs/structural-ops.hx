@@ -1,5 +1,5 @@
 import haxeon.Equality;
-import haxeon.Structural;
+import haxeon.Diff;
 
 class Point implements Hashable {
 	public var x:Float;
@@ -35,7 +35,7 @@ function main():Int {
 	a.width = 3;
 	a.origin.x = 2.5;
 	a.name = "n";
-	var b = Structural.copy(a);
+	var b = Diff.copy(a);
 	if (b != a) return 1;
 	if (!Equality.equals(a, b)) return 2;
 	// Shallow: the nested instance is shared.
@@ -47,7 +47,7 @@ function main():Int {
 	if (mask != (Diff.bit(Style, "width") | Diff.bit(Style, "mode"))) return 5;
 	if (Equality.equals(a, b)) return 6;
 	// A field changed outside the delta is left alone.
-	var target = Structural.copy(a);
+	var target = Diff.copy(a);
 	target.visible = false;
 	var applied = Diff.apply(target, a, b);
 	if (applied != mask || target.width != 4 || target.mode != Bold || target.visible) return 7;
@@ -56,11 +56,11 @@ function main():Int {
 	q.y = 1.0;
 	if (Equality.equals(p, q)) return 9;
 	// Nested structural fields compare and hash by value, not identity.
-	var c = Structural.copy(a);
+	var c = Diff.copy(a);
 	c.origin = new Point();
 	c.origin.x = 2.5;
 	if (!Equality.equals(a, c) || Hashing.hash(a) != Hashing.hash(c)) return 10;
-	var nulled = Structural.copy(a);
+	var nulled = Diff.copy(a);
 	nulled.name = null;
 	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(Style, "name")) return 11;
 	return 42;

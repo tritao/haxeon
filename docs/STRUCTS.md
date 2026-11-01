@@ -23,7 +23,7 @@ Declared `Equatable`, `Hashable` and `Diffable` conformance selects one equality
 diagnostics name unsupported fields. A handwritten `equals(other:T):Bool` supplies equality; a handwritten hash is
 required with it for `Hashable`. Struct comparisons without `Equatable` are rejected, while nonconforming classes keep
 identity comparison. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
-on `Diffable` declarations. `Structural.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
+on `Diffable` declarations. `Diff.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
 it to a value.
 Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
 HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
@@ -273,7 +273,7 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
   rectangles, insets, transforms) should be written this way; the trap above then cannot arise for them, and replacing a
   whole field is what code holding them does anyway. Mutable structs remain for records edited in place, such as world
   components and store records.
-- Struct bindings are ordinary value copies, including final fields. `Structural.copy` is only for `Diffable` classes.
+- Struct bindings are ordinary value copies, including final fields. `Diff.copy` is only for `Diffable` classes.
 - `Diff.apply` writes changed, writable fields of its target. It reports immutable fields by name.
 
 The flow analyzer can infer construction as effect-free when it writes only the fresh receiver, does not let that
@@ -339,7 +339,7 @@ author must choose that contract; adding or reordering private fields must not s
 do not synthesize field-level operations by default.
 
 `Diff.apply` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
-the field. Struct binding already copies values, so `Structural.copy` is unnecessary for structs and remains for
+the field. Struct binding already copies values, so `Diff.copy` is unnecessary for structs and remains for
 `Diffable` classes. All `@:structural` declarations and the old mask and hash APIs have been removed.
 
 Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses

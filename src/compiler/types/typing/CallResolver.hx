@@ -1172,7 +1172,7 @@ class CallResolver {
 				default: false;
 			};
 			if (session.relations.isStruct(structType) && !DeclaredConformance.supportsEquality(session, structType))
-				fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.type(structType)}" does not conform to Equatable', span);
+				fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.display(structType)}" does not conform to Equatable', span);
 			if (DeclaredConformance.usesEquality(session, left.type) && !typeParameter) {
 				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
@@ -1184,7 +1184,7 @@ class CallResolver {
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
 			if (!DeclaredConformance.supportsHash(session, value.type))
-				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.type(value.type)}" does not conform to Hashable', span);
+				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(value.type)}" does not conform to Hashable', span);
 			HashGenerator.request(session, value.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(HashGenerator.hashName(value.type), [value]), TInt, span);
 		}

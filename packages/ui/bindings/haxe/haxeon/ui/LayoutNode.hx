@@ -93,10 +93,10 @@ class LayoutNode {
 	/** Copy mutable typography into a comparison prior without allocating default styles for boxes. */
 	public function copyTextStylesTo(target:LayoutNode):Void {
 		if (ownTextStyle == null) target.ownTextStyle = null;
-		else if (target.ownTextStyle == null) target.ownTextStyle = haxeon.Structural.copy(ownTextStyle);
+		else if (target.ownTextStyle == null) target.ownTextStyle = haxeon.Diff.copy(ownTextStyle);
 		else haxeon.Diff.apply(target.ownTextStyle, target.ownTextStyle, ownTextStyle);
 		if (ownParagraphStyle == null) target.ownParagraphStyle = null;
-		else if (target.ownParagraphStyle == null) target.ownParagraphStyle = haxeon.Structural.copy(ownParagraphStyle);
+		else if (target.ownParagraphStyle == null) target.ownParagraphStyle = haxeon.Diff.copy(ownParagraphStyle);
 		else haxeon.Diff.apply(target.ownParagraphStyle, target.ownParagraphStyle, ownParagraphStyle);
 	}
 

@@ -90,7 +90,7 @@ interface View {
 |---|---|
 | `View.build` and component setup | `@:pure` with `@:effect context` |
 | `observeInt/Bool/String` getters, `Derived<T>` and bindings (ADR 0002) | `@:pure` function types |
-| style resolution, `Structural` operations, text measurement keys | inferred pure; annotated where they are relied on |
+| style resolution, `Diff` operations, text measurement keys | inferred pure; annotated where they are relied on |
 | event handlers, `update()` steps, `Effect`s, commands | impure by design |
 
 Verify mode stays. Purity catches writes; verify still catches reads that were not declared as dependencies and stale cache

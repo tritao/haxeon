@@ -92,7 +92,7 @@ class EnumEqualityGenerator {
 				}
 				statements.push(TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span));
 			default:
-				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.type(type)}"', span);
+			BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
 			name: equalsName(type), origin: req.origin, originKind: Helper, typeArguments: null,

@@ -1131,7 +1131,7 @@ class TestMain {
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
 			'MessagePack.decode requires an expected result type');
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
-			'Struct "class:Thing<>" does not conform to Equatable');
+			'Struct "Thing" does not conform to Equatable');
 		var temporaryStruct = 'interface Diffable {} struct Value : Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
 			+ 'struct Nested { public var value:Value; public function new() value = new Value(1); } '
 			+ 'class Holder { public var value(get, never):Value; public var nested(get, never):Nested; public function new() {} '
@@ -1171,11 +1171,17 @@ class TestMain {
 		expectCompileError(temporaryStruct + 'function main():Int { haxeon.Diff.apply(make(), new Value(1), new Value(2)); return 0; }',
 			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
-			'Type "class:Thing<>" does not conform to Hashable');
+			'Type "Thing" does not conform to Hashable');
 		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(Named, "b");',
 			'Type "Named" has no stored field "b"');
-		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Structural.copy(new Fixed()).a;',
-			'haxeon.Structural.copy cannot copy immutable field "a" of "Fixed"');
+		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Diff.copy(new Fixed()).a;',
+			'haxeon.Diff.copy cannot copy immutable field "a" of "Fixed"');
+		expectCompileError('class Box<T> { public function new() {} } function main():Int return haxeon.Hashing.hash(new Box<Int>());',
+			'Type "Box<Int>" does not conform to Hashable');
+		expectCompileError('class Box<T> { public function new() {} } function main():Int return haxeon.Diff.mask(new Box<Int>(), new Box<Int>());',
+			'haxeon.Diff.mask requires Diffable conformance for "Box<Int>"');
+		expectCompileError('interface Diffable {} class Box<T> implements Diffable { public var value:T; public function new() {} } function main():Int return haxeon.Diff.copy(new Box<Int>()).value;',
+			'haxeon.Diff.copy does not support generic class "Box<Int>"');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Opaque implements Equatable { public function new() {} public function equals(other:Opaque):Bool return true; } class Holder implements Hashable { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Hashing.hash(new Holder());',
 			'Cannot synthesize Hashable for "Holder": field "value" does not conform to Hashable');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { @:isVar public var value(get, never):Int; public function new() {} function get_value():Int return 1; } function main():Int { var a = new Fixed(); var b = new Fixed(); return haxeon.Diff.apply(a, a, b); }',

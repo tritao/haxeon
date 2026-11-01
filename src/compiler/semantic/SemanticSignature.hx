@@ -70,6 +70,37 @@ class SemanticSignature {
 			case TAnonymous(name, _): name;
 		};
 
+	/** A source-level spelling for diagnostics; unlike `type`, this omits compiler-only nominal prefixes. */
+	public static function display(semanticType:CompilerType):String
+		return switch semanticType {
+			case TInt: "Int";
+			case TInt64: "haxe.Int64";
+			case TBool: "Bool";
+			case TFloat: "Float";
+			case TString: "String";
+			case TBytes: "Bytes";
+			case THlBytes: "hl.Bytes";
+			case TDynamic: "Dynamic";
+			case TNativeAbstract(name): 'hl.Abstract<"$name">';
+			case TNativeScalar(name): name;
+			case TNever: "Never";
+			case TRange: "Range";
+			case TVoid: "Void";
+			case TTypeParameter(_, name): name;
+			case TAbstract(name, arguments, _), TInstance(_, name, arguments):
+				displayApplied(name, arguments);
+			case TNull: "null";
+			case TNullable(element): 'Null<${display(element)}>';
+			case TArray(element): 'Array<${display(element)}>';
+			case TIterator(element): 'Iterator<${display(element)}>';
+			case TMap(key, value): 'Map<${display(key)},${display(value)}>';
+			case TFunction(arguments, result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
+			case TAnonymous(name, _): name;
+		};
+
+	static function displayApplied(name:String, arguments:Array<CompilerType>):String
+		return arguments.length == 0 ? name : '$name<${[for (argument in arguments) display(argument)].join(",")}>';
+
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
 			typeParameters = fn.typeParameters;

@@ -272,7 +272,7 @@ class ExpressionTyper {
 	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
 		var name = descriptorRecordName(resolved);
 		if (name == null)
-			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.type(resolved)}"', span);
+			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"', span);
 		var descriptor = buildNativeTypeDescriptor(resolved);
 		if (descriptor == null)
 			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
@@ -2051,7 +2051,7 @@ class ExpressionTyper {
 				default: operand.type;
 				};
 				if (session.relations.isStruct(valueType) && !DeclaredConformance.supportsEquality(session, valueType))
-					fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.type(valueType)}" does not conform to Equatable', span);
+					fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.display(valueType)}" does not conform to Equatable', span);
 			}
 		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
 			// Compare content in source operand order; reversing the numeric result

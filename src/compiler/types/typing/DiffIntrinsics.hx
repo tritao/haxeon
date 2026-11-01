@@ -14,7 +14,7 @@ class DiffIntrinsics {
 
 	public static function handles(name:String):Bool
 		return switch name {
-			case "Structural.copy", "haxeon.Structural.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply", "Diff.bit",
+			case "Diff.copy", "haxeon.Diff.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply", "Diff.bit",
 				"haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all": true;
 			default: false;
 		};
@@ -51,7 +51,7 @@ class DiffIntrinsics {
 				if (session.relations.isStruct(type))
 					fail("E1009", '$name is unnecessary for struct "${declaration.name}"; bind the value to a local to copy it', span);
 				if (declaration.typeParameters.length > 0)
-					fail("E1009", '$name does not support generic class "${declaration.name}"', span);
+					fail("E1009", '$name does not support generic class "${compiler.semantic.SemanticSignature.display(type)}"', span);
 				var source = hold("copy-source", span), result = hold("copy-result", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(source, null, arguments[0], span),
@@ -59,7 +59,7 @@ class DiffIntrinsics {
 					];
 				for (field in storedFields(declaration)) {
 					if (!isWritable(field))
-						fail("E1009", '$name cannot copy immutable field "${field.name}" of "${declaration.name}"', span);
+						fail("E1009", '$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"', span);
 					statements.push(FieldAssignment(Variable(result, span), field.name, Member(Variable(source, span), field.name, span), span));
 				}
 				return BlockExpression(statements, Variable(result, span), span);
@@ -142,7 +142,7 @@ class DiffIntrinsics {
 		var className = switch type {
 			case TInstance(NominalKind.Class, className, _) if (DeclaredConformance.has(session, type, "Diffable")): className;
 			default:
-				fail("E1009", '$name requires Diffable conformance for "${describe(type)}"', span);
+				fail("E1009", '$name requires Diffable conformance for "${compiler.semantic.SemanticSignature.display(type)}"', span);
 				"";
 		};
 		return classNamed(session, className, span);
@@ -175,12 +175,6 @@ class DiffIntrinsics {
 
 	static function differs(left:String, right:String, field:String, span:SourceSpan):AstExpression
 		return NotEqual(Member(Variable(left, span), field, span), Member(Variable(right, span), field, span), span);
-
-	static function describe(type:CompilerType):String
-		return switch type {
-			case TInstance(_, name, _), TAbstract(name, _, _): name;
-			default: compiler.semantic.SemanticSignature.type(type);
-		};
 
 	static function hold(purpose:String, span:SourceSpan):String
 		return '$' + 'diff:$purpose:${span.start}:${serial++}';

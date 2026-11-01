@@ -835,8 +835,8 @@ private class DockTextWidthCache {
 		}
 		var key = new DockTextWidthKey();
 		key.label = label;
-		key.textStyle = haxeon.Structural.copy(textStyle);
-		key.paragraphStyle = haxeon.Structural.copy(paragraphStyle);
+		key.textStyle = haxeon.Diff.copy(textStyle);
+		key.paragraphStyle = haxeon.Diff.copy(paragraphStyle);
 		if (bucket == null) {
 			bucket = [];
 			buckets.set(hash, bucket);

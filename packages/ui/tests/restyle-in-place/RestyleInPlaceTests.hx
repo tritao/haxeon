@@ -1186,14 +1186,14 @@ class RestyleInPlaceTests {
    * the hand-written comparisons and keys that remain must name every field: adding one to a class fails here until they do.
    */
   static function structuralValues():Void {
-    var text = new TextStyle(14.0), changedText = haxeon.Structural.copy(text);
+    var text = new TextStyle(14.0), changedText = haxeon.Diff.copy(text);
     check(haxeon.Equality.equals(text, changedText) && haxeon.Diff.mask(text, changedText) == 0, "TextStyle.copy is not equal");
     changedText.letterSpacing = 0.5;
     check(!haxeon.Equality.equals(text, changedText), "TextStyle equality ignores letter spacing");
-    var paragraph = new ParagraphStyle(), changedParagraph = haxeon.Structural.copy(paragraph);
+    var paragraph = new ParagraphStyle(), changedParagraph = haxeon.Diff.copy(paragraph);
     changedParagraph.tabWidth = 4;
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the tab width");
-    changedParagraph = haxeon.Structural.copy(paragraph);
+    changedParagraph = haxeon.Diff.copy(paragraph);
     changedParagraph.lineHeight = 20.0;
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the line height");
     check(haxeon.Diff.mask(paragraph, changedParagraph) == haxeon.Diff.bit(ParagraphStyle, "lineHeight"),

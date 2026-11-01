@@ -1,8 +1,8 @@
 package haxeon.ui;
 
 /**
- * Haxe-owned layout, paint, visibility, and transform data. Structural: copying, comparing, hashing and diffing go through
- * haxeon.Diff, generated from the fields below, so a field added here is covered by all of them.
+ * Haxe-owned layout, paint, visibility, and transform data. Declared Hashable and Diffable conformance provides copying,
+ * comparing, hashing and diffing, so a field added here is covered by all of them.
  */
 class LayoutStyle implements Hashable, Diffable {
 	public var width:LayoutAxis;
@@ -87,6 +87,6 @@ class LayoutStyle implements Hashable, Diffable {
 
 	/** Returns an independent style value for compositional widget builders: every field, generated from the declaration. */
 	public function copy():LayoutStyle
-		return haxeon.Structural.copy(this);
+		return haxeon.Diff.copy(this);
 
 }
