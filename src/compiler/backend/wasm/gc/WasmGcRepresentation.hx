@@ -577,7 +577,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(destination)
 			];
 		var closureCast = switch output.type {
-			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signature(gc.module, plan, output.type)));
+			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signatureId(plan, output.type)));
 			default: null;
 		};
 		if (closureCast != null)
@@ -4145,7 +4145,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [
 			I32Const(tableSlot * 2 + 1),
 			RefNull(Any),
-			I32Const(WasmGcClosureAdapters.signature(gc.module, plan, type)),
+			I32Const(WasmGcClosureAdapters.signatureId(plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];
@@ -4158,7 +4158,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [
 			I32Const(tableSlot * 2),
 			LocalGet(receiverLocal),
-			I32Const(name == WasmDynamicCalls.VARARGS_TARGET ? -1 : WasmGcClosureAdapters.signature(gc.module, plan, type)),
+			I32Const(name == WasmDynamicCalls.VARARGS_TARGET ? -1 : WasmGcClosureAdapters.signatureId(plan, type)),
 			StructNew(plan.closureTypeIndex),
 			LocalSet(destination)
 		];

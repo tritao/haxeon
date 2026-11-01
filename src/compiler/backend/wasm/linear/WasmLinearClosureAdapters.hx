@@ -209,6 +209,8 @@ class WasmLinearClosureAdapters {
 	static function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		if (Type.enumEq(value.type, type))
 			return value;
+		if (value.type == I32 && type == Bool)
+			return builder.equal(builder.equal(value, builder.constInt(0)), builder.constBool(false));
 		if (type == Dyn)
 			return builder.toDyn(value);
 		return builder.safeCast(value.type == Dyn ? value : builder.toDyn(value), type);

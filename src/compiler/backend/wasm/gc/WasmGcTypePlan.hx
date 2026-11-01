@@ -54,6 +54,18 @@ class WasmGcTypePlan {
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
 
 	final implementorCache:Map<String, Array<Int>> = [];
+	final closureSignatureIds:Map<String, Int> = [];
+	var nextClosureSignatureId:Int = 0;
+
+	/** Closure cast targets distinguish source types even when their Wasm signatures coincide. */
+	public function closureSignatureId(type:IrType):Int {
+		var key = Std.string(type), existing = closureSignatureIds.get(key);
+		if (existing != null)
+			return existing;
+		var result = nextClosureSignatureId++;
+		closureSignatureIds.set(key, result);
+		return result;
+	}
 
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
@@ -80,7 +92,7 @@ class WasmGcTypePlan {
 	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
 
-	/** Closure field holding the Wasm function type index its target is called with (WasmGcClosureAdapters). */
+	/** Closure field holding its source-language signature ID (WasmGcClosureAdapters). */
 	public static inline final CLOSURE_SIGNATURE_FIELD = 2;
 
 	final objectDeclarations:Map<String, IrObject> = [];

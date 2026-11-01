@@ -19,14 +19,16 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
  * A closure calls its target with `call_indirect` at the call site's function type, which traps unless the target
  * was declared with exactly that type. Haxe converts closures between function types whose values are represented
  * differently (an `Int->Int` lambda stored in an `Int->T` field is called as `(i32)->anyref`), so every closure
- * records the Wasm signature it was created with. A cast to a function type with another signature calls that
+ * records the source-language signature it was created with. A cast to a function type with another signature calls that
  * type's cast function, which wraps the closure in an adapter: an instance closure that converts the arguments,
- * calls the original at its own signature and converts the result.
+ * calls the original at its own Wasm signature and converts the result. Two source signatures can share a Wasm
+ * signature while requiring different Dynamic boxes for a varargs call or different closure-cast behavior.
  */
 class WasmGcClosureAdapters {
 	final plan:WasmGcTypePlan;
 	final module:WasmModule;
 	final types:Map<Int, IrType> = [];
+	final targetTypes:Map<Int, IrType> = [];
 	final targets:Array<Int> = [];
 	final sources:Array<Int> = [];
 
@@ -45,6 +47,13 @@ class WasmGcClosureAdapters {
 	public static function signature(module:WasmModule, plan:WasmGcTypePlan, type:IrType):Int
 		return switch type {
 			case Function(_, _): module.typeIndex(plan.closureFunctionType(type));
+			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
+		};
+
+	/** Semantic identity is separate from the Wasm function type: Bool and Int both lower to i32. */
+	public static function signatureId(plan:WasmGcTypePlan, type:IrType):Int
+		return switch type {
+			case Function(_, _): plan.closureSignatureId(type);
 			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
 		};
 
@@ -68,10 +77,15 @@ class WasmGcClosureAdapters {
 			created:Map<Int, Bool> = [],
 			castTo:Map<Int, Bool> = [];
 		function note(type:IrType, into:Map<Int, Bool>):Void {
-			var key = signature(module, plan, type);
+			var key = signatureId(plan, type);
 			if (!adapters.types.exists(key))
 				adapters.types.set(key, type);
 			into.set(key, true);
+		}
+		function noteTarget(type:IrType):Void {
+			var key = signatureId(plan, type);
+			adapters.targetTypes.set(key, type);
+			castTo.set(key, true);
 		}
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -85,14 +99,14 @@ class WasmGcClosureAdapters {
 								note(output.type, created);
 							case SafeCast(output, _):
 								switch output.type {
-									case Function(_, _): note(output.type, castTo);
+									case Function(_, _): noteTarget(output.type);
 									default:
 								}
 							default:
 						}
 		// An adapted closure has its target's signature and may be cast again.
 		for (key in castTo.keys())
-			created.set(key, true);
+			note(adapters.targetTypes.get(key), created);
 		for (key in castTo.keys())
 			adapters.targets.push(key);
 		for (key in created.keys())
@@ -106,8 +120,8 @@ class WasmGcClosureAdapters {
 				var name = adapterName(source, target);
 				functions.set(name,
 					source == -1 ? WasmModuleSupport.requiredFunctionIndex(functions,
-						WasmDynamicCalls.varargsAdapterName(adapters.types.get(target))) : module.addFunction(new WasmFunction(name,
-							module.functionTypeAt(instanceType(module, plan, adapters.types.get(target))))));
+						WasmDynamicCalls.varargsAdapterName(adapters.targetTypes.get(target))) : module.addFunction(new WasmFunction(name,
+							module.functionTypeAt(instanceType(module, plan, adapters.targetTypes.get(target))))));
 			}
 		}
 		return adapters;
@@ -117,8 +131,14 @@ class WasmGcClosureAdapters {
 	function adaptable(target:Int):Array<Int>
 		return [
 			for (source in sources)
-				if (source != target && (source == -1 || arity(source) == arity(target))) source
+				if (source != target && (source == -1 || arity(source) == targetArity(target))) source
 		];
+
+	function targetArity(key:Int):Int
+		return switch targetTypes.get(key) {
+			case Function(arguments, _): arguments.length;
+			default: -1;
+		};
 
 	function arity(key:Int):Int
 		return switch types.get(key) {
@@ -150,7 +170,7 @@ class WasmGcClosureAdapters {
 				End
 			];
 		for (source in adaptable(target)) {
-			var slot = tableSlots.get(source == -1 ? WasmDynamicCalls.varargsAdapterName(types.get(target)) : adapterName(source, target));
+			var slot = tableSlots.get(source == -1 ? WasmDynamicCalls.varargsAdapterName(targetTypes.get(target)) : adapterName(source, target));
 			if (slot == null)
 				throw 'Wasm GC closure adapter ${adapterName(source, target)} has no table slot';
 			body = body.concat([
@@ -182,7 +202,7 @@ class WasmGcClosureAdapters {
 		var name = adapterName(source, target),
 			type:WasmFunctionType = module.functionType(WasmModuleSupport.requiredFunctionIndex(functions, name)),
 			sourceType = types.get(source),
-			targetType = types.get(target);
+			targetType = targetTypes.get(target);
 		var sourceArguments:Array<IrType> = [],
 			sourceResult:IrType = Void,
 			targetArguments:Array<IrType> = [],
@@ -225,7 +245,7 @@ class WasmGcClosureAdapters {
 				convert(lowering, allocateLocal, body, targetArguments[index], sourceArguments[index], index + 1)
 		];
 		var result = sourceResult == Void ? -1 : allocateLocal(plan.valueType(sourceResult));
-		body = body.concat(handled(lowering.callClosure(source, instanceType(module, plan, types.get(source)),
+		body = body.concat(handled(lowering.callClosure(signature(module, plan, types.get(source)), instanceType(module, plan, types.get(source)),
 			[for (argument in sourceArguments) value(argument)], closure, result, converted)));
 		if (targetResult != Void) {
 			if (sourceResult == Void)
@@ -239,6 +259,14 @@ class WasmGcClosureAdapters {
 
 	/** Converts a value between closure parameter or result types, through Dynamic when their Wasm types differ. */
 	function convert(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, body:Array<WasmInstruction>, from:IrType, to:IrType, local:Int):Int {
+		if (from == I32 && to == Bool) {
+			var result = allocateLocal(plan.valueType(Bool));
+			body.push(LocalGet(local));
+			body.push(I32Eqz);
+			body.push(I32Eqz);
+			body.push(LocalSet(result));
+			return result;
+		}
 		if (Type.enumEq(plan.valueType(from), plan.valueType(to)))
 			return local;
 		var boxed = local;
