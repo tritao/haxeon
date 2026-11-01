@@ -8,6 +8,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.Insets;
 import haxeon.ui.Color;
 import haxeon.ui.Transform2D;
+import haxeon.ui.style.StyleResolver.StyleResolverLocalValue;
 
 /** One resolved property value and its optional cascade provenance. */
 class ComputedProperty<T> {
@@ -39,6 +40,7 @@ private class InlineAxes {
 }
 
 /** Authoritative Haxe-side result of style resolution. */
+@:access(haxeon.ui.style.StyleResolver.StyleResolverLocalValue)
 class ComputedStyle {
 	/** Indexed by `StyleProperty.slot`: null is absent, and `NullValue` stands for a stored null. */
 	var values:Array<Dynamic>;
@@ -73,6 +75,18 @@ class ComputedStyle {
 		shared = from != null;
 		rulesShared = from != null;
 		inheritedKeyCache = null;
+	}
+
+	/** Refer to the resolver's already-owned local snapshot without boxing a value. */
+	@:allow(haxeon.ui.style.StyleResolver)
+	function setLocalValue<T>(property:StyleProperty<T>, snapshot:StyleResolverLocalValue, source:Null<StyleSource>):Void {
+		if (snapshot == null || (property != cast StyleProperty.Padding && property != cast StyleProperty.Background &&
+				property != cast StyleProperty.Transform)) throw "A local snapshot requires a supported property";
+		ensureWritable();
+		var slot = property.slot;
+		if (slot >= values.length) { values.resize(slot + 1); sources.resize(slot + 1); }
+		values[slot] = snapshot;
+		sources[slot] = source;
 	}
 
 	public function set<T>(property:StyleProperty<T>, value:T, source:Null<StyleSource>):Void {
@@ -135,11 +149,54 @@ class ComputedStyle {
 		return cast dynamicValue;
 	}
 
+	inline function isLocalValue(slot:Int, value:Dynamic):Bool
+		return (slot == StyleProperty.Padding.slot || slot == StyleProperty.Background.slot ||
+			slot == StyleProperty.Transform.slot) && Std.isOfType(value, StyleResolverLocalValue);
+
+	inline function paddingAt(slot:Int):Insets {
+		if (isLocalValue(slot, values[slot])) {
+			var local:StyleResolverLocalValue = cast values[slot];
+			return local.snapshot.padding;
+		}
+		return cast valueAt(slot);
+	}
+
+	inline function backgroundAt(slot:Int):Color {
+		if (isLocalValue(slot, values[slot])) {
+			var local:StyleResolverLocalValue = cast values[slot];
+			return local.snapshot.background;
+		}
+		return cast valueAt(slot);
+	}
+
+	inline function transformAt(slot:Int):Transform2D {
+		if (isLocalValue(slot, values[slot])) {
+			var local:StyleResolverLocalValue = cast values[slot];
+			return local.snapshot.transform;
+		}
+		return cast valueAt(slot);
+	}
+
+	/** Reads the built-in background without crossing the dynamic inspection boundary. */
+	@:allow(haxeon.ui.style.BackgroundDecoration)
+	function readBackground():Color
+		return isSet(StyleProperty.Background.slot) ? backgroundAt(StyleProperty.Background.slot) : StyleProperty.Background.defaultValue;
+
 	inline function isSet(slot:Int):Bool
 		return slot < values.length && values[slot] != null;
 
 	inline function valueAt(slot:Int):Dynamic {
 		var value = slot < values.length ? values[slot] : null;
+		if (isLocalValue(slot, value)) {
+			var local:StyleResolverLocalValue = cast value;
+			var snapshot = local.snapshot;
+			// Forks already share these slots and previously shared their boxes. Materializing a logical value
+			// is therefore safe without detaching the copy-on-write arrays.
+			var boxed:Dynamic = slot == StyleProperty.Padding.slot ? snapshot.padding :
+				slot == StyleProperty.Background.slot ? snapshot.background : snapshot.transform;
+			values[slot] = boxed;
+			return boxed;
+		}
 		if (value == AxisValue) {
 			var axes:InlineAxes = cast inlineAxes;
 			if (slot == StyleProperty.Width.slot) {
@@ -159,6 +216,14 @@ class ComputedStyle {
 				(values[slot] == AxisValue || other.values[slot] == AxisValue) &&
 				values[slot] != NullValue && other.values[slot] != NullValue)
 			return haxeon.Equality.equals(axisAt(slot), other.axisAt(slot));
+		if (values[slot] != NullValue && other.values[slot] != NullValue) {
+			if (slot == StyleProperty.Padding.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
+				return haxeon.Equality.equals(paddingAt(slot), other.paddingAt(slot));
+			if (slot == StyleProperty.Background.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
+				return haxeon.Equality.equals(backgroundAt(slot), other.backgroundAt(slot));
+			if (slot == StyleProperty.Transform.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
+				return haxeon.Equality.equals(transformAt(slot), other.transformAt(slot));
+		}
 		return property.isEqual(valueAt(slot), other.valueAt(slot));
 	}
 
@@ -257,12 +322,12 @@ class ComputedStyle {
 		if (isSet(StyleProperty.Overlay.slot)) result.overlay = cast valueAt(StyleProperty.Overlay.slot);
 		if (isSet(StyleProperty.ClipToParent.slot)) result.clipToParent = cast valueAt(StyleProperty.ClipToParent.slot);
 		if (isSet(StyleProperty.Padding.slot)) {
-			var padding:Insets = cast valueAt(StyleProperty.Padding.slot);
+			var padding = paddingAt(StyleProperty.Padding.slot);
 			result.padding = padding;
 		}
 		if (isSet(StyleProperty.ChildGap.slot)) result.childGap = cast valueAt(StyleProperty.ChildGap.slot);
 		if (isSet(StyleProperty.Background.slot)) {
-			var background:Color = cast valueAt(StyleProperty.Background.slot);
+			var background = backgroundAt(StyleProperty.Background.slot);
 			result.background = background;
 		}
 		if (isSet(StyleProperty.RadiusTopLeft.slot)) result.radiusTopLeft = cast valueAt(StyleProperty.RadiusTopLeft.slot);
@@ -273,7 +338,7 @@ class ComputedStyle {
 		if (isSet(StyleProperty.ClipVertical.slot)) result.clipVertical = cast valueAt(StyleProperty.ClipVertical.slot);
 		if (isSet(StyleProperty.Visible.slot)) result.visible = cast valueAt(StyleProperty.Visible.slot);
 		if (isSet(StyleProperty.Transform.slot)) {
-			var transform:Transform2D = cast valueAt(StyleProperty.Transform.slot);
+			var transform = transformAt(StyleProperty.Transform.slot);
 			result.transform = transform;
 		}
 		if (isSet(StyleProperty.TransformOriginX.slot))

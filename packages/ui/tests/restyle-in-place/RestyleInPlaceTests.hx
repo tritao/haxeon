@@ -542,6 +542,8 @@ private class UpdatingResources implements View {
 
 @:access(haxeon.ui.core.UiContext)
 @:access(haxeon.ui.style.ComputedStyle)
+@:access(haxeon.ui.style.StyleResolver)
+@:access(haxeon.ui.style.StyleResolver.StyleResolverLocalValue)
 @:access(haxeon.ui.debug.UiInspector)
 class RestyleInPlaceTests {
 	static function retainedVariants(fonts:FontCollection):Void {
@@ -651,6 +653,69 @@ class RestyleInPlaceTests {
 		var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
 		check(detailedAxis.value == 23 && Reflect.field(axisStorage, "widthBox") != null,
 			"Detailed inspection did not materialize its value");
+	}
+	static function inlineLocalSnapshots():Void {
+		var padding = haxeon.ui.style.StyleProperty.Padding, background = haxeon.ui.style.StyleProperty.Background;
+		var transform = haxeon.ui.style.StyleProperty.Transform;
+		var local = new LayoutStyle();
+		local.padding = new haxeon.ui.Insets(1, 2, 3, 4);
+		local.background = Color.rgba(0.1, 0.2, 0.3, 1);
+		local.transform = haxeon.ui.Transform2D.translation(5, 6);
+		var resolver = new haxeon.ui.style.StyleResolver();
+		var target = new haxeon.ui.style.StyleTarget("local-snapshot");
+		var computed = resolver.resolve(target, null, null, null, local), fork = computed.fork();
+		resolver.clearCache();
+		local.padding = new haxeon.ui.Insets(8, 8, 8, 8);
+		local.background = Color.rgba(0.8, 0.8, 0.8, 1);
+		local.transform = haxeon.ui.Transform2D.translation(9, 9);
+		var materialized = computed.toLayoutStyle(), forked = fork.toLayoutStyle();
+		check(materialized.padding.left == 1 && materialized.background.red == 0.1 && materialized.transform.tx == 5 &&
+			forked.padding.left == 1 && forked.background.red == 0.1 && forked.transform.tx == 5,
+			"A local struct snapshot changed when its input style was edited");
+		var clone = computed.copy();
+		check(!haxeon.ui.style.StyleDiff.compare(computed, clone).changed, "Copying lazy local values changed their style");
+		var originalEntries = computed.entries(), copyEntries = clone.entries(), forkEntries = fork.entries();
+		var originalPadding:Dynamic = null, copyPadding:Dynamic = null, forkPadding:Dynamic = null;
+		for (entry in originalEntries) if (entry.name == "padding") originalPadding = entry.value;
+		for (entry in copyEntries) if (entry.name == "padding") copyPadding = entry.value;
+		for (entry in forkEntries) if (entry.name == "padding") forkPadding = entry.value;
+		check(originalPadding != null && originalPadding == copyPadding && originalPadding == forkPadding,
+			"Copy or fork changed an inspected value's box alias");
+		var dynamicStyle = new haxeon.ui.style.ComputedStyle(), lazyStyle = new haxeon.ui.style.ComputedStyle();
+		var snapshot = materialized.copy();
+		var localValue = new haxeon.ui.style.StyleResolver.StyleResolverLocalValue(snapshot, "snapshot");
+		dynamicStyle.set(padding, snapshot.padding, null); dynamicStyle.set(background, snapshot.background, null);
+		dynamicStyle.set(transform, snapshot.transform, null);
+		lazyStyle.setLocalValue(padding, localValue, null); lazyStyle.setLocalValue(background, localValue, null);
+		lazyStyle.setLocalValue(transform, localValue, null);
+		check(!haxeon.ui.style.StyleDiff.compare(dynamicStyle, lazyStyle).changed,
+			"Dynamic and local-snapshot values compared differently");
+		var oldFork = lazyStyle.fork();
+		var next = new LayoutStyle(); next.padding = new haxeon.ui.Insets(11, 12, 13, 14);
+		lazyStyle.setLocalValue(padding, new haxeon.ui.style.StyleResolver.StyleResolverLocalValue(next, "next"), null);
+		var after = lazyStyle.toLayoutStyle();
+		var oldAfter = oldFork.toLayoutStyle();
+		check(after.padding.left == 11 && after.background.red == 0.1 && after.transform.tx == 5 &&
+			oldAfter.padding.left == 1 && oldAfter.background.red == 0.1 && oldAfter.transform.tx == 5,
+			"Replacing a local snapshot lost untouched values");
+		var zero = 0.0, minusZero = zero * -1.0;
+		check(!haxeon.ui.style.StyleResolver.sameFloatBits(0.0, minusZero) &&
+			haxeon.ui.style.StyleResolver.sameFloatBits(minusZero, minusZero) &&
+			!haxeon.ui.style.StyleResolver.sameFloatBits(Math.NaN, Math.NaN),
+			"Snapshot matching lost signed-zero or NaN distinctions");
+		var positive = new LayoutStyle(), negative = new LayoutStyle();
+		positive.padding = new haxeon.ui.Insets(0.0, 1.0, 0.0, 0.0);
+		negative.padding = new haxeon.ui.Insets(minusZero, 1.0, 0.0, 0.0);
+		positive.background = Color.rgba(0.0, 0.2, 0.3, 1.0);
+		negative.background = Color.rgba(minusZero, 0.2, 0.3, 1.0);
+		positive.transform = haxeon.ui.Transform2D.translation(0.0, 5.0);
+		negative.transform = haxeon.ui.Transform2D.translation(minusZero, 5.0);
+		var signs = new haxeon.ui.style.StyleResolver();
+		signs.resolve(new haxeon.ui.style.StyleTarget("sign", "positive"), null, null, null, positive);
+		var signed = signs.resolve(new haxeon.ui.style.StyleTarget("sign", "negative"), null, null, null, negative).toLayoutStyle();
+		check(1.0 / signed.padding.left == Math.NEGATIVE_INFINITY &&
+			1.0 / signed.background.red == Math.NEGATIVE_INFINITY &&
+			1.0 / signed.transform.tx == Math.NEGATIVE_INFINITY, "A cached local snapshot changed a signed zero");
 	}
   static function check(value:Bool, message:String):Void if (!value) throw message;
 
@@ -1434,6 +1499,7 @@ class RestyleInPlaceTests {
 
   public static function main():Int {
     inlineAxisSnapshots();
+    inlineLocalSnapshots();
     var runtime = Runtime.start();
     var fonts = FontCollection.create();
     fonts.addSystemFallbacks();

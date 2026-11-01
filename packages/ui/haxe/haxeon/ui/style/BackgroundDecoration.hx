@@ -16,7 +16,7 @@ class BackgroundDecoration extends Decoration {
 	}
 
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
-		var resolved = color == null ? style.get(StyleProperty.Background) : color;
+		var resolved = color == null ? style.readBackground() : color;
 		canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
 			resolved);
 	}

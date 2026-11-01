@@ -22,6 +22,11 @@ The textual tree dump does not consume inspection entries or rule provenance, so
 still calling the same copy hooks and propagating their failures. Public inspection snapshots still include the entries
 and expose their values to reflection; the dump's rendered output is unchanged. This removed 728 `LayoutAxis` boxes
 from the 30-cycle interaction census (740 to 12).
+For cacheable local styles, the resolver also reuses its existing immutable style snapshot for padding, background and
+transform until a caller asks for their dynamic values. Forks share the materialized box, preserving the existing
+dynamic identity, while each typed read uses the snapshot directly. Signed-zero differences and NaNs use the original
+boxed path when a cached fingerprint cannot preserve the exact local value. A computed style keeps its snapshot alive
+even after resolver cache eviction, so eviction cannot change a resolved value.
 
 Struct boxes can still occur at real dynamic and reflective boundaries. For example, inspecting a dynamic style value
 materializes a box; a type census should distinguish `@`-prefixed struct boxes from the former class allocations. The
@@ -39,6 +44,6 @@ struct boxes (`@haxeon.ui.*`) at dynamic boundaries. The per-action KiB and Wasm
 
 | Scenario | Rect | Insets | Color | LayoutAxis | Transform2D |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Interaction, classes → current | 7,511 → 0 | 70 → 146 | 487 → 549 | 1,007 → 12 | 1,722 → 0 |
+| Interaction, classes → current | 7,511 → 0 | 70 → 44 | 487 → 486 | 1,007 → 12 | 1,722 → 0 |
 | Tab matrix, classes → current | 12,586 → 0 | 8 → 0 | 1,185 → 0 | 4,956 → 0 | 351 → 0 |
-| Selection stress, classes → current | 4,307 → 0 | 512 → 9 | 866 → 3 | 5,364 → 0 | 456 → 0 |
+| Selection stress, classes → current | 4,307 → 0 | 512 → 0 | 866 → 0 | 5,364 → 0 | 456 → 0 |

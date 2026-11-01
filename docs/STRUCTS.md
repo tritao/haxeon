@@ -388,7 +388,9 @@ intermediate measurements: the class baseline and remaining optional flow still 
 The same-machine HashLink medians below are KiB per action. The all-five column is the full-width exploratory
 conversion before removing repeated holder allocations. Selection uses a direct allocation census because the budget
 script does not report that action's bytes. `Gc.totalAllocated` reports reservations in chunks, so tiny differences
-between adjacent actions can move between those actions; a direct per-action census checks the current counts.
+between adjacent actions can move between those actions; a direct per-action census checks the current counts. For
+example, backspace measured 18.1 KiB in the current reservation-based run, but its direct census fell from 18,392 to
+17,056 bytes.
 
 | Action | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
@@ -398,13 +400,13 @@ between adjacent actions can move between those actions; a direct per-action cen
 | telemetry → console | 128.6 | 131.0 | 145.5 | 95.6 |
 | hover away | 24.9 | 25.0 | 26.5 | 14.8 |
 | hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
-| hover field | 22.1 | 22.2 | 25.0 | 13.6 |
+| hover field | 22.1 | 22.2 | 25.0 | 13.9 |
 | hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
 | hover other | 13.1 | 13.2 | 14.3 | 10.0 |
 | idle | 0.2 | 0.2 | 0.2 | 0.2 |
 | idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
 | scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
-| type backspace | 17.8 | 17.9 | 18.7 | 16.4 |
+| type backspace | 17.8 | 17.9 | 18.7 | 18.1 |
 | type character | 17.8 | 17.9 | 18.7 | 16.1 |
 | selection (census) | 927.7 | — | — | 855.9 |
 
@@ -413,13 +415,13 @@ not establish byte sizes or cover separately encoded function bodies.
 
 | Showcase scenario | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
-| Full | 8,654 | 6,496 | 6,138 | 5,898 |
-| Editing | 15,482 | 13,528 | 13,168 | 12,835 |
-| Static | 8,654 | 6,496 | 6,136 | 5,898 |
-| Text-heavy | 8,656 | 6,496 | 6,138 | 5,900 |
+| Full | 8,654 | 6,496 | 6,138 | 5,948 |
+| Editing | 15,482 | 13,528 | 13,168 | 12,847 |
+| Static | 8,654 | 6,496 | 6,136 | 5,906 |
+| Text-heavy | 8,656 | 6,496 | 6,138 | 5,904 |
 
-A separate same-compiler replay compared the allocation count for each measured frame against the class build in each
-scenario. None of the 120 frames in any scenario allocated more objects than its corresponding class frame.
+A separate same-compiler replay uses fixed frame times to compare allocations against the class build in each scenario.
+None of the 120 frames in any scenario allocated more objects than its corresponding class frame.
 
 #### Implemented: optional field-to-field copies
 

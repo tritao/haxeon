@@ -21,7 +21,7 @@ class StyleResolver {
 	final targets:Map<String, Dynamic>;
 	final activeAnimations:Map<String, StyleTransitionAnimation>;
 	final cache:Map<Int, Array<StyleResolverCacheEntry>>;
-	final localFingerprints:Map<Int, StyleResolverLocalFingerprint>;
+	final localFingerprints:Map<Int, StyleResolverLocalValue>;
 	final stringHashes:Map<String, Int>;
 	var cacheEntryCount:Int;
 	var cacheHitCount:Int;
@@ -103,6 +103,7 @@ class StyleResolver {
 		var cacheable = !hasTransitions(theme, application);
 		var parentInheritedKey:Null<String> = null;
 		var localStyleKey:Null<String> = null;
+		var localSnapshot:Null<StyleResolverLocalValue> = null;
 		var themeIdentity = theme == null ? -1 : theme.identity;
 		var themeRevision = theme == null ? -1 : theme.revision;
 		var applicationIdentity = application == null ? -1 : application.identity;
@@ -112,7 +113,12 @@ class StyleResolver {
 		var cacheFingerprint = 0;
 		if (cacheable) {
 			parentInheritedKey = parentKey(parent);
-			localStyleKey = localKey(local);
+			if (local == null) localStyleKey = "none";
+			else {
+				var fingerprint = localEntry(local);
+				localStyleKey = fingerprint.key;
+				localSnapshot = fingerprint;
+			}
 			cacheFingerprint = cacheHash(target.selectorHash, target.states,
 				parentInheritedKey, themeIdentity, themeRevision, applicationIdentity,
 				applicationRevision, localStyleKey, environmentIdentity, environmentRevision);
@@ -148,7 +154,7 @@ class StyleResolver {
 		applySheet(result, target, application, false, "application", environment);
 		applySheet(result, target, theme, true, "theme-state", environment);
 		applySheet(result, target, application, true, "application-state", environment);
-		applyLocal(result, local);
+		applyLocal(result, local, localSnapshot);
 		applyTransitions(result, target, theme, application);
 		if (localTextColor != null) result.set(StyleProperty.TextColor, localTextColor, LocalTextSource);
 		if (cacheable) {
@@ -228,21 +234,20 @@ class StyleResolver {
 		return result;
 	}
 
-	function localKey(local:Null<LayoutStyle>):String {
-		if (local == null)
-			return "none";
+	function localEntry(local:LayoutStyle):StyleResolverLocalValue {
 		var fingerprint = localFingerprint(local);
 		var cached = localFingerprints.get(fingerprint);
 		if (cached != null && sameLayoutStyle(local, cached.snapshot))
-			return cached.key;
+			return cached;
 		var key = "local#" + nextLocalFingerprint++;
 		if (localFingerprintCount >= MaxCacheEntries) {
 			localFingerprints.clear();
 			localFingerprintCount = 0;
 		}
-		localFingerprints.set(fingerprint, new StyleResolverLocalFingerprint(local.copy(), key));
+		var entry = new StyleResolverLocalValue(local.copy(), key);
+		localFingerprints.set(fingerprint, entry);
 		localFingerprintCount++;
-		return key;
+		return entry;
 	}
 
 	/** Every field, generated from LayoutStyle (haxeon.Structural), so a new field cannot be left out of the cache key. */
@@ -350,7 +355,7 @@ class StyleResolver {
 	/** The LayoutStyle fields the last applyLocal checked: every one, unless a new field has no style property yet. */
 	public static var localFieldsHandled(default, null):Int = 0;
 
-	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>):Void {
+	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>, snapshot:Null<StyleResolverLocalValue>):Void {
 		if (local == null)
 			return;
 		var source = new StyleSource("local", "widget", -1, "local");
@@ -428,7 +433,9 @@ class StyleResolver {
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "padding");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Padding, local.padding, source);
+			if (snapshot != null && sameInsetsBits(local.padding, snapshot.snapshot.padding))
+				result.setLocalValue(StyleProperty.Padding, snapshot, source);
+			else result.set(StyleProperty.Padding, local.padding, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "childGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -436,7 +443,9 @@ class StyleResolver {
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "background");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Background, local.background, source);
+			if (snapshot != null && sameColorBits(local.background, snapshot.snapshot.background))
+				result.setLocalValue(StyleProperty.Background, snapshot, source);
+			else result.set(StyleProperty.Background, local.background, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft");
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -468,7 +477,9 @@ class StyleResolver {
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "transform");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Transform, local.transform, source);
+			if (snapshot != null && sameTransformBits(local.transform, snapshot.snapshot.transform))
+				result.setLocalValue(StyleProperty.Transform, snapshot, source);
+			else result.set(StyleProperty.Transform, local.transform, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX");
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -479,6 +490,20 @@ class StyleResolver {
 			result.set(StyleProperty.TransformOriginY, local.transformOriginY, source);
 			localFieldsHandled = handled;
 	}
+
+	// A cached key may compare signed zero as equal; local snapshots must still retain the exact value observed here.
+	// These field lists are the same lists guarded by valueKeysComplete(). NaN falls back to the original boxed path.
+	static inline function sameFloatBits(left:Float, right:Float):Bool
+		return left == right && (left != 0.0 || 1.0 / left == 1.0 / right);
+	static inline function sameInsetsBits(a:Insets, b:Insets):Bool
+		return sameFloatBits(a.left, b.left) && sameFloatBits(a.top, b.top) &&
+			sameFloatBits(a.right, b.right) && sameFloatBits(a.bottom, b.bottom);
+	static inline function sameColorBits(a:Color, b:Color):Bool
+		return sameFloatBits(a.red, b.red) && sameFloatBits(a.green, b.green) &&
+			sameFloatBits(a.blue, b.blue) && sameFloatBits(a.alpha, b.alpha);
+	static inline function sameTransformBits(a:Transform2D, b:Transform2D):Bool
+		return sameFloatBits(a.a, b.a) && sameFloatBits(a.b, b.b) && sameFloatBits(a.c, b.c) &&
+			sameFloatBits(a.d, b.d) && sameFloatBits(a.tx, b.tx) && sameFloatBits(a.ty, b.ty);
 
 	function applyTransitions(result:ComputedStyle, target:StyleTarget,
 			theme:Null<StyleSheet>, application:Null<StyleSheet>):Void {
@@ -544,6 +569,13 @@ class StyleResolverLocalFingerprint {
 		this.snapshot = snapshot;
 		this.key = key;
 	}
+}
+
+/** Internal marker reuses the resolver's existing immutable local-style snapshot. */
+@:allow(haxeon.ui.style.ComputedStyle)
+private class StyleResolverLocalValue extends StyleResolverLocalFingerprint {
+	@:allow(haxeon.ui.style.StyleResolver)
+	function new(snapshot:LayoutStyle, key:String) super(snapshot, key);
 }
 
 /** Collision-checked structural key for a cached computed style. */
