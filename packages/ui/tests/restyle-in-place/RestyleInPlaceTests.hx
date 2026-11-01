@@ -14,6 +14,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
+import haxeon.ui.core.Signal;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.Key;
@@ -173,7 +174,7 @@ private class StrictVariantCounter implements View {
       node.add(label);
       node.on(UiEventKind.PointerDown, function(_) {
         owner.presses++;
-        state.updateQuietly(state.value + 1);
+        state.update(state.value + 1);
         owner.patchAccepted = context.requestPatch(id);
         if (!owner.patchAccepted) state.update(state.value);
       });
@@ -272,7 +273,7 @@ private class Rig {
   public final decorated:Array<DecoratedControl>;
   public var panelBuilds = 0;
   public var clicks = 0;
-  public var checked = false;
+  public final checked:Signal<Bool> = new Signal(false);
   public var toggled = false;
   public var chosen = "";
   final view:View;
@@ -301,7 +302,7 @@ private class Rig {
       rig.panelBuilds++;
       var items:Array<KeyedView> = controls ? [
         new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", function() rig.clicks++)),
-        new KeyedView("check", new Checkbox("check", "Check", rig.checked, function(value) rig.checked = value)),
+        new KeyedView("check", new Checkbox("check", "Check", rig.checked.value, function(value) rig.checked.value = value)),
         new KeyedView("toggle", new Toggle("toggle", "Toggle", rig.toggled, function(value) rig.toggled = value)),
         new KeyedView("radio", new Radio("radio", "Radio", "r", false, function(_) rig.clicks++)),
         new KeyedView("group", new RadioGroup("group", [new RadioOption("alpha", "Alpha", "a"), new RadioOption("beta", "Beta", "b")], "a",
@@ -766,7 +767,7 @@ class RestyleInPlaceTests {
     check(changed >= 6, name + ": pointer changes did not restyle anything (" + changed + ")");
     if (scrolling) check(waitsChanged >= 3, "The scrollbar did not fade frame by frame (" + waitsChanged + ")");
     check(patched.clicks == reference.clicks, "Clicks differ: " + patched.clicks + " vs " + reference.clicks);
-    check(patched.checked == reference.checked && patched.toggled == reference.toggled && patched.chosen == reference.chosen,
+    check(patched.checked.value == reference.checked.value && patched.toggled == reference.toggled && patched.chosen == reference.chosen,
       name + ": activations differ from the full rebuild");
     for (index in 0...patched.decorated.length) {
       var key = patched.decorated[index].key;
@@ -917,7 +918,8 @@ class RestyleInPlaceTests {
     compare();
     check(patched.decorated[0].presses > 0 && patched.decorated[1].presses > 0, "Caller listeners never ran");
     check(animatedSteps >= 10, "Progress paint did not advance through the animation");
-    check(patched.panelBuilds == 1 && reference.panelBuilds > steps, "Motion rebuilt its retained panel");
+    check(patched.panelBuilds == 1 && reference.panelBuilds > patched.panelBuilds,
+      'Motion did not keep the patched panel stable: patched=${patched.panelBuilds} reference=${reference.panelBuilds}');
     patched.ui.dispose(); reference.ui.dispose();
     Sys.println("PASS motion: " + steps + " decorated slider/progress steps keep nodes, caller additions and match rebuilt geometry, semantics and paint");
   }
@@ -1445,7 +1447,7 @@ class RestyleInPlaceTests {
     submit();
     key = "resources-again";
     submit();
-    check(builds == 1 && widget.created == 2 && widget.disposed == 1, "Replaced nested resources did not settle their lifetime");
+        check(builds == 1 && widget.created == 2 && widget.disposed == 1, "Replaced nested resources did not settle their lifetime");
     widget.reading++;
     key = "external-reading";
     var refreshed = submit();
@@ -1454,7 +1456,8 @@ class RestyleInPlaceTests {
     if (value == null) throw "Missing owned state";
     value.update(7);
     refreshed = submit();
-    check(builds == 3 && refreshed.children[0].children[0].layout.text == "1:7:1", "Owned state revisions stopped invalidating retained caches");
+    check(builds == 2 && refreshed.children[0].children[0].layout.text == "1:7:1",
+      "A tracked state update rebuilt its owning updater or failed to refresh its retained node");
     check(widget.value == value, "A live state handle changed across patches and complete builds");
     widget.enabled = false;
     key = "resources-remove";

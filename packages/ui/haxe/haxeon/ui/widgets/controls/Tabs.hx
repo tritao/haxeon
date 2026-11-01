@@ -110,10 +110,10 @@ class Tabs implements View {
 			selectedKey : state.value;
 		if (!isEnabled(active))
 			active = firstEnabled();
-		// Syncing during the build: this build already uses `active`, so bumping the revision would only make every cache
-		// around the tabs rebuild them again on the next frame.
-		if (active != state.value)
-			state.updateQuietly(active);
+		// Uncontrolled selection owns its saved value. A controlled tab strip derives selection from its caller and must
+		// not write its unused state while the build is tracked.
+		if (selectionMode != TabsSelectionMode.Controlled && active != state.value)
+			state.update(active);
 		selectedKey = active;
 		var select = function(next:String) {
 			if (next == selectedKey)
@@ -123,7 +123,7 @@ class Tabs implements View {
 				return;
 			}
 			selectedKey = next;
-			state.updateQuietly(next);
+			state.update(next);
 			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(next);
 			if (hasChangeHandler)
 				onChange(next);
@@ -385,10 +385,10 @@ class Tabs implements View {
 		closeNode.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
 		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
 		// changing a node of the submitted tree behind the frame's back.
-		closeNode.layout.style.visible = context.observeBool(() -> hover.value || focused.value);
+		closeNode.layout.style.visible = hover.value || focused.value;
 		var setFlag = function(state:State<Bool>, value:Bool) {
 			if (state.value == value) return;
-			state.updateQuietly(value);
+			state.update(value);
 			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
 		};
 		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
@@ -443,7 +443,7 @@ class Tabs implements View {
 			drag.tabKey = tabKey;
 			drag.startX = event.x;
 			drag.startY = event.y;
-			dragState.updateQuietly(drag);
+			dragState.update(drag);
 			// Dock targets stay inside the workspace. Logical capture keeps the
 			// drag routed to this tab without grabbing the native window pointer.
 			event.capturePointer(false);
@@ -456,7 +456,7 @@ class Tabs implements View {
 			var dy = event.y - drag.startY;
 			if (!drag.dragging && dx * dx + dy * dy >= 36.0) {
 				drag.dragging = true;
-				dragState.updateQuietly(drag);
+				dragState.update(drag);
 				if (onTabDragStart != null)
 					onTabDragStart(tabKey, event);
 			}
@@ -476,7 +476,7 @@ class Tabs implements View {
 				event.preventDefault();
 			}
 			drag.clear();
-			dragState.updateQuietly(drag);
+			dragState.update(drag);
 			event.releasePointer();
 		});
 		buttonNode.on(UiEventKind.PointerCancel, function(event) {
@@ -486,7 +486,7 @@ class Tabs implements View {
 			if (drag.dragging && onTabDragCancel != null)
 				onTabDragCancel(tabKey, event);
 			drag.clear();
-			dragState.updateQuietly(drag);
+			dragState.update(drag);
 			event.releasePointer();
 		});
 		buttonNode.on(UiEventKind.KeyDown, function(event) {

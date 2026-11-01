@@ -90,7 +90,7 @@ class ScrollView implements View {
 				controller = stored.value;
 			}
 			// The offset is applied to the content in place after layout (see onResolved below), so a scroll needs a new
-			// frame but not a rebuild: bumping the state revision here would invalidate every cached subtree around it.
+			// frame but not a rebuild. It does not write a signal read by the surrounding cached subtree.
 			var binding = context.resourceState(context.id("controller-binding"), function() return new ScrollBinding(),
 				function(value) value.dispose());
 			var visibility = context.resourceState(context.id("scrollbar-visibility"), function() return new ScrollbarVisibilityController(), function(value) value.dispose());

@@ -34,21 +34,30 @@ A frame rebuilds the view by default. Work is skipped in three ways, and one che
 **Retained caches** reuse a built subtree: `RetainedView`, and in `DockWorkspace` the pane and panel caches. A cached subtree
 is reused while all of these hold:
 
-- its optional key matches (a `RetainedView` revision, a panel's `cacheKeyHash`, plus style revision and viewport);
-- the widget states its build read have the same revisions (`stateIdsUsedSince` / `stateRevisions`);
-- every value it read through `BuildContext.observeInt`, `observeBool` or `observeString` reads the same again (`Dependencies`);
+- its declared key matches (a `RetainedView` revision, plus style revision and viewport; dock panels opt into tracked retention);
+- every `Signal` or `State` it read is still current, and every explicit `BuildContext.observeInt`, `observeBool` or
+  `observeString` read returns the same value (`Dependencies`);
+- state-backed resources it used remain mounted (`stateIdsUsedSince` tracks lifetime, not value revisions);
 - the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is
   ignored where no stylesheet rule matches it, and widgets that update themselves are left out).
 
 Prefer observing to keys: `context.observeString(() -> session.label())` returns the value and records the read, so a
-dependency cannot be left out. `CommandButton` observes its command's presence and enabled and checked states. The editor's
-top and status bars have no keys; panel contents still use `cacheKeyHash`.
+dependency cannot be left out. Signal reads track automatically. `CommandButton` observes its command's presence and enabled
+and checked states. The editor's top and status bars have no keys.
+
+`Signal`, `Derived` and `Effect` share push invalidation and pull recomputation. `State` is a signal handle owned by the
+widget store; writing an equal value is skipped, a changed value invalidates only its readers, and writes inside any
+tracking scope throw. Effects are queued and flushed before a UI submit. Sources and readers share reusable intrusive
+dependency edges; per-run stamps deduplicate reads and equal derived outputs stop downstream work. Explicit polling read
+arrays are reused, and records release subscriptions when the owning cache or context is disposed. `observe*` remains the explicit
+polling path for plain fields until those models use `Observable`.
 
 **In place** changes without rebuilding the view. A widget's own rebuild goes through one step, `RenderNode.reconcile`; the other two ways
 are edits that have no build to reconcile.
 
 - `BuildContext.selfUpdating(id, build)`: the widget rebuilds alone, on a pointer change over it or when it asks
-  (`requestPatch`, after `State.updateQuietly`; `TextField` does), and the result is reconciled with the node it built before.
+  (`requestPatch`; `TextField` does), and the result is reconciled with the node it built before. Tracked signal writes
+  invalidate their readers automatically.
   The node stays. A rebuild replaces what the builder made on it and nothing else:
   - style: only the properties that differ between the two builds (`haxeon.Diff.mask`/`apply`), so a
     style change a caller made after build stays;
@@ -91,11 +100,12 @@ of old UI.
 Rules that keep it working:
 
 - Read data a retained build depends on, outside widget state, through `observe*`.
+- Read signals directly; reads are tracked and equal writes do not invalidate their readers.
 - Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build (which `selfUpdating`
   reconciles).
-- Update state quietly (`State.updateQuietly`) only when no build reads it, or the build that changes it already used the value.
-- Panels with a hand-written `cacheKeyHash` should move their reads to `observe*`, one panel at a time, under verify mode.
-  All editor panels now declare their external dependencies; `panel-flows` (check-ui-retention) covers the five panels added here.
+- Do not write a signal or `State` while a tracked build, derived value or effect is running.
+- Dock panels opt into caching with `DockPanelContent.observing`; the cache captures their tracked reads and explicit
+  `observe*` inputs. All editor panels declare their external dependencies; `panel-flows` covers them under verify mode.
 
 ## Inspection camera retention (2026-10-30)
 
@@ -526,7 +536,7 @@ context.retained(id, key:RetainedKey, function() return view)   // returns the c
 ```
 
 - **Key** is a small value object, not a string: `styleRevision`, `viewportWidth`, `viewportHeight`, `width`, and an application `revision:Int`. Comparing it allocates nothing. Callers that only have a string revision hash it once when the source changes, not per frame.
-- **Record** holds: root, the subtree's ID set (an `Array<Int>` built once), the state IDs and revisions it depends on (what `stateUsageMarker` and `stateRevisions` provide today), and its interactive footprint: the IDs of nodes that carried a hover, press or focus bit when it was built.
+- **Record** holds: root, the subtree's ID set (an `Array<Int>` built once), tracked signal dependencies, state IDs used to keep resources alive, and its interactive footprint: the IDs of nodes that carried a hover, press or focus bit when it was built.
 - **Validity in O(interactive), not O(nodes).** `BuildContext` already knows which IDs are currently hovered, pressed or focused (at most a few). A record is stale only if its interactive footprint differs from the current interaction state for IDs inside it: for each current interactive ID, check membership in the record's ID set and compare that node's bits; for each ID in the footprint, check it is still interactive. No tree walk.
 - **Claims without a walk.** Retained IDs live in a persistent set owned by the record, added when it is built and removed when it is dropped. `BuildContext.id` checks a freshly built ID against the per-frame map and the retained sets. Duplicate detection between two retained records is checked once, when the second is built.
 - **Dock chrome.** `DockWorkspace` wraps each pane's tab strip and each split divider in `context.retained`, keyed by what determines them: the pane's tab list, active tab, resolved label widths, and split ratio. A tab switch in one pane rebuilds that pane's strip only. Panel contents keep their existing keys, ported to the same primitive so `DockPanelCache` disappears.
@@ -537,7 +547,7 @@ context.retained(id, key:RetainedKey, function() return view)   // returns the c
 The failure mode is a stale UI: a subtree that should have rebuilt and did not.
 The risk is the key, not the mechanism, so:
 
-- The key is built from the same revisions the current keys use, plus state revisions the record already tracks. No new invalidation source is invented.
+- The key is built from the same inputs the current keys use, plus tracked signal dependencies. No new invalidation source is invented.
 - A debug mode (`MATERIA_RETAINED_VERIFY=1`) rebuilds every retained subtree on a hit and compares the fresh `LayoutNode` tree with the cached one (structure, style fingerprint, text). It runs in the headless scenarios and fails the run on any difference. It is off in release.
 - Behaviour-preserving first: porting `RetainedView` and `DockPanelCache` to the primitive must leave the existing scenarios and `edit-regression` unchanged.
 

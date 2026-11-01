@@ -725,9 +725,15 @@ class RenderNode {
 	@:allow(haxeon.ui.core.UiContext)
 	function setResolved(item:Null<ResolvedLayoutItem>):Void {
 		resolved = item;
+	}
+
+	/** Runs after every node in the submitted tree has received this layout pass's geometry. */
+	@:allow(haxeon.ui.core.UiContext)
+	function didResolve():Void {
+		var item = resolved;
 		if (item != null && resolvedHandlers != null)
 			for (handler in resolvedHandlers)
-				handler(item);
+				ReactiveRuntime.withoutTracking1(handler, item);
 	}
 
 	@:allow(haxeon.ui.core.UiContext)

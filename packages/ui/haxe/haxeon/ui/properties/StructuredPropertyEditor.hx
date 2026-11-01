@@ -68,8 +68,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			function() return new StructuredPropertyDrafts(base));
 		var found = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
 		if (found != null && found.base != base) {
-			found = new StructuredPropertyDrafts(base);
-			draftState.update(found);
+			found.reset(base);
 		}
 		// Revert's closure replaces `local`, so it is declared non-null rather than null-checked.
 		var local:StructuredPropertyDrafts = found != null ? found : new StructuredPropertyDrafts(base);
@@ -303,9 +302,15 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 }
 
 private class StructuredPropertyDrafts {
-	public final base:String;
+	public var base:String;
 	public var current:Dynamic;
 	public var dirty:Bool = false;
 	public final drafts:Map<String, String> = new Map();
 	public function new(base:String) { this.base = base; current = haxe.Json.parse(base); }
+	public function reset(base:String):Void {
+		this.base = base;
+		current = haxe.Json.parse(base);
+		dirty = false;
+		drafts.clear();
+	}
 }

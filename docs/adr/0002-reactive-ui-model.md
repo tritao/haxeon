@@ -4,7 +4,8 @@ Date: 2026-10-30
 
 ## Status
 
-Proposed. Stage 1 starts after the current retention and render work in `packages/ui` lands.
+Proposed. Stage 1 is implemented under the current UI API. Stage 1b adds compiler-generated `Observable` field
+tracking; allocation acceptance is measured after both stages because stage 1 retains polling for plain `observe*` reads.
 
 The decisions do not carry the same confidence, and the migration treats them differently:
 
@@ -33,11 +34,10 @@ rebuilds from scratch and fails on any difference, so stale UI is a gate failure
 `packages/ui/docs/RETAINED_SUBTREES.md` and `LAYOUT_COST.md`.
 
 The way it got there is one mechanism per case. An author or maintainer has to know retained caches and keys, observed
-reads, state revisions, interaction snapshots, `selfUpdating` and `reconcile`, `BuiltNode`, `RenderNode.latest`,
-`requestPatch`, `updateQuietly`, `willEditRetained` and its priors, `RetainedAnimation`, patch frames, and binding
-revisions for widgets that cannot be patched while hidden. Each was a correct fix; the recent work spends more of its time
-on the edges between them (composite updaters, ordering of announced edits and patches, unmounted registrations).
-`updateQuietly` is correct only when the author reasons correctly about who reads the state.
+reads, interaction snapshots, `selfUpdating` and `reconcile`, `BuiltNode`, `RenderNode.latest`, `requestPatch`,
+`willEditRetained` and its priors, `RetainedAnimation`, patch frames, and binding revisions for widgets that cannot be
+patched while hidden. Each was a correct fix; the recent work spends more of its time on the edges between them (composite
+updaters, ordering of announced edits and patches, unmounted registrations).
 
 Two costs remain structural rather than incidental:
 
@@ -61,9 +61,17 @@ values changes, and updates the existing nodes. This record makes that idea the 
    one-field observable. Signal and observable-field writes that do not change the value are skipped, using the type's
    declared `Equatable` conformance or identity for nonconforming classes, as in Compose and Solid.
 
-   Writes batch per frame; invalidation is push (mark dirty) then pull (recompute lazily when read), so there are no
-   glitches or repeated work. `State`, `observe*`, state revisions, interaction snapshots and cache keys become this.
-   All current models are ours and become `Observable`; add an adapter only if a real external model appears.
+   Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
+   versions. A derived node recomputes only when an input version changed and increments its own version only when its
+   declared equality says the result changed. Effects and retained readers therefore stop at equal derived results,
+   including through chains and diamonds, without glitches or repeated computation. Dependency edges are intrusive
+   doubly linked nodes shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
+   stamp deduplicates reads; there is no observer array on every source and no `indexOf` scan in tracking or
+   subscribe/unsubscribe. Frame capture uses two reusable read logs; retained records keep and release only live edges.
+   `State` is a `Signal` handle and signal reads are tracked automatically. `observe*` remains
+   the explicit polling path for plain fields until stage 1b; `DockPanelContent.cacheKey` and `cacheKeyHash` are removed
+   in favor of tracked reads. All current models are ours and become `Observable`; add an adapter only if a real external
+   model appears.
    Per-field signal objects allocate and require `.get()`/`.set()`; revision counters invalidate unrelated readers and a
    missed increment leaves stale UI. Precedents include Swift Observation, MobX observable objects, Vue `reactive()`,
    Svelte 5 class fields and Solid stores.
@@ -197,10 +205,14 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for the alias audit and measurements. The interaction,
    tab-matrix and selection-stress censuses allocate none of the five geometric value types after setup; genuine Dynamic
    and reflection escapes still box.
-1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
-   are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
-   exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates
-   pass and no action allocates more.
+1. **Signals core under the current API — implemented; combined allocation check pending stage 1b.** `Signal<T>`, `Derived<T>` and `Effect` use
+   push maybe-stale propagation, version-checked pull recomputation and per-submit effect batching. Equal derived outputs do not advance
+   their source version, so downstream effects and retained readers do not rerun. Intrusive source-reader edges are
+   reused across runs and removed when a dependency disappears; frame capture and explicit polling storage are reused.
+   `State` is a signal handle. Changed signal writes invalidate readers; equal writes do nothing. Writes to signals or
+   `State` inside any tracking scope throw. `State.updateQuietly` is removed and its
+   callers use tracked reads or local widget state. `observe*` is still the explicit polling adapter for plain model
+   fields until stage 1b. The retention comparison passes when the retained-cache boundary validates those reads.
 1b. **Observable models.** Implement compiler-generated `Observable` field tracking, test it on every target and cover
    it in verify mode. Convert revision-adapter models we own, including hobbing `statusRevision`, BIM and CNC, and delete
    their counters. This does not depend on the stage 3 run-once experiment. Go: gates pass and no action allocates more.
@@ -223,6 +235,32 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    measurements show layout as the main remaining cost.
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
+
+### Stage 1 interim allocation measurement — 2026-11-01
+
+Stage 1 retains explicit polling for plain `observe*` model reads, which stage 1b replaces with compiler-generated
+observable-field tracking. Its measurements are interim; allocation acceptance compares stage 1 + 1b with the item 2
+baseline before publication. The same-machine 30-cycle medians for stage 1 alone, in KiB per action, compared with the
+item 2 result after value-type conversion, are:
+
+| Transition | Item 2 baseline | Signals core | Change |
+| --- | ---: | ---: | ---: |
+| console → telemetry | 75.4 | 80.2 | +4.8 |
+| hierarchy → sensors | 118.2 | 118.2 | 0.0 |
+| sensors → hierarchy | 82.2 | 85.8 | +3.6 |
+| telemetry → console | 95.3 | 98.8 | +3.5 |
+
+The budget and retention checks pass with the validation present. Removing the nested plain-read validation from
+`BuildContext.canRearm` makes the `panel-flows` retention check fail with: `Headless editor profile failed: CNC
+retention cnc-preview/0: UI build feedback did not converge after 8 passes`. The combined table replaces this interim
+measurement after stage 1b.
+
+The selection-stress investigation did not reproduce the reported stall after roughly 40 cycles. The current 60-cycle
+run completed (median selection frame about 3.0 ms, p95 3.2 ms); the item 2 60-action capture also completed, with a
+3.14 ms median and 3.71 ms maximum. Neither showed a stall.
+
+Stage 1b replaces the remaining polled plain fields in the retention flows with `Observable` tracking and removes
+`observe*`, root polling and the plain-read validation APIs. No `observe*` polling remains after stage 1b.
 
 ## Consequences
 

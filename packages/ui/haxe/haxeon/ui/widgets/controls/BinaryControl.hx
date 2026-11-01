@@ -64,12 +64,20 @@ class BinaryControl implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var nodeId = context.id(toggle ? "toggle" : "checkbox");
+			// This read belongs to the enclosing build: activation must invalidate the retained parent even though the
+			// control itself can patch its render node in place.
+			var invalidation:Null<State<Bool>> = null;
+			if (onChange != null) {
+				invalidation = context.state(nodeId, false);
+				invalidation.value;
+			}
 			// Hover and press change only how the control looks, so it updates itself and the panel around it stays cached.
-			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
+			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId, invalidation));
 		});
 	}
 
-	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
+	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId,
+			invalidation:Null<State<Bool>>):RenderNode {
 		var flags = context.interactionStates.get(nodeId);
 		flags = StyleStateUtil.withState(flags, StyleState.Checked, checked);
 		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
@@ -165,7 +173,6 @@ class BinaryControl implements View {
 			labelNode.layout.textStyle = labelNode.layout.textStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
 		node.add(labelNode);
 
-		var invalidation:State<Bool> = context.state(node.id, checked);
 		var activate = function(event:UiEvent) {
 			if (!enabled)
 				return;
@@ -176,10 +183,11 @@ class BinaryControl implements View {
 				semantics.states |= AccessibilityState.Checked;
 			else
 				semantics.states &= ~AccessibilityState.Checked;
-			var previous:Bool = invalidation.value;
-			invalidation.update(!previous);
-			if (onChange != null)
+			if (onChange != null) {
 				onChange(checked);
+				if (invalidation != null) invalidation.update(!invalidation.value);
+			} else if (!context.requestPatch(nodeId))
+				context.commands.refresh();
 		};
 		node.onActivate(activate);
 		return node;

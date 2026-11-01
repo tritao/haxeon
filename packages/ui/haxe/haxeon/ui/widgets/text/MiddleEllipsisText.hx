@@ -35,17 +35,17 @@ class MiddleEllipsisText implements View {
 
   public function build(context:BuildContext):RenderNode {
     return context.withScope(new Key(key), function() {
-      var displayed = context.resourceState(context.id("displayed"), function() return value, function(_) {});
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();
       style.clipHorizontal = true;
       var labelOverride = TextStyleOverride.combine(textStyle, TextStyleOverride.paragraph(TextWrap.None));
-      var text = new Text(displayed.value, style, null, labelOverride);
-      var node = text.build(context);
-      if (node.semantics != null) node.semantics.label = value;
-      var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
       // Shaping a layout to measure is the expensive part, so remember the answer while its inputs stay the same.
       var memo:EllipsisMemo = context.resourceState(context.id("ellipsis-memo"), function() return new EllipsisMemo(), function(_) {}).value;
+		var shown = memo.value == value ? memo.result : value;
+		var text = new Text(shown, style, null, labelOverride);
+		var node = text.build(context);
+		if (node.semantics != null) node.semantics.label = value;
+		var resolved = context.resolveTextRole(TextRole.Body, labelOverride);
       node.onResolved(function(geometry) {
         if (context.fonts == null) return;
         var available = memo.availableWidth(geometry);
@@ -82,7 +82,6 @@ class MiddleEllipsisText implements View {
           memo.store(value, available, resolved.textStyle, resolved.paragraphStyle, next);
         }
         truncated = next != value;
-        if (displayed.value != next) displayed.update(next);
         // Settle the current frame, including a retained label resized in place.
         if (node.layout.text != next) {
           context.willEditRetained(node);

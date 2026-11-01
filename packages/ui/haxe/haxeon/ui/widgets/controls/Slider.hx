@@ -92,7 +92,7 @@ class Slider implements View {
 			if (bounded == value)
 				return false;
 			value = bounded;
-			if (context.requestPatch(nodeId)) invalidation.updateQuietly(value);
+			if (context.requestPatch(nodeId)) invalidation.update(value);
 			else invalidation.update(value);
 			if (onChange != null)
 				onChange(value);
@@ -127,7 +127,7 @@ class Slider implements View {
 		node.on(UiEventKind.PointerDown, function(event) {
 			if (enabled && event.button == 0) {
 				event.capturePointer();
-				dragging.updateQuietly(true);
+				dragging.update(true);
 				valueAtPointer(event);
 				event.preventDefault();
 			}
@@ -137,8 +137,8 @@ class Slider implements View {
 			if (isDragging)
 				valueAtPointer(event);
 		});
-		node.on(UiEventKind.PointerUp, function(_) { dragging.updateQuietly(false); });
-		node.on(UiEventKind.PointerCancel, function(_) { dragging.updateQuietly(false); });
+		node.on(UiEventKind.PointerUp, function(_) { dragging.update(false); });
+		node.on(UiEventKind.PointerCancel, function(_) { dragging.update(false); });
 
 		var handleKey = function(event:UiEvent) {
 			if (!enabled)

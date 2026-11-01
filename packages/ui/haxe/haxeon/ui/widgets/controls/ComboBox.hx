@@ -92,28 +92,30 @@ class ComboBox<T> implements View {
 				}
 			});
 
+			// The selected signal schedules an uncontrolled change; the view value remains the input.
 			var selectedState:State<T> = context.state(context.id("value"), value);
-			var storedValue:T = selectedState.value;
-			if (!sameValue(storedValue, value))
-				selectedState.update(value);
+			selectedState.value;
 			var selectedIndex = enabledValueIndex(value);
 			if (selectedIndex < 0)
 				selectedIndex = firstEnabledIndex();
 			if (selectedIndex >= 0 && !sameValue(value, options[selectedIndex].value)) {
 				value = options[selectedIndex].value;
-				selectedState.update(value);
 			}
 			var selectedLabel = selectedIndex >= 0 ? options[selectedIndex].label : "";
 			var labelState:State<String> = context.state(context.id("value-label"), selectedLabel);
 			var queryState:State<String> = context.state(context.id("query"), selectedLabel);
 			var storedLabel:String = labelState.value;
 			var query:String = queryState.value;
-			if (storedLabel != selectedLabel && query == storedLabel) {
+			var followsSelection = query == storedLabel;
+			if (storedLabel != selectedLabel && followsSelection)
 				query = selectedLabel;
-				queryState.update(query);
+			if (storedLabel != selectedLabel) {
+				var nextLabel = selectedLabel;
+				root.onResolved(function(_) {
+					labelState.update(nextLabel);
+					if (followsSelection) queryState.update(nextLabel);
+				});
 			}
-			if (storedLabel != selectedLabel)
-				labelState.update(selectedLabel);
 
 			var filteredIndices:Array<Int> = [];
 			var loweredQuery = query == selectedLabel ? "" : query.toLowerCase();
@@ -126,8 +128,7 @@ class ComboBox<T> implements View {
 			var openState:State<Bool> = context.state(context.id("open"), false);
 			var isOpen:Bool = openState.value;
 			if (!enabled || filteredIndices.length == 0) {
-				if (isOpen)
-					openState.update(false);
+				if (isOpen) root.onResolved(function(_) openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -140,7 +141,7 @@ class ComboBox<T> implements View {
 				active = initialActive;
 			var storedActive:Int = activeState.value;
 			if (active != storedActive)
-				activeState.update(active);
+				root.onResolved(function(_) activeState.update(active));
 
 			var inputNode:RenderNode = null;
 			var optionNodes:Array<RenderNode> = [];
@@ -155,7 +156,7 @@ class ComboBox<T> implements View {
 				if (contains(filteredIndices, index)) {
 					var current:Int = activeState.value;
 					if (index != current) {
-						activeState.updateQuietly(index);
+						activeState.update(index);
 						if (!context.updateInPlace) activeState.update(index);
 					}
 					if (reveal) popupVisibility.ensure(index);

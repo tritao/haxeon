@@ -289,7 +289,6 @@ class TreeView implements View {
 		updateVisibleMetrics();
 		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 			selectedKey = null;
-			updateSelectedState(null);
 		}
 		if (onExpandedChanged != null)
 			onExpandedChanged(nodeKey, expanded);
@@ -367,7 +366,6 @@ class TreeView implements View {
 		if (metricsChanged) updateVisibleMetrics();
 		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 			selectedKey = null;
-			updateSelectedState(null);
 		}
 		return true;
 	}
@@ -426,13 +424,13 @@ class TreeView implements View {
 			var selection:State<String> = context.state(context.id("selected-key"),
 				selectedKey == null ? "" : selectedKey);
 			selectedState = selection;
-			selectedKey = selection.value == "" ? null : selection.value;
+			var provider = selectionProvider;
+			if (provider == null)
+				selectedKey = selection.value == "" ? null : selection.value;
 			ensureTreeMetrics();
 			if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 				selectedKey = null;
-				selection.update("");
 			}
-			var provider = selectionProvider;
 			if (provider != null) {
 				var desired = context.observeString(provider);
 				if (desired != null && !branchByKey.exists(desired)) desired = null;
@@ -441,13 +439,9 @@ class TreeView implements View {
 					selectionAnchor = desired;
 					selectedKey = desired;
 				}
-				var stored = desired == null ? "" : desired;
-				// This build already uses the controlled value; synchronizing its private store is not another input event.
-				if (selection.value != stored) selection.updateQuietly(stored);
 			}
 			for (hidden in [for (extra in extraSelected.keys()) if (!branchByKey.exists(extra)) extra])
 				extraSelected.remove(hidden);
-			if (onStateReady != null) onStateReady(this);
 			itemIds = new Map();
 			drag.rows.clear();
 
@@ -527,6 +521,23 @@ class TreeView implements View {
 			else drag.clear();
 			root.states = context.interactionStates.get(root.id);
 			guideVisibility.root = root;
+			// State hydration is complete, but synchronization callbacks may write State. Run after the tracked build,
+			// when layout has supplied the geometry needed by scrollIntoView.
+			var ready = onStateReady;
+			if (ready != null || provider == null) root.onResolved(function(_) {
+				// Reconcile invalid or hidden uncontrolled selection after the tracked build has settled.
+				if (provider == null) {
+					var stored = selectedKey == null ? "" : selectedKey;
+					if (selection.value != stored) selection.update(stored);
+				}
+				if (ready != null) {
+					var selectedBefore = selectedKey, expansionBefore = expansionRevision, offsetBefore = controller.offsetY;
+					ready(this);
+					var changed = selectedKey != selectedBefore || expansionRevision != expansionBefore || controller.offsetY != offsetBefore;
+					if (changed)
+						context.requestBuildFeedbackBeforeLayout();
+				}
+			});
 			return root;
 		});
 	}
@@ -694,7 +705,6 @@ class TreeView implements View {
 			virtualization.leadingOverscan, virtualization.trailingOverscan);
 		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 			selectedKey = null;
-			updateSelectedState(null);
 		}
 	}
 

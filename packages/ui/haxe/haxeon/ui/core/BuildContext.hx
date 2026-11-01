@@ -89,6 +89,7 @@ class BuildContext {
 		if (stateStore == null)
 			throw "Build context requires a state store";
 		this.stateStore = stateStore;
+		activeObserved = observed;
 		this.fonts = fonts;
 		platformSurface = null;
 		this.textInput = textInput == null ? new TextInputBridge() : textInput;
@@ -275,8 +276,14 @@ class BuildContext {
 		viewportHeight = height;
 	}
 
+	/** Plain read callbacks are shared across cache checks until model callbacks can change their inputs. */
+	public function advanceDependencyValidation():Void
+		dependencyValidationEpoch = dependencyValidationEpoch == 0x7fffffff ? 1 : dependencyValidationEpoch + 1;
+
 	public function beginFrame():Void {
 		layoutFeedbackRequested = false;
+		buildBeforeLayoutFeedbackRequested = false;
+		localObserved.clear();
 		claimed.clear();
 		if (rootScope.cachedEntries() >= 8192)
 			rootScope = new KeyScope();
@@ -286,10 +293,24 @@ class BuildContext {
 	}
 
 	var buildFeedbackRequested = false;
+	var buildBeforeLayoutFeedbackRequested = false;
+	var reactiveBuildPending = false;
 
 	/** Resolved constraints changed which children a view must build; settle them before publishing the frame. */
 	public function requestBuildFeedback():Void
 		buildFeedbackRequested = true;
+
+	/** Requests a rebuild before another layout pass can consume geometry from a view the callback just changed. */
+	public function requestBuildFeedbackBeforeLayout():Void {
+		buildFeedbackRequested = true;
+		buildBeforeLayoutFeedbackRequested = true;
+	}
+
+	public function consumeBuildFeedbackBeforeLayout():Bool {
+		var requested = buildBeforeLayoutFeedbackRequested;
+		buildBeforeLayoutFeedbackRequested = false;
+		return requested;
+	}
 
 	public function consumeBuildFeedback():Bool {
 		var requested = buildFeedbackRequested;
@@ -380,13 +401,13 @@ class BuildContext {
 	 * changes and children callers added to it after this call, and takes the style, state, semantics, callbacks and children of
 	 * the new build. So `build` must not leave state in closures that outlives the build, other than through the nodes it makes,
 	 * and a closure that captures the root resolves it through RenderNode.latest when it runs: reconcile keeps the old root.
-	 * A widget that changes its own state during interaction keeps it out of the revision that ancestors' caches watch
-	 * (State.updateQuietly). Set buildsFromHover=false when hover is read only by style resolution or live paint.
+	 * A widget that changes its own tracked state during interaction invalidates the subtrees that read it. Set
+	 * buildsFromHover=false when hover is read only by style resolution or live paint.
 	 */
 	public function selfUpdating(id:WidgetId, build:Void->RenderNode, buildsFromHover:Bool = true):RenderNode {
 		// Old entries can still belong to hidden caches; only their immutable state snapshots are reused.
 		var previous = selfUpdatingBuilds.get(id.value);
-		var entry = new SelfUpdatingBuild(build, scope, styleParent, textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy());
+		var entry = new SelfUpdatingBuild(id, build, scope, styleParent, textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy());
 		entry.buildsFromHover = buildsFromHover;
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
@@ -406,8 +427,29 @@ class BuildContext {
 	public function requestPatch(id:WidgetId):Bool {
 		if (!queuePatch(id))
 			return false;
+		var entry = selfUpdatingBuilds.get(id.value);
+		if (entry != null) entry.reactivePending = false;
 		// Its own revision, not a command refresh: a frame with nothing but patches pending rebuilds only the patched widgets.
 		patchRequestRevision++;
+		return true;
+	}
+
+	/** Queues a maybe-stale reactive reader; its sources are checked before the widget is rebuilt. */
+	public function requestReactivePatch(id:WidgetId):Bool {
+		if (id == null) return false;
+		if (!updateInPlace) {
+			if (!reactiveBuildPending) patchRequestRevision++;
+			reactiveBuildPending = true;
+			return true;
+		}
+		var entry = selfUpdatingBuilds.get(id.value);
+		if (entry == null || entry.root == null) return false;
+		if (!entry.pending) {
+			entry.pending = true;
+			pendingPatches.push(entry);
+			patchRequestRevision++;
+		}
+		if (!entry.forcePending) entry.reactivePending = true;
 		return true;
 	}
 
@@ -423,6 +465,8 @@ class BuildContext {
 		var entry = selfUpdatingBuilds.get(id.value);
 		if (entry == null || entry.root == null)
 			return false;
+		entry.forcePending = true;
+		entry.reactivePending = false;
 		if (!entry.pending) {
 			entry.pending = true;
 			pendingPatches.push(entry);
@@ -474,12 +518,8 @@ class BuildContext {
 		if (current != null && current.root != entry.root && (patching || claimed.has(id.value))) return false;
 		var dependencies = entry.dependencies;
 		if (dependencies != null) {
-			if (dependencies.stateIds != null) {
-				for (index in 0...dependencies.stateIds.length)
-					if (stateStore.valueRevision(dependencies.stateIds[index]) != dependencies.stateRevisions[index]) return false;
-			}
 			if (dependencies.observed != null && !dependencies.observed.current()) return false;
-			if (dependencies.children != null && !dependencies.children.matches(this, false)) return false;
+			if (dependencies.children != null && !dependencies.children.matches(this, false, true)) return false;
 		}
 		return true;
 	}
@@ -507,11 +547,22 @@ class BuildContext {
 		var work = pendingPatches;
 		pendingPatches = [];
 		for (entry in work) {
-			entry.pending = false;
 			var old = entry.root;
 			// Unmounted since it was asked, or built again by an ancestor's rebuild, which owns it now.
-			if (old == null || selfUpdatingBuilds.get(old.id.value) != entry)
+			if (old == null || selfUpdatingBuilds.get(old.id.value) != entry) {
+				entry.pending = false;
+				entry.reactivePending = false;
+				entry.forcePending = false;
 				continue;
+			}
+			if (entry.reactivePending && !entry.forcePending && !updatingStatesChanged(entry)) {
+				entry.pending = false;
+				entry.reactivePending = false;
+				continue;
+			}
+			entry.pending = false;
+			entry.reactivePending = false;
+			entry.forcePending = false;
 			var savedScope = scope, savedParent = styleParent, savedStack = textStyleStack;
 			scope = entry.scope;
 			styleParent = entry.styleParent;
@@ -560,16 +611,27 @@ class BuildContext {
 
 	/** Each reconciled build owns its current dependencies and resources, even when its enclosing cache stays unchanged. */
 	function buildUpdating(entry:SelfUpdatingBuild, ?prior:UpdatingDependencies):RenderNode {
-		var stateMark = stateStore.beginUsage(), intMark = observed.intCount, stringMark = observed.stringCount;
+		var previousObserved = activeObserved;
+		var capture = previousObserved == observed ? localObserved : previousObserved;
+		var previousUpdater = activeUpdatingBuild;
+		activeObserved = capture;
+		activeUpdatingBuild = entry;
+		var stateMark = stateStore.beginUsage();
+		var signalMark = capture.signalCount, intMark = capture.intCount,
+			boolMark = capture.boolCount, stringMark = capture.stringCount;
 		var registrationMark = updatingRegistrations;
 		var previous = entry.dependencies == null ? prior : entry.dependencies;
-		if (previous != null && entry.root != null && updatingStatesChanged(entry)) previous.stateInvalidationRevision++;
 		try {
-			var root = entry.build();
+			var root = trackReads(entry.build);
 			entry.buildRevision++;
 			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark, previous == null ? null : previous.stateIds);
-			var reads = observed.intCount == intMark && observed.stringCount == stringMark ? null : observed.since(intMark, stringMark);
+			var hasReads = capture.signalCount != signalMark || capture.intCount != intMark ||
+				capture.boolCount != boolMark || capture.stringCount != stringMark;
 			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this, root);
+			var reads = hasReads || previous != null && previous.observed != null
+				? observedSince(signalMark, intMark, boolMark, stringMark,
+					previous == null ? null : previous.observed)
+				: null;
 			if (usedStates != null || reads != null || children != null || previous != null) {
 				var dependencies = entry.dependencies == null ? new UpdatingDependencies() : entry.dependencies;
 				var allStates = children == null ? usedStates : children.appendStateIds(usedStates, previous == null ? null : previous.allStateIds);
@@ -577,18 +639,21 @@ class BuildContext {
 					requestBuildFeedback();
 				}
 				dependencies.stateIds = usedStates;
-				dependencies.stateRevisions = usedStates == null ? null : stateRevisions(usedStates, previous == null ? null : previous.stateRevisions);
 				dependencies.observed = reads;
 				dependencies.children = children;
 				dependencies.allStateIds = allStates;
 				entry.dependencies = dependencies;
 			}
 			stateStore.finishUsage(stateMark);
-			observed.truncate(intMark, stringMark);
+			capture.truncate(signalMark, intMark, boolMark, stringMark);
+			activeObserved = previousObserved;
+			activeUpdatingBuild = previousUpdater;
 			return root;
 		} catch (error:Dynamic) {
 			stateStore.finishUsage(stateMark);
-			observed.truncate(intMark, stringMark);
+			capture.truncate(signalMark, intMark, boolMark, stringMark);
+			activeObserved = previousObserved;
+			activeUpdatingBuild = previousUpdater;
 			throw error;
 		}
 	}
@@ -596,9 +661,7 @@ class BuildContext {
 	public function updatingStatesChanged(entry:SelfUpdatingBuild):Bool {
 		var dependencies = entry.dependencies;
 		if (dependencies == null) return false;
-		if (dependencies.stateIds != null)
-			for (index in 0...dependencies.stateIds.length)
-				if (stateStore.valueRevision(dependencies.stateIds[index]) != dependencies.stateRevisions[index]) return true;
+		if (dependencies.observed != null && dependencies.observed.trackedSourcesDirty()) return true;
 		return dependencies.children != null && dependencies.children.statesChanged(this);
 	}
 
@@ -606,8 +669,12 @@ class BuildContext {
 	public function retainUpdatingState(entry:SelfUpdatingBuild):Void {
 		var dependencies = entry.dependencies;
 		if (dependencies == null) return;
-		if (dependencies.stateIds != null) stateStore.retain(dependencies.stateIds, false);
-		if (dependencies.children != null) dependencies.children.retainState(this);
+		// A nested updater can change its own state IDs during an in-place patch. Refresh the flattened owner list from
+		// the live child entries before retaining a cached subtree, so removed resource states are not kept by stale parents.
+		dependencies.allStateIds = dependencies.children == null ? dependencies.stateIds :
+			dependencies.children.appendStateIds(dependencies.stateIds, dependencies.allStateIds);
+		if (dependencies.allStateIds != null)
+			stateStore.retain(dependencies.allStateIds, false);
 	}
 
 	/** Keeps the nodes of `node`'s subtree as priors for the frame comparison, except `root` itself when `skipRoot`. */
@@ -764,6 +831,8 @@ class BuildContext {
 		// Builds that retained caches still hold were made by the code being released; they must not come back.
 		updatingEpoch++;
 		for (entry in selfUpdatingBuilds) {
+			if (entry.dependencies != null && entry.dependencies.observed != null)
+				entry.dependencies.observed.dispose();
 			entry.root = null;
 			entry.pending = false;
 		}
@@ -771,12 +840,17 @@ class BuildContext {
 		selfUpdatingIds.resize(0);
 		pendingPatches = [];
 		patchPriors.clear();
+		rootDependencies.clearDependencies();
 	}
 
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
+		for (entry in selfUpdatingBuilds)
+			if (entry.dependencies != null && entry.dependencies.observed != null)
+				entry.dependencies.observed.dispose();
+		rootDependencies.dispose();
 		selfUpdatingBuilds.clear();
 		selfUpdatingIds.resize(0);
 		pendingPatches = [];
@@ -831,8 +905,23 @@ class BuildContext {
 	public function stateUsageMarker():Int
 		return stateStore.usageMarker();
 
-	/** Every observed read of the current frame, in order; retained caches take the part their subtree recorded. */
-	final observed:Dependencies = new Dependencies();
+	/** Tracked signal reads and explicit plain-field reads from the current frame. */
+	final observed:Dependencies = new Dependencies(true);
+	/** A nested read log for self-updating builds; root caches must not subscribe to their local state. */
+	final localObserved:Dependencies = new Dependencies(true);
+	var activeObserved:Dependencies;
+	var activeUpdatingBuild:Null<SelfUpdatingBuild>;
+	public var dependencyValidationEpoch(default, null):Int = 1;
+	/** Root subscription schedules a frame for any signal read in the mounted tree. */
+	final rootDependencies:Dependencies = new Dependencies();
+	/** Plain reads retained by caches encountered in the last full root build. */
+	final retainedRootReadSets:Array<Dependencies> = [];
+	final retainedRootReadRoots:Array<RenderNode> = [];
+	var rootPollEpoch:Int = 1;
+
+	/** Runs a build or getter as a read-only reactive tracking scope. */
+	public function trackReads<T>(run:Void->T):T
+		return ReactiveRuntime.withTracking(activeObserved, run);
 
 	/**
 	 * Reads a value a build depends on and records it, so a retained subtree around this build is reused only while `read`
@@ -841,59 +930,134 @@ class BuildContext {
 	 */
 	public function observeInt(read:Void->Int):Int {
 		var value = read();
-		observed.addInt(read, value);
+		activeObserved.addInt(read, value);
 		return value;
 	}
 
 	public function observeBool(read:Void->Bool):Bool
-		return observeInt(function() return read() ? 1 : 0) == 1;
+		{
+			var value = read();
+			activeObserved.addBool(read, value);
+			return value;
+		}
 
 	/** As observeInt; strings compare by value. */
 	public function observeString(read:Void->Null<String>):Null<String> {
 		var value = read();
-		observed.addString(read, value);
+		activeObserved.addString(read, value);
 		return value;
 	}
 
 	public function observedIntMarker():Int
-		return observed.intCount;
+		return activeObserved.intCount;
+
+	public function observedBoolMarker():Int
+		return activeObserved.boolCount;
 
 	public function observedStringMarker():Int
-		return observed.stringCount;
+		return activeObserved.stringCount;
 
 	/** The reads observed since the markers, for a retained subtree to keep. */
-	public function observedSince(intMark:Int, stringMark:Int):Dependencies
-		return observed.since(intMark, stringMark);
+	public function observedSignalMarker():Int
+		return activeObserved.signalCount;
+
+	/** Captures reads since the markers into a reusable retained dependency record. */
+	public function observedSince(signalMark:Int, intMark:Int, boolMark:Int, stringMark:Int,
+			?target:Dependencies):Dependencies {
+		var result = target == null ? new Dependencies() : target;
+		result.replaceSlice(activeObserved, signalMark, intMark, boolMark, stringMark);
+		result.setInvalidationOwner(this, activeUpdatingBuild);
+		return result;
+	}
+
+	/** Registers plain reads from a retained cache that was active in this root build. */
+	public function retainRootObserved(root:RenderNode, ?interactions:InteractionStateSnapshot):Void {
+		if (root == null) return;
+		var currentRoot = RenderNode.latest(root);
+		if (interactions != null) interactions.retainObservedDependencies(this, currentRoot);
+	}
+
+	/** Plain reads inside self-updating builds are truncated from the root log and polled only when a local patch can skip caches. */
+	public function retainUpdatingObserved(dependencies:Dependencies, root:RenderNode):Void {
+		if (dependencies == null || root == null || !dependencies.hasPlainReads()) return;
+		var currentRoot = RenderNode.latest(root);
+		if (dependencies.rootPollEpoch == rootPollEpoch) {
+			if (dependencies.rootPollIndex >= 0 && dependencies.rootPollIndex < retainedRootReadRoots.length)
+				retainedRootReadRoots[dependencies.rootPollIndex] = currentRoot;
+		} else {
+			dependencies.rootPollEpoch = rootPollEpoch;
+			dependencies.rootPollIndex = retainedRootReadSets.length;
+			retainedRootReadSets.push(dependencies);
+			retainedRootReadRoots.push(currentRoot);
+		}
+	}
+
+	/** Replaces the root subscriptions after a successful full build. */
+	public function captureRootDependencies():Void
+		{
+			// Until Observable field instrumentation replaces them, root caches still need to poll explicit plain-field reads.
+			// Keep those legacy reads out of the signal subscriptions: rootObservedDirty polls them once at the reuse boundary.
+			rootDependencies.replaceSignals(observed, 0);
+			observed.markClean();
+			reactiveBuildPending = false;
+		}
+
+	public function rootDependenciesDirty():Bool
+		return reactiveBuildPending || rootDependencies.dirty;
+
+	/** Plain model reads are polled once before deciding whether to reuse the submitted root. */
+	public function rootObservedDirty():Bool
+		return observed.dirty;
+
+	/** Checks active retained cache inputs at the root boundary or before a local patch bypasses those caches. */
+	public function retainedRootObservedDirty():Bool {
+		for (index in 0...retainedRootReadSets.length) {
+			var root = retainedRootReadRoots[index], containsPatch = false;
+			for (entry in pendingPatches) {
+				if (!entry.pending) continue;
+				var node = entry.root;
+				while (node != null) {
+					if (node == root) { containsPatch = true; break; }
+					node = node.parent;
+				}
+				if (containsPatch) break;
+			}
+			var dependencies = retainedRootReadSets[index];
+			if (containsPatch && dependencies.hasPlainReads() && !dependencies.current()) return true;
+		}
+		return false;
+	}
 
 	/** Records a reused subtree's reads again, so a retained subtree around it depends on them too. */
-	public function retainObserved(dependencies:Dependencies):Void
-		observed.addAll(dependencies);
+	public function retainObserved(dependencies:Dependencies, root:RenderNode,
+			interactions:InteractionStateSnapshot):Void
+		{
+			dependencies.setInvalidationOwner(this, activeUpdatingBuild);
+			activeObserved.addAll(dependencies);
+			retainRootObserved(root, interactions);
+		}
 
 	/** Called as a frame starts: the log only links reads to the subtrees built in one frame. */
-	public function resetObserved():Void
+	public function resetObserved():Void {
 		observed.clear();
+		localObserved.clear();
+	}
+
+	/** Starts the root cache read set that will be polled at local patch boundaries. */
+	public function resetRootObserved():Void {
+		retainedRootReadSets.resize(0);
+		retainedRootReadRoots.resize(0);
+		rootPollEpoch = rootPollEpoch == 0x7fffffff ? 1 : rootPollEpoch + 1;
+	}
+
 
 	/** Returns state IDs touched after a retained subtree build marker. */
 	public function stateIdsUsedSince(marker:Int, ?previous:Array<Int>):Array<Int>
 		return stateStore.usedIdsSince(marker, previous);
 
-	/** Current change revisions of the given widget states, for detecting changes inside a retained subtree. */
-	public function stateRevisions(ids:Array<Int>, ?previous:Array<Int>):Array<Int> {
-		if (previous != null && previous.length == ids.length) {
-			var same = true;
-			for (index in 0...ids.length)
-				if (stateStore.valueRevision(ids[index]) != previous[index]) {same = false; break;}
-			if (same) return previous;
-		}
-		var result:Array<Int> = [];
-		result.resize(ids.length);
-		for (index in 0...ids.length) result[index] = stateStore.valueRevision(ids[index]);
-		return result;
-	}
-
 	/** Keeps state-backed resources alive for a retained subtree this frame. */
-	public function retainStateIds(ids:Array<Int>):Void
-		stateStore.retain(ids);
+	public function retainStateIds(ids:Array<Int>, bubbleToEnclosingBuild:Bool = false):Void
+		stateStore.retain(ids, bubbleToEnclosingBuild || activeUpdatingBuild == null);
 
 	/** Claims IDs belonging to a retained render subtree without rebuilding it. */
 	public function claimRetainedTree(root:RenderNode):Void {
@@ -936,6 +1100,7 @@ class BuildContext {
 
 /** How a self-updating widget rebuilds; retained caches hold the ones in their subtree (see InteractionStateSnapshot). */
 class SelfUpdatingBuild {
+	public final idValue:Int;
 	public final build:Void->RenderNode;
 	public final scope:KeyScope;
 	public final styleParent:Null<ComputedStyle>;
@@ -943,6 +1108,8 @@ class SelfUpdatingBuild {
 	public var dependencies:Null<UpdatingDependencies>;
 	public var root:Null<RenderNode> = null;
 	public var pending:Bool = false;
+	public var reactivePending:Bool = false;
+	public var forcePending:Bool = false;
 	public var buildsFromHover:Bool = true;
 	public var epoch:Int = 0;
 	/** Advances for every completed build, including quiet in-place patches. */
@@ -950,7 +1117,8 @@ class SelfUpdatingBuild {
 	/** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
 	public var built:Null<BuiltNode> = null;
 
-	public function new(build:Void->RenderNode, scope:KeyScope, styleParent:Null<ComputedStyle>, textStyleStack:Array<ResolvedTextStyle>) {
+	public function new(id:WidgetId, build:Void->RenderNode, scope:KeyScope, styleParent:Null<ComputedStyle>, textStyleStack:Array<ResolvedTextStyle>) {
+		this.idValue = id.value;
 		this.build = build;
 		this.scope = scope;
 		this.styleParent = styleParent;
@@ -984,10 +1152,8 @@ private class RetainedEditCache {
 
 /** Dependencies of a composite or stateful updater; leaf controls need no additional capture record. */
 class UpdatingDependencies {
-	public var stateInvalidationRevision:Int = 0;
 	public var allStateIds:Null<Array<Int>>;
 	public var stateIds:Null<Array<Int>>;
-	public var stateRevisions:Null<Array<Int>>;
 	public var observed:Null<Dependencies>;
 	public var children:Null<InteractionStateSnapshot>;
 	public function new() {}

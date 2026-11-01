@@ -54,6 +54,11 @@ import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.core.CachePolicy;
 import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.Dependencies;
+import haxeon.ui.core.ReactiveRuntime;
+import haxeon.ui.core.Signal;
+import haxeon.ui.core.Derived;
+import haxeon.ui.core.Effect;
 import haxeon.ui.core.Command;
 import haxeon.ui.core.CommandContext;
 import haxeon.ui.core.CommandParameters;
@@ -920,8 +925,12 @@ class FrameworkSmoke {
 			return 305;
 		if (!themeSwapChangesStyleRevision())
 			return 306;
-		if (!stateRevisionsTrackOwnUpdates())
+		if (!signalsTrackOnlyReaders())
 			return 307;
+		if (!reactiveValuesRecomputeWithoutGlitches())
+			return 308;
+		if (!interactionChangesReuseStorage())
+			return 309;
 		if (!propertyInputContrastValid(fonts))
 			return 301;
 		if (!defaultTextFieldContrastValid(fonts))
@@ -2031,9 +2040,13 @@ class FrameworkSmoke {
 		if (clicks != 1 || bubbled != 1 || captured != 1)
 			return 254;
 		state.update(7);
-		if (!context.isDirty() || !UiDirtyFlag.contains(context.dirtyFlags, UiDirtyFlag.NeedsBuild) ||
-			!UiDirtyFlag.contains(context.dirtyFlags, UiDirtyFlag.NeedsLayout))
+		// A state value written outside a tracked build has no readers and must not invalidate unrelated readers.
+		var unobserved:State<Int> = context.buildContext.state(new WidgetId(0x7ffffffe), 0);
+		var reactiveVersion = ReactiveRuntime.version;
+		unobserved.update(7);
+		if (ReactiveRuntime.version != reactiveVersion)
 			return 5;
+		state.update(7);
 
 		root = context.submit(makeView(true), frame);
 		buttonNode = root.children[0];
@@ -4481,24 +4494,93 @@ class FrameworkSmoke {
 		return true;
 	}
 
-	/** A retained panel must be able to tell which of its own widget states changed (a select opening). */
-	static function stateRevisionsTrackOwnUpdates():Bool {
+	/** Retained readers are dirtied by the signals they read, without state revision snapshots. */
+	static function signalsTrackOnlyReaders():Bool {
 		var store = new StateStore();
 		var context = new BuildContext(store, null, null, null, Theme.light());
-		store.beginFrame();
 		var open:State<Bool> = context.state(context.id("open"), false);
 		var other:State<Int> = context.state(context.id("other"), 0);
-		var ids = [open.id.value, other.id.value];
-		var before = context.stateRevisions(ids);
-		if (context.stateRevisions(ids)[0] != before[0])
-			return false;
+		var openCapture = new Dependencies(true);
+		var otherCapture = new Dependencies(true);
+		ReactiveRuntime.withTracking(openCapture, function() open.value);
+		ReactiveRuntime.withTracking(otherCapture, function() other.value);
+		var openDependencies = new Dependencies();
+		var otherDependencies = new Dependencies();
+		openDependencies.replaceSlice(openCapture, 0, 0, 0, 0);
+		otherDependencies.replaceSlice(otherCapture, 0, 0, 0, 0);
+		if (!openDependencies.current() || !otherDependencies.current()) return false;
 		open.update(true);
-		var after = context.stateRevisions(ids);
-		var ok = after[0] != before[0] && after[1] == before[1];
+		if (openDependencies.current() || !otherDependencies.current()) return false;
 		other.update(3);
-		var last = context.stateRevisions(ids);
-		store.endFrame();
-		return ok && last[1] != after[1] && last[0] == after[0];
+		var failed = false;
+		try ReactiveRuntime.withTracking(otherCapture, function() other.update(4)) catch (_:Dynamic) failed = true;
+		return !otherDependencies.current() && failed;
+	}
+
+	/** Derived values pull latest inputs once, suppress equal outputs, and effects coalesce writes. */
+	static function reactiveValuesRecomputeWithoutGlitches():Bool {
+		var source = new Signal<Int>(2);
+		var derived = new Derived<Int>(function() return source.value * 3);
+		var effectRuns = 0;
+		var effect = new Effect(function() { source.value; effectRuns++; });
+		if (derived.value != 6 || effectRuns != 1) return false;
+		source.update(4);
+		source.update(5);
+		if (derived.value != 15 || effectRuns != 1) return false;
+		ReactiveRuntime.flushEffects();
+		var ok = effectRuns == 2 && derived.value == 15;
+		effect.dispose();
+		derived.dispose();
+		if (!ok) return false;
+
+		var paritySource = new Signal<Int>(0), foldedRuns = 0, projectionRuns = 0, downstreamRuns = 0;
+		var folded = new Derived<Int>(function() { foldedRuns++; return paritySource.value & 1; });
+		var projection = new Derived<String>(function() {
+			projectionRuns++;
+			return folded.value == 0 ? "even" : "odd";
+		});
+		var downstream = new Effect(function() { projection.value; downstreamRuns++; });
+		paritySource.update(2);
+		ReactiveRuntime.flushEffects();
+		if (foldedRuns != 2 || projectionRuns != 1 || downstreamRuns != 1) return false;
+		paritySource.update(3);
+		ReactiveRuntime.flushEffects();
+		if (foldedRuns != 3 || projectionRuns != 2 || downstreamRuns != 2 || projection.value != "odd") return false;
+		downstream.dispose();
+		projection.dispose();
+		folded.dispose();
+
+		var diamondSource = new Signal<Int>(1), leftRuns = 0, rightRuns = 0, sumRuns = 0, diamondEffects = 0;
+		var left = new Derived<Int>(function() { leftRuns++; return diamondSource.value + 1; });
+		var right = new Derived<Int>(function() { rightRuns++; return diamondSource.value * 2; });
+		var sum = new Derived<Int>(function() { sumRuns++; return left.value + right.value; });
+		var diamondEffect = new Effect(function() { sum.value; diamondEffects++; });
+		diamondSource.update(4);
+		ReactiveRuntime.flushEffects();
+		var diamondOk = leftRuns == 2 && rightRuns == 2 && sumRuns == 2 && diamondEffects == 2 && sum.value == 13;
+		diamondEffect.dispose();
+		sum.dispose();
+		right.dispose();
+		left.dispose();
+		return diamondOk;
+	}
+
+	/** Repeated routing queries in one event transaction share their change records. */
+	static function interactionChangesReuseStorage():Bool {
+		var store = new InteractionStateStore();
+		var id = new WidgetId(1);
+		store.set(id, 1);
+		var first = store.changes();
+		if (first.length != 1 || first[0].id != id.value || first[0].before != 0 || first[0].after != 1 ||
+			first != store.changes())
+			return false;
+		store.acknowledge();
+		if (store.changes().length != 0)
+			return false;
+		store.set(id, 2);
+		var next = store.changes();
+		return next == first && next.length == 1 && next[0].id == id.value &&
+			next[0].before == 1 && next[0].after == 2;
 	}
 
 	/** Retained views compare this fingerprint, so a light-to-dark swap must never reuse one. */

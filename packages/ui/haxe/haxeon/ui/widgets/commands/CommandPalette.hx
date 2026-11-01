@@ -55,14 +55,10 @@ class CommandPalette implements View {
 			var actualContext = invocationContext == null ? context.commandContext : invocationContext;
 			var queryState:State<String> = context.state(context.id("query"), query);
 			query = queryState.value;
-			var selectionQuery:State<String> = context.state(context.id("selection-query"), query);
 			var selection:State<Int> = context.state(context.id("selection"), -1);
-			var model = new CommandPaletteModel(commands, actualContext, query, selection,
-				function(next) { query = next; queryState.update(next); }, onResult, onDismiss);
-			if (selectionQuery.value != query || selection.value < 0 || selection.value >= model.count()) {
-				selectionQuery.update(query);
-				selection.update(model.firstEnabledIndex());
-			}
+			var model = new CommandPaletteModel(commands, actualContext, query, selection.value,
+				function(next) { query = next; queryState.update(next); selection.update(-1); },
+				function(next) selection.update(next), onResult, onDismiss);
 			var picker = context.resourceState(context.id("picker"), function() return new SearchPicker(key, model,
 				function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered),
 				function() {}, function() {}), function(_) {}).value;
@@ -92,18 +88,20 @@ private class CommandPaletteModel implements SearchPickerModel {
 	final context:CommandContext;
 	final registry:CommandRegistry;
 	final queryValue:String;
-	final selection:State<Int>;
+	var selected:Int;
 	final onQuery:String->Void;
+	final onSelection:Int->Void;
 	final onResult:Null<CommandResult->Void>;
 	final onDismiss:Null<Void->Void>;
 
-	public function new(registry:CommandRegistry, context:CommandContext, query:String, selection:State<Int>,
-			onQuery:String->Void, onResult:Null<CommandResult->Void>, onDismiss:Null<Void->Void>) {
+	public function new(registry:CommandRegistry, context:CommandContext, query:String, selected:Int,
+			onQuery:String->Void, onSelection:Int->Void, onResult:Null<CommandResult->Void>, onDismiss:Null<Void->Void>) {
 		commands = [];
 		this.context = context == null ? new CommandContext() : context;
 		this.queryValue = query;
-		this.selection = selection;
+		this.selected = selected;
 		this.onQuery = onQuery;
+		this.onSelection = onSelection;
 		this.onResult = onResult;
 		this.onDismiss = onDismiss;
 		var needle = query == null ? "" : query.toLowerCase();
@@ -114,7 +112,8 @@ private class CommandPaletteModel implements SearchPickerModel {
 		this.registry = registry;
 	}
 	public function query():String return queryValue;
-	public function selectedIndex():Int return selection.value;
+	public function selectedIndex():Int
+		return selected >= 0 && selected < commands.length && enabledAt(selected) ? selected : firstEnabledIndex();
 	public function count():Int return commands.length;
 	public function labelAt(index:Int):String return commands[index].label;
 	public function enabledAt(index:Int):Bool return commands[index].isEnabled(context);
@@ -130,17 +129,18 @@ private class CommandPaletteModel implements SearchPickerModel {
 		if (result.succeeded && onDismiss != null) onDismiss();
 	}
 	public function navigate(key:Int, modifiers:Int, pageSize:Int):Void {
-		if (key == UiKey.Enter) { activate(selection.value); return; }
+		if (key == UiKey.Enter) { activate(selectedIndex()); return; }
 		if (firstEnabledIndex() < 0) return;
 		var step = key == UiKey.Up || key == UiKey.PageUp ? -1 : 1;
 		var count = key == UiKey.PageUp || key == UiKey.PageDown ? pageSize : 1;
-		var next = selection.value;
+		var next = selectedIndex();
 		if (next < 0 && step < 0) next = 0;
 		for (_ in 0...count) for (_ in 0...commands.length) {
 			next = (next + step + commands.length) % commands.length;
 			if (enabledAt(next)) break;
 		}
-		selection.update(next);
+		selected = next;
+		onSelection(next);
 	}
 	public function buildItem(index:Int, selected:Bool, hovered:Bool):View
 		return new CommandPaletteItem(commands[index].label, enabledAt(index), commands[index].isChecked(context), selected, hovered);

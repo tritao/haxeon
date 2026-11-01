@@ -82,13 +82,14 @@ class Tooltip implements View {
 			var pointer = context.resourceState(context.id("pointer-state"), function() return new TooltipPointerState(), function(_) {}).value;
 			if (pointer.dismissRevision != dismissRevision) {
 				pointer.dismissRevision = dismissRevision;
-				if (state.value) state.update(false);
+				pointer.suppressed = true;
 			}
+			var visible = state.value && !pointer.suppressed;
 			// Preserve signed zero for explicit coordinates rather than treating -0 as the default +0.
 			var defaultPosition = x == 0.0 && 1.0 / x > 0.0 && y == -28.0;
-			var tooltipStyle = defaultPosition ? (state.value ? DefaultVisibleStyle : DefaultHiddenStyle) :
-				inlineTooltipStyle(x, y, state.value);
-			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, state.value);
+			var tooltipStyle = defaultPosition ? (visible ? DefaultVisibleStyle : DefaultHiddenStyle) :
+				inlineTooltipStyle(x, y, visible);
+			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, visible);
 			var rootStyle = fillAnchor ? FillRootStyle : FitRootStyle;
 			var root = context.withScope(new Key("layers"), function() {
 				var rootId = context.id("stack");
@@ -109,7 +110,7 @@ class Tooltip implements View {
 			});
 			var anchorNode = root.children[0];
 			var tooltipNode = root.children[1];
-			tooltipNode.layout.style.visible = state.value;
+			tooltipNode.layout.style.visible = visible;
 			tooltipNode.onResolved(function(_) {
 				// Resolved callbacks run on every frame; a hidden tooltip needs no placement, and showing it rebuilds.
 				if (!tooltipNode.layout.style.visible) return;
@@ -132,12 +133,16 @@ class Tooltip implements View {
 				}
 			});
 			anchorNode.on(UiEventKind.HoverEnter, function(_) {
+				pointer.suppressed = false;
 				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
 			});
 			if (requirePointerMovement) anchorNode.on(UiEventKind.PointerMove, function(event) {
 				var moved = !pointer.known || pointer.x != event.x || pointer.y != event.y;
 				pointer.x = event.x; pointer.y = event.y; pointer.known = true;
-				if (moved && !state.value && (showWhen == null || showWhen())) state.update(true);
+				if (moved && (!state.value || pointer.suppressed) && (showWhen == null || showWhen())) {
+					pointer.suppressed = false;
+					state.update(true);
+				}
 			});
 			anchorNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
 			tooltipNode.on(UiEventKind.HoverEnter, function(_) { state.update(true); });
@@ -289,6 +294,7 @@ private class AnonymousTooltipContent implements View {
 
 private class TooltipPointerState {
 	public var dismissRevision:Int = -1;
+	public var suppressed:Bool = false;
 	public var known:Bool = false;
 	public var x:Float = 0;
 	public var y:Float = 0;

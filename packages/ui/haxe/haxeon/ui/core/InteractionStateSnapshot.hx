@@ -16,7 +16,6 @@ class InteractionStateSnapshot {
 	var masks:Array<Int>;
 	/** Widgets left out because they update themselves, with the builds that do it, kept alive with the cached subtree. */
 	var updatingBuilds:Array<SelfUpdatingBuild>;
-	var updatingRevisions:Array<Int>;
 	var updatingBuildRevisions:Null<Array<Int>>;
 
 	public function new(root:RenderNode, context:BuildContext, ?boundary:RenderNode, trackBuilds:Bool = false) {
@@ -26,7 +25,6 @@ class InteractionStateSnapshot {
 		values = NoValues;
 		masks = NoValues;
 		updatingBuilds = NoBuilds;
-		updatingRevisions = NoValues;
 		updatingBuildRevisions = trackBuilds ? [] : null;
 		capture(root, context, boundary);
 	}
@@ -36,11 +34,9 @@ class InteractionStateSnapshot {
 			// A composite updater keeps its current descendants; enclosing caches stop at that mutable boundary.
 			var build = context.updatingBuild(node);
 			if (build != null) {
-				if (updatingBuilds.length == 0) {updatingBuilds = []; updatingRevisions = [];}
+				if (updatingBuilds.length == 0) updatingBuilds = [];
 				updatingBuilds.push(build);
 				if (updatingBuildRevisions != null) updatingBuildRevisions.push(build.buildRevision);
-				var dependencies = build.dependencies;
-				updatingRevisions.push(dependencies == null ? 0 : dependencies.stateInvalidationRevision);
 				// Callers can append independently updating views after the owner's build was captured.
 				var built = build.built;
 				for (child in node.children) {
@@ -64,15 +60,12 @@ class InteractionStateSnapshot {
 	}
 
 	public function statesChanged(context:BuildContext):Bool {
-		for (index in 0...updatingBuilds.length) {
-			var entry = updatingBuilds[index], dependencies = entry.dependencies;
-			if ((dependencies == null ? 0 : dependencies.stateInvalidationRevision) != updatingRevisions[index]
-				|| context.updatingStatesChanged(entry)) return true;
-		}
+		for (entry in updatingBuilds)
+			if (context.updatingStatesChanged(entry)) return true;
 		return false;
 	}
 
-	/** Whether a tracked updater rebuilt after capture, including changes deliberately kept out of state revisions. */
+	/** Whether a tracked updater rebuilt after capture, including changed plain-field reads. */
 	public function buildsChanged():Bool {
 		if (updatingBuildRevisions == null) return false;
 		for (index in 0...updatingBuilds.length)
@@ -109,8 +102,21 @@ class InteractionStateSnapshot {
 		for (entry in updatingBuilds) context.retainUpdatingState(entry);
 	}
 
-	public function matches(context:BuildContext, register:Bool = true):Bool {
-		if (statesChanged(context)) return false;
+	/** Adds legacy plain reads from active self-updating descendants to their retained cache boundary. */
+	@:allow(haxeon.ui.core.BuildContext)
+	function retainObservedDependencies(context:BuildContext, root:RenderNode):Void {
+		for (entry in updatingBuilds) {
+			var dependencies = entry.dependencies;
+			if (dependencies == null) continue;
+			if (dependencies.observed != null)
+				context.retainUpdatingObserved(dependencies.observed, root);
+			if (dependencies.children != null)
+				dependencies.children.retainObservedDependencies(context, root);
+		}
+	}
+
+	public function matches(context:BuildContext, register:Bool = true, dependenciesChecked:Bool = false):Bool {
+		if (!dependenciesChecked && statesChanged(context)) return false;
 		for (index in 0...ids.length)
 			if ((context.interactionStates.get(ids[index]) & masks[index]) != values[index])
 				return false;

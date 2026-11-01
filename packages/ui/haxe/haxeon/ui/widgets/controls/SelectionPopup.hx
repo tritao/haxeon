@@ -105,7 +105,7 @@ class SelectionPopup {
 		var optionNodes:Array<RenderNode> = [];
 		var visibility = new SelectionPopupVisibility();
 		var request = function() {
-			valueState.updateQuietly(selectedValue);
+			valueState.update(selectedValue);
 			if (!context.updateInPlace || !context.requestPatch(dropdownId)) valueState.update(selectedValue);
 		};
 		var ensure = function(index:Int) {

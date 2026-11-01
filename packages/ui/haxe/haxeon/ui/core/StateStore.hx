@@ -2,10 +2,7 @@ package haxeon.ui.core;
 
 /** Haxe-owned per-widget state retained while views are rebuilt. */
 class StateStore {
-	final values:Map<Int, Dynamic>;
 	final handles:Map<Int, State<Dynamic>> = new Map();
-	// Store revision at each state's last update, so retained subtrees can tell which of their own states changed.
-	final valueRevisions:Map<Int, Int> = new Map();
 	final disposers:Map<Int, Void->Void>;
 	final paths:Map<Int, String>;
 	/** The IDs in `paths`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
@@ -16,26 +13,21 @@ class StateStore {
 	final seenScratch:IdSet = new IdSet(256);
 	final frameUseOrder:Array<Int>;
 	public var frameActive(default, null):Bool;
-	public var revision(default, null):Int;
 
 	public function new() {
-		values = new Map();
 		disposers = new Map();
 		paths = new Map();
 		managed = new Map();
 		frameUsed = new IdSet();
 		frameUseOrder = [];
 		frameActive = false;
-		revision = 0;
 	}
 
 	@:allow(haxeon.ui.core.BuildContext)
 	function handle<T>(id:WidgetId):State<T> {
 		var result = handles.get(id.value);
-		if (result == null) {
-			result = new State<Dynamic>(this, id);
-			handles.set(id.value, result);
-		}
+		if (result == null)
+			throw 'Widget state has not been initialized for ${describe(id)}';
 		return cast result;
 	}
 
@@ -68,7 +60,7 @@ class StateStore {
 			var id = pathIds[read++];
 			if (!paths.exists(id))
 				continue;
-			if (!mounted.exists(id) && !values.exists(id))
+			if (!mounted.exists(id) && !handles.exists(id))
 				paths.remove(id);
 			else
 				pathIds[write++] = id;
@@ -79,9 +71,8 @@ class StateStore {
 	public function initialize(id:WidgetId, initial:Dynamic):Void {
 		if (id == null)
 			throw "State requires a widget ID";
-		if (!values.exists(id.value)) {
-			values.set(id.value, initial);
-		}
+		if (!handles.exists(id.value))
+			handles.set(id.value, new State<Dynamic>(this, id, initial));
 		markUsed(id);
 	}
 
@@ -135,7 +126,7 @@ class StateStore {
 		if (ids == null)
 			return;
 		for (id in ids)
-			if (values.exists(id)) {
+			if (handles.exists(id)) {
 				if (frameActive) frameUsed.add(id);
 				if (recordUsage && (frameActive || usageCaptures > 0)) frameUseOrder.push(id);
 			}
@@ -143,9 +134,15 @@ class StateStore {
 
 	/** Marks an initialized state as used by the current render tree. */
 	public function touch(id:WidgetId):Void {
-		if (id == null || !values.exists(id.value))
+		if (id == null || !handles.exists(id.value))
 			throw "Widget state has not been initialized";
 		markUsed(id);
+	}
+
+	@:allow(haxeon.ui.core.State)
+	function check(id:WidgetId):Void {
+		if (id == null || !handles.exists(id.value))
+			throw 'Widget state has not been initialized for ${describe(id)}';
 	}
 
 	/** Releases resource-backed state that was absent from the completed tree. */
@@ -154,8 +151,9 @@ class StateStore {
 			return;
 		var stale:Array<Int> = [];
 		for (id in managed.keys())
-			if (!frameUsed.has(id))
+			if (!frameUsed.has(id)) {
 				stale.push(id);
+			}
 		var failure:Dynamic = null;
 		for (id in stale) {
 			var disposer = disposers.get(id);
@@ -168,66 +166,24 @@ class StateStore {
 			}
 			disposers.remove(id);
 			managed.remove(id);
-			values.remove(id);
 			handles.remove(id);
-			valueRevisions.remove(id);
 		}
 		frameUsed.clear();
 		frameUseOrder.resize(0);
 		frameActive = false;
-		if (stale.length > 0)
-			revision++;
 		if (failure != null)
 			throw failure;
 	}
 
-	@:allow(haxeon.ui.core.State)
-	function getValue(id:WidgetId):Dynamic {
-		if (id == null || !values.exists(id.value))
-			throw 'Widget state has not been initialized for ${describe(id)}';
-		return values.get(id.value);
-	}
-
-	@:allow(haxeon.ui.core.State)
-	function setValue(id:WidgetId, value:Dynamic):Void {
-		if (id == null)
-			throw "State requires a widget ID";
-		values.set(id.value, value);
-		revision++;
-		valueRevisions.set(id.value, revision);
-	}
-
-	@:allow(haxeon.ui.core.State)
-	function setValueQuietly(id:WidgetId, value:Dynamic):Void {
-		if (id == null)
-			throw "State requires a widget ID";
-		values.set(id.value, value);
-	}
-
-	/** IDs of the states set after `since` (a value of `revision`), in no particular order. */
-	public function idsChangedSince(since:Int):Array<Int> {
-		var result:Array<Int> = [];
-		for (id => changedAt in valueRevisions)
-			if (changedAt > since)
-				result.push(id);
-		return result;
-	}
-
-	/** Revision at which this state last changed; zero if it never has been set since creation. */
-	public function valueRevision(id:Int):Int {
-		var result = valueRevisions.get(id);
-		return result == null ? 0 : result;
-	}
-
 	public function contains(id:WidgetId):Bool
-		return id != null && values.exists(id.value);
+		return id != null && handles.exists(id.value);
 
 	/** Bounded-run diagnostics for detecting retained widget state growth. */
 	public function diagnosticCounts():{values:Int, paths:Int, resources:Int} {
 		var valueCount = 0;
 		var pathCount = 0;
 		var resourceCount = 0;
-		for (_ in values.keys()) valueCount++;
+		for (_ in handles.keys()) valueCount++;
 		for (_ in paths.keys()) pathCount++;
 		for (_ in managed.keys()) resourceCount++;
 		return {values: valueCount, paths: pathCount, resources: resourceCount};
@@ -242,7 +198,7 @@ class StateStore {
 
 	/** Registers one native-resource cleanup callback for persistent widget state. */
 	public function onDispose(id:WidgetId, disposer:Void->Void):Void {
-		if (id == null || disposer == null || !values.exists(id.value) || disposers.exists(id.value))
+		if (id == null || disposer == null || !handles.exists(id.value) || disposers.exists(id.value))
 			throw "State disposal requires initialized state and one callback per widget ID";
 		disposers.set(id.value, disposer);
 	}
@@ -269,12 +225,9 @@ class StateStore {
 		managed.clear();
 		frameUsed.clear();
 		frameActive = false;
-		values.clear();
 		handles.clear();
-		valueRevisions.clear();
 		paths.clear();
 		pathIds.resize(0);
-		revision++;
 		if (failure != null)
 			throw failure;
 	}

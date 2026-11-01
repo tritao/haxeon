@@ -66,11 +66,12 @@ but hard with conservative stack scanning. Reconsider if GC marking shows in int
 
 ## Is the current model right?
 
-It works and is verified, but it grew one mechanism per case: retained caches and keys, three ways to record a dependency,
-`selfUpdating` with `reconcile`, `BuiltNode` and `RenderNode.latest`, `requestPatch` with `updateQuietly`,
+It works and is verified, but it grew one mechanism per case: retained caches and keys, explicit polling reads alongside
+tracked signal dependencies, `selfUpdating` with `reconcile`, `BuiltNode` and `RenderNode.latest`, `requestPatch`,
 `willEditRetained` with priors and `RetainedAnimation`, patch frames, and binding revisions for widgets that cannot be
-patched while hidden. Recent work spends its time on the edges between them. `updateQuietly` depends on the author knowing
-who reads the state.
+patched while hidden. Stage 1 now supplies `Signal`, `Derived` and `Effect`; stage 1b will replace the remaining polling
+reads and revision counters with compiler-tracked `Observable` fields. The older quiet-write path has been removed because
+changed signals invalidate their readers directly.
 
 Most of these are one idea at different sizes: a scope records what it reads, re-runs when one of those values changes,
 and updates the existing nodes. That idea is what the ADR adopts.

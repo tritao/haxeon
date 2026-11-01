@@ -193,12 +193,8 @@ class TextField implements View {
 				? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap);
 			var stored:State<TextEditorState> = acquireState(context, id, value, resolved.textStyle, paragraph, document);
 			var editor:TextEditorState = stored.value;
-			// Quiet update plus a patch request: only this field rebuilds. Falls back to a full state update if it is not self-updating.
-			var refresh = function() {
-				stored.updateQuietly(editor);
-				if (!context.requestPatch(id))
-					stored.update(editor);
-			};
+			// The editor is an identity-bearing mutable resource; its event requests the owning field's local rebuild.
+			var refresh = function() context.requestPatch(id);
 			editor.layout.codeWordBoundaries = codeWordBoundaries;
 			editor.configureTail(followTail && readOnly);
 			var documentChanged = document != null

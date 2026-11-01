@@ -39,9 +39,9 @@ class RetainedVariants implements View {
 		if (entry != null && !context.bypassRetention && entry.matches(keyA, keyB, context,
 				returning && resetChangedOnReturn)) {
 			cache.active = variant;
-			context.retainStateIds(entry.stateIds);
-			context.retainObserved(entry.observed);
+			context.retainStateIds(entry.refreshStateIds());
 			var retained = context.currentRoot(entry.root);
+			context.retainObserved(entry.observed, retained, entry.interactions);
 			entry.root = retained;
 			context.claimRetainedTree(retained);
 			retained.detach();
@@ -52,16 +52,20 @@ class RetainedVariants implements View {
 		var dirty = entry != null && scope == entry.scope &&
 			(entry.dirty || (resetChangedOnReturn && entry.interactions.buildsChanged()));
 		var stateMark = context.stateUsageMarker();
-		var intMark = context.observedIntMarker(), stringMark = context.observedStringMarker();
+		var signalMark = context.observedSignalMarker(), intMark = context.observedIntMarker(),
+			boolMark = context.observedBoolMarker(), stringMark = context.observedStringMarker();
 		var root = context.withScope(new Key(scope), function() {
 			var view = builder(context);
 			if (view == null) throw 'Retained variant "$variant" returned no view';
 			return view.build(context);
 		});
 		var used = context.stateIdsUsedSince(stateMark);
-		cache.put(variant, new RetainedVariantEntry(keyA, keyB, scope, root, used, context.stateRevisions(used),
-			new InteractionStateSnapshot(context.currentRoot(root), context, null, resetChangedOnReturn),
-			context.observedSince(intMark, stringMark), context, dirty));
+		var interactions = new InteractionStateSnapshot(context.currentRoot(root), context, null, resetChangedOnReturn);
+		var observed = context.observedSince(signalMark, intMark, boolMark, stringMark,
+			entry == null ? null : entry.observed);
+		context.retainRootObserved(root, interactions);
+		cache.put(variant, new RetainedVariantEntry(keyA, keyB, scope, root, used, interactions,
+			observed, context, dirty, entry == null ? null : entry.stateIds));
 		cache.active = variant;
 		return root;
 	}
@@ -85,24 +89,30 @@ private class RetainedVariantsCache {
 	}
 	public function put(key:String, entry:RetainedVariantEntry):Void {
 		var previous = entries.get(key);
-		if (previous != null && previous.root != entry.root) previous.root.detach();
+		if (previous != null && previous != entry) {
+			if (previous.root != entry.root) previous.root.detach();
+			if (previous.observed != entry.observed) previous.observed.dispose();
+		}
 		entries.set(key, entry);
 		recent.remove(key); recent.push(key); trim();
 	}
 	function trim():Void {
 		while (recent.length > capacity) {
 			var oldest = recent.shift();
-			if (oldest != null) entries.remove(oldest);
+			if (oldest != null) {
+				var entry = entries.get(oldest);
+				entries.remove(oldest);
+				// The root may still be the submitted prior for this frame; only release the cache's subscriptions now.
+				if (entry != null) entry.observed.dispose();
+			}
 		}
 	}
 	public function retain(context:BuildContext):Void {
-		for (entry in entries) {
-			context.retainStateIds(entry.stateIds);
-			entry.interactions.retainState(context);
-		}
+		for (entry in entries)
+			context.retainStateIds(entry.refreshStateIds(), true);
 	}
 	public function dispose():Void {
-		for (entry in entries) entry.root.detach();
+		for (entry in entries) entry.dispose();
 		entries.clear(); recent.resize(0);
 	}
 }
@@ -112,8 +122,8 @@ private class RetainedVariantEntry {
 	final keyB:Int;
 	public final scope:String;
 	public var root:RenderNode;
-	public final stateIds:Array<Int>;
-	final stateRevisions:Array<Int>;
+	public var stateIds(default, null):Array<Int>;
+	final usedStateIds:Array<Int>;
 	public final interactions:InteractionStateSnapshot;
 	public final observed:Dependencies;
 	public final dirty:Bool;
@@ -122,12 +132,20 @@ private class RetainedVariantEntry {
 	final positions:Array<Int> = [];
 	final childCounts:Array<Int> = [];
 
-	public function new(keyA:Int, keyB:Int, scope:String, root:RenderNode, ids:Array<Int>, revisions:Array<Int>,
-			interactions:InteractionStateSnapshot, observed:Dependencies, context:BuildContext, dirty:Bool) {
+	public function new(keyA:Int, keyB:Int, scope:String, root:RenderNode, ids:Array<Int>,
+			interactions:InteractionStateSnapshot, observed:Dependencies, context:BuildContext, dirty:Bool,
+			previousStateIds:Null<Array<Int>>) {
 		this.keyA = keyA; this.keyB = keyB; this.scope = scope; this.root = root;
-		stateIds = ids.copy(); stateRevisions = revisions.copy();
+		usedStateIds = ids == null ? [] : ids.copy();
 		this.interactions = interactions; this.observed = observed; this.dirty = dirty;
+		stateIds = interactions.appendStateIds(usedStateIds, previousStateIds);
 		capture(root, context, false);
+	}
+
+	/** Nested self-updating widgets may replace resource IDs while this variant stays cached. */
+	public function refreshStateIds():Array<Int> {
+		stateIds = interactions.appendStateIds(usedStateIds, stateIds);
+		return stateIds;
 	}
 
 	function capture(node:RenderNode, context:BuildContext, variableParent:Bool):Void {
@@ -158,5 +176,10 @@ private class RetainedVariantEntry {
 
 	public function matches(a:Int, b:Int, context:BuildContext, strict:Bool):Bool
 		return keyA == a && keyB == b && topologyMatches() && (!strict || (!dirty && !interactions.buildsChanged())) &&
-			context.stateRevisions(stateIds, stateRevisions) == stateRevisions && observed.current() && interactions.matches(context);
+			observed.current() && interactions.matches(context);
+
+	public function dispose():Void {
+		root.detach();
+		observed.dispose();
+	}
 }

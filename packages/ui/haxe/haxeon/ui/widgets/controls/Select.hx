@@ -87,24 +87,21 @@ class Select<T> implements View {
 				}
 			});
 
+			// The selected signal is an invalidation source for uncontrolled changes; the view value remains the input.
 			var selectedState:State<T> = context.state(context.id("value"), value);
-			var storedValue:T = selectedState.value;
-			if (!sameValue(storedValue, value))
-				selectedState.update(value);
+			selectedState.value;
 			var selectedIndex = enabledValueIndex(value);
 			if (selectedIndex < 0)
 				selectedIndex = firstEnabledIndex();
 			if (selectedIndex >= 0 && !sameValue(value, options[selectedIndex].value)) {
 				value = options[selectedIndex].value;
-				selectedState.update(value);
 			}
 
 			var openState:State<Bool> = context.state(context.id("open"), false);
 			var isOpen:Bool = openState.value;
 			var firstEnabled = firstEnabledIndex();
 			if (!enabled || firstEnabled < 0) {
-				if (isOpen)
-					openState.update(false);
+				if (isOpen) root.onResolved(function(_) openState.update(false));
 				isOpen = false;
 			}
 			root.layout.style.zIndex = isOpen ? 10 : 0;
@@ -116,7 +113,7 @@ class Select<T> implements View {
 				active = initialActive;
 			var storedActive:Int = activeState.value;
 			if (active != storedActive)
-				activeState.update(active);
+				root.onResolved(function(_) activeState.update(active));
 
 			var triggerNode:RenderNode = null;
 			var optionNodes:Array<RenderNode> = [];
@@ -131,7 +128,7 @@ class Select<T> implements View {
 				var current:Int = activeState.value;
 				if (isEnabledIndex(index)) {
 					if (index != current) {
-						activeState.updateQuietly(index);
+						activeState.update(index);
 						if (!context.updateInPlace) activeState.update(index);
 					}
 					if (reveal) popupVisibility.ensure(index);

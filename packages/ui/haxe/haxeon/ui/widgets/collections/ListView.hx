@@ -133,17 +133,15 @@ class ListView implements View {
 			ensureModelMetrics();
 			var state:State<Int> = context.state(context.id("selected-index"), selectedIndex);
 			selectedState = state;
-			if (state.value < -1 || state.value >= cachedCount)
-				state.update(-1);
-			if (state.value >= 0 && !itemEnabled(state.value))
-				state.update(-1);
-			selectedIndex = state.value;
 			var provider = selectionProvider;
-			if (provider != null) {
+			if (provider == null) {
+				var current = state.value;
+				if (current < -1 || current >= cachedCount || current >= 0 && !itemEnabled(current)) current = -1;
+				selectedIndex = current;
+			} else {
 				var desired = context.observeInt(provider);
 				if (desired < -1 || desired >= cachedCount || desired >= 0 && !itemEnabled(desired)) desired = -1;
 				selectedIndex = desired;
-				if (state.value != desired) state.updateQuietly(desired);
 			}
 			itemIds = new Map();
 			itemKeys = new Map();
@@ -151,6 +149,7 @@ class ListView implements View {
 			var viewportHeight = controller.hasMetrics ? Math.max(1.0, controller.viewportHeight) :
 				(viewportStyle.height.sizing == LayoutSizing.Fixed ? viewportStyle.height.value :
 				fallbackViewportHeight);
+			var builtViewportHeight = viewportHeight;
 			var window = requiredExtentIndex();
 			measureWindowPreservingAnchor(window, viewportHeight);
 			materializedFirst = window.first;
@@ -209,9 +208,9 @@ class ListView implements View {
 			var viewport = context.withScope(new Key("scroll-view"), function() return scroll.build(context));
 			root.add(viewport);
 			viewport.onResolved(geometry -> {
-				// Compare the actual scroll viewport: its parent can differ by a float32 rounding step.
-				// ScrollView records these metrics later in the same geometry walk.
-				if (!controller.hasMetrics || controller.viewportHeight != geometry.height || controller.offsetY != builtOffset) {
+				// Compare the geometry used to choose the virtual window with the resolved scroll viewport.
+				// ScrollView updates controller metrics before this callback runs.
+				if (!controller.hasMetrics || builtViewportHeight != geometry.height || controller.offsetY != builtOffset) {
 					context.requestBuildFeedback();
 				}
 			});

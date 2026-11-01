@@ -4,8 +4,10 @@ package haxeon.ui.core;
 class InteractionStateStore {
 	final values:Map<Int, Int>;
 	final pending:Map<Int, Int> = [];
+	/** Borrowed until the next state change or acknowledge; reused by every caller in one input transaction. */
+	final changeScratch:Array<{id:Int, before:Int, after:Int}> = [];
+	var changesRevision:Int = -1;
 	public var revision(default, null):Int;
-	static final NoChanges:Array<{id:Int, before:Int, after:Int}> = [];
 
 	public function new() {
 		values = new Map();
@@ -28,21 +30,38 @@ class InteractionStateStore {
 
 	/** Net state changes since the last submitted frame, bounded by touched widget IDs. */
 	public function changes():Array<{id:Int, before:Int, after:Int}> {
-		// Shared and empty: callers only read the result.
-		if (pending.size() == 0)
-			return NoChanges;
-		var result = [];
-		for (id in pending.keys()) {
-			var before:Int = cast pending.get(id), after:Int = cast values.get(id);
-			if (before != after) result.push({id:id, before:before, after:after});
+		if (changesRevision == revision)
+			return changeScratch;
+		var count = 0;
+		if (pending.size() != 0)
+			for (id in pending.keys()) {
+				var before:Int = cast pending.get(id), after:Int = cast values.get(id);
+				if (before == after) continue;
+				if (count == changeScratch.length)
+					changeScratch.push({id:id, before:before, after:after});
+				else {
+					var change = changeScratch[count];
+					change.id = id;
+					change.before = before;
+					change.after = after;
+				}
+				count++;
 		}
-		return result;
+		changeScratch.resize(count);
+		changesRevision = revision;
+		return changeScratch;
 	}
-	public function acknowledge():Void pending.clear();
+	public function acknowledge():Void {
+		pending.clear();
+		changeScratch.resize(0);
+		changesRevision = revision;
+	}
 
 	public function dispose():Void {
 		values.clear();
 		pending.clear();
+		changeScratch.resize(0);
 		revision++;
+		changesRevision = revision;
 	}
 }
