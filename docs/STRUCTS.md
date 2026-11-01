@@ -113,11 +113,13 @@ struct Health : Component {
   - no inheritance;
   - constructors and non-virtual methods, called directly.
 - **Conformance.** `struct Name : A, B` declares conformance to interfaces.
-  In the first version, conformance is used only by generic constraints
-  (`get<T:Component>()`). Boxing a struct into an interface-typed value is
-  deferred.
-- **`==` compares fields.** This fixes the current reference equality on
-  value classes.
+  Interfaces remain the abstraction; there is no separate trait feature. A generic bound such as
+  `lerp<T:Interpolate>` dispatches statically after specialization for each struct type, without boxing. Converting a
+  struct to an interface-typed value boxes it, like a Rust `dyn Trait`; using an interface as a bound does not.
+  Retroactive conformance requires coherence rules and is deferred, as are associated types and default interface
+  methods, until a concrete need arises.
+- **Declared equality.** `@:structural` derives fieldwise equality and hashing; an explicit `equals`/`hash` pair can
+  supply the capability instead, as described in [Equality and hashing](#equality-and-hashing).
 
 ### Flat and Portable
 
@@ -357,16 +359,9 @@ inline layout and is rejected.
 
 ### Allocation-free optional value flow
 
-The UI migration exposed an allocation boundary that stage 1a deliberately leaves boxed. A `Null<Rect>` can travel
-from an inline field through a local, a typed callback and another inline field. On Wasm GC, a prototype converting
-only `Rect` and `Insets` increased the fixed-time Showcase's 120-frame object count from 8,654 to 19,936; a per-function
-instrumentation attributes 6,480 allocations each to the optional `CanvasState.clip` getter and its `copyFrom` caller.
-On HashLink, an interaction census recorded 23,217 `@haxeon.ui.Rect` and 9,811 `@haxeon.ui.Insets` allocations over
-30 cycles after that prototype. The prior class census recorded 7,511 `Rect` and 70 `Insets` allocations. These are
-whole-capture counts, not per-action counts. The prototype also raised the measured inspector-scroll median from
-22.3 to 29.4 KiB, and the hierarchy-to-sensors median from 158.2 to 182.1 KiB. The conversion is not accepted on this
-evidence. The allocation-instrumented Wasm counts include generated `struct.new` and `array.new` instructions; they do
-not establish byte sizes or cover separately encoded function bodies.
+The UI migration exposed allocations when a `Null<Rect>` traveled from an inline field through a local, a typed
+callback and another inline field. The compiler changes below keep eligible value flow scalar while preserving the
+boxed representation at genuine escape boundaries.
 
 #### Implemented: non-optional HashLink value temporaries
 
@@ -379,34 +374,28 @@ tracks stack arguments individually instead of using a 32-bit mask. This extends
 adding a second VM ABI. Inline-field construction and copies are scalar-replaced even when ordinary function inlining is disabled.
 Typed static-initialization checks preserve the value representation instead of converting it to Dynamic.
 
-With the Rect/Insets prototype on the baseline machine, the HashLink interaction census over 30 cycles changed from
-23,217 to 16,539 boxed `Rect` allocations and from 9,811 to 779 boxed `Insets` allocations. The hierarchy-to-sensors
-median changed from 182.1 to 162.6 KiB and inspector-scroll from 29.4 to 21.6 KiB. The 120-frame Wasm GC Showcase
-count remained 19,936 objects in full mode and 26,762 in editing mode, as this step targets HashLink. These are
-intermediate measurements: the class baseline and remaining optional flow still determine acceptance.
-
 The same-machine HashLink medians below are KiB per action. The all-five column is the full-width exploratory
 conversion before removing repeated holder allocations. Selection uses a direct allocation census because the budget
 script does not report that action's bytes. `Gc.totalAllocated` reports reservations in chunks, so tiny differences
 between adjacent actions can move between those actions; a direct per-action census checks the current counts. For
-example, backspace measured 18.1 KiB in the current reservation-based run, but its direct census fell from 18,392 to
+example, backspace measured 18.1 KiB in another reservation-based run, but its direct census fell from 18,392 to
 17,056 bytes.
 
 | Action | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
 | console → telemetry | 110.9 | 112.7 | 125.0 | 77.2 |
 | hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.4 |
-| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 80.8 |
+| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.6 |
 | telemetry → console | 128.6 | 131.0 | 145.5 | 95.6 |
 | hover away | 24.9 | 25.0 | 26.5 | 14.8 |
 | hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
-| hover field | 22.1 | 22.2 | 25.0 | 13.9 |
+| hover field | 22.1 | 22.2 | 25.0 | 13.6 |
 | hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
 | hover other | 13.1 | 13.2 | 14.3 | 10.0 |
 | idle | 0.2 | 0.2 | 0.2 | 0.2 |
 | idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
 | scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
-| type backspace | 17.8 | 17.9 | 18.7 | 18.1 |
+| type backspace | 17.8 | 17.9 | 18.7 | 16.2 |
 | type character | 17.8 | 17.9 | 18.7 | 16.1 |
 | selection (census) | 927.7 | — | — | 855.9 |
 
@@ -430,13 +419,9 @@ snapshots the source presence flag and every flattened leaf before writing the d
 in source order, and source and destination null errors occur at their original accesses. This preserves nested optionals,
 managed references, side effects, and overlapping or identical places. Other copies keep their boxed representation.
 
-The interaction census was unchanged in step B. The Wasm GC Showcase counts fell by 12,960 objects in both full and
-editing scenarios, removing the paired clip getter and copy allocations measured in the prototype.
+This removes the paired allocations in the optional clip getter and its copy caller.
 
 #### Implemented: scalar optional flow
-
-In the Rect/Insets interaction census, step C reduced boxed Rect allocations from 16,539 to 5,932 and Insets from 779
-to 759 over 30 cycles; native-layout optional flow reduced these further.
 
 Nonescaping optional locals carry a presence flag and recursively flattened leaves. Eligible direct calls, typed closures
 and exact-type methods use specialized scalar component carriers; calls across unsupported or reference-representation
@@ -456,6 +441,22 @@ Dynamic, reflective, native and otherwise unsupported boundaries retain the boxe
 The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
 recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and
 without inlining.
+
+### Dynamic fields holding values
+
+The UI style pipeline currently erases known types in declarations, computed values and transitions, causing the
+remaining struct boxes. Replace that pipeline with typed declarations, typed computed storage and typed transitions;
+materialize `Dynamic` values at inspection, debugging and reflection boundaries. Keep the typed declaration factories.
+This removes the avoidable erasure rather than introducing a compiler transformation that must preserve dynamic access,
+reflection, identity, mutation, exception order and native escape on every target. Remove the temporary inline-axis and
+cached local-snapshot boxing paths once typed storage covers them.
+
+For later stages 2–3, specialize generics for struct type arguments, as in C# and Rust. Monomorphization can replace
+per-kind declaration implementations with `StyleValueOf<T>` and is the general path to unboxed `Array<S>`, `Map<K, S>`,
+`State<S>` and `T`-typed closures. Interface bounds dispatch statically for each specialized struct, without boxing; an
+interface-typed value remains a boxed dynamic boundary. Equality and hashing remain compiler-known capabilities
+(`@:structural` or an `equals`/`hash` pair), and may later be exposed as `Equatable` and `Hashable` interfaces so bounds
+such as `Map<K:Hashable, V>` are checked at compile time. This remains separate from the stage 0 UI migration.
 
 ## Representation on Wasm GC
 
@@ -725,8 +726,6 @@ point green.
 
 ## Open questions
 
-- **Conformance syntax.** `struct X : I` reuses the inheritance syntax. Should
-  conformance have its own keyword (`struct X is I`)?
 - **Fixed-array syntax.** `Int32[4]`, or a type such as `Fixed<Int32, 4>`,
   which would need integer generic arguments?
 - **HashLink layout.** Does HashLink's inline layout for value structures

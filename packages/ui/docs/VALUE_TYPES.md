@@ -32,10 +32,9 @@ Struct boxes can still occur at real dynamic and reflective boundaries. For exam
 materializes a box; a type census should distinguish `@`-prefixed struct boxes from the former class allocations. The
 compiler scalarizes supported direct and typed calls, optional locals and inline field copies; unsupported or escaping
 values retain the normal boxed ABI. See [STRUCTS.md](../../../docs/STRUCTS.md) for the calling conventions and attribution.
-In particular, `StyleValue.value` is a public `Dynamic` field. Independent boxes can compare differently by dynamic
-identity, and HashLink can change a boxed value through `Reflect`. Sharing boxes across declarations or refreshes would
-therefore change observable behavior. Removing these allocations needs a representation that preserves that boundary,
-not a pool of shared boxes.
+The remaining style boxes come from declarations, computed styles and transitions erasing known types to `Dynamic`.
+The planned typed style pipeline keeps those values inline and creates dynamic values only for inspection, debugging
+and reflection. See [STRUCTS.md](../../../docs/STRUCTS.md) for the decision and the later generic-specialization work.
 
 The same-machine 30-cycle HashLink census starts after the initial editor frame and includes scenario setup. It counts
 allocations by type. Entries after conversion are
