@@ -12,6 +12,11 @@ static vstring *realtime_atomic_windows_error( DWORD error ) {
 	LocalFree(message);
 	return result;
 }
+
+/* Errors a process holding the target open causes, which go away when it closes the file. */
+static bool realtime_atomic_transient( DWORD error ) {
+	return error == ERROR_SHARING_VIOLATION || error == ERROR_ACCESS_DENIED || error == ERROR_LOCK_VIOLATION;
+}
 #else
 #include <errno.h>
 #include <fcntl.h>
@@ -72,12 +77,15 @@ HL_PRIM vstring *HL_NAME(__file_write_atomic)( vstring *path, realtime_bytes *co
 	}
 	if( error == ERROR_SUCCESS && !FlushFileBuffers(file) ) error = GetLastError();
 	if( file != INVALID_HANDLE_VALUE && !CloseHandle(file) && error == ERROR_SUCCESS ) error = GetLastError();
+	// A rename over the target is atomic: a reader sees the old file or the new one. ReplaceFileW is not; it moves the
+	// target aside first, so a concurrent reader or writer found no file. A process that has the target open without
+	// FILE_SHARE_DELETE (a scanner, an indexer) refuses the rename for a moment, so retry for about a second.
 	if( error == ERROR_SUCCESS ) {
-		if( replace && target_exists ) {
-			if( !ReplaceFileW(target,temporary,NULL,REPLACEFILE_WRITE_THROUGH,NULL,NULL) ) error = GetLastError();
-		} else {
-			DWORD flags = MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0);
-			if( !MoveFileExW(temporary,target,flags) ) error = GetLastError();
+		DWORD flags = MOVEFILE_WRITE_THROUGH | (replace ? MOVEFILE_REPLACE_EXISTING : 0);
+		for( int attempt = 0;; attempt++ ) {
+			error = MoveFileExW(temporary,target,flags) ? ERROR_SUCCESS : GetLastError();
+			if( error == ERROR_SUCCESS || !realtime_atomic_transient(error) || attempt == 20 ) break;
+			Sleep(attempt < 5 ? 10 : 50);
 		}
 	}
 	if( error != ERROR_SUCCESS ) DeleteFileW(temporary);

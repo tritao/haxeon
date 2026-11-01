@@ -288,9 +288,34 @@ HL_PRIM void HL_NAME(__file_append_content)( vstring *path, vstring *content ) {
 }
 
 
+#ifdef HL_WIN
+/* Opens for reading with every share mode, so an atomic writer can rename over the file while it is read. The rename
+   in progress refuses the open for a moment (the replaced file is pending deletion), so retry for about a second. */
+static FILE *realtime_file_open_shared( const wchar_t *path ) {
+	for( int attempt = 0;; attempt++ ) {
+		HANDLE handle = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+			OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if( handle != INVALID_HANDLE_VALUE ) {
+			int descriptor = _open_osfhandle((intptr_t)handle, _O_RDONLY | _O_BINARY);
+			if( descriptor < 0 ) { CloseHandle(handle); return NULL; }
+			FILE *file = _fdopen(descriptor, "rb");
+			if( file == NULL ) _close(descriptor);
+			return file;
+		}
+		DWORD error = GetLastError();
+		DWORD attributes = GetFileAttributesW(path);
+		bool directory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+		bool transient = error == ERROR_SHARING_VIOLATION || error == ERROR_LOCK_VIOLATION || error == ERROR_ACCESS_DENIED ||
+			error == ERROR_DELETE_PENDING;
+		if( directory || !transient || attempt == 20 ) return NULL;
+		Sleep(attempt < 5 ? 10 : 50);
+	}
+}
+#endif
+
 static vbyte *realtime_file_read( vstring *path, int *length ) {
 #ifdef HL_WIN
-	FILE *file = _wfopen((const wchar_t *)realtime_string_data(path),L"rb");
+	FILE *file = realtime_file_open_shared((const wchar_t *)realtime_string_data(path));
 #else
 	char *path_utf8 = realtime_utf8_copy(path);
 	FILE *file = fopen(path_utf8, "rb");
