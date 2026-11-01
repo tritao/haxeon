@@ -12,7 +12,7 @@ class BackgroundDecoration extends Decoration {
 
 	public function new(?color:Color) {
 		super(DecorationKind.Background);
-		this.color = color == null ? null : Effect.copyColor(color);
+		this.color = color == null ? null : VisualEffect.copyColor(color);
 	}
 
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
@@ -28,7 +28,7 @@ class BackgroundDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:BackgroundDecoration = cast other;
-		return Effect.equalColor(color, value.color);
+		return VisualEffect.equalColor(color, value.color);
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {
@@ -37,7 +37,7 @@ class BackgroundDecoration extends Decoration {
 		var value:BackgroundDecoration = cast other;
 		if (color == null || value.color == null)
 			return amount < 0.5 ? copy() : value.copy();
-		return new BackgroundDecoration(Effect.interpolateColor(color, value.color, amount));
+		return new BackgroundDecoration(VisualEffect.interpolateColor(color, value.color, amount));
 	}
 
 	override public function describe():String

@@ -1,30 +1,30 @@
 package haxeon.ui.style;
 
 /** Multiplicative RGB brightness adjustment. */
-class BrightnessEffect extends Effect {
+class BrightnessEffect extends VisualEffect {
 	public final factor:Float;
 
 	public function new(factor:Float) {
 		super(EffectKind.Brightness);
-		this.factor = Effect.requireNonNegative(factor,
+		this.factor = VisualEffect.requireNonNegative(factor,
 			"Brightness factor must be finite and non-negative");
 	}
 
-	override public function isEqual(other:Effect):Bool {
+	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.Brightness)
 			return false;
 		var value:BrightnessEffect = cast other;
 		return value != null && factor == value.factor;
 	}
 
-	override public function interpolate(other:Effect, amount:Float):Effect {
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
 		if (other == null || other.kind != EffectKind.Brightness)
-			return Effect.discrete(this, other, amount);
+			return VisualEffect.discrete(this, other, amount);
 		var value:BrightnessEffect = cast other;
-		return new BrightnessEffect(Effect.interpolateFloat(factor, value.factor, amount));
+		return new BrightnessEffect(VisualEffect.interpolateFloat(factor, value.factor, amount));
 	}
 
-	override public function copy():Effect
+	override public function copy():VisualEffect
 		return new BrightnessEffect(factor);
 
 	override public function describe():String

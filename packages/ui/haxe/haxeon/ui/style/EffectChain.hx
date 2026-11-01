@@ -8,14 +8,14 @@ import haxeon.ui.style.HueRotateEffect;
 
 /** Ordered, value-semantic collection of post-layout visual effects. */
 class EffectChain {
-	public final effects:Array<Effect>;
+	public final effects:Array<VisualEffect>;
 
-	public function new(effects:Array<Effect> = null) {
+	public function new(effects:Array<VisualEffect> = null) {
 		this.effects = [];
 		if (effects != null)
 			for (effect in effects) {
 				if (effect == null)
-					throw "Effect chains cannot contain null effects";
+					throw "VisualEffect chains cannot contain null effects";
 				this.effects.push(effect.copy());
 			}
 	}
@@ -23,7 +23,7 @@ class EffectChain {
 	public static function empty():EffectChain
 		return new EffectChain();
 
-	public static function of(effects:Array<Effect>):EffectChain
+	public static function of(effects:Array<VisualEffect>):EffectChain
 		return new EffectChain(effects);
 
 	public function copy():EffectChain
@@ -51,7 +51,7 @@ class EffectChain {
 			return left.copy();
 		if (left.effects.length != right.effects.length)
 			return amount < 0.5 ? left.copy() : right.copy();
-		var result:Array<Effect> = [];
+		var result:Array<VisualEffect> = [];
 		for (index in 0...left.effects.length) {
 			var from = left.effects[index];
 			var to = right.effects[index];
@@ -76,7 +76,7 @@ class EffectChain {
 	 * renderer-owned operation remains in its original position.
 	 */
 	public function normalized():EffectChain {
-		var result:Array<Effect> = [];
+		var result:Array<VisualEffect> = [];
 		var matrix:Array<Float> = null;
 		for (effect in effects) {
 			if (isMatrixEffect(effect)) {
@@ -128,14 +128,14 @@ class EffectChain {
 		return result;
 	}
 
-	static function isMatrixEffect(effect:Effect):Bool
+	static function isMatrixEffect(effect:VisualEffect):Bool
 		return switch effect.kind {
 			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate |
 				EffectKind.HueRotate | EffectKind.ColorMatrix: true;
 			default: false;
 		};
 
-	static function matrixFor(effect:Effect):Array<Float> {
+	static function matrixFor(effect:VisualEffect):Array<Float> {
 		switch effect.kind {
 			case EffectKind.Brightness:
 				var value:BrightnessEffect = cast effect;
@@ -153,7 +153,7 @@ class EffectChain {
 				var value:ColorMatrixEffect = cast effect;
 				return value.matrix.copy();
 			default:
-				throw "Effect is not a color-matrix operation";
+				throw "VisualEffect is not a color-matrix operation";
 		}
 	}
 

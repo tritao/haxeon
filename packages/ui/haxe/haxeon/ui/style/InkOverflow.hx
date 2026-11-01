@@ -19,7 +19,7 @@ struct InkOverflow : Hashable {
 			bottom:Float = 0.0) {
 		if (!Math.isFinite(left) || left < 0.0 || !Math.isFinite(top) || top < 0.0 ||
 			!Math.isFinite(right) || right < 0.0 || !Math.isFinite(bottom) || bottom < 0.0)
-			throw "Effect ink overflow must be finite and non-negative";
+			throw "VisualEffect ink overflow must be finite and non-negative";
 		this.left = left;
 		this.top = top;
 		this.right = right;

@@ -18,10 +18,10 @@ struct EffectParameter : Equatable {
 			throw "Custom effect parameter shape does not match its type";
 		this.type = type;
 		this.componentCount = count;
-		this.x = Effect.requireFinite(x, "Custom effect parameters must be finite");
-		this.y = count > 1 ? Effect.requireFinite(y, "Custom effect parameters must be finite") : 0.0;
-		this.z = count > 2 ? Effect.requireFinite(z, "Custom effect parameters must be finite") : 0.0;
-		this.w = count > 3 ? Effect.requireFinite(w, "Custom effect parameters must be finite") : 0.0;
+		this.x = VisualEffect.requireFinite(x, "Custom effect parameters must be finite");
+		this.y = count > 1 ? VisualEffect.requireFinite(y, "Custom effect parameters must be finite") : 0.0;
+		this.z = count > 2 ? VisualEffect.requireFinite(z, "Custom effect parameters must be finite") : 0.0;
+		this.w = count > 3 ? VisualEffect.requireFinite(w, "Custom effect parameters must be finite") : 0.0;
 	}
 
 	public static function scalar(value:Float):EffectParameter
@@ -59,10 +59,10 @@ struct EffectParameter : Equatable {
 		if (type != other.type)
 			return amount < 0.5 ? this : other;
 		return new EffectParameter(type,
-			Effect.interpolateFloat(x, other.x, amount),
-			Effect.interpolateFloat(y, other.y, amount),
-			Effect.interpolateFloat(z, other.z, amount),
-			Effect.interpolateFloat(w, other.w, amount));
+			VisualEffect.interpolateFloat(x, other.x, amount),
+			VisualEffect.interpolateFloat(y, other.y, amount),
+			VisualEffect.interpolateFloat(z, other.z, amount),
+			VisualEffect.interpolateFloat(w, other.w, amount));
 	}
 
 	public function describe():String {

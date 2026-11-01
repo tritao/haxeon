@@ -10,7 +10,7 @@ import haxeon.ui.style.BlurEffect;
 import haxeon.ui.style.ColorMatrixEffect;
 import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.DropShadowEffect;
-import haxeon.ui.style.Effect;
+import haxeon.ui.style.VisualEffect;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.EffectKind;
 import haxeon.ui.style.Mask;
@@ -131,7 +131,7 @@ class CanvasCommandBuffer {
 			writeEffect(effect);
 	}
 
-	function writeEffect(value:Effect):Void {
+	function writeEffect(value:VisualEffect):Void {
 		var matrix:Array<Float> = [];
 		for (index in 0...20)
 			matrix.push(0.0);

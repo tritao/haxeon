@@ -39,7 +39,7 @@ class OutlineDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:OutlineDecoration = cast other;
-		return Effect.equalColor(color, value.color) && width == value.width;
+		return VisualEffect.equalColor(color, value.color) && width == value.width;
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {
@@ -48,7 +48,7 @@ class OutlineDecoration extends Decoration {
 		var value:OutlineDecoration = cast other;
 		if (color == null || value.color == null || width == null || value.width == null)
 			return amount < 0.5 ? copy() : value.copy();
-		return new OutlineDecoration(Effect.interpolateColor(color, value.color, amount),
+		return new OutlineDecoration(VisualEffect.interpolateColor(color, value.color, amount),
 			width + (value.width - width) * amount);
 	}
 

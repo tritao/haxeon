@@ -14,8 +14,8 @@ class GradientDecoration extends Decoration {
 
 	public function new(start:Color, end:Color) {
 		super(DecorationKind.Gradient);
-		this.start = Effect.copyColor(start);
-		this.end = Effect.copyColor(end);
+		this.start = VisualEffect.copyColor(start);
+		this.end = VisualEffect.copyColor(end);
 	}
 
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
@@ -31,15 +31,15 @@ class GradientDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:GradientDecoration = cast other;
-		return Effect.equalColor(start, value.start) && Effect.equalColor(end, value.end);
+		return VisualEffect.equalColor(start, value.start) && VisualEffect.equalColor(end, value.end);
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {
 		if (other == null || other.kind != kind)
 			return Decoration.discrete(this, other, amount);
 		var value:GradientDecoration = cast other;
-		return new GradientDecoration(Effect.interpolateColor(start, value.start, amount),
-			Effect.interpolateColor(end, value.end, amount));
+		return new GradientDecoration(VisualEffect.interpolateColor(start, value.start, amount),
+			VisualEffect.interpolateColor(end, value.end, amount));
 	}
 
 	override public function describe():String

@@ -1,7 +1,7 @@
 package haxeon.ui.style;
 
 /** Typed value for a native renderer-owned custom shader effect. */
-class CustomEffect extends Effect {
+class CustomEffect extends VisualEffect {
 	public final definition:CustomEffectDefinition;
 	public final parameters:Array<EffectParameter>;
 	/** Flattened values written into the backend-neutral layer descriptor. */
@@ -26,7 +26,7 @@ class CustomEffect extends Effect {
 		}
 	}
 
-	override public function isEqual(other:Effect):Bool {
+	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.Custom)
 			return false;
 		var value:CustomEffect = cast other;
@@ -39,9 +39,9 @@ class CustomEffect extends Effect {
 		return true;
 	}
 
-	override public function interpolate(other:Effect, amount:Float):Effect {
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
 		if (other == null || other.kind != EffectKind.Custom)
-			return Effect.discrete(this, other, amount);
+			return VisualEffect.discrete(this, other, amount);
 		var value:CustomEffect = cast other;
 		if (value == null || definition != value.definition ||
 			parameters.length != value.parameters.length)
@@ -52,7 +52,7 @@ class CustomEffect extends Effect {
 		return new CustomEffect(definition, result);
 	}
 
-	override public function copy():Effect
+	override public function copy():VisualEffect
 		return new CustomEffect(definition, parameters);
 
 	override public function inkOverflow():InkOverflow

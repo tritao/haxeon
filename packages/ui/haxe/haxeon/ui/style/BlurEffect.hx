@@ -1,33 +1,33 @@
 package haxeon.ui.style;
 
 /** Gaussian blur described by its standard deviation in logical pixels. */
-class BlurEffect extends Effect {
+class BlurEffect extends VisualEffect {
 	public final sigma:Float;
 
 	public function new(sigma:Float) {
 		super(EffectKind.Blur);
-		this.sigma = Effect.requireNonNegative(sigma,
+		this.sigma = VisualEffect.requireNonNegative(sigma,
 			"Blur sigma must be finite and non-negative");
 	}
 
 	public static function withSigma(value:Float):BlurEffect
 		return new BlurEffect(value);
 
-	override public function isEqual(other:Effect):Bool {
+	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.Blur)
 			return false;
 		var value:BlurEffect = cast other;
 		return value != null && kind == value.kind && sigma == value.sigma;
 	}
 
-	override public function interpolate(other:Effect, amount:Float):Effect {
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
 		if (other == null || other.kind != EffectKind.Blur)
-			return Effect.discrete(this, other, amount);
+			return VisualEffect.discrete(this, other, amount);
 		var value:BlurEffect = cast other;
-		return new BlurEffect(Effect.interpolateFloat(sigma, value.sigma, amount));
+		return new BlurEffect(VisualEffect.interpolateFloat(sigma, value.sigma, amount));
 	}
 
-	override public function copy():Effect
+	override public function copy():VisualEffect
 		return new BlurEffect(sigma);
 
 	override public function inkOverflow():InkOverflow

@@ -1,7 +1,7 @@
 package haxeon.ui.style;
 
 /** Four-channel color matrix in row-major 4x5 form. */
-class ColorMatrixEffect extends Effect {
+class ColorMatrixEffect extends VisualEffect {
 	public static inline var ComponentCount:Int = 20;
 	public final matrix:Array<Float>;
 
@@ -11,7 +11,7 @@ class ColorMatrixEffect extends Effect {
 			throw "Color matrices require 20 components";
 		this.matrix = [];
 		for (value in matrix)
-			this.matrix.push(Effect.requireFinite(value,
+			this.matrix.push(VisualEffect.requireFinite(value,
 				"Color matrix components must be finite"));
 	}
 
@@ -23,7 +23,7 @@ class ColorMatrixEffect extends Effect {
 		return new ColorMatrixEffect(matrix);
 	}
 
-	override public function isEqual(other:Effect):Bool {
+	override public function isEqual(other:VisualEffect):Bool {
 		if (other == null || other.kind != EffectKind.ColorMatrix)
 			return false;
 		var value:ColorMatrixEffect = cast other;
@@ -35,17 +35,17 @@ class ColorMatrixEffect extends Effect {
 		return true;
 	}
 
-	override public function interpolate(other:Effect, amount:Float):Effect {
+	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
 		if (other == null || other.kind != EffectKind.ColorMatrix)
-			return Effect.discrete(this, other, amount);
+			return VisualEffect.discrete(this, other, amount);
 		var value:ColorMatrixEffect = cast other;
 		var result:Array<Float> = [];
 		for (index in 0...matrix.length)
-			result.push(Effect.interpolateFloat(matrix[index], value.matrix[index], amount));
+			result.push(VisualEffect.interpolateFloat(matrix[index], value.matrix[index], amount));
 		return new ColorMatrixEffect(result);
 	}
 
-	override public function copy():Effect
+	override public function copy():VisualEffect
 		return new ColorMatrixEffect(matrix);
 
 	override public function describe():String {

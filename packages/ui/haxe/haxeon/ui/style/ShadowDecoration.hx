@@ -46,7 +46,7 @@ class ShadowDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:ShadowDecoration = cast other;
-		return Effect.equalColor(color, value.color) && offsetX == value.offsetX &&
+		return VisualEffect.equalColor(color, value.color) && offsetX == value.offsetX &&
 			offsetY == value.offsetY && blurRadius == value.blurRadius && spread == value.spread;
 	}
 
@@ -58,7 +58,7 @@ class ShadowDecoration extends Decoration {
 			offsetY == null || value.offsetY == null || blurRadius == null ||
 			value.blurRadius == null || spread == null || value.spread == null)
 			return amount < 0.5 ? copy() : value.copy();
-		return new ShadowDecoration(Effect.interpolateColor(color, value.color, amount),
+		return new ShadowDecoration(VisualEffect.interpolateColor(color, value.color, amount),
 			offsetX + (value.offsetX - offsetX) * amount,
 			offsetY + (value.offsetY - offsetY) * amount,
 			blurRadius + (value.blurRadius - blurRadius) * amount,

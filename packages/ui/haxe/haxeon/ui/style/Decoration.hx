@@ -6,7 +6,7 @@ import haxeon.ui.ResolvedLayoutItem;
 /**
  * Rendering-independent decoration value painted after layout resolves geometry.
  *
- * Decorations deliberately follow the same value-object contract as Effect:
+ * Decorations deliberately follow the same value-object contract as VisualEffect:
  * built-ins override copy/equality/interpolation, while custom decorations can
  * inherit the identity/discrete defaults without any runtime type inspection.
  */

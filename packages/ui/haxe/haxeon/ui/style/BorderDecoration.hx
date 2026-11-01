@@ -40,7 +40,7 @@ class BorderDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:BorderDecoration = cast other;
-		return Effect.equalColor(color, value.color) && width == value.width && hairline == value.hairline;
+		return VisualEffect.equalColor(color, value.color) && width == value.width && hairline == value.hairline;
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {
@@ -49,7 +49,7 @@ class BorderDecoration extends Decoration {
 		var value:BorderDecoration = cast other;
 		if (hairline != value.hairline || color == null || value.color == null || width == null || value.width == null)
 			return amount < 0.5 ? copy() : value.copy();
-		return new BorderDecoration(Effect.interpolateColor(color, value.color, amount),
+		return new BorderDecoration(VisualEffect.interpolateColor(color, value.color, amount),
 			width + (value.width - width) * amount, hairline);
 	}
 
