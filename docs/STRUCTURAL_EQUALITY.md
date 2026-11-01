@@ -42,10 +42,12 @@ error rather than a silent omission.
   hand-written group of fields can be checked against `allFieldsMask` in a test.
 
 Today every struct is accepted without the annotation, and a struct's `==` applies each field's own `==` while
-`Equality.equals` and `hash` compare deeply. The decided direction (STRUCTS.md, "Equality and hashing") makes value
-equality declared: `@:structural` derives it, or a type implements an `equals`/`hash` pair; that one equality is used by
-`==`, maps, `Equality.equals` and `Structural.hash`; and `==` on a struct without it is a compile error. Mark structs
-that are compared `@:structural` now.
+`Equality.equals` and `hash` compare deeply. The decided direction (STRUCTS.md, "Equality and hashing") declares value equality through `Equatable` or `Hashable`
+conformance; the compiler synthesizes it or uses hand-written implementations. That equality is shared by `==`, maps,
+`Equality.equals` and `Structural.hash`, and `==` on a struct without `Equatable` is a compile error. Field masks and
+related operations require separate `Diffable` conformance, for structs and classes. When the new rules are implemented,
+port every `@:structural` declaration and `Structural.*` use in the same change, then remove `@:structural`; keep the
+current annotations until that change lands.
 
 A structural class may not extend another class: the base's fields would be
 left out. `LayoutStyle` in the UI package uses these for its copy, its restyle

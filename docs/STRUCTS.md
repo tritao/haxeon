@@ -118,8 +118,8 @@ struct Health : Component {
   struct to an interface-typed value boxes it, like a Rust `dyn Trait`; using an interface as a bound does not.
   Retroactive conformance requires coherence rules and is deferred, as are associated types and default interface
   methods, until a concrete need arises.
-- **Declared equality.** `@:structural` derives fieldwise equality and hashing; an explicit `equals`/`hash` pair can
-  supply the capability instead, as described in [Equality and hashing](#equality-and-hashing).
+- **Declared equality.** Conformance to `Equatable` or `Hashable` declares value equality; the compiler synthesizes
+  it when possible, as described in [Equality and hashing](#equality-and-hashing).
 
 ### Flat and Portable
 
@@ -303,43 +303,49 @@ still make their usual independent copies. Wasm GC uses flattened fields for the
 
 ## Equality and hashing
 
-Decided 2026-10-31, not yet implemented. Value equality is a capability a type declares, as in Rust (`derive`) and Swift
-(`Equatable`/`Hashable` with synthesis), rather than something every struct gets implicitly as in Go or C#'s
-`ValueType.Equals`:
+Decided 2026-11-01, not yet implemented. Value equality is declared by interface conformance, following Swift's
+`Equatable` and `Hashable` model:
 
-- **Equality is part of a type's contract.** Implicit equality makes every field, including private and cached ones,
-  part of `==` and `hash`; adding such a field, or one whose type cannot be compared, silently changes or breaks
-  comparisons far from the declaration. A declaration puts that decision, and its errors, at the type.
-- **Custom equality is needed.** `Semantics.same` excludes a field and `Mask` compares its image by identity. A declared
-  capability can be derived or written by hand, and every consumer uses the one implementation.
-- **Declaring later never breaks anyone; removing implicit equality does.**
+```haxe
+struct Color : Hashable { /* fields */ }
+class Record implements Hashable { /* fields */ }
+```
 
-The rules:
+`Equatable` supplies `==`; `Hashable` implies `Equatable`, so a type that is also a key ordinarily declares only
+`Hashable`. The compiler synthesizes equality and hashing when every field supports the required conformance, and names
+an offending field otherwise. Hand-written `equals` and `hash` implementations satisfy the same interfaces rather than
+forming a separate declaration mechanism. A type has one equality used by `==`, maps, `haxeon.Equality.equals`,
+`Structural.hash` and containing types.
 
-1. **`@:structural` derives** equality, hashing and the field operations (`Structural.changedMask`, `assignChanged`,
-   `fieldBit`, `allFieldsMask`) for a struct or a class. Derived equality compares each field with that field type's
-   declared equality (below); derived hashing agrees with it.
-2. **A type may instead implement `function equals(other:T):Bool` and `function hash():Int`**, as a pair: one without
-   the other is an error, as is combining them with `@:structural`. Field operations are not available on such a type.
-3. **One equality per type, used everywhere.** For a struct with declared equality, `==`, `!=`, map keys,
-   `haxeon.Equality.equals`, `Structural.hash` and the derived equality of every type that contains it all use that
-   implementation. This replaces the stage 1a split, where a struct's `==` applied each field's own `==` while
-   `Equality.equals` and `Structural.hash` compared deeply.
-4. **A field's declared equality** is: for primitives and integer enum abstracts, `==` (floats follow IEEE: `NaN` is
-   unequal to itself and `0.0 == -0.0`, and hashing maps `-0.0` to `0.0`); for structs and `@:structural` or
-   custom-equality classes, their declared equality; for `Null<T>`, equal when both are absent or both present and
-   equal; for strings, content; for enums, constructor and payload by the same rules; for arrays, maps and anonymous
-   structures, element by element as `Equality.equals` already does; for other class instances, identity.
-5. **`==` on a struct without declared equality is a compile error** naming the type and suggesting `@:structural`.
-   Copying stays implicit: a struct is a value, and Haxeon has no moves, so Rust's `Clone`/`Copy` split has no
-   counterpart. Nor does `PartialEq`/`Eq`: there is one equality, with IEEE floats.
-6. **Classes keep identity `==`.** `@:structural` or a custom pair gives a class content equality through
-   `Equality.equals`, `Structural.hash` and containing types, never through `==`.
+A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
+conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
+value semantics; floats retain IEEE behavior, with hashing consistent for `0.0` and `-0.0`. With specialized interface
+bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
+are statically dispatched without boxing.
 
-Implementation, after the UI value-type conversion: the `==` diagnostic, the `equals`/`hash` pair and its checks, the
-shared equality used by `==`, `EqualityGenerator` and `StructuralIntrinsics`, and migration of the struct fixtures
-(`struct-value-semantics.hx`, `struct-field-equality.hx` and those comparing structs without `@:structural`). Then
-`Semantics.same` becomes a custom pair, or derived once a per-field exclusion exists.
+Field operations are a separate opt-in through the compiler-known `Diffable` interface, for example
+`struct LayoutStyle : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `fieldBit`,
+`allFieldsMask` and `changedMask` for conforming types. Masks expose declaration order and field count, so the type's
+author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
+do not synthesize field-level operations by default.
+
+`assignChanged` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
+the field. Struct binding already copies values, so `Structural.copy` is unnecessary for structs and remains for
+`Diffable` classes. When conformance is implemented, port every `@:structural` declaration and `Structural.*` call in the
+same change and remove `@:structural`; the UI value structs keep their current annotations until then.
+
+Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses
+`derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
+interface methods remain deferred until there is a concrete need.
+
+Implementation follows the UI value-type conversion: add the conformance checks and synthesis, use the declared
+implementation throughout equality and hashing, and migrate struct fixtures and annotated structs. After an aliasing
+audit, data-record classes that need no identity can become structs: `LayoutStyle` after the item 3 measurement,
+`TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`, `EffectParameter`, `InkOverflow`,
+`CustomEffectDefinition`, and the app's CNC presentation and telemetry records. The same migration replaces
+`Structural.changedMask/assignChanged/fieldBit/allFieldsMask` with `Diff.mask/apply/bit/all`. Future
+ADR 0002 per-field `@Channel(...)` declarations fold into the masks produced by `Diffable`. This decision does not
+change the currently implemented rules described in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
 ## Nullable structs
 
@@ -454,9 +460,9 @@ cached local-snapshot boxing paths once typed storage covers them.
 For later stages 2–3, specialize generics for struct type arguments, as in C# and Rust. Monomorphization can replace
 per-kind declaration implementations with `StyleValueOf<T>` and is the general path to unboxed `Array<S>`, `Map<K, S>`,
 `State<S>` and `T`-typed closures. Interface bounds dispatch statically for each specialized struct, without boxing; an
-interface-typed value remains a boxed dynamic boundary. Equality and hashing remain compiler-known capabilities
-(`@:structural` or an `equals`/`hash` pair), and may later be exposed as `Equatable` and `Hashable` interfaces so bounds
-such as `Map<K:Hashable, V>` are checked at compile time. This remains separate from the stage 0 UI migration.
+interface-typed value remains a boxed dynamic boundary. Equality and hashing are compiler-known capabilities declared
+through `Equatable` and `Hashable`, so bounds such as `Map<K:Hashable, V>` are checked at compile time. This remains
+separate from the stage 0 UI migration.
 
 ## Representation on Wasm GC
 
@@ -645,11 +651,9 @@ headers in, and a build check reports headers that are out of date.
 - HXI-imported records become flat structs. This also completes the
   unification of HXI record projections that
   [NATIVE_MEMORY.md](NATIVE_MEMORY.md) lists as future work.
-- Both old forms remain accepted as aliases until their uses are migrated.
-  Diagnostics then suggest `struct`, and later the forms are removed.
-- **One semantic change:** `==` on former value classes changes from
-  reference to field comparison. Existing uses, mainly in Materia's UI code,
-  have to be audited before S1 lands.
+- Port every use of the old forms in the same change and remove them.
+- **One semantic change:** equality on former value classes follows declared `Equatable` conformance. Audit existing
+  comparisons before the change lands.
 
 ## Dependencies
 
