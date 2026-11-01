@@ -1172,6 +1172,8 @@ class TestMain {
 			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
 			'Type "Thing" does not conform to Hashable');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class MutableKey implements Hashable { public var value:Int; public function new() value = 1; } function main():Int return 42;',
+			'Cannot synthesize Hashable for "MutableKey": mutable field "value" must be final on a class');
 		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(Named, "b");',
 			'Type "Named" has no stored field "b"');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Diff.copy(new Fixed()).a;',

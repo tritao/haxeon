@@ -16,7 +16,7 @@ struct Point : Hashable {
   public var y:Float;
   public function new(x:Float, y:Float) { this.x = x; this.y = y; }
 }
-class Record implements Hashable {
+class Record implements Equatable {
   public var label:String;
   public var point:Point;
   public function new(label:String, point:Point) { this.label = label; this.point = point; }

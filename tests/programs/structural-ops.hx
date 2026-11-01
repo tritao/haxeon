@@ -1,7 +1,7 @@
 import haxeon.Equality;
 import haxeon.Diff;
 
-class Point implements Hashable {
+class Point implements Equatable {
 	public var x:Float;
 	public var y:Float;
 
@@ -16,7 +16,7 @@ enum abstract Mode(Int) {
 	var Bold = 2;
 }
 
-class Style implements Hashable, Diffable {
+class Style implements Equatable, Diffable {
 	public var width:Int = 0;
 	public var visible:Bool = true;
 	public var mode:Mode = Plain;
@@ -40,7 +40,6 @@ function main():Int {
 	if (!Equality.equals(a, b)) return 2;
 	// Shallow: the nested instance is shared.
 	if (b.origin != a.origin) return 3;
-	if (Hashing.hash(a) != Hashing.hash(b)) return 4;
 	b.width = 4;
 	b.mode = Bold;
 	var mask = Diff.mask(a, b);
@@ -55,11 +54,11 @@ function main():Int {
 	var p = new Point(), q = new Point();
 	q.y = 1.0;
 	if (Equality.equals(p, q)) return 9;
-	// Nested structural fields compare and hash by value, not identity.
+	// Nested conforming fields compare by value.
 	var c = Diff.copy(a);
 	c.origin = new Point();
 	c.origin.x = 2.5;
-	if (!Equality.equals(a, c) || Hashing.hash(a) != Hashing.hash(c)) return 10;
+	if (!Equality.equals(a, c)) return 10;
 	var nulled = Diff.copy(a);
 	nulled.name = null;
 	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(Style, "name")) return 11;

@@ -21,6 +21,11 @@ class Hashed implements Hashable {
 	public function hash():Int return x % 10;
 }
 
+class RecordKey implements Hashable {
+	public final id:Int;
+	public function new(id:Int) this.id = id;
+}
+
 class Editable implements Diffable {
 	public var x:Int;
 	public var y:Int;
@@ -118,6 +123,8 @@ function main():Int {
 	var classMapMatches = classMap.size() == 1 && classMap.get(new Hashed(22)) == 30 && classMap.exists(new Hashed(32));
 	var classMapRemoved = classMap.remove(new Hashed(42));
 	classMap.clear();
+	var synthesizedClassMap = new Map<RecordKey, String>();
+	synthesizedClassMap.set(new RecordKey(7), "seven");
 	return a == b && a != c && pair == new Pair(3) && pair != new Pair(4)
 		&& new Modulo(1) == new Modulo(11)
 		&& haxeon.Equality.equals(new Modulo(1), new Modulo(11)) && first == second
@@ -139,5 +146,6 @@ function main():Int {
 		&& haxeon.Diff.mask(refBefore, refSame) == 0 && haxeon.Diff.mask(refBefore, refChanged) == 1
 		&& pairMap.size() == 1 && pairMap.get(new Pair(4)) == "last" && pairMapCopy.get(new Pair(4)) == "last"
 		&& pairKeyTotal == 4 && pairValueTotal == 4 && classMapMatches && classMapRemoved && classMap.size() == 0
+		&& synthesizedClassMap.get(new RecordKey(7)) == "seven"
 		&& keepEquatable(7) == 7 && keepHashable("value") == "value" ? 42 : 0;
 }

@@ -122,7 +122,7 @@ class DiffIntrinsics {
 			default: true;
 		};
 
-	static function isWritable(field:AstField):Bool {
+	public static function isWritable(field:AstField):Bool {
 		if (field.isFinal)
 			return false;
 		return switch field.writeAccess {

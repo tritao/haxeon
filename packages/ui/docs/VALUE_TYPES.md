@@ -6,7 +6,7 @@ style storage and transitions.
 `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `Hashable` structs. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
-object, and `Hashable` style fingerprints still cover their fields.
+object. Render and style caches use its explicit fieldwise content fingerprint.
 
 The data-record conversion also made `TextStyle` and `ParagraphStyle` immutable `Hashable` structs, with whole-value
 replacement helpers. `LayoutNode` keeps them in one lazy `LayoutTextStyles` holder only when text styling is present;
@@ -16,7 +16,8 @@ smaller and allocates one holder rather than separate text and paragraph objects
 The app's mutable `CncPresentation` and `HobbingTelemetry` snapshots are `Diffable` structs. Their values are owned by
 their containing models, and no caller depends on a stable object identity.
 
-`LayoutStyle` remains a mutable `Hashable, Diffable` class. The measured struct version boxed 25,625 values
+`LayoutStyle` remains a mutable `Equatable, Diffable` class. It is not `Hashable`: its fields change in place, while
+render and style caches use an explicit fieldwise content fingerprint. The measured struct version boxed 25,625 values
 (8,474,960 bytes) as `@haxeon.ui.LayoutStyle`, plus 2,823 optional boxes (948,528 bytes), during selection stress.
 The class version kept its 10,165 objects (3,496,760 bytes) and lowered tab-transition allocations. In the class
 version, `LayoutNode` uses 120 bytes per node (5,906 nodes, 708,720 bytes); the inline text-style prototype enlarged
@@ -88,7 +89,19 @@ allocated KiB per action, rounded to one decimal:
 | type backspace | 16.1 | 16.3 |
 | type character | 18.1 | 16.2 |
 
-The HashLink selection-stress census fell from 408,765 allocations across 830 types to 403,157 across 832 types.
+The three rounded increases are thread-local allocation-buffer refill noise. A 100-cycle interaction run in direct
+census mode measured exact per-action bytes before and after conversion:
+
+| Action | Baseline bytes | After conversion bytes |
+| --- | ---: | ---: |
+| hover away | 14,112 | 14,112 |
+| hover other | 10,400 | 10,400 |
+| type backspace | 17,104 | 17,104 |
+
+Each action dirtied all 100 frames in both runs. The census disables the allocation-buffer refill accounting that
+causes `Gc.totalAllocated` to round slightly differently; no action allocated more bytes after conversion.
+
+The HashLink selection-stress census fell from 408,765 allocations across 830 types to 403,156 across 832 types.
 `LayoutStyle` stayed at 10,165 objects and 3,496,760 bytes. `TextStyle` and `ParagraphStyle` class allocations
 (3,882/124,224 and 3,897/124,704) became 675 and 360 struct boxes (16,200 and 8,640 bytes) at actual escape
 boundaries; 956 `LayoutTextStyles` holders accounted for 53,536 bytes. `LayoutNode` fell from 755,968 bytes to

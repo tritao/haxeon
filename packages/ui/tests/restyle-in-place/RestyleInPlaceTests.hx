@@ -1530,11 +1530,14 @@ class RestyleInPlaceTests {
     var style = new LayoutStyle();
     style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
     var copied = style.copy();
-    check(haxeon.Equality.equals(copied, style) && haxeon.Hashing.hash(copied) == haxeon.Hashing.hash(style),
+    var styleFingerprint = style.cacheFingerprint();
+    check(haxeon.Equality.equals(copied, style) && styleFingerprint == copied.cacheFingerprint(),
       "LayoutStyle.copy is not an equal copy");
     copied.childGap = 17.0;
     check(style.childGap == 0.0, "LayoutStyle.copy shares mutable fields with its source");
-    Sys.println("PASS structural: every LayoutStyle field is copied, compared, hashed, classified and resolved");
+    check(styleFingerprint != copied.cacheFingerprint(),
+      "LayoutStyle cache fingerprint ignored a changed field");
+    Sys.println("PASS structural: every LayoutStyle field is copied, compared, fingerprinted, classified and resolved");
     structuralValues();
     fonts.dispose(); runtime.dispose();
     return 0;

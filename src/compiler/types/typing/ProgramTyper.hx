@@ -488,12 +488,17 @@ class ProgramTyper {
 			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
 				if (hasEquals)
 					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int', classDecl.span);
-				for (field in DiffIntrinsics.storedFields(classDecl)) {
+				var hashFields = DiffIntrinsics.storedFields(classDecl);
+				for (field in hashFields) {
 					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
 						classSemanticSubstitutions);
 					if (!DeclaredConformance.supportsHash(session, fieldType))
 						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable', field.span);
 				}
+				if (classDecl.isStruct != true)
+					for (field in hashFields)
+						if (DiffIntrinsics.isWritable(field))
+							BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": mutable field "${field.name}" must be final on a class', field.span);
 			}
 	}
 	}

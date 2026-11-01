@@ -321,7 +321,9 @@ forming a separate declaration mechanism. A type has one equality used by `==`, 
 A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
 infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
 to equal values. The author is responsible for keeping the two methods consistent. A handwritten hash may accompany
-synthesized equality.
+synthesized equality. A class with a synthesized hash must have immutable stored fields; otherwise changing a field while
+the object is a map key could change its hash. The compiler diagnoses writable fields. A handwritten hash is an
+explicit author contract and may read mutable state only when that state cannot change the key's hash while it is stored.
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
 conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
@@ -334,7 +336,7 @@ statically selected, so retaining an interface cache would enlarge every conform
 Ordinary runtime interfaces keep their cache slots and dispatch behavior.
 
 Field operations are a separate opt-in through the compiler-known `Diffable` interface, for example
-`struct LayoutStyle : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
+`struct Style : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
 `Diff.all` and `Diff.mask` for conforming types. Masks expose declaration order and field count, so the type's
 author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
 do not synthesize field-level operations by default.
@@ -351,9 +353,10 @@ The data-record aliasing audit converted `TextStyle`, `ParagraphStyle`, `DockTex
 `EffectParameter`, `InkOverflow`, `CustomEffectDefinition`, and the app's `CncPresentation` and `HobbingTelemetry`
 records to structs with the needed conformances. These values carry configuration, keys or snapshots; callers rely on
 their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
-`LayoutStyle` stays a mutable `Hashable, Diffable` class: its struct prototype boxes at layout-node call sites and
-regresses transition allocations. The census and per-action measurements are recorded in
-[UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
+`LayoutStyle` stays a mutable `Equatable, Diffable` class: its struct prototype boxes at layout-node call sites and
+regresses transition allocations. It is not `Hashable`, because its fields change in place; render and style caches
+compute a content fingerprint from its fields rather than using it as a map key. The census and per-action measurements are
+recorded in [UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
 the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
 ## Nullable structs
