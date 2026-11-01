@@ -8,7 +8,7 @@ trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
 build() {
 	if command -v "${CC:-cc}" >/dev/null 2>&1; then
-		"${CC:-cc}" -I"$root/vendor/hashlink/src" "$root/tests/native/$1.c" -L"$library" -lhl -lpthread -o "$work/$1"
+		"${CC:-cc}" -O2 -I"$root/vendor/hashlink/src" "$root/tests/native/$1.c" -L"$library" -lhl -lpthread -o "$work/$1"
 	elif command -v cl >/dev/null 2>&1; then
 		# MSVC from a Visual Studio command prompt
 		MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 -I"$(cygpath -w "$root/vendor/hashlink/src")" "$(cygpath -w "$root/tests/native/$1.c")" \
@@ -23,11 +23,12 @@ if ! command -v "${CC:-cc}" >/dev/null 2>&1 && ! command -v cl >/dev/null 2>&1; 
 	echo "SKIP: no C compiler for the native owner tests"
 	exit 0
 fi
-for test in gc_owner_pages gc_owner_tlab gc_owner_classes; do build "$test"; done
+for test in gc_owner_pages gc_owner_tlab gc_owner_classes gc_mark_completion; do build "$test"; done
 exe=
 [ -f "$work/gc_owner_pages.exe" ] && exe=.exe
 for mode in 0 1; do
 	HL_GC_ALLOC_FAST=$mode run "$work/gc_owner_pages$exe"
+	HL_GC_ALLOC_FAST=$mode run "$work/gc_mark_completion$exe"
 done
 # Owned allocations come out of the thread's buffers through the inline entry.
 HL_GC_ALLOC_FAST=1 run "$work/gc_owner_tlab$exe"

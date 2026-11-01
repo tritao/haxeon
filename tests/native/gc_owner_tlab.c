@@ -94,9 +94,13 @@ int main(void) {
 
 	/* Threads allocate for the owner while another one collects and counts. */
 	for(int i=0;i<WORKERS;i++) hl_thread_start(worker,(void*)(intptr_t)i,true);
+	int collect_round = 0;
 	while(finished < WORKERS) {
-		hl_gc_major();
-		if(!check(hl_gc_owner_live_count(&owner) >= 0,"count while threads allocate")) goto done;
+		/* Let mutators progress between collections; gc_mark_completion exercises very short worker batches directly. */
+		if( (collect_round++ & 4095) == 0 ) {
+			hl_gc_major();
+			if(!check(hl_gc_owner_live_count(&owner) >= 0,"count while threads allocate")) goto done;
+		}
 		hl_thread_yield();
 	}
 	/* A thread that has finished its work is still registered, and its stack scanned, until it unregisters. */
