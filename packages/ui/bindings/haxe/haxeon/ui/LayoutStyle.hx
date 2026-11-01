@@ -89,39 +89,4 @@ class LayoutStyle implements Equatable, Diffable {
 	public function copy():LayoutStyle
 		return haxeon.Diff.copy(this);
 
-	/** A content fingerprint for caches; this mutable class does not conform to Hashable or serve as a map key. */
-	public function cacheFingerprint():Int {
-		var hash = 17;
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(width));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(height));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(aspectRatio));
-		hash = haxeon.Hashing.mix(hash, cast direction);
-		hash = haxeon.Hashing.mix(hash, cast childAlignX);
-		hash = haxeon.Hashing.mix(hash, cast childAlignY);
-		hash = haxeon.Hashing.mix(hash, cast childDistribution);
-		hash = haxeon.Hashing.mix(hash, cast positioning);
-		hash = haxeon.Hashing.mix(hash, cast wrapMode);
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(rowGap));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(columnGap));
-		hash = haxeon.Hashing.mix(hash, cast alignSelf);
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(positionX));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(positionY));
-		hash = haxeon.Hashing.mix(hash, zIndex);
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(clipToParent));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(overlay));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(padding));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(childGap));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(background));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(radiusTopLeft));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(radiusTopRight));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(radiusBottomLeft));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(radiusBottomRight));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(clipHorizontal));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(clipVertical));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(visible));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(transform));
-		hash = haxeon.Hashing.mix(hash, haxeon.Hashing.hash(transformOriginX));
-		return haxeon.Hashing.mix(hash, haxeon.Hashing.hash(transformOriginY));
-	}
-
 }

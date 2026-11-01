@@ -81,6 +81,31 @@ struct EditableValue : Diffable {
 	public function new(x:Int, y:Int) { this.x = x; this.y = y; }
 }
 
+struct FingerprintLeaf : Hashable {
+	public final value:Float;
+	public function new(value:Float) this.value = value;
+}
+
+struct FingerprintValues : Diffable {
+	public var whole:Int;
+	public var label:Null<String>;
+	public var nested:FingerprintLeaf;
+	public var optional:Null<FingerprintLeaf>;
+	public var enabled:Bool;
+	public function new(whole:Int, label:Null<String>, nested:FingerprintLeaf, optional:Null<FingerprintLeaf>, enabled:Bool) {
+		this.whole = whole;
+		this.label = label;
+		this.nested = nested;
+		this.optional = optional;
+		this.enabled = enabled;
+	}
+}
+
+class GenericFingerprint<T> implements Diffable {
+	public var value:T;
+	public function new(value:T) this.value = value;
+}
+
 function keepEquatable<T:Equatable>(value:T):T return value;
 function keepHashable<T:Hashable>(value:T):T return value;
 
@@ -98,6 +123,13 @@ function main():Int {
 	var applied = haxeon.Diff.apply(target, before, after);
 	var valueBefore = new EditableValue(1, 2), valueAfter = new EditableValue(1, 3), valueTarget = new EditableValue(1, 2);
 	var valueMask = haxeon.Diff.mask(valueBefore, valueAfter), valueApplied = haxeon.Diff.apply(valueTarget, valueBefore, valueAfter);
+	var fingerprintBefore = haxeon.Diff.fingerprint(before), fingerprintAfter = haxeon.Diff.fingerprint(after);
+	var expectedFingerprint = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hash(before.x)), haxeon.Hashing.hash(before.y));
+	var nestedZero = new FingerprintValues(4, "record", new FingerprintLeaf(-0.0), new FingerprintLeaf(Math.NaN), true);
+	var nestedPositiveZero = new FingerprintValues(4, "record", new FingerprintLeaf(0.0), new FingerprintLeaf(Math.NaN), true);
+	var nestedDifferent = new FingerprintValues(4, "record", new FingerprintLeaf(0.0), null, true);
+	var genericFingerprint:GenericFingerprint<FingerprintLeaf> = new GenericFingerprint(new FingerprintLeaf(3.0));
+	var genericFingerprintCopy:GenericFingerprint<FingerprintLeaf> = new GenericFingerprint(new FingerprintLeaf(3.0));
 	var zero = new Scalar(0.0);
 	var optionalZero:Null<Scalar> = zero;
 	var absentScalar:Null<Scalar> = null;
@@ -131,7 +163,13 @@ function main():Int {
 		&& haxeon.Hashing.hash(new Hashed(11)) == haxeon.Hashing.hash(new Hashed(1))
 		&& haxeon.Hashing.hash(pair) == haxeon.Hashing.hash(new Pair(3))
 		&& mask == haxeon.Diff.bit(Editable, "y") && applied == mask && target.y == 3
+		&& fingerprintBefore == expectedFingerprint && fingerprintBefore != fingerprintAfter
 		&& valueMask == 2 && valueApplied == valueMask && valueTarget.y == 3
+		&& haxeon.Diff.fingerprint(pair) == haxeon.Hashing.hash(pair)
+		&& haxeon.Diff.fingerprint(nestedZero) == haxeon.Diff.fingerprint(nestedPositiveZero)
+		&& haxeon.Diff.fingerprint(nestedZero) != haxeon.Diff.fingerprint(nestedDifferent)
+		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Hashing.mix(17, haxeon.Hashing.hash(genericFingerprint.value))
+		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Diff.fingerprint(genericFingerprintCopy)
 		&& haxeon.Diff.all(Editable) == 3 && zero == negativeZero
 		&& haxeon.Hashing.hash(zero) == haxeon.Hashing.hash(negativeZero)
 		&& haxeon.Hashing.hash(optionalZero) == haxeon.Hashing.hash(zero) && haxeon.Hashing.hash(absentScalar) == 0 && nan != nan

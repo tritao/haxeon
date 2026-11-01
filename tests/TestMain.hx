@@ -1198,6 +1198,8 @@ class TestMain {
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('class Plain { public function new() {} } function main():Int return haxeon.Diff.mask(new Plain(), new Plain());',
 			'haxeon.Diff.mask requires Diffable conformance for "Plain"');
+		expectCompileError('interface Diffable {} struct Unhashable {} class Snapshot implements Diffable { public var value:Unhashable; public function new() {} } function main():Int return haxeon.Diff.fingerprint(new Snapshot());',
+			'Cannot synthesize Diff.fingerprint for "Snapshot": field "value" does not conform to Hashable');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',

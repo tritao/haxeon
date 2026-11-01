@@ -6,7 +6,8 @@ style storage and transitions.
 `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `Hashable` structs. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
-object. Render and style caches use its explicit fieldwise content fingerprint.
+object. Render and style caches use compiler-generated `Diff.fingerprint` snapshots, so their field lists stay aligned
+with `Diff.mask`.
 
 The data-record conversion also made `TextStyle` and `ParagraphStyle` immutable `Hashable` structs, with whole-value
 replacement helpers. `LayoutNode` keeps them in one lazy `LayoutTextStyles` holder only when text styling is present;
@@ -17,7 +18,7 @@ The app's mutable `CncPresentation` and `HobbingTelemetry` snapshots are `Diffab
 their containing models, and no caller depends on a stable object identity.
 
 `LayoutStyle` remains a mutable `Equatable, Diffable` class. It is not `Hashable`: its fields change in place, while
-render and style caches use an explicit fieldwise content fingerprint. The measured struct version boxed 25,625 values
+render and style caches use `Diff.fingerprint` snapshot values. The measured struct version boxed 25,625 values
 (8,474,960 bytes) as `@haxeon.ui.LayoutStyle`, plus 2,823 optional boxes (948,528 bytes), during selection stress.
 The class version kept its 10,165 objects (3,496,760 bytes) and lowered tab-transition allocations. In the class
 version, `LayoutNode` uses 120 bytes per node (5,906 nodes, 708,720 bytes); the inline text-style prototype enlarged
@@ -101,12 +102,14 @@ census mode measured exact per-action bytes before and after conversion:
 Each action dirtied all 100 frames in both runs. The census disables the allocation-buffer refill accounting that
 causes `Gc.totalAllocated` to round slightly differently; no action allocated more bytes after conversion.
 
-The HashLink selection-stress census fell from 408,765 allocations across 830 types to 403,156 across 832 types.
+The HashLink selection-stress census fell from 408,765 allocations across 830 types to 403,157 across 832 types.
 `LayoutStyle` stayed at 10,165 objects and 3,496,760 bytes. `TextStyle` and `ParagraphStyle` class allocations
 (3,882/124,224 and 3,897/124,704) became 675 and 360 struct boxes (16,200 and 8,640 bytes) at actual escape
 boundaries; 956 `LayoutTextStyles` holders accounted for 53,536 bytes. `LayoutNode` fell from 755,968 bytes to
 708,720 bytes.
 
-The committed opt-in Wasm GC allocation counter reports the same Showcase object counts as baseline: full, static and
-text-heavy each allocate 5,896 objects (49.13/frame); editing allocates 12,833 (106.94/frame), over 120 measured frames
-after 120 warmup frames. Median frame times were 1.4 ms full, 1.3 ms static, 1.4 ms text-heavy and 1.5 ms editing.
+The committed opt-in Wasm GC allocation counter reports no increase over the class baseline. Across three runs of 120
+measured frames after 120 warmup frames, baseline full, static and text-heavy each allocated 5,896 objects, and editing
+allocated 12,833. Generated fingerprints had median counts of 5,896 full, 5,894 static, 5,896 text-heavy and 12,833
+editing objects (49.13, 49.12, 49.13 and 106.94 per frame); individual runs varied by at most two objects. Median frame
+times were 1.3 ms full, 1.3 ms static, 1.4 ms text-heavy and 1.6 ms editing.

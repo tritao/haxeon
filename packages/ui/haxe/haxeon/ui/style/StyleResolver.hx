@@ -243,9 +243,9 @@ class StyleResolver {
 		return key;
 	}
 
-	/** Uses LayoutStyle's scalar value fingerprint; the all-fields check below guards its explicit field list. */
+	/** Uses the compiler-generated fieldwise snapshot fingerprint. */
 	static inline function localFingerprint(local:LayoutStyle):Int
-		return local.cacheFingerprint();
+		return haxeon.Diff.fingerprint(local);
 
 	static function colorFingerprint(seed:Int, value:Null<Color>):Int
 		return mix(seed, value == null ? 0 : haxeon.Hashing.hash(value));
@@ -276,25 +276,9 @@ class StyleResolver {
 		var transformFields = haxeon.Diff.bit(Transform2D, "a") | haxeon.Diff.bit(Transform2D, "b")
 			| haxeon.Diff.bit(Transform2D, "c") | haxeon.Diff.bit(Transform2D, "d")
 			| haxeon.Diff.bit(Transform2D, "tx") | haxeon.Diff.bit(Transform2D, "ty");
-		var layoutStyleFields = haxeon.Diff.bit(LayoutStyle, "width") | haxeon.Diff.bit(LayoutStyle, "height")
-			| haxeon.Diff.bit(LayoutStyle, "aspectRatio") | haxeon.Diff.bit(LayoutStyle, "direction")
-			| haxeon.Diff.bit(LayoutStyle, "childAlignX") | haxeon.Diff.bit(LayoutStyle, "childAlignY")
-			| haxeon.Diff.bit(LayoutStyle, "childDistribution") | haxeon.Diff.bit(LayoutStyle, "positioning")
-			| haxeon.Diff.bit(LayoutStyle, "wrapMode") | haxeon.Diff.bit(LayoutStyle, "rowGap")
-			| haxeon.Diff.bit(LayoutStyle, "columnGap") | haxeon.Diff.bit(LayoutStyle, "alignSelf")
-			| haxeon.Diff.bit(LayoutStyle, "positionX") | haxeon.Diff.bit(LayoutStyle, "positionY")
-			| haxeon.Diff.bit(LayoutStyle, "zIndex") | haxeon.Diff.bit(LayoutStyle, "clipToParent")
-			| haxeon.Diff.bit(LayoutStyle, "overlay") | haxeon.Diff.bit(LayoutStyle, "padding")
-			| haxeon.Diff.bit(LayoutStyle, "childGap") | haxeon.Diff.bit(LayoutStyle, "background")
-			| haxeon.Diff.bit(LayoutStyle, "radiusTopLeft") | haxeon.Diff.bit(LayoutStyle, "radiusTopRight")
-			| haxeon.Diff.bit(LayoutStyle, "radiusBottomLeft") | haxeon.Diff.bit(LayoutStyle, "radiusBottomRight")
-			| haxeon.Diff.bit(LayoutStyle, "clipHorizontal") | haxeon.Diff.bit(LayoutStyle, "clipVertical")
-			| haxeon.Diff.bit(LayoutStyle, "visible") | haxeon.Diff.bit(LayoutStyle, "transform")
-			| haxeon.Diff.bit(LayoutStyle, "transformOriginX") | haxeon.Diff.bit(LayoutStyle, "transformOriginY");
 		return colorFields == haxeon.Diff.all(Color) && axisFields == haxeon.Diff.all(LayoutAxis)
 			&& insetsFields == haxeon.Diff.all(Insets)
-			&& transformFields == haxeon.Diff.all(Transform2D)
-			&& layoutStyleFields == haxeon.Diff.all(LayoutStyle);
+			&& transformFields == haxeon.Diff.all(Transform2D);
 	}
 
 

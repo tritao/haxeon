@@ -343,7 +343,11 @@ do not synthesize field-level operations by default.
 
 `Diff.apply` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
 the field. Struct binding already copies values, so `Diff.copy` is unnecessary for structs and remains for
-`Diffable` classes. All `@:structural` declarations and the old mask and hash APIs have been removed.
+`Diffable` classes. `Diff.fingerprint(value)` synthesizes the same ordered field traversal as `Diff.mask` and combines
+`Hashing.hash` for each field. Every field must conform to `Hashable` when this operation is used. The result is a
+snapshot fingerprint, not a map-key contract, so it is valid for mutable `Diffable` classes. Float fields follow the
+same `Hashable` behavior: `0.0` and `-0.0` match, and NaNs use the canonical hash. All `@:structural` declarations and
+the old mask and hash APIs have been removed.
 
 Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses
 `derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
@@ -354,9 +358,9 @@ The data-record aliasing audit converted `TextStyle`, `ParagraphStyle`, `DockTex
 records to structs with the needed conformances. These values carry configuration, keys or snapshots; callers rely on
 their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
 `LayoutStyle` stays a mutable `Equatable, Diffable` class: its struct prototype boxes at layout-node call sites and
-regresses transition allocations. It is not `Hashable`, because its fields change in place; render and style caches
-compute a content fingerprint from its fields rather than using it as a map key. The census and per-action measurements are
-recorded in [UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
+regresses transition allocations. It is not `Hashable`, because its fields change in place; render and style caches use
+the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fields without making it a map key. The census
+and per-action measurements are recorded in [UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
 the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
 ## Nullable structs
@@ -401,21 +405,21 @@ example, backspace measured 18.1 KiB in another reservation-based run, but its d
 
 | Action | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
-| console → telemetry | 110.9 | 112.7 | 125.0 | 77.1 |
-| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.3 |
-| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.4 |
-| telemetry → console | 128.6 | 131.0 | 145.5 | 95.4 |
-| hover away | 24.9 | 25.0 | 26.5 | 14.8 |
+| console → telemetry | 110.9 | 112.7 | 125.0 | 74.9 |
+| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.2 |
+| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.2 |
+| telemetry → console | 128.6 | 131.0 | 145.5 | 95.3 |
+| hover away | 24.9 | 25.0 | 26.5 | 15.0 |
 | hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
-| hover field | 22.1 | 22.2 | 25.0 | 13.4 |
+| hover field | 22.1 | 22.2 | 25.0 | 14.0 |
 | hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
-| hover other | 13.1 | 13.2 | 14.3 | 9.9 |
+| hover other | 13.1 | 13.2 | 14.3 | 10.0 |
 | idle | 0.2 | 0.2 | 0.2 | 0.2 |
 | idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
 | scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
-| type backspace | 17.8 | 17.9 | 18.7 | 16.1 |
-| type character | 17.8 | 17.9 | 18.7 | 16.6 |
-| selection (census) | 927.7 | — | — | 899.1 |
+| type backspace | 17.8 | 17.9 | 18.7 | 16.3 |
+| type character | 17.8 | 17.9 | 18.7 | 16.2 |
+| selection (census) | 927.7 | — | — | 895.7 |
 
 The 120-frame instrumented Wasm GC Showcase counts generated `struct.new` and `array.new` operations; these counts do
 not establish byte sizes or cover separately encoded function bodies.
@@ -424,7 +428,7 @@ not establish byte sizes or cover separately encoded function bodies.
 | --- | ---: | ---: | ---: | ---: |
 | Full | 8,654 | 6,496 | 6,138 | 5,896 |
 | Editing | 15,482 | 13,528 | 13,168 | 12,833 |
-| Static | 8,654 | 6,496 | 6,136 | 5,896 |
+| Static | 8,654 | 6,496 | 6,136 | 5,894 |
 | Text-heavy | 8,656 | 6,496 | 6,138 | 5,896 |
 
 A separate same-compiler replay uses fixed frame times to compare allocations against the class build in each scenario.

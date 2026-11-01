@@ -8,14 +8,14 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
-/** Compiler expansion for Diffable field masks and class copies. */
+/** Compiler expansion for Diffable field masks, class copies, and snapshot fingerprints. */
 class DiffIntrinsics {
 	static var serial = 0;
 
 	public static function handles(name:String):Bool
 		return switch name {
 			case "Diff.copy", "haxeon.Diff.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply", "Diff.bit",
-				"haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all": true;
+				"haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all", "Diff.fingerprint", "haxeon.Diff.fingerprint": true;
 			default: false;
 		};
 
@@ -23,6 +23,37 @@ class DiffIntrinsics {
 			typeOf:AstExpression->CompilerType):AstExpression {
 		var operation = name.substr(name.lastIndexOf(".") + 1);
 		switch operation {
+			case "fingerprint":
+				expectArguments(name, arguments, 1, span);
+				var type = typeOf(arguments[0]), declaration = classOf(session, type, name, span),
+					value = hold("fingerprint-value", span), hash = hold("fingerprint-hash", span),
+					fields = maskedFields(declaration, name, span),
+					statements:Array<AstStatement> = [
+						VarDeclaration(value, null, arguments[0], span),
+						VarDeclaration(hash, IntType, IntegerLiteral(17, span), span)
+					];
+				var typeArguments = switch type {
+					case TInstance(NominalKind.Class, _, arguments): arguments;
+					case _: [];
+				};
+				var substitutions:Map<String, CompilerType> = [];
+				for (index in 0...declaration.typeParameters.length) {
+					var parameter = declaration.typeParameters[index],
+						argument = index < typeArguments.length ? typeArguments[index] : TTypeParameter(declaration.name, parameter);
+					substitutions.set(parameter, argument);
+					substitutions.set(declaration.name + "." + parameter, argument);
+				}
+				for (field in fields) {
+					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field), field.span,
+						substitutions);
+					if (!DeclaredConformance.supportsHash(session, fieldType))
+						fail("E1025", 'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable', field.span);
+					var fieldValue = Member(Variable(value, span), field.name, span),
+						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
+						mixed = Call("haxeon.Hashing.mix", [Variable(hash, span), fieldHash], span);
+					statements.push(Assignment(hash, mixed, span));
+				}
+				return BlockExpression(statements, Variable(hash, span), span);
 			case "bit":
 				expectArguments(name, arguments, 2, span);
 				var declaration = classNamed(session, typeName(arguments[0], name, span), span),
