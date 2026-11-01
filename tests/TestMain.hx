@@ -1281,6 +1281,21 @@ class TestMain {
 			|| compilerRequest.ffiInterfaces.join(",") != "generated/nativekit.hxi,generated/system.hxi"
 			|| compilerRequest.ffiLibrary != "sample")
 			throw "Compiler CLI did not produce a typed build request";
+		var defaultGcAllocationCount = CompilerArguments.parse(["--target=wasm-gc", "source/Main.hx"]);
+		if (defaultGcAllocationCount.wasmGcAllocationCount)
+			throw "Wasm GC allocation counting must be disabled by default";
+		var gcAllocationCountRequest = CompilerArguments.parse([
+			"--target=wasm-gc", "--wasm-gc-allocation-count", "source/Main.hx"]);
+		if (!gcAllocationCountRequest.wasmGcAllocationCount)
+			throw "Compiler CLI did not enable Wasm GC allocation counting";
+		var gcAllocationCountRejectedForWasm32 = false;
+		try {
+			CompilerArguments.parse(["--target=wasm32", "--wasm-gc-allocation-count", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			gcAllocationCountRejectedForWasm32 = true;
+		}
+		if (!gcAllocationCountRejectedForWasm32)
+			throw "Compiler CLI accepted Wasm GC allocation counting for wasm32";
 		var runtimeNeutralRejectedForHashLink = false;
 		try {
 			CompilerArguments.parse(["--wasm-runtime-neutral", "source/Main.hx"]);

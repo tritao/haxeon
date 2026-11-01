@@ -18,6 +18,7 @@ typedef CompilerRequest = {
 	final memoryBase:Int;
 	final memoryContract:Null<String>;
 	final wasmMemoryStats:Bool;
+	final wasmGcAllocationCount:Bool;
 	final wasmGcStress:Bool;
 	final wasmRuntimeNeutral:Bool;
 

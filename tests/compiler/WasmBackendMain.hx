@@ -43,6 +43,16 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		var allocationProgram = Frontend.compile("class Box { public var value:Int; "
+			+ "public function new(value:Int) this.value = value; } function main():Int return new Box(42).value;"),
+			allocationDisabled = new WasmBackend().compile(allocationProgram, {target: WasmGc, debugNames: true}),
+			allocationEnabled = new WasmBackend().compile(allocationProgram, {
+				target: WasmGc, debugNames: true, wasmGcAllocationCount: true
+			});
+		if (containsBytes(allocationDisabled.bytes, "__allocation_count"))
+			throw "Wasm GC allocation counter must not be emitted by default";
+		if (!containsBytes(allocationEnabled.bytes, "__allocation_count"))
+			throw "Wasm GC allocation counter option did not emit its diagnostic export";
 		var optionalProgram = Frontend.compile("struct V { public var x:Int; public var label:String; "
 			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
 			+ "function change(v:Null<V>, callback:Void->Void):Null<V> { "

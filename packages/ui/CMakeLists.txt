@@ -616,6 +616,12 @@ if(NK_BUILD_EXAMPLES)
                 message(FATAL_ERROR
                     "NKUI_HAXEON_MEMORY_STATS is currently supported only with NKUI_HAXEON_TARGET=wasm32")
             endif()
+            option(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT
+                "Count Wasm GC struct.new and array.new operations in the Haxeon guest" OFF)
+            if(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT AND NOT NKUI_HAXEON_TARGET STREQUAL "wasm-gc")
+                message(FATAL_ERROR
+                    "NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT requires NKUI_HAXEON_TARGET=wasm-gc")
+            endif()
             file(GLOB_RECURSE NKUI_HAXEON_GUEST_HX_DEPS CONFIGURE_DEPENDS
                 "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_showcase/*.hx"
                 "${CMAKE_CURRENT_SOURCE_DIR}/haxe/haxeon/ui/*.hx"
@@ -645,6 +651,10 @@ if(NK_BUILD_EXAMPLES)
             if(NKUI_HAXEON_MEMORY_STATS)
                 set(NKUI_HAXEON_MEMORY_STATS_VALUE 1)
             endif()
+            set(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE 0)
+            if(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT)
+                set(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE 1)
+            endif()
             set(NKUI_HAXEON_BUNDLE_FONTS_VALUE 0)
             if(NKUI_HAXEON_BUNDLE_FONTS)
                 set(NKUI_HAXEON_BUNDLE_FONTS_VALUE 1)
@@ -658,6 +668,7 @@ if(NK_BUILD_EXAMPLES)
                     "NATIVEKIT_HAXEON_EXCEPTION_MODE=${NKUI_HAXEON_EXCEPTION_MODE}"
                     "NATIVEKIT_HAXEON_MEMORY_CONTRACT=${NKUI_HAXEON_MEMORY_CONTRACT}"
                     "NATIVEKIT_HAXEON_MEMORY_STATS=${NKUI_HAXEON_MEMORY_STATS_VALUE}"
+                    "NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT=${NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE}"
                     "NATIVEKIT_HAXEON_BUNDLE_FONTS=${NKUI_HAXEON_BUNDLE_FONTS_VALUE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
                 DEPENDS

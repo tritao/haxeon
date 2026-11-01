@@ -73,6 +73,7 @@ class CompilerDriver {
 						memoryBase: request.memoryBase,
 						memoryContract: memoryContract,
 						wasmMemoryStats: request.wasmMemoryStats,
+						wasmGcAllocationCount: request.wasmGcAllocationCount,
 						wasmGcStress: request.wasmGcStress,
 						wasmRuntimeNeutral: request.wasmRuntimeNeutral,
 						exports: request.exports

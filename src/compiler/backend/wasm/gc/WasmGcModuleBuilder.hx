@@ -249,7 +249,34 @@ class WasmGcModuleBuilder {
 		// legacy form available while the standardized lowering rolls out.
 		if (Sys.getEnv("HAXEON_WASM_LEGACY_EXCEPTIONS") != "1")
 			WasmExceptionLowering.lower(module);
+		if (options.wasmGcAllocationCount == true)
+			instrumentGcAllocations(module);
 		return {target: options.target, bytes: WasmEncoder.encode(module)};
+	}
+
+	static function instrumentGcAllocations(module:WasmModule):Void {
+		var counter = module.globals.length;
+		module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		for (fn in module.functions) {
+			if (fn.encodedBody != null)
+				continue;
+			var body:Array<WasmInstruction> = [];
+			for (instruction in fn.body) {
+				switch instruction {
+					case StructNew(_) | StructNewDefault(_) | ArrayNew(_) | ArrayNewDefault(_) | ArrayNewData(_, _):
+						body.push(GlobalGet(counter));
+						body.push(I32Const(1));
+						body.push(I32Add);
+						body.push(GlobalSet(counter));
+					default:
+				}
+				body.push(instruction);
+			}
+			fn.body.splice(0, fn.body.length);
+			for (instruction in body)
+				fn.body.push(instruction);
+		}
+		compiler.backend.wasm.WasmModuleSupport.addMemoryStatExport(module, "__allocation_count", [GlobalGet(counter)]);
 	}
 
 	/**

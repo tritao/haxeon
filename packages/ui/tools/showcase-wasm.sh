@@ -31,6 +31,10 @@ if [[ $wasm_target == wasm-gc && ${NATIVEKIT_HAXEON_MEMORY_STATS:-0} == 1 ]]; th
 	echo "showcase-wasm: allocator statistics are currently available only for wasm32" >&2
 	exit 2
 fi
+if [[ ${NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT:-0} == 1 && $wasm_target != wasm-gc ]]; then
+	echo "showcase-wasm: Wasm GC allocation counting requires wasm-gc" >&2
+	exit 2
+fi
 if [[ $wasm_target == wasm-gc && $exception_mode != legacy && $exception_mode != try-table ]]; then
 	echo "showcase-wasm: unsupported exception mode $exception_mode (expected legacy or try-table)" >&2
 	exit 2
@@ -197,6 +201,9 @@ fi
 if [[ ${NATIVEKIT_HAXEON_MEMORY_STATS:-0} == 1 ]]; then
 	compiler_args+=(--wasm-memory-stats)
 fi
+if [[ ${NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT:-0} == 1 ]]; then
+	compiler_args+=(--wasm-gc-allocation-count)
+fi
 if [[ ${NATIVEKIT_HAXEON_BUNDLE_FONTS:-0} == 1 ]]; then
 	compiler_args+=(--define=nativekit_bundle_web_fonts)
 fi
@@ -227,5 +234,9 @@ if (process.env.NATIVEKIT_HAXEON_MEMORY_STATS === '1') {
       'haxeon.memory.collection_count'])
     if (!exports.includes(name)) throw new Error(`Showcase wasm is missing allocator diagnostic ${name}`);
 }
+if (process.env.NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT === '1' && !exports.includes('__allocation_count'))
+  throw new Error('Showcase wasm is missing the Wasm GC allocation counter');
+if (process.env.NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT !== '1' && exports.includes('__allocation_count'))
+  throw new Error('Showcase wasm unexpectedly contains the Wasm GC allocation counter');
 console.log(`showcase-wasm: built ${process.env.NATIVEKIT_HAXEON_TARGET || 'wasm32'} artifact ${path} (${imports.length} imports; exports ${exports.join(', ')})`);
 NODE

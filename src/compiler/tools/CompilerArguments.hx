@@ -8,7 +8,7 @@ class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
 		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
 			dumpFunction = -1, live = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null,
-			wasmMemoryStats = false, wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null,
+			wasmMemoryStats = false, wasmGcAllocationCount = false, wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null,
 			ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
 			defines:Array<String> = [], paths:Array<String> = [];
 		var packageRoots:Array<PackageSourceRoot> = [];
@@ -67,6 +67,8 @@ class CompilerArguments {
 				memoryContract = value(argument, "--wasm-memory-contract=");
 			else if (argument == "--wasm-memory-stats")
 				wasmMemoryStats = true;
+			else if (argument == "--wasm-gc-allocation-count")
+				wasmGcAllocationCount = true;
 			else if (argument == "--wasm-gc-stress")
 				wasmGcStress = true;
 			else if (argument == "--wasm-runtime-neutral")
@@ -92,6 +94,8 @@ class CompilerArguments {
 			throw "--live requires --target=hl";
 		if ((wasmMemoryStats || wasmGcStress) && target != "wasm32")
 			throw "Wasm allocator options require --target=wasm32";
+		if (wasmGcAllocationCount && target != "wasmgc" && target != "wasm-gc")
+			throw "--wasm-gc-allocation-count requires --target=wasm-gc";
 		if (wasmRuntimeNeutral && target != "wasm32")
 			throw "--wasm-runtime-neutral requires --target=wasm32";
 		if (exports.length != 0 && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
@@ -117,6 +121,7 @@ class CompilerArguments {
 			memoryBase: memoryBase,
 			memoryContract: memoryContract,
 			wasmMemoryStats: wasmMemoryStats,
+			wasmGcAllocationCount: wasmGcAllocationCount,
 			wasmGcStress: wasmGcStress,
 			wasmRuntimeNeutral: wasmRuntimeNeutral,
 			live: live,

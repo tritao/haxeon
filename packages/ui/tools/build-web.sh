@@ -7,6 +7,7 @@ emsdk_dir="$nativekit_dir/.tools/emsdk"
 build_dir=${NATIVEKIT_WEB_BUILD_DIR:-"$repo_dir/build-web"}
 build_type=${CMAKE_BUILD_TYPE:-Release}
 memory_stats=${NKUI_HAXEON_MEMORY_STATS:-OFF}
+wasm_gc_allocation_count=${NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT:-OFF}
 haxeon_target=${NKUI_HAXEON_TARGET:-wasm32}
 exception_mode=${NATIVEKIT_HAXEON_EXCEPTION_MODE:-legacy}
 bundle_fonts=${NKUI_HAXEON_BUNDLE_FONTS:-OFF}
@@ -27,6 +28,7 @@ emcmake cmake -S "$repo_dir" -B "$build_dir" -G Ninja \
     -DNKUI_HAXEON_TARGET="$haxeon_target" \
     -DNKUI_HAXEON_EXCEPTION_MODE="$exception_mode" \
     -DNKUI_HAXEON_MEMORY_STATS="$memory_stats" \
+    -DNKUI_HAXEON_WASM_GC_ALLOCATION_COUNT="$wasm_gc_allocation_count" \
     -DNKUI_HAXEON_BUNDLE_FONTS="$bundle_fonts" \
     -DNKUI_HAXEON_SUBSET_FONTS="$subset_fonts" \
     -DNK_SOKOL_BACKEND=gles3

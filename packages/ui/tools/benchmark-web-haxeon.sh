@@ -2,7 +2,9 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-artifact_dir=${NATIVEKIT_WEB_ARTIFACT_DIR:-"$repo_dir/build-web"}
+haxeon_dir=${HAXEON_DIR:-"$(cd "$repo_dir/../.." && pwd)"}
+nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
+artifact_dir=${NATIVEKIT_WEB_ARTIFACT_DIR:-"${NATIVEKIT_WEB_BUILD_DIR:-$repo_dir/build-web}"}
 output=${NATIVEKIT_WEB_BENCHMARK_JSON:-"$repo_dir/out/benchmark-web-haxeon.json"}
 warmup=${NATIVEKIT_WEB_BENCHMARK_WARMUP:-120}
 frames=${NATIVEKIT_WEB_BENCHMARK_FRAMES:-600}
@@ -11,7 +13,26 @@ mode=${NATIVEKIT_WEB_BENCHMARK_MODE:-browser}
 scenario=${NATIVEKIT_WEB_BENCHMARK_SCENARIO:-full}
 profile=${NATIVEKIT_WEB_BENCHMARK_PROFILE:-0}
 gpu=${NATIVEKIT_WEB_BENCHMARK_GPU:-software}
+build_before_benchmark=${NATIVEKIT_WEB_BENCHMARK_BUILD:-0}
 browser=${NK_WEB_BROWSER:-}
+
+if [[ "$build_before_benchmark" != "0" && "$build_before_benchmark" != "1" ]]; then
+    echo "NATIVEKIT_WEB_BENCHMARK_BUILD must be 0 or 1" >&2
+    exit 2
+fi
+if [[ "$build_before_benchmark" == "1" ]]; then
+    target=${NKUI_HAXEON_TARGET:-wasm32}
+    allocation_count=OFF
+    if [[ "$target" == "wasm-gc" ]]; then
+        allocation_count=ON
+    fi
+    NATIVEKIT_DIR="$nativekit_dir" \
+    HAXEON_DIR="$haxeon_dir" \
+    NATIVEKIT_WEB_BUILD_DIR="$artifact_dir" \
+    NKUI_HAXEON_TARGET="$target" \
+    NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT="$allocation_count" \
+        "$repo_dir/tools/build-web.sh"
+fi
 
 if [[ ! -f "$artifact_dir/nativekit_ui_haxeon.html" ]]; then
     echo "Haxeon web artifact is missing. Run tools/build-web.sh first." >&2
@@ -90,5 +111,6 @@ for _ in $(seq 1 100); do
     sleep 0.1
 done
 
-python3 -B "$repo_dir/tools/web_benchmark.py" --debug-port "$debug_port" \
+nativekit_tools="$nativekit_dir/tools"
+PYTHONPATH="$nativekit_tools${PYTHONPATH:+:$PYTHONPATH}" python3 -B "$repo_dir/tools/web_benchmark.py" --debug-port "$debug_port" \
     --page-url "$page_url" --output "$output" --timeout "$benchmark_timeout"

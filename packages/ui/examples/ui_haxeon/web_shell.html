@@ -46,6 +46,7 @@
     const benchmarkStartedAt = performance.now();
     const benchmarkFrameDurations = [];
     const benchmarkFrameIntervals = [];
+    const benchmarkGcAllocationFrames = [];
     const benchmarkHostApiDurations = [];
     const benchmarkGuestResidualDurations = [];
     const benchmarkHostApiCategories = Object.create(null);
@@ -61,6 +62,7 @@
     let hostMemory = null;
     let memoryContract = null;
     let benchmarkAllocatorBaseline = null;
+    let benchmarkGcAllocationBaseline = null;
     let guest = null;
     let frameCount = 0;
     let finished = false;
@@ -97,9 +99,24 @@
       };
     }
 
+    function summarizeCounts(samples) {
+      const sorted = [...samples].sort((left, right) => left - right);
+      const total = sorted.reduce((sum, value) => sum + value, 0);
+      return {
+        count: sorted.length,
+        mean: sorted.length ? total / sorted.length : 0,
+        median: percentile(sorted, 0.5),
+        p95: percentile(sorted, 0.95),
+        p99: percentile(sorted, 0.99),
+        min: sorted[0] || 0,
+        max: sorted[sorted.length - 1] || 0
+      };
+    }
+
     function finishBenchmark() {
       const result = guest["ShowcaseWeb.status"]();
       const allocator = readAllocatorStats();
+      const gcAllocations = readGcAllocationCount();
       const droppedFrames = benchmarkFrameIntervals.reduce((total, interval) =>
         total + Math.max(0, Math.round(interval / benchmarkFrameBudgetMs) - 1), 0);
       const report = {
@@ -121,6 +138,8 @@
           benchmark_complete_ms: performance.now() - benchmarkStartedAt
         },
         frames: summarize(benchmarkFrameDurations),
+        wasm_gc_per_frame: benchmarkGcAllocationFrames.length
+          ? summarizeCounts(benchmarkGcAllocationFrames) : null,
         frame_intervals: summarize(benchmarkFrameIntervals),
         frames_over_budget: benchmarkFrameDurations.filter(duration =>
           duration > benchmarkFrameBudgetMs).length,
@@ -138,7 +157,11 @@
             heap_high_water_bytes: allocator.heap_top - allocator.heap_base,
             heap_growth_during_measurement_bytes: allocator.heap_top - benchmarkAllocatorBaseline.heap_top,
             live_gc_metadata_bytes: allocator.metadata_top - allocator.metadata_base
-          } : null
+          } : null,
+          wasm_gc_objects: gcAllocations !== null && benchmarkGcAllocationBaseline !== null
+            ? (gcAllocations - benchmarkGcAllocationBaseline) >>> 0 : null,
+          wasm_gc_objects_per_frame: gcAllocations !== null && benchmarkGcAllocationBaseline !== null
+            ? ((gcAllocations - benchmarkGcAllocationBaseline) >>> 0) / benchmarkFrameDurations.length : null
         },
         canvas: {width: canvas.width, height: canvas.height, webgl2: !!canvas.getContext("webgl2")},
         environment: {
@@ -295,6 +318,12 @@
       return Object.fromEntries(names.map(name => [name, guest["haxeon.memory." + name]() >>> 0]));
     }
 
+    function readGcAllocationCount() {
+      if (!guest || typeof guest.__allocation_count !== "function")
+        return null;
+      return guest.__allocation_count() >>> 0;
+    }
+
     // Times each forwarded host C call while a benchmark frame is being profiled.
     function timeHostCall(module, name, value) {
       return (...args) => {
@@ -333,6 +362,7 @@
     function invokeShowcaseFrame(time) {
       const frameProfile = benchmarkProfile ? {calls: 0, total_ms: 0, categories: Object.create(null)} : null;
       activeHostApiFrame = frameProfile;
+      const gcBefore = readGcAllocationCount();
       const startedAt = performance.now();
       let result;
       try {
@@ -340,11 +370,19 @@
       } finally {
         activeHostApiFrame = null;
       }
-      return {result, duration_ms: performance.now() - startedAt, profile: frameProfile};
+      const gcAfter = readGcAllocationCount();
+      return {
+        result,
+        duration_ms: performance.now() - startedAt,
+        profile: frameProfile,
+        wasm_gc_objects: gcBefore !== null && gcAfter !== null ? (gcAfter - gcBefore) >>> 0 : null
+      };
     }
 
     function recordBenchmarkFrame(sample, animationTime) {
       benchmarkFrameDurations.push(sample.duration_ms);
+      if (sample.wasm_gc_objects !== null)
+        benchmarkGcAllocationFrames.push(sample.wasm_gc_objects);
       if (benchmarkProfile && sample.profile) {
         benchmarkHostApiDurations.push(sample.profile.total_ms);
         benchmarkGuestResidualDurations.push(Math.max(0, sample.duration_ms - sample.profile.total_ms));
@@ -371,6 +409,8 @@
       try {
         if (benchmarkWarmupFrames === 0)
           benchmarkAllocatorBaseline = readAllocatorStats();
+        if (benchmarkWarmupFrames === 0)
+          benchmarkGcAllocationBaseline = readGcAllocationCount();
         for (let index = 0; index < totalFrames; index++) {
           const sample = invokeShowcaseFrame(index * fixedStepMs);
           frameCount++;
@@ -384,6 +424,8 @@
           }
           if (index + 1 === benchmarkWarmupFrames)
             benchmarkAllocatorBaseline = readAllocatorStats();
+          if (index + 1 === benchmarkWarmupFrames)
+            benchmarkGcAllocationBaseline = readGcAllocationCount();
           if (index >= benchmarkWarmupFrames)
             recordBenchmarkFrame(sample, index * fixedStepMs);
         }
@@ -489,6 +531,8 @@
           benchmarkGuestInitMs = performance.now() - initStarted;
           if (benchmark && benchmarkWarmupFrames === 0)
             benchmarkAllocatorBaseline = readAllocatorStats();
+          if (benchmark && benchmarkWarmupFrames === 0)
+            benchmarkGcAllocationBaseline = readGcAllocationCount();
           status.textContent = benchmark ? "Running Haxeon browser benchmark…" : smoke ? "Running Haxeon browser smoke test…" :
               "NativeKit UI Explorer · WebGL2";
           canvas.focus();
@@ -518,6 +562,8 @@
         }
         if (benchmark && frameCount === benchmarkWarmupFrames)
           benchmarkAllocatorBaseline = readAllocatorStats();
+        if (benchmark && frameCount === benchmarkWarmupFrames)
+          benchmarkGcAllocationBaseline = readGcAllocationCount();
         if (benchmark && frameCount > benchmarkWarmupFrames) {
           recordBenchmarkFrame(sample, time);
           if (benchmarkFrameDurations.length >= benchmarkMeasuredFrames) {

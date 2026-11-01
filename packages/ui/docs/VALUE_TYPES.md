@@ -32,6 +32,21 @@ allocations by type. Entries after conversion are
 struct boxes (`@haxeon.ui.*`) if a dynamic boundary is exercised. The per-action KiB and Wasm GC Showcase comparisons are in
 [STRUCTS.md](../../../docs/STRUCTS.md).
 
+The Wasm GC Showcase counts in that comparison instrument generated `struct.new` and `array.new` operations. The compiler
+flag `--wasm-gc-allocation-count` and CMake option `NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT` are disabled by default; with
+the option off, the guest has no counter global, instructions or export. The benchmark wrapper enables the option when
+it rebuilds a Wasm GC artifact and reports `memory.wasm_gc_objects` and `memory.wasm_gc_objects_per_frame` for measured
+frames after warmup. From `packages/ui`, rebuild and collect the 120-frame comparison in one command:
+
+```sh
+NKUI_HAXEON_TARGET=wasm-gc NATIVEKIT_WEB_BENCHMARK_BUILD=1 \
+NATIVEKIT_WEB_BENCHMARK_WARMUP=120 NATIVEKIT_WEB_BENCHMARK_FRAMES=120 \
+./tools/benchmark-web-haxeon.sh
+```
+
+The wrapper also supplies NativeKit's `web_smoke` helper path to Python. To build the instrumented Showcase guest without
+running a benchmark, use `NKUI_HAXEON_TARGET=wasm-gc NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT=ON ./tools/build-web.sh`.
+
 | Scenario | Rect | Insets | Color | LayoutAxis | Transform2D |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Interaction, classes → current | 7,511 → 0 | 70 → 0 | 487 → 0 | 1,007 → 0 | 1,722 → 0 |
