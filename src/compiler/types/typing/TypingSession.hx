@@ -61,9 +61,12 @@ class TypingSession {
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
 	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
-	public final equalityRequests:Map<String, EqualityRequest> = [];
-	/** Language `==` on values follows each field's `==`, independently of deep Equality.equals. */
+	/** Language `==` on declared values follows their one conformance equality. */
 	public final valueEqualityRequests:Map<String, EqualityRequest> = [];
+	/** Static Type.enumEq comparisons use enum tags and payloads without declaring enum value conformance. */
+	public final enumEqualityRequests:Map<String, EqualityRequest> = [];
+	/** Hash implementations generated from declared `Hashable` conformance. */
+	public final hashRequests:Map<String, EqualityRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
@@ -292,7 +295,12 @@ class TypingSession {
 				if (constructor.params.length != 0)
 					return null;
 		}
-		return RuntimeType.mapName(key, value);
+		var builtin = RuntimeType.mapName(key, value);
+		if (builtin != null)
+			return builtin;
+		return DeclaredConformance.has(this, key, "Hashable") && RuntimeType.hashableMapValueSupported(value)
+			? RuntimeType.hashableMapObjectName(key, value)
+			: null;
 	}
 
 	static function enumKeyType(type:CompilerType):Null<{name:String, arguments:Array<CompilerType>}> {

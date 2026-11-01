@@ -9,7 +9,6 @@ import compiler.types.DeclarationIndex;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
-import compiler.types.typing.EqualityGenerator;
 
 /**
  * A typedef may refer to itself through the fields of the anonymous structure it declares, as Haxe allows. The
@@ -118,8 +117,6 @@ class Marker {}
 
 		// Everything that walks a structure must finish.
 		expect(SemanticSignature.type(CompilerType.TArray(tree)).indexOf("Array<") == 0, "spelling a type that contains a recursive one finishes");
-		expect(EqualityGenerator.equalsName(tree) == EqualityGenerator.equalsName(resolve("Tree")), "equality names are stable for a recursive type");
-		expect(EqualityGenerator.equalsName(tree) != EqualityGenerator.equalsName(chain), "and differ between shapes");
 		expect(!NativeLayout.containsNativeLayoutType(tree), "a recursive type holds no native layout");
 
 		// Only cycles through an anonymous structure are allowed: anything else could never be expanded.

@@ -16,13 +16,13 @@ class SharedEqualityHelperEditMain {
 		FileSystem.createDirectory(root);
 		// Left and Right both contain an Inner, so the helper for Inner is shared by the helpers for Left and Right.
 		var files = [
-			"Inner.hx" => "typedef Inner = {a:Int, b:Int};",
-			"Left.hx" => "typedef Left = {inner:Inner, x:Int};",
-			"Right.hx" => "typedef Right = {inner:Inner, y:Int};",
+			"Inner.hx" => "struct Inner : Equatable { public var a:Int; public var b:Int; public function new(a:Int, b:Int) { this.a = a; this.b = b; } }",
+			"Left.hx" => "struct Left : Equatable { public var inner:Inner; public var x:Int; public function new(inner:Inner, x:Int) { this.inner = inner; this.x = x; } }",
+			"Right.hx" => "struct Right : Equatable { public var inner:Inner; public var y:Int; public function new(inner:Inner, y:Int) { this.inner = inner; this.y = y; } }",
 			"P.hx" => "class P { public static function same(a:Left, b:Left):Bool return haxeon.Equality.equals(a, b); }",
 			"Q.hx" => "class Q { public static function same(a:Right, b:Right):Bool return haxeon.Equality.equals(a, b); }",
 			"Main.hx" => "class Main { public static function main():Int {\n" +
-			"var l:Left = {inner: {a: 1, b: 2}, x: 3}; var r:Right = {inner: {a: 1, b: 2}, y: 3}; var other:Right = {inner: {a: 1, b: 9}, y: 3};\n" +
+			"var l = new Left(new Inner(1, 2), 3); var r = new Right(new Inner(1, 2), 3); var other = new Right(new Inner(1, 9), 3);\n" +
 			"return (P.same(l, l) ? 1 : 0) + (Q.same(r, r) ? 10 : 0) + (Q.same(r, other) ? 100 : 0); } }"
 		];
 		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--output=" + root + "/main.hl"];

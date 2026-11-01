@@ -1,8 +1,10 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
+
 /** Six-value affine transform using x'=a*x+c*y+tx and y'=b*x+d*y+ty. */
-@:structural
-struct Transform2D {
+struct Transform2D : Hashable, Diffable {
 	static inline var InvertibilityEpsilon:Float = 0.000001;
 
 	public final a:Float;

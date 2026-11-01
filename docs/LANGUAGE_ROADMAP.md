@@ -22,6 +22,7 @@ The rules for every entry:
 | Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Declared value equality, synthesized when every field supports it; `==` on a struct that does not conform is a compile error. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
 | `Diffable` | Explicit conformance for field masks (`Diff.mask/apply/bit/all`); writes only to writable fields. | [STRUCTS.md](STRUCTS.md) |
+| Signals core | `Signal<T>`, `Derived<T>` and `Effect`, with push invalidation, pull recomputation and per-frame batching. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | Result builders | A library-declared builder lowers `if`, `switch` and `for` in a body; attached to an interface method and inherited by implementers. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | `Lazy<T>` parameters receive the caller's expression unevaluated. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
@@ -38,7 +39,8 @@ compiles to a constant offset and allocates nothing.
 
 It could give `Diff.bit` and `@Channel` annotations a typed field reference instead of a name, and let bindings name
 their target (`bind(\Label.text, value)`).
-Design it with `Equatable`/`Diffable`, since all three share the per-type field numbering.
+The proposed typing, place semantics and relationship to `Diffable` field numbering are in
+[KEY_PATHS.md](KEY_PATHS.md). Implementation remains future work.
 
 ### Inline enums with payloads
 
@@ -85,9 +87,10 @@ Check each against what Haxeon already supports before designing it.
 
 ## Order
 
-1. `Equatable`, `Hashable` and `Diffable`, porting every `@:structural` use; key paths designed alongside.
-2. `Observable` (ADR 0002 stage 1b).
-3. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
-4. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
-5. Move-only types and `inout`, with native memory and the node store prototype.
-6. Smaller conveniences when a concrete use appears.
+1. `Equatable`, `Hashable` and `Diffable`, replacing the former structural metadata; key paths designed alongside.
+2. Signals core (ADR 0002 stage 1).
+3. `Observable` (ADR 0002 stage 1b).
+4. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
+5. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
+6. Move-only types and `inout`, with native memory and the node store prototype.
+7. Smaller conveniences when a concrete use appears.

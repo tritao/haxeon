@@ -168,7 +168,7 @@ class FrontendCompilation {
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
-			IrGenerator.bindClasses(typedNew.classes);
+			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces);
 			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);
@@ -228,6 +228,7 @@ class FrontendCompilation {
 		for (object in typedObjects)
 			objectCache.set(object.name, object);
 		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
+		IrGenerator.bindGeneratedObjects(currentObjects);
 		IrGenerator.bindFlatValueObjects(currentObjects);
 		var allocationAfterObjects = AllocationMeter.sample();
 		var touchedModules:Map<String, Bool> = [],
@@ -285,6 +286,8 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
+		for (object in currentObjects)
+			objectCache.set(object.name, object);
 		var allocationAfterFunctions = AllocationMeter.sample();
 		if (indexSemantics) {
 			indexTypedInitializers(context, typedNew, reindexedModules);
@@ -632,7 +635,8 @@ class FrontendCompilation {
 			pending:Array<String> = [];
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
-				if (!StringTools.startsWith(cached, "$equality:")
+				if (!StringTools.startsWith(cached, "$value$equality:")
+					&& !StringTools.startsWith(cached, "$hash$value$equality:")
 					&& !StringTools.startsWith(cached, "$wire:")
 					&& !StringTools.startsWith(cached, "$json:"))
 					continue;

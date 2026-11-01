@@ -68,7 +68,7 @@ class InlinerMain {
 		IrVerifier.verify(nestedConstructors);
 		expect(allocations(programFunction(nestedConstructors, "$hl:scalar-arguments:make")) == 0,
 			"nested value constructors stay scalar when ordinary inlining is disabled");
-		var equality = Frontend.compile("@:structural struct Value { public final x:Float; public function new(x:Float) this.x = x; } "
+		var equality = Frontend.compile("interface Equatable {} struct Value : Equatable { public final x:Float; public function new(x:Float) this.x = x; } "
 			+ "class Exact { public final v:Value; public function new(v:Value) this.v = v; } "
 			+ "class Holder { final exact:Null<Exact>; public var value(get, never):Value; public function new() exact = null; "
 			+ "inline function get_value():Value return exact == null ? new Value(4) : exact.v; } "
@@ -185,6 +185,12 @@ class InlinerMain {
 			expect(allocations(programFunction(flowProgram, name)) == 1, '$name allocates once, and needs phis to replace it');
 		// An argument is a copy, but keep only reads it and stores nothing, so the copy is dropped.
 		expect(allocations(programFunction(flowProgram, "late")) == 1, "late passes its object to keep without copying it");
+		var returnedValue = Frontend.compile("@:value class Box { public var value:Int; public function new(value:Int) this.value = value; } "
+			+ "function identity(box:Box):Box return box; function main():Int { var original = new Box(1); var copy = original; copy.value = 2; "
+			+ "var returned = identity(copy); returned.value = 3; return original.value; }");
+		IrInliner.run(returnedValue, new IrInlineCache());
+		if (new compiler.ir.IrInterpreter(returnedValue).run("main") != 1)
+			throw "a value copy returned by a read-only callee must remain independent of its source";
 		for (name in ["perIteration", "perIterationNested"])
 			expect(allocations(programFunction(flowProgram, name)) == 0, '$name allocates every iteration, so it should be replaced even with phis');
 		expect(allocations(programFunction(flowProgram, "guarded")) <= 1, "an object in a function with exception handling is handled safely");

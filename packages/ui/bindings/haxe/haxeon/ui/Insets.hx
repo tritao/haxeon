@@ -1,8 +1,10 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
+
 /** Immutable four-sided inset value. */
-@:structural
-struct Insets {
+struct Insets : Hashable, Diffable {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;

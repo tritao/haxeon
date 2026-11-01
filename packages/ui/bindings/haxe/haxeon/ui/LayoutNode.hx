@@ -94,10 +94,10 @@ class LayoutNode {
 	public function copyTextStylesTo(target:LayoutNode):Void {
 		if (ownTextStyle == null) target.ownTextStyle = null;
 		else if (target.ownTextStyle == null) target.ownTextStyle = haxeon.Structural.copy(ownTextStyle);
-		else haxeon.Structural.assignChanged(target.ownTextStyle, target.ownTextStyle, ownTextStyle);
+		else haxeon.Diff.apply(target.ownTextStyle, target.ownTextStyle, ownTextStyle);
 		if (ownParagraphStyle == null) target.ownParagraphStyle = null;
 		else if (target.ownParagraphStyle == null) target.ownParagraphStyle = haxeon.Structural.copy(ownParagraphStyle);
-		else haxeon.Structural.assignChanged(target.ownParagraphStyle, target.ownParagraphStyle, ownParagraphStyle);
+		else haxeon.Diff.apply(target.ownParagraphStyle, target.ownParagraphStyle, ownParagraphStyle);
 	}
 
 	public function add(child:LayoutNode):LayoutNode {

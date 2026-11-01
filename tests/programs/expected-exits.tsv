@@ -408,6 +408,9 @@ struct-writable-places	42
 nullable-struct-copy	42
 nullable-struct-storage	42
 struct-field-equality	42
+declared-equality	42
+native-integer-cast	42
+native-integer-cast-standalone	42
 nested-value-scalar-replace	42
 struct-flat-storage	42
 struct-closure-abi	42

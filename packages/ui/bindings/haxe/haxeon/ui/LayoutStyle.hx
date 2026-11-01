@@ -2,10 +2,9 @@ package haxeon.ui;
 
 /**
  * Haxe-owned layout, paint, visibility, and transform data. Structural: copying, comparing, hashing and diffing go through
- * haxeon.Structural, generated from the fields below, so a field added here is covered by all of them.
+ * haxeon.Diff, generated from the fields below, so a field added here is covered by all of them.
  */
-@:structural
-class LayoutStyle {
+class LayoutStyle implements Hashable, Diffable {
 	public var width:LayoutAxis;
 	public var height:LayoutAxis;
 	/** Width divided by height; zero disables aspect-ratio sizing. */

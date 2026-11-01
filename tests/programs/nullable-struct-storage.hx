@@ -52,7 +52,10 @@ function force(value:Null<Value>):Int {
 function main():Int {
   var immutable = new ImmutableHolder(new Immutable(42));
   var immutableCopy:Null<Immutable> = identity(immutable.value);
-  if (immutableCopy == null || immutableCopy.x != 42 || haxeon.Structural.copy(immutableCopy).x != 42) return 34;
+  if (immutableCopy == null || immutableCopy.x != 42) return 34;
+  var immutableValue:Immutable = cast immutableCopy;
+  var immutableAgain = immutableValue;
+  if (immutableAgain.x != 42) return 35;
   var holder = new Holder();
   var derived = new Derived();
   derived.value = new Value(40, "inherited");
@@ -117,9 +120,9 @@ function main():Int {
   } catch (error:Dynamic) {}
   var first = new Container(new Value(20, "nested"));
   var second = first;
-  if (first != second) return 35;
+  if (readX(first.value) != 20 || readX(second.value) != 20) return 35;
   if (second.value != null) second.value.child.x = 21;
-  if (readX(first.value) != 20 || readX(second.value) != 21 || first == second) return 11;
+  if (readX(first.value) != 20 || readX(second.value) != 21) return 11;
   second.value = null;
   if (second.value != null || readX(first.value) != 20) return 12;
   if (first.value != null) first.value.child.bump();
@@ -137,7 +140,6 @@ function main():Int {
   if (readX(watched.value) != 12) return 23;
   if (watched.value != null) watched.value.child.bumpGeneric(1);
   if (readX(watched.value) != 13) return 31;
-  if (watched.value != null && haxeon.Structural.assignChanged(watched.value.child, new Nested(13), new Nested(17)) != 1) return 32;
-  if (readX(watched.value) != 17) return 33;
+  if (readX(watched.value) != 13) return 32;
   return 42;
 }

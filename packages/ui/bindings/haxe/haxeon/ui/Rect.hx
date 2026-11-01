@@ -1,8 +1,9 @@
 package haxeon.ui;
 
+import Hashable;
+
 /** Immutable axis-aligned rectangle. */
-@:structural
-struct Rect {
+struct Rect : Hashable {
 	public final x:Float;
 	public final y:Float;
 	public final width:Float;

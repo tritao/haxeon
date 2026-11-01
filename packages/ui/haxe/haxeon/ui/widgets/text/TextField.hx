@@ -356,7 +356,7 @@ class TextField implements View {
 			}
 			// The text node owns this style; it can also serve as the working copy for computed font overrides.
 			var textNodeTextStyle = textNode.layout.textStyle;
-			haxeon.Structural.assignChanged(textNodeTextStyle, textNodeTextStyle, editor.textStyle);
+			haxeon.Diff.apply(textNodeTextStyle, textNodeTextStyle, editor.textStyle);
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			if (textStyle == null && fontSource != null && fontSource.layer != "framework")

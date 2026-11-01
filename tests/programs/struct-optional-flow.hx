@@ -1,10 +1,8 @@
-@:structural
-struct Child {
+struct Child : Hashable {
   public var text:String;
   public function new(text:String) this.text = text;
 }
-@:structural
-struct Value {
+struct Value : Hashable {
   public var n:Int;
   public var child:Null<Child>;
   public function new(n:Int, text:String) { this.n = n; this.child = new Child(text); }
@@ -28,19 +26,16 @@ struct NativeShape {
   public var fraction:Float32;
   public function new(narrow:Int, fraction:Float) { this.narrow = cast narrow; this.unsigned = 0; this.fraction = cast fraction; }
 }
-@:structural
-struct FlatPoint {
+struct FlatPoint : Hashable {
   public final x:Float;
   public final y:Float;
   public function new(x:Float, y:Float) { this.x = x; this.y = y; }
 }
-@:structural
-class PointHolder {
+class PointHolder implements Hashable {
   public final point:FlatPoint;
   public function new(point:FlatPoint) this.point = point;
 }
-@:structural
-struct Choice {
+struct Choice : Equatable {
   public final n:Int;
   public final text:String;
   public function new(n:Int, text:String) { this.n = n; this.text = text; }
@@ -163,10 +158,10 @@ function main():Int {
   if (ChoiceEffects.count != 1) return 41;
 
   var pointHolder = new PointHolder(new FlatPoint(1, 2));
-  var expectedHash = haxeon.Structural.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
-  var pointHash = haxeon.Structural.mix(haxeon.Structural.mix(17, haxeon.Structural.hashFloat(1)), haxeon.Structural.hashFloat(2));
-  if (expectedHash != haxeon.Structural.mix(17, pointHash)) return 32;
-  for (i in 0...10000) if (haxeon.Structural.hash(pointHolder) == expectedHash) hashTotal++;
+  var expectedHash = haxeon.Hashing.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
+  var pointHash = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hashFloat(1)), haxeon.Hashing.hashFloat(2));
+  if (expectedHash != haxeon.Hashing.mix(17, pointHash)) return 32;
+  for (i in 0...10000) if (haxeon.Hashing.hash(pointHolder) == expectedHash) hashTotal++;
   if (hashTotal != 10000 || hl.Gc.totalAllocated() - hashBefore > 4096) return 31;
   var nativeHolder = new NativeHolder();
   nativeHolder.value = new NativeShape(1, 0);
@@ -185,7 +180,7 @@ function main():Int {
   var equal:Null<Value> = new Value(42, "managed");
   if (a.value != equal) return 24;
   var firstValue:Value = cast a.value, secondValue:Value = cast equal;
-  if (haxeon.Structural.hash(firstValue) != haxeon.Structural.hash(secondValue)) return 25;
+  if (haxeon.Hashing.hash(firstValue) != haxeon.Hashing.hash(secondValue)) return 25;
   var expectedValue:Value = cast a.value;
   var equalityBefore = hl.Gc.totalAllocated(), equalityTotal = 0;
   for (i in 0...10000) {

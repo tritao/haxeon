@@ -3,6 +3,9 @@ import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.hl.HlBackend;
+import compiler.hl.HlCode;
+import compiler.hl.HlCode.HlTypeDef;
+import compiler.ir.hl.HlLower;
 import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.WasmTarget.WasmReferenceModel;
@@ -74,7 +77,7 @@ class WasmBackendMain {
 			}
 		}
 		if (!optionalCloneFound) throw "missing Wasm GC scalar optional call";
-		var equalityProgram = Frontend.compile("@:structural struct V { public var x:Int; public var label:String; "
+		var equalityProgram = Frontend.compile("interface Equatable {} struct V : Equatable { public var x:Int; public var label:String; "
 			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
 			+ "function same(a:Null<V>, b:V):Bool return a == b; "
 			+ "function main():Int { var a:Null<V> = new V(42, 'managed'); var b = new V(42, 'managed'); return same(a, b) ? 42 : 0; }");
@@ -167,6 +170,18 @@ class WasmBackendMain {
 		var hl = new HlBackend().compile(Frontend.compile("function main():Int return 42;"), {target: HashLink, debugNames: true});
 		if (hl.bytes.get(0) != 72 || hl.bytes.get(1) != 76 || hl.bytes.get(2) != 66)
 			throw "The target-neutral backend seam must preserve the HashLink backend";
+		var capabilityCode = HlLower.lower(Frontend.compile("interface Equatable {} interface Hashable extends Equatable {} interface Diffable {} "
+			+ "interface Reader { function read():Int; } struct Point : Hashable, Diffable { public var x:Int; } "
+			+ "class Record implements Hashable, Diffable { public var x:Int; public function new() {} } "
+			+ "class ReaderImpl implements Reader { public function new() {} public function read():Int return 42; } "
+			+ "function consume(reader:Reader):Int return reader.read(); function main():Int { var p = new Point(); var r = new Record(); "
+			+ "return p.x + r.x + consume(new ReaderImpl()); }"));
+		var pointFields = hlObjectFields(capabilityCode, "Point"), recordFields = hlObjectFields(capabilityCode, "Record"),
+			readerFields = hlObjectFields(capabilityCode, "ReaderImpl");
+		if (pointFields.length != 1 || recordFields.length != 1)
+			throw "Compiler-known value capabilities must not add HashLink virtual-cache fields to structs or classes";
+		if (readerFields.length != 1 || readerFields[0] != "")
+			throw "Ordinary runtime interfaces must retain their HashLink virtual-cache field";
 		var layout = new WasmLayout(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int return 0;"));
 		if (layout.object("Box").fields[0].offset != WasmLayout.HEADER_SIZE)
 			throw "Wasm object fields must use the centralized layout";
@@ -1173,6 +1188,18 @@ class WasmBackendMain {
 		if (result.bytes.length < 8 || result.bytes.get(0) != 0 || result.bytes.get(1) != 97 || result.bytes.get(2) != 115 || result.bytes.get(3) != 109)
 			throw "Wasm module is missing its binary header";
 		return result.bytes;
+	}
+
+	static function hlObjectFields(code:HlCode, name:String):Array<String> {
+		for (type in code.types)
+			switch type {
+				case Object(typeName, _, _, fields, _, _) if (code.strings[typeName] == name):
+					return [for (field in fields) code.strings[field.name]];
+				case Structure(typeName, _, fields, _, _) if (code.strings[typeName] == name):
+					return [for (field in fields) code.strings[field.name]];
+				case _:
+			}
+		throw 'Missing HashLink type "$name"';
 	}
 
 	static function containsBytes(bytes:haxe.io.Bytes, value:String):Bool {

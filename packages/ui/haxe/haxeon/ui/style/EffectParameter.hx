@@ -1,10 +1,10 @@
 package haxeon.ui.style;
 
+import Equatable;
 import haxeon.ui.Color;
 
 /** One typed value supplied to a custom effect registration. */
-@:structural
-class EffectParameter {
+class EffectParameter implements Equatable {
 	public final type:EffectParameterType;
 	public final values:Array<Float>;
 
@@ -37,8 +37,14 @@ class EffectParameter {
 	public function copy():EffectParameter
 		return new EffectParameter(type, values);
 
-	public function isEqual(other:EffectParameter):Bool
-		return other != null && haxeon.Equality.equals(this, other);
+	public function equals(other:EffectParameter):Bool {
+		if (other == null || type != other.type || values.length != other.values.length)
+			return false;
+		for (index in 0...values.length)
+			if (values[index] != other.values[index])
+				return false;
+		return true;
+	}
 
 	public function interpolate(other:EffectParameter, amount:Float):EffectParameter {
 		if (other == null || type != other.type || values.length != other.values.length)

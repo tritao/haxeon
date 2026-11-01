@@ -1,4 +1,4 @@
-struct Value {
+struct Value : Diffable {
   public var x:Int;
   public function new(x:Int) this.x = x;
   public function bump():Void x++;
@@ -45,7 +45,7 @@ function main():Int {
   values[1].value.bump();
   if (values[0].value.x != 12 || values[1].value.x != 21) return 6;
   var before = new Value(30), after = new Value(40);
-  if (haxeon.Structural.assignChanged(holder.self().nested.value, before, after) != 1) return 7;
+  if (haxeon.Diff.apply(holder.self().nested.value, before, after) != 1) return 7;
   if (holder.calls != 2 || holder.nested.value.x != 40 || before.x != 30 || after.x != 40) return 8;
   return 42;
 }

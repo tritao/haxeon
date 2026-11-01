@@ -1,8 +1,10 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
+
 /** One immutable axis policy encoded into a layout transaction. */
-@:structural
-struct LayoutAxis {
+struct LayoutAxis : Hashable, Diffable {
 	public final sizing:LayoutSizing;
 	/** Exact value for FIXED, or the parent fraction for PERCENT. */
 	public final value:Float;

@@ -30,7 +30,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
-		IrGenerator.bindClasses(typed.classes);
+		IrGenerator.bindClasses(typed.classes, typed.interfaces);
 		var objects = objectsFrom(typed);
 		IrGenerator.bindFlatValueObjects(objects);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
@@ -309,6 +309,7 @@ class IrProgramAssembler {
 	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
 		var objects:Array<IrObject> = [],
 			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
+		IrGenerator.bindGeneratedObjects(objects);
 		for (classDecl in typed.classes)
 			classesByName.set(classDecl.name, classDecl);
 		for (classDecl in typed.classes)
@@ -504,12 +505,15 @@ class IrProgramAssembler {
 			needsTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
 			needsDynamicObjectRuntime = false,
+			needsInt64ToInt = false,
 			mapRuntimeNames:Map<String, Bool> = [];
 		for (fn in allFunctions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
 						case Call(_, name, _):
+							if (name == "haxe.Int64.toInt")
+								needsInt64ToInt = true;
 							if (name == "__exception_matches")
 								needsExceptionRuntime = true;
 							if (name == "__std_is_of_type")
@@ -567,6 +571,14 @@ class IrProgramAssembler {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsInt64ToInt && !hasNative(natives, "haxe.Int64.toInt"))
+			program.natives.push({
+				name: "haxe.Int64.toInt",
+				library: "haxeon_runtime",
+				symbol: "__int64_to_int",
+				arguments: [I64],
+				result: I32
+			});
 		if (needsDynamicObjectRuntime && !hasNative(natives, "__reflect_dynamic_object"))
 			program.natives.push({
 				name: "__reflect_dynamic_object",

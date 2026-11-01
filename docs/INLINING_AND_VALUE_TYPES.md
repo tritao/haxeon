@@ -53,8 +53,8 @@ stored value fields inline and handed out pointers into the parent while Wasm us
 `var alias = h.span; h.span = new Span(5, 6)` meant two different things; the parity suite now runs the same value
 class programs on all three targets with no skips.
 
-Not covered yet: the loop variable of `for (x in values)` and generic value classes. Value-class `==` compares fields
-using each field's own equality; `haxeon.Equality.equals` is the separate deep structural operation.
+Not covered yet: the loop variable of `for (x in values)` and generic value classes. A value class must conform to
+`Equatable` for fieldwise `==`; `haxeon.Equality.equals` selects the same declared equality from its static type.
 
 ## Plan
 

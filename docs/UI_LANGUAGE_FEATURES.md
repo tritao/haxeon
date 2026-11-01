@@ -77,7 +77,7 @@ deferred.
 
 ### 4. Structs for small values, and nullable struct fields — implemented
 
-`Color`, `Insets`, `LayoutAxis`, `Rect` and `Transform2D` are immutable `@:structural` structs, with fieldwise equality
+`Color`, `Insets`, `LayoutAxis`, `Rect` and `Transform2D` are immutable `Hashable` structs, with conformance-based equality
 and inline storage in `LayoutStyle`. Optional fields use `Null<S>` with an inline presence flag. The compiler rejects
 writes through temporary values, scalar-replaces eligible values and their callers, and flattens struct fields and locals
 on Wasm GC. Dynamic and otherwise escaping values still box; the measured UI scenarios allocate none of the five

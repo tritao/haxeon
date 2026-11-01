@@ -46,8 +46,11 @@ import compiler.Source.SourceSpan;
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
 @:allow(compiler.types.typing.WireCodecGenerator)
-@:allow(compiler.types.typing.EqualityGenerator)
-@:allow(compiler.types.typing.StructuralIntrinsics)
+@:allow(compiler.types.typing.ValueEqualityGenerator)
+@:allow(compiler.types.typing.HashGenerator)
+@:allow(compiler.types.typing.DiffIntrinsics)
+@:allow(compiler.types.typing.DeclaredConformance)
+@:allow(compiler.types.typing.EnumEqualityGenerator)
 class BodyTyper {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;

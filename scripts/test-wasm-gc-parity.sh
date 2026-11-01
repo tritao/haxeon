@@ -44,6 +44,17 @@ while IFS=$'\t' read -r case_name _; do
 	done
 done < "$root_dir/tests/programs/expected-exits.tsv"
 
+# The declared-conformance fixture covers synthesized and hand-written equality,
+# hashing, nullable/nested structs, maps and Diff. Run it with optimization both
+# enabled and disabled on each Wasm backend, in addition to its normal HL run.
+for inline in 0 1; do
+	for target in wasm32 wasm-gc; do
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="out/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
+			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
+	done
+done
+
 haxeon_compile_async \
 	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-bytes-view-stress.wasm \
 	--entry=bytes-view --root=tests/programs tests/programs/bytes-view.hx
@@ -158,6 +169,17 @@ async function run(name, target) {
     for (const target of ["wasm32", "wasm-gc"])
       if (results[target].failure !== undefined)
         failures.push(`${name} (${target}): ${results[target].failure}`);
+  }
+  for (const inline of [0, 1]) {
+    for (const target of ["wasm32", "wasm-gc"]) {
+      const result = await run(`declared-equality-inline-${inline}`, target);
+      if (result.failure === undefined && result.exit !== 42)
+        result.failure = `expected 42, got ${result.exit}`;
+      if (result.failure !== undefined)
+        failures.push(`declared-equality (inline=${inline}, ${target}): ${result.failure}`);
+      else
+        console.log(`PASS: declared-equality on ${target}, inline=${inline}`);
+    }
   }
   const stressBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-bytes-view-stress.wasm"));
   const stressInstance = await WebAssembly.instantiate(stressBytes, {});

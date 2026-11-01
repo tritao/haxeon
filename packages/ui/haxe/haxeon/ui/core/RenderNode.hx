@@ -255,11 +255,11 @@ class RenderNode {
 	 */
 	public function fingerprint():Int {
 		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Structural.hash(layout.style)).addInt(cast layout.visualKind).addString(layout.text)
+		hash.addInt(haxeon.Hashing.hash(layout.style)).addInt(cast layout.visualKind).addString(layout.text)
 			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
 			.addString(semantics == null ? null : semantics.label);
 		var text = layout.textColor;
-		if (text != null) hash.addInt(haxeon.Structural.hash(text));
+		if (text != null) hash.addInt(haxeon.Hashing.hash(text));
 		hash.addInt(children.length);
 		return hash.a ^ (hash.b * 31);
 	}
@@ -273,7 +273,7 @@ class RenderNode {
 		var prior:RenderNode = reusable ? cast reuse : shareLayout
 			? new RenderNode(id, layout.visualKind, null, layout) : new RenderNode(id, layout.visualKind, layout.style.copy());
 		if (reusable && !shareLayout) {
-			haxeon.Structural.assignChanged(prior.layout.style, prior.layout.style, layout.style);
+			haxeon.Diff.apply(prior.layout.style, prior.layout.style, layout.style);
 			prior.layout.visualKind = layout.visualKind;
 		}
 		prior.computedStyle = computedStyle;
@@ -348,7 +348,7 @@ class RenderNode {
 		if (fresh == this || fresh.replacedBy != null)
 			throw "A reconcile requires a fresh render node";
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
-		var styleChanged = haxeon.Structural.changedMask(built.style, fresh.layout.style) != 0;
+		var styleChanged = haxeon.Diff.mask(built.style, fresh.layout.style) != 0;
 		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
 		var prior = this;
 		if (styleChanged || appearanceChanged(fresh, built)) {
@@ -357,8 +357,8 @@ class RenderNode {
 		}
 		computedStyle = fresh.computedStyle;
 		states = fresh.states;
-		haxeon.Structural.assignChanged(layout.style, built.style, fresh.layout.style);
-		haxeon.Structural.assignChanged(built.style, built.style, fresh.layout.style);
+		haxeon.Diff.apply(layout.style, built.style, fresh.layout.style);
+		haxeon.Diff.apply(built.style, built.style, fresh.layout.style);
 		if (semantics == built.semantics) semantics = fresh.semantics;
 		built.semantics = fresh.semantics;
 		// The counts of the new build, taken before its lists take what callers added to this node.
@@ -489,8 +489,8 @@ class RenderNode {
 	function applyTextComponents(text:TextStyle, paragraph:ParagraphStyle, color:Color):RenderNode {
 		layout.textColor = color;
 		var ownText = layout.textStyle, ownParagraph = layout.paragraphStyle;
-		haxeon.Structural.assignChanged(ownText, ownText, text);
-		haxeon.Structural.assignChanged(ownParagraph, ownParagraph, paragraph);
+		haxeon.Diff.apply(ownText, ownText, text);
+		haxeon.Diff.apply(ownParagraph, ownParagraph, paragraph);
 		return this;
 	}
 
@@ -887,26 +887,26 @@ class RenderNode {
 	}
 
 	/** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */
-	static final StyleLayoutFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "width") | haxeon.Structural.fieldBit(LayoutStyle, "height")
-		| haxeon.Structural.fieldBit(LayoutStyle, "aspectRatio") | haxeon.Structural.fieldBit(LayoutStyle, "direction")
-		| haxeon.Structural.fieldBit(LayoutStyle, "childAlignX") | haxeon.Structural.fieldBit(LayoutStyle, "childAlignY")
-		| haxeon.Structural.fieldBit(LayoutStyle, "childDistribution") | haxeon.Structural.fieldBit(LayoutStyle, "positioning")
-		| haxeon.Structural.fieldBit(LayoutStyle, "wrapMode") | haxeon.Structural.fieldBit(LayoutStyle, "rowGap")
-		| haxeon.Structural.fieldBit(LayoutStyle, "columnGap") | haxeon.Structural.fieldBit(LayoutStyle, "alignSelf")
-		| haxeon.Structural.fieldBit(LayoutStyle, "positionX") | haxeon.Structural.fieldBit(LayoutStyle, "positionY")
-		| haxeon.Structural.fieldBit(LayoutStyle, "padding") | haxeon.Structural.fieldBit(LayoutStyle, "childGap");
-	static final StyleHitFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "zIndex") | haxeon.Structural.fieldBit(LayoutStyle, "clipToParent")
-		| haxeon.Structural.fieldBit(LayoutStyle, "overlay") | haxeon.Structural.fieldBit(LayoutStyle, "clipHorizontal")
-		| haxeon.Structural.fieldBit(LayoutStyle, "clipVertical") | haxeon.Structural.fieldBit(LayoutStyle, "visible");
-	static final StylePaintFields:Int = StyleHitFields | haxeon.Structural.fieldBit(LayoutStyle, "background")
-		| haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft") | haxeon.Structural.fieldBit(LayoutStyle, "radiusTopRight")
-		| haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomRight") | haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomLeft");
-	static final StyleTransformFields:Int = haxeon.Structural.fieldBit(LayoutStyle, "transform")
-		| haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX") | haxeon.Structural.fieldBit(LayoutStyle, "transformOriginY");
+	static final StyleLayoutFields:Int = haxeon.Diff.bit(LayoutStyle, "width") | haxeon.Diff.bit(LayoutStyle, "height")
+		| haxeon.Diff.bit(LayoutStyle, "aspectRatio") | haxeon.Diff.bit(LayoutStyle, "direction")
+		| haxeon.Diff.bit(LayoutStyle, "childAlignX") | haxeon.Diff.bit(LayoutStyle, "childAlignY")
+		| haxeon.Diff.bit(LayoutStyle, "childDistribution") | haxeon.Diff.bit(LayoutStyle, "positioning")
+		| haxeon.Diff.bit(LayoutStyle, "wrapMode") | haxeon.Diff.bit(LayoutStyle, "rowGap")
+		| haxeon.Diff.bit(LayoutStyle, "columnGap") | haxeon.Diff.bit(LayoutStyle, "alignSelf")
+		| haxeon.Diff.bit(LayoutStyle, "positionX") | haxeon.Diff.bit(LayoutStyle, "positionY")
+		| haxeon.Diff.bit(LayoutStyle, "padding") | haxeon.Diff.bit(LayoutStyle, "childGap");
+	static final StyleHitFields:Int = haxeon.Diff.bit(LayoutStyle, "zIndex") | haxeon.Diff.bit(LayoutStyle, "clipToParent")
+		| haxeon.Diff.bit(LayoutStyle, "overlay") | haxeon.Diff.bit(LayoutStyle, "clipHorizontal")
+		| haxeon.Diff.bit(LayoutStyle, "clipVertical") | haxeon.Diff.bit(LayoutStyle, "visible");
+	static final StylePaintFields:Int = StyleHitFields | haxeon.Diff.bit(LayoutStyle, "background")
+		| haxeon.Diff.bit(LayoutStyle, "radiusTopLeft") | haxeon.Diff.bit(LayoutStyle, "radiusTopRight")
+		| haxeon.Diff.bit(LayoutStyle, "radiusBottomRight") | haxeon.Diff.bit(LayoutStyle, "radiusBottomLeft");
+	static final StyleTransformFields:Int = haxeon.Diff.bit(LayoutStyle, "transform")
+		| haxeon.Diff.bit(LayoutStyle, "transformOriginX") | haxeon.Diff.bit(LayoutStyle, "transformOriginY");
 
 	/** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
 	public static function styleFieldsClassified():Bool
-		return (StyleLayoutFields | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Structural.allFieldsMask(LayoutStyle);
+		return (StyleLayoutFields | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Diff.all(LayoutStyle);
 
 	/** Classifies concrete LayoutNode mutations that bypass computed styles. */
 	function layoutInputDiffFlags(previous:RenderNode):Int {
@@ -915,8 +915,8 @@ class RenderNode {
 		var flags = 0;
 		var beforeStyle = before.style;
 		var afterStyle = layout.style;
-		// Generated from LayoutStyle's fields (haxeon.Structural); styleFieldsClassified checks each is in a group below.
-		var changed = beforeStyle == afterStyle ? 0 : haxeon.Structural.changedMask(beforeStyle, afterStyle);
+		// Generated from LayoutStyle's fields (haxeon.Diff); styleFieldsClassified checks each is in a group below.
+		var changed = beforeStyle == afterStyle ? 0 : haxeon.Diff.mask(beforeStyle, afterStyle);
 		if ((changed & StyleLayoutFields) != 0)
 			flags |= UiDirtyFlag.NeedsLayout;
 		if ((changed & StylePaintFields) != 0 || !haxeon.Equality.equals(before.textColor, after.textColor))

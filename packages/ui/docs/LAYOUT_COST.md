@@ -141,7 +141,7 @@ owns the root. New IDs carry their input records and nonempty child lists. Uncha
 The header validates exact metadata lengths, final node count and a reserved zero before applying anything.
 
 **One dirty classification.** `UiStyleInvalidationMetrics.compare` and `RenderNode.syncRevisions` still decide what changed,
-including generated `Structural.changedMask` style differences, text, intrinsic content, hit policy and retained scene
+including generated `Diff.mask` style differences, text, intrinsic content, hit policy and retained scene
 revisions. `LayoutChanges` is reusable transport scratch populated from those decisions, not another style cache or
 fingerprint. The encoder walks for membership, order, validation and intrinsic registration, but validates and writes input
 records only for changed or new nodes. Successful-submission identity tables are swapped into place and reused by decode;

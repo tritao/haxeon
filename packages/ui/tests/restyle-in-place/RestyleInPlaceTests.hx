@@ -1182,12 +1182,12 @@ class RestyleInPlaceTests {
   }
 
   /**
-   * Equality of text styles, paragraph styles, rectangles, shortcuts and effect parameters is generated from their fields, and
+   * Equality of text styles, paragraph styles, rectangles, shortcuts and effect parameters follows their declared conformances, and
    * the hand-written comparisons and keys that remain must name every field: adding one to a class fails here until they do.
    */
   static function structuralValues():Void {
     var text = new TextStyle(14.0), changedText = haxeon.Structural.copy(text);
-    check(haxeon.Equality.equals(text, changedText) && haxeon.Structural.changedMask(text, changedText) == 0, "TextStyle.copy is not equal");
+    check(haxeon.Equality.equals(text, changedText) && haxeon.Diff.mask(text, changedText) == 0, "TextStyle.copy is not equal");
     changedText.letterSpacing = 0.5;
     check(!haxeon.Equality.equals(text, changedText), "TextStyle equality ignores letter spacing");
     var paragraph = new ParagraphStyle(), changedParagraph = haxeon.Structural.copy(paragraph);
@@ -1196,7 +1196,7 @@ class RestyleInPlaceTests {
     changedParagraph = haxeon.Structural.copy(paragraph);
     changedParagraph.lineHeight = 20.0;
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the line height");
-    check(haxeon.Structural.changedMask(paragraph, changedParagraph) == haxeon.Structural.fieldBit(ParagraphStyle, "lineHeight"),
+    check(haxeon.Diff.mask(paragraph, changedParagraph) == haxeon.Diff.bit(ParagraphStyle, "lineHeight"),
       "ParagraphStyle reports a changed line height as another field");
 
     check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
@@ -1209,23 +1209,23 @@ class RestyleInPlaceTests {
     check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))
       && !haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
       "Text metrics equality ignores a field");
-    check(new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 2))
-      && !new haxeon.ui.core.Shortcut(65, 2).equals(new haxeon.ui.core.Shortcut(65, 4)) && !new haxeon.ui.core.Shortcut(65, 2).equals(null),
+    check(new haxeon.ui.core.Shortcut(65, 2) == new haxeon.ui.core.Shortcut(65, 2)
+      && new haxeon.ui.core.Shortcut(65, 2) != new haxeon.ui.core.Shortcut(65, 4),
       "Shortcut equality is wrong");
-    check(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0))
-      && !haxeon.ui.style.EffectParameter.vec2(1.0, 2.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 3.0))
-      && !haxeon.ui.style.EffectParameter.scalar(1.0).isEqual(haxeon.ui.style.EffectParameter.vec2(1.0, 0.0)),
+    check(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) == haxeon.ui.style.EffectParameter.vec2(1.0, 2.0)
+      && haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) != haxeon.ui.style.EffectParameter.vec2(1.0, 3.0)
+      && haxeon.ui.style.EffectParameter.scalar(1.0) != haxeon.ui.style.EffectParameter.vec2(1.0, 0.0),
       "EffectParameter equality is wrong");
 
-    check(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0).isEqual(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0))
-      && !new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0).isEqual(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 5.0)),
+    check(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0) == new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0)
+      && new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0) != new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 5.0),
       "InkOverflow equality is wrong");
     var definition = function(id:Int, overflow:Float, types:Array<haxeon.ui.style.EffectParameterType>)
       return new haxeon.ui.style.CustomEffectDefinition(id, "effect", types, new haxeon.ui.style.InkOverflow(overflow, 0.0, 0.0, 0.0));
-    check(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]))
-      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(2, 1.0, [haxeon.ui.style.EffectParameterType.Float]))
-      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 2.0, [haxeon.ui.style.EffectParameterType.Float]))
-      && !definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]).isEqual(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Vec2])),
+    check(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) == definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float])
+      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(2, 1.0, [haxeon.ui.style.EffectParameterType.Float])
+      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(1, 2.0, [haxeon.ui.style.EffectParameterType.Float])
+      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Vec2]),
       "CustomEffectDefinition equality is wrong");
     check(haxeon.ui.style.StyleResolver.valueKeysComplete(), "A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys");
     semanticsFields();
@@ -1528,13 +1528,15 @@ class RestyleInPlaceTests {
     ]);
     // The frame comparison and local style resolution name LayoutStyle fields by hand; each must name every one.
     check(RenderNode.styleFieldsClassified(), "A LayoutStyle field is in no invalidation group of the frame comparison");
-    check(haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Structural.allFieldsMask(LayoutStyle),
+    check(haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Diff.all(LayoutStyle),
       "A LayoutStyle field has no style property in local style resolution");
     var style = new LayoutStyle();
     style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
     var copied = style.copy();
-    check(copied != style && haxeon.Equality.equals(copied, style) && haxeon.Structural.hash(copied) == haxeon.Structural.hash(style),
+    check(haxeon.Equality.equals(copied, style) && haxeon.Hashing.hash(copied) == haxeon.Hashing.hash(style),
       "LayoutStyle.copy is not an equal copy");
+    copied.childGap = 17.0;
+    check(style.childGap == 0.0, "LayoutStyle.copy shares mutable fields with its source");
     Sys.println("PASS structural: every LayoutStyle field is copied, compared, hashed, classified and resolved");
     structuralValues();
     fonts.dispose(); runtime.dispose();

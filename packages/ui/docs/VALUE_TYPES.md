@@ -2,10 +2,10 @@
 
 This implements the value conversions in stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md); including typed style storage and transitions.
 
-`Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `@:structural` structs. Their fields are final;
-replace the whole value to change one. Their `==` and `!=` comparisons are fieldwise. Optional values use `Null<T>`,
+`Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `Hashable` structs. Their fields are final;
+replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
-object, and structural style fingerprints and hashes still cover their fields.
+object, and `Hashable` style fingerprints still cover their fields.
 
 The native layout interface uses an output buffer for resolved geometry. The session reuses that buffer and holds on to
 immutable results when their fields have not changed. This keeps the C ABI explicit and avoids rebuilding geometry that

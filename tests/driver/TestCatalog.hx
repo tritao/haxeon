@@ -53,6 +53,7 @@ class TestCatalog {
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",
+		"DeclaredEqualityInliningMain",
 		"NullableStructIrMain",
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",

@@ -1,5 +1,7 @@
 package haxeon.ui.style;
 
+import Hashable;
+
 /**
  * Extra paint extent requested by a visual effect, in logical pixels.
  *
@@ -7,8 +9,7 @@ package haxeon.ui.style;
  * between style and rendering without exposing render targets or GPU state to
  * the Haxe style system.
  */
-@:structural
-class InkOverflow {
+class InkOverflow implements Hashable {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;
@@ -36,8 +37,6 @@ class InkOverflow {
 			right + other.right, bottom + other.bottom);
 	}
 
-	public function isEqual(other:InkOverflow):Bool
-		return other != null && haxeon.Equality.equals(this, other);
 
 	public function toString():String
 		return '($left, $top, $right, $bottom)';

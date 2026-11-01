@@ -772,8 +772,7 @@ private class DockDropTargetView implements View {
 
 /** Bounded measured-width cache for tab labels during repeated workspace builds. */
 /** What a tab label's measured width depends on; hashed and compared by field, so a new style field joins the key. */
-@:structural
-private class DockTextWidthKey {
+private class DockTextWidthKey implements Hashable {
 	public var label:String;
 	public var textStyle:TextStyle;
 	public var paragraphStyle:ParagraphStyle;
@@ -820,11 +819,11 @@ private class DockTextWidthCache {
 		scratch.label = label;
 		scratch.textStyle = textStyle;
 		scratch.paragraphStyle = paragraphStyle;
-		var hash = haxeon.Structural.hash(scratch);
+		var hash = haxeon.Hashing.hash(scratch);
 		var bucket = buckets.get(hash);
 		if (bucket != null)
 			for (index in 0...bucket.length)
-				if (haxeon.Equality.equals(bucket[index].key, scratch))
+				if (bucket[index].key == scratch)
 					return bucket[index].width;
 		var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
 		var width = layout.measure().width;

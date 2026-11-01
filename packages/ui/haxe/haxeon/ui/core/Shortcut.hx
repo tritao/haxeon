@@ -1,8 +1,9 @@
 package haxeon.ui.core;
 
+import Hashable;
+
 /** A normalized key/modifier chord used by application commands. */
-@:structural
-class Shortcut {
+class Shortcut implements Hashable {
 	public final key:Int;
 	public final modifiers:Int;
 
@@ -21,8 +22,11 @@ class Shortcut {
 	public function matches(key:Int, modifiers:Int):Bool
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
-	public function equals(other:Null<Shortcut>):Bool
-		return other != null && haxeon.Equality.equals(this, other);
+	public function equals(other:Shortcut):Bool
+		return other != null && key == other.key && modifiers == other.modifiers;
+
+	public function hash():Int
+		return key * 31 + modifiers;
 
 	public function toString():String
 		return 'Shortcut($key, $modifiers)';

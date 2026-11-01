@@ -50,7 +50,7 @@ are edits that have no build to reconcile.
 - `BuildContext.selfUpdating(id, build)`: the widget rebuilds alone, on a pointer change over it or when it asks
   (`requestPatch`, after `State.updateQuietly`; `TextField` does), and the result is reconciled with the node it built before.
   The node stays. A rebuild replaces what the builder made on it and nothing else:
-  - style: only the properties that differ between the two builds (`haxeon.Structural.changedMask`/`assignChanged`), so a
+  - style: only the properties that differ between the two builds (`haxeon.Diff.mask`/`apply`), so a
     style change a caller made after build stays;
   - computed style, interaction state, and semantics (unless the caller replaced them);
   - the listeners, outside-pointer, geometry and paint callbacks and decorations the builder made (counted when it returned
@@ -406,7 +406,7 @@ The remaining typing allocations were traced with `--census 1` and an isolated
 `MATERIA_INTERACTION_ONLY=type-char,type-backspace` replay (100 cycles), then checked with the full interaction replay.
 The comparison prior is now reused by its `BuiltNode`, including its child storage; it is overwritten only when another
 patch takes a snapshot, after the previous frame consumed it. A change between shared and copied layout storage creates
-a compatible prior; copied styles are updated with `Structural.assignChanged`. The cache retains at most one previous
+a compatible prior; copied styles are updated with `Diff.apply`. The cache retains at most one previous
 snapshot/subtree per self-updating widget and has the lifetime of that build entry.
 
 Other measured, discarded work on the same typing path was removed:
@@ -579,7 +579,7 @@ Conclusion: the remaining tab-switch cost is spread thinly over hundreds of node
 CNC source resets, selection resets, executing-line following and failure-disclosure resets now run in an explicit
 `CncPanel.update` before retention is checked. `ToolpathPlayer.sourceText` returns the immutable program without splitting
 and rejoining it. A reusable structural presentation captures the source and displayed execution inputs; generated
-`Structural.changedMask`/`assignChanged` compare and publish them without a maintained equality field list. Builds read this captured presentation, so the retained and reference builds use the same execution sample. Printer-link
+`Diff.mask`/`Diff.apply` compare and publish them without a maintained equality field list. Builds read this captured presentation, so the retained and reference builds use the same execution sample. Printer-link
 text is observed at the dock boundary. The controlled list selection keeps the highlighted row and restart selection in
 agreement after source replacement.
 

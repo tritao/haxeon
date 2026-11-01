@@ -243,12 +243,12 @@ class StyleResolver {
 		return key;
 	}
 
-	/** Every field, generated from LayoutStyle (haxeon.Structural), so a new field cannot be left out of the cache key. */
+	/** Every field, generated from LayoutStyle (haxeon.Diff), so a new field cannot be left out of the cache key. */
 	static inline function localFingerprint(local:LayoutStyle):Int
-		return haxeon.Structural.hash(local);
+		return haxeon.Hashing.hash(local);
 
 	static function colorFingerprint(seed:Int, value:Null<Color>):Int
-		return mix(seed, value == null ? 0 : haxeon.Structural.hash(value));
+		return mix(seed, value == null ? 0 : haxeon.Hashing.hash(value));
 
 	static inline function mix(seed:Int, value:Int):Int
 		return seed * 31 + value;
@@ -266,19 +266,19 @@ class StyleResolver {
 	 * these text keys cannot be replaced by a hash alone. A new field fails this check until its key is updated.
 	 */
 	public static function valueKeysComplete():Bool {
-		var colorFields = haxeon.Structural.fieldBit(Color, "red") | haxeon.Structural.fieldBit(Color, "green")
-			| haxeon.Structural.fieldBit(Color, "blue") | haxeon.Structural.fieldBit(Color, "alpha");
-		var axisFields = haxeon.Structural.fieldBit(LayoutAxis, "sizing") | haxeon.Structural.fieldBit(LayoutAxis, "value")
-			| haxeon.Structural.fieldBit(LayoutAxis, "min") | haxeon.Structural.fieldBit(LayoutAxis, "max")
-			| haxeon.Structural.fieldBit(LayoutAxis, "growWeight");
-		var insetsFields = haxeon.Structural.fieldBit(Insets, "left") | haxeon.Structural.fieldBit(Insets, "top")
-			| haxeon.Structural.fieldBit(Insets, "right") | haxeon.Structural.fieldBit(Insets, "bottom");
-		var transformFields = haxeon.Structural.fieldBit(Transform2D, "a") | haxeon.Structural.fieldBit(Transform2D, "b")
-			| haxeon.Structural.fieldBit(Transform2D, "c") | haxeon.Structural.fieldBit(Transform2D, "d")
-			| haxeon.Structural.fieldBit(Transform2D, "tx") | haxeon.Structural.fieldBit(Transform2D, "ty");
-		return colorFields == haxeon.Structural.allFieldsMask(Color) && axisFields == haxeon.Structural.allFieldsMask(LayoutAxis)
-			&& insetsFields == haxeon.Structural.allFieldsMask(Insets)
-			&& transformFields == haxeon.Structural.allFieldsMask(Transform2D);
+		var colorFields = haxeon.Diff.bit(Color, "red") | haxeon.Diff.bit(Color, "green")
+			| haxeon.Diff.bit(Color, "blue") | haxeon.Diff.bit(Color, "alpha");
+		var axisFields = haxeon.Diff.bit(LayoutAxis, "sizing") | haxeon.Diff.bit(LayoutAxis, "value")
+			| haxeon.Diff.bit(LayoutAxis, "min") | haxeon.Diff.bit(LayoutAxis, "max")
+			| haxeon.Diff.bit(LayoutAxis, "growWeight");
+		var insetsFields = haxeon.Diff.bit(Insets, "left") | haxeon.Diff.bit(Insets, "top")
+			| haxeon.Diff.bit(Insets, "right") | haxeon.Diff.bit(Insets, "bottom");
+		var transformFields = haxeon.Diff.bit(Transform2D, "a") | haxeon.Diff.bit(Transform2D, "b")
+			| haxeon.Diff.bit(Transform2D, "c") | haxeon.Diff.bit(Transform2D, "d")
+			| haxeon.Diff.bit(Transform2D, "tx") | haxeon.Diff.bit(Transform2D, "ty");
+		return colorFields == haxeon.Diff.all(Color) && axisFields == haxeon.Diff.all(LayoutAxis)
+			&& insetsFields == haxeon.Diff.all(Insets)
+			&& transformFields == haxeon.Diff.all(Transform2D);
 	}
 
 
@@ -311,126 +311,126 @@ class StyleResolver {
 		if (local == null)
 			return;
 		var source = new StyleSource("local", "widget", -1, "local");
-		var changed = haxeon.Structural.changedMask(local, localDefaults);
+		var changed = haxeon.Diff.mask(local, localDefaults);
 		// `handled` collects every field checked here, for localFieldsHandled.
 		var handled = 0, bit = 0;
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "width");
+		bit = haxeon.Diff.bit(LayoutStyle, "width");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setAxis(StyleProperty.Width, local.width, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "height");
+		bit = haxeon.Diff.bit(LayoutStyle, "height");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setAxis(StyleProperty.Height, local.height, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "direction");
+		bit = haxeon.Diff.bit(LayoutStyle, "direction");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.Direction, cast local.direction, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignX");
+		bit = haxeon.Diff.bit(LayoutStyle, "childAlignX");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.ChildAlignX, cast local.childAlignX, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignY");
+		bit = haxeon.Diff.bit(LayoutStyle, "childAlignY");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.ChildAlignY, cast local.childAlignY, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "childDistribution");
+		bit = haxeon.Diff.bit(LayoutStyle, "childDistribution");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.ChildDistribution, cast local.childDistribution, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "positioning");
+		bit = haxeon.Diff.bit(LayoutStyle, "positioning");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.Positioning, cast local.positioning, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "aspectRatio");
+		bit = haxeon.Diff.bit(LayoutStyle, "aspectRatio");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.AspectRatio, local.aspectRatio, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "wrapMode");
+		bit = haxeon.Diff.bit(LayoutStyle, "wrapMode");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.WrapMode, cast local.wrapMode, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "rowGap");
+		bit = haxeon.Diff.bit(LayoutStyle, "rowGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.RowGap, local.rowGap, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "columnGap");
+		bit = haxeon.Diff.bit(LayoutStyle, "columnGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.ColumnGap, local.columnGap, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "alignSelf");
+		bit = haxeon.Diff.bit(LayoutStyle, "alignSelf");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.AlignSelf, cast local.alignSelf, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionX");
+		bit = haxeon.Diff.bit(LayoutStyle, "positionX");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.PositionX, local.positionX, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionY");
+		bit = haxeon.Diff.bit(LayoutStyle, "positionY");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.PositionY, local.positionY, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "zIndex");
+		bit = haxeon.Diff.bit(LayoutStyle, "zIndex");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInteger(StyleProperty.ZIndex, local.zIndex, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "overlay");
+		bit = haxeon.Diff.bit(LayoutStyle, "overlay");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setBoolean(StyleProperty.Overlay, local.overlay, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipToParent");
+		bit = haxeon.Diff.bit(LayoutStyle, "clipToParent");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setBoolean(StyleProperty.ClipToParent, local.clipToParent, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "padding");
+		bit = haxeon.Diff.bit(LayoutStyle, "padding");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setInsets(StyleProperty.Padding, local.padding, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "childGap");
+		bit = haxeon.Diff.bit(LayoutStyle, "childGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.ChildGap, local.childGap, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "background");
+		bit = haxeon.Diff.bit(LayoutStyle, "background");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setColor(StyleProperty.Background, local.background, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft");
+		bit = haxeon.Diff.bit(LayoutStyle, "radiusTopLeft");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.RadiusTopLeft, local.radiusTopLeft, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopRight");
+		bit = haxeon.Diff.bit(LayoutStyle, "radiusTopRight");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.RadiusTopRight, local.radiusTopRight, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomRight");
+		bit = haxeon.Diff.bit(LayoutStyle, "radiusBottomRight");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.RadiusBottomRight, local.radiusBottomRight, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomLeft");
+		bit = haxeon.Diff.bit(LayoutStyle, "radiusBottomLeft");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.RadiusBottomLeft, local.radiusBottomLeft, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipHorizontal");
+		bit = haxeon.Diff.bit(LayoutStyle, "clipHorizontal");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setBoolean(StyleProperty.ClipHorizontal, local.clipHorizontal, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipVertical");
+		bit = haxeon.Diff.bit(LayoutStyle, "clipVertical");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setBoolean(StyleProperty.ClipVertical, local.clipVertical, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "visible");
+		bit = haxeon.Diff.bit(LayoutStyle, "visible");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setBoolean(StyleProperty.Visible, local.visible, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "transform");
+		bit = haxeon.Diff.bit(LayoutStyle, "transform");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setMatrix(StyleProperty.Transform, local.transform, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX");
+		bit = haxeon.Diff.bit(LayoutStyle, "transformOriginX");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.TransformOriginX, local.transformOriginX, source);
-		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginY");
+		bit = haxeon.Diff.bit(LayoutStyle, "transformOriginY");
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.TransformOriginY, local.transformOriginY, source);

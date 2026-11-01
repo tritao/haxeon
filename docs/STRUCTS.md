@@ -1,6 +1,6 @@
 # Structs
 
-Status: design, with the basic form implemented (see "Implemented so far"). `struct` is meant to replace
+Status: implementation in progress. `struct` replaces
 both `@:value class` and `@:value @:repr("C") class`; their uses will be ported and the old forms removed in the same change.
 The broader plan for conformances and struct-specialized generics is in [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md).
 
@@ -18,13 +18,13 @@ Receiver-effect analysis follows statically dispatched methods on the same struc
 primitive field arguments as values rather than aliases. Property getters remain effectful unless their dependencies are
 proven pure; a method or getter that can write the receiver still requires a writable place.
 
-`@:structural` is accepted on structs as built-in metadata. `Structural.copy` binds an ordinary value copy, including
-final fields and nested values, without invoking a constructor or assigning fields after construction. `assignChanged`
-binds its target as a place, evaluates it once, and snapshots the before/after values using ordinary copies. Fieldwise
-`==` and `Equality.equals` were already implemented before this work; the earlier status below predates those changes.
-Language `==` now applies each field's own `==`: ordinary class and array fields compare by identity, payload enum fields
-use enum identity semantics, and abstract comparison operators are honoured. Deep `Equality.equals` remains a separate
-operation. A layout-edit test checks that incremental compilation regenerates the fieldwise comparison.
+Declared `Equatable`, `Hashable` and `Diffable` conformance selects one equality and hash implementation per type.
+`Hashable` implies `Equatable`; generated implementations recurse through fields that support the same conformance, and
+diagnostics name unsupported fields. A handwritten `equals(other:T):Bool` supplies equality; a handwritten hash is
+required with it for `Hashable`. Struct comparisons without `Equatable` are rejected, while nonconforming classes keep
+identity comparison. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
+on `Diffable` declarations. `Structural.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
+it to a value.
 Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
 HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
 value raises a catchable null-access error when cast to its non-null struct. A focused program covers these behaviours,
@@ -273,9 +273,8 @@ in `node.style.padding.left = 4` when `style` or `padding` is reached through a 
   rectangles, insets, transforms) should be written this way; the trap above then cannot arise for them, and replacing a
   whole field is what code holding them does anyway. Mutable structs remain for records edited in place, such as world
   components and store records.
-- `Structural.copy` of a struct is its ordinary copy, so the final-field restriction on `copy` applies only to classes.
-  `Structural.assignChanged` writes the fields of its target, so a holder of immutable struct fields still updates
-  them by replacement.
+- Struct bindings are ordinary value copies, including final fields. `Structural.copy` is only for `Diffable` classes.
+- `Diff.apply` writes changed, writable fields of its target. It reports immutable fields by name.
 
 The flow analyzer can infer construction as effect-free when it writes only the fresh receiver, does not let that
 receiver escape, and its initializers and callees are effect-free. It tracks nested constructors in the same purity
@@ -304,7 +303,7 @@ still make their usual independent copies. Wasm GC uses flattened fields for the
 
 ## Equality and hashing
 
-Decided 2026-11-01, not yet implemented. Value equality is declared by interface conformance, following Swift's
+Decided and implemented 2026-11-01. Value equality is declared by interface conformance, following Swift's
 `Equatable` and `Hashable` model:
 
 ```haxe
@@ -316,7 +315,12 @@ class Record implements Hashable { /* fields */ }
 `Hashable`. The compiler synthesizes equality and hashing when every field supports the required conformance, and names
 an offending field otherwise. Hand-written `equals` and `hash` implementations satisfy the same interfaces rather than
 forming a separate declaration mechanism. A type has one equality used by `==`, maps, `haxeon.Equality.equals`,
-`Structural.hash` and containing types.
+`haxeon.Hashing.hash` and containing types.
+
+A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
+infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
+to equal values. The author is responsible for keeping the two methods consistent. A handwritten hash may accompany
+synthesized equality.
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
 conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
@@ -324,29 +328,30 @@ value semantics; floats retain IEEE behavior, with hashing consistent for `0.0` 
 bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
 are statically dispatched without boxing.
 
+These three compiler-known interfaces are erased from HashLink's per-instance virtual-cache slots: their operations are
+statically selected, so retaining an interface cache would enlarge every conforming class and every inline value field.
+Ordinary runtime interfaces keep their cache slots and dispatch behavior.
+
 Field operations are a separate opt-in through the compiler-known `Diffable` interface, for example
-`struct LayoutStyle : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `fieldBit`,
-`allFieldsMask` and `changedMask` for conforming types. Masks expose declaration order and field count, so the type's
+`struct LayoutStyle : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
+`Diff.all` and `Diff.mask` for conforming types. Masks expose declaration order and field count, so the type's
 author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
 do not synthesize field-level operations by default.
 
-`assignChanged` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
+`Diff.apply` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
 the field. Struct binding already copies values, so `Structural.copy` is unnecessary for structs and remains for
-`Diffable` classes. When conformance is implemented, port every `@:structural` declaration and `Structural.*` call in the
-same change and remove `@:structural`; the UI value structs keep their current annotations until then.
+`Diffable` classes. All `@:structural` declarations and the old mask and hash APIs have been removed.
 
 Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses
 `derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
 interface methods remain deferred until there is a concrete need.
 
-Implementation follows the UI value-type conversion: add the conformance checks and synthesis, use the declared
-implementation throughout equality and hashing, and migrate struct fixtures and annotated structs. After an aliasing
-audit, data-record classes that need no identity can become structs: `LayoutStyle` after the item 3 measurement,
+After an aliasing audit, data-record classes that need no identity can become structs: `LayoutStyle` after the item 3 measurement,
 `TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`, `EffectParameter`, `InkOverflow`,
 `CustomEffectDefinition`, and the app's CNC presentation and telemetry records. The same migration replaces
-`Structural.changedMask/assignChanged/fieldBit/allFieldsMask` with `Diff.mask/apply/bit/all`. Future
-ADR 0002 per-field `@Channel(...)` declarations fold into the masks produced by `Diffable`. This decision does not
-change the currently implemented rules described in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
+field-mask API is `Diff.mask/apply/bit/all`. Future
+ADR 0002 per-field `@Channel(...)` declarations fold into the masks produced by `Diffable`. Current rules are summarized
+in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
 ## Nullable structs
 
@@ -412,9 +417,9 @@ not establish byte sizes or cover separately encoded function bodies.
 | Showcase scenario | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
 | Full | 8,654 | 6,496 | 6,138 | 5,896 |
-| Editing | 15,482 | 13,528 | 13,168 | 12,835 |
+| Editing | 15,482 | 13,528 | 13,168 | 12,833 |
 | Static | 8,654 | 6,496 | 6,136 | 5,896 |
-| Text-heavy | 8,656 | 6,496 | 6,138 | 5,894 |
+| Text-heavy | 8,656 | 6,496 | 6,138 | 5,896 |
 
 A separate same-compiler replay uses fixed frame times to compare allocations against the class build in each scenario.
 The corresponding class totals were 8,656, 15,688, 8,656 and 8,656 respectively; none of the 120 frames in any

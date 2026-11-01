@@ -30,11 +30,11 @@ class CustomEffect extends Effect {
 		if (other == null || other.kind != EffectKind.Custom)
 			return false;
 		var value:CustomEffect = cast other;
-		if (value == null || !definition.isEqual(value.definition) ||
+		if (value == null || definition != value.definition ||
 			parameters.length != value.parameters.length)
 			return false;
 		for (index in 0...parameters.length)
-			if (!parameters[index].isEqual(value.parameters[index]))
+			if (parameters[index] != value.parameters[index])
 				return false;
 		return true;
 	}
@@ -43,7 +43,7 @@ class CustomEffect extends Effect {
 		if (other == null || other.kind != EffectKind.Custom)
 			return Effect.discrete(this, other, amount);
 		var value:CustomEffect = cast other;
-		if (value == null || !definition.isEqual(value.definition) ||
+		if (value == null || definition != value.definition ||
 			parameters.length != value.parameters.length)
 			return amount < 0.5 ? copy() : value == null ? copy() : value.copy();
 		var result:Array<EffectParameter> = [];

@@ -1130,9 +1130,9 @@ class TestMain {
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
 			'MessagePack.decode requires an expected result type');
-		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Equality.equals(new Thing(), new Thing()) ? 1 : 0;',
-			'Structural equality does not support type "TInstance(class,Thing,[])"');
-		var temporaryStruct = 'struct Value { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
+		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
+			'Struct "class:Thing<>" does not conform to Equatable');
+		var temporaryStruct = 'interface Diffable {} struct Value : Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
 			+ 'struct Nested { public var value:Value; public function new() value = new Value(1); } '
 			+ 'class Holder { public var value(get, never):Value; public var nested(get, never):Nested; public function new() {} '
 			+ 'function get_value():Value return new Value(1); function get_nested():Nested return new Nested(); } '
@@ -1160,26 +1160,36 @@ class TestMain {
 		expectCompileError('struct A { public var b:Null<B>; } struct B { public var a:A; } function main():Int return 42;',
 			'Value layout contains a by-value cycle: A -> B -> A');
 		Frontend.compile('class Link { public var next:Null<Link>; } struct Node { public var link:Link; public var children:Array<Node>; } function main():Int return 42;');
-		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var copy = haxeon.Structural.copy(new Fixed(1)); copy.x = 2; return 0; }',
+		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var copy = new Fixed(1); copy.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
-		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Structural.assignChanged(a, a, b); }',
-			'haxeon.Structural.assignChanged cannot assign final field "x" of "Fixed"');
+		expectCompileError('interface Diffable {} struct Fixed : Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
+			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('struct Inner { public var x:Int; public function new(x:Int) this.x = x; } struct Fixed { public final child:Inner; public function new() this.child = new Inner(1); } function main():Int { var a = new Fixed(); a.child.x = 2; return 0; }',
 			'Final field "Fixed.child" can only be assigned through this in the constructor of "Fixed"');
-		expectCompileError(temporaryStruct + 'function main():Int { haxeon.Structural.assignChanged(make(), new Value(1), new Value(2)); return 0; }',
+		expectCompileError(temporaryStruct + 'function main():Int { haxeon.Diff.apply(make(), new Value(1), new Value(2)); return 0; }',
 			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
-		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Structural.hash(new Thing());',
-			'haxeon.Structural.hash expects a value class or a class marked @:structural, got "Thing"');
-		expectCompileError('@:structural class Base { public var a:Int = 0; public function new() {} } @:structural class Derived extends Base { public var b:Int = 0; } function main():Int return haxeon.Structural.allFieldsMask(Derived);',
-			'Structural class "Derived" cannot extend another class: its fields would be left out');
-		expectCompileError('@:structural class Named { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Structural.fieldBit(Named, "b");',
-			'Class "Named" has no stored field "b"');
-		expectCompileError('@:structural class Fixed { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Structural.copy(new Fixed()).a;',
-			'haxeon.Structural.copy cannot copy final field "a" of "Fixed"');
-		expectCompileError('class Opaque { public function new() {} } @:structural class Holder { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Structural.hash(new Holder());',
-			'Structural.hash does not support field "Holder.value" of type "Opaque"');
+		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
+			'Type "class:Thing<>" does not conform to Hashable');
+		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(Named, "b");',
+			'Type "Named" has no stored field "b"');
+		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Structural.copy(new Fixed()).a;',
+			'haxeon.Structural.copy cannot copy immutable field "a" of "Fixed"');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Opaque implements Equatable { public function new() {} public function equals(other:Opaque):Bool return true; } class Holder implements Hashable { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Hashing.hash(new Holder());',
+			'Cannot synthesize Hashable for "Holder": field "value" does not conform to Hashable');
+		expectCompileError('interface Diffable {} class Fixed implements Diffable { @:isVar public var value(get, never):Int; public function new() {} function get_value():Int return 1; } function main():Int { var a = new Fixed(); var b = new Fixed(); return haxeon.Diff.apply(a, a, b); }',
+			'haxeon.Diff.apply cannot assign immutable field "value" of "Fixed"');
+		expectCompileError('interface Equatable {} class Opaque {} struct Bad : Equatable { public var item:Opaque; } function main():Int return 42;',
+			'Cannot synthesize Equatable for "Bad": field "item" does not conform to Equatable');
+		expectCompileError('interface Equatable {} class Bad implements Equatable { public function equals(other:Int):Bool return true; } function main():Int return 42;',
+			'Method "Bad.equals" must have signature equals(other:Bad):Bool');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Bad implements Hashable { public function equals(other:Bad):Bool return true; } function main():Int return 42;',
+			'Cannot synthesize Hashable for "Bad" with a handwritten equals; provide hash():Int');
+		expectCompileError('interface Diffable {} struct Fixed : Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
+			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
+		expectCompileError('class Plain { public function new() {} } function main():Int return haxeon.Diff.mask(new Plain(), new Plain());',
+			'haxeon.Diff.mask requires Diffable conformance for "Plain"');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',

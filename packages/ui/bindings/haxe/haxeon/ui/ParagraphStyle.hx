@@ -1,8 +1,9 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
 /** Semantic paragraph inputs shared by all NativeKit text APIs. */
-@:structural
-class ParagraphStyle {
+class ParagraphStyle implements Hashable, Diffable {
     public var wrap:TextWrap;
     public var alignment:TextAlignment;
     public var lineHeight:Null<Float>;

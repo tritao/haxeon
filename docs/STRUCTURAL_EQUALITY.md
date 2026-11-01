@@ -1,67 +1,35 @@
-# Generated structural equality
+# Declared value equality
 
-`haxeon.Equality.equals(left, right)` generates a comparison for the static
-type of `left`. The second value must be assignable to that type. It compares
-anonymous structures and typedefs field by field, arrays by position, enums
-by constructor and payload, and maps by key and value regardless of insertion
-order. Nested combinations use the same rules recursively.
+Value equality is a capability declared through conformance. There is one equality for a type, selected consistently by
+`==`, `!=`, `haxeon.Equality.equals`, containing conforming values, and maps keyed by `Hashable` values.
 
-Primitive fields use Haxe `==` semantics, abstracts compare by their underlying
-values, and byte buffers compare by content. In particular, `NaN` differs from
-itself, while `0.0` and `-0.0` compare equal. Nullable values compare equal
-when both are null; otherwise their contents are compared. Map keys use the
-map's own key lookup semantics and currently support `Int`, `String`, and
-parameterless enum constructors. Value classes and classes marked
-`@:structural` compare their stored fields in declaration order; a structural
-reference compares equal to itself first, and to null only when both are null.
-Other class instances, `Dynamic`, functions, and other unsupported types
-produce a compile diagnostic.
+```haxe
+struct Color : Hashable { /* stored fields */ }
+class Record implements Hashable { /* stored fields */ }
+```
 
-This helper does not change `==` or `Type.enumEq`. It is intended for typed
-data descriptions; cyclic runtime object graphs are not supported.
+`Equatable` supplies equality. `Hashable` extends `Equatable`. The compiler synthesizes the implementation when every
+stored field supports the requested conformance; diagnostics identify the field that prevents synthesis. A handwritten
+`equals(other:T):Bool` satisfies `Equatable`. A `Hashable` type with a handwritten equality must also provide
+`hash():Int`, because a synthesized field hash might distinguish values that its equality considers equal. A custom
+hash may also accompany synthesized equality.
 
-## Structural classes
+Structs that do not conform to `Equatable` cannot be compared with `==` or `!=`. Classes that do not conform retain
+identity equality. Nullable conforming values compare absent values with absence and otherwise use their element's
+declared equality. Float equality follows IEEE rules (`NaN != NaN`, `0.0 == -0.0`); float hashes treat the two zero
+representations alike.
 
-A class or struct marked `@:structural` (or a legacy value class) is also accepted by
-`haxeon.Structural`, whose operations are generated from the class's stored
-instance fields, in declaration order, at each call site. Adding a field to the
-class updates every one of them; a field type they cannot handle is a compile
-error rather than a silent omission.
+`haxeon.Equality.equals` chooses the same implementation as `==` from its statically known argument type. When its
+argument is genuinely `Dynamic`, the runtime dynamic equality path remains available. Reflection, dynamic values and
+native escapes keep their required boxing and runtime handling.
 
-- `Structural.copy(value)`: a new instance, made with the class's no-argument
-  constructor, with every field copied shallowly. Final fields are an error.
-- `Structural.hash(value)`: an `Int` hash consistent with `Equality.equals`:
-  equal values hash equally. Nested structural fields are hashed by content.
-- `Structural.changedMask(a, b)`: one bit per field, set where `Equality.equals`
-  finds the two values' fields different. At most 32 fields.
-- `Structural.assignChanged(target, before, after)`: copies into `target` each
-  field that differs between `before` and `after`, leaves the others as they
-  are, and returns the mask of the fields it copied.
-- `Structural.fieldBit(Type, "field")` and `Structural.allFieldsMask(Type)`:
-  compile-time constants for those masks. A misspelled field is an error, so a
-  hand-written group of fields can be checked against `allFieldsMask` in a test.
+`Diffable` is a separate opt-in for declaration-order field masks:
 
-Today every struct is accepted without the annotation, and a struct's `==` applies each field's own `==` while
-`Equality.equals` and `hash` compare deeply. The decided direction (STRUCTS.md, "Equality and hashing") declares value equality through `Equatable` or `Hashable`
-conformance; the compiler synthesizes it or uses hand-written implementations. That equality is shared by `==`, maps,
-`Equality.equals` and `Structural.hash`, and `==` on a struct without `Equatable` is a compile error. Field masks and
-related operations require separate `Diffable` conformance, for structs and classes. When the new rules are implemented,
-port every `@:structural` declaration and `Structural.*` use in the same change, then remove `@:structural`; keep the
-current annotations until that change lands.
+- `Diff.mask(before, after)` returns the bits for fields whose declared equality reports a change.
+- `Diff.apply(target, before, after)` copies changed fields into `target` and returns those bits. Every destination field
+  must be writable; the diagnostic names an immutable field.
+- `Diff.bit(Type, "field")` and `Diff.all(Type)` are compile-time constants. At most 32 stored fields are supported.
+- `Structural.copy(value)` is only for mutable `Diffable` classes. Struct values already copy on binding.
 
-A structural class may not extend another class: the base's fields would be
-left out. `LayoutStyle` in the UI package uses these for its copy, its restyle
-delta, its frame comparison and its cache keys.
-
-The UI package uses them beyond `LayoutStyle`: `Color`, `Insets`, `LayoutAxis`, `Transform2D`, `Rect`, `TextStyle`,
-`ParagraphStyle`, `Shortcut`, `EffectParameter`, `InkOverflow` and `CustomEffectDefinition` are compared with
-`Equality.equals`, so their comparisons cannot fall behind their fields. What stays written out, and why:
-
-- `Semantics.same`: the value compares through `sameValue` and a deferred source is not a field to compare.
-- `Mask.isEqual`: its image is compared by identity, which `Equality` does not do for a plain class.
-- Decorations and effects extend a base class, which a structural class may not do.
-- String keys that spell out the fields of `Color`, `LayoutAxis`, `Insets` and `Transform2D` (the style cache): a hash
-  could collide. They are paired with a field list that a test checks against `Structural.allFieldsMask`, so a new field
-  fails the test until the key names it. The dock's label widths instead use a structural key class, looked up by
-  `Structural.hash` and confirmed with `Equality.equals`, which needs no field list.
-
+Field numbering is an explicit contract for each type. [Key paths](KEY_PATHS.md) describe a future typed field-reference
+syntax; this stage keeps string literals for `Diff.bit` and does not introduce a second mask implementation.

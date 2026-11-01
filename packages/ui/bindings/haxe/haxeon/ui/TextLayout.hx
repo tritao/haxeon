@@ -1,5 +1,6 @@
 package haxeon.ui;
 
+import Equatable;
 import NativeKitUI;
 
 /** A shaped text layout resource with a stable handle and mutable UTF-8 content. */
@@ -420,8 +421,7 @@ class TextLayout extends NativeKitUIResource {
 }
 
 /** Bounds returned by TextLayout.measure. */
-@:structural
-struct TextMetrics {
+struct TextMetrics : Equatable {
 	public final x:Float;
 	public final y:Float;
 	public final width:Float;
@@ -481,8 +481,7 @@ class TextRangeRect {
 }
 
 /** Visual geometry for a text caret. */
-@:structural
-struct TextCaret {
+struct TextCaret : Equatable {
 	public final x:Float;
 	public final y:Float;
 	public final ascender:Float;

@@ -1,10 +1,11 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
 import haxeon.ui.FontFamily;
 
 /** Semantic font and inline-spacing inputs shared by all NativeKit text APIs. */
-@:structural
-class TextStyle {
+class TextStyle implements Hashable, Diffable {
     public var font:FontFamily;
     public var fontSize:Float;
     public var letterSpacing:Float;

@@ -39,6 +39,7 @@ class IrCopyElision {
 	final byName:Map<String, IrFunction>;
 	final resolve:IrValue->String->Null<String>;
 	final consult:String->Void;
+	final resultDependencies:Map<String, Bool> = [];
 
 	public function new(byName:Map<String, IrFunction>, resolve:IrValue->String->Null<String>, consult:String->Void) {
 		this.byName = byName;
@@ -154,7 +155,8 @@ class IrCopyElision {
 		if (callPosition < lastWrite || !nothingRunsBetween(block, lastWrite + 1, callPosition))
 			return false;
 		var callee = calleeOf(block.instructions[callPosition].value, argument);
-		if (callee == null || !readsOnly(callee.name, callee.parameter, [], 0) || !storesNothing(callee.name, false, [], 0))
+		if (callee == null || resultDependsOnParameter(callee.name, callee.parameter, [], 0)
+			|| !readsOnly(callee.name, callee.parameter, [], 0) || !storesNothing(callee.name, false, [], 0))
 			return false;
 		// Pass the source itself, and drop the copy with the reads that fed it.
 		var rewritten:Array<Located<IrInstruction>> = [];
@@ -174,6 +176,105 @@ class IrCopyElision {
 			block.instructions.push(kept);
 		return true;
 	}
+
+	/** Whether the callee can return or throw an alias of a value copied from this argument. */
+	function resultDependsOnParameter(name:String, index:Int, visiting:Array<String>, depth:Int):Bool {
+		var fn = byName.get(name);
+		if (fn == null || index >= fn.arguments.length || depth > MaxDepth)
+			return true;
+		var key = name + "#" + index;
+		if (resultDependencies.exists(key))
+			return resultDependencies.get(key);
+		if (visiting.indexOf(key) >= 0)
+			return true;
+		consult(name);
+		visiting.push(key);
+		var parameter = fn.arguments[index], tainted:Map<Int, Bool> = [], fresh:Map<Int, Bool> = [];
+		tainted.set(parameter.id, true);
+		var changed = true, rounds = 0;
+		while (changed && rounds++ < fn.blocks.length + 1) {
+			changed = false;
+			for (block in fn.blocks)
+				for (located in block.instructions) {
+					var instruction = located.value;
+					switch instruction {
+						case NewObject(out, _):
+							fresh.set(out.id, true);
+						case FieldSet(target, _, value) if (fresh.exists(target.id) && tainted.exists(value.id)):
+							if (!tainted.exists(target.id)) {
+								tainted.set(target.id, true);
+								changed = true;
+							}
+						case ArraySet(array, _, value) if (fresh.exists(array.id) && tainted.exists(value.id)):
+							if (!tainted.exists(array.id)) {
+								tainted.set(array.id, true);
+								changed = true;
+							}
+						case Phi(out, inputs) if (canCarryIdentity(out.type)):
+							for (input in inputs)
+								if (tainted.exists(input.value.id) && !tainted.exists(out.id)) {
+									tainted.set(out.id, true);
+									changed = true;
+								}
+						default:
+							var output = IrOperands.output(instruction);
+							if (output != null && canCarryIdentity(output.type) && !tainted.exists(output.id)) {
+								var depends = switch instruction {
+									case Call(_, callee, arguments):
+										var found = false;
+										for (argument in 0...arguments.length)
+											if (tainted.exists(arguments[argument].id)
+												&& resultDependsOnParameter(callee, argument, visiting, depth + 1))
+												found = true;
+										found;
+									case MethodCall(_, receiver, method, arguments):
+										var target = valueMethod(receiver, method), found = target == null && tainted.exists(receiver.id);
+										if (target != null && tainted.exists(receiver.id)
+											&& resultDependsOnParameter(target, 0, visiting, depth + 1))
+											found = true;
+										for (argument in 0...arguments.length)
+											if (tainted.exists(arguments[argument].id)
+												&& (target == null || resultDependsOnParameter(target, argument + 1, visiting, depth + 1)))
+												found = true;
+										found;
+									default:
+										var found = false;
+										for (input in IrOperands.inputs(instruction))
+											if (tainted.exists(input.id))
+												found = true;
+										found;
+								};
+								if (depends) {
+									tainted.set(output.id, true);
+									changed = true;
+								}
+							}
+					}
+				}
+		}
+		var depends = false;
+		for (block in fn.blocks) {
+			var terminator = block.terminator;
+			if (terminator == null)
+				continue;
+			switch terminator.value {
+				case Return(value), Throw(value), Rethrow(value):
+					if (tainted.exists(value.id)) depends = true;
+				case Branch(condition, _, _):
+				case Jump(_):
+			}
+		}
+		visiting.pop();
+		resultDependencies.set(key, depends);
+		return depends;
+	}
+
+	static function canCarryIdentity(type:IrType):Bool
+		return switch type {
+			case Bytes, RawPtr, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): true;
+			case Nullable(element): canCarryIdentity(element);
+			case _: false;
+		};
 
 	/** The FieldGet of `field` whose value is `value`, when nothing else uses that value. */
 	static function feederOf(block:IrBlock, allocation:Int, writePosition:Int, value:IrValue, field:String):Int {

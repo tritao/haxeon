@@ -48,6 +48,15 @@ class RuntimeType {
 			default: null;
 		};
 
+	/** Stable IR object name for a compiler-owned map whose keys use declared Hashable equality. */
+	public static function hashableMapObjectName(key:CompilerType, value:CompilerType):String {
+		var signature = compiler.semantic.SemanticSignature.type(key) + "->" + compiler.semantic.SemanticSignature.type(value);
+		return "__haxeon_hashable_map_" + haxe.crypto.Sha256.encode(signature).substr(0, 24);
+	}
+
+	public static function hashableMapValueSupported(value:CompilerType):Bool
+		return mapValueName("map_int_", value) != null;
+
 	static function mapValueName(prefix:String, value:CompilerType):Null<String>
 		return switch value {
 			case TAbstract(_, _, representation): mapValueName(prefix, representation);

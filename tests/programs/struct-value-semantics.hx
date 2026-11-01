@@ -1,4 +1,4 @@
-interface HasX {
+interface HasX extends Equatable {
   function xValue():Int;
 }
 
@@ -12,14 +12,14 @@ struct Vec2:HasX {
 
   public function xValue():Int return x;
 }
-struct Holder {
+struct Holder : Equatable {
   public var point:Vec2;
   public function new(point:Vec2) {
     this.point = point;
   }
 }
 
-struct Bounds {
+struct Bounds : Equatable {
   public var origin:Vec2;
   public var extent:Int;
 
@@ -29,7 +29,7 @@ struct Bounds {
   }
 }
 
-struct NativeHandle {
+struct NativeHandle : Equatable {
   public var slot:Int32;
   public var generation:Int32;
 
@@ -39,7 +39,7 @@ struct NativeHandle {
   }
 }
 
-@:value class LegacyPoint {
+struct LegacyPoint : Equatable {
   public var x:Int;
   public function new(x:Int) this.x = x;
 }

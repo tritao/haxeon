@@ -180,6 +180,18 @@ class TypeRelations {
 		}
 		if (StructProperties.isConstraintType(expected))
 			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
+		var valueCapability = switch expected {
+			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
+			default: false;
+		};
+		if (valueCapability)
+			switch actual {
+				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_): return true;
+				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
+					return satisfiesConstraint(representation, expected);
+				case TNullable(element): return satisfiesConstraint(element, expected);
+				default:
+			}
 		if (isStructType(actual))
 			switch expected {
 				case TInstance(NominalKind.Interface, _, _):

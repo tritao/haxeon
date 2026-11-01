@@ -1161,11 +1161,35 @@ class CallResolver {
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
 			var left = typeExpressionValue(arguments[0], scope),
 				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
-			EqualityGenerator.request(session, left.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(EqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			if (left.type == TDynamic)
+				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);
+			var structType = switch left.type {
+				case TNullable(element) if (session.relations.isStruct(element)): element;
+				default: left.type;
+			};
+			var typeParameter = switch left.type {
+				case TTypeParameter(_, _): true;
+				default: false;
+			};
+			if (session.relations.isStruct(structType) && !DeclaredConformance.supportsEquality(session, structType))
+				fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.type(structType)}" does not conform to Equatable', span);
+			if (DeclaredConformance.usesEquality(session, left.type) && !typeParameter) {
+				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			}
+			return new TypedExpression(TEqual(left, right), TBool, span);
 		}
-		if (StructuralIntrinsics.handles(name))
-			return typeExpression(StructuralIntrinsics.expand(session, name, arguments, span,
+		if (name == "Hashing.hash" || name == "haxeon.Hashing.hash") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var value = typeExpressionValue(arguments[0], scope);
+			if (!DeclaredConformance.supportsHash(session, value.type))
+				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.type(value.type)}" does not conform to Hashable', span);
+			HashGenerator.request(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(HashGenerator.hashName(value.type), [value]), TInt, span);
+		}
+		if (DiffIntrinsics.handles(name))
+			return typeExpression(DiffIntrinsics.expand(session, name, arguments, span,
 				function(argument) return typeExpressionValue(argument, scope).type), scope, expectedType, false);
 		if (name == "Type.enumIndex") {
 			if (arguments.length != 1)
@@ -1222,23 +1246,21 @@ class CallResolver {
 				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
 			var leftValue = typeExpressionValue(arguments[0], scope),
 				rightValue = typeExpression(arguments[1], scope, leftValue.type, false);
-			// Haxe compares the constructor and then each argument, recursively, so an enum known here gets the structural
-			// comparison the compiler generates for it; the dynamic comparison below is for values it only knows as Dynamic.
-			switch leftValue.type {
-				case TInstance(NominalKind.Enum, _, _):
-					EqualityGenerator.request(session, leftValue.type, session.currentContext.name, span);
-					return new TypedExpression(TCall(EqualityGenerator.equalsName(leftValue.type),
-						[leftValue, coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")]),
-						TBool, span);
-				default:
+			var enumValue = switch leftValue.type {
+				case TInstance(NominalKind.Enum, _, _): true;
+				case TNullable(TInstance(NominalKind.Enum, _, _)): true;
+				default: false;
+			};
+			if (enumValue) {
+				EnumEqualityGenerator.request(session, leftValue.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(leftValue.type),
+					[leftValue, coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")]), TBool, span);
 			}
 			var left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
 				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
-			// Type.enumEq is a dynamic equality operation at runtime.  Keep the
-			// source-level builtin in the typer, but lower it through the shared
-			// intrinsic so every backend has one verified call signature.
 			return new TypedExpression(TCall("__dynamic_equal", [left, right]), TBool, span);
 		}
+
 		if (name == "Std.isOfType" || name == "Std.isExactType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
@@ -1789,6 +1811,7 @@ class CallResolver {
 		};
 		if (session.mapName(mapType.key, mapType.value) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requestHashableMapKey(session, mapType.key, span);
 		if (name == "set") {
 			if (arguments.length != 2)
 				fail("E1008", "Map.set expects a key and value", span);

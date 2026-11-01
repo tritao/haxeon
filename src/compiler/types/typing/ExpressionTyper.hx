@@ -756,7 +756,7 @@ class ExpressionTyper {
 		return switch name {
 			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat" | "forward" | "from" | "hiddenUnless" |
 				"hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata" | "noCompletion" | "noInline" | "op" | "optional" | "portable" |
-				"privateAccess" | "pure" | "renamedFrom" | "repr" | "structural" | "value" | "wire": true;
+				"privateAccess" | "pure" | "renamedFrom" | "repr" | "value" | "wire": true;
 			case _: false;
 		};
 
@@ -1195,6 +1195,7 @@ class ExpressionTyper {
 			fail("E1003", "An empty map literal requires an expected key and value type", span);
 		if (session.mapName(keyType, valueType) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requestHashableMapKey(session, keyType, span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
 
@@ -1261,6 +1262,7 @@ class ExpressionTyper {
 			case TMap(key, mapValue):
 				if (session.mapName(key, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requestHashableMapKey(session, key, span);
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
@@ -1366,6 +1368,7 @@ class ExpressionTyper {
 			case TMap(mapKey, mapValue):
 				if (session.mapName(mapKey, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requestHashableMapKey(session, mapKey, span);
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
@@ -1397,6 +1400,7 @@ class ExpressionTyper {
 		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
 		if (session.mapName(resultKey, resultValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requestHashableMapKey(session, resultKey, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TMap(resultKey, resultValue),
 				resultName = "$comprehension-result:" + span.start;
@@ -1442,6 +1446,7 @@ class ExpressionTyper {
 			case TMap(key, value):
 				if (session.mapName(key, value) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requestHashableMapKey(session, key, span);
 				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
@@ -1468,6 +1473,7 @@ class ExpressionTyper {
 		var loweredKey = lowerType(key), loweredValue = lowerType(value);
 		if (session.mapName(loweredKey, loweredValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 
@@ -2038,6 +2044,15 @@ class ExpressionTyper {
 		};
 
 	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (operation == 2 && !isNullOperand(left) && !isNullOperand(right))
+			for (operand in [left, right]) {
+				var valueType = switch operand.type {
+					case TNullable(element): element;
+				default: operand.type;
+				};
+				if (session.relations.isStruct(valueType) && !DeclaredConformance.supportsEquality(session, valueType))
+					fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.type(valueType)}" does not conform to Equatable', span);
+			}
 		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
 			// Compare content in source operand order; reversing the numeric result
 			// must not reverse evaluation of side-effecting string expressions.
@@ -2056,6 +2071,10 @@ class ExpressionTyper {
 			&& ((sameType(left.type, TNull) && !isNullable(right.type) && right.type != TNull && !TypeRelations.isReference(right.type))
 				|| (sameType(right.type, TNull) && !isNullable(left.type) && left.type != TNull && !TypeRelations.isReference(left.type))))
 			return new TypedExpression(TBoolLiteral(false), TBool, span);
+		if (operation == 2
+			&& ((sameType(left.type, TNull) && session.relations.isStruct(right.type))
+				|| (sameType(right.type, TNull) && session.relations.isStruct(left.type))))
+			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))
 				left = coerce(left, right.type, "null comparison", "E1009");
@@ -2065,7 +2084,11 @@ class ExpressionTyper {
 		// Equality observes nullable operands without binding new locations. In particular, retain the local in a
 		// null test so flow narrowing can recognize it; nullable struct copies are made at actual bindings instead.
 		if (operation == 2 && isNullable(left.type) && TypeRelations.equals(left.type, right.type)) {
-			if (session.relations.isNullableValueClass(left.type) && !isNullOperand(left) && !isNullOperand(right)) {
+			var declaredNullable = switch left.type {
+					case TNullable(element): session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element);
+				default: false;
+			};
+			if ((session.relations.isNullableValueClass(left.type) || declaredNullable) && !isNullOperand(left) && !isNullOperand(right)) {
 				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 			}
@@ -2073,7 +2096,8 @@ class ExpressionTyper {
 		}
 		if (operation == 2) {
 			var nullableElement:Null<CompilerType> = switch left.type {
-				case TNullable(element) if (session.relations.isValueClass(element) && TypeRelations.equals(element, right.type)): element;
+				case TNullable(element) if ((session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element))
+					&& TypeRelations.equals(element, right.type)): element;
 				default: null;
 			};
 			if (nullableElement != null) {
@@ -2082,7 +2106,8 @@ class ExpressionTyper {
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 			}
 			nullableElement = switch right.type {
-				case TNullable(element) if (session.relations.isValueClass(element) && TypeRelations.equals(element, left.type)): element;
+				case TNullable(element) if ((session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element))
+					&& TypeRelations.equals(element, left.type)): element;
 				default: null;
 			};
 			if (nullableElement != null) {
@@ -2095,7 +2120,8 @@ class ExpressionTyper {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
-		if (operation == 2 && TypeRelations.equals(left.type, right.type) && session.relations.isValueClass(left.type)) {
+		if (operation == 2 && TypeRelations.equals(left.type, right.type)
+			&& DeclaredConformance.usesEquality(session, left.type)) {
 			ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}

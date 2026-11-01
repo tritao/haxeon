@@ -1,12 +1,14 @@
 package haxeon.ui;
 
+import Diffable;
+import Hashable;
+
 import haxeon.ui.Paint.SolidPaint;
 
 import NativeKitUI;
 
 /** Immutable normalized RGBA color value. */
-@:structural
-struct Color {
+struct Color : Hashable, Diffable {
 	public final red:Float;
 	public final green:Float;
 	public final blue:Float;

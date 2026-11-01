@@ -238,9 +238,11 @@ class ProgramTyper {
 			typedFunctions.push(codec);
 		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
+		for (hash in HashGenerator.generate(session))
+			typedFunctions.push(hash);
 		for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues))
 			typedFunctions.push(equality);
-		for (equality in EqualityGenerator.generate(session))
+		for (equality in EnumEqualityGenerator.generate(session))
 			typedFunctions.push(equality);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
@@ -435,6 +437,9 @@ class ProgramTyper {
 				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
+		var declaredType = TInstance(NominalKind.Class, classDecl.name,
+			[for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)]);
+		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
 			baseName = BodyTyper.inheritanceName(parsedBase);
@@ -456,6 +461,43 @@ class ProgramTyper {
 		};
 	}
 
+	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType,
+			classSemanticSubstitutions:Map<String, CompilerType>):Void {
+		if (DeclaredConformance.has(session, declaredType, "Equatable")) {
+			var hasEquals = false, hasHash = false;
+			for (method in classDecl.methods)
+				if (method.name == "equals") {
+					hasEquals = true;
+					if (method.isStatic || method.arguments.length != 1
+						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, classSemanticSubstitutions), declaredType)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TBool))
+						BodyTyper.fail("E1003", 'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool', method.span);
+				} else if (method.name == "hash" && DeclaredConformance.has(session, declaredType, "Hashable")) {
+					hasHash = true;
+					if (method.isStatic || method.arguments.length != 0
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TInt))
+						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int', method.span);
+				}
+			if (!hasEquals)
+				for (field in DiffIntrinsics.storedFields(classDecl)) {
+					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
+						classSemanticSubstitutions);
+					if (!DeclaredConformance.supportsEquality(session, fieldType))
+						BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable', field.span);
+				}
+			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
+				if (hasEquals)
+					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int', classDecl.span);
+				for (field in DiffIntrinsics.storedFields(classDecl)) {
+					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
+						classSemanticSubstitutions);
+					if (!DeclaredConformance.supportsHash(session, fieldType))
+						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable', field.span);
+				}
+			}
+	}
+	}
+
 	/** A nullable value still contains its payload inline, so it cannot break a by-value cycle. */
 	function validateFiniteValueLayout(declaration:AstClass, visiting:Array<String>, complete:Map<String, Bool>):Void {
 		var cycle = visiting.indexOf(declaration.name);
@@ -466,7 +508,7 @@ class ProgramTyper {
 			return;
 		var path = visiting.concat([declaration.name]);
 		for (field in declaration.fields) {
-			if (field.isStatic || !EqualityGenerator.hasStoredField(field))
+			if (field.isStatic || !DiffIntrinsics.hasStoredField(field))
 				continue;
 			var type = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field), field.span);
 			validateFiniteValueField(type, path, complete);

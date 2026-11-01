@@ -1,7 +1,7 @@
 import haxeon.Equality;
 import haxeon.Structural;
 
-@:structural class Point {
+class Point implements Hashable {
 	public var x:Float;
 	public var y:Float;
 
@@ -16,7 +16,7 @@ enum abstract Mode(Int) {
 	var Bold = 2;
 }
 
-@:structural class Style {
+class Style implements Hashable, Diffable {
 	public var width:Int = 0;
 	public var visible:Bool = true;
 	public var mode:Mode = Plain;
@@ -36,22 +36,22 @@ function main():Int {
 	a.origin.x = 2.5;
 	a.name = "n";
 	var b = Structural.copy(a);
-	if (b == a) return 1;
+	if (b != a) return 1;
 	if (!Equality.equals(a, b)) return 2;
 	// Shallow: the nested instance is shared.
 	if (b.origin != a.origin) return 3;
-	if (Structural.hash(a) != Structural.hash(b)) return 4;
+	if (Hashing.hash(a) != Hashing.hash(b)) return 4;
 	b.width = 4;
 	b.mode = Bold;
-	var mask = Structural.changedMask(a, b);
-	if (mask != (Structural.fieldBit(Style, "width") | Structural.fieldBit(Style, "mode"))) return 5;
+	var mask = Diff.mask(a, b);
+	if (mask != (Diff.bit(Style, "width") | Diff.bit(Style, "mode"))) return 5;
 	if (Equality.equals(a, b)) return 6;
 	// A field changed outside the delta is left alone.
 	var target = Structural.copy(a);
 	target.visible = false;
-	var applied = Structural.assignChanged(target, a, b);
+	var applied = Diff.apply(target, a, b);
 	if (applied != mask || target.width != 4 || target.mode != Bold || target.visible) return 7;
-	if (Structural.allFieldsMask(Style) != 63) return 8;
+	if (Diff.all(Style) != 63) return 8;
 	var p = new Point(), q = new Point();
 	q.y = 1.0;
 	if (Equality.equals(p, q)) return 9;
@@ -59,9 +59,9 @@ function main():Int {
 	var c = Structural.copy(a);
 	c.origin = new Point();
 	c.origin.x = 2.5;
-	if (!Equality.equals(a, c) || Structural.hash(a) != Structural.hash(c)) return 10;
+	if (!Equality.equals(a, c) || Hashing.hash(a) != Hashing.hash(c)) return 10;
 	var nulled = Structural.copy(a);
 	nulled.name = null;
-	if (Equality.equals(a, nulled) || Structural.changedMask(a, nulled) != Structural.fieldBit(Style, "name")) return 11;
+	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(Style, "name")) return 11;
 	return 42;
 }

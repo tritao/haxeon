@@ -1758,9 +1758,14 @@ class HlLower {
 		}
 		return [
 			for (name in closeInterfaces(object.interfaces))
-				if (!inherited.exists(name)) name
+				// These interfaces describe compiler-selected value operations. Their calls are statically lowered, so
+				// caching an HL virtual on each instance only bloats objects and inline structs without serving dispatch.
+				if (!inherited.exists(name) && !isValueCapability(name)) name
 		];
 	}
+
+	static function isValueCapability(name:String):Bool
+		return name == "Equatable" || name == "Hashable" || name == "Diffable";
 
 	function closeInterfaces(names:Array<String>):Array<String> {
 		var result:Array<String> = [], seen:Map<String, Bool> = [];

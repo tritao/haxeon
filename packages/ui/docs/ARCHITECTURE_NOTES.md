@@ -21,19 +21,19 @@ with two layout passes. Allocation per action: tab switch 112–165 KiB (from 30
 typing 17.8 KiB, idle 0.2 KiB. The layout bridge (encode, parse, prepare, decode) fell 88% on interaction and 55% on tab
 switches. Details: `RETAINED_SUBTREES.md`, `LAYOUT_COST.md`.
 
-## Generated structural code
+## Declared value conformances
 
-`@:structural` classes get compiler-generated `copy`, `hash`, `changedMask`, `assignChanged`, `fieldBit` and
-`allFieldsMask`, and `haxeon.Equality.equals` compares them by field (`haxeon/docs/STRUCTURAL_EQUALITY.md`). This removed
+`Hashable` and `Diffable` declarations use one generated equality/hash and declaration-order field masks
+(`haxeon/docs/STRUCTURAL_EQUALITY.md`). This removed
 the hand-maintained style field lists, which had drifted (the node fingerprint skipped corner radii).
 
 Remaining hand-written field lists, and whether to add compiler features for them:
 
-- **Dock label-width cache key.** Builds a string on every lookup. Worth fixing, without a compiler feature: a
-  `@:structural` key class looked up by `Structural.hash` and confirmed by `Equality.equals`, with a reused scratch key.
+- **Dock label-width cache key.** Builds a string on every lookup. Worth fixing: a `Hashable` key class looked up by
+  `Hashing.hash` and confirmed by `Equality.equals`, with a reused scratch key.
   Queued.
 - **Style resolver value keys.** Cached per parent style, so off the hot path, and guarded by a test. Not worth it now.
-- **`Semantics.same`.** Needs a per-field exclusion or custom comparison (`@:structural.skip`). Guarded by a test that
+- **`Semantics.same`.** Needs a per-field exclusion or custom comparison. Guarded by a test that
   changes every field; add the feature when a second class needs it.
 - **`Mask`** compares its image by identity on purpose.
 
