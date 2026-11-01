@@ -386,7 +386,7 @@ class Theme {
 		styles.rule(StyleSelector.widget("selection-popup"), [
 			StyleValue.background(panelBackground), StyleValue.borderColor(tokens.selectionBorder),
 			StyleValue.borderWidth(1.0), StyleValue.shadowColor(tokens.selectionPopupShadow),
-			StyleValue.of(StyleProperty.ShadowOffsetY, 3.0), StyleValue.shadowBlur(8.0),
+			StyleValue.number(StyleProperty.ShadowOffsetY, 3.0), StyleValue.shadowBlur(8.0),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusMedium),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusMedium),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, tokens.radiusMedium),
@@ -403,7 +403,7 @@ class Theme {
 			StyleValue.radius(StyleProperty.RadiusTopRight, 8.0),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, 8.0),
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, 8.0),
-			StyleValue.of(StyleProperty.ChildGap, 16.0)
+			StyleValue.number(StyleProperty.ChildGap, 16.0)
 		]);
 		styles.rule(StyleSelector.widget("dialog-heading"),
 			[StyleValue.textColor(text)]);

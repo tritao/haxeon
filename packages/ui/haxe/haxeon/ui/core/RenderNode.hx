@@ -684,7 +684,7 @@ class RenderNode {
 		if (!hasPaintHandler()) return null;
 		var base = buildBasePaintKey();
 		if (base == null) return null;
-		var style = computedStyle == null ? null : computedStyle.getReadOnly(StyleProperty.Decorations);
+		var style = computedStyle == null ? null : computedStyle.getDecorationsReadOnly();
 		var result = style != null && style.decorations.length > 0
 			? base + "|style-decorations:" + style.key() : base;
 		// Existing content revisions and routed states invalidate the complete local fingerprint.
@@ -711,13 +711,13 @@ class RenderNode {
 		if (!hasCompositePaint())
 			return null;
 		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-		var effects = style.getReadOnly(StyleProperty.Effects);
-		var backdropEffects = style.getReadOnly(StyleProperty.BackdropEffects);
-		var mask = style.getReadOnly(StyleProperty.Mask);
+		var effects = style.getEffectsReadOnly(StyleProperty.Effects);
+		var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
+		var mask = style.getMaskReadOnly();
 		var maskKey = mask == null ? "" : mask.describe();
 		if (mask != null && mask.image != null)
 			maskKey += ":image=" + mask.image.identity;
-		return "opacity:" + Std.string(style.get(StyleProperty.Opacity)) +
+		return "opacity:" + Std.string(style.getNumber(StyleProperty.Opacity)) +
 			"|effects:" + (effects == null ? "" : effects.key()) +
 			"|backdrop:" + (backdropEffects == null ? "" : backdropEffects.key()) +
 			"|mask:" + maskKey;
@@ -737,7 +737,7 @@ class RenderNode {
 			return false;
 		var started = RenderCost.time(), encodedBefore = RenderCost.encode;
 		var style = computedStyle;
-		var styleDecorations = style == null ? null : style.getReadOnly(StyleProperty.Decorations);
+		var styleDecorations = style == null ? null : style.getDecorationsReadOnly();
 		if (styleDecorations != null)
 			for (decoration in styleDecorations.decorations)
 				decoration.paint(canvas, resolved, style);
@@ -758,12 +758,12 @@ class RenderNode {
 		if (computedStyle == null || resolved == null || !resolved.visible || !hasPaintHandler())
 			return false;
 		var style = computedStyle;
-		var opacity = style.get(StyleProperty.Opacity);
-		var effects = style.getReadOnly(StyleProperty.Effects);
+		var opacity = style.getNumber(StyleProperty.Opacity);
+		var effects = style.getEffectsReadOnly(StyleProperty.Effects);
 		var hasEffects = effects != null && effects.effects.length > 0;
-		var backdropEffects = style.getReadOnly(StyleProperty.BackdropEffects);
+		var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
 		var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
-		var mask = style.getReadOnly(StyleProperty.Mask);
+		var mask = style.getMaskReadOnly();
 		return opacity < 1.0 || hasEffects || hasBackdropEffects || mask != null;
 	}
 
@@ -773,12 +773,12 @@ class RenderNode {
 		if (!hasCompositePaint())
 			return false;
 		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-		var opacity = style.get(StyleProperty.Opacity);
-		var effects = style.get(StyleProperty.Effects);
+		var opacity = style.getNumber(StyleProperty.Opacity);
+		var effects = style.getEffects(StyleProperty.Effects);
 		var hasEffects = effects != null && effects.effects.length > 0;
-		var backdropEffects = style.get(StyleProperty.BackdropEffects);
+		var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
 		var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
-		var mask = style.get(StyleProperty.Mask);
+		var mask = style.getMask();
 		canvas.beginLayer(opacity, CompositeMode.SourceOver, resolved.localBounds(),
 			hasEffects ? effects : null, mask, hasBackdropEffects ? backdropEffects : null);
 		canvas.endLayer();
@@ -794,10 +794,10 @@ class RenderNode {
 				paintContent(target);
 			};
 			var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-			var effects = style.get(StyleProperty.Effects);
-			var backdropEffects = style.get(StyleProperty.BackdropEffects);
-			var mask = style.get(StyleProperty.Mask);
-			canvas.withLayer(style.get(StyleProperty.Opacity), content, CompositeMode.SourceOver,
+			var effects = style.getEffects(StyleProperty.Effects);
+			var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
+			var mask = style.getMask();
+			canvas.withLayer(style.getNumber(StyleProperty.Opacity), content, CompositeMode.SourceOver,
 				resolved.bounds(), effects != null && effects.effects.length > 0 ? effects : null,
 				mask, backdropEffects != null && backdropEffects.effects.length > 0 ? backdropEffects : null);
 		} else {
@@ -809,7 +809,7 @@ class RenderNode {
 	function hasStyleDecorations():Bool {
 		if (computedStyle == null)
 			return false;
-		var value = computedStyle.getReadOnly(StyleProperty.Decorations);
+		var value = computedStyle.getDecorationsReadOnly();
 		return value != null && value.decorations.length > 0;
 	}
 

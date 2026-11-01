@@ -17,8 +17,8 @@ class OutlineDecoration extends Decoration {
 	}
 
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
-		var outlineColor = color == null ? style.get(StyleProperty.OutlineColor) : color;
-		var outlineWidth = width == null ? style.get(StyleProperty.OutlineWidth) : width;
+		var outlineColor = color == null ? style.getColor(StyleProperty.OutlineColor) : color;
+		var outlineWidth = width == null ? style.getNumber(StyleProperty.OutlineWidth) : width;
 		if (outlineWidth <= 0.0)
 			return;
 		var edge = Math.min(outlineWidth, Math.min(geometry.width, geometry.height) * 0.5);

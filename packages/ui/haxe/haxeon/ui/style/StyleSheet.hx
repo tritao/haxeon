@@ -1,6 +1,7 @@
 package haxeon.ui.style;
 
 import haxeon.ui.animation.Easing;
+import haxeon.ui.style.StyleProperty.StylePropertyBase;
 
 /** Ordered collection of typed style rules. */
 class StyleSheet {
@@ -48,7 +49,7 @@ class StyleSheet {
 	public function isEmpty():Bool
 		return rules.length == 0;
 
-	public function transition<T>(property:StyleProperty<T>, duration:Float,
+	public function transition(property:StylePropertyBase, duration:Float,
 			easing:Int = Easing.EaseOut):StyleTransition {
 		var result = new StyleTransition(property, duration, easing);
 		transitions.push(result);
@@ -56,7 +57,7 @@ class StyleSheet {
 		return result;
 	}
 
-	public function transitionFor(property:StyleProperty<Dynamic>):Null<StyleTransition> {
+	public function transitionFor(property:StylePropertyBase):Null<StyleTransition> {
 		for (transition in transitions)
 			if (transition.property.name == property.name)
 				return transition;

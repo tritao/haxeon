@@ -229,7 +229,7 @@ class TextField implements View {
 				new StyleTarget("text-field", key, key, classes, ["text-field"], flags),
 				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
 			if (textColor != null)
-				computed.set(StyleProperty.TextColor, textColor,
+				computed.setColor(StyleProperty.TextColor, textColor,
 					new StyleSource("local", "text-field", -1, "local"));
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
@@ -360,13 +360,13 @@ class TextField implements View {
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			if (textStyle == null && fontSource != null && fontSource.layer != "framework")
-				textNodeTextStyle.fontSize = computed.get(StyleProperty.FontSize);
+				textNodeTextStyle.fontSize = computed.getNumber(StyleProperty.FontSize);
 			if (textStyle == null && letterSource != null && letterSource.layer != "framework")
-				textNodeTextStyle.letterSpacing = computed.get(StyleProperty.LetterSpacing);
+				textNodeTextStyle.letterSpacing = computed.getNumber(StyleProperty.LetterSpacing);
 			var colorSource = computed.source(StyleProperty.TextColor);
 			var textNodeColor = showsPlaceholder ? context.theme.mutedText :
 				(colorSource != null && colorSource.layer != "framework"
-					? computed.get(StyleProperty.TextColor) : resolved.textColor);
+					? computed.getColor(StyleProperty.TextColor) : resolved.textColor);
 			if (showEllipsis)
 				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
 					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,

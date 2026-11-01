@@ -108,7 +108,7 @@ class Popup implements View {
 				new StyleTarget("popup-backdrop", "backdrop", "backdrop", null, ["popup"],
 					context.interactionStates.get(backdropId)), backdropStyle);
 			if (!modal || !dimBackdrop)
-				backdropComputed.set(StyleProperty.Background,
+				backdropComputed.setColor(StyleProperty.Background,
 					Color.rgba(0.0, 0.0, 0.0, 0.0),
 					new StyleSource("local", "popup-backdrop", -1, "local"));
 			var backdrop = new RenderNode(backdropId, LayoutVisualKind.Box,
@@ -134,12 +134,12 @@ class Popup implements View {
 					context.interactionStates.get(panelId)), panelStyle);
 			if (menuSurface) {
 				var source = new StyleSource("local", "popup-content", -1, "local");
-				panelComputed.set(StyleProperty.Background, Color.rgba(0.0, 0.0, 0.0, 0.0), source);
-				panelComputed.set(StyleProperty.Padding, panelStyle.padding, source);
-				panelComputed.set(StyleProperty.RadiusTopLeft, 0.0, source);
-				panelComputed.set(StyleProperty.RadiusTopRight, 0.0, source);
-				panelComputed.set(StyleProperty.RadiusBottomRight, 0.0, source);
-				panelComputed.set(StyleProperty.RadiusBottomLeft, 0.0, source);
+				panelComputed.setColor(StyleProperty.Background, Color.rgba(0.0, 0.0, 0.0, 0.0), source);
+				panelComputed.setInsets(StyleProperty.Padding, panelStyle.padding, source);
+				panelComputed.setNumber(StyleProperty.RadiusTopLeft, 0.0, source);
+				panelComputed.setNumber(StyleProperty.RadiusTopRight, 0.0, source);
+				panelComputed.setNumber(StyleProperty.RadiusBottomRight, 0.0, source);
+				panelComputed.setNumber(StyleProperty.RadiusBottomLeft, 0.0, source);
 			}
 			var panel = new RenderNode(panelId, LayoutVisualKind.Box,
 				panelComputed.toLayoutStyle());

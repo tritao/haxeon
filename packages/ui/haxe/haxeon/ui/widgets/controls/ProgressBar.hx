@@ -76,8 +76,8 @@ class ProgressBar implements View {
 		painter.configure(mode, fraction, animationDuration, context.environment.reducedMotion);
 		node.onPaint(function(canvas, geometry) {
 			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
-			painter.paint(canvas, geometry, liveStyle.get(StyleProperty.ProgressTrackColor),
-				liveStyle.get(StyleProperty.ProgressFillColor));
+			painter.paint(canvas, geometry, liveStyle.getColor(StyleProperty.ProgressTrackColor),
+				liveStyle.getColor(StyleProperty.ProgressFillColor));
 		});
 		return node;
 	}

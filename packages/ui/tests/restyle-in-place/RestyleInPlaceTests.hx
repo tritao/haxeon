@@ -541,9 +541,6 @@ private class UpdatingResources implements View {
 }
 
 @:access(haxeon.ui.core.UiContext)
-@:access(haxeon.ui.style.ComputedStyle)
-@:access(haxeon.ui.style.StyleResolver)
-@:access(haxeon.ui.style.StyleResolver.StyleResolverLocalValue)
 @:access(haxeon.ui.debug.UiInspector)
 class RestyleInPlaceTests {
 	static function retainedVariants(fonts:FontCollection):Void {
@@ -599,19 +596,19 @@ class RestyleInPlaceTests {
 		original.setAxis(height, LayoutAxis.grow(), null);
 		var fork = original.fork();
 		original.setAxis(width, LayoutAxis.fixed(9), null);
-		check(fork.get(width).value == 7 && original.get(width).value == 9, "Inline axes leaked across a fork");
+		check(fork.getAxis(width).value == 7 && original.getAxis(width).value == 9, "Inline axes leaked across a fork");
 		var constructed = new haxeon.ui.style.ComputedStyle(fork);
 		fork.setAxis(height, LayoutAxis.fixed(11), null);
-		check(constructed.get(height).sizing == haxeon.ui.LayoutSizing.Grow, "Constructed style lost its axis snapshot");
+		check(constructed.getAxis(height).sizing == haxeon.ui.LayoutSizing.Grow, "Constructed style lost its axis snapshot");
 		var copy = constructed.copy();
 		check(!haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Copied inline axes compare differently");
 		var dynamicStyle = new haxeon.ui.style.ComputedStyle();
-		dynamicStyle.set(width, LayoutAxis.fixed(7), null);
-		dynamicStyle.set(height, LayoutAxis.grow(), null);
+		dynamicStyle.setAxis(width, LayoutAxis.fixed(7), null);
+		dynamicStyle.setAxis(height, LayoutAxis.grow(), null);
 		check(!haxeon.ui.style.StyleDiff.compare(constructed, dynamicStyle).changed,
 			"Inline and dynamically stored axes compare differently");
-		copy.set(width, LayoutAxis.fixed(3), null);
-		check(copy.get(width).value == 3 && constructed.get(width).value == 7 &&
+		copy.setAxis(width, LayoutAxis.fixed(3), null);
+		check(copy.getAxis(width).value == 3 && constructed.getAxis(width).value == 7 &&
 			haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Dynamic axis replacement lost value or isolation");
 		var entries = constructed.entries();
 		check(entries.length == 2, "Inline axis inspection omitted a property");
@@ -619,12 +616,12 @@ class RestyleInPlaceTests {
 		constructed.setAxis(width, LayoutAxis.fixed(13), null);
 		var inspected:LayoutAxis = cast entries[0].value;
 		var reflected:Null<LayoutAxis> = cast Reflect.field(entries[0], "value");
-		check(inspected.value == 7 && constructed.get(width).value == 13 && entries[0].describe() == description,
+		check(inspected.value == 7 && constructed.getAxis(width).value == 13 && entries[0].describe() == description,
 			"Changing an inline axis mutated an existing inspection snapshot");
 		check(Reflect.hasField(entries[0], "value") && Reflect.fields(entries[0]).indexOf("value") >= 0 &&
 			reflected != null && reflected.value == 7, "Reflection lost the inspected axis value");
 		var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
-		constructed.set(haxeon.ui.style.StyleProperty.Decorations,
+		constructed.setDecorations(
 			new haxeon.ui.style.DecorationChain([new InspectionDecoration()]), null);
 		node.computedStyle = constructed;
 		InspectionDecoration.copies = 0;
@@ -644,15 +641,11 @@ class RestyleInPlaceTests {
 		check(snapshotFailed && dumpFailed, "A tree dump swallowed an inspection copy failure");
 		var undisturbed = new haxeon.ui.style.ComputedStyle();
 		undisturbed.setAxis(width, LayoutAxis.fixed(23), null);
-		var axisStorage:Dynamic = undisturbed.inlineAxes;
-		check(axisStorage != null && Reflect.field(axisStorage, "widthBox") == null, "The axis was boxed before inspection");
 		node.computedStyle = undisturbed;
 		haxeon.ui.debug.UiInspector.dump(node, null);
-		check(Reflect.field(axisStorage, "widthBox") == null, "A textual dump boxed an unused inspection value");
 		var detailed = haxeon.ui.debug.UiInspector.snapshot(node, null);
 		var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
-		check(detailedAxis.value == 23 && Reflect.field(axisStorage, "widthBox") != null,
-			"Detailed inspection did not materialize its value");
+		check(detailedAxis.value == 23, "Detailed inspection lost its axis value");
 	}
 	static function inlineLocalSnapshots():Void {
 		var padding = haxeon.ui.style.StyleProperty.Padding, background = haxeon.ui.style.StyleProperty.Background;
@@ -674,35 +667,18 @@ class RestyleInPlaceTests {
 			"A local struct snapshot changed when its input style was edited");
 		var clone = computed.copy();
 		check(!haxeon.ui.style.StyleDiff.compare(computed, clone).changed, "Copying lazy local values changed their style");
-		var originalEntries = computed.entries(), copyEntries = clone.entries(), forkEntries = fork.entries();
-		var originalPadding:Dynamic = null, copyPadding:Dynamic = null, forkPadding:Dynamic = null;
-		for (entry in originalEntries) if (entry.name == "padding") originalPadding = entry.value;
-		for (entry in copyEntries) if (entry.name == "padding") copyPadding = entry.value;
-		for (entry in forkEntries) if (entry.name == "padding") forkPadding = entry.value;
-		check(originalPadding != null && originalPadding == copyPadding && originalPadding == forkPadding,
-			"Copy or fork changed an inspected value's box alias");
-		var dynamicStyle = new haxeon.ui.style.ComputedStyle(), lazyStyle = new haxeon.ui.style.ComputedStyle();
-		var snapshot = materialized.copy();
-		var localValue = new haxeon.ui.style.StyleResolver.StyleResolverLocalValue(snapshot, "snapshot");
-		dynamicStyle.set(padding, snapshot.padding, null); dynamicStyle.set(background, snapshot.background, null);
-		dynamicStyle.set(transform, snapshot.transform, null);
-		lazyStyle.setLocalValue(padding, localValue, null); lazyStyle.setLocalValue(background, localValue, null);
-		lazyStyle.setLocalValue(transform, localValue, null);
-		check(!haxeon.ui.style.StyleDiff.compare(dynamicStyle, lazyStyle).changed,
-			"Dynamic and local-snapshot values compared differently");
-		var oldFork = lazyStyle.fork();
-		var next = new LayoutStyle(); next.padding = new haxeon.ui.Insets(11, 12, 13, 14);
-		lazyStyle.setLocalValue(padding, new haxeon.ui.style.StyleResolver.StyleResolverLocalValue(next, "next"), null);
-		var after = lazyStyle.toLayoutStyle();
-		var oldAfter = oldFork.toLayoutStyle();
+		var typedStyle = new haxeon.ui.style.ComputedStyle();
+		typedStyle.setInsets(padding, materialized.padding, null);
+		typedStyle.setColor(background, materialized.background, null);
+		typedStyle.setMatrix(transform, materialized.transform, null);
+		var oldFork = typedStyle.fork();
+		typedStyle.setInsets(padding, new haxeon.ui.Insets(11, 12, 13, 14), null);
+		var after = typedStyle.toLayoutStyle(), oldAfter = oldFork.toLayoutStyle();
 		check(after.padding.left == 11 && after.background.red == 0.1 && after.transform.tx == 5 &&
 			oldAfter.padding.left == 1 && oldAfter.background.red == 0.1 && oldAfter.transform.tx == 5,
-			"Replacing a local snapshot lost untouched values");
+			"Replacing a typed value lost untouched values");
 		var zero = 0.0, minusZero = zero * -1.0;
-		check(!haxeon.ui.style.StyleResolver.sameFloatBits(0.0, minusZero) &&
-			haxeon.ui.style.StyleResolver.sameFloatBits(minusZero, minusZero) &&
-			!haxeon.ui.style.StyleResolver.sameFloatBits(Math.NaN, Math.NaN),
-			"Snapshot matching lost signed-zero or NaN distinctions");
+
 		var positive = new LayoutStyle(), negative = new LayoutStyle();
 		positive.padding = new haxeon.ui.Insets(0.0, 1.0, 0.0, 0.0);
 		negative.padding = new haxeon.ui.Insets(minusZero, 1.0, 0.0, 0.0);

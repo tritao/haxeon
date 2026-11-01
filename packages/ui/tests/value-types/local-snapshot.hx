@@ -5,8 +5,36 @@ import haxeon.ui.Transform2D;
 import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
+import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleDiff;
+import haxeon.ui.style.StyleValue;
+import haxeon.ui.style.StyleImpact;
+import haxeon.ui.style.ComputedStyle;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutDirection;
 function main():Int {
+  var declared = StyleValue.background(Color.rgba(0.1, 0.2, 0.3, 1));
+  var generic = StyleValue.color(StyleProperty.Background, Color.rgba(0.1, 0.2, 0.3, 1));
+  if (!declared.sameAs(generic) || !generic.sameAs(declared)) return 4;
+  var font = StyleValue.fontSize(14.0), genericFont = StyleValue.number(StyleProperty.FontSize, 14.0);
+  if (!font.sameAs(genericFont) || !genericFont.sameAs(font)) return 5;
+  var inspected:Color = cast declared.inspect();
+  if (inspected.red != 0.1) return 6;
+  var custom = new StyleColorProperty("custom-color", Color.rgba(0, 0, 0), false, StyleImpact.Paint,
+    null, (left, right) -> left.red == right.red);
+  var customFirst = StyleValue.color(custom, Color.rgba(0.1, 0.2, 0.3));
+  var customSecond = StyleValue.color(custom, Color.rgba(0.1, 0.5, 0.6));
+  if (!customFirst.sameAs(customSecond)) return 7;
+  var applied = new ComputedStyle();
+  declared.applyTo(applied, null);
+  StyleValue.width(LayoutAxis.fixed(42)).applyTo(applied, null);
+  var appliedLayout = applied.toLayoutStyle();
+  if (appliedLayout.background.green != 0.2 || appliedLayout.width.value != 42) return 8;
+  var direction = StyleValue.direction(LayoutDirection.LeftToRight);
+  var genericDirection = StyleValue.direction(LayoutDirection.LeftToRight);
+  if (!direction.sameAs(genericDirection)) return 9;
+  StyleValue.boolean(StyleProperty.Visible, true).applyTo(applied, null);
+  if (!applied.getBoolean(StyleProperty.Visible)) return 10;
   var local = new LayoutStyle();
   local.padding = new Insets(1, 2, 3, 4);
   local.background = Color.rgba(0.1, 0.2, 0.3, 1);
@@ -17,15 +45,14 @@ function main():Int {
   local.padding = new Insets(8, 8, 8, 8); local.background = Color.rgba(0.8, 0.8, 0.8, 1); local.transform = Transform2D.translation(9, 9);
   var copy = computed.copy(); var a = computed.toLayoutStyle(); var b = fork.toLayoutStyle();
   if (a.padding.left != 1 || a.background.red != 0.1 || a.transform.tx != 5 || b.padding.top != 2 || b.background.green != 0.2 || b.transform.ty != 6) return 1;
-  if (StyleDiff.compare(computed, copy).changed || computed.get(StyleProperty.Padding).right != 3) return 2;
-  var originalBox:Dynamic = null, copyBox:Dynamic = null, forkBox:Dynamic = null, reflected:Dynamic = null;
-  for (entry in computed.entries()) if (entry.name == "padding") {
-    originalBox = entry.value;
-    reflected = Reflect.field(entry, "value");
+  if (StyleDiff.compare(computed, copy).changed || computed.getInsets(StyleProperty.Padding).right != 3) return 2;
+  var paddingEntry = computed.entries();
+  var found = false;
+  for (entry in paddingEntry) if (entry.name == "padding") {
+    var inspectedPadding:Insets = cast Reflect.field(entry, "value");
+    found = inspectedPadding.left == 1 && inspectedPadding.right == 3;
   }
-  for (entry in copy.entries()) if (entry.name == "padding") copyBox = entry.value;
-  for (entry in fork.entries()) if (entry.name == "padding") forkBox = entry.value;
-  if (originalBox == null || originalBox != copyBox || originalBox != forkBox || originalBox != reflected) return 4;
+  if (!found) return 11;
   var zero = 0.0, minusZero = zero * -1.0;
   var positive = new LayoutStyle(), negative = new LayoutStyle();
   positive.padding = new Insets(0.0, 1.0, 0.0, 0.0); negative.padding = new Insets(minusZero, 1.0, 0.0, 0.0);

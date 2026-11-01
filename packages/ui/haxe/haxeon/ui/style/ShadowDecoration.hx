@@ -24,17 +24,17 @@ class ShadowDecoration extends Decoration {
 	}
 
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
-		var shadowColor = color == null ? style.get(StyleProperty.ShadowColor) : color;
-		var x = offsetX == null ? style.get(StyleProperty.ShadowOffsetX) : offsetX;
-		var y = offsetY == null ? style.get(StyleProperty.ShadowOffsetY) : offsetY;
-		var radius = blurRadius == null ? style.get(StyleProperty.ShadowBlur) : blurRadius;
+		var shadowColor = color == null ? style.getColor(StyleProperty.ShadowColor) : color;
+		var x = offsetX == null ? style.getNumber(StyleProperty.ShadowOffsetX) : offsetX;
+		var y = offsetY == null ? style.getNumber(StyleProperty.ShadowOffsetY) : offsetY;
+		var radius = blurRadius == null ? style.getNumber(StyleProperty.ShadowBlur) : blurRadius;
 		if (shadowColor == null || shadowColor.alpha <= 0.0)
 			return;
-		var topLeft = style.get(StyleProperty.RadiusTopLeft);
-		var topRight = style.get(StyleProperty.RadiusTopRight);
-		var bottomRight = style.get(StyleProperty.RadiusBottomRight);
-		var bottomLeft = style.get(StyleProperty.RadiusBottomLeft);
-		var resolvedSpread = spread == null ? style.get(StyleProperty.ShadowSpread) : spread;
+		var topLeft = style.getNumber(StyleProperty.RadiusTopLeft);
+		var topRight = style.getNumber(StyleProperty.RadiusTopRight);
+		var bottomRight = style.getNumber(StyleProperty.RadiusBottomRight);
+		var bottomLeft = style.getNumber(StyleProperty.RadiusBottomLeft);
+		var resolvedSpread = spread == null ? style.getNumber(StyleProperty.ShadowSpread) : spread;
 		canvas.drawBoxShadow(new Rect(0.0, 0.0, geometry.width, geometry.height), x, y, radius,
 			resolvedSpread, [topLeft, topRight, bottomRight, bottomLeft], shadowColor);
 	}

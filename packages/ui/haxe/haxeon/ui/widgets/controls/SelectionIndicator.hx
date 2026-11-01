@@ -34,8 +34,8 @@ class SelectionIndicator {
 	public static function fieldFrame(context:BuildContext, node:RenderNode, key:String):Void {
 		if (node.computedStyle == null)
 			return;
-		var color = node.computedStyle.get(StyleProperty.BorderColor);
-		var width = node.computedStyle.get(StyleProperty.BorderWidth);
+		var color = node.computedStyle.getColor(StyleProperty.BorderColor);
+		var width = node.computedStyle.getNumber(StyleProperty.BorderWidth);
 		if (color.alpha <= 0.0 || width <= 0.0)
 			return;
 		var indicator = overlay(context, key);

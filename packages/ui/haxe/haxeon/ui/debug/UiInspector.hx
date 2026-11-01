@@ -121,11 +121,11 @@ class UiInspector {
 			} else node.computedStyle.copyInspectionValues();
 		}
 		var style = node.computedStyle;
-		var effects:Null<EffectChain> = style == null ? null : style.get(StyleProperty.Effects);
+		var effects:Null<EffectChain> = style == null ? null : style.getEffects(StyleProperty.Effects);
 		var backdropEffects:Null<EffectChain> =
-			style == null ? null : style.get(StyleProperty.BackdropEffects);
-		var mask:Null<Mask> = style == null ? null : style.get(StyleProperty.Mask);
-		var opacity:Float = style == null ? 1.0 : style.get(StyleProperty.Opacity);
+			style == null ? null : style.getEffects(StyleProperty.BackdropEffects);
+		var mask:Null<Mask> = style == null ? null : style.getMask();
+		var opacity:Float = style == null ? 1.0 : style.getNumber(StyleProperty.Opacity);
 		var overflow:InkOverflow = effects == null ? InkOverflow.zero() : effects.inkOverflow();
 		var paintBounds = new Rect(bounds.x - overflow.left, bounds.y - overflow.top,
 			bounds.width + overflow.left + overflow.right,

@@ -45,12 +45,12 @@ class Text implements View {
 		var letterSource = computed.source(StyleProperty.LetterSpacing);
 		var computedOverride = new TextStyleOverride(null,
 			(textStyle == null || textStyle.fontSize == null) && fontSource != null && fontSource.layer != "framework"
-				? computed.get(StyleProperty.FontSize) : null,
+				? computed.getNumber(StyleProperty.FontSize) : null,
 			(textStyle == null || textStyle.letterSpacing == null) && letterSource != null && letterSource.layer != "framework"
-				? computed.get(StyleProperty.LetterSpacing) : null,
+				? computed.getNumber(StyleProperty.LetterSpacing) : null,
 			null, null, null, null,
 			color == null && colorSource != null && colorSource.layer != "framework"
-				? computed.get(StyleProperty.TextColor) : null);
+				? computed.getColor(StyleProperty.TextColor) : null);
 		resolved = resolved.merge(computedOverride);
 		if (color != null)
 			resolved = resolved.withTextColor(color);

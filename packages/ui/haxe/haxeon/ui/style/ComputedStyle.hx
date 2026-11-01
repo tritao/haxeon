@@ -1,416 +1,221 @@
 package haxeon.ui.style;
 
-import haxeon.ui.widgets.layout.Padding;
-
-
-import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutAxis;
-import haxeon.ui.Insets;
 import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
-import haxeon.ui.style.StyleResolver.StyleResolverLocalValue;
-
-/** One resolved property value and its optional cascade provenance. */
-class ComputedProperty<T> {
-	public final value:T;
-	public final source:Null<StyleSource>;
-
-	public function new(value:T, source:Null<StyleSource>) {
-		this.value = value;
-		this.source = source;
-	}
-}
+import haxeon.ui.style.StyleProperty.StylePropertyBase;
+import haxeon.ui.style.StyleProperty.StyleColorProperty;
+import haxeon.ui.style.StyleProperty.StyleInsetsProperty;
+import haxeon.ui.style.StyleProperty.StyleAxisProperty;
+import haxeon.ui.style.StyleProperty.StyleTransformProperty;
 
 private class InheritedKeyCache {
 	public var key:Null<String> = null;
 	public function new() {}
 }
 
-/** Copy-on-write storage for local axis values; a style cache fork shares it until an axis changes. */
-private class InlineAxes {
-	public var width:LayoutAxis;
-	public var height:LayoutAxis;
-	/** Materialized only when a dynamic consumer inspects the corresponding value. */
-	public var widthBox:Dynamic = null;
-	public var heightBox:Dynamic = null;
-	public function new(width:LayoutAxis, height:LayoutAxis) {
-		this.width = width;
-		this.height = height;
-	}
-}
-
-/** Authoritative Haxe-side result of style resolution. */
-@:access(haxeon.ui.style.StyleResolver.StyleResolverLocalValue)
+/** Authoritative Haxe-side result of style resolution. Values remain in their typed declarations. */
 class ComputedStyle {
-	/** Indexed by `StyleProperty.slot`: null is absent, and `NullValue` stands for a stored null. */
-	var values:Array<Dynamic>;
+	var values:Array<StyleValue>;
 	var sources:Array<Null<StyleSource>>;
-	static final NullValue:Dynamic = new InheritedKeyCache();
-	static final AxisValue:Dynamic = new InheritedKeyCache();
-	var inlineAxes:Null<InlineAxes>;
-	var axesShared:Bool;
 	public var matchingRules(default, null):Array<StyleSource>;
 	var shared:Bool;
-	/** The rule list is shared with a fork until either side records a match; `recordMatch` detaches it. */
 	var rulesShared:Bool;
 	var inheritedKeyCache:Null<InheritedKeyCache>;
 
-	/** With `from`, the new style reads `from`'s storage and detaches it on the first mutation, as `fork` does. */
+	/** With `from`, storage is shared until either style is changed. */
 	public function new(?from:ComputedStyle) {
 		if (from == null) {
 			values = [];
 			sources = [];
 			matchingRules = [];
-			inlineAxes = null;
 		} else {
 			values = from.values;
 			sources = from.sources;
 			matchingRules = from.matchingRules;
-			inlineAxes = from.inlineAxes;
 			from.shared = true;
 			from.rulesShared = true;
-			from.axesShared = true;
 		}
-		axesShared = from != null;
 		shared = from != null;
 		rulesShared = from != null;
 		inheritedKeyCache = null;
 	}
 
-	/** Refer to the resolver's already-owned local snapshot without boxing a value. */
-	@:allow(haxeon.ui.style.StyleResolver)
-	function setLocalValue<T>(property:StyleProperty<T>, snapshot:StyleResolverLocalValue, source:Null<StyleSource>):Void {
-		if (snapshot == null || (property != cast StyleProperty.Padding && property != cast StyleProperty.Background &&
-				property != cast StyleProperty.Transform)) throw "A local snapshot requires a supported property";
+	/** Stores an immutable typed declaration. */
+	public function setDeclaration(value:StyleValue, source:Null<StyleSource>):Void {
+		if (value == null) throw "Computed styles require a declaration";
 		ensureWritable();
+		var property = value.property;
+		if (property.inherited) inheritedKeyCache = null;
 		var slot = property.slot;
 		if (slot >= values.length) { values.resize(slot + 1); sources.resize(slot + 1); }
-		values[slot] = snapshot;
+		values[slot] = value;
 		sources[slot] = source;
 	}
 
-	public function set<T>(property:StyleProperty<T>, value:T, source:Null<StyleSource>):Void {
-		if (property == null)
-			throw "Computed styles require a property";
-		ensureWritable();
-		if (property.inherited)
-			inheritedKeyCache = null;
-		var slot = property.slot;
-		if (slot >= values.length) {
-			values.resize(slot + 1);
-			sources.resize(slot + 1);
-		}
-		values[slot] = value == null ? NullValue : value;
-		sources[slot] = source;
-	}
+	public function setColor(property:StyleColorProperty, value:Color, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.color(property, value), source);
+	public function setInsets(property:StyleInsetsProperty, value:Insets, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.insets(property, value), source);
+	public function setAxis(property:StyleAxisProperty, value:LayoutAxis, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.axis(property, value), source);
+	public function setMatrix(property:StyleTransformProperty, value:Transform2D, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.matrix(property, value), source);
+	public function setNumber(property:StyleProperty<Float>, value:Float, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.number(property, value), source);
+	public function setInteger(property:StylePropertyBase, value:Int, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.integerProperty(property, value), source);
+	public function setBoolean(property:StyleProperty<Bool>, value:Bool, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.boolean(property, value), source);
+	public function setDecorations(value:DecorationChain, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.decorations(value), source);
+	public function setEffects(property:StyleProperty<EffectChain>, value:EffectChain, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.effectProperty(property, value), source);
+	public function setMask(value:Mask, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.mask(value), source);
 
-	/** Local layout axes are stored together without crossing the dynamic-value boundary. */
+	inline function isSet(slot:Int):Bool return slot < values.length && values[slot] != null;
+	inline function valueAt(slot:Int):Null<StyleValue> return slot < values.length ? values[slot] : null;
+	inline function sourceAt(slot:Int):Null<StyleSource> return slot < sources.length ? sources[slot] : null;
+
+	public function has(property:StylePropertyBase):Bool return property != null && isSet(property.slot);
+	public function source(property:StylePropertyBase):Null<StyleSource> return sourceAt(property.slot);
+	/** Internal typed value access, including null-valued reference declarations. */
 	@:allow(haxeon.ui.style.StyleResolver)
-	function setAxis(property:StyleProperty<LayoutAxis>, value:LayoutAxis, source:Null<StyleSource>):Void {
-		if (property != StyleProperty.Width && property != StyleProperty.Height)
-			throw "Inline axis storage requires a built-in layout axis";
-		ensureWritable();
-		var axes = inlineAxes;
-		if (axes == null) {
-			axes = new InlineAxes(LayoutAxis.fit(), LayoutAxis.fit());
-			inlineAxes = axes;
-			axesShared = false;
-		} else if (axesShared) {
-			var previous = axes;
-			axes = new InlineAxes(previous.width, previous.height);
-			axes.widthBox = previous.widthBox;
-			axes.heightBox = previous.heightBox;
-			inlineAxes = axes;
-			axesShared = false;
-		}
-		if (property == StyleProperty.Width) {
-			axes.width = value;
-			axes.widthBox = null;
-		} else {
-			axes.height = value;
-			axes.heightBox = null;
-		}
-		var slot = property.slot;
-		if (slot >= values.length) {
-			values.resize(slot + 1);
-			sources.resize(slot + 1);
-		}
-		values[slot] = AxisValue;
-		sources[slot] = source;
+	function declaration(property:StylePropertyBase):Null<StyleValue> return valueAt(property.slot);
+
+	public function getColor(property:StyleColorProperty):Color {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.colorOf(value);
+	}
+	public function getInsets(property:StyleInsetsProperty):Insets {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.insetsOf(value);
+	}
+	public function getAxis(property:StyleAxisProperty):LayoutAxis {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.axisOf(value);
+	}
+	public function getMatrix(property:StyleTransformProperty):Transform2D {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.matrixOf(value);
+	}
+	public function getNumber(property:StyleProperty<Float>):Float {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.numberOf(value);
+	}
+	public function getInteger(property:StyleProperty<Int>):Int {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.integerOf(value);
+	}
+	public function getBoolean(property:StyleProperty<Bool>):Bool {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.booleanOf(value);
+	}
+	public function getDecorations():DecorationChain {
+		var value = valueAt(StyleProperty.Decorations.slot);
+		if (value == null) return StyleProperty.Decorations.defaultValue;
+		var result = StyleValue.decorationsOf(value); return result == null ? null : result.copy();
+	}
+	public function getDecorationsReadOnly():DecorationChain {
+		var value = valueAt(StyleProperty.Decorations.slot);
+		return value == null ? StyleProperty.Decorations.defaultValue : StyleValue.decorationsOf(value);
+	}
+	public function getEffects(property:StyleProperty<EffectChain>):EffectChain {
+		var value = valueAt(property.slot);
+		if (value == null) return property.defaultValue;
+		var result = StyleValue.effectsOf(value); return result == null ? null : result.copy();
+	}
+	public function getEffectsReadOnly(property:StyleProperty<EffectChain>):EffectChain {
+		var value = valueAt(property.slot); return value == null ? property.defaultValue : StyleValue.effectsOf(value);
+	}
+	public function getMask():Mask {
+		var value = valueAt(StyleProperty.Mask.slot);
+		if (value == null) return StyleProperty.Mask.defaultValue;
+		var result = StyleValue.maskOf(value); return result == null ? null : result.copy();
+	}
+	public function getMaskReadOnly():Mask {
+		var value = valueAt(StyleProperty.Mask.slot);
+		return value == null ? StyleProperty.Mask.defaultValue : StyleValue.maskOf(value);
 	}
 
-	inline function axisAt(slot:Int):LayoutAxis {
-		var value = values[slot];
-		if (value == AxisValue) {
-			var axes:InlineAxes = cast inlineAxes;
-			return slot == StyleProperty.Width.slot ? axes.width : axes.height;
-		}
-		var dynamicValue:Dynamic = value == NullValue ? null : value;
-		return cast dynamicValue;
-	}
-
-	inline function isLocalValue(slot:Int, value:Dynamic):Bool
-		return (slot == StyleProperty.Padding.slot || slot == StyleProperty.Background.slot ||
-			slot == StyleProperty.Transform.slot) && Std.isOfType(value, StyleResolverLocalValue);
-
-	inline function paddingAt(slot:Int):Insets {
-		if (isLocalValue(slot, values[slot])) {
-			var local:StyleResolverLocalValue = cast values[slot];
-			return local.snapshot.padding;
-		}
-		return cast valueAt(slot);
-	}
-
-	inline function backgroundAt(slot:Int):Color {
-		if (isLocalValue(slot, values[slot])) {
-			var local:StyleResolverLocalValue = cast values[slot];
-			return local.snapshot.background;
-		}
-		return cast valueAt(slot);
-	}
-
-	inline function transformAt(slot:Int):Transform2D {
-		if (isLocalValue(slot, values[slot])) {
-			var local:StyleResolverLocalValue = cast values[slot];
-			return local.snapshot.transform;
-		}
-		return cast valueAt(slot);
-	}
-
-	/** Reads the built-in background without crossing the dynamic inspection boundary. */
-	@:allow(haxeon.ui.style.BackgroundDecoration)
-	function readBackground():Color
-		return isSet(StyleProperty.Background.slot) ? backgroundAt(StyleProperty.Background.slot) : StyleProperty.Background.defaultValue;
-
-	inline function isSet(slot:Int):Bool
-		return slot < values.length && values[slot] != null;
-
-	inline function valueAt(slot:Int):Dynamic {
-		var value = slot < values.length ? values[slot] : null;
-		if (isLocalValue(slot, value)) {
-			var local:StyleResolverLocalValue = cast value;
-			var snapshot = local.snapshot;
-			// Forks already share these slots and previously shared their boxes. Materializing a logical value
-			// is therefore safe without detaching the copy-on-write arrays.
-			var boxed:Dynamic = slot == StyleProperty.Padding.slot ? snapshot.padding :
-				slot == StyleProperty.Background.slot ? snapshot.background : snapshot.transform;
-			values[slot] = boxed;
-			return boxed;
-		}
-		if (value == AxisValue) {
-			var axes:InlineAxes = cast inlineAxes;
-			if (slot == StyleProperty.Width.slot) {
-				if (axes.widthBox == null) axes.widthBox = axes.width;
-				return axes.widthBox;
-			}
-			if (axes.heightBox == null) axes.heightBox = axes.height;
-			return axes.heightBox;
-		}
-		return value == NullValue ? null : value;
-	}
-
+	public function sharesValuesWith(other:Null<ComputedStyle>):Bool return other != null && values == other.values;
 	@:allow(haxeon.ui.style.StyleDiff)
-	function sameValue(property:StyleProperty<Dynamic>, other:ComputedStyle):Bool {
-		var slot = property.slot;
-		if ((slot == StyleProperty.Width.slot || slot == StyleProperty.Height.slot) &&
-				(values[slot] == AxisValue || other.values[slot] == AxisValue) &&
-				values[slot] != NullValue && other.values[slot] != NullValue)
-			return haxeon.Equality.equals(axisAt(slot), other.axisAt(slot));
-		if (values[slot] != NullValue && other.values[slot] != NullValue) {
-			if (slot == StyleProperty.Padding.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
-				return haxeon.Equality.equals(paddingAt(slot), other.paddingAt(slot));
-			if (slot == StyleProperty.Background.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
-				return haxeon.Equality.equals(backgroundAt(slot), other.backgroundAt(slot));
-			if (slot == StyleProperty.Transform.slot && (isLocalValue(slot, values[slot]) || other.isLocalValue(slot, other.values[slot])))
-				return haxeon.Equality.equals(transformAt(slot), other.transformAt(slot));
-		}
-		return property.isEqual(valueAt(slot), other.valueAt(slot));
-	}
+	function sameValue(property:StylePropertyBase, other:ComputedStyle):Bool
+		return values[property.slot].sameAs(other.values[property.slot]);
 
-	inline function sourceAt(slot:Int):Null<StyleSource>
-		return slot < sources.length ? sources[slot] : null;
-
-	public function has<T>(property:StyleProperty<T>):Bool
-		return property != null && isSet(property.slot);
-
-	public function get<T>(property:StyleProperty<T>):T {
-		if (property == null)
-			throw "Computed styles require a property";
-		var slot = property.slot;
-		if (!isSet(slot))
-			return property.defaultValue;
-		var value = valueAt(slot);
-		return property.copiedOnRead ? cast copyValue(cast property, value) : cast value;
-	}
-
-	/** Reads the effective value without copying it; callers must not mutate the result. */
-	public function getReadOnly<T>(property:StyleProperty<T>):T {
-		if (property == null) throw "Computed styles require a property";
-		return isSet(property.slot) ? cast valueAt(property.slot) : property.defaultValue;
-	}
-
-	/** True when both styles read the same value storage (cache forks do until one mutates), so no value can differ. */
-	public function sharesValuesWith(other:Null<ComputedStyle>):Bool
-		return other != null && values == other.values;
-
-	/** Reads a value without the defensive copy `get` makes; the caller must not mutate it. */
-	public function peek<T>(property:StyleProperty<T>):T
-		return cast valueAt(property.slot);
-
-	public function property<T>(property:StyleProperty<T>):ComputedProperty<T>
-		return new ComputedProperty(get(property), sourceAt(property.slot));
-
-	public function source<T>(property:StyleProperty<T>):Null<StyleSource>
-		return sourceAt(property.slot);
-
-	/** Records every matching rule, including rules whose declarations were overridden. */
 	public function recordMatch(source:StyleSource):Void {
 		if (source != null) {
-			if (rulesShared) {
-				matchingRules = matchingRules.copy();
-				rulesShared = false;
-			}
+			if (rulesShared) { matchingRules = matchingRules.copy(); rulesShared = false; }
 			matchingRules.push(source);
 		}
 	}
-
-	/** Returns a stable copy for inspectors and external tooling. */
-	public function matchingStyleRules():Array<StyleSource>
-		return matchingRules.copy();
-
+	public function matchingStyleRules():Array<StyleSource> return matchingRules.copy();
 	public function entries():Array<StyleInspectionEntry> {
 		var result:Array<StyleInspectionEntry> = [];
 		for (property in StyleProperty.all())
-			if (isSet(property.slot))
-				result.push(new StyleInspectionEntry(property.name, copyValue(property, valueAt(property.slot)),
-					sourceAt(property.slot)));
+			if (isSet(property.slot)) result.push(new StyleInspectionEntry(property.name,
+				values[property.slot].inspectForRead(), sourceAt(property.slot)));
 		return result;
 	}
-
-	/** Preserve the copy hooks used by inspection when a textual dump discards the entries themselves. */
 	@:allow(haxeon.ui.debug.UiInspector)
 	function copyInspectionValues():Void {
 		for (property in StyleProperty.all())
-			if (property.copiedOnRead && isSet(property.slot))
-				copyValue(property, valueAt(property.slot));
+			if (property.copiedOnRead && isSet(property.slot)) values[property.slot].inspectForRead();
 	}
 
 	/** Materializes the resolved layout subset without mutating any input style. */
 	public function toLayoutStyle(?base:LayoutStyle):LayoutStyle {
 		var result = base == null ? new LayoutStyle() : base.copy();
-		if (isSet(StyleProperty.Width.slot)) {
-			var width = axisAt(StyleProperty.Width.slot);
-			result.width = width;
-		}
-		if (isSet(StyleProperty.Height.slot)) {
-			var height = axisAt(StyleProperty.Height.slot);
-			result.height = height;
-		}
-		if (isSet(StyleProperty.Direction.slot)) result.direction = cast valueAt(StyleProperty.Direction.slot);
-		if (isSet(StyleProperty.ChildAlignX.slot)) result.childAlignX = cast valueAt(StyleProperty.ChildAlignX.slot);
-		if (isSet(StyleProperty.ChildAlignY.slot)) result.childAlignY = cast valueAt(StyleProperty.ChildAlignY.slot);
-		if (isSet(StyleProperty.ChildDistribution.slot)) result.childDistribution = cast valueAt(StyleProperty.ChildDistribution.slot);
-		if (isSet(StyleProperty.Positioning.slot)) result.positioning = cast valueAt(StyleProperty.Positioning.slot);
-		if (isSet(StyleProperty.AspectRatio.slot)) result.aspectRatio = cast valueAt(StyleProperty.AspectRatio.slot);
-		if (isSet(StyleProperty.WrapMode.slot)) result.wrapMode = cast valueAt(StyleProperty.WrapMode.slot);
-		if (isSet(StyleProperty.RowGap.slot)) result.rowGap = cast valueAt(StyleProperty.RowGap.slot);
-		if (isSet(StyleProperty.ColumnGap.slot)) result.columnGap = cast valueAt(StyleProperty.ColumnGap.slot);
-		if (isSet(StyleProperty.AlignSelf.slot)) result.alignSelf = cast valueAt(StyleProperty.AlignSelf.slot);
-		if (isSet(StyleProperty.PositionX.slot)) result.positionX = cast valueAt(StyleProperty.PositionX.slot);
-		if (isSet(StyleProperty.PositionY.slot)) result.positionY = cast valueAt(StyleProperty.PositionY.slot);
-		if (isSet(StyleProperty.ZIndex.slot)) result.zIndex = cast valueAt(StyleProperty.ZIndex.slot);
-		if (isSet(StyleProperty.Overlay.slot)) result.overlay = cast valueAt(StyleProperty.Overlay.slot);
-		if (isSet(StyleProperty.ClipToParent.slot)) result.clipToParent = cast valueAt(StyleProperty.ClipToParent.slot);
-		if (isSet(StyleProperty.Padding.slot)) {
-			var padding = paddingAt(StyleProperty.Padding.slot);
-			result.padding = padding;
-		}
-		if (isSet(StyleProperty.ChildGap.slot)) result.childGap = cast valueAt(StyleProperty.ChildGap.slot);
-		if (isSet(StyleProperty.Background.slot)) {
-			var background = backgroundAt(StyleProperty.Background.slot);
-			result.background = background;
-		}
-		if (isSet(StyleProperty.RadiusTopLeft.slot)) result.radiusTopLeft = cast valueAt(StyleProperty.RadiusTopLeft.slot);
-		if (isSet(StyleProperty.RadiusTopRight.slot)) result.radiusTopRight = cast valueAt(StyleProperty.RadiusTopRight.slot);
-		if (isSet(StyleProperty.RadiusBottomRight.slot)) result.radiusBottomRight = cast valueAt(StyleProperty.RadiusBottomRight.slot);
-		if (isSet(StyleProperty.RadiusBottomLeft.slot)) result.radiusBottomLeft = cast valueAt(StyleProperty.RadiusBottomLeft.slot);
-		if (isSet(StyleProperty.ClipHorizontal.slot)) result.clipHorizontal = cast valueAt(StyleProperty.ClipHorizontal.slot);
-		if (isSet(StyleProperty.ClipVertical.slot)) result.clipVertical = cast valueAt(StyleProperty.ClipVertical.slot);
-		if (isSet(StyleProperty.Visible.slot)) result.visible = cast valueAt(StyleProperty.Visible.slot);
-		if (isSet(StyleProperty.Transform.slot)) {
-			var transform = transformAt(StyleProperty.Transform.slot);
-			result.transform = transform;
-		}
-		if (isSet(StyleProperty.TransformOriginX.slot))
-			result.transformOriginX = cast valueAt(StyleProperty.TransformOriginX.slot);
-		if (isSet(StyleProperty.TransformOriginY.slot))
-			result.transformOriginY = cast valueAt(StyleProperty.TransformOriginY.slot);
+		if (isSet(StyleProperty.Width.slot)) result.width = getAxis(StyleProperty.Width);
+		if (isSet(StyleProperty.Height.slot)) result.height = getAxis(StyleProperty.Height);
+		if (isSet(StyleProperty.Direction.slot)) result.direction = cast StyleValue.integerOf(values[StyleProperty.Direction.slot]);
+		if (isSet(StyleProperty.ChildAlignX.slot)) result.childAlignX = cast StyleValue.integerOf(values[StyleProperty.ChildAlignX.slot]);
+		if (isSet(StyleProperty.ChildAlignY.slot)) result.childAlignY = cast StyleValue.integerOf(values[StyleProperty.ChildAlignY.slot]);
+		if (isSet(StyleProperty.ChildDistribution.slot)) result.childDistribution = cast StyleValue.integerOf(values[StyleProperty.ChildDistribution.slot]);
+		if (isSet(StyleProperty.Positioning.slot)) result.positioning = cast StyleValue.integerOf(values[StyleProperty.Positioning.slot]);
+		if (isSet(StyleProperty.AspectRatio.slot)) result.aspectRatio = getNumber(StyleProperty.AspectRatio);
+		if (isSet(StyleProperty.WrapMode.slot)) result.wrapMode = cast StyleValue.integerOf(values[StyleProperty.WrapMode.slot]);
+		if (isSet(StyleProperty.RowGap.slot)) result.rowGap = getNumber(StyleProperty.RowGap);
+		if (isSet(StyleProperty.ColumnGap.slot)) result.columnGap = getNumber(StyleProperty.ColumnGap);
+		if (isSet(StyleProperty.AlignSelf.slot)) result.alignSelf = cast StyleValue.integerOf(values[StyleProperty.AlignSelf.slot]);
+		if (isSet(StyleProperty.PositionX.slot)) result.positionX = getNumber(StyleProperty.PositionX);
+		if (isSet(StyleProperty.PositionY.slot)) result.positionY = getNumber(StyleProperty.PositionY);
+		if (isSet(StyleProperty.ZIndex.slot)) result.zIndex = getInteger(StyleProperty.ZIndex);
+		if (isSet(StyleProperty.Overlay.slot)) result.overlay = getBoolean(StyleProperty.Overlay);
+		if (isSet(StyleProperty.ClipToParent.slot)) result.clipToParent = getBoolean(StyleProperty.ClipToParent);
+		if (isSet(StyleProperty.Padding.slot)) result.padding = getInsets(StyleProperty.Padding);
+		if (isSet(StyleProperty.ChildGap.slot)) result.childGap = getNumber(StyleProperty.ChildGap);
+		if (isSet(StyleProperty.Background.slot)) result.background = getColor(StyleProperty.Background);
+		if (isSet(StyleProperty.RadiusTopLeft.slot)) result.radiusTopLeft = getNumber(StyleProperty.RadiusTopLeft);
+		if (isSet(StyleProperty.RadiusTopRight.slot)) result.radiusTopRight = getNumber(StyleProperty.RadiusTopRight);
+		if (isSet(StyleProperty.RadiusBottomRight.slot)) result.radiusBottomRight = getNumber(StyleProperty.RadiusBottomRight);
+		if (isSet(StyleProperty.RadiusBottomLeft.slot)) result.radiusBottomLeft = getNumber(StyleProperty.RadiusBottomLeft);
+		if (isSet(StyleProperty.ClipHorizontal.slot)) result.clipHorizontal = getBoolean(StyleProperty.ClipHorizontal);
+		if (isSet(StyleProperty.ClipVertical.slot)) result.clipVertical = getBoolean(StyleProperty.ClipVertical);
+		if (isSet(StyleProperty.Visible.slot)) result.visible = getBoolean(StyleProperty.Visible);
+		if (isSet(StyleProperty.Transform.slot)) result.transform = getMatrix(StyleProperty.Transform);
+		if (isSet(StyleProperty.TransformOriginX.slot)) result.transformOriginX = getNumber(StyleProperty.TransformOriginX);
+		if (isSet(StyleProperty.TransformOriginY.slot)) result.transformOriginY = getNumber(StyleProperty.TransformOriginY);
 		return result;
 	}
 
 	public function copy():ComputedStyle {
 		var result = new ComputedStyle();
 		for (property in StyleProperty.all())
-			if (isSet(property.slot)) {
-				if (values[property.slot] == AxisValue) {
-					result.setAxis(cast property, axisAt(property.slot), sourceAt(property.slot));
-					var sourceAxes:InlineAxes = cast inlineAxes, targetAxes:InlineAxes = cast result.inlineAxes;
-					if (property.slot == StyleProperty.Width.slot) targetAxes.widthBox = sourceAxes.widthBox;
-					else targetAxes.heightBox = sourceAxes.heightBox;
-				} else result.set(property, copyValue(property, valueAt(property.slot)), sourceAt(property.slot));
-			}
-		for (source in matchingRules)
-			result.recordMatch(source);
+			if (isSet(property.slot)) result.setDeclaration(values[property.slot].copyForRead(), sourceAt(property.slot));
+		for (source in matchingRules) result.recordMatch(source);
 		return result;
 	}
-
-	/** Fast copy used by style caches; map storage is detached only on mutation. */
 	public function fork():ComputedStyle {
-		if (inheritedKeyCache == null)
-			inheritedKeyCache = new InheritedKeyCache();
+		if (inheritedKeyCache == null) inheritedKeyCache = new InheritedKeyCache();
 		var result = new ComputedStyle(this);
 		result.inheritedKeyCache = inheritedKeyCache;
-		shared = true;
-		rulesShared = true;
+		shared = true; rulesShared = true;
 		return result;
 	}
-
-	/** Shared across style-cache forks; set() detaches it before mutation. */
-	public function cachedInheritedKey():Null<String>
-		return inheritedKeyCache == null ? null : inheritedKeyCache.key;
-
+	public function cachedInheritedKey():Null<String> return inheritedKeyCache == null ? null : inheritedKeyCache.key;
 	public function rememberInheritedKey(key:String):Void {
-		if (inheritedKeyCache == null)
-			inheritedKeyCache = new InheritedKeyCache();
+		if (inheritedKeyCache == null) inheritedKeyCache = new InheritedKeyCache();
 		inheritedKeyCache.key = key;
 	}
-
 	function ensureWritable():Void {
-		if (!shared)
-			return;
-		values = values.copy();
-		sources = sources.copy();
-		shared = false;
-	}
-
-	/** Copies the mutable value objects that can be exposed through a computed style; Insets and Transform2D are immutable. */
-	static function copyValue(property:StyleProperty<Dynamic>, value:Dynamic):Dynamic {
-		if (value == null)
-			return null;
-		if (!property.copiedOnRead)
-			return value;
-		return switch property.name {
-			case "effects" | "backdropEffects":
-				var effects:EffectChain = cast value;
-				effects == null ? null : effects.copy();
-			case "decorations":
-				var decorations:DecorationChain = cast value;
-				decorations == null ? null : decorations.copy();
-			case "mask":
-				var mask:Mask = cast value;
-				mask == null ? null : mask.copy();
-			default:
-				value;
-		};
+		if (!shared) return;
+		values = values.copy(); sources = sources.copy(); shared = false;
 	}
 }

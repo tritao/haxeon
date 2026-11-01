@@ -1,8 +1,8 @@
 # Structs
 
 Status: design, with the basic form implemented (see "Implemented so far"). `struct` is meant to replace
-both `@:value class` and `@:value @:repr("C") class`; those forms keep
-compiling while code migrates.
+both `@:value class` and `@:value @:repr("C") class`; their uses will be ported and the old forms removed in the same change.
+The broader plan for conformances and struct-specialized generics is in [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md).
 
 ## Implemented so far
 
@@ -117,7 +117,8 @@ struct Health : Component {
   `lerp<T:Interpolate>` dispatches statically after specialization for each struct type, without boxing. Converting a
   struct to an interface-typed value boxes it, like a Rust `dyn Trait`; using an interface as a bound does not.
   Retroactive conformance requires coherence rules and is deferred, as are associated types and default interface
-  methods, until a concrete need arises.
+  methods, until a concrete need arises. [ADR 0002](adr/0002-reactive-ui-model.md) also plans class-only `Observable`
+  conformance, whose field bits share `Diffable`'s numbering; it is future work, not part of this migration.
 - **Declared equality.** Conformance to `Equatable` or `Hashable` declares value equality; the compiler synthesizes
   it when possible, as described in [Equality and hashing](#equality-and-hashing).
 
@@ -389,34 +390,35 @@ example, backspace measured 18.1 KiB in another reservation-based run, but its d
 
 | Action | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
-| console → telemetry | 110.9 | 112.7 | 125.0 | 77.2 |
-| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.4 |
-| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.6 |
-| telemetry → console | 128.6 | 131.0 | 145.5 | 95.6 |
+| console → telemetry | 110.9 | 112.7 | 125.0 | 77.1 |
+| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.3 |
+| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.4 |
+| telemetry → console | 128.6 | 131.0 | 145.5 | 95.4 |
 | hover away | 24.9 | 25.0 | 26.5 | 14.8 |
 | hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
-| hover field | 22.1 | 22.2 | 25.0 | 13.6 |
+| hover field | 22.1 | 22.2 | 25.0 | 13.4 |
 | hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
-| hover other | 13.1 | 13.2 | 14.3 | 10.0 |
+| hover other | 13.1 | 13.2 | 14.3 | 9.9 |
 | idle | 0.2 | 0.2 | 0.2 | 0.2 |
 | idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
 | scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
-| type backspace | 17.8 | 17.9 | 18.7 | 16.2 |
-| type character | 17.8 | 17.9 | 18.7 | 16.1 |
-| selection (census) | 927.7 | — | — | 855.9 |
+| type backspace | 17.8 | 17.9 | 18.7 | 16.1 |
+| type character | 17.8 | 17.9 | 18.7 | 16.6 |
+| selection (census) | 927.7 | — | — | 899.1 |
 
 The 120-frame instrumented Wasm GC Showcase counts generated `struct.new` and `array.new` operations; these counts do
 not establish byte sizes or cover separately encoded function bodies.
 
 | Showcase scenario | Classes | Rect/Insets | All five | Current |
 | --- | ---: | ---: | ---: | ---: |
-| Full | 8,654 | 6,496 | 6,138 | 5,948 |
-| Editing | 15,482 | 13,528 | 13,168 | 12,847 |
-| Static | 8,654 | 6,496 | 6,136 | 5,906 |
-| Text-heavy | 8,656 | 6,496 | 6,138 | 5,904 |
+| Full | 8,654 | 6,496 | 6,138 | 5,896 |
+| Editing | 15,482 | 13,528 | 13,168 | 12,835 |
+| Static | 8,654 | 6,496 | 6,136 | 5,896 |
+| Text-heavy | 8,656 | 6,496 | 6,138 | 5,894 |
 
 A separate same-compiler replay uses fixed frame times to compare allocations against the class build in each scenario.
-None of the 120 frames in any scenario allocated more objects than its corresponding class frame.
+The corresponding class totals were 8,656, 15,688, 8,656 and 8,656 respectively; none of the 120 frames in any
+scenario allocated more objects than its corresponding class frame.
 
 #### Implemented: optional field-to-field copies
 
@@ -450,12 +452,12 @@ without inlining.
 
 ### Dynamic fields holding values
 
-The UI style pipeline currently erases known types in declarations, computed values and transitions, causing the
-remaining struct boxes. Replace that pipeline with typed declarations, typed computed storage and typed transitions;
-materialize `Dynamic` values at inspection, debugging and reflection boundaries. Keep the typed declaration factories.
-This removes the avoidable erasure rather than introducing a compiler transformation that must preserve dynamic access,
-reflection, identity, mutation, exception order and native escape on every target. Remove the temporary inline-axis and
-cached local-snapshot boxing paths once typed storage covers them.
+The UI style pipeline stores known types in declarations, computed styles and transitions, using per-kind typed
+implementations until struct-specialized generics exist. `Dynamic` values are materialized for inspection, debugging
+and reflection. This removes avoidable erasure and the temporary inline-axis and cached local-snapshot boxing paths,
+without a compiler transformation that would have to preserve dynamic access, reflection, identity, mutation, exception
+order and native escape. A same-machine 30-cycle HashLink census after initial setup found no allocations of the five
+value types in interaction, tab matrix or selection stress; see [UI value types](../packages/ui/docs/VALUE_TYPES.md).
 
 For later stages 2–3, specialize generics for struct type arguments, as in C# and Rust. Monomorphization can replace
 per-kind declaration implementations with `StyleValueOf<T>` and is the general path to unboxed `Array<S>`, `Map<K, S>`,

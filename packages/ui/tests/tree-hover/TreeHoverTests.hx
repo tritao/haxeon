@@ -105,7 +105,7 @@ class TreeHoverTests {
       check(commands(rebuiltRows[2]) == 0, "Leaving the tree left a stale highlight");
       // Theme hover rules can change text metrics; they must use the ordinary build path.
       ui.buildContext.styleSheet.rule(haxeon.ui.style.StyleSelector.widget("text").state(haxeon.ui.style.StyleState.Hovered),
-        [haxeon.ui.style.StyleValue.of(haxeon.ui.style.StyleProperty.FontSize, 22.0)]);
+        [haxeon.ui.style.StyleValue.number(haxeon.ui.style.StyleProperty.FontSize, 22.0)]);
       root = ui.submitCached(build, frame, "files");
       ui.pointerMove(35, 8);
       root = ui.submitCached(build, frame, "files");

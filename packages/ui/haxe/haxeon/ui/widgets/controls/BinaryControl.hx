@@ -160,9 +160,9 @@ class BinaryControl implements View {
 		var fontSource = computed.source(StyleProperty.FontSize);
 		var letterSource = computed.source(StyleProperty.LetterSpacing);
 		if (fontSource != null && fontSource.layer != "framework")
-			labelNode.layout.textStyle.fontSize = computed.get(StyleProperty.FontSize);
+			labelNode.layout.textStyle.fontSize = computed.getNumber(StyleProperty.FontSize);
 		if (letterSource != null && letterSource.layer != "framework")
-			labelNode.layout.textStyle.letterSpacing = computed.get(StyleProperty.LetterSpacing);
+			labelNode.layout.textStyle.letterSpacing = computed.getNumber(StyleProperty.LetterSpacing);
 		node.add(labelNode);
 
 		var invalidation:State<Bool> = context.state(node.id, checked);

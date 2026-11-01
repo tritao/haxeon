@@ -169,12 +169,12 @@ class SelectionPopup {
 		dropdown.setStyleIdentity("selection-popup", "options", "options", null, ["selection-popup"]);
 		dropdown.states = context.interactionStates.get(dropdownId);
 		dropdown.computedStyle = dropdownComputed;
-		var popupDecorations = dropdownComputed.get(StyleProperty.Decorations);
+		var popupDecorations = dropdownComputed.getDecorations();
 		var popupDecorationSource = dropdownComputed.source(StyleProperty.Decorations);
 		if ((popupDecorations == null || popupDecorations.decorations.length == 0) &&
 			popupDecorationSource != null && popupDecorationSource.stylesheet == "framework" &&
 			popupDecorationSource.selector == "default")
-			dropdownComputed.set(StyleProperty.Decorations, DecorationChain.of([
+			dropdownComputed.setDecorations(DecorationChain.of([
 				new ShadowDecoration()
 			]), new StyleSource("framework", "selection-popup", -1, "default"));
 		dropdown.onPaint(function(canvas, geometry) {

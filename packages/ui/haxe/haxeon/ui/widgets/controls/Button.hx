@@ -142,9 +142,9 @@ class Button implements View {
 				var letterSource = computed.source(StyleProperty.LetterSpacing);
 				var labelStyle = context.resolveTextRole(TextRole.Button, new TextStyleOverride(null,
 					fontSource != null && fontSource.layer != "framework"
-						? computed.get(StyleProperty.FontSize) : null,
+						? computed.getNumber(StyleProperty.FontSize) : null,
 					letterSource != null && letterSource.layer != "framework"
-						? computed.get(StyleProperty.LetterSpacing) : null,
+						? computed.getNumber(StyleProperty.LetterSpacing) : null,
 					TextWrap.None, null, null, null, foreground));
 				if (ellipsizeLabel) {
 					var typography = labelStyle.textStyle, paragraph = labelStyle.paragraphStyle;

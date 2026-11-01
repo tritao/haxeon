@@ -86,8 +86,8 @@ class Menu implements View {
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			typography = typography.merge(new TextStyleOverride(null,
-				fontSource != null && fontSource.layer != "framework" ? computed.get(StyleProperty.FontSize) : null,
-				letterSource != null && letterSource.layer != "framework" ? computed.get(StyleProperty.LetterSpacing) : null));
+				fontSource != null && fontSource.layer != "framework" ? computed.getNumber(StyleProperty.FontSize) : null,
+				letterSource != null && letterSource.layer != "framework" ? computed.getNumber(StyleProperty.LetterSpacing) : null));
 			var labelStyle = TextStyleOverride.combine(TextStyleOverride.fromTextStyle(typography.textStyle),
 				TextStyleOverride.foreground(item.enabled ? context.theme.tokens.textPrimary : context.theme.tokens.textDisabled));
 			if (context.fonts != null) {

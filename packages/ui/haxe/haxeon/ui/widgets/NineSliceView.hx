@@ -46,12 +46,12 @@ class NineSliceView implements View {
 			var nodeId = context.id("nine-slice");
 			var computed = context.resolveStyle(new StyleTarget("nine-slice", key, key,
 				null, ["nine-slice"], context.interactionStates.get(nodeId)), style);
-			var resolvedDecorations = computed.get(StyleProperty.Decorations);
+			var resolvedDecorations = computed.getDecorations();
 			var decorationSource = computed.source(StyleProperty.Decorations);
 			if ((resolvedDecorations == null || resolvedDecorations.decorations.length == 0) &&
 				decorationSource != null && decorationSource.stylesheet == "framework" &&
 				decorationSource.selector == "default")
-				computed.set(StyleProperty.Decorations, DecorationChain.of([
+				computed.setDecorations(DecorationChain.of([
 					new NineSliceDecoration(image, left, top, right, bottom)
 				]), new StyleSource("framework", "nine-slice", -1, "default"));
 			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());

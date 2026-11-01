@@ -36,8 +36,8 @@ capabilities.
 `\Node.width` is a typed, first-class reference to a field: passable, composable and comparable. A key path into a struct
 compiles to a constant offset and allocates nothing.
 
-It would replace the closure pairs in `StyleProperty<T>` (`readLayout`/`writeLayout`), give `Diff.bit` and `@Channel`
-annotations a typed field reference instead of a name, and let bindings name their target (`bind(\Label.text, value)`).
+It could give `Diff.bit` and `@Channel` annotations a typed field reference instead of a name, and let bindings name
+their target (`bind(\Label.text, value)`).
 Design it with `Equatable`/`Diffable`, since all three share the per-type field numbering.
 
 ### Inline enums with payloads
@@ -87,7 +87,7 @@ Check each against what Haxeon already supports before designing it.
 
 1. `Equatable`, `Hashable` and `Diffable`, porting every `@:structural` use; key paths designed alongside.
 2. `Observable` (ADR 0002 stage 1b).
-3. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
-4. Result builders and lazy parameters, before ADR 0002 stages 3–5.
+3. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
+4. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
 5. Move-only types and `inout`, with native memory and the node store prototype.
 6. Smaller conveniences when a concrete use appears.

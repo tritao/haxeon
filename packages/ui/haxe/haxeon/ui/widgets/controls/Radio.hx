@@ -134,9 +134,9 @@ class Radio implements View {
 		var fontSource = computed.source(StyleProperty.FontSize);
 		var letterSource = computed.source(StyleProperty.LetterSpacing);
 		if (fontSource != null && fontSource.layer != "framework")
-			text.layout.textStyle.fontSize = computed.get(StyleProperty.FontSize);
+			text.layout.textStyle.fontSize = computed.getNumber(StyleProperty.FontSize);
 		if (letterSource != null && letterSource.layer != "framework")
-			text.layout.textStyle.letterSpacing = computed.get(StyleProperty.LetterSpacing);
+			text.layout.textStyle.letterSpacing = computed.getNumber(StyleProperty.LetterSpacing);
 		node.add(text);
 		if (enabled && hasSelectHandler) {
 			var select = function(_:UiEvent) { onSelect(value); };

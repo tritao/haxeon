@@ -11,7 +11,8 @@ The decisions do not carry the same confidence, and the migration treats them di
 - **Committed:** tracked values (1), interaction state as signals (5), retained rendering with layers (7), semantics and
   input from the same model (8), verification (9). Mature UI frameworks have converged on each, and each removes
   mechanisms we have today.
-- **Pending an experiment:** run-once components (2) and their compiler support (3). Stage 3 decides.
+- **Pending an experiment:** the run-once or re-running implementation of components (2). Stage 3 decides; the
+  author-facing builder syntax is the same for either implementation.
 - **Options that must prove themselves:** the shared native store (4) and an incremental layout engine (6). After the
   incremental bridge, the interaction bridge costs 0.036 ms and Clay's full solve about 0.14 ms, so neither is justified by
   speed alone. Each gets a prototype and a measured go/no-go before any migration. Local placement of independent
@@ -51,24 +52,52 @@ values changes, and updates the existing nodes. This record makes that idea the 
 
 ## Decisions
 
-1. **One dependency mechanism: tracked values.** `Signal<T>` holds a value, `Derived<T>` caches a computation over signals,
-   `Effect` runs a side effect. Reading a signal inside a tracking scope records the dependency; writing it marks exactly its
-   readers dirty. Writes batch per frame; invalidation is push (mark dirty) then pull (recompute lazily when read), so
-   there are no glitches or repeated work. `State`, `observe*`, state revisions, interaction snapshots and cache keys all
-   become this. External models join through one adapter, `Signal.fromRevision(() -> model.revision)`, sampled once per
-   frame; models expose one revision rather than many observed fields.
-2. **Components run once; changes flow through bindings.** A component function runs at mount, creates nodes and binds
+1. **One dependency mechanism: tracked values.** `Signal<T>` holds a standalone value, `Derived<T>` caches a computation,
+   and `Effect` runs a side effect. Models we own can declare `class Model implements Observable { public var phase:Phase; }`
+   and retain ordinary field syntax. The compiler instruments each field read inside a tracking scope to record the
+   object and field bit after one flag check; a changed write marks only that field's readers dirty. One dependency list
+   belongs to each object, with no per-field `Signal` objects or revision counters. `Observable` applies to classes;
+   structs have no identity, so a struct-valued observable field is tracked as one field. A signal is effectively a
+   one-field observable. Signal and observable-field writes that do not change the value are skipped, using the type's
+   declared `Equatable` conformance or identity for nonconforming classes, as in Compose and Solid.
+
+   Writes batch per frame; invalidation is push (mark dirty) then pull (recompute lazily when read), so there are no
+   glitches or repeated work. `State`, `observe*`, state revisions, interaction snapshots and cache keys become this.
+   All current models are ours and become `Observable`; add an adapter only if a real external model appears.
+   Per-field signal objects allocate and require `.get()`/`.set()`; revision counters invalidate unrelated readers and a
+   missed increment leaves stale UI. Precedents include Swift Observation, MobX observable objects, Vue `reactive()`,
+   Svelte 5 class fields and Solid stores.
+2. **Option: components run once; changes flow through bindings.** A component function runs at mount, creates nodes and binds
    signals to node properties. A change re-runs only the binding, which writes one field. Structural change goes through
    keyed primitives that own child scopes: `Show`, `For` (by key), `Switch`. Only they create or destroy nodes. Scopes own
    their children and cleanup, so unmounting disposes everything under it. This replaces retained caches, `selfUpdating`,
    `reconcile`, `BuiltNode`, `RenderNode.latest`, `requestPatch`, patch frames and binding revisions.
-3. **The compiler supports the model.** Haxeon compiles component bodies so a signal read in a property position becomes a
-   binding, and reports a signal read outside any tracking scope (the characteristic bug of run-once components) in
-   debug builds.
+3. **General language features support component syntax; the compiler does not know UI concepts.** A result builder
+   declared by a library combines sequential statements, `if` with or without `else`, `switch` and `for` by rewriting
+   each form into builder calls. An interface can attach the builder to a method, and implementations inherit it:
+   `interface View { @:builder(ViewBuilder) function body():View; }`. Helpers opt in with `@:builder(ViewBuilder)`.
+   The library's signature supplies list keys, for example `forEach<T:Identifiable>`, so an unkeyed list is an ordinary
+   bound error. Each form has one fixed lowering signature, with no overload resolution across builder methods; errors
+   point at the user's control flow and type checking stays fast, avoiding Swift result builders' diagnostic and cost
+   problems.
+
+   A general lazy parameter such as `function label(text:Lazy<String>):View` lets a caller write
+   `label(cup.phase.toString())`; the compiler passes the expression unevaluated and the library turns it into a binding.
+   Lazy parameters also serve logging, assertions and defaults. `Observable` supplies tracked reads. The library, not
+   the compiler, chooses run-once bindings or re-running scopes, with identical author code either way. Reads outside a
+   tracking scope are a runtime debug check (decision 9); builder control flow prevents the usual untracked plain `if`
+   in a run-once component.
+
+   Stateful components are classes `implements View` with `body()`, their own tracked `var` state, and cached derived
+   getters when purity inference proves eligibility. Stateless composition uses plain functions returning `View`,
+   explicitly builder-annotated when they use control flow. Props are constructor arguments and final fields, using
+   `Lazy<T>` where they must remain live; public mutable prop fields are not used. UI-specific compiler intrinsics are
+   added only if profiling finds a gap the general optimizer cannot close.
 4. **Option: nodes are records in a flat store shared with native code.** Stable handles (index and generation); one record per
    node, with dirty bits per channel: layout, paint, text, semantics, transform. Bindings write fields and set bits;
    native layout and rendering read the same memory. There is no encode, parse or decode. Record layout, change masks and
-   channels are generated from `@:structural` declarations, so adding a style property updates all of them.
+   channels are generated from `Diffable` field numbering and `@Channel(...)` annotations. Observable field bits,
+   `Diffable` masks and channel masks share one numbering per type; bindings write fields and dirty the channel masks.
    The costs: strings, text, callbacks and object references do not fit native records and need side tables, and raw
    records are harder to inspect than objects. With the incremental bridge, the speed gain is small; the case rests on
    deleting the transaction code. Adopted only if the stage 2 prototype shows a net simplification.
@@ -104,18 +133,46 @@ values changes, and updates the existing nodes. This record makes that idea the 
    and paint, and compares records, geometry and display lists byte for byte. The reactive core rejects untracked reads in
    bindings and store writes that do not come from a binding.
    **Read-only phases are enforced at runtime.** While a tracking scope runs (a build or component setup, a derived value,
-   a binding, an observed getter), writing a signal or `State` throws at the write, with its stack trace, as Svelte 5
+   a binding, an observed getter), writing a signal, observable field or `State` throws at the write, with its stack trace, as Svelte 5
    (`state_unsafe_mutation`) and Compose do. It costs one flag check per signal write and is on in debug builds and every
    gate, not only verify runs. State the UI depends on lives in signals (decision 1), so this covers the writes that made
    panels hard to retain; plain internal fields stay plain and verify mode covers their effect on output. A compile-time
    purity contract (`docs/PURITY.md`) is deferred until these checks show real holes.
 
+For example, a panel today records a revision and constructs keyed children explicitly:
+
+```haxe
+function build(context:BuildContext):View {
+	context.observeInt(() -> model.revision);
+	var children = [new KeyedView("phase", label(model.phase.toString()))];
+	if (model.ready) children.push(new KeyedView("ready", readyBadge()));
+	for (item in model.items) children.push(new KeyedView(item.id, itemView(item)));
+	return new Column("panel", children);
+}
+```
+
+With the planned general features, the same component can be written schematically as:
+
+```haxe
+class Panel implements View {
+	final model:Model;
+	public function body():View {
+		label(model.phase.toString()); // label takes Lazy<String>
+		if (model.ready) readyBadge();
+		for (item in model.items) itemView(item); // item is Identifiable
+	}
+}
+```
+
+`View` supplies the builder, `Observable` tracks `model` fields, and the library decides whether these bindings run once
+or the scope re-runs. Panels do not need rewriting when the stage 3 experiment chooses between those implementations.
+
 ## Mapping from today
 
 | Today | Becomes |
 |---|---|
-| `context.state`, `State.update` | `Signal` |
-| `observeInt/Bool/String`, `cacheKeyHash` | tracked reads; `Signal.fromRevision` for external models |
+| `context.state`, `State.update` | tracked component fields or standalone `Signal` |
+| `observeInt/Bool/String`, model revision counters, `cacheKeyHash` | observable fields and tracked reads |
 | `State.updateQuietly` | removed: writes know their readers |
 | `RetainedView`, dock pane and panel caches | removed: components run once |
 | `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | bindings |
@@ -132,27 +189,30 @@ values changes, and updates the existing nodes. This record makes that idea the 
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
-0. **Structs for small values — allocation audit in progress.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
+0. **Structs for small values — done.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
    structural structs, stored inline in `LayoutStyle`. Nullable fields have inline presence flags, eligible temporary
    values stay scalar, and Wasm GC flattens their fields. See [UI value types](../../packages/ui/docs/VALUE_TYPES.md)
-   for the retained-holder design and measurements. Dynamic boundaries still box in the interaction and selection
-   censuses, so the zero-allocation census target is not yet met.
+   for the retained-holder and typed-style designs and measurements. The interaction, tab-matrix and selection-stress
+   censuses allocate none of the five types after setup; their real Dynamic and reflection escapes still box.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates
    pass and no action allocates more.
+1b. **Observable models.** Implement compiler-generated `Observable` field tracking, test it on every target and cover
+   it in verify mode. Convert revision-adapter models we own, including hobbing `statusRevision`, BIM and CNC, and delete
+   their counters. This does not depend on the stage 3 run-once experiment. Go: gates pass and no action allocates more.
 2. **Shared node store prototype.** Move one channel (paint) into flat records shared with native, keeping `RenderNode`
    as a handle-based view so callers are unchanged. Compare code size, the side tables needed, debuggability and frame cost
    against the incremental bridge. Go (migrate the remaining channels and delete the transaction code): a net
    simplification with no frame-time or allocation regression. No-go: keep the incremental bridge, record why here, and
    continue with stage 3.
-3. **Component model experiment.** Convert one live panel (CNC or telemetry) to run-once bindings with `Show`/`For`, and
-   another to small re-running scopes (Compose style) on the same signals. Compare allocation, frame time and how the
-   code reads. Decide decision 2 from the result and amend this record. The expected outcome is bindings for leaf widgets
-   and live values, and small re-running scopes only where structure is genuinely dynamic.
-4. **Compiler support.** Binding inference in component bodies, untracked-read diagnostics.
-5. **Widgets, then panels.** Convert leaf widgets to bindings and delete `selfUpdating`/`reconcile`; convert panels and
-   delete retained caches, patch frames and binding revisions. Interaction signals and derived style replace hover handling.
+3. **Component model experiment.** Compare run-once bindings and small re-running scopes using the same builder-style
+   panel code and tracked model. Measure allocation and frame time, decide decision 2, and amend this record; authors do
+   not rewrite panels when the implementation changes.
+4. **General compiler support.** Implement result builders and lazy parameters, with separate designs and target tests;
+   runtime debug checks enforce tracked reads.
+5. **Widgets, then panels.** Convert leaf widgets and panels to the builder API; delete `selfUpdating`/`reconcile`,
+   retained caches, patch frames and binding revisions. Interaction signals and derived style replace hover handling.
 6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
    backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
    solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback
@@ -163,20 +223,24 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 
 ## Consequences
 
-- Authors learn four things: signal, binding, `Show`/`For`, effect. Most of the mechanisms listed under Context are
-  deleted.
+- Authors use tracked state, ordinary builder control flow, lazy props and effects. Most mechanisms listed under Context
+  are deleted.
 - Steady-state updates write fields; allocation happens on mount and unmount, not per interaction.
 - Layout-dependent geometry of independent nodes costs one solve plus a local placement. The layout bridge disappears only if the shared store passes its prototype.
-- Code in a component body runs once: a plain `if` over a signal does not update, and must be `Show`. Compiler checks
-  limit this; it remains the main learning cost.
+- Builder control flow stays reactive under either component implementation; reads outside tracking scopes are runtime
+  debug errors.
 - Debugging moves from "why did this rebuild" to "why did this binding not run". Signal dependency inspection becomes a
   required tool.
-- External mutable models need revision adapters; deeply nested ones need more work.
+- Add an adapter only if a real external model appears; deeply nested models need more work.
 - The committed work (reactive core, retained display lists) is moderate. Compiler support, a shared store and a layout
   engine are large, which is why they are gated on experiments and measurements.
 
 ## Alternatives considered
 
+- **`@:component` or compiler-special-cased `View`.** These teach the compiler UI semantics, couple UI design changes to
+  compiler changes and bake the stage 3 choice into the transform. Result builders and lazy parameters are general.
+- **AOP-style weaving.** Pattern-matched, non-local rewriting is hard to optimize and conflicts with Haxeon's rule
+  against general macros.
 - **Keep the current model and clean its edges.** It meets "fast enough" today (GC is under 0.1% of time), but it keeps the
   mechanism count, keeps allocation per interaction as an optimization target rather than a property, and keeps the bridge.
 - **Rebuild and cache (React, GPUI).** The simplest model to read and debug, and cheap structural change. Its per-update

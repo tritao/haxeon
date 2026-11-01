@@ -110,9 +110,9 @@ class Slider implements View {
 		};
 		node.onPaint(function(canvas, geometry) {
 			var liveStyle:haxeon.ui.style.ComputedStyle = cast RenderNode.latest(node).computedStyle;
-			var accent = liveStyle.get(StyleProperty.SliderFillColor);
-			var muted = liveStyle.get(StyleProperty.SliderTrackColor);
-			var foreground = liveStyle.get(StyleProperty.SliderThumbColor);
+			var accent = liveStyle.getColor(StyleProperty.SliderFillColor);
+			var muted = liveStyle.getColor(StyleProperty.SliderTrackColor);
+			var foreground = liveStyle.getColor(StyleProperty.SliderThumbColor);
 			var y = geometry.height * 0.5;
 			var start = 10.0;
 			var end = Math.max(start + 1.0, geometry.width - 10.0);

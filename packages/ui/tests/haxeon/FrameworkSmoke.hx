@@ -1823,7 +1823,7 @@ class FrameworkSmoke {
 			1.0, 1.0, 1.0, 1.0, "Scalable frame"), new LayoutFrame(256.0, 192.0));
 		var nineSliceSemantics:Semantics = cast nineSliceRoot.semantics;
 		var nineSliceDecorations:DecorationChain = nineSliceRoot.computedStyle == null ? null :
-			nineSliceRoot.computedStyle.get(StyleProperty.Decorations);
+			nineSliceRoot.computedStyle.getDecorations();
 		var nineSliceDecorationSource:Null<StyleSource> = nineSliceRoot.computedStyle == null ? null :
 			nineSliceRoot.computedStyle.source(StyleProperty.Decorations);
 		if (nineSliceSemantics == null || nineSliceSemantics.role != AccessibilityRole.Image ||
@@ -1841,15 +1841,15 @@ class FrameworkSmoke {
 		imageList.dispose();
 		image.dispose();
 		var shadowStyle = new ComputedStyle();
-		shadowStyle.set(StyleProperty.ShadowColor, Color.rgba(0.05, 0.08, 0.12, 0.7), null);
-		shadowStyle.set(StyleProperty.ShadowOffsetX, 2.0, null);
-		shadowStyle.set(StyleProperty.ShadowOffsetY, 3.0, null);
-		shadowStyle.set(StyleProperty.ShadowBlur, 9.0, null);
-		shadowStyle.set(StyleProperty.ShadowSpread, 2.0, null);
-		shadowStyle.set(StyleProperty.RadiusTopLeft, 3.0, null);
-		shadowStyle.set(StyleProperty.RadiusTopRight, 5.0, null);
-		shadowStyle.set(StyleProperty.RadiusBottomRight, 7.0, null);
-		shadowStyle.set(StyleProperty.RadiusBottomLeft, 9.0, null);
+		shadowStyle.setColor(StyleProperty.ShadowColor, Color.rgba(0.05, 0.08, 0.12, 0.7), null);
+		shadowStyle.setNumber(StyleProperty.ShadowOffsetX, 2.0, null);
+		shadowStyle.setNumber(StyleProperty.ShadowOffsetY, 3.0, null);
+		shadowStyle.setNumber(StyleProperty.ShadowBlur, 9.0, null);
+		shadowStyle.setNumber(StyleProperty.ShadowSpread, 2.0, null);
+		shadowStyle.setNumber(StyleProperty.RadiusTopLeft, 3.0, null);
+		shadowStyle.setNumber(StyleProperty.RadiusTopRight, 5.0, null);
+		shadowStyle.setNumber(StyleProperty.RadiusBottomRight, 7.0, null);
+		shadowStyle.setNumber(StyleProperty.RadiusBottomLeft, 9.0, null);
 		var shadowGeometry = new ResolvedLayoutItem(501, 1, 0.0, 0.0, 80.0, 40.0,
 			new Rect(0.0, 0.0, 80.0, 40.0), new Rect(0.0, 0.0, 80.0, 40.0),
 			Transform2D.identity(), 0.0);
@@ -3149,9 +3149,9 @@ class FrameworkSmoke {
 		var computedSource:Null<StyleSource> = computed.source(StyleProperty.Background);
 		var computedSourceStylesheet = computedSource == null ? "" : computedSource.stylesheet;
 		var computedSourceSelector = computedSource == null ? "" : computedSource.selector;
-		if (computed.get(StyleProperty.Background).red != 0.4 ||
-			computed.get(StyleProperty.Width).sizing != LayoutSizing.Fixed ||
-			computed.get(StyleProperty.Width).value != 88.0 || computedSource == null ||
+		if (computed.getColor(StyleProperty.Background).red != 0.4 ||
+			computed.getAxis(StyleProperty.Width).sizing != LayoutSizing.Fixed ||
+			computed.getAxis(StyleProperty.Width).value != 88.0 || computedSource == null ||
 			computedSourceStylesheet != "StyleApplication" ||
 			computedSourceSelector != "button:hovered")
 			return 214;
@@ -3164,16 +3164,16 @@ class FrameworkSmoke {
 		var cachedFirst = cacheResolver.resolve(cacheTarget, null, null, cacheSheet);
 		var cachedSecond = cacheResolver.resolve(cacheTarget, null, null, cacheSheet);
 		if (cacheResolver.cacheMisses != 1 || cacheResolver.cacheHits != 1 ||
-			cacheResolver.cachedStyleCount != 1 || cachedSecond.get(StyleProperty.Background).red != 0.3)
+			cacheResolver.cachedStyleCount != 1 || cachedSecond.getColor(StyleProperty.Background).red != 0.3)
 			return 230;
 		var cachedAxisLayout = cachedSecond.copy().toLayoutStyle();
 		if (cachedAxisLayout.width.sizing != LayoutSizing.Grow || cachedAxisLayout.width.min != 100.0 ||
 			cachedAxisLayout.width.max != 500.0 || cachedAxisLayout.width.growWeight != 3.0)
 			return 236;
-		cachedFirst.set(StyleProperty.Background, Color.rgba(1.0, 0.0, 0.0, 1.0), null);
+		cachedFirst.setColor(StyleProperty.Background, Color.rgba(1.0, 0.0, 0.0, 1.0), null);
 		var cachedThird = cacheResolver.resolve(cacheTarget, null, null, cacheSheet);
-		if (cacheResolver.cacheHits != 2 || cachedThird.get(StyleProperty.Background).red != 0.3 ||
-			cachedThird.get(StyleProperty.Width).value != 0.0)
+		if (cacheResolver.cacheHits != 2 || cachedThird.getColor(StyleProperty.Background).red != 0.3 ||
+			cachedThird.getAxis(StyleProperty.Width).value != 0.0)
 			return 231;
 		var colorResolver = new StyleResolver();
 		var colorTarget = new StyleTarget("text");
@@ -3190,46 +3190,46 @@ class FrameworkSmoke {
 		var noColor = colorResolver.resolve(colorTarget);
 		var noColorSource = noColor.source(StyleProperty.TextColor);
 		if (noColorSource == null) throw "Missing framework text provenance";
-		if (blueStyle.get(StyleProperty.TextColor).blue != 1 ||
+		if (blueStyle.getColor(StyleProperty.TextColor).blue != 1 ||
 			noColorSource.layer != "framework")
 			throw "Text color variants and absent overrides must resolve independently";
-		colored.set(StyleProperty.TextColor, blue, null);
+		colored.setColor(StyleProperty.TextColor, blue, null);
 		var redAgain = colorResolver.resolve(colorTarget, null, null, null, null, null, red);
-		if (redAgain.get(StyleProperty.TextColor).red != 1)
+		if (redAgain.getColor(StyleProperty.TextColor).red != 1)
 			throw "Mutating a returned colored style must preserve the cache";
 		var localAxis = new LayoutStyle();
 		localAxis.width = LayoutAxis.fit(100.0, 500.0);
 		var localAxisResolver = new StyleResolver();
 		var localAxisTarget = new StyleTarget("box", "local-axis");
 		var localAxisFirst = localAxisResolver.resolve(localAxisTarget, null, null, null, localAxis);
-		var localAxisFirstValue = localAxisFirst.get(StyleProperty.Width);
+		var localAxisFirstValue = localAxisFirst.getAxis(StyleProperty.Width);
 		if (localAxisResolver.cacheMisses != 1 || !localAxisFirst.has(StyleProperty.Width) ||
 			localAxisFirstValue.min != 100.0 || localAxisFirstValue.max != 500.0)
 			return 237;
 		localAxis.width = LayoutAxis.grow(100.0, 500.0, 3.0);
 		var localAxisSecond = localAxisResolver.resolve(localAxisTarget, null, null, null, localAxis);
-		var localAxisSecondValue = localAxisSecond.get(StyleProperty.Width);
+		var localAxisSecondValue = localAxisSecond.getAxis(StyleProperty.Width);
 		if (localAxisResolver.cacheMisses != 2 || localAxisResolver.cacheHits != 0 ||
 			localAxisSecondValue.sizing != LayoutSizing.Grow || localAxisSecondValue.growWeight != 3.0)
 			return 238;
 		localAxis.width = LayoutAxis.grow(100.0, 500.0, 4.0);
 		var localAxisThird = localAxisResolver.resolve(localAxisTarget, null, null, null, localAxis);
-		if (localAxisResolver.cacheMisses != 3 || localAxisThird.get(StyleProperty.Width).growWeight != 4.0)
+		if (localAxisResolver.cacheMisses != 3 || localAxisThird.getAxis(StyleProperty.Width).growWeight != 4.0)
 			return 239;
 		var axisBefore = new ComputedStyle();
-		axisBefore.set(StyleProperty.Width, LayoutAxis.grow(100.0, 500.0, 3.0), null);
+		axisBefore.setAxis(StyleProperty.Width, LayoutAxis.grow(100.0, 500.0, 3.0), null);
 		var axisAfter = new ComputedStyle();
-		axisAfter.set(StyleProperty.Width, LayoutAxis.grow(100.0, 500.0, 4.0), null);
+		axisAfter.setAxis(StyleProperty.Width, LayoutAxis.grow(100.0, 500.0, 4.0), null);
 		if (!StyleDiff.compare(axisBefore, axisAfter).changed)
 			return 240;
 		cacheSheet.rule(StyleSelector.widget("button"),
 			[StyleValue.background(Color.rgba(0.6, 0.6, 0.6, 1.0))]);
 		var revised = cacheResolver.resolve(cacheTarget, null, null, cacheSheet);
-		if (cacheResolver.cacheMisses != 2 || revised.get(StyleProperty.Background).red != 0.6)
+		if (cacheResolver.cacheMisses != 2 || revised.getColor(StyleProperty.Background).red != 0.6)
 			return 232;
 		cacheTarget = new StyleTarget("button", "cache-key", null, null, null, StyleState.Hovered);
 		var stateChanged = cacheResolver.resolve(cacheTarget, null, null, cacheSheet);
-		if (cacheResolver.cacheMisses != 3 || stateChanged.get(StyleProperty.Background).red != 0.6)
+		if (cacheResolver.cacheMisses != 3 || stateChanged.getColor(StyleProperty.Background).red != 0.6)
 			return 233;
 		var cacheEnvironment = new StyleEnvironment(500.0, 800.0);
 		var environmentSheet = new StyleSheet("CacheEnvironment");
@@ -3244,29 +3244,29 @@ class FrameworkSmoke {
 		var environmentChanged = environmentResolver.resolve(cacheTarget, null, null,
 			environmentSheet, null, cacheEnvironment);
 		if (environmentResolver.cacheHits != 1 || environmentResolver.cacheMisses != 2 ||
-			environmentChanged.get(StyleProperty.Padding).left != 12.0)
+			environmentChanged.getInsets(StyleProperty.Padding).left != 12.0)
 			return 234;
 		var replacementEnvironment = new StyleEnvironment(800.0, 500.0);
 		var replacementEnvironmentStyle = environmentResolver.resolve(cacheTarget, null, null,
 			environmentSheet, null, replacementEnvironment);
 		if (environmentResolver.cacheMisses != 3 ||
-			replacementEnvironmentStyle.get(StyleProperty.Padding).left != 12.0)
+			replacementEnvironmentStyle.getInsets(StyleProperty.Padding).left != 12.0)
 			return 235;
 		var inherited = new ComputedStyle();
-		inherited.set(StyleProperty.TextColor, Color.rgba(0.7, 0.7, 0.7, 1.0), null);
+		inherited.setColor(StyleProperty.TextColor, Color.rgba(0.7, 0.7, 0.7, 1.0), null);
 		var inheritedChild = new StyleResolver().resolve(new StyleTarget("label"), inherited);
-		if (inheritedChild.get(StyleProperty.TextColor).red != 0.7)
+		if (inheritedChild.getColor(StyleProperty.TextColor).red != 0.7)
 			return 215;
 		var inheritedResolver = new StyleResolver();
 		var inheritedTarget = new StyleTarget("label", "inherited-cache-key");
 		var inheritedFork = inherited.fork();
 		var unchangedFork = inheritedFork.fork();
 		inheritedResolver.resolve(inheritedTarget, inheritedFork);
-		inheritedFork.set(StyleProperty.TextColor, Color.rgba(0.2, 0.2, 0.2, 1.0), null);
+		inheritedFork.setColor(StyleProperty.TextColor, Color.rgba(0.2, 0.2, 0.2, 1.0), null);
 		var changedInherited = inheritedResolver.resolve(inheritedTarget, inheritedFork);
 		var unchangedInherited = inheritedResolver.resolve(inheritedTarget, unchangedFork);
-		if (changedInherited.get(StyleProperty.TextColor).red != 0.2 ||
-			unchangedInherited.get(StyleProperty.TextColor).red != 0.7 ||
+		if (changedInherited.getColor(StyleProperty.TextColor).red != 0.2 ||
+			unchangedInherited.getColor(StyleProperty.TextColor).red != 0.7 ||
 			inheritedResolver.cacheMisses != 2 || inheritedResolver.cacheHits != 1)
 			return 268;
 		var transitionSheet = new StyleSheet("TransitionSheet");
@@ -3283,18 +3283,18 @@ class FrameworkSmoke {
 		transitionTarget = new StyleTarget("button", "transition-key", "transition-id",
 			null, null, StyleState.Hovered);
 		var animatedComputed = transitionResolver.resolve(transitionTarget, null, transitionSheet);
-		if (animatedComputed.get(StyleProperty.Background).red != 0.0 ||
+		if (animatedComputed.getColor(StyleProperty.Background).red != 0.0 ||
 			transitionScheduler.activeCount != 1)
 			return 216;
 		transitionScheduler.advance(0.05);
 		animatedComputed = transitionResolver.resolve(transitionTarget, null, transitionSheet);
-		if (animatedComputed.get(StyleProperty.Background).red <= 0.0 ||
-			animatedComputed.get(StyleProperty.Background).red >= 1.0)
+		if (animatedComputed.getColor(StyleProperty.Background).red <= 0.0 ||
+			animatedComputed.getColor(StyleProperty.Background).red >= 1.0)
 			return 217;
 		transitionScheduler.advance(0.05);
 		animatedComputed = transitionResolver.resolve(transitionTarget, null, transitionSheet);
-		if (animatedComputed.get(StyleProperty.Background).red != 1.0 ||
-			transitionScheduler.activeCount != 0 || normalComputed.get(StyleProperty.Background).red != 0.0 ||
+		if (animatedComputed.getColor(StyleProperty.Background).red != 1.0 ||
+			transitionScheduler.activeCount != 0 || normalComputed.getColor(StyleProperty.Background).red != 0.0 ||
 			transitionResolver.cacheHits != 0 || transitionResolver.cacheMisses != 0)
 			return 218;
 		var effectChain = EffectChain.of([
@@ -3380,7 +3380,7 @@ class FrameworkSmoke {
 		effectTransitionScheduler.advance(0.05);
 		var effectTransitionComputed = effectTransitionResolver.resolve(effectTransitionTarget, null,
 			effectTransitionSheet);
-		var effectTransitionBlur:BlurEffect = cast effectTransitionComputed.get(StyleProperty.Effects).effects[0];
+		var effectTransitionBlur:BlurEffect = cast effectTransitionComputed.getEffects(StyleProperty.Effects).effects[0];
 		if (effectTransitionBlur == null || effectTransitionBlur.sigma != 8.0)
 			return 246;
 		var dropShadow = new DropShadowEffect(0.0, 6.0, 12.0,
@@ -3409,14 +3409,14 @@ class FrameworkSmoke {
 		var effectComputed = new StyleResolver().resolve(effectTarget, null, null, effectSheet);
 		var effectsSource = effectComputed.source(StyleProperty.Effects);
 		var backdropSource = effectComputed.source(StyleProperty.BackdropEffects);
-		if (!effectComputed.get(StyleProperty.Effects).isEqual(effectChain) ||
+		if (!effectComputed.getEffects(StyleProperty.Effects).isEqual(effectChain) ||
 			effectsSource == null || effectsSource.stylesheet != "EffectSheet" ||
 			backdropSource == null || !effectComputed.has(StyleProperty.BackdropEffects))
 			return 243;
 		var emptyEffects = new ComputedStyle();
-		emptyEffects.set(StyleProperty.Effects, EffectChain.empty(), null);
+		emptyEffects.setEffects(StyleProperty.Effects, EffectChain.empty(), null);
 		var changedEffects = new ComputedStyle();
-		changedEffects.set(StyleProperty.Effects, effectChain, null);
+		changedEffects.setEffects(StyleProperty.Effects, effectChain, null);
 		var effectsDiff = StyleDiff.compare(emptyEffects, changedEffects);
 		var effectDescription = "";
 		for (entry in effectComputed.entries())
@@ -3498,17 +3498,17 @@ class FrameworkSmoke {
 		var maskComputed = new StyleResolver().resolve(new StyleTarget("panel", "mask-key"),
 			noMaskParent, noMaskTheme, maskSheet);
 		var maskSource = maskComputed.source(StyleProperty.Mask);
-		if (maskComputed.get(StyleProperty.Mask) == null ||
-			!maskComputed.get(StyleProperty.Mask).isEqual(roundedMask) || maskSource == null ||
+		if (maskComputed.getMask() == null ||
+			!maskComputed.getMask().isEqual(roundedMask) || maskSource == null ||
 			maskSource.stylesheet != "MaskSheet")
 			return 252;
 		var emptyMask = new ComputedStyle();
 		var noMask:Mask = null;
 		var noMaskSource:Null<StyleSource> = null;
-		emptyMask.set(StyleProperty.Mask, noMask, noMaskSource);
+		emptyMask.setMask(noMask, noMaskSource);
 		var changedMask = new ComputedStyle();
 		var typedMask:Mask = roundedMask;
-		changedMask.set(StyleProperty.Mask, typedMask, noMaskSource);
+		changedMask.setMask(typedMask, noMaskSource);
 		var maskDiff = StyleDiff.compare(emptyMask, changedMask);
 		if (!maskDiff.changed || maskDiff.impact != StyleImpact.Composite)
 			return 253;
@@ -3567,14 +3567,14 @@ class FrameworkSmoke {
 		var responsiveEnvironment = new StyleEnvironment(500.0, 800.0);
 		var responsive = new StyleResolver().resolve(transitionTarget, null, null,
 			responsiveSheet, null, responsiveEnvironment);
-		if (responsive.get(StyleProperty.Padding).left != 6.0)
+		if (responsive.getInsets(StyleProperty.Padding).left != 6.0)
 			return 219;
 		responsiveEnvironment.setViewport(800.0, 500.0);
 		responsiveEnvironment.colorScheme = EnvironmentColorScheme.Dark;
 		responsive = new StyleResolver().resolve(transitionTarget, null, null,
 			responsiveSheet, null, responsiveEnvironment);
-		if (responsive.get(StyleProperty.Padding).left != 12.0 ||
-			responsive.get(StyleProperty.Background).red != 0.05)
+		if (responsive.getInsets(StyleProperty.Padding).left != 12.0 ||
+			responsive.getColor(StyleProperty.Background).red != 0.05)
 			return 220;
 		var inheritanceSheet = new StyleSheet("InheritanceSheet");
 		inheritanceSheet.rule(StyleSelector.key("inherit-parent"), [
@@ -3587,8 +3587,8 @@ class FrameworkSmoke {
 		var inheritedTextSource:Null<StyleSource> = inheritedTextNode.computedStyle == null ? null :
 			inheritedTextNode.computedStyle.source(StyleProperty.TextColor);
 		if (inheritedTextNode.computedStyle == null ||
-			inheritedTextNode.computedStyle.get(StyleProperty.TextColor).red != 0.75 ||
-			inheritedTextNode.computedStyle.get(StyleProperty.FontSize) != 22.0 ||
+			inheritedTextNode.computedStyle.getColor(StyleProperty.TextColor).red != 0.75 ||
+			inheritedTextNode.computedStyle.getNumber(StyleProperty.FontSize) != 22.0 ||
 			inheritedTextSource == null || inheritedTextSource.stylesheet != "InheritanceSheet")
 			return 224;
 		context.setStyleSheet(new StyleSheet("Application"));
@@ -3975,8 +3975,8 @@ class FrameworkSmoke {
 			return 80;
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (themedRoot.layout.style.background != theme.buttonBackground ||
-			themedRoot.computedStyle.get(StyleProperty.BorderColor) != theme.tokens.textOnAccent ||
-			themedRoot.computedStyle.get(StyleProperty.BorderWidth) != 1.0)
+			themedRoot.computedStyle.getColor(StyleProperty.BorderColor) != theme.tokens.textOnAccent ||
+			themedRoot.computedStyle.getNumber(StyleProperty.BorderWidth) != 1.0)
 			throw "Focused primary buttons must retain their fill and show a contrasting border";
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, true))
@@ -4088,7 +4088,7 @@ class FrameworkSmoke {
 		var sliderFillSource:Null<StyleSource> = migratedSliderRoot.computedStyle == null ? null :
 			migratedSliderRoot.computedStyle.source(StyleProperty.SliderFillColor);
 		if (migratedSliderRoot.computedStyle == null ||
-			migratedSliderRoot.computedStyle.get(StyleProperty.SliderFillColor).red != 0.91 ||
+			migratedSliderRoot.computedStyle.getColor(StyleProperty.SliderFillColor).red != 0.91 ||
 			sliderFillSource == null || sliderFillSource.stylesheet != "MigratedWidgets" ||
 			migratedSliderRoot.styleType != "slider")
 			return 226;
@@ -4097,7 +4097,7 @@ class FrameworkSmoke {
 		var progressFillSource:Null<StyleSource> = migratedProgressRoot.computedStyle == null ? null :
 			migratedProgressRoot.computedStyle.source(StyleProperty.ProgressFillColor);
 		if (migratedProgressRoot.computedStyle == null ||
-			migratedProgressRoot.computedStyle.get(StyleProperty.ProgressFillColor).green != 0.78 ||
+			migratedProgressRoot.computedStyle.getColor(StyleProperty.ProgressFillColor).green != 0.78 ||
 			progressFillSource == null || progressFillSource.stylesheet != "MigratedWidgets")
 			return 227;
 		var migratedPopupRoot = context.submit(new Popup("migrated-popup", new Text("Popup")),
@@ -4106,7 +4106,7 @@ class FrameworkSmoke {
 		var popupBackgroundSource:Null<StyleSource> = migratedPopupPanel.computedStyle == null ? null :
 			migratedPopupPanel.computedStyle.source(StyleProperty.Background);
 		if (migratedPopupPanel.computedStyle == null ||
-			migratedPopupPanel.computedStyle.get(StyleProperty.Background).red != 0.18 ||
+			migratedPopupPanel.computedStyle.getColor(StyleProperty.Background).red != 0.18 ||
 			popupBackgroundSource == null || popupBackgroundSource.stylesheet != "MigratedWidgets" ||
 			migratedPopupPanel.styleType != "popup-content")
 			return 228;
@@ -4117,7 +4117,7 @@ class FrameworkSmoke {
 		var tooltipBackgroundSource:Null<StyleSource> = migratedTooltipNode.computedStyle == null ? null :
 			migratedTooltipNode.computedStyle.source(StyleProperty.Background);
 		if (migratedTooltipNode.computedStyle == null ||
-			migratedTooltipNode.computedStyle.get(StyleProperty.Background).red != 0.92 ||
+			migratedTooltipNode.computedStyle.getColor(StyleProperty.Background).red != 0.92 ||
 			tooltipBackgroundSource == null || tooltipBackgroundSource.stylesheet != "MigratedWidgets")
 			return 229;
 		context.setStyleSheet(new StyleSheet("Application"));
@@ -4439,8 +4439,8 @@ class FrameworkSmoke {
 			field.enabled = index != 1;
 			var root = context.submit(field, new LayoutFrame(240.0, 40.0));
 			var expected = field.enabled ? theme.tokens.textPrimary : theme.tokens.textDisabled;
-			var foreground:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.TextColor);
-			var background:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.Background);
+			var foreground:Color = root.computedStyle.getColor(haxeon.ui.style.StyleProperty.TextColor);
+			var background:Color = root.computedStyle.getColor(haxeon.ui.style.StyleProperty.Background);
 			var rendered:Color = root.children[0].children[0].layout.textColor;
 			if (foreground == null || background == null || rendered == null ||
 				root.children[0].children[0].layout.visualKind != LayoutVisualKind.Text ||
@@ -4464,7 +4464,7 @@ class FrameworkSmoke {
 			var context = new UiContext(null, fonts, theme);
 			var root = context.submit(new TextField("default-field", "Rename me"),
 				new LayoutFrame(280.0, 48.0));
-			var background:Color = root.computedStyle.get(haxeon.ui.style.StyleProperty.Background);
+			var background:Color = root.computedStyle.getColor(haxeon.ui.style.StyleProperty.Background);
 			var foreground:Color = root.children[0].children[0].layout.textColor;
 			var valid = background != null && foreground != null &&
 				background.red == theme.tokens.surfaceSunken.red &&
@@ -4667,7 +4667,7 @@ class FrameworkSmoke {
 		if (normal == hovered) return false;
 		var before = new ComputedStyle();
 		var decorated = new ComputedStyle();
-		decorated.set(StyleProperty.Decorations, new DecorationChain([
+		decorated.setDecorations(new DecorationChain([
 			new BorderDecoration(Color.fromBytes(255, 0, 0), 2)
 		]), null);
 		node.computedStyle = decorated;
@@ -4778,8 +4778,8 @@ class FrameworkSmoke {
 		var hoveredDecorated = decorationResolver.resolve(decorationTarget, null, null,
 			decorationSheet);
 		var decorationSource = hoveredDecorated.source(StyleProperty.Decorations);
-		if (!normalDecorated.get(StyleProperty.Decorations).isEqual(decorationsA) ||
-			!hoveredDecorated.get(StyleProperty.Decorations).isEqual(decorationsB) ||
+		if (!normalDecorated.getDecorations().isEqual(decorationsA) ||
+			!hoveredDecorated.getDecorations().isEqual(decorationsB) ||
 			decorationSource == null || decorationSource.selector != "panel:hovered" ||
 			StyleDiff.compare(normalDecorated, hoveredDecorated).impact != StyleImpact.Paint)
 			return 261;
@@ -4804,7 +4804,7 @@ class FrameworkSmoke {
 		decorationScheduler.advance(0.05);
 		var midDecorated = decorationTransitionResolver.resolve(decorationTransitionTarget, null, null,
 			decorationTransitionSheet);
-		var midChain:DecorationChain = midDecorated.get(StyleProperty.Decorations);
+		var midChain:DecorationChain = midDecorated.getDecorations();
 		var midGradient:GradientDecoration = cast midChain.decorations[1];
 		if (midGradient == null || Math.abs(midGradient.start.red - 0.5) > 0.00001 ||
 			Math.abs(midGradient.end.green - 0.45) > 0.00001)
@@ -5411,14 +5411,14 @@ class FrameworkSmoke {
 		});
 		var firstItemNode = firstItem;
 		if (firstItemNode == null ||
-			firstItemNode.computedStyle.get(StyleProperty.Background).red !=
+			firstItemNode.computedStyle.getColor(StyleProperty.Background).red !=
 			uiContext.buildContext.theme.tokens.selectionField.red)
 			return false;
 		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		var settledFirst:Null<RenderNode> = settledMenu.find(firstItemNode.id);
 		if (settledFirst == null ||
-			settledFirst.computedStyle.get(StyleProperty.Background).red !=
-			firstItemNode.computedStyle.get(StyleProperty.Background).red)
+			settledFirst.computedStyle.getColor(StyleProperty.Background).red !=
+			firstItemNode.computedStyle.getColor(StyleProperty.Background).red)
 			return false;
 		var sceneNudges = 0;
 		uiContext.commands.register(new Command("scene.nudge", "Nudge scene", function() {
@@ -6853,7 +6853,7 @@ private class DecoratedButtonSmoke implements View {
         var node=new Button("Decorated",null,function(){},"decoration-normalization").build(context);
         if(decorated) {
             var computed=node.computedStyle.copy();
-            computed.set(StyleProperty.Decorations,new DecorationChain([
+            computed.setDecorations(new DecorationChain([
                 new BorderDecoration(Color.fromBytes(255,0,0),2)
             ]),null);
             node.computedStyle=computed;

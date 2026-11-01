@@ -9,6 +9,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
 import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.style.StyleProperty.StylePropertyBase;
 
 /** Deterministic framework/inheritance/theme/application/state/local cascade. */
 class StyleResolver {
@@ -17,11 +18,11 @@ class StyleResolver {
 
 	final frameworkSource:StyleSource;
 	final scheduler:Null<AnimationScheduler>;
-	final animatedValues:Map<String, Dynamic>;
-	final targets:Map<String, Dynamic>;
+	final animatedValues:Map<String, StyleValue>;
+	final targets:Map<String, StyleValue>;
 	final activeAnimations:Map<String, StyleTransitionAnimation>;
 	final cache:Map<Int, Array<StyleResolverCacheEntry>>;
-	final localFingerprints:Map<Int, StyleResolverLocalValue>;
+	final localFingerprints:Map<Int, StyleResolverLocalFingerprint>;
 	final stringHashes:Map<String, Int>;
 	var cacheEntryCount:Int;
 	var cacheHitCount:Int;
@@ -103,7 +104,6 @@ class StyleResolver {
 		var cacheable = !hasTransitions(theme, application);
 		var parentInheritedKey:Null<String> = null;
 		var localStyleKey:Null<String> = null;
-		var localSnapshot:Null<StyleResolverLocalValue> = null;
 		var themeIdentity = theme == null ? -1 : theme.identity;
 		var themeRevision = theme == null ? -1 : theme.revision;
 		var applicationIdentity = application == null ? -1 : application.identity;
@@ -113,12 +113,7 @@ class StyleResolver {
 		var cacheFingerprint = 0;
 		if (cacheable) {
 			parentInheritedKey = parentKey(parent);
-			if (local == null) localStyleKey = "none";
-			else {
-				var fingerprint = localEntry(local);
-				localStyleKey = fingerprint.key;
-				localSnapshot = fingerprint;
-			}
+			localStyleKey = localKey(local);
 			cacheFingerprint = cacheHash(target.selectorHash, target.states,
 				parentInheritedKey, themeIdentity, themeRevision, applicationIdentity,
 				applicationRevision, localStyleKey, environmentIdentity, environmentRevision);
@@ -142,21 +137,22 @@ class StyleResolver {
 		}
 
 		var result = new ComputedStyle();
+		var defaults = StyleValue.defaults();
 		for (property in StyleProperty.all())
-			result.set(property, property.defaultValue, frameworkSource);
+			result.setDeclaration(defaults[property.slot], frameworkSource);
 
 		if (parent != null)
 			for (property in StyleProperty.all())
 				if (property.inherited && parent.has(property))
-					result.set(property, parent.get(property), parent.source(property));
+					result.setDeclaration(parent.declaration(property).copyForRead(), parent.source(property));
 
 		applySheet(result, target, theme, false, "theme", environment);
 		applySheet(result, target, application, false, "application", environment);
 		applySheet(result, target, theme, true, "theme-state", environment);
 		applySheet(result, target, application, true, "application-state", environment);
-		applyLocal(result, local, localSnapshot);
+		applyLocal(result, local);
 		applyTransitions(result, target, theme, application);
-		if (localTextColor != null) result.set(StyleProperty.TextColor, localTextColor, LocalTextSource);
+		if (localTextColor != null) result.setColor(StyleProperty.TextColor, localTextColor, LocalTextSource);
 		if (cacheable) {
 			var bucket = cache.get(cacheFingerprint);
 			if (bucket == null) {
@@ -226,28 +222,25 @@ class StyleResolver {
 		for (property in StyleProperty.all()) {
 			if (!property.inherited)
 				continue;
-			result += property.name + "=" + (parent.has(property) ? "present:" : "absent:") +
-				valueKey(property, parent.get(property)) +
+			var declaration = parent.declaration(property);
+			result += property.name + "=" + (declaration != null ? "present:" : "absent:") +
+				(declaration != null ? declaration : StyleValue.defaults()[property.slot]).key() +
 				"@" + sourceKey(parent.source(property)) + ";";
 		}
 		parent.rememberInheritedKey(result);
 		return result;
 	}
 
-	function localEntry(local:LayoutStyle):StyleResolverLocalValue {
+	function localKey(local:Null<LayoutStyle>):String {
+		if (local == null) return "none";
 		var fingerprint = localFingerprint(local);
 		var cached = localFingerprints.get(fingerprint);
-		if (cached != null && sameLayoutStyle(local, cached.snapshot))
-			return cached;
+		if (cached != null && sameLayoutStyle(local, cached.snapshot)) return cached.key;
 		var key = "local#" + nextLocalFingerprint++;
-		if (localFingerprintCount >= MaxCacheEntries) {
-			localFingerprints.clear();
-			localFingerprintCount = 0;
-		}
-		var entry = new StyleResolverLocalValue(local.copy(), key);
-		localFingerprints.set(fingerprint, entry);
+		if (localFingerprintCount >= MaxCacheEntries) { localFingerprints.clear(); localFingerprintCount = 0; }
+		localFingerprints.set(fingerprint, new StyleResolverLocalFingerprint(local.copy(), key));
 		localFingerprintCount++;
-		return entry;
+		return key;
 	}
 
 	/** Every field, generated from LayoutStyle (haxeon.Structural), so a new field cannot be left out of the cache key. */
@@ -267,38 +260,10 @@ class StyleResolver {
 		return source == null ? "none" : stringKey(source.stylesheet) + "|" + stringKey(source.selector) +
 			"|" + source.rule + "|" + stringKey(source.layer);
 
-	static function valueKey<T>(property:StyleProperty<T>, value:T):String {
-		if (value == null)
-			return "null";
-		return switch property.name {
-			case "background" | "borderColor" | "outlineColor" | "shadowColor" |
-				"textColor" | "progressTrackColor" | "progressFillColor" |
-				"sliderTrackColor" | "sliderFillColor" | "sliderThumbColor":
-				colorKey(cast value);
-			case "width" | "height":
-				axisKey(cast value);
-			case "padding":
-				insetsKey(cast value);
-			case "transform":
-				transformKey(cast value);
-			case "effects" | "backdropEffects":
-				var effects:EffectChain = cast value;
-				effects == null ? "null" : effects.key();
-			case "decorations":
-				var decorations:DecorationChain = cast value;
-				decorations == null ? "null" : decorations.key();
-			case "mask":
-				var mask:Mask = cast value;
-				mask == null ? "null" : mask.describe();
-			default:
-				Std.string(value);
-		};
-	}
 
 	/**
-	 * The value keys below spell out the fields of Color, LayoutAxis, Insets and Transform2D, which a generated key could not
-	 * replace (a hash may collide, and these are compared as text). This lists those fields so a test can require them to be all
-	 * of each class's fields: a new field fails it until the key and this list both name it.
+	 * The typed declaration keys spell out fields of Color, LayoutAxis, Insets and Transform2D. Hashes can collide, so
+	 * these text keys cannot be replaced by a hash alone. A new field fails this check until its key is updated.
 	 */
 	public static function valueKeysComplete():Bool {
 		var colorFields = haxeon.Structural.fieldBit(Color, "red") | haxeon.Structural.fieldBit(Color, "green")
@@ -316,19 +281,6 @@ class StyleResolver {
 			&& transformFields == haxeon.Structural.allFieldsMask(Transform2D);
 	}
 
-	static function colorKey(value:Color):String
-		return value.red + "," + value.green + "," + value.blue + "," + value.alpha;
-
-	static function axisKey(value:LayoutAxis):String
-		return Std.string(value.sizing) + "," + value.value + "," +
-			value.min + "," + value.max + "," + value.growWeight;
-
-	static function insetsKey(value:Insets):String
-		return value.left + "," + value.top + "," + value.right + "," + value.bottom;
-
-	static function transformKey(value:Transform2D):String
-		return value.a + "," + value.b + "," + value.c + "," +
-			value.d + "," + value.tx + "," + value.ty;
 
 	function applySheet(result:ComputedStyle, target:StyleTarget, sheet:Null<StyleSheet>,
 			stateRules:Bool, layer:String, environment:Null<StyleEnvironment>):Void {
@@ -346,7 +298,7 @@ class StyleResolver {
 			var source = new StyleSource(sheet.name, rule.selector.describe(), rule.order, layer);
 			result.recordMatch(source);
 			for (declaration in rule.declarations)
-				result.set(declaration.property, declaration.value, source);
+				declaration.applyTo(result, source);
 		}
 	}
 
@@ -355,7 +307,7 @@ class StyleResolver {
 	/** The LayoutStyle fields the last applyLocal checked: every one, unless a new field has no style property yet. */
 	public static var localFieldsHandled(default, null):Int = 0;
 
-	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>, snapshot:Null<StyleResolverLocalValue>):Void {
+	function applyLocal(result:ComputedStyle, local:Null<LayoutStyle>):Void {
 		if (local == null)
 			return;
 		var source = new StyleSource("local", "widget", -1, "local");
@@ -373,170 +325,146 @@ class StyleResolver {
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "direction");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Direction, local.direction, source);
+			result.setInteger(StyleProperty.Direction, cast local.direction, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignX");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ChildAlignX, local.childAlignX, source);
+			result.setInteger(StyleProperty.ChildAlignX, cast local.childAlignX, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "childAlignY");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ChildAlignY, local.childAlignY, source);
+			result.setInteger(StyleProperty.ChildAlignY, cast local.childAlignY, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "childDistribution");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ChildDistribution, local.childDistribution, source);
+			result.setInteger(StyleProperty.ChildDistribution, cast local.childDistribution, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "positioning");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Positioning, local.positioning, source);
+			result.setInteger(StyleProperty.Positioning, cast local.positioning, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "aspectRatio");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.AspectRatio, local.aspectRatio, source);
+			result.setNumber(StyleProperty.AspectRatio, local.aspectRatio, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "wrapMode");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.WrapMode, local.wrapMode, source);
+			result.setInteger(StyleProperty.WrapMode, cast local.wrapMode, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "rowGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.RowGap, local.rowGap, source);
+			result.setNumber(StyleProperty.RowGap, local.rowGap, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "columnGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ColumnGap, local.columnGap, source);
+			result.setNumber(StyleProperty.ColumnGap, local.columnGap, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "alignSelf");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.AlignSelf, local.alignSelf, source);
+			result.setInteger(StyleProperty.AlignSelf, cast local.alignSelf, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionX");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.PositionX, local.positionX, source);
+			result.setNumber(StyleProperty.PositionX, local.positionX, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "positionY");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.PositionY, local.positionY, source);
+			result.setNumber(StyleProperty.PositionY, local.positionY, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "zIndex");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ZIndex, local.zIndex, source);
+			result.setInteger(StyleProperty.ZIndex, local.zIndex, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "overlay");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Overlay, local.overlay, source);
+			result.setBoolean(StyleProperty.Overlay, local.overlay, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipToParent");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ClipToParent, local.clipToParent, source);
+			result.setBoolean(StyleProperty.ClipToParent, local.clipToParent, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "padding");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			if (snapshot != null && sameInsetsBits(local.padding, snapshot.snapshot.padding))
-				result.setLocalValue(StyleProperty.Padding, snapshot, source);
-			else result.set(StyleProperty.Padding, local.padding, source);
+			result.setInsets(StyleProperty.Padding, local.padding, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "childGap");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ChildGap, local.childGap, source);
+			result.setNumber(StyleProperty.ChildGap, local.childGap, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "background");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			if (snapshot != null && sameColorBits(local.background, snapshot.snapshot.background))
-				result.setLocalValue(StyleProperty.Background, snapshot, source);
-			else result.set(StyleProperty.Background, local.background, source);
+			result.setColor(StyleProperty.Background, local.background, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopLeft");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.RadiusTopLeft, local.radiusTopLeft, source);
+			result.setNumber(StyleProperty.RadiusTopLeft, local.radiusTopLeft, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusTopRight");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.RadiusTopRight, local.radiusTopRight, source);
+			result.setNumber(StyleProperty.RadiusTopRight, local.radiusTopRight, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomRight");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.RadiusBottomRight, local.radiusBottomRight, source);
+			result.setNumber(StyleProperty.RadiusBottomRight, local.radiusBottomRight, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "radiusBottomLeft");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.RadiusBottomLeft, local.radiusBottomLeft, source);
+			result.setNumber(StyleProperty.RadiusBottomLeft, local.radiusBottomLeft, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipHorizontal");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ClipHorizontal, local.clipHorizontal, source);
+			result.setBoolean(StyleProperty.ClipHorizontal, local.clipHorizontal, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "clipVertical");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.ClipVertical, local.clipVertical, source);
+			result.setBoolean(StyleProperty.ClipVertical, local.clipVertical, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "visible");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.Visible, local.visible, source);
+			result.setBoolean(StyleProperty.Visible, local.visible, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "transform");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			if (snapshot != null && sameTransformBits(local.transform, snapshot.snapshot.transform))
-				result.setLocalValue(StyleProperty.Transform, snapshot, source);
-			else result.set(StyleProperty.Transform, local.transform, source);
+			result.setMatrix(StyleProperty.Transform, local.transform, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginX");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.TransformOriginX, local.transformOriginX, source);
+			result.setNumber(StyleProperty.TransformOriginX, local.transformOriginX, source);
 		bit = haxeon.Structural.fieldBit(LayoutStyle, "transformOriginY");
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.set(StyleProperty.TransformOriginY, local.transformOriginY, source);
+			result.setNumber(StyleProperty.TransformOriginY, local.transformOriginY, source);
 			localFieldsHandled = handled;
 	}
 
-	// A cached key may compare signed zero as equal; local snapshots must still retain the exact value observed here.
-	// These field lists are the same lists guarded by valueKeysComplete(). NaN falls back to the original boxed path.
-	static inline function sameFloatBits(left:Float, right:Float):Bool
-		return left == right && (left != 0.0 || 1.0 / left == 1.0 / right);
-	static inline function sameInsetsBits(a:Insets, b:Insets):Bool
-		return sameFloatBits(a.left, b.left) && sameFloatBits(a.top, b.top) &&
-			sameFloatBits(a.right, b.right) && sameFloatBits(a.bottom, b.bottom);
-	static inline function sameColorBits(a:Color, b:Color):Bool
-		return sameFloatBits(a.red, b.red) && sameFloatBits(a.green, b.green) &&
-			sameFloatBits(a.blue, b.blue) && sameFloatBits(a.alpha, b.alpha);
-	static inline function sameTransformBits(a:Transform2D, b:Transform2D):Bool
-		return sameFloatBits(a.a, b.a) && sameFloatBits(a.b, b.b) && sameFloatBits(a.c, b.c) &&
-			sameFloatBits(a.d, b.d) && sameFloatBits(a.tx, b.tx) && sameFloatBits(a.ty, b.ty);
 
 	function applyTransitions(result:ComputedStyle, target:StyleTarget,
 			theme:Null<StyleSheet>, application:Null<StyleSheet>):Void {
-		if (scheduler == null)
-			return;
+		if (scheduler == null) return;
 		for (property in StyleProperty.all()) {
 			var transition = transitionFor(property, theme, application);
-			if (transition == null || property.interpolate == null || !result.has(property))
-				continue;
+			if (transition == null || !property.hasInterpolation || !result.has(property)) continue;
 			var key = animationKey(target, property);
-			var next = result.get(property);
+			var next:StyleValue = result.declaration(property);
 			var previousTarget = targets.get(key);
 			if (!targets.exists(key)) {
 				targets.set(key, next);
 				animatedValues.set(key, next);
-			} else if (!sameValue(property, previousTarget, next)) {
+			} else if (!previousTarget.sameAs(next)) {
 				targets.set(key, next);
-				var current = animatedValues.get(key);
+				var current:StyleValue = animatedValues.get(key);
 				stop(key);
-				var animation = new StyleTransitionAnimation(current, next, transition.duration,
-					transition.easing, property.name,
+				var animation = new StyleTransitionAnimation(current, next, transition.duration, transition.easing,
 					function(value) { animatedValues.set(key, value); },
-					function() { animatedValues.set(key, next); activeAnimations.remove(key); },
-					property.interpolate == null ? null : cast property.interpolate);
+					function() { animatedValues.set(key, next); activeAnimations.remove(key); });
 				activeAnimations.set(key, animation);
 				scheduler.track(animation);
 			}
-			if (animatedValues.exists(key))
-				result.set(property, animatedValues.get(key), result.source(property));
+			if (animatedValues.exists(key)) result.setDeclaration(animatedValues.get(key), result.source(property));
 		}
 	}
 
-	function transitionFor(property:StyleProperty<Dynamic>, theme:Null<StyleSheet>,
+	function transitionFor(property:StylePropertyBase, theme:Null<StyleSheet>,
 			application:Null<StyleSheet>):Null<StyleTransition> {
 		var result = application == null ? null : application.transitionFor(property);
 		return result == null && theme != null ? theme.transitionFor(property) : result;
@@ -544,21 +472,15 @@ class StyleResolver {
 
 	function stop(key:String):Void {
 		var active = activeAnimations.get(key);
-		if (active != null && scheduler != null)
-			scheduler.remove(active);
+		if (active != null && scheduler != null) scheduler.remove(active);
 		activeAnimations.remove(key);
 	}
 
-	static function animationKey(target:StyleTarget, property:StyleProperty<Dynamic>):String {
+	static function animationKey(target:StyleTarget, property:StylePropertyBase):String {
 		var identity = target.id != null ? target.id : target.key != null ? target.key : target.widgetType;
 		return identity + "|" + property.name;
 	}
 
-	static function sameValue(property:StyleProperty<Dynamic>, left:Dynamic, right:Dynamic):Bool {
-		if (left == right)
-			return true;
-		return property.isEqual(left, right);
-	}
 }
 
 class StyleResolverLocalFingerprint {
@@ -569,13 +491,6 @@ class StyleResolverLocalFingerprint {
 		this.snapshot = snapshot;
 		this.key = key;
 	}
-}
-
-/** Internal marker reuses the resolver's existing immutable local-style snapshot. */
-@:allow(haxeon.ui.style.ComputedStyle)
-private class StyleResolverLocalValue extends StyleResolverLocalFingerprint {
-	@:allow(haxeon.ui.style.StyleResolver)
-	function new(snapshot:LayoutStyle, key:String) super(snapshot, key);
 }
 
 /** Collision-checked structural key for a cached computed style. */
