@@ -189,11 +189,14 @@ or the scope re-runs. Panels do not need rewriting when the stage 3 experiment c
 Each stage deletes mechanisms rather than adding them. Each passes the existing gates — UI scripts, every-frame
 retention scenarios, budgets that may only go down, memory runs, compiler suites — before the next starts.
 
-0. **Structs for small values — done.** `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable
-   structural structs, stored inline in `LayoutStyle`. Nullable fields have inline presence flags, eligible temporary
-   values stay scalar, and Wasm GC flattens their fields. See [UI value types](../../packages/ui/docs/VALUE_TYPES.md)
-   for the retained-holder and typed-style designs and measurements. The interaction, tab-matrix and selection-stress
-   censuses allocate none of the five types after setup; their real Dynamic and reflection escapes still box.
+0. **Structs for small values and data records — done.** `Rect`, `Insets`, `Color`, `LayoutAxis`, `Transform2D`,
+   `TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`, `EffectParameter`, `InkOverflow`,
+   `CustomEffectDefinition`, and the app's presentation/telemetry snapshots are structs with declared conformances.
+   Nullable fields use inline presence flags, eligible temporaries stay scalar, and Wasm GC flattens supported fields.
+   `LayoutStyle` remains a class because its measured struct form allocated more. See
+   [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for the alias audit and measurements. The interaction,
+   tab-matrix and selection-stress censuses allocate none of the five geometric value types after setup; genuine Dynamic
+   and reflection escapes still box.
 1. **Signals core under the current API.** `State` and `observe*` become signals and tracked reads; dependency records
    are reusable arrays, not per-frame allocations. `updateQuietly` becomes an error in verify mode when a tracked reader
    exists. Writes to signals or `State` inside a tracking scope throw in debug builds and gates (decision 9). Go: gates

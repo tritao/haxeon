@@ -26,7 +26,7 @@ class ComboBox<T> implements View {
 	public final options:Array<SelectOption<T>>;
 	public var value:T;
 	public var enabled:Bool;
-	public final style:LayoutStyle;
+	public var style:LayoutStyle;
 	public var placeholder:String;
 	public var onChange:T->Void;
 	public var onQueryChange:String->Void;
@@ -51,7 +51,7 @@ class ComboBox<T> implements View {
 		hasChangeHandler = onChange != null;
 		this.onChange = onChange == null ? function(_:T) {} : onChange;
 		usesDefaultStyle = style == null;
-		this.style = usesDefaultStyle ? defaultStyle() : style.copy();
+		this.style = style == null ? defaultStyle() : style;
 		if (this.style.height.sizing == LayoutSizing.Fit)
 			this.style.height = LayoutAxis.fixed(40.0);
 		this.placeholder = placeholder == null || placeholder.length == 0 ? "Search" : placeholder;

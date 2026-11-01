@@ -38,8 +38,8 @@ class TextEditorLayout {
 	public var geometryRevision(default, null):Int = 0;
 	/** Logical/visual row boundaries and vertical placement; unwrapped viewport widths do not change these. */
 	public var visualRowsRevision(default, null):Int = 0;
-	public final textStyle:TextStyle;
-	public final paragraphStyle:ParagraphStyle;
+	public var textStyle:TextStyle;
+	public var paragraphStyle:ParagraphStyle;
 	public var paragraphCount(get, never):Int;
 	/** Supplies sorted, disjoint absolute codepoint ranges for one visible chunk.
 	 * Ranges may extend beyond the requested chunk and are clipped to it.
@@ -74,8 +74,8 @@ class TextEditorLayout {
 		if (width <= 0.0 || textStyle == null || paragraphStyle == null)
 			throw "Editor layout arguments are invalid";
 		this.fonts = fonts;
-		this.textStyle = copyTextStyle(textStyle);
-		this.paragraphStyle = copyParagraphStyle(paragraphStyle);
+		this.textStyle = textStyle;
+		this.paragraphStyle = paragraphStyle;
 		colorRangeProvider = null;
 		decorationProvider = null;
 		paragraphs = [];
@@ -155,14 +155,8 @@ class TextEditorLayout {
 			recomputeMetrics(paragraphStyle.wrap != haxeon.ui.TextWrap.None);
 			return;
 		}
-		textStyle.font = nextTextStyle.font;
-		textStyle.fontSize = nextTextStyle.fontSize;
-		textStyle.letterSpacing = nextTextStyle.letterSpacing;
-		paragraphStyle.wrap = nextParagraphStyle.wrap;
-		paragraphStyle.alignment = nextParagraphStyle.alignment;
-		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
-		paragraphStyle.direction = nextParagraphStyle.direction;
-		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
+		textStyle = nextTextStyle;
+		paragraphStyle = nextParagraphStyle;
 
 		var previous = paragraphs;
 		var reusable = new Map<String, Array<TextEditorParagraphRecord>>();
@@ -1124,12 +1118,6 @@ class TextEditorLayout {
 				return true;
 		return false;
 	}
-
-	static function copyTextStyle(style:TextStyle):TextStyle
-		return new TextStyle(style.fontSize, style.font, style.letterSpacing);
-
-	static function copyParagraphStyle(style:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction, style.tabWidth);
 
 	static inline function clamp(value:Int, low:Int, high:Int):Int
 		return value < low ? low : (value > high ? high : value);

@@ -77,13 +77,12 @@ class Transaction {
 			return 9;
 		fonts.add(fontPath);
 		var textStyle = new TextStyle(18.0);
-		textStyle.letterSpacing = -0.25;
-		var paragraphStyle = new ParagraphStyle();
-		paragraphStyle.wrap = TextWrap.Word;
+		textStyle = textStyle.withLetterSpacing(-0.25);
+		var paragraphStyle = new ParagraphStyle().withWrap(TextWrap.Word);
 		var text = TextLayout.createStyled(fonts, "NativeKit — こんにちは — مرحبا", 220.0,
 			textStyle, paragraphStyle);
-		textStyle.fontSize = 30.0;
-		paragraphStyle.wrap = TextWrap.None;
+		textStyle = textStyle.withFontSize(30.0);
+		paragraphStyle = paragraphStyle.withWrap(TextWrap.None);
 		if (text.textStyle.fontSize != 18.0 || text.textStyle.letterSpacing != -0.25 ||
 			text.paragraphStyle.wrap != TextWrap.Word)
 			return 18;
@@ -92,8 +91,8 @@ class Transaction {
 			TextAlignment.Center, 22.0, TextDirection.Rtl);
 		text.update("Updated — こんにちは — مرحبا", 220.0, updatedTextStyle,
 			updatedParagraphStyle);
-		updatedTextStyle.fontSize = 28.0;
-		updatedParagraphStyle.alignment = TextAlignment.End;
+		updatedTextStyle = updatedTextStyle.withFontSize(28.0);
+		updatedParagraphStyle = updatedParagraphStyle.withAlignment(TextAlignment.End);
 		if (text.textStyle.fontSize != 19.5 || text.textStyle.letterSpacing != -0.5 ||
 			text.paragraphStyle.alignment != TextAlignment.Center ||
 			text.paragraphStyle.lineHeight != 22.0 ||

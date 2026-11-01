@@ -11,18 +11,18 @@ class CustomEffect extends Effect {
 		super(EffectKind.Custom);
 		if (definition == null)
 			throw "Custom effects require a definition";
-		if (parameters == null || parameters.length != definition.parameterTypes.length)
+		if (parameters == null || parameters.length != definition.parameterCount())
 			throw "Custom effect parameter count does not match its definition";
 		this.definition = definition;
 		this.parameters = [];
 		this.components = [];
 		for (index in 0...parameters.length) {
 			var parameter = parameters[index];
-			if (parameter == null || parameter.type != definition.parameterTypes[index])
+			if (parameter == null || parameter.type != definition.parameterTypeAt(index))
 				throw "Custom effect parameter type does not match its definition";
-			this.parameters.push(parameter.copy());
-			for (value in parameter.values)
-				this.components.push(value);
+			this.parameters.push(parameter);
+			for (component in 0...parameter.componentCount)
+				this.components.push(parameter.valueAt(component));
 		}
 	}
 

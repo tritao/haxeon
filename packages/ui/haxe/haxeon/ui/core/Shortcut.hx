@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import Hashable;
 
 /** A normalized key/modifier chord used by application commands. */
-class Shortcut implements Hashable {
+struct Shortcut : Hashable {
 	public final key:Int;
 	public final modifiers:Int;
 
@@ -23,7 +23,7 @@ class Shortcut implements Hashable {
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
 	public function equals(other:Shortcut):Bool
-		return other != null && key == other.key && modifiers == other.modifiers;
+		return key == other.key && modifiers == other.modifiers;
 
 	public function hash():Int
 		return key * 31 + modifiers;

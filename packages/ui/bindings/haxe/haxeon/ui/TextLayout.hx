@@ -7,8 +7,8 @@ import NativeKitUI;
 class TextLayout extends NativeKitUIResource {
 	public var text(default, null):String;
 	public var width(default, null):Float;
-	public final textStyle:TextStyle;
-	public final paragraphStyle:ParagraphStyle;
+	public var textStyle:TextStyle;
+	public var paragraphStyle:ParagraphStyle;
 	// Canonical grapheme geometry is stable until shaping changes. Bound the cache
 	// for standalone long-line layouts as well as editor paragraph chunks.
 	static inline var maximumCachedGraphemes = 8192;
@@ -39,8 +39,8 @@ class TextLayout extends NativeKitUIResource {
 		if (width <= 0.0)
 			throw "Text layout arguments are invalid";
 		var actualText = text == null ? "" : text;
-		var actualTextStyle = textStyle == null ? new TextStyle() : copyTextStyle(textStyle);
-		var actualParagraphStyle = paragraphStyle == null ? new ParagraphStyle() : copyParagraphStyle(paragraphStyle);
+		var actualTextStyle = textStyle == null ? new TextStyle() : textStyle;
+		var actualParagraphStyle = paragraphStyle == null ? new ParagraphStyle() : paragraphStyle;
 		var made = NativeKitUI.nkui_text_layout_create_styled(fonts.nativeHandle(), actualText, width,
 			nativeTextStyle(actualTextStyle), nativeParagraphStyle(actualParagraphStyle));
 		UiResult.check(made.status, "textLayout.create");
@@ -103,21 +103,15 @@ class TextLayout extends NativeKitUIResource {
 		if (newWidth <= 0.0 || style == null || paragraph == null)
 			throw "Text layout update arguments are invalid";
 		var actualText = value == null ? "" : value;
-		var ownedTextStyle = copyTextStyle(style);
-		var ownedParagraphStyle = copyParagraphStyle(paragraph);
+		var ownedTextStyle = style;
+		var ownedParagraphStyle = paragraph;
 		UiResult.check(NativeKitUI.nkui_text_layout_update(nativeHandle(), actualText, newWidth,
 			nativeTextStyle(ownedTextStyle), nativeParagraphStyle(ownedParagraphStyle)), "textLayout.update");
 		clearGraphemeGeometry();
 		text = actualText;
 		width = newWidth;
-		textStyle.font = ownedTextStyle.font;
-		textStyle.fontSize = ownedTextStyle.fontSize;
-		textStyle.letterSpacing = ownedTextStyle.letterSpacing;
-		paragraphStyle.wrap = ownedParagraphStyle.wrap;
-		paragraphStyle.alignment = ownedParagraphStyle.alignment;
-		paragraphStyle.lineHeight = ownedParagraphStyle.lineHeight;
-		paragraphStyle.direction = ownedParagraphStyle.direction;
-		paragraphStyle.tabWidth = ownedParagraphStyle.tabWidth;
+		textStyle = ownedTextStyle;
+		paragraphStyle = ownedParagraphStyle;
 	}
 
 	/** Applies a codepoint replacement to the retained layout. */
@@ -129,12 +123,6 @@ class TextLayout extends NativeKitUIResource {
 		clearGraphemeGeometry();
 		text = nextText;
 	}
-
-	static function copyTextStyle(style:TextStyle):TextStyle
-		return new TextStyle(style.fontSize, style.font, style.letterSpacing);
-
-	static function copyParagraphStyle(style:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(style.wrap, style.alignment, style.lineHeight, style.direction, style.tabWidth);
 
 	static function nativeTextStyle(style:TextStyle):nkui_text_style {
 		var result = new nkui_text_style();

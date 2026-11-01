@@ -488,9 +488,8 @@ class RenderNode {
 	@:allow(haxeon.ui.widgets.text.TextField)
 	function applyTextComponents(text:TextStyle, paragraph:ParagraphStyle, color:Color):RenderNode {
 		layout.textColor = color;
-		var ownText = layout.textStyle, ownParagraph = layout.paragraphStyle;
-		haxeon.Diff.apply(ownText, ownText, text);
-		haxeon.Diff.apply(ownParagraph, ownParagraph, paragraph);
+		layout.textStyle = text;
+		layout.paragraphStyle = paragraph;
 		return this;
 	}
 

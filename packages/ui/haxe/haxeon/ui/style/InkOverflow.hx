@@ -9,7 +9,7 @@ import Hashable;
  * between style and rendering without exposing render targets or GPU state to
  * the Haxe style system.
  */
-class InkOverflow implements Hashable {
+struct InkOverflow : Hashable {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;
@@ -17,9 +17,9 @@ class InkOverflow implements Hashable {
 
 	public function new(left:Float = 0.0, top:Float = 0.0, right:Float = 0.0,
 			bottom:Float = 0.0) {
-		for (value in [left, top, right, bottom])
-			if (!Math.isFinite(value) || value < 0.0)
-				throw "Effect ink overflow must be finite and non-negative";
+		if (!Math.isFinite(left) || left < 0.0 || !Math.isFinite(top) || top < 0.0 ||
+			!Math.isFinite(right) || right < 0.0 || !Math.isFinite(bottom) || bottom < 0.0)
+			throw "Effect ink overflow must be finite and non-negative";
 		this.left = left;
 		this.top = top;
 		this.right = right;
@@ -30,7 +30,7 @@ class InkOverflow implements Hashable {
 		return new InkOverflow();
 
 	/** Adds sequential effect extents. */
-	public function added(other:InkOverflow):InkOverflow {
+	public function added(other:Null<InkOverflow>):InkOverflow {
 		if (other == null)
 			return this;
 		return new InkOverflow(left + other.left, top + other.top,

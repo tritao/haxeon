@@ -1186,18 +1186,15 @@ class RestyleInPlaceTests {
    * the hand-written comparisons and keys that remain must name every field: adding one to a class fails here until they do.
    */
   static function structuralValues():Void {
-    var text = new TextStyle(14.0), changedText = haxeon.Diff.copy(text);
-    check(haxeon.Equality.equals(text, changedText) && haxeon.Diff.mask(text, changedText) == 0, "TextStyle.copy is not equal");
-    changedText.letterSpacing = 0.5;
+    var text = new TextStyle(14.0), changedText = text;
+    check(haxeon.Equality.equals(text, changedText), "TextStyle value copy is not equal");
+    changedText = changedText.withLetterSpacing(0.5);
     check(!haxeon.Equality.equals(text, changedText), "TextStyle equality ignores letter spacing");
-    var paragraph = new ParagraphStyle(), changedParagraph = haxeon.Diff.copy(paragraph);
-    changedParagraph.tabWidth = 4;
+    var paragraph = new ParagraphStyle(), changedParagraph = paragraph;
+    changedParagraph = changedParagraph.withTabWidth(4);
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the tab width");
-    changedParagraph = haxeon.Diff.copy(paragraph);
-    changedParagraph.lineHeight = 20.0;
+    changedParagraph = paragraph.withLineHeight(20.0);
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the line height");
-    check(haxeon.Diff.mask(paragraph, changedParagraph) == haxeon.Diff.bit(ParagraphStyle, "lineHeight"),
-      "ParagraphStyle reports a changed line height as another field");
 
     check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
       && !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)), "Rect equality is wrong");

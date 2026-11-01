@@ -523,8 +523,10 @@ class SettingsTests {
 		check(new Shortcut(UiKey.Comma, UiModifier.Control).label() == "Ctrl+,", "punctuation shows as itself");
 		check(new Shortcut(UiKey.F5).label() == "F5" && new Shortcut(UiKey.Escape).label() == "Esc", "F-keys and named keys");
 		for (shortcut in [save, new Shortcut(UiKey.Comma, UiModifier.Control), new Shortcut(UiKey.F10, UiModifier.Alt),
-			new Shortcut(49, UiModifier.Super), new Shortcut(UiKey.PageDown), new Shortcut(123456, UiModifier.Control)])
-			check(shortcut.equals(Shortcut.parse(shortcut.serialize())), "round trip: " + shortcut.serialize());
+			new Shortcut(49, UiModifier.Super), new Shortcut(UiKey.PageDown), new Shortcut(123456, UiModifier.Control)]) {
+			var parsed = Shortcut.parse(shortcut.serialize());
+			check(parsed != null && shortcut == parsed, "round trip: " + shortcut.serialize());
+		}
 		check(Shortcut.parse("CTRL+S") != null, "parsing ignores case");
 		for (bad in ["", "ctrl+", "hyper+s", "ctrl+nosuchkey", "f0", "key-3", "ctrl+key340"])
 			check(Shortcut.parse(bad) == null, "rejected: " + bad);

@@ -46,8 +46,9 @@ and legacy `@:value class` at the starting revision. That rejected value types c
 compared array and payload-enum fields deeply. The new fieldwise operation accepts those class fields and uses their
 ordinary reference equality; arrays and payload enums now also follow their own `==`. `struct-value-semantics.hx` covers
 ordinary, nested, legacy and native-width value equality; `struct-field-equality.hx` covers the changed field behaviour.
-The other value-copy/map/array/escape fixtures compare scalar fields or absence. No production value declarations occur
-in `src` or `stdlib`; the separate UI migration remains outside this work.
+The other value-copy/map/array/escape fixtures compare scalar fields or absence. At the compiler-conformance checkpoint,
+there were no production value declarations in `src` or `stdlib`; UI value migrations are tracked separately under
+[ADR 0002](adr/0002-reactive-ui-model.md) and [UI value types](../packages/ui/docs/VALUE_TYPES.md).
 
 Checked on 2026-10-29: a `struct` with fields, a constructor and non-virtual methods compiles and runs with copy semantics
 (`var w = v; w.x = 6` leaves `v` alone). Measured per 1,000 operations, against a `class` of the same shape:
@@ -346,12 +347,14 @@ Conformance provides one mechanism for both equality and generic bounds, without
 `derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
 interface methods remain deferred until there is a concrete need.
 
-After an aliasing audit, data-record classes that need no identity can become structs: `LayoutStyle` after the item 3 measurement,
-`TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`, `EffectParameter`, `InkOverflow`,
-`CustomEffectDefinition`, and the app's CNC presentation and telemetry records. The same migration replaces
-field-mask API is `Diff.mask/apply/bit/all`. Future
-ADR 0002 per-field `@Channel(...)` declarations fold into the masks produced by `Diffable`. Current rules are summarized
-in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
+The data-record aliasing audit converted `TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`,
+`EffectParameter`, `InkOverflow`, `CustomEffectDefinition`, and the app's `CncPresentation` and `HobbingTelemetry`
+records to structs with the needed conformances. These values carry configuration, keys or snapshots; callers rely on
+their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
+`LayoutStyle` stays a mutable `Hashable, Diffable` class: its struct prototype boxes at layout-node call sites and
+regresses transition allocations. The census and per-action measurements are recorded in
+[UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
+the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
 ## Nullable structs
 

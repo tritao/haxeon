@@ -1,14 +1,13 @@
 package haxeon.ui;
 
-import Diffable;
 import Hashable;
 import haxeon.ui.FontFamily;
 
 /** Semantic font and inline-spacing inputs shared by all NativeKit text APIs. */
-class TextStyle implements Hashable, Diffable {
-    public var font:FontFamily;
-    public var fontSize:Float;
-    public var letterSpacing:Float;
+struct TextStyle : Hashable {
+    public final font:FontFamily;
+    public final fontSize:Float;
+    public final letterSpacing:Float;
 
     public function new(fontSize:Float = 16.0, font:FontFamily = FontFamily.Default,
             letterSpacing:Float = 0.0) {
@@ -18,4 +17,10 @@ class TextStyle implements Hashable, Diffable {
         this.fontSize = fontSize;
         this.letterSpacing = letterSpacing;
     }
+
+    public function withFontSize(value:Float):TextStyle
+        return new TextStyle(value, font, letterSpacing);
+
+    public function withLetterSpacing(value:Float):TextStyle
+        return new TextStyle(fontSize, font, value);
 }

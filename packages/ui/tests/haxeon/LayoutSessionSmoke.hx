@@ -219,11 +219,12 @@ class LayoutSessionSmoke {
 		if (!rejectsTransaction(repeatedIdRoot)) return 48;
 		var infinity = Math.pow(2.0, 1024.0);
 		var infiniteFontSize = LayoutNode.textNode(90, "font size");
-		infiniteFontSize.textStyle.fontSize = infinity;
+		infiniteFontSize.textStyle = new TextStyle(infinity);
 		var infiniteLetterSpacing = LayoutNode.textNode(91, "letter spacing");
-		infiniteLetterSpacing.textStyle.letterSpacing = -infinity;
+		infiniteLetterSpacing.textStyle = infiniteLetterSpacing.textStyle.withLetterSpacing(-infinity);
 		var infiniteLineHeight = LayoutNode.textNode(92, "line height");
-		infiniteLineHeight.paragraphStyle.lineHeight = infinity;
+		infiniteLineHeight.paragraphStyle = new haxeon.ui.ParagraphStyle(
+			haxeon.ui.TextWrap.WordCharacter, haxeon.ui.TextAlignment.Start, infinity);
 		if (!rejectsTransaction(infiniteFontSize) ||
 			!rejectsTransaction(infiniteLetterSpacing) ||
 			!rejectsTransaction(infiniteLineHeight))

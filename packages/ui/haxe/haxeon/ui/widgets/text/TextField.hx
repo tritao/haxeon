@@ -24,7 +24,6 @@ import haxeon.ui.TextColorRange;
 import haxeon.ui.Transform2D;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
-import haxeon.ui.core.ResolvedTextStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
@@ -146,8 +145,7 @@ class TextField implements View {
 		this.placeholder = null;
 		this.multiline = multiline;
 		this.style = style == null ? defaultStyle(multiline) : style.copy();
-		this.textStyle = textStyle == null ? null :
-			new TextStyle(textStyle.fontSize, textStyle.font, textStyle.letterSpacing);
+		this.textStyle = textStyle;
 		this.textColor = textColor;
 		classes = [];
 		enabled = true;
@@ -187,13 +185,13 @@ class TextField implements View {
 	function buildField(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 			var resolved = context.resolveTextRole(TextRole.Body,
 				TextStyleOverride.fromTextStyle(textStyle));
-			if (textColor != null)
-				resolved = resolved.withTextColor(textColor);
-			// resolveTextRole returns independent typography, so its paragraph can be configured in place.
+			var resolvedTextColor = textColor == null ? resolved.textColor : textColor;
+			// Typography is immutable; replace the complete paragraph value for this field.
 			var paragraph = resolved.paragraphStyle;
-			if (tabWidth != null) paragraph.tabWidth = tabWidth;
-			paragraph.wrap = wrap == null ? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap;
-			var stored:State<TextEditorState> = acquireState(context, id, value, resolved, document);
+			if (tabWidth != null) paragraph = paragraph.withTabWidth(tabWidth);
+			paragraph = paragraph.withWrap(wrap == null
+				? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap);
+			var stored:State<TextEditorState> = acquireState(context, id, value, resolved.textStyle, paragraph, document);
 			var editor:TextEditorState = stored.value;
 			// Quiet update plus a patch request: only this field rebuilds. Falls back to a full state update if it is not self-updating.
 			var refresh = function() {
@@ -220,7 +218,7 @@ class TextField implements View {
 				if (selection.anchor > editor.documentLength() || selection.focus > editor.documentLength())
 					throw "Additional selection is outside the document";
 			}
-			editor.updateStyle(resolved.textStyle, resolved.paragraphStyle);
+			editor.updateStyle(resolved.textStyle, paragraph);
 			editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
 
 			var flags = context.interactionStates.get(id);
@@ -355,18 +353,17 @@ class TextField implements View {
 				textNode.layout.intrinsicContent = editor.renderContent;
 			}
 			// The text node owns this style; it can also serve as the working copy for computed font overrides.
-			var textNodeTextStyle = textNode.layout.textStyle;
-			haxeon.Diff.apply(textNodeTextStyle, textNodeTextStyle, editor.textStyle);
+			var textNodeTextStyle = editor.textStyle;
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			if (textStyle == null && fontSource != null && fontSource.layer != "framework")
-				textNodeTextStyle.fontSize = computed.getNumber(StyleProperty.FontSize);
+				textNodeTextStyle = textNodeTextStyle.withFontSize(computed.getNumber(StyleProperty.FontSize));
 			if (textStyle == null && letterSource != null && letterSource.layer != "framework")
-				textNodeTextStyle.letterSpacing = computed.getNumber(StyleProperty.LetterSpacing);
+				textNodeTextStyle = textNodeTextStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
 			var colorSource = computed.source(StyleProperty.TextColor);
 			var textNodeColor = showsPlaceholder ? context.theme.mutedText :
 				(colorSource != null && colorSource.layer != "framework"
-					? computed.getColor(StyleProperty.TextColor) : resolved.textColor);
+					? computed.getColor(StyleProperty.TextColor) : resolvedTextColor);
 			if (showEllipsis)
 				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
 					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,
@@ -915,15 +912,14 @@ class TextField implements View {
 	}
 
 	static function acquireState(context:BuildContext, id:haxeon.ui.core.WidgetId,
-			value:String, resolved:ResolvedTextStyle,
+			value:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle,
 			document:Null<TextDocument>):State<TextEditorState> {
 		if (context.fonts == null || context.fonts.isDisposed())
 			throw "Text fields require fonts on their build context";
 		var fonts = context.fonts;
 		return context.resourceState(id,
 			function() {
-				return new TextEditorState(cast fonts, value, resolved.textStyle,
-				resolved.paragraphStyle, document);
+				return new TextEditorState(cast fonts, value, textStyle, paragraphStyle, document);
 			},
 			function(editor:TextEditorState) { editor.dispose(); });
 	}

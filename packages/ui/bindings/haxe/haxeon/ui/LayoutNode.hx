@@ -8,13 +8,12 @@ class LayoutNode {
 	public var text:String;
 	public var textColor:Color;
 	/**
-	 * Most nodes never show text, so a node allocates its own text and paragraph style on first use. Anything that reads
-	 * these for every node must use `peekTextStyle` and `peekParagraphStyle`, which allocate nothing.
+	 * Most nodes never show text, so absent values use shared immutable defaults. Reading these properties allocates
+	 * nothing; assigning a complete style stores its value inline in the optional slot.
 	 */
-	public var textStyle(get, never):TextStyle;
-	public var paragraphStyle(get, never):ParagraphStyle;
-	var ownTextStyle:Null<TextStyle> = null;
-	var ownParagraphStyle:Null<ParagraphStyle> = null;
+	public var textStyle(get, set):TextStyle;
+	public var paragraphStyle(get, set):ParagraphStyle;
+	var ownTextStyles:Null<LayoutTextStyles> = null;
 	/** Color is immutable, and the styles below are only ever read: every node without its own starts from these. */
 	static final DefaultTextColor:Color = Color.rgba(1.0, 1.0, 1.0, 1.0);
 	static final DefaultTextStyle:TextStyle = new TextStyle();
@@ -60,44 +59,56 @@ class LayoutNode {
 		children = NoChildren;
 	}
 
-	function get_textStyle():TextStyle {
-		var own = ownTextStyle;
+	function get_textStyle():TextStyle return peekTextStyle();
+
+	function set_textStyle(value:TextStyle):TextStyle {
+		var own = ownTextStyles;
 		if (own == null) {
-			own = new TextStyle();
-			ownTextStyle = own;
+			own = new LayoutTextStyles(DefaultTextStyle, DefaultParagraphStyle);
+			ownTextStyles = own;
 		}
-		return own;
+		own.text = value;
+		return value;
 	}
 
-	function get_paragraphStyle():ParagraphStyle {
-		var own = ownParagraphStyle;
+	function get_paragraphStyle():ParagraphStyle return peekParagraphStyle();
+
+	function set_paragraphStyle(value:ParagraphStyle):ParagraphStyle {
+		var own = ownTextStyles;
 		if (own == null) {
-			own = new ParagraphStyle();
-			ownParagraphStyle = own;
+			own = new LayoutTextStyles(DefaultTextStyle, DefaultParagraphStyle);
+			ownTextStyles = own;
 		}
-		return own;
+		own.paragraph = value;
+		return value;
 	}
 
-	/** Read-only view of the text style: the node's own, or a shared default that must never be changed. Allocates nothing. */
+	/** Text style value: the node's own, or the shared immutable default. Allocates nothing. */
 	public function peekTextStyle():TextStyle {
-		var own = ownTextStyle;
-		return own == null ? DefaultTextStyle : own;
+		var own = ownTextStyles;
+		return own == null ? DefaultTextStyle : own.text;
 	}
 
-	/** Read-only view of the paragraph style: the node's own, or a shared default that must never be changed. Allocates nothing. */
+	/** Paragraph style value: the node's own, or the shared immutable default. Allocates nothing. */
 	public function peekParagraphStyle():ParagraphStyle {
-		var own = ownParagraphStyle;
-		return own == null ? DefaultParagraphStyle : own;
+		var own = ownTextStyles;
+		return own == null ? DefaultParagraphStyle : own.paragraph;
 	}
 
-	/** Copy mutable typography into a comparison prior without allocating default styles for boxes. */
+	/** Copy immutable typography into a comparison prior without allocating default styles for boxes. */
 	public function copyTextStylesTo(target:LayoutNode):Void {
-		if (ownTextStyle == null) target.ownTextStyle = null;
-		else if (target.ownTextStyle == null) target.ownTextStyle = haxeon.Diff.copy(ownTextStyle);
-		else haxeon.Diff.apply(target.ownTextStyle, target.ownTextStyle, ownTextStyle);
-		if (ownParagraphStyle == null) target.ownParagraphStyle = null;
-		else if (target.ownParagraphStyle == null) target.ownParagraphStyle = haxeon.Diff.copy(ownParagraphStyle);
-		else haxeon.Diff.apply(target.ownParagraphStyle, target.ownParagraphStyle, ownParagraphStyle);
+		var own = ownTextStyles;
+		if (own == null) {
+			target.ownTextStyles = null;
+		} else {
+			var targetOwn = target.ownTextStyles;
+			if (targetOwn == null)
+				target.ownTextStyles = new LayoutTextStyles(own.text, own.paragraph);
+			else {
+				targetOwn.text = own.text;
+				targetOwn.paragraph = own.paragraph;
+			}
+		}
 	}
 
 	public function add(child:LayoutNode):LayoutNode {
@@ -129,5 +140,16 @@ class LayoutNode {
 		var node = new LayoutNode(id, LayoutVisualKind.Custom, style);
 		node.intrinsicContent = content;
 		return node;
+	}
+}
+
+/** Lazily allocated because most layout nodes do not carry text. Its immutable values stay inline in this holder. */
+private class LayoutTextStyles {
+	public var text:TextStyle;
+	public var paragraph:ParagraphStyle;
+
+	public function new(text:TextStyle, paragraph:ParagraphStyle) {
+		this.text = text;
+		this.paragraph = paragraph;
 	}
 }

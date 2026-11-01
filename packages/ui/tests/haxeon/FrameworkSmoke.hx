@@ -466,7 +466,7 @@ class FrameworkSmoke {
 		for (line in 0...220)
 			value.add("é🙂 x " + line + "\n");
 		var editor = new TextEditorState(fonts, value.toString());
-		editor.paragraphStyle.lineHeight = 24.0;
+		editor.paragraphStyle = editor.paragraphStyle.withLineHeight(24.0);
 		editor.updateLayout(400.0);
 		var paintedRanges:Array<Int> = [];
 		editor.layout.colorRangeProvider = function(start, end) {
@@ -503,7 +503,7 @@ class FrameworkSmoke {
 			if (!editor.replace(start, end, inserted))
 				throw "newline chunk replacement was ignored";
 			var expected = new TextEditorState(fonts, editor.text);
-			expected.paragraphStyle.lineHeight = 24.0;
+			expected.paragraphStyle = expected.paragraphStyle.withLineHeight(24.0);
 			expected.updateLayout(400.0);
 			var actualSize = editor.layout.measure();
 			var expectedSize = expected.layout.measure();
@@ -762,14 +762,18 @@ class FrameworkSmoke {
 			new TextStyle(16.0), new ParagraphStyle(TextWrap.WordCharacter), Color.fromBytes(0, 0, 0));
 		var mergedTypography = originalTypography.merge(new TextStyleOverride(null, 20.0, null,
 			TextWrap.None, null, 0.0));
-		originalTypography.textStyle.fontSize = 30.0;
-		originalTypography.paragraphStyle.wrap = TextWrap.Word;
+		var replacementText = originalTypography.textStyle.withFontSize(30.0);
+		var replacementParagraph = originalTypography.paragraphStyle.withWrap(TextWrap.Word);
+		if (replacementText.fontSize != 30.0 || replacementParagraph.wrap != TextWrap.Word)
+			throw "Immutable typography replacements were not constructed";
 		if (mergedTypography.textStyle.fontSize != 20.0 || mergedTypography.paragraphStyle.wrap != TextWrap.None ||
 			mergedTypography.paragraphStyle.lineHeight != 0.0)
 			throw "Merged typography must preserve overrides and own its style values";
 		var copiedTypography = mergedTypography.merge(null);
-		copiedTypography.textStyle.fontSize = 24.0;
-		copiedTypography.paragraphStyle.wrap = TextWrap.Word;
+		var copiedText = copiedTypography.textStyle.withFontSize(24.0);
+		var copiedParagraph = copiedTypography.paragraphStyle.withWrap(TextWrap.Word);
+		if (copiedText.fontSize != 24.0 || copiedParagraph.wrap != TextWrap.Word)
+			throw "Typography replacements were not constructed";
 		if (mergedTypography.textStyle.fontSize != 20.0 || mergedTypography.paragraphStyle.wrap != TextWrap.None)
 			throw "Typography copies must remain independent";
 		var clickSequence = new haxeon.ui.core.PointerClickSequence();

@@ -132,8 +132,9 @@ class Dialog implements View {
 					node.computedStyle = headingComputed;
 					node.layout.text = title;
 					node.layout.textColor = headingComputed.getColor(haxeon.ui.style.StyleProperty.TextColor);
-					node.layout.textStyle.fontSize = headingComputed.getNumber(haxeon.ui.style.StyleProperty.FontSize);
-					node.layout.textStyle.letterSpacing = headingComputed.getNumber(haxeon.ui.style.StyleProperty.LetterSpacing);
+					node.layout.textStyle = node.layout.textStyle
+						.withFontSize(headingComputed.getNumber(haxeon.ui.style.StyleProperty.FontSize))
+						.withLetterSpacing(headingComputed.getNumber(haxeon.ui.style.StyleProperty.LetterSpacing));
 					node.semantics = new Semantics(AccessibilityRole.Heading, title);
 					return node;
 				}));

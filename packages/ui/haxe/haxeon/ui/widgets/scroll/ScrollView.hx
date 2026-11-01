@@ -267,22 +267,24 @@ class ScrollView implements View {
 		var offset = function() return vertical ? controller.offsetY : controller.offsetX;
 		var extent = function() return vertical ? controller.viewportHeight : controller.viewportWidth;
 		var jump = function(value:Float) return vertical ? controller.jumpTo(controller.offsetX, value) : controller.jumpTo(value, controller.offsetY);
-		var travel = function() return Math.max(0.0, vertical ? trackStyle.height.value - thumbStyle.height.value : trackStyle.width.value - thumbStyle.width.value);
+		var travel = function() return Math.max(0.0, vertical ? track.layout.style.height.value - thumb.layout.style.height.value : track.layout.style.width.value - thumb.layout.style.width.value);
 		var updatePaint = function() {
 			var opacity = visibility.opacity;
 			var active = visibility.hovered || visibility.dragging || visibility.focused;
 			var color = context.theme.tokens.textSecondary;
-			trackStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (active ? 0.06 : 0.0));
+			var nextTrackStyle = track.layout.style;
+			nextTrackStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (active ? 0.06 : 0.0));
+			var nextVisualStyle = visual.layout.style;
 			if (vertical) {
-				visualStyle.width = LayoutAxis.fixed(active ? 10.0 : 8.0);
-				visualStyle.height = LayoutAxis.grow();
-				visualStyle.positionX = active ? 1.0 : 2.0;
+				nextVisualStyle.width = LayoutAxis.fixed(active ? 10.0 : 8.0);
+				nextVisualStyle.height = LayoutAxis.grow();
+				nextVisualStyle.positionX = active ? 1.0 : 2.0;
 			} else {
-				visualStyle.height = LayoutAxis.fixed(active ? 10.0 : 8.0);
-				visualStyle.width = LayoutAxis.grow();
-				visualStyle.positionY = active ? 1.0 : 2.0;
+				nextVisualStyle.height = LayoutAxis.fixed(active ? 10.0 : 8.0);
+				nextVisualStyle.width = LayoutAxis.grow();
+				nextVisualStyle.positionY = active ? 1.0 : 2.0;
 			}
-			visualStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
+			nextVisualStyle.background = Color.rgba(color.red, color.green, color.blue, color.alpha * opacity * (visibility.dragging ? 0.85 : active ? 0.65 : 0.4));
 			thumb.hitTestSelf = opacity > 0;
 		};
 		// Fades and hover change only these nodes, so they are edited in place: the frame lays them out and paints them
@@ -338,7 +340,7 @@ class ScrollView implements View {
 			var geometry:ResolvedLayoutItem = cast track.resolved;
 			var local = geometry.viewportToLayout(event.x, event.y);
 			var pointer = vertical ? local.y - geometry.y : local.x - geometry.x;
-			var thumbExtent = vertical ? thumbStyle.height.value : thumbStyle.width.value;
+			var thumbExtent = vertical ? thumb.layout.style.height.value : thumb.layout.style.width.value;
 			jump(travel() <= 0 ? 0 : Math.max(0.0, Math.min(travel(), pointer - thumbExtent * 0.5)) / travel() * maximum());
 			event.preventDefault();
 		});

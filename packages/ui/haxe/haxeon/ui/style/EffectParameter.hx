@@ -4,61 +4,71 @@ import Equatable;
 import haxeon.ui.Color;
 
 /** One typed value supplied to a custom effect registration. */
-class EffectParameter implements Equatable {
+struct EffectParameter : Equatable {
 	public final type:EffectParameterType;
-	public final values:Array<Float>;
+	public final componentCount:Int;
+	public final x:Float;
+	public final y:Float;
+	public final z:Float;
+	public final w:Float;
 
-	private function new(type:EffectParameterType, values:Array<Float>) {
-		if (type == null || values == null || values.length != EffectParameterTypeUtil.componentCount(type))
+	private function new(type:EffectParameterType, x:Float, y:Float, z:Float, w:Float) {
+		var count = type == null ? 0 : EffectParameterTypeUtil.componentCount(type);
+		if (count == 0)
 			throw "Custom effect parameter shape does not match its type";
 		this.type = type;
-		this.values = [];
-		for (value in values)
-			this.values.push(Effect.requireFinite(value,
-				"Custom effect parameters must be finite"));
+		this.componentCount = count;
+		this.x = Effect.requireFinite(x, "Custom effect parameters must be finite");
+		this.y = count > 1 ? Effect.requireFinite(y, "Custom effect parameters must be finite") : 0.0;
+		this.z = count > 2 ? Effect.requireFinite(z, "Custom effect parameters must be finite") : 0.0;
+		this.w = count > 3 ? Effect.requireFinite(w, "Custom effect parameters must be finite") : 0.0;
 	}
 
 	public static function scalar(value:Float):EffectParameter
-		return new EffectParameter(EffectParameterType.Float, [value]);
+		return new EffectParameter(EffectParameterType.Float, value, 0.0, 0.0, 0.0);
 
 	public static function vec2(x:Float, y:Float):EffectParameter
-		return new EffectParameter(EffectParameterType.Vec2, [x, y]);
+		return new EffectParameter(EffectParameterType.Vec2, x, y, 0.0, 0.0);
 
 	public static function vec4(x:Float, y:Float, z:Float, w:Float):EffectParameter
-		return new EffectParameter(EffectParameterType.Vec4, [x, y, z, w]);
+		return new EffectParameter(EffectParameterType.Vec4, x, y, z, w);
 
 	public static function color(value:Color):EffectParameter {
 		if (value == null)
 			throw "Custom color parameters require a color";
 		return new EffectParameter(EffectParameterType.Color,
-			[value.red, value.green, value.blue, value.alpha]);
+			value.red, value.green, value.blue, value.alpha);
 	}
 
-	public function copy():EffectParameter
-		return new EffectParameter(type, values);
+	public function valueAt(index:Int):Float
+		return switch index {
+			case 0: x;
+			case 1 if (componentCount > 1): y;
+			case 2 if (componentCount > 2): z;
+			case 3 if (componentCount > 3): w;
+			default: throw "Custom effect parameter component is out of range";
+		};
 
-	public function equals(other:EffectParameter):Bool {
-		if (other == null || type != other.type || values.length != other.values.length)
-			return false;
-		for (index in 0...values.length)
-			if (values[index] != other.values[index])
-				return false;
-		return true;
-	}
+	public function equals(other:EffectParameter):Bool
+		return type == other.type && componentCount == other.componentCount &&
+			x == other.x && y == other.y && z == other.z && w == other.w;
 
-	public function interpolate(other:EffectParameter, amount:Float):EffectParameter {
-		if (other == null || type != other.type || values.length != other.values.length)
-			return amount < 0.5 ? copy() : other == null ? copy() : other.copy();
-		var result:Array<Float> = [];
-		for (index in 0...values.length)
-			result.push(Effect.interpolateFloat(values[index], other.values[index], amount));
-		return new EffectParameter(type, result);
+	public function interpolate(other:Null<EffectParameter>, amount:Float):EffectParameter {
+		if (other == null)
+			return this;
+		if (type != other.type)
+			return amount < 0.5 ? this : other;
+		return new EffectParameter(type,
+			Effect.interpolateFloat(x, other.x, amount),
+			Effect.interpolateFloat(y, other.y, amount),
+			Effect.interpolateFloat(z, other.z, amount),
+			Effect.interpolateFloat(w, other.w, amount));
 	}
 
 	public function describe():String {
 		var text:Array<String> = [];
-		for (value in values)
-			text.push(Std.string(value));
+		for (index in 0...componentCount)
+			text.push(Std.string(valueAt(index)));
 		return Std.string(type) + "(" + text.join(",") + ")";
 	}
 }

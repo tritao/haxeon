@@ -772,15 +772,15 @@ private class DockDropTargetView implements View {
 
 /** Bounded measured-width cache for tab labels during repeated workspace builds. */
 /** What a tab label's measured width depends on; hashed and compared by field, so a new style field joins the key. */
-private class DockTextWidthKey implements Hashable {
-	public var label:String;
-	public var textStyle:TextStyle;
-	public var paragraphStyle:ParagraphStyle;
+private struct DockTextWidthKey : Hashable {
+	public final label:String;
+	public final textStyle:TextStyle;
+	public final paragraphStyle:ParagraphStyle;
 
-	public function new() {
-		label = "";
-		textStyle = new TextStyle();
-		paragraphStyle = new ParagraphStyle();
+	public function new(label:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle) {
+		this.label = label;
+		this.textStyle = textStyle;
+		this.paragraphStyle = paragraphStyle;
 	}
 }
 
@@ -798,14 +798,11 @@ private class DockTextWidthCache {
 	static inline var MAX_ENTRIES:Int = 128;
 	var fonts:Null<FontCollection>;
 	final buckets:Map<Int, Array<DockTextWidthEntry>>;
-	/** Holds the label and styles being looked up, so a hit allocates nothing; entries keep copies. */
-	final scratch:DockTextWidthKey;
 	var entryCount:Int;
 
 	public function new() {
 		fonts = null;
 		buckets = new Map();
-		scratch = new DockTextWidthKey();
 		entryCount = 0;
 	}
 
@@ -816,14 +813,12 @@ private class DockTextWidthCache {
 			buckets.clear();
 			entryCount = 0;
 		}
-		scratch.label = label;
-		scratch.textStyle = textStyle;
-		scratch.paragraphStyle = paragraphStyle;
-		var hash = haxeon.Hashing.hash(scratch);
+		var key = new DockTextWidthKey(label, textStyle, paragraphStyle);
+		var hash = haxeon.Hashing.hash(key);
 		var bucket = buckets.get(hash);
 		if (bucket != null)
 			for (index in 0...bucket.length)
-				if (bucket[index].key == scratch)
+				if (bucket[index].key == key)
 					return bucket[index].width;
 		var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
 		var width = layout.measure().width;
@@ -833,10 +828,6 @@ private class DockTextWidthCache {
 			entryCount = 0;
 			bucket = null;
 		}
-		var key = new DockTextWidthKey();
-		key.label = label;
-		key.textStyle = haxeon.Diff.copy(textStyle);
-		key.paragraphStyle = haxeon.Diff.copy(paragraphStyle);
 		if (bucket == null) {
 			bucket = [];
 			buckets.set(hash, bucket);

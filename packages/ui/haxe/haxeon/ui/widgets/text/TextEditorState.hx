@@ -54,8 +54,8 @@ class TextEditorState implements SemanticsValueSource {
 	var surroundingWindow:Null<TextInputWindow>;
 	var surroundingRevision:Int = -1;
 	var surroundingDocument:Null<TextDocument>;
-	public final textStyle:TextStyle;
-	public final paragraphStyle:ParagraphStyle;
+	public var textStyle:TextStyle;
+	public var paragraphStyle:ParagraphStyle;
 	/** Cached conversions between document code points, UTF-8 bytes and UTF-16 units. */
 	var offsets:TextDocument;
 	/** The document and its revision that `semanticsRevision` last counted. */
@@ -147,8 +147,8 @@ class TextEditorState implements SemanticsValueSource {
 			throw "Text editor requires a live font collection";
 		var initialText = text == null ? "" : text;
 		offsets = document == null ? new TextDocument(initialText) : document;
-		this.textStyle = copyTextStyle(textStyle == null ? new TextStyle() : textStyle);
-		this.paragraphStyle = copyParagraphStyle(paragraphStyle == null ? new ParagraphStyle() : paragraphStyle);
+		this.textStyle = textStyle == null ? new TextStyle() : textStyle;
+		this.paragraphStyle = paragraphStyle == null ? new ParagraphStyle() : paragraphStyle;
 		var end = offsets.codepointCount;
 		selectionStart = end;
 		selectionEnd = end;
@@ -298,14 +298,8 @@ class TextEditorState implements SemanticsValueSource {
 			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		if (!changed)
 			return false;
-		textStyle.font = nextTextStyle.font;
-		textStyle.fontSize = nextTextStyle.fontSize;
-		textStyle.letterSpacing = nextTextStyle.letterSpacing;
-		paragraphStyle.wrap = nextParagraphStyle.wrap;
-		paragraphStyle.alignment = nextParagraphStyle.alignment;
-		paragraphStyle.lineHeight = nextParagraphStyle.lineHeight;
-		paragraphStyle.direction = nextParagraphStyle.direction;
-		paragraphStyle.tabWidth = nextParagraphStyle.tabWidth;
+		textStyle = nextTextStyle;
+		paragraphStyle = nextParagraphStyle;
 		layout.updateDocument(offsets, Math.max(1.0, lastLayoutWidth), textStyle, paragraphStyle);
 		renderMeasurement.invalidate();
 		lastLayoutRevision = offsets.revision;
@@ -1070,12 +1064,6 @@ class TextEditorState implements SemanticsValueSource {
 		}
 		return semanticsRevision;
 	}
-
-	static function copyTextStyle(value:TextStyle):TextStyle
-		return new TextStyle(value.fontSize, value.font, value.letterSpacing);
-
-	static function copyParagraphStyle(value:ParagraphStyle):ParagraphStyle
-		return new ParagraphStyle(value.wrap, value.alignment, value.lineHeight, value.direction, value.tabWidth);
 
 	static inline function clamp(value:Int, minimum:Int, maximum:Int):Int
 		return value < minimum ? minimum : value > maximum ? maximum : value;
