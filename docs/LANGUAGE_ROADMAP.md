@@ -49,7 +49,24 @@ payload inline, as `Null<S>` stores its presence flag; `Null<S>` is the one-case
 scalar flow, and belongs with flat structs ([STRUCTS.md](STRUCTS.md) stages 2–3). Candidates: `Paint`, sizing modes,
 effects.
 
+### Resource cleanup
+
+Deterministic release is layered by need rather than solved with one mechanism:
+
+1. **Scoped cleanup.** `defer` runs a statement at scope exit, and a scoped binding over a `Disposable` conformance
+   (`scoped var file = File.open(path);`, spelled differently from Haxe's `using` for static extensions) disposes the
+   value when the scope ends, including on exceptions. This covers locks, files, profiler scopes and temporary native
+   buffers, which is most resource code, as C# `using`, Java try-with-resources and Python `with` do.
+2. **Owner scopes.** UI-held resources (GPU textures and buffers, subscriptions) register cleanup with their reactive
+   scope and are released on unmount ([ADR 0002](adr/0002-reactive-ui-model.md) decision 2). No language feature.
+3. **Move-only types,** below, only where a mistake corrupts memory rather than leaks: native memory and GPU handles
+   passed between owners.
+
+Finalizers are not used for resources: their timing is nondeterministic.
+
 ### Move-only types and parameter ownership
+
+Deferred until layers 1 and 2 above leave real bugs in practice.
 
 Structs that cannot be copied, only moved, with cleanup that runs when their owner ends (Swift `~Copyable` with
 `borrowing`/`consuming` parameters; Rust ownership). They suit native resources (GPU buffers and textures, native-memory
@@ -68,7 +85,6 @@ flat node store (ADR 0002 decision 4) would be one. Decide with that prototype.
 Check each against what Haxeon already supports before designing it.
 
 - **`if let` / `guard let`:** unwrap an optional, including `Null<S>`, and narrow in one step.
-- **`defer`:** run cleanup at scope exit; pairs with move-only resources and profiler scopes.
 - **Default interface methods:** static extensions cover most uses; add on demand.
 - **Serialization by conformance:** express STRUCTS.md's descriptors and the [MessagePack](MESSAGEPACK.md) attributes as
   a conformance (`: Codable`), consistent with `Hashable`, `Diffable` and `Observable`.
@@ -83,7 +99,10 @@ Check each against what Haxeon already supports before designing it.
   and hard to optimize. Cross-cutting concerns use declared mechanisms (`Observable`, `Diffable`, the profiler pass,
   verify mode).
 - **Actors and structured concurrency:** revisit if simulation work becomes multithreaded.
-- **Reference counting and `deinit` on classes:** deterministic cleanup belongs on move-only structs.
+- **Reference counting** (Swift ARC) instead of the tracing GC: cycles leak without manual `weak` links, every pointer
+  copy costs a retain/release unless a large ownership optimizer removes it, and Wasm GC uses the host's tracing
+  collector. Deterministic cleanup comes from the resource layers above; GC cost is addressed by allocation-free values
+  and, if pauses ever matter, generational or incremental collection in HashLink.
 
 ## Order
 
@@ -92,5 +111,7 @@ Check each against what Haxeon already supports before designing it.
 3. `Observable` (ADR 0002 stage 1b).
 4. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
-6. Move-only types and `inout`, with native memory and the node store prototype.
-7. Smaller conveniences when a concrete use appears.
+6. Scoped cleanup (`defer`, `Disposable` scoped bindings).
+7. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
+   leave real bugs.
+8. Smaller conveniences when a concrete use appears.
