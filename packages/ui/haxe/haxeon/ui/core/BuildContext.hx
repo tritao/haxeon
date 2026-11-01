@@ -494,6 +494,12 @@ class BuildContext {
 		retainUpdatingState(entry);
 	}
 
+	/**
+	 * Called with the root of each rebuilt subtree once a patch has put it in the tree. A patch builds outside the view, so a view
+	 * wrapper that moves nodes after building (TooltipOverlayHost lifts tooltips) uses this to do the same for what the patch made.
+	 */
+	public var onPatched:Null<RenderNode->Void> = null;
+
 	/** Rebuilds the pending self-updating widgets and reconciles them with the retained tree; runs after beginFrame, before the root builds. */
 	public function applyPatches(?topology:RenderTreeTopology):Void {
 		if (pendingPatches.length == 0)
@@ -547,6 +553,8 @@ class BuildContext {
 			scope = savedScope;
 			styleParent = savedParent;
 			textStyleStack = savedStack;
+			var patched = onPatched;
+			if (patched != null && entry.root != null) patched(entry.root);
 		}
 	}
 
