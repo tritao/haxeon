@@ -495,18 +495,18 @@ class EventDispatcher {
 		while (index >= common) {
 			setState(previous[index], StyleState.Hovered, false);
 			if (pathHasHandler(previous, index, UiEventKind.HoverLeave))
-				dispatchPath(previous.slice(0, index + 1),
+				dispatchPath(previous,
 					new UiEvent(UiEventKind.HoverLeave, previous[index].id, x, y,
-						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
+						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId), index);
 			index--;
 		}
 		for (index in common...path.length)
 			{
 			setState(path[index], StyleState.Hovered, true);
 			if (pathHasHandler(path, index, UiEventKind.HoverEnter))
-				dispatchPath(path.slice(0, index + 1),
+				dispatchPath(path,
 					new UiEvent(UiEventKind.HoverEnter, path[index].id, x, y,
-						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId));
+						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId), index);
 			}
 		hoverPaths.set(pointerId, path);
 	}
@@ -660,13 +660,14 @@ class EventDispatcher {
 		return path.length == 0 ? null : path[path.length - 1];
 	}
 
-	function dispatchPath(path:Array<RenderNode>, event:UiEvent):Void {
-		if (path.length == 0)
+	function dispatchPath(path:Array<RenderNode>, event:UiEvent, lastInclusive:Int = -1):Void {
+		var length = lastInclusive < 0 ? path.length : lastInclusive + 1;
+		if (length == 0)
 			return;
 		var clickProbe = event.kind == UiEventKind.Click ? pointerUpProbe : null;
 		var clickStarted = clickProbe == null ? 0.0 : Sys.time();
 		event.phase = "capture";
-		for (index in 0...(path.length - 1)) {
+		for (index in 0...(length - 1)) {
 			event.setCurrentTarget(path[index]);
 			path[index].invoke(event);
 			if (event.propagationStopped)
@@ -677,7 +678,7 @@ class EventDispatcher {
 			clickProbe("clickCaptureSeconds", now - clickStarted);
 			clickStarted = now;
 		}
-		var targetIndex = path.length - 1;
+		var targetIndex = length - 1;
 		event.phase = "target";
 		event.setCurrentTarget(path[targetIndex]);
 		path[targetIndex].invoke(event);

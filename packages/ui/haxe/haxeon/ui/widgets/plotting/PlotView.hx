@@ -155,11 +155,11 @@ class PlotView implements View {
 private class PlotPaintWatch {
 	var model:PlotModel;
 	var node:Null<RenderNode>;
-	final effect:haxeon.ui.core.Effect;
+	final effect:haxeon.reactive.Effect;
 
 	public function new(model:PlotModel) {
 		this.model = model;
-		effect = new haxeon.ui.core.Effect(function() {
+		effect = new haxeon.reactive.Effect(function() {
 			this.model.trackPaintData();
 			var current = this.node;
 			if (current != null) RenderNode.latest(current).invalidatePaint();

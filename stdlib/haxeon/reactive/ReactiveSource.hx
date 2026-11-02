@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
@@ -28,11 +28,11 @@ class ReactiveSource {
 	/** Version of the dependency represented by one edge. Ordinary sources have a single version. */
 	public function versionAt(fieldBit:Int):Int return version;
 
-	@:allow(haxeon.ui.core.ReactiveRuntime)
+	@:allow(haxeon.reactive.ReactiveRuntime)
 	function recordRead():Void
 		ReactiveRuntime.track(this);
 
-	@:allow(haxeon.ui.core.ReactiveDependencySet)
+	@:allow(haxeon.reactive.ReactiveDependencySet)
 	function subscribe(edge:ReactiveEdge):Void {
 		edge.sourcePrevious = null;
 		edge.sourceNext = observerHead;
@@ -40,7 +40,7 @@ class ReactiveSource {
 		observerHead = edge;
 	}
 
-	@:allow(haxeon.ui.core.ReactiveDependencySet)
+	@:allow(haxeon.reactive.ReactiveDependencySet)
 	function unsubscribe(edge:ReactiveEdge):Void {
 		if (edge.sourcePrevious == null)
 			observerHead = edge.sourceNext;
@@ -51,8 +51,8 @@ class ReactiveSource {
 		edge.sourceNext = null;
 	}
 
-	@:allow(haxeon.ui.core.ReactiveDependencySet)
-	@:allow(haxeon.ui.core.Signal)
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	@:allow(haxeon.reactive.Signal)
 	function bumpVersion():Void
 		version = version == 0x7fffffff ? 1 : version + 1;
 

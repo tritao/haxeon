@@ -1,6 +1,6 @@
-import haxeon.ui.core.Effect;
-import haxeon.ui.core.ReactiveRuntime;
-import haxeon.ui.core.Signal;
+import haxeon.reactive.Effect;
+import haxeon.reactive.ReactiveRuntime;
+import haxeon.reactive.Signal;
 
 struct ValueRecord : Equatable {
 	public final value:Int;
@@ -102,7 +102,7 @@ function main():Int {
 		fresh.initialize(6);
 		freshEffectValue = fresh.value;
 	});
-	var freshDerived = new haxeon.ui.core.Derived<Int>(function() {
+	var freshDerived = new haxeon.reactive.Derived<Int>(function() {
 		var fresh = new FreshModel();
 		fresh.initialize(7);
 		return fresh.value;
@@ -112,7 +112,7 @@ function main():Int {
 		fresh.update(6);
 		freshSignalEffectValue = fresh.value;
 	});
-	var freshSignalDerived = new haxeon.ui.core.Derived<Int>(function() {
+	var freshSignalDerived = new haxeon.reactive.Derived<Int>(function() {
 		var fresh = new Signal<Int>(1);
 		fresh.update(7);
 		return fresh.value;

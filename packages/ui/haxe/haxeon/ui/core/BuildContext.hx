@@ -1,5 +1,8 @@
 package haxeon.ui.core;
 
+import haxeon.reactive.Derived;
+import haxeon.reactive.ReactiveRuntime;
+
 import haxeon.platform.Surface;
 
 import haxeon.ui.FontCollection;

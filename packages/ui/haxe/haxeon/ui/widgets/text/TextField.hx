@@ -909,6 +909,8 @@ class TextField implements View {
 			document:Null<TextDocument>):State<TextEditorState> {
 		if (context.fonts == null || context.fonts.isDisposed())
 			throw "Text fields require fonts on their build context";
+		if (context.stateStore.contains(id))
+			return context.existingState(id);
 		var fonts = context.fonts;
 		return context.resourceState(id,
 			function() {

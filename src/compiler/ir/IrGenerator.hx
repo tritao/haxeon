@@ -72,8 +72,8 @@ class IrGenerator {
 	static var observableAccessSerial = 0;
 	static var observableConstructorInitialization = false;
 	static inline final ObservableStateField:String = "$haxeonObservableState";
-	static inline final ObservableSourceClass:String = "haxeon.ui.core.ObservableSource";
-	static inline final ReactiveRuntimeClass:String = "haxeon.ui.core.ReactiveRuntime";
+	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
+	static inline final ReactiveRuntimeClass:String = "haxeon.reactive.ReactiveRuntime";
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {

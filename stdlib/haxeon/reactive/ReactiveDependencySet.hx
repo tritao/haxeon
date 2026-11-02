@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** Reusable dependency edges for a derived value, effect or retained computation. */
 class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector {

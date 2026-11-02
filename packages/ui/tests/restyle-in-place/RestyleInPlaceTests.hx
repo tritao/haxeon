@@ -15,7 +15,7 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RetainedView;
-import haxeon.ui.core.Signal;
+import haxeon.reactive.Signal;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.Key;
@@ -1014,7 +1014,7 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 600);
     ui.buildContext.environment.reducedMotion = true;
     ui.verifyRetentionEvery = 1;
-    var controller = new ScrollController(), inputs = new ListInputs(480), selected = new haxeon.ui.core.Signal<Int>(-1), notifications = 0;
+    var controller = new ScrollController(), inputs = new ListInputs(480), selected = new haxeon.reactive.Signal<Int>(-1), notifications = 0;
     var view:View = new RetainedView("resolved-list", context -> {
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();

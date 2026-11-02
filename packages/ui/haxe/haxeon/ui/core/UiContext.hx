@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.reactive.ReactiveRuntime;
+
 import haxeon.ui.debug.RenderCost;
 
 import haxeon.platform.Surface as PlatformSurface;
@@ -97,6 +99,15 @@ class UiContext {
 	var retainedHitTestProvider:Null<Float->Float->Array<RenderNode>> = null;
 	/** The dispatcher treats paths as immutable; reuse one while all of its node identities still match. */
 	var retainedHitPath:Null<Array<RenderNode>> = null;
+	/** Reuse the resolved-node visitor and counters across submissions. */
+	final visitResolvedNode:RenderNode->Void;
+	var visitResolved:Array<ResolvedLayoutItem>;
+	var visitMissing = false;
+	var visitMissingNode:Null<RenderNode>;
+	var visitNodeCount = 0;
+	var visitMountedHash = 0;
+	var visitGeometryChanged = 0;
+	var visitGeometryReused = 0;
 	var disposed:Bool;
 	final stalePaintNodes:Array<Int> = [];
 	var customCanvases:Map<Int, Canvas>;
@@ -134,6 +145,7 @@ class UiContext {
 	public var platformCoordinateScale:Float = 1.0;
 
 	public function new(?session:LayoutSession, ?fonts:FontCollection, ?theme:Theme) {
+		visitResolvedNode = collectResolvedNode;
 		this.session = session == null ? LayoutSession.create() : session;
 		stateStore = new StateStore();
 		clipboard = new ClipboardService();
@@ -402,6 +414,34 @@ class UiContext {
 		return out.toString();
 	}
 
+	function collectResolvedNode(node:RenderNode):Void {
+		submittedNodes.push(node);
+		visitNodeCount++;
+		visitMountedHash = visitMountedHash * 31 + node.id.value;
+		// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
+		var position = resolvedById.get(node.layout.id);
+		var resolved:Array<ResolvedLayoutItem> = cast visitResolved;
+		var item = position < 0 ? null : resolved[position];
+		if (item == null) {
+			visitMissing = true;
+			if (visitMissingNode == null) visitMissingNode = node;
+			return;
+		}
+		var previous = previousNodesById.get(node.id.value);
+		var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
+		var geometryChanged = previousResolved == null || !sameGeometry(previousResolved, item);
+		if (!geometryChanged && previousResolved != null) {
+			item = previousResolved;
+			visitGeometryReused++;
+		} else
+			visitGeometryChanged++;
+		// Resolved callbacks still run when geometry is retained.
+		node.setResolved(item);
+		if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom || node.cachePolicy != CachePolicy.None)
+			submittedPaintNodes.push(node);
+		nextTopology.append(node);
+	}
+
 	function submitInternal(frame:LayoutFrame, cacheKey:Null<String>, build:Void->View,
 			reconcileNewFocus:Bool = true, buildFeedbackPass:Int = 0):RenderNode {
 		var submitStartedAt = Sys.time();
@@ -523,10 +563,7 @@ class UiContext {
 		}
 		layoutChanges.clear();
 		diagnosticStage = 6;
-		var missing = false;
-		var missingNode:Null<RenderNode> = null;
 		var nodeCount = 0;
-		// Which nodes are mounted, in tree order, for the key caches' pruning.
 		var mountedHash = 0;
 		var resolvedGeometryChangedNodes = 0;
 		var resolvedGeometryReusedNodes = 0;
@@ -536,43 +573,25 @@ class UiContext {
 			resolvedById.clear();
 			for (index in 0...resolved.length)
 				resolvedById.set(resolved[index].id, index);
-			missing = false;
-			missingNode = null;
-			nodeCount = 0;
-			mountedHash = 0;
-			resolvedGeometryChangedNodes = 0;
-			resolvedGeometryReusedNodes = 0;
+			visitMissing = false;
+			visitMissingNode = null;
+			visitNodeCount = 0;
+			visitMountedHash = 0;
+			visitGeometryChanged = 0;
+			visitGeometryReused = 0;
 			diagnosticStage = 7;
 			submittedNodes.resize(0);
 			submittedPaintNodes.resize(0);
 			nextTopology.clear();
-			next.walk(function(node) {
-				submittedNodes.push(node);
-				nodeCount++;
-				mountedHash = mountedHash * 31 + node.id.value;
-				// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
-				var position = resolvedById.get(node.layout.id);
-				var item = position < 0 ? null : resolved[position];
-				if (item == null) {
-					missing = true;
-					if (missingNode == null) missingNode = node;
-					return;
-				}
-				var previous = previousById.get(node.id.value);
-				var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
-				var geometryChanged = previousResolved == null || !sameGeometry(previousResolved, item);
-				if (!geometryChanged && previousResolved != null) {
-					item = previousResolved;
-					resolvedGeometryReusedNodes++;
-				} else
-					resolvedGeometryChangedNodes++;
-				// Resolved callbacks still run when geometry is retained.
-				node.setResolved(item);
-				if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom || node.cachePolicy != CachePolicy.None)
-					submittedPaintNodes.push(node);
-				nextTopology.append(node);
-			});
-			if (missing) {
+			visitResolved = resolved;
+			next.walk(visitResolvedNode);
+			visitResolved = null;
+			nodeCount = visitNodeCount;
+			mountedHash = visitMountedHash;
+			resolvedGeometryChangedNodes = visitGeometryChanged;
+			resolvedGeometryReusedNodes = visitGeometryReused;
+			if (visitMissing) {
+				var missingNode = visitMissingNode;
 				diagnosticStage = 8;
 				throw "Native layout did not return geometry for render node " +
 					Std.string(missingNode == null ? -1 : missingNode.id.value) + " (" +

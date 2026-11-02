@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** One lazily allocated dependency source shared by every observable field on an object. */
 class ObservableSource extends ReactiveSource {

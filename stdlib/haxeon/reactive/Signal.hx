@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** Mutable reactive value. Reads track; equal writes do not invalidate readers. */
 class Signal<T> extends ReactiveSource {

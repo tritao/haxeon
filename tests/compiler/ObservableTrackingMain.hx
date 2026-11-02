@@ -10,9 +10,9 @@ class ObservableTrackingMain {
 			compiler.update("Observable.hx", "interface Observable {}\n");
 			compiler.update("Equatable.hx", "interface Equatable {}\n");
 			compiler.update("Tracked.hx", "interface Tracked extends Observable {}\n");
-			compiler.update("haxeon/ui/core/ReactiveRuntime.hx", runtimeSource());
-			compiler.update("haxeon/ui/core/ObservableProbe.hx", probeSource());
-			compiler.update("haxeon/ui/core/ObservableSource.hx", sourceSource());
+			compiler.update("haxeon/reactive/ReactiveRuntime.hx", runtimeSource());
+			compiler.update("haxeon/reactive/ObservableProbe.hx", probeSource());
+			compiler.update("haxeon/reactive/ObservableSource.hx", sourceSource());
 			compiler.update("Main.hx", programSource());
 			compiler.configure(inlineEnabled ? "observable-inline-on" : "observable-inline-off", "test",
 				["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
@@ -35,7 +35,7 @@ class ObservableTrackingMain {
 	}
 
 	static function runtimeSource():String
-		return 'package haxeon.ui.core;\n'
+		return 'package haxeon.reactive;\n'
 			+ 'class ReactiveRuntime { public static var tracking:Bool = false; '
 			+ 'public static function isTracking():Bool return tracking; '
 			+ 'public static function createObservableSource(fieldCount:Int):ObservableSource return new ObservableSource(fieldCount); '
@@ -43,14 +43,14 @@ class ObservableTrackingMain {
 			+ 'return tracking && source != null && source.hasFieldReaders(bit); }\n';
 
 	static function probeSource():String
-		return 'package haxeon.ui.core;\n'
+		return 'package haxeon.reactive;\n'
 			+ 'class ObservableProbe { public static var created:Int = 0; public static var readCount:Int = 0; '
 			+ 'public static var readMask:Int = 0; public static var writeCount:Int = 0; public static var writeMask:Int = 0; '
 			+ 'public static function read(bit:Int):Void { readCount++; readMask = readMask | (1 << bit); } '
 			+ 'public static function write(bit:Int):Void { writeCount++; writeMask = writeMask | (1 << bit); } }\n';
 
 	static function sourceSource():String
-		return 'package haxeon.ui.core;\n'
+		return 'package haxeon.reactive;\n'
 			+ 'class ObservableSource { var readers:Array<Bool>; public function new(fieldCount:Int) { readers = []; '
 			+ 'while (readers.length < fieldCount) readers.push(false); ObservableProbe.created++; } '
 			+ 'public function recordFieldRead(bit:Int):Void { ObservableProbe.read(bit); readers[bit] = true; } '
@@ -58,7 +58,7 @@ class ObservableTrackingMain {
 			+ 'public function invalidateField(bit:Int):Void ObservableProbe.write(bit); }\n';
 
 	static function programSource():String
-		return 'import haxeon.ui.core.ReactiveRuntime; import haxeon.ui.core.ObservableProbe; '
+		return 'import haxeon.reactive.ReactiveRuntime; import haxeon.reactive.ObservableProbe; '
 			+ 'class Part implements Equatable { public var value:Int; public function new(value:Int) this.value = value; '
 			+ 'public function equals(other:Part):Bool return value % 10 == other.value % 10; } '
 			+ 'class BaseModel implements Observable { public var baseValue:Int; public function new(value:Int) baseValue = value; } '

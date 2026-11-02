@@ -14,7 +14,7 @@ import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.core.RetainedView;
-import haxeon.ui.core.Signal;
+import haxeon.reactive.Signal;
 
 private class Items implements TreeViewModel {
   public function new() {}

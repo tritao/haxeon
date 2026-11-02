@@ -331,7 +331,7 @@ class IrProgramAssembler {
 				if (IrGenerator.observableStateOwner(classDecl.name) == classDecl.name)
 					fields.push({
 						name: "$haxeonObservableState",
-						type: IrGenerator.lowerType(TInstance(NominalKind.Class, "haxeon.ui.core.ObservableSource", []))
+						type: IrGenerator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
 					});
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)

@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.reactive.Signal;
+
 /** Stable signal handle for one value in a UiContext's persistent state store. */
 class State<T> extends Signal<T> {
 	final store:StateStore;

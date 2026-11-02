@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** A tracked computation or build that records reactive sources it reads. */
 interface ReactiveCollector {

@@ -1,5 +1,8 @@
 package haxeon.ui.core;
 
+import haxeon.reactive.ReactiveDependencySet;
+import haxeon.reactive.ReactiveRuntime;
+
 /** Reusable tracked field and signal dependencies owned by a retained computation. */
 class Dependencies extends ReactiveDependencySet {
 	var invalidationContext:Null<BuildContext>;

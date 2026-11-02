@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** Single-threaded tracking state shared by signals, derived values, effects and UI builds. */
 class ReactiveRuntime {
@@ -17,8 +17,8 @@ class ReactiveRuntime {
 	public static function createObservableSource(fieldCount:Int):ObservableSource
 		return new ObservableSource(fieldCount);
 
-	@:allow(haxeon.ui.core.Dependencies)
-	static function changed():Void
+	/** Publishes a change from an external retained computation. */
+	public static function changed():Void
 		version = version == 0x7fffffff ? 1 : version + 1;
 
 	public static function withTracking<T>(collector:ReactiveCollector, run:Void->T):T {
@@ -72,13 +72,13 @@ class ReactiveRuntime {
 		}
 	}
 
-	@:allow(haxeon.ui.core.ReactiveSource)
+	@:allow(haxeon.reactive.ReactiveSource)
 	static function track(source:ReactiveSource):Void {
 		if (current != null)
 			current.track(source);
 	}
 
-	@:allow(haxeon.ui.core.ObservableSource)
+	@:allow(haxeon.reactive.ObservableSource)
 	static function trackField(source:ReactiveSource, fieldBit:Int):Void {
 		if (current != null)
 			current.trackField(source, fieldBit);
@@ -95,7 +95,7 @@ class ReactiveRuntime {
 	public static function observableWriteBlocked(source:Null<ObservableSource>, fieldBit:Int):Bool
 		return trackingDepth > 0 && source != null && source.hasFieldReaders(fieldBit);
 
-	@:allow(haxeon.ui.core.Effect)
+	@:allow(haxeon.reactive.Effect)
 	static function enqueue(effect:Effect):Void {
 		if (!effect.pending && !effect.disposed) {
 			effect.pending = true;

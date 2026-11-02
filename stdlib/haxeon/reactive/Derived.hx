@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** Lazily recomputed value whose version changes only when its output changes. */
 class Derived<T> extends ReactiveDependencySet {

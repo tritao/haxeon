@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.reactive.ReactiveRuntime;
+
 import haxeon.ui.debug.RenderCost;
 
 import haxeon.ui.Color;

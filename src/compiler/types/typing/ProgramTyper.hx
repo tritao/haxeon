@@ -469,8 +469,8 @@ class ProgramTyper {
 		// Observable field access is generated after typing. Its per-object source is
 		// therefore an implicit module dependency even when user code imports none of
 		// the reactive runtime classes.
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.ui.core.ObservableSource");
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.ui.core.ReactiveRuntime");
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ObservableSource");
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ReactiveRuntime");
 		if (isValue || isNativeValue)
 			BodyTyper.fail("E1025", 'Observable conformance is only supported on classes with identity: "${classDecl.name}"', classDecl.span);
 		if (classDecl.base != null) {

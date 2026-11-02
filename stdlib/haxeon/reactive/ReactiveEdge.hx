@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** One reusable source-to-reader dependency link. */
 class ReactiveEdge {

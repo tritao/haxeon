@@ -215,7 +215,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    retained derived enabled/checked result, so a context replacement that leaves the result unchanged does not rebuild
    the button. `State.updateQuietly`,
    `observe*`, root polling and plain-read validation are removed. The owned revision-adapter models were migrated and
-   their adapter counters deleted. The dependency primitives live in Haxeon's stdlib under `haxeon.ui.core`, so a
+   their adapter counters deleted. The dependency primitives live in Haxeon's stdlib under `haxeon.reactive`, so a
    non-UI model can implement compiler-known `Observable` without importing the UI package. Typing adds the generated
    `ObservableSource` and `ReactiveRuntime` dependencies to that model's source module; otherwise a generic method can
    reach IR generation without its object layout or runtime calls. The combined allocation table records the item 2
@@ -279,15 +279,15 @@ these per-action HashLink allocation medians in KiB. The item 2 column is the sa
 
 | Action | Item 2 | Combined |
 | --- | ---: | ---: |
-| console → telemetry | 75.4 | 74.6 |
+| console → telemetry | 75.4 | 74.5 |
 | hierarchy → sensors | 118.2 | 112.6 |
-| sensors → hierarchy | 82.2 | 80.2 |
-| telemetry → console | 95.3 | 93.0 |
-| hover away / enter / field / inside / other | 15.0 / 0.5 / 13.5 / 0.5 / 10.0 | 14.1 / 0.5 / 12.9 / 0.5 / 10.0 |
-| idle / idle focused / scroll inspector | 0.2 / 0.2 / 21.3 | 0.2 / 0.2 / 21.3 |
-| type backspace / character | 16.3 / 16.2 | 16.3 / 16.3 |
+| sensors → hierarchy | 82.2 | 78.6 |
+| telemetry → console | 95.3 | 92.9 |
+| hover away / enter / field / inside / other | 15.0 / 0.5 / 13.5 / 0.5 / 10.0 | 13.6 / 0.5 / 12.4 / 0.5 / 10.0 |
+| idle / idle focused / scroll inspector | 0.2 / 0.2 / 21.3 | 0.2 / 0.2 / 21.2 |
+| type backspace / character | 16.3 / 16.2 | 16.2 / 16.1 |
 
-The 30-cycle selection-stress census fell from 403,157 allocations across 832 types to 343,967 across 755 types;
+The 30-cycle selection-stress census fell from 403,157 allocations across 832 types to 342,872 across 747 types;
 the current capture was run without profiler sampling. A direct census measured 17,120 bytes per backspace before the
 last TextField cleanup, 16 above the item 2 baseline of 17,104. The final rebuilt app measured 16,704 bytes per
 backspace and 16,664 bytes per character. Each rebuild had supplied document length both through the optional
@@ -296,6 +296,28 @@ census found exactly 1,000 `i32` boxes (16,000 bytes) for the optional argument 
 supplied the length. The isolated app suite, nine retention scenarios, budget and headless memory gates passed. The
 shared checkout could not compile because another session's uncommitted machinekit constructor call has the wrong
 argument type; the isolated worktree used the committed machinekit tree and the same Haxeon and app changes.
+
+The follow-up moved the stdlib primitives to `haxeon.reactive`, reopened already initialized text-editor resources
+without constructing their factories, and reused the resolved-node visitor. Hover dispatch now passes a prefix length
+instead of copying paths for enter and leave events. A same-machine 60-cycle direct allocation capture measured character
+typing at 16,504 bytes before and 16,496 bytes after; the earlier 16.2 → 16.3 KiB table entry was a real increase before
+these changes, rather than rounding alone. The corresponding backspace medians were 16,536 and 16,544 bytes, and
+hover-other medians were 10,168 and 10,200 bytes. Those last two differences remain below the 0.1 KiB reporting
+precision; the prescribed 30-cycle budget medians above are equal or lower for every action. The final Wasm GC Showcase
+medians over three 120-frame runs per scenario were 5,896 full, 5,894 static, 5,896 text-heavy and 12,835 editing objects,
+matching the saved paired baseline.
+
+The headless memory gate was compared in three complete invocations per tree, nine 500-cycle captures each, using the
+item 2 Haxeon commit `281c9422` with its matching pre-signals app commit `5fb040624` as the baseline. The first
+100-cycle RSS window had a 31.09 MiB median on the baseline (29.69–31.41) and 30.94 MiB on the combined tree
+(28.59–31.09). The second window was higher on the combined tree: 6.88 MiB median (0.31–8.12) versus 4.69 MiB
+(3.75–6.72). One combined capture crossed the unchanged consecutive-window limit by 0.12 MiB; the baseline had no
+failures. The later windows were stable: 0.78 / 4.53 MiB median on the baseline and 0.78 / 4.84 MiB on the combined
+tree. The combined profile bytecode is 98 MiB versus 89 MiB at item 2, and the new reactive dependency graph and
+Observable accessors expand one-time code and subscription warm-up; the later flat windows and stable retained counts
+show no continuing growth. This is a real warm-up increase, not a passing retry or a pre-existing gate flake. The
+threshold was not raised. A full gate invocation passed twice in the paired run and one capture failed in the other;
+the remaining memory-gate flakiness is reported as a limitation of this checkpoint.
 
 The selection-stress investigation did not reproduce the reported stall after roughly 40 cycles. The current 60-cycle
 run completed (median selection frame about 3.0 ms, p95 3.2 ms); the item 2 60-action capture also completed, with a

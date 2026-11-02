@@ -1,4 +1,4 @@
-package haxeon.ui.core;
+package haxeon.reactive;
 
 /** A side effect that reruns once after a source it read actually changes. */
 class Effect extends ReactiveDependencySet {
@@ -15,7 +15,7 @@ class Effect extends ReactiveDependencySet {
 		run();
 	}
 
-	@:allow(haxeon.ui.core.ReactiveRuntime)
+	@:allow(haxeon.reactive.ReactiveRuntime)
 	public function run():Void {
 		if (disposed || hasRun && !dirty) return;
 		runBody();
