@@ -1121,9 +1121,12 @@ class BodyTyper {
 						storageType = session.representation.enumStorageType(info.typeParameters, parameter);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
-							var constantName = enumAbstractPatternConstant(abstractName, binding);
+							var constantName = enumAbstractPatternConstant(abstractName, binding), owner = context.lexicalOwner,
+								staticField = owner == null ? null : findStaticFieldNullable(owner, binding),
+								inlineField = staticField == null ? null : inlineConstantResolver.resolve(staticField.owner, binding, bindingSpan);
 							if (binding == "_") {} else if (constantName != null
 								|| binding.indexOf(".") >= 0
+								|| inlineField != null
 								|| enumLiteralPattern(parameterType, binding)) {
 								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
 							} else {

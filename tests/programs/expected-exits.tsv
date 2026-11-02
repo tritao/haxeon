@@ -436,3 +436,4 @@ observable-generic-runtime	42
 struct-managed-nullable-narrow	42
 reactive-thread-isolation	42
 reactive-owner-thread	42
+enum-inline-constant-pattern	42
