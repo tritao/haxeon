@@ -51,6 +51,7 @@ class TestCatalog {
 		"AllocationReportMain",
 		"GenericDynamicArgumentMain",
 		"GenericStructFunctionMain",
+		"MemberModuleShadowMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",

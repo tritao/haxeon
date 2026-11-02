@@ -184,6 +184,7 @@ optional-argument-forwarding	42
 default-parameter-inference	42
 generic-functions	42
 generic-struct-functions	42
+member-module-shadow	42
 generic-abstract	42
 bounded-generic	42
 generic-class	42

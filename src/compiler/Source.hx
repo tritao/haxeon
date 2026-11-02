@@ -144,7 +144,7 @@ class SourceSpan {
 	/** Parser-recorded qualification for a variable or named call reference. */
 	public final isBareReference:Bool;
 
-	/** Original named-call path before import expansion; introduced package roots are not value bindings. */
+	/** Original reference path before module or import expansion; introduced package roots are not value bindings. */
 	public final referenceName:Null<String>;
 
 	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String) {

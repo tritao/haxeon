@@ -427,10 +427,10 @@ class ModuleCanonicalizer {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_): e;
 			case Variable(name, span):
-				var imported = importedReference(name, locals, aliases);
-				if (imported != null) Variable(imported,
-					span); else if (name.indexOf(".") < 0 && locals.get(name) == true) Variable(module == entry
-					&& name == "main" ? "main" : module + "." + name, span); else e;
+				var imported = importedReference(name, locals, aliases), resolved = imported != null ? imported
+					: name.indexOf(".") < 0 && locals.get(name) == true ? (module == entry && name == "main" ? "main" : module + "." + name) : name;
+				resolved == name ? e : Variable(resolved, new compiler.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
+					span.referenceName == null ? name : span.referenceName));
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
 					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases);
@@ -518,7 +518,7 @@ class ModuleCanonicalizer {
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
 						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
-				], imported == null || imported == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
+				], resolved == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
 					s.referenceName == null ? name : s.referenceName));
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
 			case ClosureCall(callee, args, s):

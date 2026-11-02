@@ -613,17 +613,17 @@ requestAnimationFrame runs varied with frame intervals, so the fixed-time compar
 
 The editor's per-action HashLink allocation medians, in KiB, were:
 
-| Action | Baseline | Inline arrays |
-| --- | ---: | ---: |
-| hierarchy → sensors | 114.6 | 112.6 |
-| sensors → hierarchy | 80.1 | 78.6 |
-| console → telemetry | 74.5 | 74.5 |
-| telemetry → console | 92.9 | 92.9 |
-| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 |
-| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
-| scroll inspector | 21.2 | 21.2 |
-| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 |
-| type character / backspace | 16.1 / 16.6 | 16.1 / 16.1 |
+| Action | Baseline | Inline arrays | Current compiler |
+| --- | ---: | ---: | ---: |
+| hierarchy → sensors | 114.6 | 112.6 | 112.6 |
+| sensors → hierarchy | 80.1 | 78.6 | 78.4 |
+| console → telemetry | 74.5 | 74.5 | 74.5 |
+| telemetry → console | 92.9 | 92.9 | 92.9 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 | 0.5 / 0.5 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
+| scroll inspector | 21.2 | 21.2 | 21.2 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 | 0.2 / 0.2 |
+| type character / backspace | 16.1 / 16.6 | 16.1 / 16.1 | 16.1 / 16.2 |
 
 The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
 

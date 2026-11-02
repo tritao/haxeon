@@ -1472,6 +1472,12 @@ class BodyTyper {
 	}
 
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
+		var sourceName = span.isBareReference ? span.referenceName : null, owner = context.lexicalOwner, thisType = scope.resolve("this");
+		if (name != "this" && sourceName != null && sourceName.indexOf(".") < 0 && owner != null
+			&& (findStaticFieldNullable(owner, sourceName) != null || thisType != null && findFieldType(thisType, sourceName) != null
+				|| lexicalMethod(sourceName) != null))
+			name = sourceName;
 		span = referencePrefixSpan(name, span);
 		var type = scope.resolve(name);
 		return if (type != null) {

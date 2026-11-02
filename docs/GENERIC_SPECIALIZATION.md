@@ -35,6 +35,18 @@ growth was respectively [30.00, 3.75, 0.78, 4.84] and [30.16, 3.75, 0.78, 4.84] 
 were [30.47, 4.06, 0.94, 4.69] MiB; all captures passed the memory gate. The 0.16 MiB first-window difference against
 the paired control is retained here rather than treated as a demonstrated improvement.
 
+The subsequent member-resolution fix measured 342,353 selection-stress allocations and Wasm GC Showcase counts of
+5,896, 5,894, 5,896 and 12,835. Its nine paired headless runs had median RSS windows [30.16, 3.59, 0.78, 4.84] MiB for
+the preceding compiler and [30.31, 3.59, 0.94, 4.84] MiB for the fix. All runs passed the memory gate, but the first and
+third medians are 0.15–0.16 MiB higher in that pairing. A matching 30-cycle allocation census recorded 149,815
+allocations in both builds, with the fixed build using 32 more bytes, all in byte buffers; sampled stacks include the
+benchmark's JSON timeline serialization. This does not determine the cause of the RSS differences. The original
+baseline windows were [30.47, 4.06, 0.94, 4.69] MiB, and the fourth window was 4.84 MiB in both paired builds.
+An additional matched 30-cycle census sampled every allocation stack: it recorded 149,816/149,817 allocations and
+11,980,904/11,981,160 bytes for control/fix. All differences in byte-buffer stacks were in the benchmark's own
+`JsonPrinter` or `HeadlessEditorProfile` string construction; the net 256-byte difference came from serialization.
+This isolates the observed allocation difference in that capture, but does not prove the cause of the RSS medians.
+
 The policy label and representation signature are both part of the generated function name and persisted registry key. Changing policy therefore creates a new identity instead of reusing an incompatible body.
 
 Generated bodies are owned by the module declaring their generic origin. Incremental compilation regenerates them when a generic body changes and prunes them when that owner becomes unreachable or the specialization is no longer requested.

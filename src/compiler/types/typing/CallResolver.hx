@@ -892,6 +892,14 @@ class CallResolver {
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
 			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
+		// A canonical module function is only the fallback for a bare source call; members still win.
+		var sourceName = span.isBareReference ? span.referenceName : null;
+		if (sourceName != null && sourceName.indexOf(".") < 0 && sourceName != name) {
+			var fieldCall = typeImplicitFunctionFieldCall(sourceName, arguments, span, scope);
+			if (fieldCall != null) return fieldCall;
+			var methodCall = resolveImplicitMethodCall(sourceName, arguments, span, scope, expectedType);
+			if (methodCall != null) return methodCall;
+		}
 		if (scope.resolve(name) != null) {
 			// A local function runs a known body, so a call through it only clears facts when that body might.
 			var local = scope.localFunction(name);
