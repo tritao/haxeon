@@ -66,6 +66,7 @@ class TestCatalog {
 		"ExternMain",
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",
+		"QualifiedMainTypeMain",
 		"SemanticDependencyCollectorMain",
 		"ResolvedSemanticDependencyMain",
 		"InvalidationMain",

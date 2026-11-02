@@ -808,6 +808,13 @@ class SemanticAssembly {
 			canonicalName = ModuleCanonicalizer.qualifiedTypeName(packageName, declarationName);
 		target.set(sourceName, canonicalName);
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
+		// Haxe also permits spelling a module's primary declaration as Module.Module.
+		// Keep the source spelling distinct from its canonical package-level type name.
+		if (compiler.QualifiedName.last(moduleName) == declarationName) {
+			var explicitPrimary = moduleName + "." + declarationName;
+			target.set(explicitPrimary, canonicalName);
+			moduleAliases.push({sourceName: explicitPrimary, declarationName: canonicalName});
+		}
 	}
 
 	static function typedAtCurrentRevision(state:Null<ModuleState>, name:String):Bool
