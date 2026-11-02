@@ -58,6 +58,7 @@ class TestCatalog {
 		"NullableStructIrMain",
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",
+		"IrIntegerBuilderMain",
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",
 		"DeterministicNamesMain",

@@ -70,7 +70,7 @@ class IrBuilder {
 	}
 
 	public function mod(a:IrValue, b:IrValue):IrValue {
-		var out = temporary(I32);
+		var out = temporary(a.type);
 		emit(Mod(out, a, b));
 		return out;
 	}
@@ -94,7 +94,7 @@ class IrBuilder {
 		return shift(a, b, 2);
 
 	function bitwise(a:IrValue, b:IrValue, operation:Int):IrValue {
-		var out = temporary(I32);
+		var out = temporary(a.type);
 		emit(switch operation {
 			case 0: BitAnd(out, a, b);
 			case 1: BitXor(out, a, b);
@@ -104,7 +104,7 @@ class IrBuilder {
 	}
 
 	function shift(a:IrValue, b:IrValue, operation:Int):IrValue {
-		var out = temporary(I32);
+		var out = temporary(a.type);
 		emit(switch operation {
 			case 0: ShiftLeft(out, a, b);
 			case 1: ShiftRight(out, a, b);
