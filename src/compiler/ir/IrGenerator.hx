@@ -4051,6 +4051,14 @@ class IrGenerator {
 
 	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
 		var nativeName = arrayNativeName(element, operation);
+		// The any-array natives return Array<Dynamic>, even when the source array has a nullable element type.
+		// Preserve that ABI in IR, then restore the semantic type at the call boundary.
+		switch resultType {
+			case Array(Nullable(_)) if (nativeArrayChecks && IrTypeTools.isDynamic(lowerType(element))):
+				var value = builder.call(nativeName, arguments, Array(Dyn));
+				return referenceResultCast(builder, value, resultType);
+			default:
+		}
 		var nativeResult = RuntimeType.requireArrayName(element) == "ref" ? switch resultType {
 			case Array(_): return builder.call(nativeName, arguments, resultType);
 			// The runtime hands back the stored element pointer, which a headerless value class cannot be cast from.

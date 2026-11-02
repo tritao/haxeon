@@ -407,6 +407,7 @@ inherited-closure-inline	42
 struct-immutable-copy	42
 struct-writable-places	42
 nullable-struct-copy	42
+nullable-array-collections	42
 nullable-struct-storage	42
 struct-field-equality	42
 declared-equality	42
