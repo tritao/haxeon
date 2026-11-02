@@ -146,6 +146,7 @@ wasm_log="$prebuilt_compilers/wasm-stages.log"
 run_wasm_stages >"$wasm_log" 2>&1 &
 wasm_stages=$!
 run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatter.sh"
+run_timed native-publish-integration bash "$root_dir/tests/integration/test-native-publish.sh"
 run_timed native-call-integration "$root_dir/tests/integration/test-native-call.sh"
 run_timed hxi-call-integration "$root_dir/tests/integration/test-hxi-call.sh"
 run_timed world-native-record-layout-integration "$root_dir/tests/integration/test-world-native-record-layout.sh"

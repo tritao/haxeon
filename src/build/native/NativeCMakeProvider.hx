@@ -75,7 +75,14 @@ class NativeCMakeProvider {
 				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE=" + configuration
-			].concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
+			// Published copies must resolve sibling libraries beside themselves. An absolute build-tree RPATH would load
+			// another copy from the cache, splitting native handle registries between the two libraries.
+			].concat(cached && context.environment.target.os == TargetOs.Linux ? [
+				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=$ORIGIN", "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+			] : cached && context.environment.target.os == TargetOs.MacOS ? [
+				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=@loader_path", "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+			] : [])
+				.concat(ninja ? ["-G", "Ninja"].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
 			windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
 			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
