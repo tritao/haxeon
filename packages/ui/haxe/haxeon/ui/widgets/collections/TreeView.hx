@@ -114,6 +114,9 @@ class TreeView implements View {
 	var cachedUniform:Bool;
 	var extentIndex:Null<VirtualExtentIndex>;
 	var itemIds:Map<String, WidgetId>;
+	/** Row to focus when it is next built; a rebuild of the whole tree (its owner was re-keyed) would drop focus otherwise. */
+	var pendingFocusKey:Null<String>;
+	var pendingFocusUntil = 0.0;
 
 	public function new(key:String,
 			model:TreeViewModel,
@@ -185,6 +188,15 @@ class TreeView implements View {
 		updateSelectedState(nextKey);
 		if (notify && nextKey != null && onSelectionChanged != null) onSelectionChanged(nextKey);
 		return true;
+	}
+
+	/**
+		Gives the row keyboard focus when the tree next builds it. The owner may re-key the tree's whole subtree in the
+		same frame (a context switch), which drops focus from the old row nodes; the new ones take it.
+	**/
+	public function focusItem(nodeKey:String):Void {
+		pendingFocusKey = nodeKey;
+		pendingFocusUntil = Sys.time() + 2.0;
 	}
 
 	/** True for the focused row and every row a multi-selection added. */
@@ -472,6 +484,13 @@ class TreeView implements View {
 					}, function(node) {
 						itemIds.set(nodeKey, node.id);
 						drag.rows.set(nodeKey, node);
+						// Asked again on every build for a moment: the tree can be rebuilt more than once before it settles.
+						if (pendingFocusKey == nodeKey) {
+							if (Sys.time() > pendingFocusUntil
+								|| context.interactionStates.get(node.id).contains(StyleState.Focused))
+								pendingFocusKey = null;
+							else context.requestFocusAfterLayout(node.id, nodeKey);
+						}
 					}, function(event) {
 						// A menu on a selected row applies to the whole selection.
 						if (!isSelected(nodeKey)) select(nodeKey);

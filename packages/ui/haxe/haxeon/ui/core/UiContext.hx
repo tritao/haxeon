@@ -72,6 +72,7 @@ class UiContext {
 	var inspectionEnabled = false;
 	var inspectionNode:Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
+	var pendingFocusLabel:Null<String> = null;
 	var windowFocused:Bool = true;
 	var focusBeforeWindowBlur:Null<WidgetId> = null;
 
@@ -214,6 +215,7 @@ class UiContext {
 		buildContext.setDeferredFocusRequester(function(id) {
 			ensureLive();
 			pendingFocus = id;
+			pendingFocusLabel = buildContext.deferredFocusLabel;
 		});
 		customCanvases = new Map();
 		customLists = new Map();
@@ -708,9 +710,14 @@ class UiContext {
 		var routedInteractionRevision = interactionStates.revision;
 		var previousFocus = focus.focusedId;
 		focus.rebuild(next);
-		var requestedFocus = pendingFocus;
+		var requestedFocus = pendingFocus, requestedLabel = pendingFocusLabel;
 		pendingFocus = null;
-		if (requestedFocus != null) focus.focus(requestedFocus);
+		pendingFocusLabel = null;
+		if (requestedFocus != null && !focus.focus(requestedFocus) && requestedLabel != null) {
+			// A restored context keeps rows from an earlier build, so the id asked for may belong to a build that was discarded.
+			var stand = focus.eligibleTreeItemByLabel(requestedLabel);
+			if (stand != null) focus.focus(stand.id);
+		}
 		var nextFocus = focus.focusedId;
 		var focusChanged = (previousFocus == null
 			&& nextFocus != null) || (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)));
