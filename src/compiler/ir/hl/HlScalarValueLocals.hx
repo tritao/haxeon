@@ -53,9 +53,9 @@ class HlScalarValueLocals {
 		for (field in object.fields) {
 			// Native storage is scalar-safe only when the register has the same representation as the field.
 			// Narrow integer fields still need truncation and sign extension on every store/load.
-			var native = field.nativeLayout;
+			if (field.nativeLayout != null && field.nativeLayout.inlineRecord) return false;
+			var native = compiler.ir.IrFieldStorage.scalar(field);
 			if (native != null) {
-				if (native.inlineRecord) return false;
 				var exact = switch field.type {
 					case I32: native.size == 4;
 					case I64: native.size == 8;

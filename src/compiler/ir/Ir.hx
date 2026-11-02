@@ -196,8 +196,16 @@ typedef IrObjectFieldNativeLayout = {
 /** C-compatible payload layout for a Flat record on the active ABI. */
 typedef IrObjectNativeLayout = {final target:String; final size:Int; final alignment:Int;}
 
+/** Width and signedness of a stored scalar, independent of an enclosing record's native layout. */
+typedef IrScalarStorage = {final size:Int; final signed:Bool;}
+
 /** Runtime-visible field in an IR object layout. */
-typedef IrObjectField = {final name:String; final type:IrType; @:optional final nativeLayout:Null<IrObjectFieldNativeLayout>;}
+typedef IrObjectField = {
+	final name:String;
+	final type:IrType;
+	@:optional final nativeLayout:Null<IrObjectFieldNativeLayout>;
+	@:optional final scalarStorage:Null<IrScalarStorage>;
+}
 
 /** Method name and implementing function attached to an IR object. */
 typedef IrObjectMethod = {final name:String; final functionName:String;}

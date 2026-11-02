@@ -586,7 +586,7 @@ class HlModuleAssembler {
 		var native = object.nativeLayout != null || nativeVisible.exists(object.name), exhausted = false, present:Map<String, Bool> = [];
 		for (field in object.fields) {
 			present.set(field.name, true);
-			if (field.nativeLayout != null)
+			if (field.nativeLayout != null || field.scalarStorage != null)
 				native = true;
 		}
 		var previous = symbols.types[type];
@@ -599,7 +599,7 @@ class HlModuleAssembler {
 					retiredFields.set(object.name + "." + name, true);
 			}
 		for (field in object.fields) {
-			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, field.nativeLayout), slot = -1, own = ownFields(type);
+			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field)), slot = -1, own = ownFields(type);
 			for (index in 0...own.length)
 				if (symbols.strings[own[index].name] == field.name)
 					slot = index;

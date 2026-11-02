@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 11;
+	public static inline final VERSION:Int = 12;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -256,6 +256,12 @@ class CanonicalIrCodec {
 					output.writeByte(fieldLayout.signed ? 1 : 0);
 					output.writeByte(fieldLayout.inlineRecord ? 1 : 0);
 				}
+				var scalarStorage = field.scalarStorage;
+				output.writeByte(scalarStorage == null ? 0 : 1);
+				if (scalarStorage != null) {
+					output.writeInt32(scalarStorage.size);
+					output.writeByte(scalarStorage.signed ? 1 : 0);
+				}
 			}
 			writeCount(output, object.methods.length);
 			for (method in object.methods) {
@@ -293,7 +299,10 @@ class CanonicalIrCodec {
 						signed: readByteBool(input),
 						inlineRecord: readByteBool(input)
 					};
-				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout});
+				var scalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
+				if (version >= 12 && readByteBool(input))
+					scalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
+				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout, scalarStorage: scalarStorage});
 			}
 			for (_ in 0...readCount(input))
 				methods.push({name: IrTypeCodec.readString(input, limit), functionName: IrTypeCodec.readString(input, limit)});

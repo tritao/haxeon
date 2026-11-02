@@ -88,7 +88,19 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		var valueName = switch field.type { case Obj(name) if (valueObjects.exists(name)): name; default: null; };
 		if (valueName != null)
 			return assignValueField([LocalGet(objectLocal)], field.offset, [LocalGet(valueLocal)], valueName, []);
-		return [LocalGet(objectLocal), LocalGet(valueLocal), store(field.type, field.offset)];
+		var body:Array<WasmInstruction> = [LocalGet(objectLocal), LocalGet(valueLocal)], scalar = field.scalarStorage;
+		if (scalar != null) {
+			var bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
+			if (bits > 0 && scalar.size * 8 < bits) {
+				var shift = bits - scalar.size * 8;
+				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
+				body.push(bits == 64 ? I64Shl : I32Shl);
+				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
+				body.push(bits == 64 ? (scalar.signed ? I64ShrS : I64ShrU) : (scalar.signed ? I32ShrS : I32ShrU));
+			}
+		}
+		body.push(store(field.type, field.offset));
+		return body;
 	}
 
 	/** Keep each embedded value place stable when a whole value is assigned to its field. */

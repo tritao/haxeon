@@ -564,7 +564,7 @@ class IrScalarReplacement {
 	/** A scalar replacement must preserve the narrowing of a stored native-width field. */
 	static function normalizeStore(block:IrBlock, value:IrValue, field:IrObjectField, origin:Located<IrInstruction>,
 			next:Int):{value:IrValue, next:Int} {
-		var native = field.nativeLayout, width = native == null ? 0 : native.size,
+		var native = IrFieldStorage.scalar(field), width = native == null ? 0 : native.size,
 			bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
 		if (native != null && bits > 0 && width > 0 && width * 8 < bits) {
 			var shift = new IrValue(next++, "$scalar-shift", I32), shifted = new IrValue(next++, "$scalar-truncate", value.type),

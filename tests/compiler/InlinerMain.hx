@@ -348,6 +348,26 @@ function main():Int return stay(1);
 		expect(IrInliner.run(grown, grownCache).length == 0, "a new class changes no function");
 		for (name => memo in memosBefore)
 			expect(grownCache.memo.get(name) == memo, 'a new class that $name never looked at must not redo it');
+		// A stored scalar's width affects forwarding even when the IR register type is unchanged.
+		var narrowProgram = Frontend.compile('struct NarrowValue { public var text:String; public var value:UInt8; '
+			+ 'public function new() { text = "x"; value = 0; } } '
+			+ 'function writeAndRead(v:NarrowValue, n:Int):Int { v.value = cast n; return cast v.value; } '
+			+ 'function main():Int return writeAndRead(new NarrowValue(), 257);'),
+			narrowFunctions = narrowProgram.functions.copy(), narrowObjects = narrowProgram.objects.copy(), narrowCache = new IrInlineCache();
+		IrInliner.run(narrowProgram, narrowCache);
+		var narrowMemo = narrowCache.memo.get("writeAndRead");
+		expect(narrowMemo != null, "the narrow-field function should be memoized");
+		narrowProgram.functions = narrowFunctions.copy();
+		narrowProgram.objects = [for (object in narrowObjects) if (object.name != "NarrowValue") object else {
+			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
+			interfaces: object.interfaces, methods: object.methods,
+			fields: [for (field in object.fields) if (field.name != "value") field else {
+				name: field.name, type: field.type, nativeLayout: field.nativeLayout, scalarStorage: {size: 1, signed: true}
+			}]
+		}];
+		IrInliner.run(narrowProgram, narrowCache);
+		expect(narrowCache.memo.get("writeAndRead") != narrowMemo, "a width or signedness change must invalidate forwarding");
+
 		// A new subclass that overrides a method resolved through its base changes the functions that looked at that base, and only those.
 		grown.functions = grownPristine.copy();
 		grown.objects = grownObjects.concat([

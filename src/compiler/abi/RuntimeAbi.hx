@@ -38,7 +38,7 @@ class RuntimeAbi {
 			functions.set(fn.name, signature([for (argument in fn.arguments) argument.type], fn.result));
 		for (object in program.objects)
 			objects.set(object.name,
-				'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) field.name + ":" + typeKey(field.type)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}');
+				'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) field.name + ":" + typeKey(field.type) + (field.scalarStorage == null ? "" : ":storage=" + field.scalarStorage.size + ":" + field.scalarStorage.signed)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}');
 		for (declaration in program.interfaces)
 			interfaces.set(declaration.name,
 				'bases=${declaration.bases.join(",")};methods=${[for (method in declaration.methods) method.name + signature(method.arguments, method.result)].join(",")}');

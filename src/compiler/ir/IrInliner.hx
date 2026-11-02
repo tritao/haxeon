@@ -249,15 +249,16 @@ class IrInliner {
 		table = new IrObjectTable(objects, subclasses);
 	}
 
-	/** What the inliner can tell about an object: its base, its methods, and the fields of a value class. */
+	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
 	static function describe(object:IrObject):String {
 		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
-		if (!object.isValue)
-			return object.name + "<" + Std.string(object.base) + ":" + methods;
-		return object.name + ":" + methods + ":" + [
-			for (field in object.fields)
-				field.name + "=" + Std.string(field.type)
-		].join(",");
+		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.type == F32) {
+			var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field);
+			field.name + "=" + Std.string(field.type)
+				+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
+				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}');
+		}].join(",");
+		return object.name + "<" + Std.string(object.base) + ":" + object.isValue + ":" + methods + ":" + fields;
 	}
 
 	/** The print an object has now; one that is not in the program has its own, which a class of that name would change. */

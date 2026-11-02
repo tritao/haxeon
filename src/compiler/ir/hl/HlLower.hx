@@ -944,11 +944,23 @@ class HlLower {
 						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), source));
 					case FieldGet(output, object, fieldName):
 						var destination = defineRegister(output, registers, registerTypes),
-							nativeLayout = objectFieldNativeLayout(object, fieldName);
-						instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers), requireObjectField(object, fieldName)));
+							nativeLayout = objectFieldNativeLayout(object, fieldName),
+							storageType = symbols.internNativeFieldStorageType(output.type, nativeLayout);
+						if (output.type == I64 && storageType != null) {
+							var stored = temporaryRegisterType(storageType, registerTypes);
+							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers), requireObjectField(object, fieldName)));
+							instructions.push(HlInstruction.ToInt(destination, stored));
+							if (nativeLayout != null && !nativeLayout.signed) {
+								var shift = temporaryRegister(IrType.I32, registerTypes);
+								instructions.push(HlInstruction.LoadInt(shift, internInt(32)));
+								instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
+								instructions.push(HlInstruction.UnsignedShiftRight(destination, destination, shift));
+							}
+						} else
+							instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers), requireObjectField(object, fieldName)));
 						// Inline records produce an HSTRUCT pointer into their owner. Only scalar
 						// narrow fields need sign or zero extension after the field load.
-						if (nativeLayout != null && !nativeLayout.inlineRecord && nativeLayout.size < 4) {
+						if (nativeLayout != null && nativeLayout.size < 4) {
 							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 								bits = nativeLayout.size * 8;
 							instructions.push(HlInstruction.LoadInt(maskOrShift, internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
@@ -1672,7 +1684,7 @@ class HlLower {
 		return visible;
 	}
 
-	function objectFieldNativeLayout(object:IrValue, name:String):Null<IrObjectFieldNativeLayout> {
+	function objectFieldNativeLayout(object:IrValue, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
 		var typeName = switch object.type {
 			case Obj(value): value;
 			default: return null;
@@ -1680,13 +1692,13 @@ class HlLower {
 		return objectFieldNativeLayoutForType(typeName, name);
 	}
 
-	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<IrObjectFieldNativeLayout> {
+	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
 		var descriptor = objects.get(typeName);
 		if (descriptor == null)
 			return null;
 		for (field in descriptor.fields)
 			if (field.name == name)
-				return field.nativeLayout;
+				return compiler.ir.IrFieldStorage.scalar(field);
 		return descriptor.base == null ? null : objectFieldNativeLayoutForType(Std.string(descriptor.base), name);
 	}
 

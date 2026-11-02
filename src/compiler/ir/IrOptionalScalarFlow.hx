@@ -362,7 +362,7 @@ class IrOptionalScalarFlow {
 			throw 'Missing optional scalar slot ${path.join(".")}';
 		}
 		function storeSlot(block:IrBlock, holder:IrValue, name:String, index:Int, value:IrValue, from:Located<IrInstruction>):Void {
-			var slot = slots(name)[index], native = slot.nativeLayout, bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
+			var slot = slots(name)[index], native = slot.scalarStorage, bits = switch value.type { case I32: 32; case I64: 64; default: 0; };
 			if (native != null && bits > 0 && native.size > 0 && native.size * 8 < bits) {
 				var shift = new IrValue(next++, "$optional-shift", I32), shifted = new IrValue(next++, "$optional-truncate", value.type),
 					result = new IrValue(next++, "$optional-extend", value.type);

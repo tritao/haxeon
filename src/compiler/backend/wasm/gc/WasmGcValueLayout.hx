@@ -41,7 +41,8 @@ class WasmGcValueLayout {
 			else for (slot in leaves(field.type)) result.push({
 				name: IrInlineValueLayout.slotName(field.name, slot),
 				type: slot.type,
-				nativeLayout: slot.nativeLayout
+				nativeLayout: slot.nativeLayout,
+				scalarStorage: slot.scalarStorage
 			});
 		}
 		return result;

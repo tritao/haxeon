@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectFieldNativeLayout;
+import compiler.ir.Ir.IrScalarStorage;
 import compiler.ir.Ir.IrType;
 
 /** One storage slot in a recursively flattened value. */
@@ -12,6 +13,8 @@ typedef IrInlineValueSlot = {
 	final isPresence:Bool;
 	/** Native scalar storage metadata, if this leaf belongs to a native-layout value. */
 	final nativeLayout:Null<IrObjectFieldNativeLayout>;
+	/** Stored scalar width, including fields of values that contain managed references. */
+	@:optional final scalarStorage:Null<IrScalarStorage>;
 }
 
 /**
@@ -27,16 +30,16 @@ class IrInlineValueLayout {
 
 	public function slots(type:IrType):Array<IrInlineValueSlot> {
 		var result:Array<IrInlineValueSlot> = [];
-		append(type, [], [], null, result);
+		append(type, [], [], null, null, result);
 		return result;
 	}
 
-	function append(type:IrType, path:Array<String>, visiting:Array<String>, nativeLayout:Null<IrObjectFieldNativeLayout>,
+	function append(type:IrType, path:Array<String>, visiting:Array<String>, nativeLayout:Null<IrObjectFieldNativeLayout>, scalarStorage:Null<IrScalarStorage>,
 			result:Array<IrInlineValueSlot>):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				result.push({path: path.copy(), type: Bool, isPresence: true, nativeLayout: null});
-				append(Obj(name), path, visiting, null, result);
+				append(Obj(name), path, visiting, null, null, result);
 			case Obj(name) if (isValue(name)):
 				if (visiting.indexOf(name) >= 0)
 					throw 'Value layout contains a by-value cycle at "$name"';
@@ -44,9 +47,9 @@ class IrInlineValueLayout {
 				if (object == null)
 					throw 'Missing value object "$name"';
 				for (field in object.fields)
-					append(field.type, path.concat([field.name]), next, field.nativeLayout, result);
+					append(field.type, path.concat([field.name]), next, field.nativeLayout, IrFieldStorage.scalar(field), result);
 			default:
-				result.push({path: path.copy(), type: type, isPresence: false, nativeLayout: nativeLayout});
+				result.push({path: path.copy(), type: type, isPresence: false, nativeLayout: nativeLayout, scalarStorage: scalarStorage});
 		}
 	}
 

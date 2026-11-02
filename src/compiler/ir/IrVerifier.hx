@@ -32,6 +32,9 @@ class IrVerifier {
 		for (object in program.objects) {
 			if (objects.exists(object.name))
 				throw 'Duplicate IR object "${object.name}"';
+			for (field in object.fields)
+				if (field.scalarStorage != null && !validScalarStorage(field.type, field.scalarStorage))
+					throw 'Invalid scalar storage for "${object.name}.${field.name}"';
 			objects.set(object.name, object);
 		}
 		for (interfaceDecl in program.interfaces) {
@@ -59,6 +62,19 @@ class IrVerifier {
 				} catch (error:String) {
 					throw 'IR verification failed for ${fn.name}: $error';
 				}
+	}
+
+	static function validScalarStorage(type:IrType, storage:IrScalarStorage):Bool {
+		var size = storage.size;
+		return switch type {
+			case I32: size == 1 || size == 2 || size == 4;
+			case I64: size == 1 || size == 2 || size == 4 || size == 8;
+			case F32: size == 4;
+			case F64: size == 8;
+			case Bool: size == 1;
+			case RawPtr: size == 4 || size == 8;
+			default: false;
+		};
 	}
 
 	static function verifyCNative(native:IrCNative):Void {

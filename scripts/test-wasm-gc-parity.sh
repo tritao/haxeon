@@ -48,9 +48,11 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 # Run declared conformance and struct array places with inlining both enabled and disabled.
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
-		HAXEON_INLINE="$inline" haxeon_compile_async \
-			--target="$target" --output="$parity_output_dir/wasm-parity-$target-struct-array-places-inline-$inline.wasm" \
-			--entry=struct-array-places --root=tests/programs tests/programs/struct-array-places.hx
+		for value_case in struct-array-places struct-managed-narrow; do
+			HAXEON_INLINE="$inline" haxeon_compile_async \
+				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
+				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
+		done
 		HAXEON_INLINE="$inline" haxeon_compile_async \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
 			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
@@ -67,14 +69,27 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
+	for value_case in struct-array-places struct-managed-narrow; do
+		HAXEON_INLINE="$inline" haxeon_compile \
+			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
+			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
+		status=0
+		LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+			"$root_dir/.tools/hashlink/hl" "$parity_output_dir/$value_case-inline-$inline.hl" || status=$?
+		if [[ $status -ne 42 ]]; then
+			echo "$value_case (inline=$inline) expected exit 42, got $status" >&2
+			exit 1
+		fi
+	done
 	HAXEON_INLINE="$inline" haxeon_compile \
-		--target=hl --output="$parity_output_dir/struct-array-places-inline-$inline.hl" \
-		--entry=struct-array-places --root=tests/programs tests/programs/struct-array-places.hx
+		--target=hl --define=native-abi-target=portable-abi32 --define=managed_long32 \
+		--output="$parity_output_dir/struct-managed-narrow-abi32-inline-$inline.hl" \
+		--entry=struct-managed-narrow --root=tests/programs tests/programs/struct-managed-narrow.hx
 	status=0
 	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/struct-array-places-inline-$inline.hl" || status=$?
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/struct-managed-narrow-abi32-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
-		echo "Struct array fixture (inline=$inline) expected exit 42, got $status" >&2
+		echo "struct-managed-narrow (32-bit ABI, inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
 	HAXEON_INLINE="$inline" haxeon_compile \
@@ -228,15 +243,16 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const target of ["wasm32", "wasm-gc"]) {
-      const result = await run(`struct-array-places-inline-${inline}`, target);
-      if (result.failure === undefined && result.exit !== 42)
-        result.failure = `expected 42, got ${result.exit}`;
-      if (result.failure !== undefined)
-        failures.push(`struct-array-places (inline=${inline}, ${target}): ${result.failure}`);
-      else
-        console.log(`PASS: struct-array-places on ${target}, inline=${inline}`);
-    }
+    for (const name of ["struct-array-places", "struct-managed-narrow"])
+      for (const target of ["wasm32", "wasm-gc"]) {
+        const result = await run(`${name}-inline-${inline}`, target);
+        if (result.failure === undefined && result.exit !== 42)
+          result.failure = `expected 42, got ${result.exit}`;
+        if (result.failure !== undefined)
+          failures.push(`${name} (inline=${inline}, ${target}): ${result.failure}`);
+        else
+          console.log(`PASS: ${name} on ${target}, inline=${inline}`);
+      }
   }
   for (const inline of [0, 1]) {
     for (const target of ["wasm32", "wasm-gc"]) {

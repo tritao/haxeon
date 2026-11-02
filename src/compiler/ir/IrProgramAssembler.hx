@@ -323,10 +323,13 @@ class IrProgramAssembler {
 								offset: layout.offset,
 								size: layout.size,
 								alignment: layout.alignment,
-								signed: isSignedField(field.type),
+								signed: isSignedField(field.type, typed.nativeAbiTarget),
 								inlineRecord: isFlatRecordField(field.type, classesByName, typed.nativeAbiTarget)
 							};
-						fields.push({name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout});
+						fields.push({
+							name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout,
+							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null
+						});
 					}
 				if (IrGenerator.observableStateOwner(classDecl.name) == classDecl.name)
 					fields.push({
@@ -421,9 +424,10 @@ class IrProgramAssembler {
 			case _: false;
 		};
 
-	static function isSignedField(type:CompilerType):Bool
+	static function isSignedField(type:CompilerType, target:String):Bool
 		return switch type {
 			case TInt | TInt64: true;
+			case TNativeScalar("c_wchar"): compiler.ffi.HxiAbi.forTarget(target).wcharBits != 16;
 			case TNativeScalar(name):
 				name == "i8"
 				|| name == "i16"
@@ -433,11 +437,26 @@ class IrProgramAssembler {
 				|| name == "c_short"
 				|| name == "c_int"
 				|| name == "c_long"
-				|| name == "c_long_long"
-				|| name == "c_wchar";
-			case TAbstract(_, _, representation): isSignedField(representation);
+				|| name == "c_long_long";
+			case TAbstract(_, _, representation): isSignedField(representation, target);
 			case _: false;
 		};
+
+	/** Preserve native scalar widths even when a managed reference prevents a whole-record C layout. */
+	static function narrowScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage> return switch type {
+		case TNativeScalar("i8" | "c_schar"): {size: 1, signed: true};
+		case TNativeScalar("u8" | "c_uchar" | "c_char"): {size: 1, signed: false};
+		case TNativeScalar("i16" | "c_short"): {size: 2, signed: true};
+		case TNativeScalar("u16" | "c_ushort"): {size: 2, signed: false};
+		case TNativeScalar("c_long" | "c_ulong" | "c_size" | "c_wchar"):
+			var abi = compiler.ffi.HxiAbi.forTarget(target);
+			var name = switch type { case TNativeScalar(value): value; default: ""; };
+			var bits = name == "c_size" ? abi.pointerBits : name == "c_wchar" ? abi.wcharBits : abi.longBits;
+			var registerBits = name == "c_wchar" ? 32 : 64;
+			bits < registerBits ? {size: Std.int(bits / 8), signed: name == "c_long" || (name == "c_wchar" && bits == 32)} : null;
+		case TAbstract(_, _, representation): narrowScalarStorage(representation, target);
+		default: null;
+	};
 
 	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
 	public static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {

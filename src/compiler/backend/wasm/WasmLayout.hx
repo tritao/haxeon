@@ -12,6 +12,7 @@ typedef WasmFieldLayout = {
 	final offset:Int;
 	final type:IrType;
 	final nativeLayout:Null<IrObjectFieldNativeLayout>;
+	@:optional final scalarStorage:Null<compiler.ir.Ir.IrScalarStorage>;
 }
 
 typedef WasmObjectLayout = {
@@ -178,7 +179,8 @@ class WasmLayout {
 				name: field.name,
 				offset: offset,
 				type: field.type,
-				nativeLayout: null
+				nativeLayout: null,
+				scalarStorage: field.scalarStorage
 			});
 			offset += sizeOf(field.type);
 		}

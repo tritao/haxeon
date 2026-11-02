@@ -287,7 +287,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	static function appendFieldNarrowing(body:Array<WasmInstruction>, field:IrObjectField):Void {
-		var native = field.nativeLayout;
+		var native = compiler.ir.IrFieldStorage.scalar(field);
 		if (field.type == F32) {
 			body.push(F32DemoteF64);
 			body.push(F64PromoteF32);

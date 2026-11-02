@@ -460,7 +460,7 @@ class HlSymbolTable {
 		ensureWritable();
 		var fields:Array<HlObjectField> = [
 			for (field in object.fields)
-				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects, field.nativeLayout)}
+				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field))}
 		];
 		if (interfaceSlots != null)
 			for (slot in interfaceSlots) {
@@ -629,7 +629,7 @@ class HlSymbolTable {
 			default: 0;
 		};
 
-	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Int {
+	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';
@@ -646,7 +646,7 @@ class HlSymbolTable {
 	}
 
 	/** Returns the HashLink type used for native field storage when it is narrower than the IR value type. */
-	public function internNativeFieldStorageType(type:IrType, nativeLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Null<Int> {
+	public function internNativeFieldStorageType(type:IrType, nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
 		if (nativeLayout == null)
 			return null;
 		return switch type {

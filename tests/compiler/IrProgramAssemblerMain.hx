@@ -59,6 +59,53 @@ class IrProgramAssemblerMain {
 			&& roundTripDelta.nativeLayout.signed,
 			"canonical IR must round-trip record and narrow-field layout facts");
 
+		var managed = Frontend.compile('struct ManagedWidth { public var text:String; public var byte:UInt8; public var short:Int16; } '
+			+ 'class ManagedWidthHolder { public var optional:Null<ManagedWidth>; } function main():Int return 0;'),
+			managedObject = findObject(managed.objects, "ManagedWidth"),
+			byteField = findObjectField(managedObject, "byte"), shortField = findObjectField(managedObject, "short");
+		expect(managedObject.nativeLayout == null && byteField.scalarStorage != null && byteField.scalarStorage.size == 1
+			&& !byteField.scalarStorage.signed && shortField.scalarStorage != null && shortField.scalarStorage.size == 2
+			&& shortField.scalarStorage.signed, "managed values must retain scalar width and signedness without a C layout");
+		var wcharSource = new SourceFile("WChar.hx", 'struct FlatWChar { public var value:CWChar; } '
+			+ 'struct ManagedWChar { public var text:String; public var value:CWChar; }');
+		var wcharProgram = new Parser(new Lexer(wcharSource).tokenize()).parseProgram();
+		var windowsFields = IrProgramAssembler.objectsFrom(Typer.typeLibrary(wcharProgram, "x86_64-pc-windows-msvc"));
+		var windowsFlat = findObjectField(findObject(windowsFields, "FlatWChar"), "value");
+		var windowsManaged = findObjectField(findObject(windowsFields, "ManagedWChar"), "value");
+		expect(windowsFlat.nativeLayout != null && windowsFlat.nativeLayout.size == 2 && !windowsFlat.nativeLayout.signed
+			&& windowsManaged.scalarStorage != null && windowsManaged.scalarStorage.size == 2 && !windowsManaged.scalarStorage.signed,
+			"Windows wchar fields must use unsigned 16-bit storage in flat and managed values");
+		var managedRoundTrip = CanonicalIrCodec.decode(CanonicalIrCodec.encode(managed)),
+			restoredByte = findObjectField(findObject(managedRoundTrip.objects, "ManagedWidth"), "byte");
+		expect(restoredByte.scalarStorage != null && restoredByte.scalarStorage.size == 1 && !restoredByte.scalarStorage.signed,
+			"canonical IR must preserve managed scalar storage metadata");
+		var optionalSlot = compiler.ir.IrInlineValueLayout.slotName("optional", {
+			path: ["byte"], type: compiler.ir.Ir.IrType.I32, isPresence: false, nativeLayout: null
+		});
+		var optionalByte = findObjectField(findObject(managedRoundTrip.objects, "ManagedWidthHolder"), optionalSlot);
+		expect(optionalByte.scalarStorage != null && optionalByte.scalarStorage.size == 1 && !optionalByte.scalarStorage.signed,
+			"flattened optional fields must retain the payload's scalar storage");
+		var signedManaged = Frontend.compile('struct ManagedWidth { public var text:String; public var byte:Int8; public var short:Int16; } '
+			+ 'class ManagedWidthHolder { public var optional:Null<ManagedWidth>; } function main():Int return 0;');
+		expect(compiler.abi.RuntimeAbi.describe(managed).objects.get("ManagedWidth")
+			!= compiler.abi.RuntimeAbi.describe(signedManaged).objects.get("ManagedWidth"),
+			"changing scalar signedness must change the runtime ABI signature");
+		managedRoundTrip.objects = [for (object in managedRoundTrip.objects) if (object.name != "ManagedWidth") object else {
+			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
+			interfaces: object.interfaces, methods: object.methods,
+			fields: [for (field in object.fields) if (field.name != "byte") field else {
+				name: field.name, type: field.type, nativeLayout: field.nativeLayout, scalarStorage: {size: 3, signed: false}
+			}]
+		}];
+		var rejectedStorage = false;
+		try compiler.ir.IrVerifier.verify(managedRoundTrip) catch (_:Dynamic) rejectedStorage = true;
+		expect(rejectedStorage, "IR verification must reject invalid scalar storage widths");
+		var interpretedNarrow = Frontend.compile('struct InterpretedWidth { public var text:String; public var value:UInt8; '
+			+ 'public function new() { text = "x"; value = 0; } } '
+			+ 'function main():Int { var item = new InterpretedWidth(); item.value = cast 257; return cast item.value; }');
+		expect(new compiler.ir.IrInterpreter(interpretedNarrow).run("main") == 1,
+			"IR interpretation must apply the same narrow field stores as the backends");
+
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
 			typed = Typer.type(new Parser(new Lexer(source).tokenize()).parseProgram()),
 			objects = IrProgramAssembler.objectsFrom(typed);

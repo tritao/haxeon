@@ -28,7 +28,7 @@ class IrNullableErasure {
 					interfaces: object.interfaces,
 					fields: [
 						for (field in object.fields)
-							{name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout}
+							{name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout, scalarStorage: field.scalarStorage}
 					],
 					methods: object.methods
 				}

@@ -105,7 +105,7 @@ class IrNestedScalarReplacement {
 		var layout = new IrInlineValueLayout(objects), slots = layout.slots(Obj(typeName)), fields:Array<IrObjectField> = [];
 		for (slot in slots) {
 			if (slot.isPresence) return nextValue;
-			fields.push({name: slotName(slot.path), type: slot.type, nativeLayout: slot.nativeLayout});
+			fields.push({name: slotName(slot.path), type: slot.type, nativeLayout: slot.nativeLayout, scalarStorage: slot.scalarStorage});
 		}
 		var descriptor:IrObject = {name: typeName, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
 		var copies:Array<IrBlock> = [], next = nextValue;

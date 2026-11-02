@@ -156,8 +156,8 @@ class IrLoadStoreForwarding {
 			for (entry in object.fields) if (entry.name == field) {
 				// A Float32 field rounds even when its enclosing object has no native layout.
 				if (Type.enumEq(entry.type, F32)) return true;
-				var native = entry.nativeLayout;
-				if (native == null || native.inlineRecord) return false;
+				var native = IrFieldStorage.scalar(entry);
+				if (native == null) return false;
 				return switch entry.type {
 					case I32: native.size > 0 && native.size < 4;
 					case I64: native.size > 0 && native.size < 8;
