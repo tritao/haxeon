@@ -64,6 +64,20 @@ class TooltipContentTests {
     check(!visible(root.children[1]), "leaving the anchor did not hide the inline tooltip");
     check(hints(root) == 0, "the hidden inline tooltip kept its content");
 
+    // A shown tooltip takes no pointer input: the pointer over it reaches what is under it, and the tooltip hides.
+    var dense = new Tooltip("dense", new Button("Anchor"), new Text("Hint"), 0.0, 28.0);
+    root = ui.submit(dense, frame);
+    anchor = cast root.children[0].resolved;
+    ui.pointerMove(anchor.x + 4.0, anchor.y + 4.0);
+    root = ui.submit(dense, frame);
+    check(visible(root.children[1]), "hovering the anchor did not show the offset tooltip");
+    var tipBounds = root.children[1].globalBounds();
+    var under = tipBounds.y + tipBounds.height - 2.0;
+    check(under > anchor.y + anchor.height, "the offset tooltip does not extend below its anchor");
+    ui.pointerMove(tipBounds.x + 4.0, under);
+    root = ui.submit(dense, frame);
+    check(!visible(root.children[1]), "the pointer over a tooltip kept it open instead of reaching what is under it");
+
     // Side-placed tooltip: shown after its hover delay, placed inside the viewport.
     for (placement in [TooltipPlacement.Below, TooltipPlacement.Above, TooltipPlacement.Right]) {
       var side = new Tooltip("side-" + Std.string(placement), new Button("Anchor"), new Text("Hint"));
