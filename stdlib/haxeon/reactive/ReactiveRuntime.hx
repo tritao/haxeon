@@ -13,9 +13,17 @@ class ReactiveRuntime {
 		return trackingDepth > 0;
 
 
-	/** Compiler-generated Observable reads allocate this only when an object is first read while tracking. */
-	public static function createObservableSource(fieldCount:Int):ObservableSource
-		return new ObservableSource(fieldCount);
+	/** Shared slow path for a tracked Observable read. */
+	public static function recordObservableRead(source:Null<ObservableSource>, fieldBit:Int, fieldCount:Int):ObservableSource {
+		if (source == null) source = new ObservableSource(fieldCount);
+		source.recordFieldRead(fieldBit);
+		return source;
+	}
+
+	/** Shared slow path after a changed Observable field has been assigned. */
+	public static function invalidateObservable(source:Null<ObservableSource>, fieldBit:Int):Void {
+		if (source != null) source.invalidateField(fieldBit);
+	}
 
 	/** Publishes a change from an external retained computation. */
 	public static function changed():Void

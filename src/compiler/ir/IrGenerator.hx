@@ -3706,16 +3706,9 @@ class IrGenerator {
 		builder.branch(builder.call(ReactiveRuntimeClass + ".isTracking", [], Bool), trackingBlock, readBlock);
 		builder.select(trackingBlock);
 		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiverValue.type), ObservableStateField, sourceType));
-		var createBlock = builder.createBlock(),
-			recordBlock = builder.createBlock();
-		builder.branch(builder.equal(builder.load(sourceName, sourceType), builder.constNull(sourceType)), createBlock, recordBlock);
-		builder.select(createBlock);
-		var created = builder.call(ReactiveRuntimeClass + ".createObservableSource", [builder.constInt(observableDependencyStride())], sourceType);
-		builder.store(sourceName, created);
-		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField, created);
-		builder.jump(recordBlock);
-		builder.select(recordBlock);
-		builder.methodCall(builder.load(sourceName, sourceType), "recordFieldRead", [builder.constInt(fieldBit)], Void);
+		var trackedSource = builder.call(ReactiveRuntimeClass + ".recordObservableRead",
+			[builder.load(sourceName, sourceType), builder.constInt(fieldBit), builder.constInt(observableDependencyStride())], sourceType);
+		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField, trackedSource);
 		builder.jump(readBlock);
 		builder.select(readBlock);
 		return builder.fieldGet(builder.load(receiverName, receiverValue.type), field, resultType);
@@ -3804,11 +3797,7 @@ class IrGenerator {
 			" inside a reactive tracking scope")));
 		builder.select(allowedBlock);
 		builder.fieldSet(builder.load(receiverName, receiver.type), field, builder.load(afterName, afterType));
-		var source = builder.load(sourceName, sourceType),
-			invalidateBlock = builder.createBlock();
-		builder.branch(builder.equal(source, builder.constNull(sourceType)), doneBlock, invalidateBlock);
-		builder.select(invalidateBlock);
-		builder.methodCall(builder.load(sourceName, sourceType), "invalidateField", [builder.constInt(fieldBit)], Void);
+		builder.call(ReactiveRuntimeClass + ".invalidateObservable", [builder.load(sourceName, sourceType), builder.constInt(fieldBit)], Void);
 		builder.jump(doneBlock);
 		builder.select(doneBlock);
 		return builder.load(beforeName, beforeType);

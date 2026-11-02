@@ -281,7 +281,7 @@ these per-action HashLink allocation medians in KiB. The item 2 column is the sa
 | --- | ---: | ---: |
 | console → telemetry | 75.4 | 74.5 |
 | hierarchy → sensors | 118.2 | 112.6 |
-| sensors → hierarchy | 82.2 | 78.6 |
+| sensors → hierarchy | 82.2 | 78.1 |
 | telemetry → console | 95.3 | 92.9 |
 | hover away / enter / field / inside / other | 15.0 / 0.5 / 13.5 / 0.5 / 10.0 | 13.6 / 0.5 / 12.4 / 0.5 / 10.0 |
 | idle / idle focused / scroll inspector | 0.2 / 0.2 / 21.3 | 0.2 / 0.2 / 21.2 |
@@ -315,9 +315,13 @@ item 2 Haxeon commit `281c9422` with its matching pre-signals app commit `5fb040
 failures. The later windows were stable: 0.78 / 4.53 MiB median on the baseline and 0.78 / 4.84 MiB on the combined
 tree. The combined profile bytecode is 98 MiB versus 89 MiB at item 2, and the new reactive dependency graph and
 Observable accessors expand one-time code and subscription warm-up; the later flat windows and stable retained counts
-show no continuing growth. This is a real warm-up increase, not a passing retry or a pre-existing gate flake. The
-threshold was not raised. A full gate invocation passed twice in the paired run and one capture failed in the other;
-the remaining memory-gate flakiness is reported as a limitation of this checkpoint.
+show no continuing growth. This was a real warm-up increase, not a passing retry or a pre-existing gate flake. The
+generated read path had repeated source creation and field recording blocks at each access site; the generated write
+path had repeated null-check and invalidation blocks. Both now call small shared runtime helpers. The profile bytecode
+fell from 101,928,103 to 98,595,908 bytes, a 3,332,195-byte reduction. Three more full invocations on the changed
+tree passed all nine captures: first-window median 30.62 MiB (30.00–31.41), second-window median 3.75 MiB
+(1.09–6.41), later-window medians 0.78 and 4.84 MiB. The second window is now below the item 2 baseline's 4.69 MiB
+median. The threshold remains unchanged.
 
 The selection-stress investigation did not reproduce the reported stall after roughly 40 cycles. The current 60-cycle
 run completed (median selection frame about 3.0 ms, p95 3.2 ms); the item 2 60-action capture also completed, with a
