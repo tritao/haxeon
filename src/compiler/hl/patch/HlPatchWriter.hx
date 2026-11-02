@@ -431,6 +431,9 @@ class HlPatchWriter {
 			switch values[i] {
 				case Simple(kind):
 					h = hashBytes(intBytes(kind), h);
+				// hash_type_prefix in hlpatch.c hashes the parameter of a reference or null type, but only the kind of a packed one.
+				case Parameterized(kind, _) if (kind == HashLinkType.Packed):
+					h = hashBytes(intBytes(kind), h);
 				case Parameterized(kind, parameter):
 					h = hashBytes(intBytes(kind), h);
 					h = hashBytes(intBytes(parameter), h);

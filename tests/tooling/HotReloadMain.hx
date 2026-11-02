@@ -357,6 +357,7 @@ class HotReloadMain {
 		}
 		testAppendedFloatAndStringSymbols();
 		testNonMovingTypeArena();
+		testPackedTypeInPrefix();
 		Sys.println("PASS: selective HLP patches are atomic and retain bounded JIT code");
 	}
 
@@ -711,6 +712,31 @@ class HotReloadMain {
 		probe.update("Main.hx", "function main():Int { return 42; }");
 		if (probe.compile("Main").ir.functions.length == 0)
 			throw "Compiler failed after decoded IR lifetime stress";
+	}
+
+	/** A packed field type in the loaded prefix must hash the way HashLink hashes it, or every patch is rejected. */
+	static function testPackedTypeInPrefix():Void {
+		var moduleId = haxe.io.Bytes.alloc(16);
+		moduleId.set(0, 92);
+		var code = new HlCode();
+		code.ints = [42];
+		code.types = [Simple(HlType.Void), Simple(HlType.I32), Parameterized(HlType.Packed, 1), Function([], 1)];
+		code.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 0), Return(0)])];
+		code.entryPoint = 0;
+		var indices:Map<String, Int> = [],
+			ids:Map<String, Int> = [],
+			bySlot:Map<Int, Int> = [];
+		indices.set("value", 0);
+		ids.set("value", 72000);
+		bySlot.set(0, 72000);
+		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+		code.ints.push(7);
+		code.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 1), Return(0)])];
+		var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, 1, 2, 1, 0, 0, code.types.length);
+		Runtime.patchSet(loaded, new PatchSet(1, 2, patch, [72000]));
+		if (Runtime.callInt(loaded, 72000) != 7)
+			throw "patch over a module with a packed type did not apply";
+		Runtime.dispose(loaded);
 	}
 
 	static function testNonMovingTypeArena():Void {
