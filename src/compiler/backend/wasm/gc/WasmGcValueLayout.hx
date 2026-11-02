@@ -42,7 +42,8 @@ class WasmGcValueLayout {
 				name: IrInlineValueLayout.slotName(field.name, slot),
 				type: slot.type,
 				nativeLayout: slot.nativeLayout,
-				scalarStorage: slot.scalarStorage
+				scalarStorage: slot.scalarStorage,
+				nullableScalarStorage: slot.nullableScalarStorage
 			});
 		}
 		return result;

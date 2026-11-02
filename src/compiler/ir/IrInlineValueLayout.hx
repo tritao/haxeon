@@ -15,6 +15,8 @@ typedef IrInlineValueSlot = {
 	final nativeLayout:Null<IrObjectFieldNativeLayout>;
 	/** Stored scalar width, including fields of values that contain managed references. */
 	@:optional final scalarStorage:Null<IrScalarStorage>;
+	/** Stored width of a nullable primitive's payload. */
+	@:optional final nullableScalarStorage:Null<IrScalarStorage>;
 }
 
 /**
@@ -30,16 +32,17 @@ class IrInlineValueLayout {
 
 	public function slots(type:IrType):Array<IrInlineValueSlot> {
 		var result:Array<IrInlineValueSlot> = [];
-		append(type, [], [], null, null, result);
+		append(type, [], [], null, null, null, result);
 		return result;
 	}
 
 	function append(type:IrType, path:Array<String>, visiting:Array<String>, nativeLayout:Null<IrObjectFieldNativeLayout>, scalarStorage:Null<IrScalarStorage>,
+			nullableScalarStorage:Null<IrScalarStorage>,
 			result:Array<IrInlineValueSlot>):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				result.push({path: path.copy(), type: Bool, isPresence: true, nativeLayout: null});
-				append(Obj(name), path, visiting, null, null, result);
+				append(Obj(name), path, visiting, null, null, null, result);
 			case Obj(name) if (isValue(name)):
 				if (visiting.indexOf(name) >= 0)
 					throw 'Value layout contains a by-value cycle at "$name"';
@@ -47,9 +50,10 @@ class IrInlineValueLayout {
 				if (object == null)
 					throw 'Missing value object "$name"';
 				for (field in object.fields)
-					append(field.type, path.concat([field.name]), next, field.nativeLayout, IrFieldStorage.scalar(field), result);
+					append(field.type, path.concat([field.name]), next, field.nativeLayout, IrFieldStorage.scalar(field), field.nullableScalarStorage, result);
 			default:
-				result.push({path: path.copy(), type: type, isPresence: false, nativeLayout: nativeLayout, scalarStorage: scalarStorage});
+				result.push({path: path.copy(), type: type, isPresence: false, nativeLayout: nativeLayout, scalarStorage: scalarStorage,
+					nullableScalarStorage: nullableScalarStorage});
 		}
 	}
 

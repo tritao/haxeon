@@ -252,11 +252,12 @@ class IrInliner {
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
 	static function describe(object:IrObject):String {
 		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
-		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.type == F32) {
-			var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field);
+		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.nullableScalarStorage != null || field.type == F32) {
+			var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field), nullable = field.nullableScalarStorage;
 			field.name + "=" + Std.string(field.type)
 				+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
-				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}');
+				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')
+				+ (nullable == null ? "" : ':nullable=${nullable.size}:${nullable.signed}');
 		}].join(",");
 		return object.name + "<" + Std.string(object.base) + ":" + object.isValue + ":" + methods + ":" + fields;
 	}

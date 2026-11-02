@@ -48,7 +48,8 @@ class IrOptionalFieldStorage {
 					fields.push(field);
 				else
 					for (slot in plan.slots)
-						fields.push({name: IrInlineValueLayout.slotName(field.name, slot), type: slot.type, nativeLayout: null, scalarStorage: slot.scalarStorage});
+						fields.push({name: IrInlineValueLayout.slotName(field.name, slot), type: slot.type, nativeLayout: null,
+							scalarStorage: slot.scalarStorage, nullableScalarStorage: slot.nullableScalarStorage});
 			}
 			{
 				name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,

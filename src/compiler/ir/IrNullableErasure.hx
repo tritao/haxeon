@@ -18,6 +18,7 @@ class IrNullableErasure {
 		result.natives = [for (native in program.natives) eraseNative(native)];
 		result.cNatives = [for (native in program.cNatives) eraseCNative(native)];
 		result.functions = [for (fn in program.functions) eraseFunction(fn)];
+		// Payload-width semantics have already been lowered before a nullable field becomes an opaque Dynamic slot.
 		result.objects = [
 			for (object in program.objects)
 				{
@@ -28,7 +29,8 @@ class IrNullableErasure {
 					interfaces: object.interfaces,
 					fields: [
 						for (field in object.fields)
-							{name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout, scalarStorage: field.scalarStorage}
+							{name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout, scalarStorage: field.scalarStorage,
+								nullableScalarStorage: null}
 					],
 					methods: object.methods
 				}

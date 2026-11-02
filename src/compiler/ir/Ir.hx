@@ -205,6 +205,8 @@ typedef IrObjectField = {
 	final type:IrType;
 	@:optional final nativeLayout:Null<IrObjectFieldNativeLayout>;
 	@:optional final scalarStorage:Null<IrScalarStorage>;
+	/** Width of a boxed nullable primitive's payload, independent of the nullable reference's storage. */
+	@:optional final nullableScalarStorage:Null<IrScalarStorage>;
 }
 
 /** Method name and implementing function attached to an IR object. */

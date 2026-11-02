@@ -48,7 +48,7 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 # Run declared conformance and struct array places with inlining both enabled and disabled.
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
-		for value_case in struct-array-places struct-managed-narrow; do
+		for value_case in struct-array-places struct-managed-narrow struct-managed-nullable-narrow; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -69,7 +69,7 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	for value_case in struct-array-places struct-managed-narrow; do
+	for value_case in struct-array-places struct-managed-narrow struct-managed-nullable-narrow; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -81,17 +81,19 @@ for inline in 0 1; do
 			exit 1
 		fi
 	done
-	HAXEON_INLINE="$inline" haxeon_compile \
-		--target=hl --define=native-abi-target=portable-abi32 --define=managed_long32 \
-		--output="$parity_output_dir/struct-managed-narrow-abi32-inline-$inline.hl" \
-		--entry=struct-managed-narrow --root=tests/programs tests/programs/struct-managed-narrow.hx
-	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/struct-managed-narrow-abi32-inline-$inline.hl" || status=$?
-	if [[ $status -ne 42 ]]; then
-		echo "struct-managed-narrow (32-bit ABI, inline=$inline) expected exit 42, got $status" >&2
-		exit 1
-	fi
+	for value_case in struct-managed-narrow struct-managed-nullable-narrow; do
+		HAXEON_INLINE="$inline" haxeon_compile \
+			--target=hl --define=native-abi-target=portable-abi32 --define=managed_long32 \
+			--output="$parity_output_dir/$value_case-abi32-inline-$inline.hl" \
+			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
+		status=0
+		LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+			"$root_dir/.tools/hashlink/hl" "$parity_output_dir/$value_case-abi32-inline-$inline.hl" || status=$?
+		if [[ $status -ne 42 ]]; then
+			echo "$value_case (32-bit ABI, inline=$inline) expected exit 42, got $status" >&2
+			exit 1
+		fi
+	done
 	HAXEON_INLINE="$inline" haxeon_compile \
 		--target=hl --output="$parity_output_dir/observable-tracking-inline-$inline.hl" \
 		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
@@ -243,7 +245,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["struct-array-places", "struct-managed-narrow"])
+    for (const name of ["struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         if (result.failure === undefined && result.exit !== 42)

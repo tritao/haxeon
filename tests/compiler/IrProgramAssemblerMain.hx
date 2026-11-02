@@ -105,6 +105,18 @@ class IrProgramAssemblerMain {
 			+ 'function main():Int { var item = new InterpretedWidth(); item.value = cast 257; return cast item.value; }');
 		expect(new compiler.ir.IrInterpreter(interpretedNarrow).run("main") == 1,
 			"IR interpretation must apply the same narrow field stores as the backends");
+		var nullableWidth = Frontend.compile('struct NullableWidth { public var text:String; public var value:Null<UInt8>; '
+			+ 'public function new() { text = "x"; value = null; } } '
+			+ 'function main():Int { var item = new NullableWidth(); item.value = cast 257; return cast item.value; }');
+		var nullableField = findObjectField(findObject(nullableWidth.objects, "NullableWidth"), "value");
+		expect(nullableField.nullableScalarStorage != null && nullableField.nullableScalarStorage.size == 1
+			&& !nullableField.nullableScalarStorage.signed, "nullable fields must preserve payload width and signedness");
+		var nullableRoundTrip = CanonicalIrCodec.decode(CanonicalIrCodec.encode(nullableWidth));
+		var restoredNullable = findObjectField(findObject(nullableRoundTrip.objects, "NullableWidth"), "value");
+		expect(restoredNullable.nullableScalarStorage != null && restoredNullable.nullableScalarStorage.size == 1,
+			"canonical IR must preserve nullable scalar payload metadata");
+		expect(new compiler.ir.IrInterpreter(nullableWidth).run("main") == 1,
+			"IR interpretation must normalize nullable narrow payloads");
 
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
 			typed = Typer.type(new Parser(new Lexer(source).tokenize()).parseProgram()),

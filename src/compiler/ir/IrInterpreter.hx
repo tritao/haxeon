@@ -305,8 +305,12 @@ class IrInterpreter {
 			var found = false;
 			for (field in declaration.fields) if (field.name == name) {
 				found = true;
-				var scalar = IrFieldStorage.scalar(field);
-				if (field.type == I32 && scalar != null && scalar.size > 0 && scalar.size < 4) {
+				var scalar = IrFieldStorage.scalar(field), narrowInteger = switch field.type {
+					case I32: true;
+					case Nullable(I32) if (input != null): scalar = field.nullableScalarStorage; true;
+					default: false;
+				};
+				if (narrowInteger && scalar != null && scalar.size > 0 && scalar.size < 4) {
 					var shift = 32 - scalar.size * 8, truncated = Std.int(input) << shift;
 					input = scalar.signed ? truncated >> shift : truncated >>> shift;
 				} else if (field.type == F32)

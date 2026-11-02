@@ -35,6 +35,8 @@ class IrVerifier {
 			for (field in object.fields)
 				if (field.scalarStorage != null && !validScalarStorage(field.type, field.scalarStorage))
 					throw 'Invalid scalar storage for "${object.name}.${field.name}"';
+				else if (field.nullableScalarStorage != null && !validNullableScalarStorage(field.type, field.nullableScalarStorage))
+					throw 'Invalid nullable scalar storage for "${object.name}.${field.name}"';
 			objects.set(object.name, object);
 		}
 		for (interfaceDecl in program.interfaces) {
@@ -76,6 +78,12 @@ class IrVerifier {
 			default: false;
 		};
 	}
+
+	static function validNullableScalarStorage(type:IrType, storage:IrScalarStorage):Bool return switch type {
+		case Nullable(I32): storage.size == 1 || storage.size == 2;
+		case Nullable(I64): storage.size == 1 || storage.size == 2 || storage.size == 4;
+		default: false;
+	};
 
 	static function verifyCNative(native:IrCNative):Void {
 		if (native.argumentModes == null || native.argumentModes.length != native.arguments.length)

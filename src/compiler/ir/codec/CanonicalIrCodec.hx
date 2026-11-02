@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 12;
+	public static inline final VERSION:Int = 13;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -262,6 +262,12 @@ class CanonicalIrCodec {
 					output.writeInt32(scalarStorage.size);
 					output.writeByte(scalarStorage.signed ? 1 : 0);
 				}
+				var nullableScalarStorage = field.nullableScalarStorage;
+				output.writeByte(nullableScalarStorage == null ? 0 : 1);
+				if (nullableScalarStorage != null) {
+					output.writeInt32(nullableScalarStorage.size);
+					output.writeByte(nullableScalarStorage.signed ? 1 : 0);
+				}
 			}
 			writeCount(output, object.methods.length);
 			for (method in object.methods) {
@@ -302,7 +308,11 @@ class CanonicalIrCodec {
 				var scalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
 				if (version >= 12 && readByteBool(input))
 					scalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
-				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout, scalarStorage: scalarStorage});
+				var nullableScalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
+				if (version >= 13 && readByteBool(input))
+					nullableScalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
+				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout, scalarStorage: scalarStorage,
+					nullableScalarStorage: nullableScalarStorage});
 			}
 			for (_ in 0...readCount(input))
 				methods.push({name: IrTypeCodec.readString(input, limit), functionName: IrTypeCodec.readString(input, limit)});

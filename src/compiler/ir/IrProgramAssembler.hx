@@ -328,7 +328,8 @@ class IrProgramAssembler {
 							};
 						fields.push({
 							name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout,
-							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null
+							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null,
+							nullableScalarStorage: nullableScalarStorage(field.type, typed.nativeAbiTarget)
 						});
 					}
 				if (IrGenerator.observableStateOwner(classDecl.name) == classDecl.name)
@@ -458,6 +459,12 @@ class IrProgramAssembler {
 		default: null;
 	};
 
+	static function nullableScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage> return switch type {
+		case TNullable(element): narrowScalarStorage(element, target);
+		case TAbstract(_, _, representation): nullableScalarStorage(representation, target);
+		default: null;
+	};
+
 	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
 	public static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
 		if (hasDirectFieldAccess(field.readAccess) || hasDirectFieldAccess(field.writeAccess))
@@ -518,6 +525,7 @@ class IrProgramAssembler {
 				allFunctions = optionalStorage.rewrite(allFunctions);
 				objects = optionalStorage.physicalObjects(objects);
 			}
+			allFunctions = new IrNullableScalarFields(objects).rewrite(allFunctions);
 		}
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
