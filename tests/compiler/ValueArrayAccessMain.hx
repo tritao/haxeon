@@ -19,6 +19,12 @@ import compiler.ir.SourceProvenance.Located;
 /** Execute compiler-generated lane operations through the production HashLink native ABI. */
 class ValueArrayAccessMain {
 	static function main():Void {
+		var boxedRangeSource = 'struct BoxedPoint { public var x:Int; public function new(x:Int) this.x=x; } '
+			+ 'function main():Int { var source:Array<BoxedPoint>=[new BoxedPoint(1),new BoxedPoint(2)]; '
+			+ 'var copied=source.copy(); var joined=source.concat(source); source[0].x=9; '
+			+ 'return copied[0].x==1 && joined[0].x==1 ? 42 : 0; }';
+		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(boxedRangeSource)).run("main") != 42)
+			throw "Portable boxed array copies must retain value semantics";
 		var frontendSource = 'struct PlaceLeaf { public var x:Int; public function new(x:Int) this.x = x; public function bump(n:Int):Void x += n; } '
 			+ 'struct PlaceRoot { public var leaf:PlaceLeaf; public function new(x:Int) leaf = new PlaceLeaf(x); } '
 			+ 'function missingValue(a:Array<PlaceRoot>):Bool { try { var v = a[15].leaf.x; return false; } catch (error:Dynamic) { return true; } } '
@@ -1348,6 +1354,48 @@ class ValueArrayAccessMain {
 					var process = new sys.io.Process("node", ["-e", script, wasmPath]), error = process.stderr.readAll().toString(), status = process.exitCode();
 					process.close();
 					if (status != 0) throw 'Wasm GC nullable inline array returned $status: $error';
+				} catch (error:Dynamic) { if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath); throw error; }
+				if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath);
+			}
+			var rangeSource = 'struct RangePoint { public var x:Int; public function new(x:Int) this.x=x; } '
+				+ 'class RangeCensus { public static var values:Array<RangePoint>; '
+				+ 'public static function prepare(n:Int):Void { values=[]; for (i in 0...n) values.push(new RangePoint(i)); } '
+				+ 'public static function perform():Int { var copied=values.copy(); var sliced=values.slice(0,values.length); '
+				+ 'var joined=values.concat(values); copied[0].x=77; sliced[0].x=66; joined[0].x=55; '
+				+ 'return values[0].x == 0 ? copied[0].x+sliced[0].x+joined[0].x : -1; } } function main():Int return 42;';
+			for (target in [Wasm32, WasmGc]) for (inlineEnabled in [false, true]) {
+				var rangeProgram = compiler.Frontend.compile(rangeSource);
+				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(rangeProgram, 32, target);
+				for (fn in rangeProgram.functions) for (block in fn.blocks) for (located in block.instructions)
+					switch located.provenance.origin {
+						case CompilerGenerated(reason) if (reason == compiler.ir.IrGenerator.ArrayValueCopyReason):
+							throw 'Boxed copy loop remains in $target lane array IR';
+						default:
+					}
+				compiler.ir.IrValueConstructors.rewrite(rangeProgram);
+				compiler.ir.IrValuePhiScalarization.rewrite(rangeProgram);
+				compiler.ir.IrScalarArguments.rewrite(rangeProgram, true);
+				compiler.ir.IrValuePhiScalarization.rewrite(rangeProgram);
+				var table = IrObjectTable.of([for (object in rangeProgram.objects) object.name => object]);
+				rangeProgram.functions = [for (fn in rangeProgram.functions) IrScalarReplacement.rewrite(fn, table, false, true)];
+				compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
+				compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+				var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
+				var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {target:backendTarget, debugNames:true,
+					wasmMemoryStats:target == Wasm32, wasmGcAllocationCount:target == WasmGc,
+					exports:["RangeCensus.prepare", "RangeCensus.perform"]}).bytes;
+				try {
+					sys.io.File.saveBytes(wasmPath, bytes);
+					var counter = target == Wasm32 ? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
+					var script = 'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+						+ 'i.exports.main(); function sample(n) { i.exports["RangeCensus.prepare"](n); const before=$counter; '
+						+ 'const value=i.exports["RangeCensus.perform"](), count=$counter-before; if(value!==198) throw Error("result="+value); return count; } '
+						+ 'const small=sample(8), large=sample(1024); if(small!==large || large>30) throw Error("small="+small+", large="+large); console.log(large);';
+					var process = new sys.io.Process("node", ["-e", script, wasmPath]), allocations = process.stdout.readAll().toString(),
+						error = process.stderr.readAll().toString(), status = process.exitCode();
+					process.close();
+					if (status != 0) throw '$target range allocation census (inline=$inlineEnabled) failed ($status): $error';
+					Sys.println('$target copy, slice and concat of 8 or 1024 values (inline=$inlineEnabled): ${StringTools.trim(allocations)} allocations');
 				} catch (error:Dynamic) { if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath); throw error; }
 				if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath);
 			}

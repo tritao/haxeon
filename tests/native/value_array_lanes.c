@@ -247,6 +247,25 @@ int main(void) {
 	int growth_allocations = observed_allocations;
 	if( observed_value_boxes != 0 || growth_allocations > 128
 		|| realtime___value_array_read_i32(growth, 4999, 8, 16, true) != -4999 ) return 21;
+	/* Range operations allocate destination lanes, not one box per copied element. */
+	varray *small = realtime___value_array_slice(growth, 0, 8);
+	hl_add_root(&small);
+	int range_counts[2];
+	for( int which = 0; which < 2; which++ ) {
+		varray *source = which == 0 ? small : growth;
+		observed_allocations = observed_value_boxes = 0;
+		hl_gc_set_profile_allocation_callback(count_allocation);
+		varray *copied = realtime___value_array_copy(source);
+		varray *sliced = realtime___value_array_slice(source, 0, source->size);
+		varray *concatenated = realtime___value_array_concat(source, source);
+		hl_gc_set_profile_allocation_callback(NULL);
+		range_counts[which] = observed_allocations;
+		if( observed_value_boxes != 0 || copied->size != source->size || sliced->size != source->size
+			|| concatenated->size != source->size * 2 ) return 62;
+	}
+	if( range_counts[0] != range_counts[1] ) return 63;
+	printf("PASS: HashLink copy, slice and concat allocate %d objects for both 8 and 5000 values\n", range_counts[0]);
+	hl_remove_root(&small);
 	hl_remove_root(&growth);
 	varray *slice = realtime___array_slice_any(values, -4, -1);
 	hl_add_root(&slice);

@@ -595,6 +595,14 @@ and reference clearing. Dynamic writes and insertions currently stage the conver
 before changing the destination, so a conversion exception cannot expose partial writes. These temporary allocations
 occur at dynamic escapes; typed element access uses the lanes directly.
 
+`copy`, `slice` and `concat` on a concrete struct array copy the lanes directly; the compiler removes the portable
+boxed-element copy loop before target code runs. The targetless IR interpreter still uses boxed element storage, so its
+portable IR retains that loop to preserve independent value copies. Remove this boxed-copy path when struct generic
+specialization supplies value storage at every typed boundary; do not keep parallel copy implementations afterward.
+Allocation tests copy, slice and concatenate arrays of 8 and 5,000 managed-reference values on HashLink: both sizes
+allocate nine objects and no value boxes. The corresponding scalar-array test allocates six objects for 8 or 1,024
+values on Wasm32 and Wasm GC, with inlining both enabled and disabled; all three results remain independent copies.
+
 On the same machine, the 30-cycle HashLink selection census fell from 342,877 allocations to 342,351. The nine-run
 median RSS growth windows were 30.47 / 4.06 / 0.94 / 4.69 MiB at the original baseline and 30.00 / 3.75 / 0.94 /
 4.84 MiB with lazy lanes. A same-checkout pre-array control measured 30.00 / 3.75 / 0.94 / 4.84 MiB; its last window

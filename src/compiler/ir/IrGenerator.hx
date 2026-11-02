@@ -3984,6 +3984,9 @@ class IrGenerator {
 		default: throw "Expected a value element";
 	};
 
+	// Portable, targetless IR still represents value elements as boxed objects (notably in the IR interpreter).
+	// Concrete target arrays are rewritten to lane range operations and this loop is removed before execution.
+	// Delete this boxed-copy path when struct generic specialization supplies value storage at every typed boundary.
 	static function copyArrayValues(builder:CfgBuilder, array:CfgValue, element:IrType, localTypes:Map<String, IrType>):CfgValue {
 		var previous = builder.beginGenerated(ArrayValueCopyReason);
 		var suffix = Std.string(array.id), arrayName = '$' + 'array-value-copy:' + suffix,
