@@ -41,7 +41,7 @@ class RetainedVariants implements View {
 			cache.active = variant;
 			context.retainStateIds(entry.refreshStateIds());
 			var retained = context.currentRoot(entry.root);
-			context.retainObserved(entry.observed, retained, entry.interactions);
+			context.retainDependencies(entry.observed);
 			entry.root = retained;
 			context.claimRetainedTree(retained);
 			retained.detach();
@@ -52,8 +52,7 @@ class RetainedVariants implements View {
 		var dirty = entry != null && scope == entry.scope &&
 			(entry.dirty || (resetChangedOnReturn && entry.interactions.buildsChanged()));
 		var stateMark = context.stateUsageMarker();
-		var signalMark = context.observedSignalMarker(), intMark = context.observedIntMarker(),
-			boolMark = context.observedBoolMarker(), stringMark = context.observedStringMarker();
+		var dependencyMark = context.dependencyMarker();
 		var root = context.withScope(new Key(scope), function() {
 			var view = builder(context);
 			if (view == null) throw 'Retained variant "$variant" returned no view';
@@ -61,9 +60,8 @@ class RetainedVariants implements View {
 		});
 		var used = context.stateIdsUsedSince(stateMark);
 		var interactions = new InteractionStateSnapshot(context.currentRoot(root), context, null, resetChangedOnReturn);
-		var observed = context.observedSince(signalMark, intMark, boolMark, stringMark,
+		var observed = context.dependenciesSince(dependencyMark,
 			entry == null ? null : entry.observed);
-		context.retainRootObserved(root, interactions);
 		cache.put(variant, new RetainedVariantEntry(keyA, keyB, scope, root, used, interactions,
 			observed, context, dirty, entry == null ? null : entry.stateIds));
 		cache.active = variant;

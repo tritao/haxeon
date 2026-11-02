@@ -55,6 +55,11 @@ class IrGenerator {
 	static var valueClasses:Map<String, Bool> = [];
 	static var classBases:Map<String, String> = [];
 	static var hashableClasses:Map<String, Bool> = [];
+	static var equatableTypes:Map<String, Bool> = [];
+	static var observableClasses:Map<String, Bool> = [];
+	static var observableStateOwners:Map<String, String> = [];
+	static var observableFieldBits:Map<String, Map<String, Int>> = [];
+	static var observableFieldStride:Int = 1;
 	static var generatedObjects:Array<IrObject> = [];
 	static var generatedHashableMapObjects:Map<String, Bool> = [];
 	static var headerlessValueClasses:Bool = true;
@@ -64,6 +69,11 @@ class IrGenerator {
 	static var dynamicObjectLiterals:Bool = true;
 	static var nativeArrayChecks:Bool = false;
 	static var arrayValuePlaceSerial = 0;
+	static var observableAccessSerial = 0;
+	static var observableConstructorInitialization = false;
+	static inline final ObservableStateField:String = "$haxeonObservableState";
+	static inline final ObservableSourceClass:String = "haxeon.ui.core.ObservableSource";
+	static inline final ReactiveRuntimeClass:String = "haxeon.ui.core.ReactiveRuntime";
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
@@ -84,11 +94,18 @@ class IrGenerator {
 		valueClasses = [];
 		classBases = [];
 		hashableClasses = [];
+		equatableTypes = [];
+		observableClasses = [];
+		observableStateOwners = [];
+		observableFieldBits = [];
+		observableFieldStride = 1;
 		var interfaceBases:Map<String, Array<String>> = [];
+		var classesByName:Map<String, TypedClass> = [];
 		if (interfaces != null)
 			for (interfaceDecl in interfaces)
 				interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
 		for (classDecl in classes) {
+			classesByName.set(classDecl.name, classDecl);
 			if (classDecl.isValue)
 				valueClasses.set(Std.string(classDecl.name), true);
 			if (classDecl.base != null)
@@ -132,7 +149,152 @@ class IrGenerator {
 		}
 		for (classDecl in classes)
 			classIsHashable(classDecl.name, []);
+		function extendsEquatable(name:String, visiting:Map<String, Bool>):Bool {
+			if (name == "Equatable" || name == "Hashable")
+				return true;
+			if (visiting.exists(name))
+				return false;
+			visiting.set(name, true);
+			var bases = interfaceBases.get(name);
+			if (bases != null)
+				for (base in bases)
+					if (extendsEquatable(base, visiting))
+						return true;
+			return false;
+		}
+		function classIsEquatable(name:String, visiting:Map<String, Bool>):Bool {
+			if (equatableTypes.exists(name))
+				return true;
+			if (visiting.exists(name))
+				return false;
+			visiting.set(name, true);
+			var declaration = classesByName.get(name);
+			if (declaration == null)
+				return false;
+			for (interfaceName in declaration.interfaces)
+				if (extendsEquatable(interfaceName, [])) {
+					equatableTypes.set(name, true);
+					return true;
+				}
+			if (declaration.base != null && classIsEquatable(declaration.base, visiting)) {
+				equatableTypes.set(name, true);
+				return true;
+			}
+			return false;
+		}
+		for (classDecl in classes)
+			classIsEquatable(classDecl.name, []);
+		function extendsObservable(name:String, visiting:Map<String, Bool>):Bool {
+			if (name == "Observable")
+				return true;
+			if (visiting.exists(name))
+				return false;
+			visiting.set(name, true);
+			var bases = interfaceBases.get(name);
+			if (bases != null)
+				for (base in bases)
+					if (extendsObservable(base, visiting))
+						return true;
+			return false;
+		}
+		function classIsObservable(name:String, visiting:Map<String, Bool>):Bool {
+			if (observableClasses.exists(name))
+				return true;
+			if (visiting.exists(name))
+				return false;
+			visiting.set(name, true);
+			var declaration = classesByName.get(name);
+			if (declaration == null)
+				return false;
+			for (interfaceName in declaration.interfaces)
+				if (extendsObservable(interfaceName, [])) {
+					observableClasses.set(name, true);
+					return true;
+				}
+			if (declaration.base != null && classIsObservable(declaration.base, visiting)) {
+				observableClasses.set(name, true);
+				return true;
+			}
+			return false;
+		}
+		function orderedFields(name:String, visiting:Map<String, Bool>):Array<compiler.types.TypedAst.TypedField> {
+			if (visiting.exists(name))
+				return [];
+			visiting.set(name, true);
+			var declaration = classesByName.get(name), result:Array<compiler.types.TypedAst.TypedField> = [];
+			if (declaration == null)
+				return result;
+			if (declaration.base != null)
+				result = orderedFields(declaration.base, visiting);
+			for (field in declaration.fields)
+				if (!field.isStatic && IrProgramAssembler.hasPhysicalStorage(field) && !hasUnobservableMetadata(field.metadata))
+					result.push(field);
+			return result;
+		}
+		function stateOwner(name:String, visiting:Map<String, Bool>):String {
+			var prior = observableStateOwners.get(name);
+			if (prior != null)
+				return prior;
+			if (visiting.exists(name))
+				return name;
+			visiting.set(name, true);
+			var declaration = classesByName.get(name);
+			if (declaration == null)
+				return name;
+			var owner = declaration.base != null && classIsObservable(declaration.base, [])
+				? stateOwner(declaration.base, visiting)
+				: name;
+			observableStateOwners.set(name, owner);
+			return owner;
+		}
+		for (classDecl in classes)
+			if (classIsObservable(classDecl.name, [])) {
+				var fields = orderedFields(classDecl.name, []), byName:Map<String, Int> = [];
+				for (index in 0...fields.length)
+					byName.set(fields[index].name, index);
+				observableFieldBits.set(classDecl.name, byName);
+				if (fields.length > observableFieldStride)
+					observableFieldStride = fields.length;
+				stateOwner(classDecl.name, []);
+			}
 	}
+
+	static function hasUnobservableMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>):Bool {
+		for (entry in metadata)
+			if (entry.name == "unobservable") return true;
+		return false;
+	}
+
+	/** The object field carrying this observable hierarchy's shared dependency source. */
+	public static function observableStateOwner(className:String):Null<String>
+		return observableStateOwners.get(className);
+
+	public static function observableDependencyStride():Int
+		return observableFieldStride;
+
+	/** Field bit in the flattened, declaration-ordered observable layout. */
+	public static function observableFieldBit(type:CompilerType, fieldName:String):Null<Int> {
+		var className = switch type {
+			case TInstance(NominalKind.Class, name, _): name;
+			default: return null;
+		};
+		var fields = observableFieldBits.get(className);
+		return fields == null ? null : fields.get(fieldName);
+	}
+
+	static function usesDeclaredEquality(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element): usesDeclaredEquality(element);
+			case TInstance(_, name, _): equatableTypes.exists(name);
+			default: false;
+		};
+
+	static function isValueClassType(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element): isValueClassType(element);
+			case TInstance(_, name, _): valueClasses.exists(name);
+			default: false;
+		};
 
 	/** Bind the mutable object list before lowering fields, so synthetic collection layouts join the same program. */
 	public static function bindGeneratedObjects(objects:Array<IrObject>):Void {
@@ -380,7 +542,10 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
 					builder.store('$' + 'cell:$name', cell);
 				}
+		var previousObservableConstructorInitialization = observableConstructorInitialization;
+		observableConstructorInitialization = fn.isConstructor;
 		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
+		observableConstructorInitialization = previousObservableConstructorInitialization;
 		if (!builder.isTerminated()) {
 			if (lowerType(fn.result) == Void)
 				builder.returnVoid();
@@ -458,6 +623,18 @@ class IrGenerator {
 						builder.fieldSet(cell, "value", loweredValue);
 					}
 				case TFieldAssign(object, name, value, _):
+					var observableBit = observableFieldBit(object.type, name);
+					if (observableBit != null) {
+						var operands = lowerOperands([object, value], builder, localTypes);
+						if (!builder.isTerminated()) {
+							if (observableConstructorInitialization && isCurrentObject(object))
+								builder.fieldSet(operands[0], name, operands[1]);
+							else {
+								var before = builder.fieldGet(operands[0], name, lowerType(value.type));
+								lowerObservableFieldWrite(operands[0], name, observableBit, value.type, before, operands[1], builder, localTypes);
+							}
+						}
+					} else {
 					var arrayPlace = arrayValuePlace(object), projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object),
 						copy = optionalFieldCopy(value), targetOwner = optionalStoredFieldOwner(lowerType(object.type), name);
 					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
@@ -555,6 +732,7 @@ class IrGenerator {
 						var operands = lowerOperands([object, value], builder, localTypes);
 						if (!builder.isTerminated())
 							builder.fieldSet(operands[0], name, operands[1]);
+					}
 					}
 				case TStaticFieldAssign(name, field, value, _):
 					var loweredValue = lowerExpression(value, builder, localTypes);
@@ -2896,7 +3074,11 @@ class IrGenerator {
 			case TNewMap(key, value):
 				if (isCustomHashableMap(key, value)) lowerHashableMapAllocation(builder, key, value);
 				else builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
-			case TField(object, name): builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type));
+			case TField(object, name):
+				var observableBit = observableFieldBit(object.type, name);
+				observableBit == null
+					? builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type))
+					: lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
 			case TMethodCall(object, name, args):
 				var place = optionalFieldPlace(object);
 				if (place != null) {
@@ -2949,8 +3131,15 @@ class IrGenerator {
 				builder.globalSet(owner + "." + name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixField(object, name, delta):
-				var projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
-				if (optionalPlace != null) {
+					var observableBit = observableFieldBit(object.type, name),
+						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
+					if (observableBit != null) {
+						var receiver = lowerExpression(object, builder, localTypes),
+							before = builder.fieldGet(receiver, name, lowerType(expression.type)),
+							one = incrementOne(expression.type, builder),
+							after = delta > 0 ? builder.add(before, one) : builder.sub(before, one);
+						lowerObservableFieldWrite(receiver, name, observableBit, expression.type, before, after, builder, localTypes);
+					} else if (optionalPlace != null) {
 					var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
 						field = optionalSlotName(optionalPlace.field, optionalPlace.path.concat([name]), false),
 						oldValue = builder.fieldGet(builder.load(owner.name, owner.type), field, lowerType(expression.type)),
@@ -3501,6 +3690,129 @@ class IrGenerator {
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
 		return type == TInt ? builder.constInt(1) : builder.constFloat(1.0);
+
+	static function lowerObservableFieldRead(object:TypedExpression, field:String, fieldBit:Int, resultType:IrType,
+			builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var serial = observableAccessSerial++,
+			receiverValue = lowerExpression(object, builder, localTypes),
+			receiverName = '$' + 'observable-read-owner:$serial',
+			sourceName = '$' + 'observable-read-source:$serial',
+			sourceType:IrType = Obj(ObservableSourceClass);
+		localTypes.set(receiverName, receiverValue.type);
+		localTypes.set(sourceName, sourceType);
+		builder.store(receiverName, receiverValue);
+		var trackingBlock = builder.createBlock(),
+			readBlock = builder.createBlock();
+		builder.branch(builder.call(ReactiveRuntimeClass + ".isTracking", [], Bool), trackingBlock, readBlock);
+		builder.select(trackingBlock);
+		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiverValue.type), ObservableStateField, sourceType));
+		var createBlock = builder.createBlock(),
+			recordBlock = builder.createBlock();
+		builder.branch(builder.equal(builder.load(sourceName, sourceType), builder.constNull(sourceType)), createBlock, recordBlock);
+		builder.select(createBlock);
+		var created = builder.call(ReactiveRuntimeClass + ".createObservableSource", [builder.constInt(observableDependencyStride())], sourceType);
+		builder.store(sourceName, created);
+		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField, created);
+		builder.jump(recordBlock);
+		builder.select(recordBlock);
+		builder.methodCall(builder.load(sourceName, sourceType), "recordFieldRead", [builder.constInt(fieldBit)], Void);
+		builder.jump(readBlock);
+		builder.select(readBlock);
+		return builder.fieldGet(builder.load(receiverName, receiverValue.type), field, resultType);
+	}
+
+	static function isCurrentObject(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TLocal("this"): true;
+			case TCast(inner), TAbiCast(inner): isCurrentObject(inner);
+			default: false;
+		};
+
+	static function observableFieldChanged(type:CompilerType, before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		if (usesDeclaredEquality(type))
+			return builder.equal(builder.call(ValueEqualityGenerator.equalsName(type), [before, after], Bool), builder.constBool(false));
+		if (isValueClassType(type))
+			return builder.constBool(true);
+		return switch type {
+			case TDynamic:
+				builder.equal(builder.call("__dynamic_equal", [builder.toDyn(before), builder.toDyn(after)], Bool), builder.constBool(false));
+			case TInstance(NominalKind.Enum, name, _):
+				var nullary = nullaryEnumConstructors.get(name);
+				if (nullary == null) throw 'Missing enum constructors for "$name"';
+				var total = enumConstructorCounts.get(name);
+				if (nullary.length == total)
+					builder.equal(builder.equal(builder.enumIndex(before), builder.enumIndex(after)), builder.constBool(false));
+				else {
+					var serial = observableAccessSerial++, resultName = '$' + 'observable-enum-changed:$serial',
+						beforeName = '$' + 'observable-enum-before:$serial', afterName = '$' + 'observable-enum-after:$serial';
+					localTypes.set(resultName, Bool);
+					localTypes.set(beforeName, before.type);
+					localTypes.set(afterName, after.type);
+					builder.store(beforeName, before);
+					builder.store(afterName, after);
+					var same = builder.createBlock(), check = builder.createBlock(), done = builder.createBlock();
+					builder.branch(builder.equal(builder.load(beforeName, before.type), builder.load(afterName, after.type)), same, check);
+					builder.select(same);
+					builder.store(resultName, builder.constBool(false));
+					builder.jump(done);
+					builder.select(check);
+					for (index in nullary) {
+						var next = builder.createBlock(), matching = builder.createBlock();
+						builder.branch(builder.equal(builder.enumIndex(builder.load(beforeName, before.type)), builder.constInt(index)), matching, next);
+						builder.select(matching);
+						builder.branch(builder.equal(builder.enumIndex(builder.load(afterName, after.type)), builder.constInt(index)), same, next);
+						builder.select(next);
+					}
+					builder.store(resultName, builder.constBool(true));
+					builder.jump(done);
+					builder.select(done);
+					builder.load(resultName, Bool);
+				}
+		case TString, TNullable(TString):
+				builder.equal(builder.call("__string_equal", [before, after], Bool), builder.constBool(false));
+			case _:
+				builder.equal(builder.equal(before, after), builder.constBool(false));
+		};
+	}
+
+	static function lowerObservableFieldWrite(receiver:CfgValue, field:String, fieldBit:Int, fieldType:CompilerType,
+			before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var serial = observableAccessSerial++, receiverName = '$' + 'observable-write-owner:$serial',
+			beforeName = '$' + 'observable-write-before:$serial', afterName = '$' + 'observable-write-after:$serial',
+			beforeType = before.type, afterType = after.type;
+		localTypes.set(receiverName, receiver.type);
+		localTypes.set(beforeName, beforeType);
+		localTypes.set(afterName, afterType);
+		builder.store(receiverName, receiver);
+		builder.store(beforeName, before);
+		builder.store(afterName, after);
+		var changed = observableFieldChanged(fieldType, builder.load(beforeName, beforeType), builder.load(afterName, afterType), builder, localTypes),
+			writeBlock = builder.createBlock(),
+			doneBlock = builder.createBlock();
+		builder.branch(changed, writeBlock, doneBlock);
+		builder.select(writeBlock);
+		var sourceType:IrType = Obj(ObservableSourceClass),
+			sourceName = '$' + 'observable-write-source:$serial';
+		localTypes.set(sourceName, sourceType);
+		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiver.type), ObservableStateField, sourceType));
+		var blocked = builder.call(ReactiveRuntimeClass + ".observableWriteBlocked",
+			[builder.load(sourceName, sourceType), builder.constInt(fieldBit)], Bool);
+		var blockedBlock = builder.createBlock(), allowedBlock = builder.createBlock();
+		builder.branch(blocked, blockedBlock, allowedBlock);
+		builder.select(blockedBlock);
+		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + field +
+			" inside a reactive tracking scope")));
+		builder.select(allowedBlock);
+		builder.fieldSet(builder.load(receiverName, receiver.type), field, builder.load(afterName, afterType));
+		var source = builder.load(sourceName, sourceType),
+			invalidateBlock = builder.createBlock();
+		builder.branch(builder.equal(source, builder.constNull(sourceType)), doneBlock, invalidateBlock);
+		builder.select(invalidateBlock);
+		builder.methodCall(builder.load(sourceName, sourceType), "invalidateField", [builder.constInt(fieldBit)], Void);
+		builder.jump(doneBlock);
+		builder.select(doneBlock);
+		return builder.load(beforeName, beforeType);
+	}
 
 	/**
 	 * Branches on a condition, lowering `&&`, `||` and `!` as control flow instead of building a Bool: each operand

@@ -157,7 +157,7 @@ class GpuViewport implements View {
 				camera.panByScreen(event.localX - lastPointerX, event.localY - lastPointerY);
 				lastPointerX = event.localX;
 				lastPointerY = event.localY;
-				context.commands.refresh();
+
 			});
 			node.on(UiEventKind.PointerUp, finishPointer);
 			node.on(UiEventKind.PointerCancel, finishPointer);
@@ -165,7 +165,7 @@ class GpuViewport implements View {
 				if (!enabled || event.deltaY == 0.0)
 					return;
 				camera.zoomAt(Math.pow(1.1, -event.deltaY / 100.0), event.localX, event.localY);
-				context.commands.refresh();
+
 				event.stopPropagation();
 			});
 			for (kind in handlers.keys())

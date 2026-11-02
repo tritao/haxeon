@@ -1,9 +1,10 @@
 package haxeon.ui.plotting;
 
+import Observable;
+
 /** Shared plotting model with explicit or data-derived ranges. */
-class PlotModel {
-	final values:Array<PlotSeries>;
-	var modelRevision:Int;
+class PlotModel implements Observable {
+	var values:Array<PlotSeries>;
 	public var minimumX(default, null):Null<Float>;
 	public var maximumX(default, null):Null<Float>;
 	public var minimumY(default, null):Null<Float>;
@@ -11,7 +12,6 @@ class PlotModel {
 
 	public function new() {
 		values = [];
-		modelRevision = 1;
 		minimumX = null;
 		maximumX = null;
 		minimumY = null;
@@ -21,16 +21,18 @@ class PlotModel {
 	public function addSeries(series:PlotSeries):Void {
 		if (series == null || seriesById(series.id) != null)
 			throw "Plot series IDs must be unique and non-null";
-		values.push(series);
-		modelRevision++;
+		var next = values.copy();
+		next.push(series);
+		values = next;
 	}
 
 	public function removeSeries(id:String):Bool {
 		var series = seriesById(id);
 		if (series == null)
 			return false;
-		values.remove(series);
-		modelRevision++;
+		var next = values.copy();
+		next.remove(series);
+		values = next;
 		return true;
 	}
 
@@ -62,18 +64,18 @@ class PlotModel {
 		this.maximumX = maximumX;
 		this.minimumY = minimumY;
 		this.maximumY = maximumY;
-		modelRevision++;
 	}
 
 	public function clearRange():Void
 		setRange(null, null, null, null);
 
-	/** Includes child series revisions so streaming data invalidates plots. */
-	public function revision():Int {
-		var result = modelRevision;
-		for (series in values)
-			result = result * 31 + series.revision;
-		return result;
+	/** Reads every paint input while a reactive effect captures the model and series fields. */
+	public function trackPaintData():Void {
+		var bounds = minimumX + ":" + maximumX + ":" + minimumY + ":" + maximumY;
+		for (series in values) {
+			var visible = series.visible;
+			var count = series.pointCount;
+		}
 	}
 
 	public function range():Null<PlotRange> {

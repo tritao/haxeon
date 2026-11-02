@@ -5,6 +5,8 @@ extern varray *hl_obj_fields(vdynamic *object);
 
 extern vdynamic *hl_obj_copy(vdynamic *object);
 
+static const uchar observable_state_name[] = {'$', 'h', 'a', 'x', 'e', 'o', 'n', 'O', 'b', 's', 'e', 'r', 'v', 'a', 'b', 'l', 'e', 'S', 't', 'a', 't', 'e', 0};
+
 HL_PRIM vdynamic *HL_NAME(__reflect_copy)(vdynamic *object) {
 	if (!object) return NULL;
 	if (object->t->kind == HVIRTUAL && ((vvirtual *)object)->value)
@@ -17,7 +19,7 @@ HL_PRIM vdynamic *HL_NAME(__reflect_copy)(vdynamic *object) {
 			hl_obj_field *field = &type->obj->fields[index];
 			// Unnamed fields hold no value of the object's: interface caches, and the slots a live build reserves for
 			// fields a patch adds, which are named once a patch gives them a field.
-			if (field->hashed_name == 0) continue;
+			if (field->hashed_name == 0 || field->hashed_name == hl_hash((vbyte *)observable_state_name)) continue;
 			int name = field->hashed_name;
 			hl_type *value_type = field->t;
 			switch (value_type->kind) {

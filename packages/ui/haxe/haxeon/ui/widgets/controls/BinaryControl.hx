@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.controls;
 
+import Observable;
+
 import haxeon.ui.LayoutSizing;
 
 import haxeon.ui.Canvas;
@@ -29,7 +31,7 @@ import haxeon.ui.semantics.Semantics;
 import haxeon.ui.theme.TextRole;
 
 /** Shared Haxe implementation for checkbox and switch-style boolean controls. */
-class BinaryControl implements View {
+class BinaryControl implements View implements Observable {
 	public final key:String;
 	public final label:String;
 
@@ -186,8 +188,7 @@ class BinaryControl implements View {
 			if (onChange != null) {
 				onChange(checked);
 				if (invalidation != null) invalidation.update(!invalidation.value);
-			} else if (!context.requestPatch(nodeId))
-				context.commands.refresh();
+			}
 		};
 		node.onActivate(activate);
 		return node;

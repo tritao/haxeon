@@ -60,7 +60,7 @@ class RenderNode {
 	/** Invalidate a retained custom display list without changing geometry or text. */
 	public function invalidatePaint():Void {
 		paintKeyResolved = false;
-		contentRevision++;
+		paintRevision++;
 		invalidationFlags = UiDirtyFlag.NeedsPaint;
 	}
 
@@ -100,6 +100,8 @@ class RenderNode {
 	public var semantics:Null<Semantics>;
 	/** Revision of paint/text content consumed by retained scene caches. */
 	public var contentRevision(default, null):Int;
+	/** Display-list invalidation independent of native layout content. */
+	public var paintRevision(default, null):Int;
 	/** Revision of resolved bounds, transforms, clips, and paint order. */
 	public var geometryRevision(default, null):Int;
 	/** Revision of opacity/effects and other compositing inputs. */
@@ -149,6 +151,7 @@ class RenderNode {
 		windowDecorationCursor = null;
 		semantics = null;
 		contentRevision = 1;
+		paintRevision = 1;
 		geometryRevision = 1;
 		compositeRevision = 1;
 		invalidationFlags = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle |
@@ -291,6 +294,7 @@ class RenderNode {
 		for (index in 0...children.length)
 			prior.children[index] = children[index];
 		prior.contentRevision = contentRevision;
+		prior.paintRevision = paintRevision;
 		prior.geometryRevision = geometryRevision;
 		prior.compositeRevision = compositeRevision;
 		prior.hitTestSelf = hitTestSelf;
@@ -834,6 +838,7 @@ class RenderNode {
 		}
 
 		contentRevision = previous.contentRevision;
+		paintRevision = previous.paintRevision;
 		geometryRevision = previous.geometryRevision;
 		compositeRevision = previous.compositeRevision;
 		invalidationFlags = UiDirtyFlag.None;
@@ -883,6 +888,7 @@ class RenderNode {
 		if (contentChanged) {
 			paintKeyResolved = false;
 			contentRevision++;
+			paintRevision++;
 		}
 		if (geometryChanged)
 			geometryRevision++;

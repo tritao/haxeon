@@ -73,8 +73,10 @@ class PlotView implements View {
 			node.cachePolicy = CachePolicy.Raster;
 			node.computedStyle = computed;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "Plot" : label);
-			// The series change without the widget being rebuilt, so a retained subtree around the plot follows the model.
-			var cacheKey = "plot:" + context.observeInt(function() return model.revision()) + ":appearance:" + appearanceKey();
+			var watch = context.resourceState(context.id("plot-paint-watch"),
+				function() return new PlotPaintWatch(model), function(value) value.dispose()).value;
+			watch.update(model, node);
+			var cacheKey = "plot:appearance:" + appearanceKey();
 			node.onPaint(function(canvas, geometry) paint(canvas, geometry), cacheKey);
 			return node;
 		});
@@ -148,4 +150,29 @@ class PlotView implements View {
 			":" + gridColor.red + ":" + gridColor.green + ":" + gridColor.blue + ":" + gridColor.alpha +
 			":" + axisColor.red + ":" + axisColor.green + ":" + axisColor.blue + ":" + axisColor.alpha +
 			":" + gridDivisions + ":" + padding;
+}
+
+private class PlotPaintWatch {
+	var model:PlotModel;
+	var node:Null<RenderNode>;
+	final effect:haxeon.ui.core.Effect;
+
+	public function new(model:PlotModel) {
+		this.model = model;
+		effect = new haxeon.ui.core.Effect(function() {
+			this.model.trackPaintData();
+			var current = this.node;
+			if (current != null) RenderNode.latest(current).invalidatePaint();
+		});
+	}
+
+	public function update(model:PlotModel, node:RenderNode):Void {
+		this.node = node;
+		if (this.model != model) {
+			this.model = model;
+			effect.retrack();
+		}
+	}
+
+	public function dispose():Void effect.dispose();
 }

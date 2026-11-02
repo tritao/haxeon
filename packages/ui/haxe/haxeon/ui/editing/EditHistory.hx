@@ -1,7 +1,9 @@
 package haxeon.ui.editing;
 
+import Observable;
+
 /** Reversible editor history with transactions and drag/coalescing hooks. */
-class EditHistory {
+class EditHistory implements Observable {
 	final undoStack:Array<EditOperation>;
 	final redoStack:Array<EditOperation>;
 	var activeTransaction:Null<EditTransaction>;
@@ -31,12 +33,16 @@ class EditHistory {
 	}
 
 	public var canUndo(get, never):Bool;
-	inline function get_canUndo():Bool
+	inline function get_canUndo():Bool {
+		var currentRevision = revision;
 		return undoStack.length > 0;
+	}
 
 	public var canRedo(get, never):Bool;
-	inline function get_canRedo():Bool
+	inline function get_canRedo():Bool {
+		var currentRevision = revision;
 		return redoStack.length > 0;
+	}
 
 	public var undoCount(get, never):Int;
 	inline function get_undoCount():Int

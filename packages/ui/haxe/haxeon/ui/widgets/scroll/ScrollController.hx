@@ -9,8 +9,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	public var animated(default, null):Bool = false;
 	var targetX:Float;
 	var targetY:Float;
-	var scheduler:Null<haxeon.ui.animation.AnimationScheduler>;
-	var bindingOwner:Null<ScrollBinding>;
+	final binding:ScrollControllerBindingState = new ScrollControllerBindingState();
 	public var offsetX(default, null):Float;
 	public var offsetY(default, null):Float;
 	public var viewportWidth(default, null):Float;
@@ -18,9 +17,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	public var contentWidth(default, null):Float;
 	public var contentHeight(default, null):Float;
 	public var hasMetrics(default, null):Bool;
-	/** Changes to scroll offsets, targets or resolved viewport/content metrics. */
-	public var revision(default, null):Int = 0;
-	var changed:ScrollController->Void;
+
 
 	public function new(offsetX:Float = 0.0, offsetY:Float = 0.0) {
 		if (!finiteNonNegative(offsetX) || !finiteNonNegative(offsetY))
@@ -33,7 +30,6 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		contentWidth = 0.0;
 		contentHeight = 0.0;
 		hasMetrics = false;
-		changed = null;
 	}
 
 	public var maxScrollX(get, never):Float;
@@ -75,7 +71,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		var nextY = clampY((y * (targetY - offsetY) < 0 ? offsetY : targetY) + y);
 		if (nextX == targetX && nextY == targetY) return false;
 		targetX = nextX; targetY = nextY;
-		if (scheduler != null) scheduler.track(this);
+		if (binding.scheduler != null) binding.scheduler.track(this);
 		notifyChanged();
 		return true;
 	}
@@ -95,7 +91,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	}
 
 	public function cancelAnimation():Void {
-		if (scheduler != null) scheduler.remove(this);
+		if (binding.scheduler != null) binding.scheduler.remove(this);
 		targetX = offsetX; targetY = offsetY;
 	}
 
@@ -104,15 +100,15 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)
 	function bind(callback:ScrollController->Void, ?clock:haxeon.ui.animation.AnimationScheduler, ?owner:ScrollBinding):Void {
-		if (scheduler != null && scheduler != clock) scheduler.remove(this);
-		changed = callback; scheduler = clock; bindingOwner = owner;
-		if (scheduler != null && (offsetX != targetX || offsetY != targetY)) scheduler.track(this);
+		if (binding.scheduler != null && binding.scheduler != clock) binding.scheduler.remove(this);
+		binding.changed = callback; binding.scheduler = clock; binding.owner = owner;
+		if (binding.scheduler != null && (offsetX != targetX || offsetY != targetY)) binding.scheduler.track(this);
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)
 	function unbind(owner:ScrollBinding):Void {
-		if (bindingOwner != owner) return;
-		cancelAnimation(); changed = null; scheduler = null; bindingOwner = null;
+		if (binding.owner != owner) return;
+		cancelAnimation(); binding.changed = null; binding.scheduler = null; binding.owner = null;
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollView)
@@ -122,8 +118,6 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) ||
 			!finiteNonNegative(contentWidth) || !finiteNonNegative(contentHeight))
 			throw "Scroll metrics must be finite and non-negative";
-		if (!hasMetrics || this.viewportWidth != viewportWidth || this.viewportHeight != viewportHeight ||
-			this.contentWidth != contentWidth || this.contentHeight != contentHeight) revision++;
 		this.viewportWidth = viewportWidth;
 		this.viewportHeight = viewportHeight;
 		this.contentWidth = contentWidth;
@@ -141,11 +135,18 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	}
 
 	function notifyChanged():Void {
-		revision++;
-		if (changed != null)
-			changed(this);
+		var callback = binding.changed;
+		if (callback != null)
+			callback(this);
 	}
 
 	static function finiteNonNegative(value:Float):Bool
 		return Math.isFinite(value) && value >= 0.0;
+}
+
+private class ScrollControllerBindingState {
+	public var scheduler:Null<haxeon.ui.animation.AnimationScheduler>;
+	public var owner:Null<ScrollBinding>;
+	public var changed:Null<ScrollController->Void>;
+	public function new() {}
 }

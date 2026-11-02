@@ -13,7 +13,7 @@ class DockPanelContent {
 	/** Builder for panels that adapt to their dock pane width; used in place of `build` when given. */
 	public final buildWithWidth:Null<WidthAwareDockPanelBuilder>;
 	/**
-	 * Retain the panel by what its build reads through BuildContext.observeInt and friends (and the widget state it uses),
+	 * Retain the panel by the observable fields and signals its build reads (and the widget state it uses),
 	 * with no key: a read cannot be left out of a key that does not exist. See `observing`.
 	 */
 	public var observed:Bool = false;

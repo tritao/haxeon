@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.settings;
 
+import Observable;
+
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
@@ -32,27 +34,28 @@ import haxeon.ui.widgets.text.Text;
  * selection and inspector state between frames. Every state change calls
  * onChanged so the host can rebuild.
  */
-class SettingsPanel implements View {
+class SettingsPanel implements View implements Observable {
 	public final key:String;
 	public final catalog:SettingsCatalog;
 	public var filter(default, null):String;
 	public var showAdvanced(default, null):Bool;
 	public var modifiedOnly(default, null):Bool = false;
 	public var restartOnly(default, null):Bool = false;
-	var focusSearchPending:Bool = false;
-	var storeRevision:Int = -1;
-	var visibleCounts:Map<String, Int> = new Map();
+	@:unobservable var focusSearchPending:Bool = false;
+	@:unobservable var storeRevision:Int = -1;
+	@:unobservable var visibleCounts:Map<String, Int> = new Map();
 	/** The category shown on the right, or null when nothing matches. */
 	public var selectedCategory(default, null):Null<String>;
 	public var onChanged:Null<Void->Void>;
-	public var treeWidth:Float;
+	@:unobservable public var treeWidth:Float;
 	public var labelWidth:Float;
 	public final editorRegistry = new haxeon.ui.properties.PropertyEditorRegistry();
 	public var compact:Bool = false;
 
-	final treeModel:SettingsTreeModel;
-	var inspector:Null<PropertyInspector>;
-	var inspectorKey:String;
+	@:unobservable final treeModel:SettingsTreeModel;
+	@:unobservable var inspector:Null<PropertyInspector>;
+	@:unobservable var inspectorKey:String;
+	@:unobservable var unsubscribeStore:Null<Void->Void>;
 
 	public function new(key:String, store:SettingsStore, ?onChanged:Void->Void) {
 		if (key == null || key.length == 0)
@@ -71,6 +74,14 @@ class SettingsPanel implements View {
 		refresh();
 		var saved:Dynamic = store.getState(key + ":category");
 		if (Std.isOfType(saved, String)) select(cast saved);
+		unsubscribeStore = store.onChanged("", function(_) refresh());
+	}
+
+	public function dispose():Void {
+		if (unsubscribeStore != null) {
+			unsubscribeStore();
+			unsubscribeStore = null;
+		}
 	}
 
 	public function hasUnsavedChanges():Bool return false;
@@ -190,7 +201,7 @@ class SettingsPanel implements View {
 		var header:View = compact ? new Column(key + ":header", headerChildren, headerStyle) : new Row(key + ":header", headerChildren, headerStyle);
 
 		var treeStyle = fill();
-		var tree = new TreeView(key + ":tree:" + treeModel.revision(), treeModel, treeStyle, null, 400.0,
+		var tree = new TreeView(key + ":tree:" + treeModel.cacheKey(), treeModel, treeStyle, null, 400.0,
 			selectedCategory, treeModel.groups(), select);
 
 		var inspectorView:View = null;
@@ -308,7 +319,6 @@ private class SettingsTreeModel implements TreeViewModel {
 	public var categories(default, null):Array<String>;
 	var roots:Array<String>;
 	var children:Map<String, Array<String>>;
-	var treeRevision:Int;
 	var counts:Map<String, Int> = new Map();
 	var query:String = "";
 	var contentKey:String = "";
@@ -317,7 +327,6 @@ private class SettingsTreeModel implements TreeViewModel {
 		categories = [];
 		roots = [];
 		children = new Map();
-		treeRevision = 0;
 	}
 
 	public function update(next:Array<String>, nextCounts:Map<String, Int>, filter:String):Void {
@@ -340,7 +349,6 @@ private class SettingsTreeModel implements TreeViewModel {
 			if (category != root)
 				children.get(root).push(category);
 		}
-		treeRevision++;
 	}
 
 	public function groups():Array<String>
@@ -405,8 +413,8 @@ private class SettingsTreeModel implements TreeViewModel {
 		return new haxeon.ui.widgets.text.HighlightedText(SettingsCatalog.labelOf(key) + " (" + count + ")", query);
 	}
 
-	public function revision():Int
-		return treeRevision;
+	public function cacheKey():String
+		return contentKey;
 }
 
 private class SettingsFocusRegion implements View {

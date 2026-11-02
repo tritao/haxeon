@@ -89,20 +89,26 @@ measurements and [UI value types](../packages/ui/docs/VALUE_TYPES.md) for the UI
 
 Every panel that was hard to retain (inspection camera, BIM, machine control, mission, CNC) was hard because its build
 changed state, and verify mode found that indirectly. The first answer is not a language feature: ADR 0002 makes the state
-the UI depends on signals and throws at any signal write inside a tracking scope, at the line that writes (decision 9,
-stage 1), as Svelte 5 and Compose do. A compile-time `@:pure` contract ([PURITY.md](PURITY.md)) is deferred until those
-runtime checks show real holes, such as verify failures caused by plain-field writes during builds.
+the UI depends on signals and throws at a tracked write when another computation could observe it, at the line that
+writes (decision 9, stage 1), as Svelte 5 and Compose do. A compile-time `@:pure` contract ([PURITY.md](PURITY.md)) is deferred until those
+runtime checks show real holes, such as writes through non-Observable external objects during builds.
 
 Purity *inference* without annotations is a separate, smaller idea for the optimizer (dead call removal, common
 subexpressions, loop-invariant hoisting); it needs no user-facing contract.
 
-### 5a. Observable model fields (ADR 0002 stage 1b)
+### 5a. Observable model fields (ADR 0002 stages 1 and 1b)
 
-Class-only `Observable` conformance instruments plain field reads and writes for field-level dependency tracking, with
-one dependency list per object and no per-field signal allocation. Writes that are equal by declared `Equatable`
-conformance (or identity for nonconforming classes) do not invalidate readers. Its field bits share the `Diffable` and
-channel numbering. Test every target and verify mode, then migrate all revision-adapter models we own and remove their
-counters. Add an adapter only if a real external model appears. This stage does not depend on the run-once experiment.
+Implemented. Class-only `Observable` conformance instruments plain field reads and writes for field-level dependency
+tracking, with one dependency list per object and no per-field signal allocation. Writes that are equal by declared
+`Equatable` conformance (or identity for nonconforming classes) do not invalidate readers. Field bits share the
+`Diffable` numbering. HashLink, Wasm32 and Wasm GC tests cover fresh-object initialization, per-field invalidation and
+the write guard; UI verify mode covers retained reads. Owned revision-adapter models were migrated and their counters
+removed. Add an adapter only if a real external model appears.
+
+Use `@:unobservable` on stored implementation fields that do not represent model state. A public getter that exposes a
+derived value must read the observable fields that define that value. `TextDocument` publishes `revision` and delegates
+text storage to an unobservable `TextDocumentBuffer`; the editor's private state uses that buffer directly. This keeps
+private synchronization inside a tracked widget build separate from edits to a shared observable document.
 
 ## General allocation work
 

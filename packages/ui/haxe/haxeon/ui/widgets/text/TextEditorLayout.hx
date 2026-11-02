@@ -16,7 +16,7 @@ import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextColorRange;
-import haxeon.editor.TextDocument;
+import haxeon.editor.TextDocument.TextDocumentBuffer;
 
 /**
 	Retained layouts for bounded groups of paragraphs in one editor document.
@@ -51,7 +51,7 @@ class TextEditorLayout {
 	final fonts:FontCollection;
 	var paragraphs:Array<TextEditorParagraphRecord>;
 	var rangeGeometryCache:Array<TextEditorRangeGeometryCache>;
-	var offsets:TextDocument;
+	var offsets:TextDocumentBuffer;
 	var documentRevision:Int = -1;
 	var paragraphLineCount:Int;
 	var contentWidth:Float;
@@ -68,7 +68,7 @@ class TextEditorLayout {
 	var disposed:Bool;
 
 	public function new(fonts:FontCollection, value:String, width:Float, textStyle:TextStyle,
-			paragraphStyle:ParagraphStyle, ?offsetMap:TextDocument) {
+			paragraphStyle:ParagraphStyle, ?offsetMap:TextDocumentBuffer) {
 		if (fonts == null || fonts.isDisposed())
 			throw "Editor layout requires a live font collection";
 		if (width <= 0.0 || textStyle == null || paragraphStyle == null)
@@ -99,13 +99,13 @@ class TextEditorLayout {
 	function get_text():String
 		return offsets == null ? "" : offsets.text;
 
-	static function chunkCount(offsetMap:TextDocument):Int
+	static function chunkCount(offsetMap:TextDocumentBuffer):Int
 		return Std.int((offsetMap.paragraphCount() + paragraphsPerLayout - 1) / paragraphsPerLayout);
 
-	static function chunkParagraphCount(offsetMap:TextDocument, index:Int):Int
+	static function chunkParagraphCount(offsetMap:TextDocumentBuffer, index:Int):Int
 		return Std.int(Math.min(offsetMap.paragraphCount(), (index + 1) * paragraphsPerLayout)) - index * paragraphsPerLayout;
 
-	static function chunkRangeAt(offsetMap:TextDocument, index:Int):TextRange {
+	static function chunkRangeAt(offsetMap:TextDocumentBuffer, index:Int):TextRange {
 		var firstParagraph = index * paragraphsPerLayout;
 		var lastParagraph = Std.int(Math.min(offsetMap.paragraphCount() - 1,
 			firstParagraph + paragraphsPerLayout - 1));
@@ -115,19 +115,19 @@ class TextEditorLayout {
 
 	/** Updates only paragraph resources whose text or shaping inputs changed. */
 	public function update(value:String, nextWidth:Float, nextTextStyle:TextStyle,
-			nextParagraphStyle:ParagraphStyle, ?offsetMap:TextDocument):Void {
+			nextParagraphStyle:ParagraphStyle, ?offsetMap:TextDocumentBuffer):Void {
 		ensureLive();
 		if (nextWidth <= 0.0 || nextTextStyle == null || nextParagraphStyle == null)
 			throw "Editor layout update arguments are invalid";
 		var actualText = value == null ? "" : value;
-		var nextOffsets = offsetMap == null ? new TextDocument(actualText) : offsetMap;
+		var nextOffsets = offsetMap == null ? new TextDocumentBuffer(actualText) : offsetMap;
 		if (nextOffsets.text != actualText)
-			nextOffsets = new TextDocument(actualText);
+			nextOffsets = new TextDocumentBuffer(actualText);
 		updateDocument(nextOffsets, nextWidth, nextTextStyle, nextParagraphStyle);
 	}
 
 	/** Updates retained paragraph layouts directly from the segmented document. */
-	public function updateDocument(nextOffsets:TextDocument, nextWidth:Float,
+	public function updateDocument(nextOffsets:TextDocumentBuffer, nextWidth:Float,
 			nextTextStyle:TextStyle, nextParagraphStyle:ParagraphStyle):Void {
 		ensureLive();
 		if (nextOffsets == null || nextWidth <= 0.0 || nextTextStyle == null || nextParagraphStyle == null)
@@ -223,13 +223,13 @@ class TextEditorLayout {
 		recomputeMetrics();
 	}
 
-	public function setText(value:String, ?offsetMap:TextDocument):Void
+	public function setText(value:String, ?offsetMap:TextDocumentBuffer):Void
 		update(value, width, textStyle, paragraphStyle, offsetMap);
 
 	/** Updates the affected chunk window while preserving all other boundaries.
 	 * Chunks grow locally to the hard paragraph bound before being split.
 	 */
-	public function setTextAfterEdit(nextOffsets:TextDocument,
+	public function setTextAfterEdit(nextOffsets:TextDocumentBuffer,
 			oldStart:Int, oldEnd:Int, newStart:Int, newEnd:Int,
 			oldDocumentLength:Int):Void {
 		ensureLive();

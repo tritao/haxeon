@@ -83,7 +83,7 @@ class PropertyInspector implements View {
 				throw "Inspector section IDs must be unique";
 			var editor = new PropertyEditor("section:" + section.id, section.descriptors,
 				null, this.registry);
-			editor.showCategories = false;
+			editor.showCategoryHeaders(false);
 			editors.set(section.id, editor);
 			for (descriptor in section.descriptors) {
 				if (sectionByDescriptor.exists(descriptor.id))
@@ -117,15 +117,6 @@ class PropertyInspector implements View {
 	}
 
 	/** Revision of transient editor state that must invalidate a retained panel. */
-	public function contentRevision():Int {
-		var result = 0;
-		for (section in sections) {
-			var editor = editors.get(section.id);
-			result = result * 31 + (editor == null ? 0 : editor.revision);
-		}
-		return result;
-	}
-
 	/** Whether discarding and rebuilding this inspector would keep all of its transient user state unchanged. */
 	public function isPristine():Bool {
 		if (sections.length != initialExpanded.length || controller.offsetX != initialScrollX ||
@@ -160,14 +151,10 @@ class PropertyInspector implements View {
 			var children:Array<KeyedView> = [];
 			for (section in sections) {
 				var editor = editors.get(section.id);
-				editor.enabled = enabled;
-				editor.labelWidth = labelWidth;
-				editor.stackedRows = stackedRows;
-				editor.searchQuery = searchQuery;
+					editor.configure(enabled, labelWidth, stackedRows, searchQuery);
 				var header = new PropertyInspectorSectionHeader("header", section,
 					function() {
-						if (setSectionExpanded(section.id, !section.expanded))
-							context.commands.refresh();
+						setSectionExpanded(section.id, !section.expanded);
 					});
 				children.push(new KeyedView("section:" + section.id + ":header", header));
 				if (section.expanded)

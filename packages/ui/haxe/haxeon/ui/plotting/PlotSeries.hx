@@ -1,16 +1,17 @@
 package haxeon.ui.plotting;
 
+import Observable;
+
 import haxeon.ui.Color;
 
 /** Application-owned samples and presentation for one plot line. */
-class PlotSeries {
+class PlotSeries implements Observable {
 	public final id:String;
 	public final label:String;
 	public final color:Color;
 	public final lineWidth:Float;
 	public var visible(default, null):Bool;
-	public var revision(default, null):Int;
-	final values:Array<PlotPoint>;
+	var values:Array<PlotPoint>;
 
 	public function new(id:String, label:String, color:Color, ?lineWidth:Float = 1.5) {
 		if (id == null || id.length == 0 || label == null || label.length == 0 ||
@@ -21,7 +22,6 @@ class PlotSeries {
 		this.color = color;
 		this.lineWidth = lineWidth;
 		visible = true;
-		revision = 1;
 		values = [];
 	}
 
@@ -42,33 +42,32 @@ class PlotSeries {
 		if (visible == value)
 			return false;
 		visible = value;
-		revision++;
 		return true;
 	}
 
 	public function setPoints(points:Array<PlotPoint>):Void {
-		values.resize(0);
+		var next:Array<PlotPoint> = [];
 		if (points != null)
 			for (point in points) {
 				if (point == null)
 					throw "Plot series cannot contain null points";
-				values.push(point);
+				next.push(point);
 			}
-		revision++;
+		values = next;
 	}
 
 	public function add(point:PlotPoint):Void {
 		if (point == null)
 			throw "Plot series cannot contain null points";
-		values.push(point);
-		revision++;
+		var next = values.copy();
+		next.push(point);
+		values = next;
 	}
 
 	public function clear():Void {
 		if (values.length == 0)
 			return;
-		values.resize(0);
-		revision++;
+		values = [];
 	}
 
 	static inline function finite(value:Float):Bool

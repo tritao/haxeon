@@ -46,15 +46,7 @@ class CommandButton implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		var commands = registry == null ? context.commands : registry;
-		var actualContext = invocationContext == null ? context.commandContext : invocationContext;
-		var id = commandId, invocation = invocationContext;
-		// Observed, so a retained subtree around the button notices the command appearing, enabling or checking. Predicates
-		// change without any notification (after a selection, for example), so they are read again to check.
-		context.observeInt(function() {
-			var current = commands.get(id);
-			var checkedIn = invocation == null ? context.commandContext : invocation;
-			return current == null ? -1 : (current.isEnabled(checkedIn) ? 1 : 0) | (current.isChecked(checkedIn) ? 2 : 0);
-		});
+		var invocation = invocationContext;
 		var command = commands.get(commandId);
 		if (command == null) {
 			var missing = new Button("Missing command: " + commandId, style, null, key);
@@ -62,6 +54,7 @@ class CommandButton implements View {
 			return missing.build(context);
 		}
 		var button = new Button(displayLabel == null ? command.label : displayLabel, style, function() {
+			var actualContext = invocation == null ? context.commandContext : invocation;
 			var result = commands.executeContext(commandId, actualContext);
 			if (onResult != null)
 				onResult(result);
@@ -72,8 +65,10 @@ class CommandButton implements View {
 		// reads is what assistive technology announces (WCAG 2.5.3, label in name).
 		if (displayLabel != null && displayLabel.length == 0)
 			button.accessibilityLabel = command.label;
-		button.enabled = command.isEnabled(actualContext);
-		button.selected = command.isChecked(actualContext);
+		var flags = invocation == null ? context.commandFlags(commands, commandId)
+			: (command.isEnabled(invocation) ? 1 : 0) | (command.isChecked(invocation) ? 2 : 0);
+		button.enabled = (flags & 1) != 0;
+		button.selected = (flags & 2) != 0;
 		button.classes = ["command-button"].concat(classes);
 		return button.build(context);
 	}

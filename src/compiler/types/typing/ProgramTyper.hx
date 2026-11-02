@@ -439,6 +439,7 @@ class ProgramTyper {
 		}
 		var declaredType = TInstance(NominalKind.Class, classDecl.name,
 			[for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)]);
+		validateObservable(classDecl, declaredType, classSemanticSubstitutions, isValue, isNativeValue);
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null)
@@ -459,6 +460,30 @@ class ProgramTyper {
 			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions),
 			span: classDecl.span
 		};
+	}
+
+	function validateObservable(classDecl:AstClass, declaredType:CompilerType,
+			classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool, isNativeValue:Bool):Void {
+		if (!DeclaredConformance.has(session, declaredType, "Observable"))
+			return;
+		// Observable field access is generated after typing. Its per-object source is
+		// therefore an implicit module dependency even when user code imports none of
+		// the reactive runtime classes.
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.ui.core.ObservableSource");
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.ui.core.ReactiveRuntime");
+		if (isValue || isNativeValue)
+			BodyTyper.fail("E1025", 'Observable conformance is only supported on classes with identity: "${classDecl.name}"', classDecl.span);
+		if (classDecl.base != null) {
+			var baseType = session.declarations.resolve(classDecl.base, classDecl.span, classSemanticSubstitutions);
+			if (!DeclaredConformance.has(session, baseType, "Observable"))
+				BodyTyper.fail("E1025", 'Observable class "${classDecl.name}" must extend an Observable base class', classDecl.span);
+		}
+		for (field in DiffIntrinsics.storedFields(classDecl)) {
+			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
+				classSemanticSubstitutions);
+			if (DeclaredConformance.usesEquality(session, fieldType))
+				ValueEqualityGenerator.request(session, fieldType, classDecl.name + ".new", field.span);
+		}
 	}
 
 	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType,

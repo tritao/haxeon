@@ -20,6 +20,7 @@ import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
 import haxeon.ui.TextStyle;
 import haxeon.editor.TextDocument;
+import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.editor.TextOffsetMap;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
@@ -53,13 +54,14 @@ class TextEditorState implements SemanticsValueSource {
 	var presentationRevision:Int = -1;
 	var surroundingWindow:Null<TextInputWindow>;
 	var surroundingRevision:Int = -1;
-	var surroundingDocument:Null<TextDocument>;
+	var surroundingDocument:Null<TextDocumentBuffer>;
 	public var textStyle:TextStyle;
 	public var paragraphStyle:ParagraphStyle;
 	/** Cached conversions between document code points, UTF-8 bytes and UTF-16 units. */
-	var offsets:TextDocument;
+	var offsets:TextDocumentBuffer;
+	var sharedDocument:Null<TextDocument>;
 	/** The document and its revision that `semanticsRevision` last counted. */
-	var semanticsDocument:Null<TextDocument>;
+	var semanticsDocument:Null<TextDocumentBuffer>;
 	var semanticsDocumentRevision:Int;
 	var semanticsRevision:Int;
 	/** Measurement-only provider for widgets that place painting in separate layers. */
@@ -86,13 +88,13 @@ class TextEditorState implements SemanticsValueSource {
 	public function breakHistoryGroup():Void { history.breakCoalescing(); lastHistoryEdit = null; }
 	public function undo():Bool {
 		ensureLive();
-		if (offsets.revision != lastLayoutRevision) syncDocument(offsets);
+		if (offsets.revision != lastLayoutRevision) syncBuffer(offsets, offsets.revision);
 		lastHistoryEdit = null;
 		return historyEnabled && history.undo();
 	}
 	public function redo():Bool {
 		ensureLive();
-		if (offsets.revision != lastLayoutRevision) syncDocument(offsets);
+		if (offsets.revision != lastLayoutRevision) syncBuffer(offsets, offsets.revision);
 		lastHistoryEdit = null;
 		return historyEnabled && history.redo();
 	}
@@ -146,7 +148,8 @@ class TextEditorState implements SemanticsValueSource {
 		if (fonts == null || fonts.isDisposed())
 			throw "Text editor requires a live font collection";
 		var initialText = text == null ? "" : text;
-		offsets = document == null ? new TextDocument(initialText) : document;
+		sharedDocument = document;
+		offsets = document == null ? new TextDocumentBuffer(initialText) : document.storage();
 		this.textStyle = textStyle == null ? new TextStyle() : textStyle;
 		this.paragraphStyle = paragraphStyle == null ? new ParagraphStyle() : paragraphStyle;
 		var end = offsets.codepointCount;
@@ -192,6 +195,10 @@ class TextEditorState implements SemanticsValueSource {
 
 	public function syncExternal(value:String):Bool {
 		ensureLive();
+		if (sharedDocument != null) {
+			offsets = new TextDocumentBuffer(offsets.text);
+			sharedDocument = null;
+		}
 		var next = value == null ? "" : value;
 		if (next == offsets.text)
 			return false;
@@ -229,16 +236,21 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	public function syncDocument(document:TextDocument):Bool {
-		ensureLive();
 		if (document == null)
 			throw "Text editor document cannot be null";
-		if (offsets == document && offsets.revision == lastLayoutRevision)
+		sharedDocument = document;
+		return syncBuffer(document.storage(), document.revision);
+	}
+
+	function syncBuffer(nextOffsets:TextDocumentBuffer, sharedRevision:Int):Bool {
+		ensureLive();
+		if (offsets == nextOffsets && sharedRevision == lastLayoutRevision)
 			return false;
 		history.clear(); lastHistoryEdit = null;
 		cancelPointerClick();
-		var sameDocument = offsets == document;
-		if (offsets != document) {
-			offsets = document;
+		var sameDocument = offsets == nextOffsets;
+		if (offsets != nextOffsets) {
+			offsets = nextOffsets;
 			var caret = offsets.codepointCount;
 			setSelection(caret, caret);
 			clearComposition();
@@ -255,6 +267,11 @@ class TextEditorState implements SemanticsValueSource {
 		lastLayoutRevision = offsets.revision;
 		clampScrollOffset();
 		return true;
+	}
+
+	function replaceOffsets(start:Int, end:Int, value:String):Bool {
+		var shared = sharedDocument;
+		return shared == null ? offsets.replace(start, end, value) : shared.replace(start, end, value);
 	}
 
 	public function updateLayout(width:Float):Void {
@@ -355,7 +372,7 @@ class TextEditorState implements SemanticsValueSource {
 		if (textChanged) {
 			var oldDocumentLength = offsets.codepointCount;
 			cancelPointerClick();
-			offsets.replace(first, last, replacement);
+			replaceOffsets(first, last, replacement);
 			var newEnd = first + TextOffsetMap.countCodepoints(replacement);
 			layout.setTextAfterEdit(offsets, first, last, first, newEnd,
 				oldDocumentLength);
@@ -383,7 +400,7 @@ class TextEditorState implements SemanticsValueSource {
 			previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
 	}
 
-	public function documentOffsets():TextDocument {
+	public function documentOffsets():TextDocumentBuffer {
 		ensureLive();
 		return offsets;
 	}

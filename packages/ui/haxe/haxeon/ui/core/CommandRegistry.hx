@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import Observable;
+
 import haxeon.ui.editing.EditHistory;
 import haxeon.ui.editing.EditorDocument;
 
@@ -8,15 +10,14 @@ import haxeon.ui.editing.EditorDocument;
  * Ordered application command registry. The last active scope wins, making
  * viewport, text-editor, and modal scopes able to override global shortcuts.
  */
-class CommandRegistry {
+class CommandRegistry implements Observable {
 	public static inline var GlobalScope:String = "global";
-	final commands:Map<String, Command>;
-	final commandScopes:Map<String, String>;
-	final commandOrder:Array<String>;
-	final activeScopeStack:Array<String>;
+	var commands:Map<String, Command>;
+	var commandScopes:Map<String, String>;
+	var commandOrder:Array<String>;
+	var activeScopeStack:Array<String>;
 	/** User bindings that replace a command's registered shortcuts; an empty list unbinds it. */
-	final customShortcuts:Map<String, Array<Shortcut>>;
-	public var revision(default, null):Int;
+	var customShortcuts:Map<String, Array<Shortcut>>;
 	/** Optional observer for semantic command recording. */
 	public var onInvoked:Null<String->CommandResult->Void> = null;
 
@@ -26,7 +27,6 @@ class CommandRegistry {
 		commandOrder = [];
 		activeScopeStack = [GlobalScope];
 		customShortcuts = new Map();
-		revision = 0;
 	}
 
 	/** Registers a command without replacing an existing ID. */
@@ -36,19 +36,27 @@ class CommandRegistry {
 			throw "Command registry cannot register null commands";
 		if (commands.exists(command.id))
 			throw 'Command ${command.id} is already registered';
-		commands.set(command.id, command);
-		commandScopes.set(command.id, scope);
-		commandOrder.push(command.id);
-		revision++;
+		var nextCommands = copyCommands(commands), nextScopes = copyScopes(commandScopes),
+			nextOrder = commandOrder.copy();
+		nextCommands.set(command.id, command);
+		nextScopes.set(command.id, scope);
+		nextOrder.push(command.id);
+		commands = nextCommands;
+		commandScopes = nextScopes;
+		commandOrder = nextOrder;
 	}
 
 	public function unregister(id:String):Bool {
 		if (id == null || !commands.exists(id))
 			return false;
-		commands.remove(id);
-		commandScopes.remove(id);
-		commandOrder.remove(id);
-		revision++;
+		var nextCommands = copyCommands(commands), nextScopes = copyScopes(commandScopes),
+			nextOrder = commandOrder.copy();
+		nextCommands.remove(id);
+		nextScopes.remove(id);
+		nextOrder.remove(id);
+		commands = nextCommands;
+		commandScopes = nextScopes;
+		commandOrder = nextOrder;
 		return true;
 	}
 
@@ -84,16 +92,19 @@ class CommandRegistry {
 			if (shortcut != null && !Lambda.exists(unique, function(existing) return existing.equals(shortcut)))
 				unique.push(shortcut);
 		var command = get(id);
+		var nextShortcuts = copyShortcuts(customShortcuts);
 		if (command != null && sameShortcuts(unique, command.defaultShortcuts()))
-			customShortcuts.remove(id);
+			nextShortcuts.remove(id);
 		else
-			customShortcuts.set(id, unique);
-		revision++;
+			nextShortcuts.set(id, unique);
+		customShortcuts = nextShortcuts;
 	}
 
 	public function resetShortcuts(id:String):Void {
-		if (customShortcuts.remove(id))
-			revision++;
+		if (!customShortcuts.exists(id)) return;
+		var nextShortcuts = copyShortcuts(customShortcuts);
+		nextShortcuts.remove(id);
+		customShortcuts = nextShortcuts;
 	}
 
 	public function hasCustomShortcuts(id:String):Bool
@@ -140,19 +151,21 @@ class CommandRegistry {
 		validateScope(scope);
 		if (scope == GlobalScope)
 			return;
-		activeScopeStack.push(scope);
-		revision++;
+		var next = activeScopeStack.copy();
+		next.push(scope);
+		activeScopeStack = next;
 	}
 
 	public function popScope(scope:String):Bool {
 		validateScope(scope);
 		if (scope == GlobalScope)
 			return false;
-		var index = activeScopeStack.length - 1;
+		var next = activeScopeStack.copy();
+		var index = next.length - 1;
 		while (index > 0) {
-			if (activeScopeStack[index] == scope) {
-				activeScopeStack.splice(index, 1);
-				revision++;
+			if (next[index] == scope) {
+				next.splice(index, 1);
+				activeScopeStack = next;
 				return true;
 			}
 			index--;
@@ -161,14 +174,14 @@ class CommandRegistry {
 	}
 
 	public function setActiveScopes(scopes:Array<String>):Void {
-		activeScopeStack.resize(1);
+		var next = [GlobalScope];
 		if (scopes != null)
 			for (scope in scopes) {
 				validateScope(scope);
 				if (scope != GlobalScope)
-					activeScopeStack.push(scope);
+					next.push(scope);
 			}
-		revision++;
+		activeScopeStack = next;
 	}
 
 	/** Runs a callback with a temporary highest-priority scope. */
@@ -198,7 +211,6 @@ class CommandRegistry {
 		}
 		notifyInvocation(id, succeeded ? CommandResult.executed() : CommandResult.disabled());
 		if (!succeeded) return false;
-		revision++;
 		return true;
 	}
 
@@ -209,8 +221,6 @@ class CommandRegistry {
 			return CommandResult.notHandled();
 		var result = command.executeContext(context);
 		notifyInvocation(id, result);
-		if (result.succeeded)
-			revision++;
 		return result;
 	}
 
@@ -280,7 +290,6 @@ class CommandRegistry {
 					var result = command.executeContext(actual);
 					notifyInvocation(id, result);
 					if (result.succeeded) {
-						revision++;
 						return result;
 					}
 					return result;
@@ -294,10 +303,6 @@ class CommandRegistry {
 	function notifyInvocation(id:String, result:CommandResult):Void {
 		if (onInvoked != null) onInvoked(id, result);
 	}
-
-	/** Invalidates command-bound views after external predicate state changes. */
-	public function refresh():Void
-		revision++;
 
 	/** Adds standard undo/redo commands to this registry. */
 	public function installHistoryCommands(history:EditHistory,
@@ -334,5 +339,23 @@ class CommandRegistry {
 	function validateScope(scope:String):Void {
 		if (scope == null || scope.length == 0)
 			throw "Command scopes require a stable name";
+	}
+
+	static function copyCommands(source:Map<String, Command>):Map<String, Command> {
+		var result:Map<String, Command> = new Map();
+		for (key in source.keys()) result.set(key, source.get(key));
+		return result;
+	}
+
+	static function copyScopes(source:Map<String, String>):Map<String, String> {
+		var result:Map<String, String> = new Map();
+		for (key in source.keys()) result.set(key, source.get(key));
+		return result;
+	}
+
+	static function copyShortcuts(source:Map<String, Array<Shortcut>>):Map<String, Array<Shortcut>> {
+		var result:Map<String, Array<Shortcut>> = new Map();
+		for (key in source.keys()) result.set(key, source.get(key));
+		return result;
 	}
 }

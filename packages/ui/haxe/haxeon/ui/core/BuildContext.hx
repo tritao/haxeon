@@ -28,7 +28,10 @@ class BuildContext {
 	/** Application commands available to command-bound widgets. */
 	public final commands:CommandRegistry;
 	/** Invocation context shared by command-bound widgets in this frame. */
-	public var commandContext(default, null):CommandContext;
+	final commandContextState:CommandContextState = new CommandContextState();
+	final commandFlagEntries:Array<{registry:CommandRegistry, id:String, value:Derived<Int>}> = [];
+	public var commandContext(get, never):CommandContext;
+	function get_commandContext():CommandContext return commandContextState.value;
 	public final styleResolver:StyleResolver;
 	public final environment:StyleEnvironment;
 	/** Optional diagnostic sink for named view builds: name, preparation, build, nodes. */
@@ -98,7 +101,7 @@ class BuildContext {
 		this.animations = animations == null ? new AnimationScheduler() : animations;
 		this.interactionStates = interactionStates == null ? new InteractionStateStore() : interactionStates;
 		this.commands = commands == null ? new CommandRegistry() : commands;
-		this.commandContext = new CommandContext();
+		commandContextState.value = new CommandContext();
 		this.styleResolver = new StyleResolver(this.animations);
 		this.environment = new StyleEnvironment();
 		this.theme = theme == null ? new Theme() : theme;
@@ -123,7 +126,26 @@ class BuildContext {
 
 	/** Updates the context passed to command-bound widgets. */
 	public function setCommandContext(context:Null<CommandContext>):Void
-		commandContext = context == null ? new CommandContext() : context;
+		commandContextState.value = context == null ? new CommandContext() : context;
+
+	/** Command presentation changes only when its enabled or checked result changes. */
+	public function commandFlags(registry:CommandRegistry, id:String):Int {
+		for (entry in commandFlagEntries)
+			if (entry.registry == registry && entry.id == id) return entry.value.value;
+		var value = new Derived(function() {
+			var command = registry.get(id);
+			if (command == null) return -1;
+			var invocation = commandContextState.value;
+			return (command.isEnabled(invocation) ? 1 : 0) | (command.isChecked(invocation) ? 2 : 0);
+		});
+		commandFlagEntries.push({registry: registry, id: id, value: value});
+		return value.value;
+	}
+
+	function clearCommandFlags():Void {
+		for (entry in commandFlagEntries) entry.value.dispose();
+		commandFlagEntries.resize(0);
+	}
 
 	/** Replaces the palette used by subsequently built widgets. */
 	public function setTheme(theme:Theme):Void {
@@ -276,10 +298,6 @@ class BuildContext {
 		viewportHeight = height;
 	}
 
-	/** Plain read callbacks are shared across cache checks until model callbacks can change their inputs. */
-	public function advanceDependencyValidation():Void
-		dependencyValidationEpoch = dependencyValidationEpoch == 0x7fffffff ? 1 : dependencyValidationEpoch + 1;
-
 	public function beginFrame():Void {
 		layoutFeedbackRequested = false;
 		buildBeforeLayoutFeedbackRequested = false;
@@ -412,6 +430,8 @@ class BuildContext {
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
 		var root = buildUpdating(entry, previous == null ? null : previous.dependencies);
+		if (root.id.value != id.value)
+			throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${id.value}';
 		// A retained alternative may still hold the old registration. A complete rebuild also changes its snapshot.
 		if (previous != null) previous.buildRevision++;
 		entry.root = root;
@@ -524,7 +544,7 @@ class BuildContext {
 		return true;
 	}
 
-	/** Commit a validated subtree without polling application-owned reads a second time. */
+	/** Commit a subtree after source versions and child registrations have been validated. */
 	@:allow(haxeon.ui.core.InteractionStateSnapshot)
 	function rearmValidated(id:WidgetId, entry:SelfUpdatingBuild):Void {
 		var dependencies = entry.dependencies;
@@ -617,19 +637,17 @@ class BuildContext {
 		activeObserved = capture;
 		activeUpdatingBuild = entry;
 		var stateMark = stateStore.beginUsage();
-		var signalMark = capture.signalCount, intMark = capture.intCount,
-			boolMark = capture.boolCount, stringMark = capture.stringCount;
+		var dependencyMark = capture.dependencyMarker();
 		var registrationMark = updatingRegistrations;
 		var previous = entry.dependencies == null ? prior : entry.dependencies;
 		try {
 			var root = trackReads(entry.build);
 			entry.buildRevision++;
 			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark, previous == null ? null : previous.stateIds);
-			var hasReads = capture.signalCount != signalMark || capture.intCount != intMark ||
-				capture.boolCount != boolMark || capture.stringCount != stringMark;
+			var hasReads = capture.pendingCount() != dependencyMark;
 			var children = updatingRegistrations == registrationMark ? null : new InteractionStateSnapshot(root, this, root);
 			var reads = hasReads || previous != null && previous.observed != null
-				? observedSince(signalMark, intMark, boolMark, stringMark,
+				? dependenciesSince(dependencyMark,
 					previous == null ? null : previous.observed)
 				: null;
 			if (usedStates != null || reads != null || children != null || previous != null) {
@@ -645,13 +663,13 @@ class BuildContext {
 				entry.dependencies = dependencies;
 			}
 			stateStore.finishUsage(stateMark);
-			capture.truncate(signalMark, intMark, boolMark, stringMark);
+			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeUpdatingBuild = previousUpdater;
 			return root;
 		} catch (error:Dynamic) {
 			stateStore.finishUsage(stateMark);
-			capture.truncate(signalMark, intMark, boolMark, stringMark);
+			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeUpdatingBuild = previousUpdater;
 			throw error;
@@ -824,6 +842,7 @@ class BuildContext {
 
 	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
 	public function releaseRetained():Void {
+		clearCommandFlags();
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
 		retainedEdits.resize(0);
@@ -845,6 +864,7 @@ class BuildContext {
 
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
+		clearCommandFlags();
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
 		for (entry in selfUpdatingBuilds)
@@ -905,149 +925,51 @@ class BuildContext {
 	public function stateUsageMarker():Int
 		return stateStore.usageMarker();
 
-	/** Tracked signal reads and explicit plain-field reads from the current frame. */
+	/** Signal and observable-field reads captured by the current frame. */
 	final observed:Dependencies = new Dependencies(true);
 	/** A nested read log for self-updating builds; root caches must not subscribe to their local state. */
 	final localObserved:Dependencies = new Dependencies(true);
 	var activeObserved:Dependencies;
 	var activeUpdatingBuild:Null<SelfUpdatingBuild>;
-	public var dependencyValidationEpoch(default, null):Int = 1;
 	/** Root subscription schedules a frame for any signal read in the mounted tree. */
 	final rootDependencies:Dependencies = new Dependencies();
-	/** Plain reads retained by caches encountered in the last full root build. */
-	final retainedRootReadSets:Array<Dependencies> = [];
-	final retainedRootReadRoots:Array<RenderNode> = [];
-	var rootPollEpoch:Int = 1;
 
 	/** Runs a build or getter as a read-only reactive tracking scope. */
 	public function trackReads<T>(run:Void->T):T
 		return ReactiveRuntime.withTracking(activeObserved, run);
 
-	/**
-	 * Reads a value a build depends on and records it, so a retained subtree around this build is reused only while `read`
-	 * gives the same value. Use it for what lives outside widget state: model fields, command predicates, revisions. The read
-	 * runs again on later frames to check, so keep it cheap and free of side effects.
-	 */
-	public function observeInt(read:Void->Int):Int {
-		var value = read();
-		activeObserved.addInt(read, value);
-		return value;
-	}
+	/** Marks the current dependency log for a retained subtree. */
+	public function dependencyMarker():Int
+		return activeObserved.dependencyMarker();
 
-	public function observeBool(read:Void->Bool):Bool
-		{
-			var value = read();
-			activeObserved.addBool(read, value);
-			return value;
-		}
-
-	/** As observeInt; strings compare by value. */
-	public function observeString(read:Void->Null<String>):Null<String> {
-		var value = read();
-		activeObserved.addString(read, value);
-		return value;
-	}
-
-	public function observedIntMarker():Int
-		return activeObserved.intCount;
-
-	public function observedBoolMarker():Int
-		return activeObserved.boolCount;
-
-	public function observedStringMarker():Int
-		return activeObserved.stringCount;
-
-	/** The reads observed since the markers, for a retained subtree to keep. */
-	public function observedSignalMarker():Int
-		return activeObserved.signalCount;
-
-	/** Captures reads since the markers into a reusable retained dependency record. */
-	public function observedSince(signalMark:Int, intMark:Int, boolMark:Int, stringMark:Int,
-			?target:Dependencies):Dependencies {
+	/** Captures tracked reads since the marker into a reusable retained dependency record. */
+	public function dependenciesSince(marker:Int, ?target:Dependencies):Dependencies {
 		var result = target == null ? new Dependencies() : target;
-		result.replaceSlice(activeObserved, signalMark, intMark, boolMark, stringMark);
+		result.replaceSlice(activeObserved, marker);
 		result.setInvalidationOwner(this, activeUpdatingBuild);
 		return result;
 	}
 
-	/** Registers plain reads from a retained cache that was active in this root build. */
-	public function retainRootObserved(root:RenderNode, ?interactions:InteractionStateSnapshot):Void {
-		if (root == null) return;
-		var currentRoot = RenderNode.latest(root);
-		if (interactions != null) interactions.retainObservedDependencies(this, currentRoot);
-	}
-
-	/** Plain reads inside self-updating builds are truncated from the root log and polled only when a local patch can skip caches. */
-	public function retainUpdatingObserved(dependencies:Dependencies, root:RenderNode):Void {
-		if (dependencies == null || root == null || !dependencies.hasPlainReads()) return;
-		var currentRoot = RenderNode.latest(root);
-		if (dependencies.rootPollEpoch == rootPollEpoch) {
-			if (dependencies.rootPollIndex >= 0 && dependencies.rootPollIndex < retainedRootReadRoots.length)
-				retainedRootReadRoots[dependencies.rootPollIndex] = currentRoot;
-		} else {
-			dependencies.rootPollEpoch = rootPollEpoch;
-			dependencies.rootPollIndex = retainedRootReadSets.length;
-			retainedRootReadSets.push(dependencies);
-			retainedRootReadRoots.push(currentRoot);
-		}
-	}
-
 	/** Replaces the root subscriptions after a successful full build. */
-	public function captureRootDependencies():Void
-		{
-			// Until Observable field instrumentation replaces them, root caches still need to poll explicit plain-field reads.
-			// Keep those legacy reads out of the signal subscriptions: rootObservedDirty polls them once at the reuse boundary.
-			rootDependencies.replaceSignals(observed, 0);
-			observed.markClean();
-			reactiveBuildPending = false;
-		}
+	public function captureRootDependencies():Void {
+		rootDependencies.replaceSlice(observed, 0);
+		observed.markClean();
+		reactiveBuildPending = false;
+	}
 
 	public function rootDependenciesDirty():Bool
 		return reactiveBuildPending || rootDependencies.dirty;
 
-	/** Plain model reads are polled once before deciding whether to reuse the submitted root. */
-	public function rootObservedDirty():Bool
-		return observed.dirty;
-
-	/** Checks active retained cache inputs at the root boundary or before a local patch bypasses those caches. */
-	public function retainedRootObservedDirty():Bool {
-		for (index in 0...retainedRootReadSets.length) {
-			var root = retainedRootReadRoots[index], containsPatch = false;
-			for (entry in pendingPatches) {
-				if (!entry.pending) continue;
-				var node = entry.root;
-				while (node != null) {
-					if (node == root) { containsPatch = true; break; }
-					node = node.parent;
-				}
-				if (containsPatch) break;
-			}
-			var dependencies = retainedRootReadSets[index];
-			if (containsPatch && dependencies.hasPlainReads() && !dependencies.current()) return true;
-		}
-		return false;
+	/** Records a reused subtree's reads again, so an enclosing cache depends on them too. */
+	public function retainDependencies(dependencies:Dependencies):Void {
+		dependencies.setInvalidationOwner(this, activeUpdatingBuild);
+		activeObserved.addAll(dependencies);
 	}
-
-	/** Records a reused subtree's reads again, so a retained subtree around it depends on them too. */
-	public function retainObserved(dependencies:Dependencies, root:RenderNode,
-			interactions:InteractionStateSnapshot):Void
-		{
-			dependencies.setInvalidationOwner(this, activeUpdatingBuild);
-			activeObserved.addAll(dependencies);
-			retainRootObserved(root, interactions);
-		}
 
 	/** Called as a frame starts: the log only links reads to the subtrees built in one frame. */
 	public function resetObserved():Void {
 		observed.clear();
 		localObserved.clear();
-	}
-
-	/** Starts the root cache read set that will be polled at local patch boundaries. */
-	public function resetRootObserved():Void {
-		retainedRootReadSets.resize(0);
-		retainedRootReadRoots.resize(0);
-		rootPollEpoch = rootPollEpoch == 0x7fffffff ? 1 : rootPollEpoch + 1;
 	}
 
 

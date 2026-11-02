@@ -56,6 +56,7 @@ import haxeon.ui.core.CachePolicy;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Dependencies;
 import haxeon.ui.core.ReactiveRuntime;
+import haxeon.ui.core.ObservableSource;
 import haxeon.ui.core.Signal;
 import haxeon.ui.core.Derived;
 import haxeon.ui.core.Effect;
@@ -927,6 +928,8 @@ class FrameworkSmoke {
 			return 306;
 		if (!signalsTrackOnlyReaders())
 			return 307;
+		if (!observableFieldsTrackIndependently())
+			return 310;
 		if (!reactiveValuesRecomputeWithoutGlitches())
 			return 308;
 		if (!interactionChangesReuseStorage())
@@ -4506,15 +4509,57 @@ class FrameworkSmoke {
 		ReactiveRuntime.withTracking(otherCapture, function() other.value);
 		var openDependencies = new Dependencies();
 		var otherDependencies = new Dependencies();
-		openDependencies.replaceSlice(openCapture, 0, 0, 0, 0);
-		otherDependencies.replaceSlice(otherCapture, 0, 0, 0, 0);
+			openDependencies.replaceSlice(openCapture, 0);
+			otherDependencies.replaceSlice(otherCapture, 0);
 		if (!openDependencies.current() || !otherDependencies.current()) return false;
 		open.update(true);
 		if (openDependencies.current() || !otherDependencies.current()) return false;
 		other.update(3);
 		var failed = false;
 		try ReactiveRuntime.withTracking(otherCapture, function() other.update(4)) catch (_:Dynamic) failed = true;
-		return !otherDependencies.current() && failed;
+		var fresh:Signal<Int> = null;
+		ReactiveRuntime.withTracking(openCapture, function() {
+			fresh = new Signal<Int>(1);
+			fresh.update(2);
+		});
+		var freshState:State<Int> = context.state(context.id("fresh"), 0);
+		ReactiveRuntime.withTracking(openCapture, function() freshState.update(1));
+		return !otherDependencies.current() && failed && fresh != null && fresh.value == 2 && freshState.value == 1;
+	}
+
+	/** Observable fields share one source while keeping independent reader versions and capture bits. */
+	static function observableFieldsTrackIndependently():Bool {
+		var source = new ObservableSource(5), firstValue = 1, secondValue = 2, firstRuns = 0, secondRuns = 0;
+		var first = new Derived<Int>(function() {
+			firstRuns++;
+			source.recordFieldRead(3);
+			return firstValue;
+		});
+		var second = new Derived<Int>(function() {
+			secondRuns++;
+			source.recordFieldRead(4);
+			return secondValue;
+		});
+		if (first.value != 1 || second.value != 2 || firstRuns != 1 || secondRuns != 1)
+			return false;
+		firstValue = 5;
+		source.invalidateField(3);
+		if (!first.dirty || second.dirty || first.value != 5 || firstRuns != 2 || secondRuns != 1)
+			return false;
+		secondValue = 6;
+		source.invalidateField(4);
+		if (!second.dirty || first.dirty || second.value != 6 || firstRuns != 2 || secondRuns != 2)
+			return false;
+		var capture = new Dependencies(true);
+		ReactiveRuntime.withTracking(capture, function() {
+			source.recordFieldRead(3);
+			source.recordFieldRead(3);
+			source.recordFieldRead(4);
+		});
+		var valid = capture.pendingCount() == 2 && capture.pendingFieldBitAt(0) == 3 && capture.pendingFieldBitAt(1) == 4;
+		first.dispose();
+		second.dispose();
+		return valid;
 	}
 
 	/** Derived values pull latest inputs once, suppress equal outputs, and effects coalesce writes. */
@@ -5213,7 +5258,7 @@ class FrameworkSmoke {
 		massSettings.unit = "kg";
 		massSettings.defaultValue = PropertyValue.Float(2.0);
 		var massProperty = new PropertyDescriptor("mass", "Mass", PropertyType.Float,
-			function(_) return PropertyValue.Float(mass), function(_, value) {
+			function() return PropertyValue.Float(mass), function(_, value) {
 				switch (value) {
 					case PropertyValue.Float(next): mass = next;
 					case PropertyValue.Int(next): mass = next;
@@ -5226,7 +5271,7 @@ class FrameworkSmoke {
 		modeSettings.options = [new PropertyOption("solid", "Solid"),
 			new PropertyOption("wire", "Wire")];
 		var modeProperty = new PropertyDescriptor("mode", "Mode", PropertyType.Enum,
-			function(_) return PropertyValue.Enum(mode), function(_, value) {
+			function() return PropertyValue.Enum(mode), function(_, value) {
 				switch (value) {
 					case PropertyValue.Enum(next): mode = next;
 					default: throw "Mode requires an enum value";
@@ -5236,7 +5281,7 @@ class FrameworkSmoke {
 			modeProperty.validateValue(commandContext, PropertyValue.Enum("invalid")) == null)
 			return false;
 		var mixedProperty = new PropertyDescriptor("visible", "Visible", PropertyType.Bool,
-			function(_) return PropertyValue.Mixed, function(_, _) {}, null);
+			function() return PropertyValue.Mixed, function(_, _) {}, null);
 		var inspector = new PropertyEditor("inspector", [massProperty, modeProperty, mixedProperty]);
 		var inspectorRoot = uiContext.submit(inspector, new LayoutFrame(480.0, 320.0));
 		if (inspectorRoot == null || inspectorRoot.children.length < 4 ||
@@ -5296,7 +5341,7 @@ class FrameworkSmoke {
 		var bindingValue = 1;
 		var bindingDocument = new EditorDocument("binding");
 		var bindingDescriptor = new PropertyDescriptor("value", "Value", PropertyType.Int,
-			function(_) return PropertyValue.Int(bindingValue), function(_, value) {
+			function() return PropertyValue.Int(bindingValue), function(_, value) {
 				switch (value) {
 					case PropertyValue.Int(next): bindingValue = next;
 					default: throw "Binding value requires an integer";
@@ -5334,8 +5379,7 @@ class FrameworkSmoke {
 			new PlotPoint(2.0, 1.5)]);
 		plotModel.addSeries(plotSeries);
 		var plotRange = plotModel.range();
-		if (plotRange == null || plotRange.minimumX != 0.0 || plotRange.maximumX != 2.0 ||
-			plotModel.revision() <= 1)
+		if (plotRange == null || plotRange.minimumX != 0.0 || plotRange.maximumX != 2.0)
 			return false;
 		var plotRoot = uiContext.submit(new PlotView("telemetry-plot", plotModel),
 			new LayoutFrame(320.0, 180.0));
@@ -5359,7 +5403,7 @@ class FrameworkSmoke {
 		var customRegistry = new PropertyEditorRegistry();
 		customRegistry.register(new SmokeVectorExtension());
 		var vectorProperty = new PropertyDescriptor("position", "Position",
-			PropertyType.Custom("vec3"), function(_) {
+			PropertyType.Custom("vec3"), function() {
 				return PropertyValue.Custom("vec3", vector);
 			}, function(_, value) {
 				switch (value) {
@@ -6536,11 +6580,10 @@ class FrameworkSmoke {
 			else if (rebuilt.interaction != retainedInteraction)
 				return false;
 		}
-		if (model.listenerCount != 2 || retainedInteraction == null ||
-			retainedInteraction.listenerCount != 1)
+		if (model.listenerCount != 1 || retainedInteraction == null)
 			return false;
 		uiContext.submit(new Text("workspace unmounted"), new LayoutFrame(640.0, 480.0));
-		return model.listenerCount == 1 && retainedInteraction.listenerCount == 0;
+		return model.listenerCount == 1;
 	}
 
 	/** Covers the shared Haxe scene policy around transforms, clipping, order, and events. */

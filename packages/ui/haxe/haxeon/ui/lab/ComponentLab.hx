@@ -1,5 +1,7 @@
 package haxeon.ui.lab;
 
+import Observable;
+
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -34,7 +36,7 @@ import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.controls.Toggle;
 
 /** Interactive Storybook-style surface backed by ordinary UIKit views. */
-class ComponentLab {
+class ComponentLab implements Observable {
   public final stories:Array<ComponentStory>;
   var selectedId:String;
   var textValue:String = "Editable text";
@@ -67,7 +69,7 @@ class ComponentLab {
       var captured = story;
       var button = new Button(story.title, null, function() {
         selectedId = captured.id;
-        ui.commands.refresh();
+
       }, "story:" + story.id);
       button.variant = ButtonVariant.Navigation;
       button.selected = story.id == selected.id;
@@ -138,7 +140,7 @@ class ComponentLab {
       var captured = entry;
       var button = new Button(entry.label, null, function() {
         previewWidth = captured.width;
-        ui.commands.refresh();
+
       }, "width:" + entry.key);
       button.variant = ButtonVariant.Navigation;
       button.selected = previewWidth == entry.width;

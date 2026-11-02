@@ -19,6 +19,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	var captureStampUsed:Int = 0;
 	var captureStampIds:Array<Int>;
 	var captureSources:Array<ReactiveSource>;
+	var captureFieldBits:Array<Int>;
 	var captureStamp:Int = 1;
 	var status:Int = Dirty;
 
@@ -33,33 +34,41 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	/** Records a source once in the active run, reusing its edge on the next run. */
 	public function track(source:ReactiveSource):Void {
+		trackField(source, 0);
+	}
+
+	/** Records one field dependency on a shared observable object source. */
+	public function trackField(source:ReactiveSource, fieldBit:Int):Void {
 		if (source == null) throw "Reactive dependencies require a source";
+		var dependencyId = source.dependencyId(fieldBit);
 		if (captureOnly) {
 			if (captureSources == null) captureSources = [];
-			var priorStamp = getCaptureStamp(source.reactiveId);
+			if (captureFieldBits == null) captureFieldBits = [];
+			var priorStamp = getCaptureStamp(dependencyId);
 			if (priorStamp < 0) {
 				if (captureStampIds == null) captureStampIds = [];
-				captureStampIds.push(source.reactiveId);
+				captureStampIds.push(dependencyId);
 			}
 			if (priorStamp != captureStamp) {
-				setCaptureStamp(source.reactiveId, captureStamp);
+				setCaptureStamp(dependencyId, captureStamp);
 				captureSources.push(source);
+				captureFieldBits.push(fieldBit);
 			}
 			return;
 		}
-		var edge = findEdge(source);
+		var edge = findEdge(source, fieldBit);
 		if (edge == null) {
-			edge = new ReactiveEdge(source, this);
+			edge = new ReactiveEdge(source, this, fieldBit);
 			if (edgesBySource == null) edgesBySource = new Map();
-			edgesBySource.set(source.reactiveId, edge);
+			edgesBySource.set(dependencyId, edge);
 			linkReader(edge);
 			source.subscribe(edge);
 		}
 		edge.stamp = runStamp;
 	}
 
-	function findEdge(source:ReactiveSource):Null<ReactiveEdge>
-		return edgesBySource == null ? null : edgesBySource.get(source.reactiveId);
+	function findEdge(source:ReactiveSource, fieldBit:Int):Null<ReactiveEdge>
+		return edgesBySource == null ? null : edgesBySource.get(source.dependencyId(fieldBit));
 
 	function linkReader(edge:ReactiveEdge):Void {
 		edge.readerPrevious = readerTail;
@@ -70,6 +79,14 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	}
 
 	public function dependencyCount():Int return captureOnly ? pendingCount() : edgeCount;
+	public function dependencyMarker():Int {
+		if (!captureOnly) return edgeCount;
+		var marker = pendingCount();
+		// Each retained computation needs its own slice even when a sibling read
+		// the same source earlier in this frame. Keep deduplication within a slice.
+		advanceCaptureStamp();
+		return marker;
+	}
 
 	function unlinkReader(edge:ReactiveEdge):Void {
 		if (edge.readerPrevious == null) readerHead = edge.readerNext else edge.readerPrevious.readerNext = edge.readerNext;
@@ -95,10 +112,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			if (edge.stamp != runStamp) {
 				edge.source.unsubscribe(edge);
 				unlinkReader(edge);
-				edgesBySource.remove(edge.source.reactiveId);
+				edgesBySource.remove(edge.source.dependencyId(edge.fieldBit));
 			} else {
 				edge.source.ensureCurrent();
-				edge.seenVersion = edge.source.version;
+				edge.seenVersion = edge.source.versionAt(edge.fieldBit);
 			}
 			edge = next;
 		}
@@ -110,7 +127,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		var edge = readerHead;
 		while (edge != null) {
 			edge.source.ensureCurrent();
-			if (edge.seenVersion != edge.source.version) return true;
+			if (edge.seenVersion != edge.source.versionAt(edge.fieldBit)) return true;
 			edge = edge.readerNext;
 		}
 		return false;
@@ -159,10 +176,6 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	public function onMaybeStale():Void {}
 
-	/** Compatibility for source-like invalidation sites inside the reactive core. */
-	public function invalidate():Void
-		markMaybeStale();
-
 	override public function ensureCurrent():Void
 		validateIfNeeded();
 
@@ -182,15 +195,21 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	public function pendingSourceAt(index:Int):ReactiveSource
 		return captureSources[index];
 
+	public function pendingFieldBitAt(index:Int):Int
+		return captureFieldBits[index];
+
 	public function truncatePending(marker:Int):Void {
-		if (captureSources != null)
+		if (captureSources != null) {
 			captureSources.resize(marker < 0 ? 0 : marker > captureSources.length ? captureSources.length : marker);
+			captureFieldBits.resize(captureSources.length);
+		}
 		advanceCaptureStamp();
 	}
 
 	public function clearPending():Void {
 		sweepCaptureStamps();
 		if (captureSources != null) captureSources.resize(0);
+		if (captureFieldBits != null) captureFieldBits.resize(0);
 		advanceCaptureStamp();
 	}
 
@@ -198,10 +217,11 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		if (captureStamp == MaxStamp) {
 			clearCaptureStamps();
 			captureStamp = 1;
-			if (captureSources != null) for (source in captureSources) {
-				if (getCaptureStamp(source.reactiveId) < 0)
-					captureStampIds.push(source.reactiveId);
-				setCaptureStamp(source.reactiveId, captureStamp);
+			if (captureSources != null) for (index in 0...captureSources.length) {
+				var source = captureSources[index], dependencyId = source.dependencyId(captureFieldBits[index]);
+				if (getCaptureStamp(dependencyId) < 0)
+					captureStampIds.push(dependencyId);
+				setCaptureStamp(dependencyId, captureStamp);
 			}
 		} else
 			captureStamp++;
@@ -217,8 +237,8 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	/** Retain entries for sources still in this capture so the next frame reuses their table slots. */
 	function sweepCaptureStamps():Void {
 		if (captureStampIds == null) return;
-		if (captureSources != null) for (source in captureSources)
-			setCaptureStamp(source.reactiveId, 0);
+		if (captureSources != null) for (index in 0...captureSources.length)
+			setCaptureStamp(captureSources[index].dependencyId(captureFieldBits[index]), 0);
 		var write = 0;
 		for (id in captureStampIds) {
 			if (getCaptureStamp(id) == 0)
@@ -341,11 +361,12 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	public function appendDependenciesTo(target:ReactiveDependencySet):Void {
 		if (captureOnly) {
-			if (captureSources != null) for (source in captureSources) target.track(source);
+			if (captureSources != null) for (index in 0...captureSources.length)
+				target.trackField(captureSources[index], captureFieldBits[index]);
 			return;
 		}
 		var edge = readerHead;
-		while (edge != null) { target.track(edge.source); edge = edge.readerNext; }
+		while (edge != null) { target.trackField(edge.source, edge.fieldBit); edge = edge.readerNext; }
 	}
 
 	/** Unsubscribe retained readers when their owning cache or context is released. */

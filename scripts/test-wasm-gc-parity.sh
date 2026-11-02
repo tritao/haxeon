@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
-mkdir -p "$root_dir/out"
+parity_output_dir=${HAXEON_WASM_PARITY_OUTPUT_DIR:-"$root_dir/out"}
+mkdir -p "$parity_output_dir"
 
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
@@ -18,14 +19,14 @@ for case_name in "${cases[@]}"; do
 	source="tests/programs/wasm-gc-$case_name.hx"
 	for target in wasm32 wasm-gc; do
 		haxeon_compile_async \
-			--target="$target" --output="out/wasm-parity-$target-$case_name.wasm" \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-$case_name.wasm" \
 			--entry="wasm-gc-$case_name" --root=tests/programs "$source"
 	done
 done
 
 for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
-		--target="$target" --output="out/wasm-parity-$target-bytes-compare.wasm" \
+		--target="$target" --output="$parity_output_dir/wasm-parity-$target-bytes-compare.wasm" \
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
 done
 
@@ -33,13 +34,13 @@ done
 # those listed in wasm-parity-skips.tsv with the reason they cannot yet.
 # Compile failures are reported with the other results; skipped programs still compile so the
 # suite notices when one starts passing.
-mkdir -p "$root_dir/out/wasm-parity-logs"
+mkdir -p "$parity_output_dir/wasm-parity-logs"
 while IFS=$'\t' read -r case_name _; do
 	[[ -z $case_name || $case_name == \#* ]] && continue
 	for target in wasm32 wasm-gc; do
-		output="out/wasm-parity-$target-$case_name.wasm"
-		rm -f "$root_dir/$output"
-		haxeon_compile_logged_async "$root_dir/out/wasm-parity-logs/$target-$case_name.log" \
+		output="$parity_output_dir/wasm-parity-$target-$case_name.wasm"
+		rm -f "$output"
+		haxeon_compile_logged_async "$parity_output_dir/wasm-parity-logs/$target-$case_name.log" \
 			--target="$target" --output="$output" --entry="$case_name" --root=tests/programs "tests/programs/$case_name.hx"
 	done
 done < "$root_dir/tests/programs/expected-exits.tsv"
@@ -50,29 +51,64 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		HAXEON_INLINE="$inline" haxeon_compile_async \
-			--target="$target" --output="out/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
 			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-tracking-inline-$inline.wasm" \
+			--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
+			tests/programs/wasm-observable-tracking.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-generic-runtime-inline-$inline.wasm" \
+			--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
+			tests/programs/observable-generic-runtime.hx
 	done
 done
 
+# Observable compiler instrumentation must also execute on HashLink with either inlining mode.
+for inline in 0 1; do
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/observable-tracking-inline-$inline.hl" \
+		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
+		tests/programs/wasm-observable-tracking.hx
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/observable-generic-runtime-inline-$inline.hl" \
+		--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
+		tests/programs/observable-generic-runtime.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/observable-generic-runtime-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Observable generic runtime fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/observable-tracking-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Observable HashLink fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+done
+
 haxeon_compile_async \
-	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-bytes-view-stress.wasm \
+	--target=wasm32 --wasm-gc-stress --output="$parity_output_dir/wasm-parity-wasm32-bytes-view-stress.wasm" \
 	--entry=bytes-view --root=tests/programs tests/programs/bytes-view.hx
 
 # Inline-record FieldGet allocates an owning view. Stress GC must retain the live
 # destination copy while constructing that view, before any later call safepoint.
 haxeon_compile_async \
-	--target=wasm32 --wasm-gc-stress --output=out/wasm-parity-wasm32-value-nested-roots-stress.wasm \
+	--target=wasm32 --wasm-gc-stress --output="$parity_output_dir/wasm-parity-wasm32-value-nested-roots-stress.wasm" \
 	--entry=wasm-value-nested-roots --root=tests/programs tests/programs/wasm-value-nested-roots.hx
 
 cases+=(bytes-compare)
 haxeon_compile_wait
 
-node - "$root_dir" "${cases[@]}" <<'JS'
+node - "$root_dir" "$parity_output_dir" "${cases[@]}" <<'JS'
 const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
-const gcCases = process.argv.slice(3);
+const outputDir = process.argv[3];
+const gcCases = process.argv.slice(4);
 
 function table(file) {
   return fs.readFileSync(path.join(root, "tests", "programs", file), "utf8").split("\n")
@@ -81,7 +117,7 @@ function table(file) {
 
 const modes = new Map(table("wasm-parity-skips.tsv").map(([name, mode]) => [name, mode]));
 const cases = gcCases.map(name => ({name, expected: 42}))
-  .concat(table("expected-exits.tsv").map(([name, expected]) => ({name, expected: Number(expected)})));
+	.concat(table("expected-exits.tsv").map(([name, expected]) => ({name, expected: Number(expected)})));
 for (const [name, mode] of modes)
   if (!["skip", "gc-linear-memory"].includes(mode))
     throw new Error(`Unknown Wasm parity mode ${mode} for ${name}`);
@@ -112,29 +148,39 @@ class ExitSignal {
   constructor(code) { this.code = code; }
 }
 const std = {sys_exit: code => { throw new ExitSignal(code); }};
+// The Observable fixture links optional output paths through reflection. A parity fixture must
+// never write output; keep the imports explicit and fail if either path becomes active.
+const haxeonHost = {
+  write_output: () => { throw new Error("Unexpected Wasm parity output"); },
+  flush_output: () => { throw new Error("Unexpected Wasm parity flush"); }
+};
 
 async function run(name, target) {
-  const file = path.join(root, "out", `wasm-parity-${target}-${name}.wasm`);
+	const file = path.join(outputDir, `wasm-parity-${target}-${name}.wasm`);
   if (!fs.existsSync(file)) {
-    const log = path.join(root, "out", "wasm-parity-logs", `${target}-${name}.log`);
+    const log = path.join(outputDir, "wasm-parity-logs", `${target}-${name}.log`);
     const text = fs.existsSync(log) ? fs.readFileSync(log, "utf8") : "";
     const reason = text.split("\n").find(line => /Uncaught exception|: E\d{4}:/.test(line)) ?? "";
     return {failure: `did not compile: ${reason.replace(/^.*(Uncaught exception |E\d{4}: )/, "").slice(0, 120)}`};
   }
   const module = new WebAssembly.Module(fs.readFileSync(file));
   const imports = WebAssembly.Module.imports(module);
-  const missing = imports.filter(entry => entry.module === "std" ? !(entry.name in std) : entry.module !== "haxeon_runtime" || !(entry.name in runtime));
+  const missing = imports.filter(entry => entry.module === "std" ? !(entry.name in std)
+    : entry.module === "haxeon_runtime" ? !(entry.name in runtime)
+    : entry.module === "haxeon_host" ? !(entry.name in haxeonHost) : true);
   if (missing.length !== 0)
     return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
   if (target === "wasm-gc") {
     const hasMemory = WebAssembly.Module.exports(module).some(entry => entry.name === "memory" && entry.kind === "memory");
-    const expectsMemory = modes.get(name) === "gc-linear-memory";
+    // The Observable fixture exercises wire encoding, whose UTF-8 buffer uses GC scratch memory.
+    const expectsMemory = modes.get(name) === "gc-linear-memory"
+      || name.startsWith("observable-tracking-inline-");
     if (hasMemory !== expectsMemory)
       return {failure: expectsMemory ? "GC C-native module is missing scratch memory" : "GC module contains undeclared linear memory"};
     if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
       return {failure: "GC module contains custom root metadata"};
   }
-  const instance = await WebAssembly.instantiate(module, {haxeon_runtime: runtime, std});
+  const instance = await WebAssembly.instantiate(module, {haxeon_runtime: runtime, haxeon_host: haxeonHost, std});
   try {
     return {exit: instance.exports.main()};
   } catch (error) {
@@ -181,11 +227,33 @@ async function run(name, target) {
         console.log(`PASS: declared-equality on ${target}, inline=${inline}`);
     }
   }
-  const stressBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-bytes-view-stress.wasm"));
+  for (const inline of [0, 1]) {
+    for (const target of ["wasm32", "wasm-gc"]) {
+      const result = await run(`observable-tracking-inline-${inline}`, target);
+      if (result.failure === undefined && result.exit !== 42)
+        result.failure = `expected 42, got ${result.exit}`;
+      if (result.failure !== undefined)
+        failures.push(`observable-tracking (inline=${inline}, ${target}): ${result.failure}`);
+      else
+        console.log(`PASS: observable-tracking on ${target}, inline=${inline}`);
+    }
+  }
+  for (const inline of [0, 1]) {
+    for (const target of ["wasm32", "wasm-gc"]) {
+      const result = await run(`observable-generic-runtime-inline-${inline}`, target);
+      if (result.failure === undefined && result.exit !== 42)
+        result.failure = `expected 42, got ${result.exit}`;
+      if (result.failure !== undefined)
+        failures.push(`observable-generic-runtime (inline=${inline}, ${target}): ${result.failure}`);
+      else
+        console.log(`PASS: observable-generic-runtime on ${target}, inline=${inline}`);
+    }
+  }
+  const stressBytes = fs.readFileSync(path.join(outputDir, "wasm-parity-wasm32-bytes-view-stress.wasm"));
   const stressInstance = await WebAssembly.instantiate(stressBytes, {});
   if (stressInstance.instance.exports.main() !== 42)
     failures.push("bytes-view (wasm32 stress GC): view failed to retain and alias its source");
-  const nestedBytes = fs.readFileSync(path.join(root, "out", "wasm-parity-wasm32-value-nested-roots-stress.wasm"));
+  const nestedBytes = fs.readFileSync(path.join(outputDir, "wasm-parity-wasm32-value-nested-roots-stress.wasm"));
   const nestedInstance = await WebAssembly.instantiate(nestedBytes, {haxeon_runtime: runtime, std});
   if (nestedInstance.instance.exports.main() !== 42)
     failures.push("nested-value (wasm32 stress GC): inline view allocation lost live value copies");

@@ -95,7 +95,6 @@ class DockWorkspace implements View {
 			function(value) { value.dispose(); });
 		var mount = mounted.value;
 		mount.bind(model, suppliedInteraction ? interaction : null);
-		mount.invalidate = function() context.commands.refresh();
 		interaction = mount.interaction;
 		interaction.beginFrame();
 		var labelWidths:DockTextWidthCache = context.lazyState(
@@ -205,7 +204,7 @@ class DockWorkspace implements View {
 			interaction.cancelTabDrag(panelId, event.pointerId);
 		options.onTabHeaderBuilt = function(panelId, node) {
 			interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
-			// Preview changes invalidate the pane through interaction.revision. A node that has nothing to paint
+			// Preview changes invalidate the pane through the tracked interaction fields. A node that has nothing to paint
 			// until then does not need its own layout, style and paint callback in every idle tab header.
 			var tabPreview = interaction.preview;
 			if (tabPreview == null || tabPreview.targetPanelId != panelId ||
@@ -343,8 +342,8 @@ class DockWorkspace implements View {
 		if (content == null || !content.observed)
 			return false;
 		var hash = paneKeyHash.reset();
-		hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
-			.addFloat(context.viewportWidth).addFloat(context.viewportHeight).addInt(interaction.revision).addString(selected);
+			hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
+			.addFloat(context.viewportWidth).addFloat(context.viewportHeight).addString(selected);
 		for (panelId in panelIds) {
 			var descriptor = model.get(panelId);
 			if (descriptor != null)
@@ -381,14 +380,10 @@ class DockWorkspace implements View {
 private class DockWorkspaceMount {
 	public var model(default, null):DockWorkspaceModel;
 	public var interaction(default, null):DockWorkspaceInteraction;
-	public var invalidate:Null<Void->Void>;
-	var stopModel:Null<Void->Void>;
-	var stopInteraction:Null<Void->Void>;
 
 	public function new(model:DockWorkspaceModel, interaction:DockWorkspaceInteraction) {
 		this.model = model;
 		this.interaction = interaction;
-		subscribe();
 	}
 
 	public function bind(nextModel:DockWorkspaceModel,
@@ -396,29 +391,11 @@ private class DockWorkspaceMount {
 		if (model == nextModel &&
 			(requestedInteraction == null || interaction == requestedInteraction))
 			return;
-		unsubscribe();
 		model = nextModel;
 		interaction = requestedInteraction == null ? new DockWorkspaceInteraction(nextModel) : requestedInteraction;
-		subscribe();
 	}
 
-	public function dispose():Void {
-		unsubscribe();
-		invalidate = null;
-	}
-
-	function subscribe():Void {
-		var notify = function() { if (invalidate != null) invalidate(); };
-		stopModel = model.listen(notify);
-		stopInteraction = interaction.listen(notify);
-	}
-
-	function unsubscribe():Void {
-		if (stopModel != null) stopModel();
-		if (stopInteraction != null) stopInteraction();
-		stopModel = null;
-		stopInteraction = null;
-	}
+	public function dispose():Void {}
 }
 
 private class DockPanelView implements View {
@@ -456,7 +433,7 @@ private class DockPanelView implements View {
 			&& cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
-			context.retainObserved(cached.observed, retained, cached.interactions);
+			context.retainDependencies(cached.observed);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
 			retained.detach();
@@ -469,8 +446,7 @@ private class DockPanelView implements View {
 		var observed = context.buildProbe != null;
 		var preparationStarted = observed ? Sys.time() : 0.0;
 		var stateMarker = context.stateUsageMarker();
-		var signalMark = context.observedSignalMarker(), intMark = context.observedIntMarker(),
-			boolMark = context.observedBoolMarker(), stringMark = context.observedStringMarker();
+		var dependencyMark = context.dependencyMarker();
 		var buildStarted = 0.0;
 		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
 		// changes: a neighbour closing, or the panel moving to another split.
@@ -487,10 +463,9 @@ private class DockPanelView implements View {
 				Sys.time() - buildStarted, root);
 		if (keyed) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
-			var dependencies = context.observedSince(signalMark, intMark, boolMark, stringMark,
+			var dependencies = context.dependenciesSince(dependencyMark,
 				cached == null ? null : cached.observed);
 			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-			context.retainRootObserved(root, interactions);
 			panelCache.put(descriptor.id, keyA, keyB, root, usedStates,
 				interactions, dependencies);
 		}
@@ -525,7 +500,7 @@ private class DockPaneView implements View {
 			&& cached.statesMatch(context)) {
 			context.retainStateIds(cached.stateIds);
 			var retained = context.currentRoot(cached.root);
-			context.retainObserved(cached.observed, retained, cached.interactions);
+			context.retainDependencies(cached.observed);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
 			retained.detach();
@@ -535,16 +510,14 @@ private class DockPaneView implements View {
 		if (cached != null)
 			cached.root.detach();
 		var stateMarker = context.stateUsageMarker();
-		var signalMark = context.observedSignalMarker(), intMark = context.observedIntMarker(),
-			boolMark = context.observedBoolMarker(), stringMark = context.observedStringMarker();
+		var dependencyMark = context.dependencyMarker();
 		var targetMark = interaction.targetCount(), tabMark = interaction.tabTargetCount();
 		var root = create().build(context);
 		if (retainable) {
 			var usedStates = context.stateIdsUsedSince(stateMarker);
-			var dependencies = context.observedSince(signalMark, intMark, boolMark, stringMark,
+			var dependencies = context.dependenciesSince(dependencyMark,
 				cached == null ? null : cached.observed);
 			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-			context.retainRootObserved(root, interactions);
 			cache.put(key, keyA, keyB, root, usedStates,
 				interactions, dependencies,
 				interaction.targetsSince(targetMark),
@@ -639,7 +612,7 @@ private class DockPanelCacheEntry {
 	public final targets:Array<DockDropTarget>;
 	public final tabTargets:Array<DockTabDropTarget>;
 	public final interactions:InteractionStateSnapshot;
-	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
+	/** Observable fields and signals the subtree's build read outside widget state. */
 	public final observed:haxeon.ui.core.Dependencies;
 	/** A hidden pane cannot be reused after one of its retained children moved to another tree. */
 	final topologyNodes:Null<Array<RenderNode>>;

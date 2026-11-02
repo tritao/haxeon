@@ -379,6 +379,18 @@ class WireCodecGenerator {
 		for (field in declaration.fields) {
 			if (field.isStatic)
 				continue;
+			var wireField = field;
+			for (metadata in field.metadata)
+				if (metadata.name == "optional") {
+					wireField = {
+						name: field.name, metadata: field.metadata, type: TNullable(field.type),
+						initializer: field.initializer, inlineValue: field.inlineValue,
+						readAccess: field.readAccess, writeAccess: field.writeAccess,
+						isStatic: field.isStatic, isInline: field.isInline, isFinal: field.isFinal,
+						span: field.span
+					};
+					break;
+				}
 			if (field.isFinal)
 				BodyTyper.fail("E1024", 'MessagePack record field "${declaration.name}.${field.name}" cannot be final yet', field.span);
 			if (!hasDirectStorage(field))
@@ -399,7 +411,7 @@ class WireCodecGenerator {
 					field.span);
 			}
 			ids.set(id, field);
-			result.push({field: field, id: id});
+			result.push({field: wireField, id: id});
 		}
 		result.sort(function(left, right) return Reflect.compare(left.id, right.id));
 		return result;
@@ -619,7 +631,15 @@ class WireCodecGenerator {
 					];
 				for (wireField in fields) {
 					var field = wireField.field,
-						fieldValue = new TypedExpression(TField(value, field.name), field.type, field.span);
+						storageType = field.type;
+					if (switch type { case TInstance(NominalKind.Class, _, _): true; default: false; })
+						for (declaredField in requiredClass(classes, switch type { case TInstance(_, name, _): name; default: ""; }, span).fields)
+							if (declaredField.name == field.name) {
+								storageType = declaredField.type;
+								break;
+							}
+					var storedValue = new TypedExpression(TField(value, field.name), storageType, field.span),
+						fieldValue = new TypedExpression(TCast(storedValue), field.type, field.span);
 					result.push(expressionStatement(jsonMode ? method(writer, "writeFieldKey",
 						[intLiteral(wireField.id, span), stringLiteral(field.name, span)], TVoid,
 						span) : method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span),
@@ -742,9 +762,19 @@ class WireCodecGenerator {
 					} else {
 					var newValue = new TypedExpression(TNew(name, [], false), type, request.span);
 					statements.push(TVar(resultName, newValue, request.span));
-					for (index in 0...fields.length)
-						statements.push(TFieldAssign(local(resultName, type, request.span), fields[index].field.name,
-							local(fieldLocal(index), fields[index].field.type, request.span), request.span));
+					var declaration = requiredClass(classes, name, request.span);
+					for (index in 0...fields.length) {
+						var wireField = fields[index].field;
+						var storedType = wireField.type;
+						for (declaredField in declaration.fields)
+							if (declaredField.name == wireField.name) {
+								storedType = declaredField.type;
+								break;
+							}
+						var decoded = local(fieldLocal(index), wireField.type, request.span);
+						statements.push(TFieldAssign(local(resultName, type, request.span), wireField.name,
+							new TypedExpression(TCast(decoded), storedType, request.span), request.span));
+					}
 					statements.push(TReturn(local(resultName, type, request.span), request.span));
 				}
 			case TArray(element):
@@ -940,7 +970,7 @@ class WireCodecGenerator {
 	static function decodeValueExpression(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>, reader:TypedExpression,
 			type:CompilerType, span:SourceSpan):TypedExpression {
 		return switch type {
-			case TArray(_), TMap(_, _), TAnonymous(_, _), TAbstract(_, _, _), TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _):
+			case TNullable(_), TArray(_), TMap(_, _), TAnonymous(_, _), TAbstract(_, _, _), TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _):
 				new TypedExpression(TCall(valueDecodeName(type), [reader]), type, span);
 			default:
 				var methodName = primitiveReadMethod(type);

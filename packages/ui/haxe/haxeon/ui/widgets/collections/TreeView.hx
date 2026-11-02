@@ -26,6 +26,7 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
+import haxeon.ui.core.Dependencies;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -102,8 +103,8 @@ class TreeView implements View {
 	var expandedState:Null<State<Map<String, Bool>>>;
 	var selectedState:Null<State<String>>;
 	var expansionRevision:Int;
-	var cachedModelRevision:Int;
 	var cachedExpansionRevision:Int;
+	final modelDependencies:Dependencies = new Dependencies();
 	var rootKeys:Array<String>;
 	var rootOffsets:Array<Int>;
 	var visibleCount:Int;
@@ -151,7 +152,6 @@ class TreeView implements View {
 		expandedState = null;
 		selectedState = null;
 		expansionRevision = 0;
-		cachedModelRevision = -1;
 		cachedExpansionRevision = -1;
 		rootKeys = [];
 		rootOffsets = [0];
@@ -340,36 +340,6 @@ class TreeView implements View {
 	}
 
 	/** Refreshes visible branches after model data changes, without rebuilding unrelated branches. */
-	public function refreshBranches(nodeKeys:Array<String>, modelRevision:Int):Bool {
-		if (nodeKeys == null || nodeKeys.length == 0 || extentIndex == null ||
-			cachedExpansionRevision != expansionRevision || modelRevision != cachedModelRevision + 1)
-			return false;
-		for (nodeKey in nodeKeys)
-			if (!branchByKey.exists(nodeKey)) return false;
-
-		var metricsChanged = false;
-		for (nodeKey in nodeKeys) {
-			var branch = branchByKey.get(nodeKey);
-			if (branch == null) return false;
-			for (child in branch.children) removeBranch(child);
-			branch.children.resize(0);
-			branch.detailsKnown = false;
-			if (branch.expanded) {
-				populateExpandedBranch(branch);
-				updateAncestorVisibleCounts(branch.parentBranch);
-				metricsChanged = true;
-			} else {
-				ensureEntryDetails(branch);
-			}
-		}
-		cachedModelRevision = modelRevision;
-		if (metricsChanged) updateVisibleMetrics();
-		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
-			selectedKey = null;
-		}
-		return true;
-	}
-
 	/** Scrolls a visible node to the top of the viewport. */
 	public function scrollTo(nodeKey:String):Bool {
 		ensureTreeMetrics();
@@ -396,9 +366,7 @@ class TreeView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			// The rows come from the model: a retained subtree around the tree rebuilds when the model's revision changes.
-			var observedModel = model;
-			context.observeInt(function() return observedModel.revision());
+			// Model reads are tracked at their fields; child rows retain only the fields they actually read.
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
 			var treeId = context.id("tree");
@@ -427,12 +395,12 @@ class TreeView implements View {
 			var provider = selectionProvider;
 			if (provider == null)
 				selectedKey = selection.value == "" ? null : selection.value;
-			ensureTreeMetrics();
+			ensureTreeMetrics(context);
 			if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 				selectedKey = null;
 			}
 			if (provider != null) {
-				var desired = context.observeString(provider);
+				var desired = provider();
 				if (desired != null && !branchByKey.exists(desired)) desired = null;
 				if (selectedKey != desired) {
 					extraSelected.clear();
@@ -655,11 +623,12 @@ class TreeView implements View {
 			Math.max(1.0, window.extentAt(window.first)))));
 	}
 
-	function ensureTreeMetrics():Void {
-		var modelRevision = model.revision();
-		if (cachedModelRevision == modelRevision && cachedExpansionRevision == expansionRevision &&
-			extentIndex != null)
+	function ensureTreeMetrics(?context:BuildContext):Void {
+		if (modelDependencies.current() && cachedExpansionRevision == expansionRevision && extentIndex != null) {
+			if (context != null) context.retainDependencies(modelDependencies);
 			return;
+		}
+		var dependencyMark = context == null ? -1 : context.dependencyMarker();
 		var estimatedExtent = model.estimatedExtent();
 		if (estimatedExtent <= 0.0 || !finite(estimatedExtent))
 			throw "TreeView estimated extent must be finite and positive";
@@ -698,7 +667,6 @@ class TreeView implements View {
 			rootOffsets.push(visibleCount);
 		}
 
-		cachedModelRevision = modelRevision;
 		cachedExpansionRevision = expansionRevision;
 		extentIndex = new VirtualExtentIndex(visibleCount, estimatedExtent,
 			fallbackViewportHeight, controller.offsetY,
@@ -706,6 +674,8 @@ class TreeView implements View {
 		if (selectedKey != null && !branchByKey.exists(selectedKey)) {
 			selectedKey = null;
 		}
+		if (context != null && dependencyMark >= 0)
+			context.dependenciesSince(dependencyMark, modelDependencies);
 	}
 
 	function buildBranch(nodeKey:String, parentKey:Null<String>, depth:Int,

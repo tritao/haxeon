@@ -54,6 +54,7 @@ class TestCatalog {
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",
 		"DeclaredEqualityInliningMain",
+		"ObservableTrackingMain",
 		"NullableStructIrMain",
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",

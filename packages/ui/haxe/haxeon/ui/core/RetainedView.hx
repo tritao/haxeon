@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /**
- * Reuses a render subtree while its tracked signals, explicit reads and interaction state remain current.
+ * Reuses a render subtree while its tracked signals, Observable fields and interaction state remain current.
  */
 class RetainedView implements View {
 	final builder:BuildContext->View;
@@ -33,7 +33,7 @@ class RetainedView implements View {
 		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.statesMatch(context)) {
 			context.retainStateIds(cached.refreshStateIds());
 			var retained = context.currentRoot(cached.root);
-			context.retainObserved(cached.observed, retained, cached.interactions);
+			context.retainDependencies(cached.observed);
 			cached.replaceRoot(retained);
 			context.claimRetainedTree(retained);
 			retained.detach();
@@ -42,17 +42,15 @@ class RetainedView implements View {
 		if (cached != null)
 			cached.root.detach();
 		var marker = context.stateUsageMarker();
-		var signalMark = context.observedSignalMarker(), intMark = context.observedIntMarker(),
-			boolMark = context.observedBoolMarker(), stringMark = context.observedStringMarker();
+		var dependencyMark = context.dependencyMarker();
 		var view = builder(context);
 		if (view == null)
 			throw 'Retained view "$key" returned no view';
 		var root = view.build(context);
 		var usedStates = context.stateIdsUsedSince(marker);
 		var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-		var observed = context.observedSince(signalMark, intMark, boolMark, stringMark,
+		var observed = context.dependenciesSince(dependencyMark,
 			cached == null ? null : cached.observed);
-		context.retainRootObserved(root, interactions);
 		cache.replace(keyA, keyB, root, usedStates, interactions, observed, cached == null ? null : cached.stateIds);
 		return root;
 	}
@@ -84,7 +82,7 @@ private class RetainedViewEntry {
 	public var stateIds(default, null):Array<Int>;
 	final usedStates:Array<Int>;
 	public final interactions:InteractionStateSnapshot;
-	/** What the subtree's build read outside widget state (BuildContext.observeInt and friends). */
+	/** Signal and Observable fields read while building the subtree. */
 	public final observed:Dependencies;
 
 	public function new(keyA:Int, keyB:Int, root:RenderNode, usedStates:Null<Array<Int>>,

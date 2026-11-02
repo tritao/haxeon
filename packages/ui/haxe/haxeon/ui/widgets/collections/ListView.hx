@@ -16,6 +16,7 @@ import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
+import haxeon.ui.core.Dependencies;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -55,7 +56,6 @@ class ListView implements View {
 
 	final fallbackViewportHeight:Float;
 	var selectedState:Null<State<Int>>;
-	var cachedRevision:Int;
 	var cachedCount:Int;
 	var cachedUniform:Bool;
 	var extentCache:Map<String, Float>;
@@ -63,6 +63,7 @@ class ListView implements View {
 	var extentIndex:Null<VirtualExtentIndex>;
 	var itemIds:Map<Int, WidgetId>;
 	var itemKeys:Map<Int, String>;
+	final modelDependencies:Dependencies = new Dependencies();
 	final itemMetadata:Null<ListViewItemMetadata>;
 
 	public function new(key:String, model:ListViewModel, ?viewportStyle:LayoutStyle,
@@ -89,7 +90,6 @@ class ListView implements View {
 		extentMeasurements = 0;
 		extentReuses = 0;
 		selectedState = null;
-		cachedRevision = -1;
 		cachedCount = -1;
 		cachedUniform = false;
 		extentCache = new Map();
@@ -129,8 +129,9 @@ class ListView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			context.observeInt(() -> model.revision());
-			ensureModelMetrics();
+			var layoutFeedback = context.state(context.id("resolved-layout-feedback"), 0);
+			var layoutGeneration = layoutFeedback.value;
+			ensureModelMetrics(context);
 			var state:State<Int> = context.state(context.id("selected-index"), selectedIndex);
 			selectedState = state;
 			var provider = selectionProvider;
@@ -139,7 +140,7 @@ class ListView implements View {
 				if (current < -1 || current >= cachedCount || current >= 0 && !itemEnabled(current)) current = -1;
 				selectedIndex = current;
 			} else {
-				var desired = context.observeInt(provider);
+				var desired = provider();
 				if (desired < -1 || desired >= cachedCount || desired >= 0 && !itemEnabled(desired)) desired = -1;
 				selectedIndex = desired;
 			}
@@ -155,7 +156,7 @@ class ListView implements View {
 			materializedFirst = window.first;
 			materializedLast = window.last;
 			var builtOffset = controller.offsetY;
-			context.observeInt(() -> controller.revision);
+			context.retainDependencies(modelDependencies);
 
 			var rowViews:Array<KeyedView> = [];
 			if (window.count > 0) {
@@ -211,6 +212,7 @@ class ListView implements View {
 				// Compare the geometry used to choose the virtual window with the resolved scroll viewport.
 				// ScrollView updates controller metrics before this callback runs.
 				if (!controller.hasMetrics || builtViewportHeight != geometry.height || controller.offsetY != builtOffset) {
+					layoutFeedback.update(layoutGeneration + 1);
 					context.requestBuildFeedback();
 				}
 			});
@@ -261,18 +263,19 @@ class ListView implements View {
 			Math.max(1.0, viewport.extentAt(viewport.first)))));
 	}
 
-	function ensureModelMetrics():Void {
+	function ensureModelMetrics(?context:BuildContext):Void {
+		if (modelDependencies.current() && cachedCount >= 0 && extentIndex != null) {
+			if (context != null) context.retainDependencies(modelDependencies);
+			return;
+		}
+		var dependencyMark = context == null ? -1 : context.dependencyMarker();
 		var count = model.count();
 		if (count < 0)
 			throw "ListView model count must be non-negative";
-		var revision = model.revision();
-		if (cachedRevision == revision && cachedCount == count && extentIndex != null)
-			return;
 		var estimatedExtent = model.estimatedExtent();
 		if (estimatedExtent <= 0.0 || !finite(estimatedExtent))
 			throw "ListView estimated extent must be finite and positive";
 		cachedUniform = model.extentIsUniform();
-		cachedRevision = revision;
 		cachedCount = count;
 		extentIndex = new VirtualExtentIndex(count, estimatedExtent,
 			fallbackViewportHeight, controller.offsetY,
@@ -280,6 +283,8 @@ class ListView implements View {
 			validatedTotalExtent());
 		if (selectedIndex >= cachedCount)
 			selectedIndex = -1;
+		if (context != null && dependencyMark >= 0)
+			context.dependenciesSince(dependencyMark, modelDependencies);
 	}
 
 	function validatedTotalExtent():Null<Float> {

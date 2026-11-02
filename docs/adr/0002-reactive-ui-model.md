@@ -4,8 +4,8 @@ Date: 2026-10-30
 
 ## Status
 
-Proposed. Stage 1 is implemented under the current UI API. Stage 1b adds compiler-generated `Observable` field
-tracking; allocation acceptance is measured after both stages because stage 1 retains polling for plain `observe*` reads.
+Accepted. Stages 1 and 1b landed together on 2026-11-01: the signals core and compiler-generated `Observable` field
+tracking now provide one dependency mechanism. Combined allocation acceptance is measured against the item 2 baseline.
 
 The decisions do not carry the same confidence, and the migration treats them differently:
 
@@ -68,10 +68,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
    doubly linked nodes shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
    stamp deduplicates reads; there is no observer array on every source and no `indexOf` scan in tracking or
    subscribe/unsubscribe. Frame capture uses two reusable read logs; retained records keep and release only live edges.
-   `State` is a `Signal` handle and signal reads are tracked automatically. `observe*` remains
-   the explicit polling path for plain fields until stage 1b; `DockPanelContent.cacheKey` and `cacheKeyHash` are removed
-   in favor of tracked reads. All current models are ours and become `Observable`; add an adapter only if a real external
-   model appears.
+   `State` is a `Signal` handle and signal reads are tracked automatically. `DockPanelContent.cacheKey` and
+   `cacheKeyHash` are removed in favor of tracked reads. Models we own use `Observable`; there is no polling API or
+   adapter unless a real external model appears.
    Per-field signal objects allocate and require `.get()`/`.set()`; revision counters invalidate unrelated readers and a
    missed increment leaves stale UI. Precedents include Swift Observation, MobX observable objects, Vue `reactive()`,
    Svelte 5 class fields and Solid stores.
@@ -140,18 +139,18 @@ values changes, and updates the existing nodes. This record makes that idea the 
 9. **Verification stays, and gets stronger.** Debug mode mounts the application fresh into a second store, runs full layout
    and paint, and compares records, geometry and display lists byte for byte. The reactive core rejects untracked reads in
    bindings and store writes that do not come from a binding.
-   **Read-only phases are enforced at runtime.** While a tracking scope runs (a build or component setup, a derived value,
-   a binding, an observed getter), writing a signal, observable field or `State` throws at the write, with its stack trace, as Svelte 5
-   (`state_unsafe_mutation`) and Compose do. It costs one flag check per signal write and is on in debug builds and every
-   gate, not only verify runs. State the UI depends on lives in signals (decision 1), so this covers the writes that made
-   panels hard to retain; plain internal fields stay plain and verify mode covers their effect on output. A compile-time
+   **Tracked writes are enforced at runtime.** While a tracking scope runs, writing a signal or `State` throws at the
+   write. An `Observable` field write throws when another computation has
+   subscribed to that field; a fresh source or unread field can be initialized without a false positive. Implementation
+   fields excluded with `@:unobservable` do not participate in field tracking; public getters track their observable
+   inputs. These checks run in debug builds and every gate, not only
+   verify runs. A compile-time
    purity contract (`docs/PURITY.md`) is deferred until these checks show real holes.
 
-For example, a panel today records a revision and constructs keyed children explicitly:
+For example, a panel reads its model directly and constructs keyed children explicitly:
 
 ```haxe
 function build(context:BuildContext):View {
-	context.observeInt(() -> model.revision);
 	var children = [new KeyedView("phase", label(model.phase.toString()))];
 	if (model.ready) children.push(new KeyedView("ready", readyBadge()));
 	for (item in model.items) children.push(new KeyedView(item.id, itemView(item)));
@@ -205,17 +204,39 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for the alias audit and measurements. The interaction,
    tab-matrix and selection-stress censuses allocate none of the five geometric value types after setup; genuine Dynamic
    and reflection escapes still box.
-1. **Signals core under the current API — implemented; combined allocation check pending stage 1b.** `Signal<T>`, `Derived<T>` and `Effect` use
-   push maybe-stale propagation, version-checked pull recomputation and per-submit effect batching. Equal derived outputs do not advance
-   their source version, so downstream effects and retained readers do not rerun. Intrusive source-reader edges are
-   reused across runs and removed when a dependency disappears; frame capture and explicit polling storage are reused.
-   `State` is a signal handle. Changed signal writes invalidate readers; equal writes do nothing. Writes to signals or
-   `State` inside any tracking scope throw. `State.updateQuietly` is removed and its
-   callers use tracked reads or local widget state. `observe*` is still the explicit polling adapter for plain model
-   fields until stage 1b. The retention comparison passes when the retained-cache boundary validates those reads.
-1b. **Observable models.** Implement compiler-generated `Observable` field tracking, test it on every target and cover
-   it in verify mode. Convert revision-adapter models we own, including hobbing `statusRevision`, BIM and CNC, and delete
-   their counters. This does not depend on the stage 3 run-once experiment. Go: gates pass and no action allocates more.
+1. **Signals and Observable models — implemented together.** `Signal<T>`, `Derived<T>` and `Effect` use push
+   maybe-stale propagation, version-checked pull recomputation and per-submit effect batching. Equal derived outputs do
+   not advance their source version, so downstream effects and retained readers do not rerun. Intrusive source-reader
+   edges are reused across runs and removed when a dependency disappears; frame capture uses reusable dependency logs.
+   `State` is a signal handle. Changed signal writes invalidate readers; equal writes do nothing. Observable field reads
+   track one field bit per object, and changed writes invalidate only that field's readers. Signal and `State` writes
+   always throw inside tracking; Observable writes throw when that field already has readers, allowing fresh object
+   initialization. Property readers take no invocation context and track model reads directly. Command buttons read a
+   retained derived enabled/checked result, so a context replacement that leaves the result unchanged does not rebuild
+   the button. `State.updateQuietly`,
+   `observe*`, root polling and plain-read validation are removed. The owned revision-adapter models were migrated and
+   their adapter counters deleted. The dependency primitives live in Haxeon's stdlib under `haxeon.ui.core`, so a
+   non-UI model can implement compiler-known `Observable` without importing the UI package. Typing adds the generated
+   `ObservableSource` and `ReactiveRuntime` dependencies to that model's source module; otherwise a generic method can
+   reach IR generation without its object layout or runtime calls. The combined allocation table records the item 2
+   comparison below.
+   Assembly presentation views use Observable records, so edits to a view label invalidate the controls that read it.
+   The cursor is an immutable Equatable struct replaced on the Observable controller. Its declared value equality
+   skips equal replacements; the viewport caches the solved presentation by cursor value and scene state, then assigns
+   a render version after recomputation for its native image cache. It does not poll a fingerprint of the cursor's
+   individual fields. A standalone HashLink census of 1,000 cursor-field updates allocated zero objects with the
+   struct and 1,000 anonymous cursor records (48,000 bytes) with the former representation.
+   The Wasm GC allocation counter exposed a compiler-generated diagnostic string on every Observable write, even
+   when no reader existed. The generated write now checks the guard before constructing its field-specific error.
+   In an isolated 1,000-update cursor probe, this reduced GC objects from 4,003 to 2,009 with inlining both enabled
+   and disabled; the remaining per-update objects are the probe's `"view"` string. The guard still throws at the write
+   for a tracked field with readers.
+   A paired Wasm GC Showcase rerun of the saved baseline and current artifacts measured 5,896 objects for each full,
+   static and text-heavy run, and 12,835 for editing, over 120 measured frames after 120 warmup frames. Three
+   additional paired editing runs also matched, including their per-function counts. The earlier 12,833-object editing
+   capture lies within the two-object run variation recorded in VALUE_TYPES.md; the paired comparison shows no
+   item-4 allocation increase in any Showcase scenario. A fresh build after the Observable write-guard cleanup measured
+   5,896 full, 5,894 static, 5,896 text-heavy and 12,835 editing objects, again within or below the paired baseline.
 2. **Shared node store prototype.** Move one channel (paint) into flat records shared with native, keeping `RenderNode`
    as a handle-based view so callers are unchanged. Compare code size, the side tables needed, debuggability and frame cost
    against the incremental bridge. Go (migrate the remaining channels and delete the transaction code): a net
@@ -236,12 +257,10 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 7. **Retained rendering and layers.** Per-node display-list segments and layer properties; delete `willEditRetained` and
    `RetainedAnimation`.
 
-### Stage 1 interim allocation measurement — 2026-11-01
+### Signals-only interim allocation measurement — 2026-11-01
 
-Stage 1 retains explicit polling for plain `observe*` model reads, which stage 1b replaces with compiler-generated
-observable-field tracking. Its measurements are interim; allocation acceptance compares stage 1 + 1b with the item 2
-baseline before publication. The same-machine 30-cycle medians for stage 1 alone, in KiB per action, compared with the
-item 2 result after value-type conversion, are:
+These historical 30-cycle medians cover the signals-only checkpoint. They are superseded by the combined stage 1 + 1b
+measurement below, which is the allocation acceptance comparison against the item 2 baseline.
 
 | Transition | Item 2 baseline | Signals core | Change |
 | --- | ---: | ---: | ---: |
@@ -250,17 +269,39 @@ item 2 result after value-type conversion, are:
 | sensors → hierarchy | 82.2 | 85.8 | +3.6 |
 | telemetry → console | 95.3 | 98.8 | +3.5 |
 
-The budget and retention checks pass with the validation present. Removing the nested plain-read validation from
-`BuildContext.canRearm` makes the `panel-flows` retention check fail with: `Headless editor profile failed: CNC
-retention cnc-preview/0: UI build feedback did not converge after 8 passes`. The combined table replaces this interim
-measurement after stage 1b.
+The budget and retention checks passed with plain-read validation present at that checkpoint. The combined table below
+replaces these interim results.
+
+### Combined stage 1 + 1b measurement — 2026-11-02
+
+The final 30-cycle editor budget measurement, run in an isolated outer worktree against committed machinekit, gave
+these per-action HashLink allocation medians in KiB. The item 2 column is the same-machine acceptance baseline:
+
+| Action | Item 2 | Combined |
+| --- | ---: | ---: |
+| console → telemetry | 75.4 | 74.6 |
+| hierarchy → sensors | 118.2 | 112.6 |
+| sensors → hierarchy | 82.2 | 80.2 |
+| telemetry → console | 95.3 | 93.0 |
+| hover away / enter / field / inside / other | 15.0 / 0.5 / 13.5 / 0.5 / 10.0 | 14.1 / 0.5 / 12.9 / 0.5 / 10.0 |
+| idle / idle focused / scroll inspector | 0.2 / 0.2 / 21.3 | 0.2 / 0.2 / 21.3 |
+| type backspace / character | 16.3 / 16.2 | 16.3 / 16.3 |
+
+The 30-cycle selection-stress census fell from 403,157 allocations across 832 types to 343,967 across 755 types;
+the current capture was run without profiler sampling. A direct census measured 17,120 bytes per backspace before the
+last TextField cleanup, 16 above the item 2 baseline of 17,104. The final rebuilt app measured 16,704 bytes per
+backspace and 16,664 bytes per character. Each rebuild had supplied document length both through the optional
+`Semantics` constructor argument and the immediately following `setValueSource` call. An isolated 1,000-construction
+census found exactly 1,000 `i32` boxes (16,000 bytes) for the optional argument and none when `setValueSource` alone
+supplied the length. The isolated app suite, nine retention scenarios, budget and headless memory gates passed. The
+shared checkout could not compile because another session's uncommitted machinekit constructor call has the wrong
+argument type; the isolated worktree used the committed machinekit tree and the same Haxeon and app changes.
 
 The selection-stress investigation did not reproduce the reported stall after roughly 40 cycles. The current 60-cycle
 run completed (median selection frame about 3.0 ms, p95 3.2 ms); the item 2 60-action capture also completed, with a
 3.14 ms median and 3.71 ms maximum. Neither showed a stall.
 
-Stage 1b replaces the remaining polled plain fields in the retention flows with `Observable` tracking and removes
-`observe*`, root polling and the plain-read validation APIs. No `observe*` polling remains after stage 1b.
+No `observe*` polling remains.
 
 ## Consequences
 

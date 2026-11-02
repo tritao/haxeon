@@ -65,7 +65,7 @@ class InteractionStateSnapshot {
 		return false;
 	}
 
-	/** Whether a tracked updater rebuilt after capture, including changed plain-field reads. */
+	/** Whether a tracked updater rebuilt after capture. */
 	public function buildsChanged():Bool {
 		if (updatingBuildRevisions == null) return false;
 		for (index in 0...updatingBuilds.length)
@@ -100,19 +100,6 @@ class InteractionStateSnapshot {
 
 	public function retainState(context:BuildContext):Void {
 		for (entry in updatingBuilds) context.retainUpdatingState(entry);
-	}
-
-	/** Adds legacy plain reads from active self-updating descendants to their retained cache boundary. */
-	@:allow(haxeon.ui.core.BuildContext)
-	function retainObservedDependencies(context:BuildContext, root:RenderNode):Void {
-		for (entry in updatingBuilds) {
-			var dependencies = entry.dependencies;
-			if (dependencies == null) continue;
-			if (dependencies.observed != null)
-				context.retainUpdatingObserved(dependencies.observed, root);
-			if (dependencies.children != null)
-				dependencies.children.retainObservedDependencies(context, root);
-		}
 	}
 
 	public function matches(context:BuildContext, register:Bool = true, dependenciesChecked:Bool = false):Bool {

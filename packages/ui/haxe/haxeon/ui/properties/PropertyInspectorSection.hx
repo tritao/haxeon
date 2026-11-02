@@ -1,7 +1,9 @@
 package haxeon.ui.properties;
 
+import Observable;
+
 /** Stable grouping of descriptors rendered by a shared property inspector. */
-class PropertyInspectorSection {
+class PropertyInspectorSection implements Observable {
 	public final id:String;
 	public final label:String;
 	public final descriptors:Array<PropertyDescriptor>;

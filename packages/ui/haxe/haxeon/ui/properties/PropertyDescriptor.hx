@@ -68,8 +68,8 @@ class PropertyDescriptor {
 		validateOptions();
 	}
 
-	public function readValue(context:CommandContext):PropertyValue
-		return read(context == null ? new CommandContext() : context);
+	public function readValue():PropertyValue
+		return read();
 
 	public function validateValue(context:CommandContext, value:PropertyValue):Null<String> {
 		if (value == null)

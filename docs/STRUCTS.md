@@ -627,6 +627,16 @@ annotation types; the compiler knows only the mechanism.
 
 ### Context-hidden fields
 
+The compiler-generated `$haxeonObservableState` on an `Observable` class is a runtime
+subscription handle, not a model field. It is omitted from wire codecs, public
+reflection, equality, hashing and `Diff` field numbering. A wire round-trip of
+an Observable record therefore has the same bytes and public fields as the
+record without tracking. The source is allocated when the object is first read
+in a tracking scope; ordinary construction and untracked access do not need it.
+
+This compiler-owned hidden field is distinct from the proposed annotation
+mechanism below, which controls source visibility by build context.
+
 An annotation type can declare that the fields it marks are hidden unless a
 compile context is active:
 

@@ -24,8 +24,13 @@ class Column implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
+		var id = context.withScope(key, function() return context.id("column"));
+		return buildWithId(context, id);
+	}
+
+	/** Build with an ID already claimed by a self-updating owner. */
+	public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		return context.withScope(key, function() {
-			var id = context.id("column");
 			var computed = context.resolveStyle(new StyleTarget("column", key.value, key.value,
 				null, ["column"], context.interactionStates.get(id)), style);
 			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());

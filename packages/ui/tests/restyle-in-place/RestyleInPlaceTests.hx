@@ -1,3 +1,4 @@
+import Observable;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.Rect;
@@ -94,7 +95,7 @@ private class HoverRoutingProbe implements View {
   }
 }
 
-private class VariantProbe implements View {
+private class VariantProbe implements View implements Observable {
   public var variant:String = "a";
   public var aRevision:Int = 0;
   public var bRevision:Int = 0;
@@ -105,7 +106,7 @@ private class VariantProbe implements View {
   public function build(context:BuildContext):RenderNode {
     var selected = variant;
     return new haxeon.ui.core.RetainedVariants("variant-probe", selected, function(ctx) {
-      var revision = ctx.observeInt(function() return selected == "a" ? aRevision : bRevision);
+      var revision = selected == "a" ? aRevision : bRevision;
       if (selected == "a") aBuilds++; else bBuilds++;
       return new Text(selected + ":" + revision);
     }, null, capacity).build(context);
@@ -194,6 +195,25 @@ private class WindowItems implements haxeon.ui.widgets.collections.ListViewModel
   public function totalExtent():Null<Float> return 800;
   public function revision():Int return 0;
   public function buildItem(index:Int):View return new Text("row-" + index);
+}
+
+private class UpdatingReadModel implements Observable {
+	public var value:Int = 0;
+}
+
+private class ListInputs implements Observable {
+	public var height:Int;
+	public var fractional:Bool = false;
+	public function new(height:Int) this.height = height;
+}
+
+private class EnabledInput implements Observable {
+	public var enabled:Bool = true;
+}
+
+private class TextInput implements Observable {
+	public var title:String;
+	public function new(title:String) this.title = title;
 }
 
 /** Records the controls' actual drawing, including caller paint, without depending on native resource IDs. */
@@ -509,7 +529,7 @@ private class PopupRig implements View {
 private class UpdatingResources implements View {
   public var enabled = false;
   public var generation = 0;
-  public var reading = 0;
+  public final reading = new UpdatingReadModel();
   public var created = 0;
   public var disposed = 0;
   public var rootId:Null<haxeon.ui.core.WidgetId>;
@@ -528,7 +548,7 @@ private class UpdatingResources implements View {
           var resource = context.resourceState(context.id("resource-" + generation), () -> {created++; return generation;}, _ -> disposed++);
           var state = context.state(context.id("value"), 0);
           value = state;
-          var seen = context.observeInt(() -> reading);
+          var seen = reading.value;
           var node = new RenderNode(child, LayoutVisualKind.Box);
           var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
           label.layout.text = resource.value + ":" + state.value + ":" + seen;
@@ -994,29 +1014,28 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 600);
     ui.buildContext.environment.reducedMotion = true;
     ui.verifyRetentionEvery = 1;
-    var controller = new ScrollController(), height = 480, selected = -1, notifications = 0;
-    var fractional = false;
+    var controller = new ScrollController(), inputs = new ListInputs(480), selected = new haxeon.ui.core.Signal<Int>(-1), notifications = 0;
     var view:View = new RetainedView("resolved-list", context -> {
       var style = new LayoutStyle();
       style.width = LayoutAxis.grow();
-      var requested = context.observeInt(() -> height);
-      style.height = LayoutAxis.fixed(context.observeBool(() -> fractional) ? requested / 3.14159 : requested);
+      var requested = inputs.height;
+      style.height = LayoutAxis.fixed(inputs.fractional ? requested / 3.14159 : requested);
       var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
-      list.selectionProvider = () -> selected;
-      list.onSelectionChanged = index -> {selected = index; notifications++;};
+      list.selectionProvider = () -> selected.value;
+      list.onSelectionChanged = index -> {selected.value = index; notifications++;};
       return list;
     });
     var build = () -> view;
     for (nextHeight in [480, 137, 341, 1, 480]) {
-      height = nextHeight;
-      ui.submitCached(build, frame, "list-height-" + height);
-      check(controller.viewportHeight == height, "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + height);
+      inputs.height = nextHeight;
+      ui.submitCached(build, frame, "list-height-" + inputs.height);
+      check(controller.viewportHeight == inputs.height, "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + inputs.height);
       check(ui.verifyRetention(build, frame) == null, "Resolved list window differs from a fresh build");
     }
-    fractional = true;
+    inputs.fractional = true;
     ui.submitCached(build, frame, "fractional-list");
     check(controller.viewportHeight > 0 && ui.verifyRetention(build, frame) == null, "Fractional list viewport did not settle");
-    fractional = false;
+    inputs.fractional = false;
     ui.submitCached(build, frame, "list-height-480");
     controller.jumpTo(0, 240);
     var scrolled = ui.submitCached(build, frame, "list-height-480"), found = false;
@@ -1025,13 +1044,13 @@ class RestyleInPlaceTests {
     controller.jumpTo(0, 0);
     ui.submitCached(build, frame, "list-height-480");
     for (next in [8, -1, 1000, 3]) {
-      selected = next;
-      var root = ui.submitCached(build, frame, "list-selection-" + selected), count = 0;
+      selected.value = next;
+      var root = ui.submitCached(build, frame, "list-selection-" + selected.value), count = 0;
       root.walk(node -> {
         if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem &&
           (node.semantics.states & haxeon.ui.semantics.AccessibilityState.Selected) != 0) count++;
       });
-      check(count == (selected < 0 || selected >= 40 ? 0 : 1), "Controlled list selection is stale");
+      check(count == (selected.value < 0 || selected.value >= 40 ? 0 : 1), "Controlled list selection is stale");
       check(notifications == 0, "External list selection notified its owner");
     }
     var root = ui.root;
@@ -1046,25 +1065,25 @@ class RestyleInPlaceTests {
     ui.pointerDown(bounds.x + 10, bounds.y + 10, 0);
     ui.pointerUp(bounds.x + 10, bounds.y + 10, 0);
     ui.submitCached(build, frame, "list-input");
-    check(selected == 0 && notifications == 1, "Controlled list input did not notify its owner exactly once");
+    check(selected.value == 0 && notifications == 1, "Controlled list input did not notify its owner exactly once");
     check(ui.verifyRetention(build, frame) == null, "Controlled list input differs from a fresh build");
     ui.dispose();
     Sys.println("PASS list: resolved windows settle before publication through grow, shrink and a one-pixel viewport; controlled selection matches fresh builds");
   }
 
   static function verifyDisabledFocus(fonts:FontCollection):Void {
-    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), enabled = true;
+    var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), input = new EnabledInput();
     ui.verifyRetentionEvery = 1;
     var view:View = new RetainedView("focus-disabling", context -> {
       var button = new Button("Focus", null, () -> {});
-      button.enabled = context.observeBool(() -> enabled);
+      button.enabled = input.enabled;
       return button;
     });
     var build = () -> view;
     var root = ui.submitCached(build, frame, "focus-initial");
     ui.focusWidget(root.id);
     ui.submitCached(build, frame, "focus-settled");
-    enabled = false;
+    input.enabled = false;
     root = ui.submitCached(build, frame, "focus-disabled");
     check(!root.enabled && ui.focus.focusedId == null, "Disabling a retained focus target did not clear focus");
     check(ui.verifyRetention(build, frame) == null, "A committed focus pass differs from a full rebuild");
@@ -1129,14 +1148,14 @@ class RestyleInPlaceTests {
     observedReads(fonts);
   }
 
-  /** A retained view without a key follows what its builder read through observeString, and nothing else rebuilds it. */
+  /** A retained view without a key follows observable fields, including reads nested under another cache. */
   static function observedReads(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts);
     var frame = new LayoutFrame(240.0, 120.0);
-    var title = "first", builds = 0, frameNumber = 0;
+    var input = new TextInput("first"), builds = 0, frameNumber = 0;
     var inner:View = new RetainedView("inner", function(context) {
       builds++;
-      return new haxeon.ui.widgets.text.Text(context.observeString(function() return title));
+      return new haxeon.ui.widgets.text.Text(input.title);
     });
     // An outer retained view around the inner one must notice the inner read too.
     var view:View = new RetainedView("outer", function(_) return inner);
@@ -1148,11 +1167,22 @@ class RestyleInPlaceTests {
     };
     check(shown() == "first" && builds == 1, "The first build did not show the observed value");
     check(shown() == "first" && builds == 1, "An unchanged observed read rebuilt the view");
-    title = "second";
+    input.title = "second";
     check(shown() == "second" && builds == 2, "A changed observed read was not picked up through the outer cache");
     check(ui.verifyRetention(build, frame) == null, "Observed reads left the retained tree stale");
     ui.dispose();
-    Sys.println("PASS observed: a keyless retained view rebuilds exactly when an observed read changes, through an outer cache");
+    var siblings = new UiContext(null, fonts), shared = new TextInput("a"), leftBuilds = 0, rightBuilds = 0;
+    var left:View = new RetainedView("left", _ -> {leftBuilds++; return new haxeon.ui.widgets.text.Text(shared.title);});
+    var right:View = new RetainedView("right", _ -> {rightBuilds++; return new haxeon.ui.widgets.text.Text(shared.title);});
+    var pair:View = new haxeon.ui.widgets.layout.Row("observed-siblings", [new KeyedView("left", left), new KeyedView("right", right)]);
+    siblings.submit(pair, frame);
+    shared.title = "b";
+    var pairRoot = siblings.submit(pair, frame), changedLabels = 0;
+    pairRoot.walk(node -> {if (node.layout.text == "b") changedLabels++;});
+    check(leftBuilds == 2 && rightBuilds == 2 && changedLabels == 2,
+      "Sibling retained views did not independently subscribe to the same Observable field");
+    siblings.dispose();
+    Sys.println("PASS observable: a keyless retained view rebuilds exactly when a tracked field changes, through an outer cache");
     unannouncedEdits(fonts);
   }
 
@@ -1448,15 +1478,15 @@ class RestyleInPlaceTests {
     key = "resources-again";
     submit();
         check(builds == 1 && widget.created == 2 && widget.disposed == 1, "Replaced nested resources did not settle their lifetime");
-    widget.reading++;
+    widget.reading.value++;
     key = "external-reading";
     var refreshed = submit();
-    check(builds == 2 && refreshed.children[0].children[0].layout.text == "1:0:1", "Patched observed reads did not invalidate their enclosing cache");
+    check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:0:1", "Tracked nested reads did not patch their updater in place");
     var value = widget.value;
     if (value == null) throw "Missing owned state";
     value.update(7);
     refreshed = submit();
-    check(builds == 2 && refreshed.children[0].children[0].layout.text == "1:7:1",
+    check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:7:1",
       "A tracked state update rebuilt its owning updater or failed to refresh its retained node");
     check(widget.value == value, "A live state handle changed across patches and complete builds");
     widget.enabled = false;

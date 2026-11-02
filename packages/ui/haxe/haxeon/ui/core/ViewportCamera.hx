@@ -1,9 +1,11 @@
 package haxeon.ui.core;
 
+import Observable;
+
 import haxeon.ui.Point;
 
 /** Camera state shared by GPU viewport widgets and application overlays. */
-class ViewportCamera {
+class ViewportCamera implements Observable {
 	public final minZoom:Float;
 	public final maxZoom:Float;
 	public var zoom(default, null):Float;

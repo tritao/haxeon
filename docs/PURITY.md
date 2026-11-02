@@ -2,12 +2,14 @@
 
 Status: deferred design (2026-10-31), not implemented. Feature 5 in [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md).
 
-Deferred in favour of a runtime check: [ADR 0002](adr/0002-reactive-ui-model.md) makes the state the UI depends on
-signals and throws at any signal or `State` write inside a tracking scope (decision 9, stage 1). That reports the bad write
-at its line, with no annotations, which is how Svelte 5, Compose, Vue and Solid handle the same problem; none of them uses
-compile-time purity. This contract is heavier: it spreads to every closure type and interface on the path, needs
+Deferred in favour of runtime checks: [ADR 0002](adr/0002-reactive-ui-model.md) rejects signal, `State` and `Observable`
+field writes inside tracking when an existing computation could observe the written value (decision 9, stages 1 and 1b).
+Fresh sources and unread fields can be initialized in the scope; `@:unobservable` excludes implementation-only fields
+from model dependencies. That reports a bad write at its line,
+with no annotations, as Svelte 5, Compose, Vue and Solid handle the same problem; none of them uses compile-time purity.
+This contract is heavier: it spreads to every closure type and interface on the path, needs
 conditional purity for generic code, and still needs trust-me holes (`@:cache`, the harmless-effect allowlist). Revisit it
-if the runtime checks leave real holes, for example verify failures caused by plain-field writes during builds.
+if the runtime checks leave real holes, for example verify failures caused by writes through non-Observable external objects.
 
 Purity *inference* without annotations remains useful on its own for the optimizer (dead call removal, common
 subexpressions, loop-invariant hoisting) and does not need this contract.
@@ -21,8 +23,7 @@ executing line. Verify mode found each of these indirectly, as a difference betw
 rebuild, often scenarios away from the cause (`packages/ui/docs/RETAINED_SUBTREES.md`). The fix was always the same:
 move the write to an explicit update step.
 
-Observed reads have the same assumption and a worse failure: `BuildContext.observeString(() -> …)` re-runs its getter
-during cache checks, so a getter with a side effect runs it on every check.
+Mutable model reads now use compiler-tracked `Observable` fields, so cache checks do not re-run application getters.
 
 `@:pure` makes the assumption a compile-time contract. A write in a build becomes an error at the line that writes, with a
 message pointing at the explicit update step.
@@ -33,7 +34,7 @@ A `@:pure` function may read anything reachable. It may write only to:
 
 1. its locals, and objects it allocated during the call (including objects allocated by pure functions it called);
 2. the context parameters it declares as writable with `@:effect` (a build's `BuildContext`, which records state IDs and
-   observed reads);
+   tracked reads);
 3. fields declared `@:cache` (below).
 
 It may call only pure functions: annotated, or inferred pure. Creating a closure is pure whatever the closure does when
@@ -52,11 +53,8 @@ interface View {
 
 - **`@:pure` on a function or interface method.** An interface method's annotation applies to every implementation and
   override; an override cannot drop it.
-- **`@:pure` in function types.** `@:pure () -> Null<String>` accepts only lambdas and function references that check as
-  pure. A pure function type is assignable to the ordinary one, not the reverse.
-  ```haxe
-  function observeString(read:@:pure () -> Null<String>):Null<String>;
-  ```
+- **`@:pure` in function types.** A type such as `@:pure () -> T` accepts only lambdas and function references that
+  check as pure. A pure function type is assignable to the ordinary one, not the reverse.
 - **`@:effect` on a parameter of a pure function.** Writes through that parameter, and calls to its methods, are allowed.
   The parameter's own methods are checked in their own right; `@:effect` does not make them pure.
 - **`@:cache` on a field.** A pure function may write it. The field promises that its contents depend only on values the
@@ -89,7 +87,7 @@ interface View {
 | Where | Contract |
 |---|---|
 | `View.build` and component setup | `@:pure` with `@:effect context` |
-| `observeInt/Bool/String` getters, `Derived<T>` and bindings (ADR 0002) | `@:pure` function types |
+| `Signal<T>`, `Observable` fields, `Derived<T>` and bindings (ADR 0002) | `@:pure` function types where computations are stored |
 | style resolution, `Diff` operations, text measurement keys | inferred pure; annotated where they are relied on |
 | event handlers, `update()` steps, `Effect`s, commands | impure by design |
 
@@ -98,7 +96,7 @@ keys, which purity cannot see.
 
 ## Rollout
 
-1. **Inference and diagnostics as warnings**, with `View.build` and the `observe*` parameters annotated. Fix or annotate
+1. **Inference and diagnostics as warnings**, with `View.build` and stored reactive computations annotated. Fix or annotate
    what it reports in `packages/ui` and the editor; each finding is either a real write to move into an update step or a
    cache to mark `@:cache`.
 2. **Errors per package** once that package is clean (`packages/ui` first, then the editor).
@@ -108,7 +106,7 @@ keys, which purity cannot see.
 ## Open questions
 
 - **`@:effect` granularity.** Whole-parameter permission is simple; restricting a build to the `BuildContext` methods that
-  record (state, observe, ids) and excluding ones that act (commands, refresh) would catch more. Start whole-parameter.
+  record tracked reads and IDs while excluding methods that act (commands, refresh) would catch more. Start whole-parameter.
 - **Freshness through containers.** An object stored in a freshly allocated array and read back is still fresh; tracking
   that precisely needs more than local facts. Start conservative.
 - **Hot reload.** A method changing from pure to impure invalidates its callers' summaries, so it is a signature change for

@@ -140,6 +140,8 @@
         frames: summarize(benchmarkFrameDurations),
         wasm_gc_per_frame: benchmarkGcAllocationFrames.length
           ? summarizeCounts(benchmarkGcAllocationFrames) : null,
+        wasm_gc_samples: benchmarkGcAllocationFrames.length
+          ? benchmarkGcAllocationFrames : null,
         frame_intervals: summarize(benchmarkFrameIntervals),
         frames_over_budget: benchmarkFrameDurations.filter(duration =>
           duration > benchmarkFrameBudgetMs).length,

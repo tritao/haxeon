@@ -18,6 +18,15 @@ class Effect extends ReactiveDependencySet {
 	@:allow(haxeon.ui.core.ReactiveRuntime)
 	public function run():Void {
 		if (disposed || hasRun && !dirty) return;
+		runBody();
+	}
+
+	/** Replaces subscriptions after a tracked callback's owner changes its input identity. */
+	public function retrack():Void {
+		if (!disposed) runBody();
+	}
+
+	function runBody():Void {
 		beginDependencies();
 		try {
 			ReactiveRuntime.withTracking(this, action);

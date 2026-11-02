@@ -12,8 +12,6 @@ import haxeon.ui.core.View;
 interface TreeViewModel {
 	function rootCount():Int;
 	function rootRange(start:Int, count:Int):Array<TreeRootMetadata>;
-	/** @deprecated Implement rootRange; retained for source migration only. */
-	function rootKeyAt(index:Int):String;
 	function childCount(parentKey:String):Int;
 	function childKeyAt(parentKey:String, index:Int):String;
 	function initiallyExpanded(key:String):Bool;
@@ -23,5 +21,4 @@ interface TreeViewModel {
 	function extentIsUniform():Bool;
 	function extentAt(key:String):Float;
 	function buildItem(key:String):View;
-	function revision():Int;
 }

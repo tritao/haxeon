@@ -2,7 +2,8 @@ package haxeon.ui.properties;
 
 import haxeon.ui.core.CommandContext;
 
-typedef PropertyReader = CommandContext->PropertyValue;
+/** Model reads track their own Observable sources; invocation context belongs to edits. */
+typedef PropertyReader = Void->PropertyValue;
 typedef PropertyWriter = CommandContext->PropertyValue->Void;
 typedef PropertyCommitter = CommandContext->PropertyValue->Null<String>->PropertyEditResult;
 

@@ -152,7 +152,7 @@ class ObjectReflection {
 			var fields:Array<IrObjectField> = [];
 			for (owner in chain)
 				for (field in owner.fields)
-					fields.push(field);
+					if (field.name != "$haxeonObservableState") fields.push(field);
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {

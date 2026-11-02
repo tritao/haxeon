@@ -29,11 +29,19 @@ if [[ ! -x "$hashlink_runtime" ]]; then
 	exit 2
 fi
 
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+compiler_command=("$haxeon_dir/.tools/haxe/haxe" -cp src --run compiler.tools.HaxeonCompiler)
+if [[ -n ${HAXEON_COMPILER_HL:-} && -f ${HAXEON_COMPILER_HL} ]]; then
+	compiler_command=("$hashlink_runtime" "$HAXEON_COMPILER_HL")
+fi
+
+(cd "$haxeon_dir" && \
+	LD_LIBRARY_PATH="$haxeon_dir/out:$haxeon_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	"${compiler_command[@]}" \
 	--output="$artifact" \
 	--entry=FrameworkSmoke \
 	--root="$module_dir/tests/haxeon" \
 	--root="$haxeon_dir/packages/platform/tests" \
+	--root="$haxeon_dir/stdlib" \
 	--root="$module_dir/haxe" \
 	--root="$editor_dir/src" \
 	--root="$module_dir/bindings/haxe" \

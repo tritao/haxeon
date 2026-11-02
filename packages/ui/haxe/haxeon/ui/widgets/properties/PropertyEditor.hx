@@ -1,4 +1,6 @@
 package haxeon.ui.widgets.properties;
+
+import Observable;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.IconButton;
@@ -17,7 +19,6 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CommandContext;
 import haxeon.ui.core.Key;
-import haxeon.ui.core.RetainedView;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyBinding;
 import haxeon.ui.properties.PropertyEditResult;
@@ -25,18 +26,18 @@ import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyType;
 import haxeon.ui.properties.PropertyValue;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.style.StyleTarget;
 
 /** Descriptor-driven inspector that routes edits through the active document. */
-class PropertyEditor implements View {
+class PropertyEditor implements View implements Observable {
 	/** Private input templates: their consumers copy the style before exposing it. */
 	static final GrowInputStyle:LayoutStyle = makeInputStyle(0.0);
 	static final FieldInputStyle:LayoutStyle = makeInputStyle(64.0);
 	static final NumericRowStyle:LayoutStyle = makeNumericRowStyle();
-	var cachedLabelStyle:Null<LayoutStyle> = null;
-	var cachedLabelWidth:Float = 0.0;
-	var cachedLabelStacked:Bool = false;
 
 	static function makeInputStyle(min:Float):LayoutStyle {
 		var result = new LayoutStyle();
@@ -56,13 +57,13 @@ class PropertyEditor implements View {
 	/** Used only by privately built text views, which read rather than expose or mutate it. */
 	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent)
 	function labelStyle():LayoutStyle {
-		var cached = cachedLabelStyle;
-		if (cached == null || cachedLabelStacked != stackedRows || cachedLabelWidth != labelWidth) {
+		var cached = options.cachedLabelStyle;
+		if (cached == null || options.cachedLabelStacked != options.stackedRows || options.cachedLabelWidth != options.labelWidth) {
 			cached = new LayoutStyle();
-			cached.width = stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(labelWidth);
-			cachedLabelStyle = cached;
-			cachedLabelWidth = labelWidth;
-			cachedLabelStacked = stackedRows;
+			cached.width = options.stackedRows ? LayoutAxis.grow() : LayoutAxis.fixed(options.labelWidth);
+			options.cachedLabelStyle = cached;
+			options.cachedLabelWidth = options.labelWidth;
+			options.cachedLabelStacked = options.stackedRows;
 		}
 		return cached;
 	}
@@ -72,19 +73,13 @@ class PropertyEditor implements View {
 	public final style:LayoutStyle;
 	public final registry:PropertyEditorRegistry;
 	final generation:Int;
-	public var revision(default, null):Int;
-	public var enabled:Bool;
-	public var labelWidth:Float;
-	public var stackedRows:Bool = false;
-	public var searchQuery:String = "";
-	/** When false, category headers are supplied by an outer inspector. */
-	public var showCategories:Bool;
+	@:unobservable public var revision(default, null):Int;
+	@:allow(haxeon.ui.widgets.properties.PropertyEditorRow)
+	final rowIds:Map<String, WidgetId> = new Map();
+	final options:PropertyEditorOptions;
 	final drafts:Map<String, String>;
 	final errors:Map<String, String>;
 	final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
-	var cachedChildren:Null<Array<KeyedView>>;
-	var cachedShowCategories:Null<Bool>;
-	var cachedColumn:Null<Column>;
 
 	public function new(key:String, descriptors:Array<PropertyDescriptor>, ?style:LayoutStyle,
 		?registry:PropertyEditorRegistry) {
@@ -102,33 +97,38 @@ class PropertyEditor implements View {
 		}
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.registry = registry == null ? new PropertyEditorRegistry() : registry;
+		options = new PropertyEditorOptions();
 		revision = 0;
-		enabled = true;
-		labelWidth = 140.0;
-		showCategories = true;
 		drafts = new Map();
 		errors = new Map();
-		cachedChildren = null;
-		cachedShowCategories = null;
-		cachedColumn = null;
 	}
+
+	public function configure(enabled:Bool, labelWidth:Float, stackedRows:Bool, searchQuery:String):Void {
+		options.enabled = enabled;
+		options.labelWidth = labelWidth;
+		options.stackedRows = stackedRows;
+		options.searchQuery = searchQuery;
+	}
+
+	public function showCategoryHeaders(value:Bool):Void
+		options.showCategories = value;
 
 	/** Applies through the document or external transaction owner. Pending returns false. */
 	public function applyValue(context:BuildContext, descriptor:PropertyDescriptor,
 			next:PropertyValue, ?coalesceKey:String):Bool {
-		if (!enabled || context == null || descriptor == null || pending.exists(descriptor.id))
+			if (!options.enabled || context == null || descriptor == null || pending.exists(descriptor.id))
 			return false;
 		var commandContext = context.commandContext == null ? new CommandContext() : context.commandContext;
 		var result = new PropertyBinding(descriptor, commandContext, registry).apply(next, coalesceKey);
 		switch result {
 			case Pending(edit):
 				pending.set(descriptor.id, edit); revision++;
+				requestRowPatch(context, descriptor.id);
 				edit.onComplete(done -> {
 					if (pending.get(descriptor.id) != edit) return;
 					pending.remove(descriptor.id);
 					finishValue(context, descriptor, done);
 				});
-				context.commands.refresh();
 				return false;
 			default: return finishValue(context, descriptor, result);
 		}
@@ -136,13 +136,13 @@ class PropertyEditor implements View {
 
 	function finishValue(context:BuildContext, descriptor:PropertyDescriptor, result:PropertyEditResult):Bool {
 		revision++;
+		requestRowPatch(context, descriptor.id);
 		switch result {
 			case Rejected(message): errors.set(descriptor.id, message);
 			case Applied | Unchanged:
 				drafts.remove(descriptor.id); errors.remove(descriptor.id);
 			case Pending(_): throw "Expected a completed edit";
 		}
-		context.commands.refresh();
 		return result == PropertyEditResult.Applied;
 	}
 
@@ -156,16 +156,16 @@ class PropertyEditor implements View {
 		drafts.remove(descriptor.id);
 		errors.remove(descriptor.id);
 		revision++;
-		context.commands.refresh();
+		requestRowPatch(context, descriptor.id);
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		if (cachedColumn == null || cachedShowCategories != showCategories) {
+		if (options.cachedColumn == null || options.cachedShowCategories != options.showCategories) {
 			var children:Array<KeyedView> = [];
 			var categoryKeys:Map<String, Bool> = new Map();
 			for (descriptor in descriptors) {
 				var category = descriptor.category;
-				if (showCategories && category.length > 0 && !categoryKeys.exists(category)) {
+				if (options.showCategories && category.length > 0 && !categoryKeys.exists(category)) {
 					categoryKeys.set(category, true);
 					children.push(new KeyedView("category:" + category,
 						new Text(category)));
@@ -173,15 +173,20 @@ class PropertyEditor implements View {
 				children.push(new KeyedView("property:" + descriptor.id,
 					new PropertyEditorRow(this, descriptor)));
 			}
-			cachedChildren = children;
-			cachedShowCategories = showCategories;
-			cachedColumn = new Column(key, children, style);
+			options.cachedChildren = children;
+			options.cachedShowCategories = options.showCategories;
+			options.cachedColumn = new Column(key, children, style);
 		}
-		return cachedColumn.build(context);
+		return options.cachedColumn.build(context);
 	}
 
 	function setDraft(descriptor:PropertyDescriptor, value:String):Void
-		drafts.set(descriptor.id, value == null ? "" : value);
+		{
+			var next = value == null ? "" : value;
+			if (drafts.exists(descriptor.id) && drafts.get(descriptor.id) == next) return;
+			drafts.set(descriptor.id, next);
+			revision++;
+		}
 
 	/** A detached inspector may reuse this editor only if no draft, error, or edit has occurred. */
 	@:allow(haxeon.ui.widgets.properties.PropertyInspector)
@@ -198,10 +203,15 @@ class PropertyEditor implements View {
 			if (errors.get(descriptor.id) != "Value is not valid")
 				revision++;
 			errors.set(descriptor.id, "Value is not valid");
-			context.commands.refresh();
+			requestRowPatch(context, descriptor.id);
 			return;
 		}
 		applyValue(context, descriptor, parsed);
+	}
+
+	function requestRowPatch(context:BuildContext, id:String):Void {
+		var row = rowIds.get(id);
+		if (row != null) context.requestPatch(row);
 	}
 
 	/** The row's visible label, which also names its control for assistive technology. */
@@ -211,39 +221,10 @@ class PropertyEditor implements View {
 	public function errorFor(id:String):Null<String>
 		return errors.get(id);
 
-	/**
-	 * Rows are rebuilt by the parent inspector when its model revision changes.
-	 * Keep the revision at the row boundary so an edit to one property does not
-	 * recreate every editor control in the inspector.
-	 */
-	function rowRevision(descriptor:PropertyDescriptor, value:PropertyValue):String {
-		var result = descriptor.id + ":value=" + valueKey(value) +
-			":pending=" + pending.exists(descriptor.id) + ":enabled=" + enabled + ":search=" + searchQuery + ":stacked=" + stackedRows + ":labelWidth=" + labelWidth + ":generation=" + generation;
-		if (drafts.exists(descriptor.id))
-			result += ":draft=" + drafts.get(descriptor.id);
-		var error = errors.get(descriptor.id);
-		if (error != null)
-			result += ":error=" + error;
-		return result;
-	}
-
-	static function valueKey(value:PropertyValue):String {
-		return switch (value) {
-			case Unavailable: "unavailable";
-			case Mixed: "mixed";
-			case Bool(data): "bool:" + data;
-			case Int(data): "int:" + data;
-			case Float(data): "float:" + Std.string(data);
-			case Text(data): "text:" + data;
-			case Enum(data): "enum:" + data;
-			case Custom(typeId, data): "custom:" + typeId + ":" + Std.string(data);
-		};
-	}
-
 	function editorView(context:BuildContext, descriptor:PropertyDescriptor,
 			value:PropertyValue):View {
 		var editorKey = "editor:" + descriptor.id;
-		var writable = enabled && !descriptor.readOnly && !pending.exists(descriptor.id);
+		var writable = options.enabled && !descriptor.readOnly && !pending.exists(descriptor.id);
 		if (isMixed(value)) {
 			if (descriptor.type == PropertyType.Bool || descriptor.type == PropertyType.Enum)
 				return mixedChoice(context, descriptor, editorKey, writable);
@@ -388,17 +369,19 @@ private class PropertyEditorRow implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var value = descriptor.readValue(context.commandContext);
-		var isModified = descriptor.modified;
-		var revision = owner.rowRevision(descriptor, value) + (isModified != null && isModified() ? 1 : 0);
-		var retained = new RetainedView("property-row:" + descriptor.id,
-			function(_) return new PropertyEditorRowContent(owner, descriptor, value),
-			function() return revision);
-		return retained.build(context);
+		var id = context.id("property-row-root");
+		owner.rowIds.set(descriptor.id, id);
+		return context.selfUpdating(id, function() return buildRow(context, id), false);
+	}
+
+	function buildRow(context:BuildContext, id:WidgetId):RenderNode {
+		var value = descriptor.readValue();
+		return new PropertyEditorRowContent(owner, descriptor, value).buildWithId(context, id);
 	}
 }
 
 private class PropertyEditorRowContent implements View {
+	static final RootKey:Key = new Key("row");
 	/** Row and detail constructors copy these private templates; text views only read the detail template. */
 	static final RowCenter:LayoutStyle = makeRow(false, false);
 	static final RowStart:LayoutStyle = makeRow(false, true);
@@ -437,14 +420,32 @@ private class PropertyEditorRowContent implements View {
 		this.value = value;
 	}
 
-	public function build(context:BuildContext):RenderNode {
+	public function build(context:BuildContext):RenderNode
+		return buildWithId(context, null);
+
+	function buildRoot(context:BuildContext, id:Null<WidgetId>, children:Array<KeyedView>, style:LayoutStyle):RenderNode {
+		return context.withScope(RootKey, function() {
+			var rootId = id == null ? context.id("column") : id;
+			var computed = context.resolveStyle(new StyleTarget("column", "row", "row", null, ["column"],
+				context.interactionStates.get(rootId)), style);
+			var node = new RenderNode(rootId, LayoutVisualKind.Box, computed.toLayoutStyle());
+			node.setStyleIdentity("column", "row", "row", null, ["column"]);
+			node.states = context.interactionStates.get(rootId);
+			node.computedStyle = computed;
+			for (child in children)
+				node.add(context.withStyleParent(computed, function() return child.build(context)));
+			return node;
+		});
+	}
+
+	public function buildWithId(context:BuildContext, id:Null<WidgetId>):RenderNode {
 		var observed = context.buildProbe != null;
 		var started = observed ? Sys.time() : 0.0;
 		var labelStyle = owner.labelStyle();
 		var custom = switch descriptor.type { case Custom(_): true; default: false; };
-		var rowStyle = owner.stackedRows ? (custom ? ColumnStart : ColumnCenter) : (custom ? RowStart : RowCenter);
+		var rowStyle = owner.options.stackedRows ? (custom ? ColumnStart : ColumnCenter) : (custom ? RowStart : RowCenter);
 		var children:Array<KeyedView> = [
-			new KeyedView("label", new haxeon.ui.widgets.text.HighlightedText(PropertyEditor.accessibleName(descriptor), owner.searchQuery, labelStyle)),
+			new KeyedView("label", new haxeon.ui.widgets.text.HighlightedText(PropertyEditor.accessibleName(descriptor), owner.options.searchQuery, labelStyle)),
 			new KeyedView("value", owner.editorView(context, descriptor, value))
 		];
 		var isModified = descriptor.modified;
@@ -456,31 +457,46 @@ private class PropertyEditorRowContent implements View {
 			&& modified) {
 			var reset = new IconButton("reset", IconName.Reset, "Reset " + descriptor.label + " to default",
 				function() owner.resetValue(context, descriptor));
-			reset.enabled = owner.enabled && !owner.pending.exists(descriptor.id);
+			reset.enabled = owner.options.enabled && !owner.pending.exists(descriptor.id);
 			children.push(new KeyedView("reset", reset));
 		}
-		var row:View = owner.stackedRows ? new Column("row", children, rowStyle) : new Row("row", children, rowStyle);
 		var error = owner.errorFor(descriptor.id);
-		if (error == null && descriptor.description == null && !descriptor.restartRequired && StringTools.trim(owner.searchQuery).length == 0) {
-			var result = row.build(context);
-			if (observed)
-				context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
+		if (error == null && descriptor.description == null && !descriptor.restartRequired && StringTools.trim(owner.options.searchQuery).length == 0) {
+			var result = buildRoot(context, id, children, rowStyle);
+			if (observed) context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 			return result;
 		}
+		var row:View = owner.options.stackedRows ? new Column("row", children, rowStyle) : new Row("row", children, rowStyle);
 		var errorStyle = DetailTextStyle;
 		var details:Array<KeyedView> = [new KeyedView("field", row)];
 		if (descriptor.description != null && descriptor.description.length > 0)
-			details.push(new KeyedView("description", new haxeon.ui.widgets.text.HighlightedText(descriptor.description, owner.searchQuery, errorStyle, context.theme.tokens.textSecondary,
+			details.push(new KeyedView("description", new haxeon.ui.widgets.text.HighlightedText(descriptor.description, owner.options.searchQuery, errorStyle, context.theme.tokens.textSecondary,
 				haxeon.ui.core.TextStyleOverride.paragraph(haxeon.ui.TextWrap.WordCharacter), haxeon.ui.theme.TextRole.Caption)));
-		if (StringTools.trim(owner.searchQuery).length > 0)
-			details.push(new KeyedView("path", new haxeon.ui.widgets.text.HighlightedText(descriptor.id, owner.searchQuery, errorStyle,
+		if (StringTools.trim(owner.options.searchQuery).length > 0)
+			details.push(new KeyedView("path", new haxeon.ui.widgets.text.HighlightedText(descriptor.id, owner.options.searchQuery, errorStyle,
 				context.theme.tokens.textSecondary, null, haxeon.ui.theme.TextRole.Caption)));
 		if (descriptor.restartRequired)
 			details.push(new KeyedView("restart", new Text("Requires restart", errorStyle)));
 		if (error != null) details.push(new KeyedView("message", new Text(error, errorStyle)));
-		var result = new Column("details-row", details, DetailColumnStyle).build(context);
+		var result = buildRoot(context, id, details, DetailColumnStyle);
 		if (observed)
 			context.reportBuild("property:" + descriptor.id, 0.0, Sys.time() - started, result);
 		return result;
 	}
+}
+
+
+/** Mutable view configuration and local caches stay outside the observable editor state. */
+private class PropertyEditorOptions {
+	public var enabled:Bool = true;
+	public var labelWidth:Float = 140.0;
+	public var stackedRows:Bool = false;
+	public var searchQuery:String = "";
+	public var showCategories:Bool = true;
+	public var cachedLabelStyle:Null<LayoutStyle>;
+	public var cachedLabelWidth:Float = 0.0;
+	public var cachedLabelStacked:Bool = false;
+	public var cachedChildren:Null<Array<KeyedView>>;
+	public var cachedShowCategories:Null<Bool>;
+	public var cachedColumn:Null<Column>;
 }

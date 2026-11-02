@@ -86,7 +86,6 @@ class UiContext {
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
-	var submittedCommandRevision:Int;
 	var submittedNodeCount:Int;
 	var submittedFrameWidth:Float;
 	var submittedFrameHeight:Float;
@@ -162,7 +161,6 @@ class UiContext {
 		submittedStyleRevision = -1;
 		submittedAnimationRevision = -1;
 		submittedGestureRevision = -1;
-		submittedCommandRevision = -1;
 		submittedNodeCount = 0;
 		submittedFrameWidth = -1.0;
 		submittedFrameHeight = -1.0;
@@ -172,7 +170,7 @@ class UiContext {
 		hitTestIds = [];
 		disposed = false;
 		buildContext.setFocusRequester(function(id) { return focusWidget(id); });
-		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; commands.refresh(); });
+		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; });
 		customCanvases = new Map();
 		customLists = new Map();
 		customGeometries = new Map();
@@ -208,7 +206,6 @@ class UiContext {
 		commandContext = context == null ? new CommandContext() : context;
 		buildContext.setCommandContext(commandContext);
 		events.setCommandContext(commandContext);
-		commands.refresh();
 	}
 
 	/** Sets fonts for text-aware widgets and the native layout session. */
@@ -413,7 +410,6 @@ class UiContext {
 		if (frame == null || build == null)
 			throw "A UI frame requires a view and layout frame";
 		ReactiveRuntime.flushEffects();
-		buildContext.advanceDependencyValidation();
 		var styleResolutionsBefore = buildContext.styleResolver.resolutions;
 		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
 		var styleCacheMissesBefore = buildContext.styleResolver.cacheMisses;
@@ -426,22 +422,16 @@ class UiContext {
 		buildContext.setViewport(frame.width, frame.height);
 		buildContext.setEnvironmentViewport(frame.width, frame.height);
 		var hoverPaintNodes = -1;
-		var rootObservedDirty = buildContext.rootObservedDirty();
 		var rootReactiveDirty = buildContext.rootDependenciesDirty();
-		var retainedRootObservedDirty = buildContext.hasPendingPatches && !rootObservedDirty && !rootReactiveDirty &&
-			buildContext.retainedRootObservedDirty();
-		var observedDirty = rootObservedDirty || retainedRootObservedDirty;
-		var reuse = buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null && !observedDirty &&
-			canReuseSubmittedFrame(cacheKey, frame, observedDirty);
+		var reuse = buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null && !rootReactiveDirty &&
+			canReuseSubmittedFrame(cacheKey, frame);
 		if (!reuse && buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null) {
-			hoverPaintNodes = reuseHoverPaint(cacheKey, frame, observedDirty);
+			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
 			reuse = hoverPaintNodes >= 0;
 		}
-		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty &&
-			!observedDirty;
+		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty;
 		var patchOnly = !reuse && reconcileNewFocus && cacheKey != null &&
-			(localPatchPending || !observedDirty && buildFeedbackPass == 0 &&
-			planInteractionPatches(cacheKey, frame, observedDirty));
+			(localPatchPending || buildFeedbackPass == 0 && planInteractionPatches(cacheKey, frame));
 		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
@@ -461,7 +451,6 @@ class UiContext {
 		// A patch-only frame keeps the submitted tree and rebuilds just the widgets that read the pointer change.
 		buildContext.resetObserved();
 		if (!patchOnly) {
-			buildContext.resetRootObserved();
 			buildContext.beginFrame();
 			queueInteractionPatches();
 		} else {
@@ -598,7 +587,6 @@ class UiContext {
 			// Handlers may read parent, child, viewport and content geometry. Give all of them the same settled layout pass
 			// before any handler changes layout inputs or requests another pass.
 			for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
-			buildContext.advanceDependencyValidation();
 			// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
 			var rootDirty = buildContext.rootDependenciesDirty();
 			var patchesPending = buildContext.hasPendingPatches;
@@ -713,7 +701,6 @@ class UiContext {
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
 		submittedPatchRequestRevision = buildContext.patchRequestRevision;
 		submittedGestureRevision = gestures.revision;
-		submittedCommandRevision = commands.revision;
 		submittedNodeCount = nodeCount;
 		submittedFrameWidth = frame.width;
 		submittedFrameHeight = frame.height;
@@ -906,7 +893,7 @@ class UiContext {
 					session.setCustomPaintCachePolicy(nodeId, node.cachePolicy);
 				customGeometries.set(nodeId, geometry);
 				customPaintKeys.set(nodeId, node.retainedPaintKey());
-				customContentRevisions.set(nodeId, node.contentRevision);
+				customContentRevisions.set(nodeId, node.paintRevision);
 				paintedNodes++;
 			}
 
@@ -1198,19 +1185,18 @@ class UiContext {
 	}
 
 	/** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
-	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame, rootObservedDirty:Bool):Bool {
+	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
 		return root != null && submittedBuildKey == cacheKey && !buildContext.rootDependenciesDirty() &&
-			!rootObservedDirty &&
 			submittedStyleRevision == buildContext.styleRevision && submittedFrameWidth == frame.width &&
 			submittedFrameHeight == frame.height && animations.rebuildingCount == 0 &&
 			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
-			commands.revision == submittedCommandRevision && buildContext.theme == submittedTheme &&
+			buildContext.theme == submittedTheme &&
 			buildContext.styleSheet == submittedStyleSheet;
 	}
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
-	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame, rootObservedDirty:Bool):Int {
-		if (!steadyForInteractionReuse(cacheKey, frame, rootObservedDirty) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches) return -1;
+	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
+		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
@@ -1236,8 +1222,8 @@ class UiContext {
 	 * widgets, such as buttons), leaving every other node of the submitted tree as it is. Queues those rebuilds and returns true,
 	 * or returns false having changed nothing, in which case the whole view rebuilds.
 	 */
-	function planInteractionPatches(cacheKey:String, frame:LayoutFrame, rootObservedDirty:Bool):Bool {
-		if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame, rootObservedDirty)) return false;
+	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
+		if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			var bits = change.before ^ change.after;
@@ -1293,12 +1279,11 @@ class UiContext {
 		}
 	}
 
-	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame, rootObservedDirty:Bool):Bool {
+	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
 		return root != null && submittedBuildKey == cacheKey && dirtyFlagsWithoutRootReads() == UiDirtyFlag.None &&
-			!buildContext.rootDependenciesDirty() && !rootObservedDirty && !buildContext.hasPendingPatches &&
+			!buildContext.rootDependenciesDirty() && !buildContext.hasPendingPatches &&
 			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
 			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
-			commands.revision == submittedCommandRevision &&
 			buildContext.theme == submittedTheme &&
 			buildContext.styleSheet == submittedStyleSheet;
 	}
@@ -1309,7 +1294,7 @@ class UiContext {
 		if (key == null || !customPaintKeys.exists(nodeId) ||
 			!customListHasCommands.exists(nodeId) || customPaintKeys.get(nodeId) != key)
 			return false;
-		if (customContentRevisions.get(nodeId) != node.contentRevision)
+		if (customContentRevisions.get(nodeId) != node.paintRevision)
 			return false;
 		var previousGeometry = customGeometries.get(nodeId);
 		if (previousGeometry == null || node.resolved == null ||
@@ -1368,7 +1353,7 @@ class UiContext {
 	public var dirtyFlags(get, never):Int;
 	function get_dirtyFlags():Int {
 		var result = dirtyFlagsWithoutRootReads();
-		// Plain observe* getters are polled once at submit, as in the retained model. isDirty stays allocation-free.
+		// Retained dependencies are validated against their tracked source versions.
 		if (buildContext.rootDependenciesDirty())
 			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
 				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
@@ -1387,10 +1372,6 @@ class UiContext {
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
 				UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics |
 				UiDirtyFlag.NeedsHitGeometry;
-		if (commands.revision != submittedCommandRevision)
-			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
-				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
-				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
 		if (animations.rebuildingCount > 0)
 			result |= UiDirtyFlag.NeedsComposite;
 		if (buildContext.patchRequestRevision != submittedPatchRequestRevision)

@@ -1,19 +1,17 @@
 package haxeon.ui.widgets.docking;
 
+import Observable;
+
 import haxeon.ui.docking.DockDropZone;
 import haxeon.ui.docking.DockWorkspaceModel;
 
 /** Shared tab-drag controller that translates pointer geometry into model docks. */
-class DockWorkspaceInteraction {
+class DockWorkspaceInteraction implements Observable {
 	public final model:DockWorkspaceModel;
 	public var draggingPanelId(default, null):Null<String>;
 	public var preview(default, null):Null<DockDropPreview>;
-	public var revision(default, null):Int;
 	final targets:Array<DockDropTarget>;
 	final tabTargets:Array<DockTabDropTarget>;
-	final listeners:Array<Void->Void>;
-	public var listenerCount(get, never):Int;
-	inline function get_listenerCount():Int return listeners.length;
 	var pointerId:Int;
 
 	public function new(model:DockWorkspaceModel) {
@@ -22,19 +20,9 @@ class DockWorkspaceInteraction {
 		this.model = model;
 		draggingPanelId = null;
 		preview = null;
-		revision = 0;
 		targets = [];
 		tabTargets = [];
-		listeners = [];
 		pointerId = -1;
-	}
-
-	/** Registers a change listener and returns a cleanup callback. */
-	public function listen(callback:Void->Void):Void->Void {
-		if (callback == null || listeners.contains(callback))
-			return function() {};
-		listeners.push(callback);
-		return function() { listeners.remove(callback); };
 	}
 
 	/** Replaces render targets after each workspace rebuild. */
@@ -148,7 +136,6 @@ class DockWorkspaceInteraction {
 			}
 		if (preview == null && next != null || preview != null && !preview.same(next)) {
 			preview = next;
-			touch();
 		}
 	}
 
@@ -156,13 +143,5 @@ class DockWorkspaceInteraction {
 		draggingPanelId = null;
 		pointerId = -1;
 		preview = null;
-		touch();
-	}
-
-	function touch():Void {
-		revision++;
-		var callbacks = listeners.copy();
-		for (callback in callbacks)
-			callback();
 	}
 }

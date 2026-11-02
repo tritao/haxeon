@@ -35,22 +35,24 @@ A frame rebuilds the view by default. Work is skipped in three ways, and one che
 is reused while all of these hold:
 
 - its declared key matches (a `RetainedView` revision, plus style revision and viewport; dock panels opt into tracked retention);
-- every `Signal` or `State` it read is still current, and every explicit `BuildContext.observeInt`, `observeBool` or
-  `observeString` read returns the same value (`Dependencies`);
+- every `Signal`, `State` or compiler-tracked `Observable` field it read is still current (`Dependencies`);
 - state-backed resources it used remain mounted (`stateIdsUsedSince` tracks lifetime, not value revisions);
 - the interaction state of nodes a widget built from interaction state is unchanged (`InteractionStateSnapshot`; hover is
   ignored where no stylesheet rule matches it, and widgets that update themselves are left out).
 
-Prefer observing to keys: `context.observeString(() -> session.label())` returns the value and records the read, so a
-dependency cannot be left out. Signal reads track automatically. `CommandButton` observes its command's presence and enabled
-and checked states. The editor's top and status bars have no keys.
+Read observable model fields directly inside the retained builder. Their dependencies are recorded automatically, so a
+key cannot omit a value the builder reads. Signal reads track the same way. `CommandButton` tracks its command's presence,
+enabled and checked fields. The editor's top and status bars have no keys.
 
 `Signal`, `Derived` and `Effect` share push invalidation and pull recomputation. `State` is a signal handle owned by the
-widget store; writing an equal value is skipped, a changed value invalidates only its readers, and writes inside any
-tracking scope throw. Effects are queued and flushed before a UI submit. Sources and readers share reusable intrusive
-dependency edges; per-run stamps deduplicate reads and equal derived outputs stop downstream work. Explicit polling read
-arrays are reused, and records release subscriptions when the owning cache or context is disposed. `observe*` remains the explicit
-polling path for plain fields until those models use `Observable`.
+widget store; writing an equal value is skipped, a changed value invalidates only its readers, and a write inside tracking
+throws when a computation has already subscribed to that value. Effects are queued and flushed before a UI submit. Sources and readers share reusable intrusive
+dependency edges; per-run stamps deduplicate reads and equal derived outputs stop downstream work. Capture arrays are
+reused, and records release subscriptions when the owning cache or context is disposed. Observable objects share one
+dependency source across their fields; writes invalidate only readers of the changed field. Inside tracking, writes to a
+source are rejected when an earlier computation could observe that value; fresh signals, fresh Observable objects and
+unread fields can be initialized normally. Each retained computation starts a new capture stamp: two sibling caches that
+read the same field both subscribe, while repeated reads within either cache still use one entry.
 
 **In place** changes without rebuilding the view. A widget's own rebuild goes through one step, `RenderNode.reconcile`; the other two ways
 are edits that have no build to reconcile.
@@ -99,13 +101,13 @@ of old UI.
 
 Rules that keep it working:
 
-- Read data a retained build depends on, outside widget state, through `observe*`.
+- Read data a retained build depends on, outside widget state, through signals or `Observable` fields.
 - Read signals directly; reads are tracked and equal writes do not invalidate their readers.
 - Change a node of the submitted tree only after `willEditRetained`, or inside its own widget's build (which `selfUpdating`
   reconciles).
-- Do not write a signal or `State` while a tracked build, derived value or effect is running.
-- Dock panels opt into caching with `DockPanelContent.observing`; the cache captures their tracked reads and explicit
-  `observe*` inputs. All editor panels declare their external dependencies; `panel-flows` covers them under verify mode.
+- Do not write a signal or `State` that already has tracked readers while a tracked build, derived value or effect is running.
+- Dock panels opt into caching with `DockPanelContent.observing`; the cache captures their tracked reads. All editor
+  panels declare their external dependencies; `panel-flows` covers them under verify mode.
 
 ## Inspection camera retention (2026-10-30)
 
@@ -199,26 +201,19 @@ Captures under `app/build/profiles`: `ui-camera-cost-{tab-matrix,interaction,sel
 
 ## BIM retention (2026-10-30)
 
-BIM now observes a model-owned `cadkit.parametric.Document.metadataRevision`, its active projection and selection, and the
-editor binding. CadKit advances this non-persisted counter at the record mutation/restore methods for collection
-membership, names, typed properties, definition input/default metadata, instance overrides/definition reassignment, and
-relationship endpoints. Undo, redo and codecs use those same paths. The counter is not restored with a historical
-`Definition.revision`, so restoring an earlier input revision cannot make an old retained snapshot current again.
-It is catalog/metadata invalidation, not a revision for feature geometry or derived shape caches.
-
-Both BIM tree models return this scalar revision. Their previous signatures enumerated and serialized elements,
-relationships, definitions and instance counts during revision checks. The type signature also missed an instance rename
-that left its count unchanged. A scalar getter allocates nothing and covers that rename as well as property-schema edits.
-The UI does not maintain a second list of model fields to hash, and direct model edits need no editor history revision.
+The BIM trees read observable `Document`, `Element`, `Definition` and `Relationship` fields directly. Document membership
+and ID lookup maps, plus record property maps, are replaced copy-on-write when edits or history restoration change them.
+Each retained tree therefore depends on the membership, names, properties or relationships it actually reads; there is
+no aggregate `metadataRevision` counter or per-frame model scan.
 
 The dock supplies its known width through `BimModelEditor.atWidth`; standalone builds use the context viewport width.
 The editor no longer measures its width and changes the next build's breakpoint from an `onResolved` callback. Compact
 and wide composition therefore use the same inputs on the submitting build and its verification reference.
 
-Tree selection has one owner. `TreeView.selectionProvider` is an optional observed primary-selection source; normal
+Tree selection has one owner. `TreeView.selectionProvider` is an optional tracked primary-selection source; normal
 uncontrolled trees keep their previous behavior. A controlled tree clamps unavailable keys to no visible selection and
 synchronizes only its private state quietly after choosing the value this build will render. Input still updates normal
-widget state and notifies the owner once; synchronization does not notify the owner. As for other observed reads, the
+widget state and notifies the owner once; synchronization does not notify the owner. As for other tracked reads, the
 owner schedules a frame/build when external model values change. BIM's inspector and each projection now use the same
 selection, rather than letting a newly created tree restore a different old selection from its internal store. An empty
 owner selection no longer silently highlights the first tree root while the inspector still says to select an object.
@@ -235,9 +230,8 @@ to rebuild and compare every submitting frame. Existing fitted-label feedback ge
 unchanged frame.
 
 The tree-selection suite separately checks externally controlled selection through a retained parent, null and missing
-keys, input notifications and comparison with a full rebuild. `CADKIT_SMOKE_ENTRY=MetadataRevisionSmoke bash
-cadkit/scripts/test-haxeon` checks the revision invariants, including no invalidation for an identical property, collection
-insertion/removal, low-level restores, history and decoding. The existing `BimEditorProjectionTests` also pass.
+keys, input notifications and comparison with a full rebuild. `BimEditorProjectionTests` checks that element-name and
+document-membership reads invalidate their retained dependencies.
 
 The ten UI suites, all nine verify-every-frame editor scenarios, the ordinary eight-cycle panel replay and all three
 500-cycle memory runs pass. Allocation ceilings are unchanged. Same-machine probe-off measurements against the starting
@@ -627,6 +621,9 @@ it passes afterward. Fingerprint checks and native/full-build comparisons are un
 List window feedback now compares the actual scroll viewport, where `ScrollView` records its metrics, rather than its
 parent box. Float32 layout can give these two boxes slightly different heights; comparing them exactly never converged.
 Comparing the same viewport on both sides preserves exact checks and covers fractional sizes without a tolerance.
+The virtual list reads a retained `State<Int>` during build and advances it only when resolved geometry differs from the
+window used to build. That invalidates the list's enclosing cache for the next bounded feedback pass without making
+every `ScrollController` offset a tracked model field. Ordinary scrolling still updates the scroll transform in place.
 
 The bounded CNC fixture uses three physical Cartesian slides, explicit small box support hulls, and a finite rapid/dwell
 program. It avoids source generation, CAD, stock cutting and the mill project. It exercises source replacement, controlled

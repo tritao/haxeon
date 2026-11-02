@@ -15,7 +15,7 @@ class PropertyTests {
 			var options = new PropertyDescriptorOptions(); options.minimum = 0; options.maximum = 10;
 			options.commit = (_, next, _) -> { submissions++; return Pending(ticket); };
 			var descriptor = new PropertyDescriptor("size", "Size", PropertyType.Int,
-				_ -> PropertyValue.Int(value), (_, _) -> { writes++; }, options);
+				() -> PropertyValue.Int(value), (_, _) -> { writes++; }, options);
 			var document = new EditorDocument("external");
 			var commands = new CommandContext(document);
 			var events:Array<String> = []; commands.onPropertyEdit = event -> events.push(event.result);
@@ -43,7 +43,7 @@ class PropertyTests {
 			ticket = new PropertyPendingEdit(); editor.applyValue(context, descriptor, PropertyValue.Int(4));
 			value = 4; revision = editor.revision; ticket.resolve(Applied);
 			check(editor.revision > revision && document.history.undoCount == 0, "Acceptance updates row without second undo stack");
-			var sync = new PropertyDescriptor("sync", "Sync", PropertyType.Int, _ -> PropertyValue.Int(value), (_, next) -> {
+			var sync = new PropertyDescriptor("sync", "Sync", PropertyType.Int, () -> PropertyValue.Int(value), (_, next) -> {
 				switch next { case Int(number): value = number; default: }
 			});
 			check(new PropertyBinding(sync, commands).apply(PropertyValue.Int(7)) == Applied, "Synchronous editing still applies");
@@ -51,7 +51,7 @@ class PropertyTests {
 			var vector = new NumericVectorPropertyEditor(); var list = new ListPropertyEditor();
 			var registry = new PropertyEditorRegistry([vector, list]);
 			var vectorDescriptor = new PropertyDescriptor("vector", "Vector", PropertyType.Custom(NumericVectorPropertyEditor.TYPE),
-				_ -> Custom(NumericVectorPropertyEditor.TYPE, [1.0, 2.0]), (_, _) -> {}, options);
+				() -> Custom(NumericVectorPropertyEditor.TYPE, [1.0, 2.0]), (_, _) -> {}, options);
 			var valid = registry.parse(vectorDescriptor.type, "[2,3]");
 			check(valid != null && registry.validate(commands, vectorDescriptor, valid) == null, "Vector JSON import and validation");
 			check(registry.validate(commands, vectorDescriptor, Custom(NumericVectorPropertyEditor.TYPE, [20.0, 2.0])) != null, "Component bounds validated");
@@ -71,7 +71,7 @@ class PropertyTests {
 		var original:Dynamic = {enabled:true, nested:{flag:true}};
 		var current:Dynamic = original, submissions = 0, reject = true;
 		var descriptor = new PropertyDescriptor("settings", "Settings", Custom(RecordPropertyEditor.TYPE),
-			_ -> Custom(RecordPropertyEditor.TYPE, current), (_, _) -> {}, options);
+			() -> Custom(RecordPropertyEditor.TYPE, current), (_, _) -> {}, options);
 		var context = new BuildContext(new StateStore());
 		function action(label:String, enabled:Bool = true):Void {
 			context.beginFrame();
@@ -107,7 +107,7 @@ class PropertyTests {
 		var original:Array<Dynamic> = [true, false, true];
 		var current:Dynamic = original;
 		var descriptor = new PropertyDescriptor("items", "Items", PropertyType.Custom(ListPropertyEditor.TYPE),
-			_ -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {});
+			() -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {});
 		var context = new BuildContext(new StateStore());
 		function action(label:String, enabled:Bool = true, ?expectedEnabled:Bool):Void {
 			context.beginFrame();
@@ -147,7 +147,7 @@ class PropertyTests {
 		var options = new PropertyDescriptorOptions();
 		options.structure = PropertyStructure.List(PropertyStructure.Value(PropertyType.Bool), 3, 3, "toggle");
 		descriptor = new PropertyDescriptor("items", "Items", PropertyType.Custom(ListPropertyEditor.TYPE),
-			_ -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {}, options);
+			() -> Custom(ListPropertyEditor.TYPE, current), (_, _) -> {}, options);
 		action("Items Add item"); action("Items item 0 Remove"); action("Apply Items");
 		check(haxe.Json.stringify(current) == "[false,true,true]", "Typed list cardinality disables invalid add/remove actions");
 

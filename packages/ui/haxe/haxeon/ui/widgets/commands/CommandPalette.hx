@@ -65,7 +65,6 @@ class CommandPalette implements View {
 			picker.model = model;
 			picker.buildRow = function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered);
 			picker.onDismiss = function() { if (onDismiss != null) onDismiss(); };
-			picker.onChanged = function() context.commands.refresh();
 			picker.width = 504;
 			picker.rowHeight = 36;
 			picker.maxListHeight = 320;

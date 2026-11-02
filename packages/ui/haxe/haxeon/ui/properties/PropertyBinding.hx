@@ -26,7 +26,7 @@ class PropertyBinding {
 	}
 
 	public function read():PropertyValue
-		return descriptor.readValue(context);
+		return descriptor.readValue();
 
 	/** Returns descriptor and extension validation without mutating the model. */
 	public function validate(value:PropertyValue):Null<String> {

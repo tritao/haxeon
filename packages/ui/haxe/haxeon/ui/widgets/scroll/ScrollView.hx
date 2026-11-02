@@ -129,14 +129,11 @@ class ScrollView implements View {
 			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
 			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
-			var followsOffset = contentFollowsOffset;
 			binding.value.attach(controller, context.animations, function(_) {
 				context.willEditRetained(translatedContent);
 				translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX, -controller.offsetY);
 				visibility.value.reveal();
 				horizontalVisibility.value.reveal();
-				if (followsOffset)
-					context.commands.refresh();
 			});
 
 			viewport.add(translatedContent);

@@ -1,7 +1,9 @@
 package haxeon.ui.editing;
 
+import Observable;
+
 /** Document-owned history and savepoint state for editor applications. */
-class EditorDocument {
+class EditorDocument implements Observable {
 	public final id:String;
 	public final history:EditHistory;
 	var savedStateToken:Int;

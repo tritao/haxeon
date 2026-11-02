@@ -1,9 +1,88 @@
 package haxeon.editor;
 
 import haxe.io.Bytes;
+import Observable;
 
-/** Editable UTF-8 text with code-point, UTF-16, and paragraph indexes per segment. */
-class TextDocument {
+/** Caller-owned editable text whose public revision participates in reactive builds. */
+@:allow(haxeon.ui.widgets.text.TextEditorState)
+class TextDocument implements Observable {
+	public var revision(default, null):Int;
+	public var codepointCount(get, never):Int;
+	public var utf8ByteLength(get, never):Int;
+	public var utf16Length(get, never):Int;
+	public var text(get, never):String;
+	@:unobservable var buffer:TextDocumentBuffer;
+
+	public function new(value:String) {
+		buffer = new TextDocumentBuffer(value);
+		revision = buffer.revision;
+	}
+
+	private function storage():TextDocumentBuffer return buffer;
+
+	function get_codepointCount():Int {
+		var currentRevision = revision;
+		return buffer.codepointCount;
+	}
+	function get_utf8ByteLength():Int {
+		var currentRevision = revision;
+		return buffer.utf8ByteLength;
+	}
+	function get_utf16Length():Int {
+		var currentRevision = revision;
+		return buffer.utf16Length;
+	}
+	function get_text():String {
+		var currentRevision = revision;
+		return buffer.text;
+	}
+
+	public function replace(start:Int, end:Int, replacement:String):Bool {
+		if (!buffer.replace(start, end, replacement)) return false;
+		revision = buffer.revision;
+		return true;
+	}
+
+	public function editSince(previous:Int):Null<TextDocumentEdit> {
+		var currentRevision = revision;
+		return buffer.editSince(previous);
+	}
+	public function sliceCodepoints(start:Int, end:Int):String {
+		var currentRevision = revision;
+		return buffer.sliceCodepoints(start, end);
+	}
+	public function utf8OffsetForCodepoint(position:Int):Int {
+		var currentRevision = revision;
+		return buffer.utf8OffsetForCodepoint(position);
+	}
+	public function utf16OffsetForCodepoint(position:Int):Int {
+		var currentRevision = revision;
+		return buffer.utf16OffsetForCodepoint(position);
+	}
+	public function codepointOffsetForUtf8(position:Int):Int {
+		var currentRevision = revision;
+		return buffer.codepointOffsetForUtf8(position);
+	}
+	public function codepointOffsetForUtf16(position:Int):Int {
+		var currentRevision = revision;
+		return buffer.codepointOffsetForUtf16(position);
+	}
+	public function paragraphCount():Int {
+		var currentRevision = revision;
+		return buffer.paragraphCount();
+	}
+	public function paragraphIndexAtOffset(position:Int):Int {
+		var currentRevision = revision;
+		return buffer.paragraphIndexAtOffset(position);
+	}
+	public function paragraphRangeAtIndex(number:Int):TextRange {
+		var currentRevision = revision;
+		return buffer.paragraphRangeAtIndex(number);
+	}
+}
+
+/** Text storage and indexes used by a widget's private editor state. */
+class TextDocumentBuffer {
 	static inline var targetBytes:Int = 2048;
 	/** Incremented after each non-no-op replacement. */
 	public var revision(default, null):Int;
@@ -31,7 +110,7 @@ class TextDocument {
 		reindex();
 	}
 
-	function get_text():String {
+	public function get_text():String {
 		if (cachedText == null) {
 			var buffer = new StringBuf();
 			for (segment in segments)

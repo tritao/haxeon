@@ -1,4 +1,4 @@
-import haxeon.editor.TextDocument;
+import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.ui.FontCollection;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextAlignment;
@@ -10,7 +10,7 @@ import haxeon.ui.widgets.text.TextEditorLayout;
 class EditorResizeTests {
   static function near(a:Float, b:Float):Bool return Math.abs(a - b) < 0.01;
 
-  static function verify(fonts:FontCollection, document:TextDocument, layout:TextEditorLayout):Void {
+  static function verify(fonts:FontCollection, document:TextDocumentBuffer, layout:TextEditorLayout):Void {
     var fresh = new TextEditorLayout(fonts, document.text, layout.width,
       layout.textStyle, layout.paragraphStyle, document);
     var a = layout.measure(), b = fresh.measure();
@@ -35,7 +35,7 @@ class EditorResizeTests {
     var fonts = FontCollection.create();
     fonts.add(Sys.getEnv("NKUI_TEST_FONT_PATH"));
     for (wrap in [TextWrap.None, TextWrap.WordCharacter]) for (alignment in [TextAlignment.Start, TextAlignment.Center]) {
-      var document = new TextDocument([for (i in 0...150) i + " Latin café אבג é long source line"].join("\n"));
+      var document = new TextDocumentBuffer([for (i in 0...150) i + " Latin café אבג é long source line"].join("\n"));
       var style = new TextStyle(16), paragraph = new ParagraphStyle(wrap, alignment);
       var layout = new TextEditorLayout(fonts, document.text, 160, style, paragraph, document);
       for (width in [300.0, 75.0, 240.0]) {

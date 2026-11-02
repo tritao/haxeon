@@ -1,15 +1,16 @@
 package haxeon.ui.docking;
 
+import Observable;
+
 /**
- * Mutable dock layout and panel metadata. Mutations increment revision and
- * notify listeners so mounted workspaces can invalidate a frame.
+ * Mutable dock layout and panel metadata. Observable fields invalidate views;
+ * listeners remain for persistence and other non-view side effects.
  */
-class DockWorkspaceModel {
-	public final panels:Map<String, DockPanelDescriptor>;
+class DockWorkspaceModel implements Observable {
+	public var panels:Map<String, DockPanelDescriptor>;
 	public var root(default, null):DockNode;
 	public var defaultRoot(default, null):DockNode;
 	public var activePanelId(default, null):Null<String>;
-	public var revision(default, null):Int;
 	final listeners:Array<Void->Void>;
 	public var listenerCount(get, never):Int;
 	inline function get_listenerCount():Int return listeners.length;
@@ -19,7 +20,6 @@ class DockWorkspaceModel {
 		root = DockNodeTools.normalize(defaultRoot == null ? DockNode.Empty : defaultRoot);
 		this.defaultRoot = DockNodeTools.clone(root);
 		activePanelId = DockNodeTools.firstPanel(root);
-		revision = 0;
 		listeners = [];
 	}
 
@@ -36,7 +36,9 @@ class DockWorkspaceModel {
 			throw "Dock workspace cannot register a null panel";
 		if (panels.exists(panel.id))
 			throw 'Dock panel ${panel.id} is already registered';
-		panels.set(panel.id, panel);
+		var next = copyPanels(panels);
+		next.set(panel.id, panel);
+		panels = next;
 		if (DockNodeTools.contains(root, panel.id) && activePanelId == null)
 			activePanelId = panel.id;
 	}
@@ -44,7 +46,7 @@ class DockWorkspaceModel {
 	public function setPanelBadge(panelId:String, count:Int):Bool {
 		var panel = get(panelId);
 		if (panel == null || count < 0 || panel.badgeCount == count) return false;
-		panel.setBadgeCount(count); revision++; return true;
+		panel.setBadgeCount(count); return true;
 	}
 
 	public function get(panelId:String):Null<DockPanelDescriptor>
@@ -267,7 +269,9 @@ class DockWorkspaceModel {
 	public function unregister(panelId:String):Bool {
 		if (!panels.exists(panelId))
 			return false;
-		panels.remove(panelId);
+		var next = copyPanels(panels);
+		next.remove(panelId);
+		panels = next;
 		root = DockNodeTools.remove(root, panelId);
 		defaultRoot = DockNodeTools.remove(defaultRoot, panelId);
 		if (activePanelId == panelId)
@@ -293,9 +297,14 @@ class DockWorkspaceModel {
 	}
 
 	function touch():Void {
-		revision++;
 		var callbacks = listeners.copy();
 		for (callback in callbacks)
 			callback();
+	}
+
+	static function copyPanels(source:Map<String, DockPanelDescriptor>):Map<String, DockPanelDescriptor> {
+		var result:Map<String, DockPanelDescriptor> = new Map();
+		for (key in source.keys()) result.set(key, source.get(key));
+		return result;
 	}
 }

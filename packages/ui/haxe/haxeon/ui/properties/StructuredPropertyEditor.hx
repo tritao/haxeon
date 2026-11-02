@@ -64,6 +64,8 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		context:BuildContext, enabled:Bool, apply:PropertyValue->Void):View {
 		var root:Dynamic = switch value { case Custom(_, data): data; default: new Array<Dynamic>(); };
 		var base = display(root);
+		var draftRevision:State<Int> = context.lazyState(context.id(key + ":draft-revision"), function() return 0);
+		var observedDraftRevision = draftRevision.value;
 		var draftState:State<StructuredPropertyDrafts> = context.lazyState(context.id(key + ":drafts"),
 			function() return new StructuredPropertyDrafts(base));
 		var found = retainDrafts ? retainedDrafts.get(descriptor.id) : draftState.value;
@@ -88,17 +90,18 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 		function changed():Void {
 			try { local.dirty = display(candidate()) != base; } catch (_:Dynamic) { local.dirty = true; }
 			draftState.update(local);
+			draftRevision.update(value -> value + 1);
 			if (onDraftChanged != null) onDraftChanged();
-			context.commands.refresh();
 		}
 		function commit():Void {
 			try {
 				var next = candidate();
 				apply(Custom(id, next));
-				var saved = descriptor.readValue(context.commandContext);
+				var saved = descriptor.readValue();
 				if (switch saved { case Custom(_, data): same(data, next); default: false; }) {
 					local.dirty = false;
 					if (retainDrafts) retainedDrafts.remove(descriptor.id);
+					draftRevision.update(value -> value + 1);
 				}
 				if (onDraftChanged != null) onDraftChanged();
 			}
@@ -108,7 +111,6 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 			if (vector) apply(Custom(id, copy));
 			else {
 				local.current = copy; drafts.clear(); changed();
-				context.commands.refresh();
 			}
 		}
 		function send(path:Array<String>, next:Dynamic):Void {
@@ -249,8 +251,8 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				local = new StructuredPropertyDrafts(base);
 				if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 				draftState.update(local);
+				draftRevision.update(value -> value + 1);
 				if (onDraftChanged != null) onDraftChanged();
-				context.commands.refresh();
 			}, "revert");
 			revert.accessibilityLabel = record ? "Revert record draft" : "Revert list draft";
 			revert.enabled = enabled && local.dirty;

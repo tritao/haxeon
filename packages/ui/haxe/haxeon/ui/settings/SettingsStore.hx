@@ -1,5 +1,7 @@
 package haxeon.ui.settings;
 
+import Observable;
+
 import haxe.Json;
 import haxe.io.Path;
 import haxeon.ui.properties.PropertyType;
@@ -22,7 +24,7 @@ import sys.io.File;
  * recently opened files: JSON-compatible values under a key, never shown in
  * the settings dialog and never validated.
  */
-class SettingsStore {
+class SettingsStore implements Observable {
 	public static inline var FORMAT_VERSION:Int = 1;
 
 	public final registry:SettingsRegistry;

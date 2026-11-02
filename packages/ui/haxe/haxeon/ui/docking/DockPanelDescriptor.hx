@@ -1,9 +1,11 @@
 package haxeon.ui.docking;
 
+import Observable;
+
 import haxeon.ui.icons.IconName;
 
 /** View-independent metadata for one registered dock panel. */
-class DockPanelDescriptor {
+class DockPanelDescriptor implements Observable {
 	public final id:String;
 	public final title:String;
 	public var badgeCount(default, null):Int = 0;

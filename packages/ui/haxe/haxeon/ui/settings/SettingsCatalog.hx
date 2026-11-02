@@ -139,7 +139,7 @@ class SettingsCatalog {
 		var target = store;
 		var path = definition.path;
 		var created = new PropertyDescriptor(path, definition.label,
-			definition.type, function(_) return target.get(path), function(_, value:PropertyValue) {
+			definition.type, function() return target.get(path), function(_, value:PropertyValue) {
 				var error = target.set(path, value);
 				if (error != null)
 					throw error;

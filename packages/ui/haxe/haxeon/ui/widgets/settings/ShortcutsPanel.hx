@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.settings;
 
+import Observable;
+
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
@@ -32,7 +34,7 @@ import haxeon.ui.widgets.text.Text;
  * and modifier keys alone keep waiting. A chord another command in the same
  * scope used is moved to this one, and the panel says so.
  */
-class ShortcutsPanel implements View {
+class ShortcutsPanel implements View implements Observable {
 	public final key:String;
 	public final bindings:ShortcutBindings;
 	public var filter(default, null):String;

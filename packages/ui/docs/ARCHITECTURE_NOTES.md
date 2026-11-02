@@ -10,7 +10,7 @@ The model is **declarative build over a retained tree**: authors write builds as
 frame, and the framework skips what it can prove unchanged.
 
 - Retained subtrees (`RetainedView`, dock caches) are reused while their recorded dependencies match: widget-state
-  revisions, observed reads (`observe*`) and the interaction state they were built from.
+  values, tracked signal and Observable reads, and the interaction state they were built from.
 - Self-updating widgets rebuild alone and are reconciled into their existing node (`RenderNode.reconcile`); controller
   edits are announced with `willEditRetained`. A frame with only these is a patch frame and builds no view.
 - Verify mode rebuilds from scratch and compares, so a missed dependency fails the gates instead of showing stale UI.
@@ -66,12 +66,12 @@ but hard with conservative stack scanning. Reconsider if GC marking shows in int
 
 ## Is the current model right?
 
-It works and is verified, but it grew one mechanism per case: retained caches and keys, explicit polling reads alongside
-tracked signal dependencies, `selfUpdating` with `reconcile`, `BuiltNode` and `RenderNode.latest`, `requestPatch`,
+It works and is verified, but it grew one mechanism per case: retained caches and keys, `selfUpdating` with `reconcile`,
+`BuiltNode` and `RenderNode.latest`, `requestPatch`,
 `willEditRetained` with priors and `RetainedAnimation`, patch frames, and binding revisions for widgets that cannot be
-patched while hidden. Stage 1 now supplies `Signal`, `Derived` and `Effect`; stage 1b will replace the remaining polling
-reads and revision counters with compiler-tracked `Observable` fields. The older quiet-write path has been removed because
-changed signals invalidate their readers directly.
+patched while hidden. ADR 0002 stages 1 and 1b now supply `Signal`, `Derived`, `Effect` and compiler-tracked `Observable`
+fields. Polling reads and owned revision adapters have been removed. The older quiet-write path is gone because changed
+signals invalidate their readers directly.
 
 Most of these are one idea at different sizes: a scope records what it reads, re-runs when one of those values changes,
 and updates the existing nodes. That idea is what the ADR adopts.
@@ -105,7 +105,5 @@ expected result is bindings for leaf widgets and live values, small re-running s
 
 1. Let the current Codex session (remaining panels, Tabs/SelectionPopup, render-side cost and incremental render compile)
    finish.
-2. Apply the queued cleanups: lazy state initial values, a hobbing-player revision, one per-frame camera update, required
-   BIM width, BIM default selection, the structural dock label key.
-3. Start ADR 0002 stage 1: signals under `State` and `observe*`.
+2. Finish the queued cleanup and measurement work from ADR 0002 stages 1 and 1b.
 4. Language and compiler features the design needs, in order: `haxeon/docs/UI_LANGUAGE_FEATURES.md`.

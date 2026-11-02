@@ -14,6 +14,7 @@ import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.core.RetainedView;
+import haxeon.ui.core.Signal;
 
 private class Items implements TreeViewModel {
   public function new() {}
@@ -113,16 +114,16 @@ class TreeSelectionTests {
     check(selection() == "item-7", "Single-select tree handled Control-click as a toggle");
     var controlled = new UiContext(null, fonts);
     controlled.buildContext.environment.reducedMotion = true;
-    var choice:Null<String> = null, notifications = 0;
+    var choice = new Signal<Null<String>>(null), notifications = 0;
     var controlledBuild = function():View return new RetainedView("controlled-tree", function(_) {
       var next = new TreeView("controlled-items", new Items(), style);
-      next.selectionProvider = function() return choice;
-      next.onSelectionChanged = function(key) { choice = key; notifications++; };
+      next.selectionProvider = function() return choice.value;
+      next.onSelectionChanged = function(key) { choice.value = key; notifications++; };
       return next;
     });
     // Build the parent each frame; RetainedView itself must observe and invalidate its cached tree.
     for (desired in ["item-1", "item-8", null, "missing", "item-2"]) {
-      choice = desired;
+      choice.value = desired;
       var mounted = controlled.submit(controlledBuild(), frame);
       var expected = desired == null || desired == "missing" ? "" : desired;
       check(selectedRows(mounted) == expected, "Controlled selection did not follow its owner: expected " + expected + " actual " + selectedRows(mounted));
@@ -135,10 +136,10 @@ class TreeSelectionTests {
     controlled.pointerDown(60, controlledY, 0);
     controlled.pointerUp(60, controlledY, 0);
     mounted = controlled.submit(controlledBuild(), frame);
-    check(choice == "item-4" && notifications == 1 && selectedRows(mounted) == "item-4", "Controlled input did not update its owner");
+    check(choice.value == "item-4" && notifications == 1 && selectedRows(mounted) == "item-4", "Controlled input did not update its owner");
     check(controlled.verifyRetention(controlledBuild, frame) == null, "Controlled input differs from a fresh tree");
     controlled.dispose();
-    Sys.println("PASS: observed controlled selection, clearing, absent keys and input match fresh builds");
+    Sys.println("PASS: tracked controlled selection, clearing, absent keys and input match fresh builds");
     Sys.println("PASS: range, toggle, anchor, menu and single-select clicks");
     ui.dispose(); fonts.dispose(); runtime.dispose();
     return 0;

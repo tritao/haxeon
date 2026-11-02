@@ -191,6 +191,7 @@ class Reflect {
 	}
 
 	public static inline function field(object:Dynamic, field:String):Dynamic {
+		if (field == "$haxeonObservableState") return null;
 		if (Std.isOfType(object, String)) {
 			var text:String = object;
 			return runtime.StringMethods.field(text, field);
@@ -198,20 +199,24 @@ class Reflect {
 		return reflectField(object, field);
 	}
 
-	public static inline function setField(object:Dynamic, field:String, value:Dynamic):Void
+	public static inline function setField(object:Dynamic, field:String, value:Dynamic):Void {
+		if (field == "$haxeonObservableState") return;
 		reflectSetField(object, field, value);
+	}
 
 	public static inline function hasField(object:Dynamic, field:String):Bool
-		return reflectHasField(object, field);
+		return field == "$haxeonObservableState" ? false : reflectHasField(object, field);
 
 	/** Removes a field from a dynamic object; returns false when it was absent. */
 	public static inline function deleteField(object:Dynamic, field:String):Bool
-		return reflectDeleteField(object, field);
+		return field == "$haxeonObservableState" ? false : reflectDeleteField(object, field);
 
 	public static function fields(object:Dynamic):Array<String> {
 		var result:Array<String> = [];
-		for (index in 0...reflectFieldCount(object))
-			result.push(reflectFieldName(object, index));
+		for (index in 0...reflectFieldCount(object)) {
+			var name = reflectFieldName(object, index);
+			if (name != "$haxeonObservableState") result.push(name);
+		}
 		return result;
 	}
 

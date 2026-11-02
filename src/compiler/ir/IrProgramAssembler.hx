@@ -328,6 +328,11 @@ class IrProgramAssembler {
 							};
 						fields.push({name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout});
 					}
+				if (IrGenerator.observableStateOwner(classDecl.name) == classDecl.name)
+					fields.push({
+						name: "$haxeonObservableState",
+						type: IrGenerator.lowerType(TInstance(NominalKind.Class, "haxeon.ui.core.ObservableSource", []))
+					});
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)
 					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
@@ -435,7 +440,7 @@ class IrProgramAssembler {
 		};
 
 	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
-	static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
+	public static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
 		if (hasDirectFieldAccess(field.readAccess) || hasDirectFieldAccess(field.writeAccess))
 			return true;
 		for (metadata in field.metadata)
