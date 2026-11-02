@@ -7,6 +7,8 @@ class DesktopUiHostOptions extends UiHostOptions {
 	public var customTitlebar:Bool = false;
 	/** Where to put the window before it is first shown, such as where it was on the last run; null lets the system choose. */
 	public var placement:Null<WindowPlacement> = null;
+	/** Brings the window to the front once shown, as when it replaces a window the user was working in. */
+	public var activate:Bool = false;
 	/** Minimum application layout size, scaled by application zoom for native limits.
 	 * Zero leaves an axis unconstrained. */
 	public var minimumWidth:Int = 0;

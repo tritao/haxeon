@@ -166,6 +166,9 @@ class DesktopUiHost {
 				throw "Window show failed: " + NativeKit.nk_last_error();
 			if (placement != null && placement.maximized)
 				NativeKit.nk_window_maximize(window);
+			// Windows does not bring a new window forward by itself; without this a reopened window lands behind.
+			if (options.activate)
+				NativeKit.nk_window_activate(window);
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
 			var surfaceOptions = new NativeSurfaceOptions();
@@ -262,6 +265,10 @@ class DesktopUiHost {
 				function() session.stop(), scheduleFrame);
 			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
 			// The bounds a maximized window restores to are the last ones read while it was not maximized.
+			hostContext.windowActive = function():Bool {
+				var state = NativeKit.nk_window_get_state(window);
+				return state.status == Result.Ok && (state.out_state.get_flags() & WindowStateFlags.Active) != 0;
+			};
 			var restoredPlacement:Null<WindowPlacement> = options.placement;
 			hostContext.windowPlacement = function():Null<WindowPlacement> {
 				var state = NativeKit.nk_window_get_state(window);
