@@ -109,6 +109,35 @@ HL_PRIM realtime_process_identity *HL_NAME(__host_process_identity_open)(int pid
 #endif
 }
 
+/** True while a process with this id is running. A given executable must also be the process image, so a reused id is not taken for the old process. */
+HL_PRIM bool HL_NAME(__host_process_alive)(int pid, vstring *expected_executable) {
+#ifdef HL_WIN
+	if (pid <= 0) return false;
+	HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, (DWORD)pid);
+	if (process == NULL) return GetLastError() == ERROR_ACCESS_DENIED;
+	DWORD status = 0;
+	bool alive = GetExitCodeProcess(process, &status) && status == STILL_ACTIVE;
+	if (alive && WaitForSingleObject(process, 0) == WAIT_OBJECT_0) alive = false;
+	if (alive && expected_executable != NULL) {
+		wchar_t actual[32768];
+		DWORD length = sizeof(actual) / sizeof(actual[0]);
+		// Only the file name is compared: another build's runtime may own the state. An image that cannot be read is not evidence of another process.
+		if (QueryFullProcessImageNameW(process, 0, actual, &length)) {
+			const wchar_t *actual_name = wcsrchr(actual, L'\\'), *expected_name = (const wchar_t *)realtime_string_data(expected_executable), *slash;
+			actual_name = actual_name == NULL ? actual : actual_name + 1;
+			while ((slash = wcspbrk(expected_name, L"\\/")) != NULL) expected_name = slash + 1;
+			alive = _wcsicmp(actual_name, expected_name) == 0;
+		}
+	}
+	CloseHandle(process);
+	return alive;
+#else
+	(void)expected_executable;
+	if (pid <= 0) return false;
+	return kill((pid_t)pid, 0) == 0 || errno == EPERM;
+#endif
+}
+
 HL_PRIM bool HL_NAME(__host_process_identity_terminate)(realtime_process_identity *handle) {
 #ifdef HL_WIN
 	if (handle == NULL || handle->closed || handle->process == NULL) return false;
