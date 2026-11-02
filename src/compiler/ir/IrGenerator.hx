@@ -2516,6 +2516,10 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
+					case TArray(element) if ((operation == "copy" || operation == "slice" || operation == "concat")
+						&& arrayValueElement(lowerType(element))):
+						var result = lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
+						copyArrayValues(builder, result, lowerType(element), localTypes);
 					case TArray(element) if (operation == "index_of" && isEnumType(element)):
 						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
 					case TArray(element) if (operation == "remove" && isEnumType(element)):
@@ -3886,6 +3890,68 @@ class IrGenerator {
 
 	static function arrayAllocatorName(element:CompilerType):String
 		return "__array_alloc_" + RuntimeType.requireArrayName(element);
+
+	/** Collection operations that create a second array must give each array its own value elements. */
+	static function arrayValueElement(type:IrType):Bool return switch type {
+		case Obj(name), Nullable(Obj(name)):
+			var object = inlineValueObjects.get(name);
+			object != null && object.isValue;
+		default: false;
+	};
+
+	static function copyArrayValue(builder:CfgBuilder, source:CfgValue, type:IrType):CfgValue return switch type {
+		case Nullable(Obj(name)):
+			builder.call(IrOptionalValueFlow.copyName(name), [source], type);
+		case Obj(name):
+			var object = inlineValueObjects.get(name);
+			if (object == null || !object.isValue) throw 'Missing value object "$name"';
+			var copy = builder.newObject(name);
+			for (field in object.fields) {
+				var value = builder.fieldGet(source, field.name, field.type);
+				if (arrayValueElement(field.type)) value = copyArrayValue(builder, value, field.type);
+				builder.fieldSet(copy, field.name, value);
+			}
+			copy;
+		default: throw "Expected a value element";
+	};
+
+	static function copyArrayValues(builder:CfgBuilder, array:CfgValue, element:IrType, localTypes:Map<String, IrType>):CfgValue {
+		var suffix = Std.string(array.id), arrayName = '$' + 'array-value-copy:' + suffix,
+			indexName = '$' + 'array-value-copy-index:' + suffix;
+		localTypes.set(arrayName, array.type);
+		localTypes.set(indexName, I32);
+		builder.store(arrayName, array);
+		builder.store(indexName, builder.constInt(0));
+		var check = builder.createBlock(), body = builder.createBlock(), done = builder.createBlock();
+		builder.jump(check);
+		builder.select(check);
+		var current = builder.load(arrayName, array.type), index = builder.load(indexName, I32);
+		builder.branch(builder.less(index, builder.arraySize(current)), body, done);
+		builder.select(body);
+		current = builder.load(arrayName, array.type);
+		index = builder.load(indexName, I32);
+		var value = elementGet(builder, current, index, element);
+		switch element {
+			case Obj(_):
+				// Growing an array can leave uninitialized slots. Preserve them without dereferencing a null value.
+				var valueName = '$' + 'array-value-copy-element:' + suffix;
+				localTypes.set(valueName, element);
+				builder.store(valueName, value);
+				var initialized = builder.createBlock(), next = builder.createBlock();
+				builder.branch(builder.equal(value, builder.constNull(element)), next, initialized);
+				builder.select(initialized);
+				elementSet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32),
+					copyArrayValue(builder, builder.load(valueName, element), element));
+				builder.jump(next);
+				builder.select(next);
+			default:
+				elementSet(builder, current, index, copyArrayValue(builder, value, element));
+		}
+		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(check);
+		builder.select(done);
+		return builder.load(arrayName, array.type);
+	}
 
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),

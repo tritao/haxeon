@@ -45,11 +45,12 @@ while IFS=$'\t' read -r case_name _; do
 	done
 done < "$root_dir/tests/programs/expected-exits.tsv"
 
-# The declared-conformance fixture covers synthesized and hand-written equality,
-# hashing, nullable/nested structs, maps and Diff. Run it with optimization both
-# enabled and disabled on each Wasm backend, in addition to its normal HL run.
+# Run declared conformance and struct array places with inlining both enabled and disabled.
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-struct-array-places-inline-$inline.wasm" \
+			--entry=struct-array-places --root=tests/programs tests/programs/struct-array-places.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
 			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
@@ -64,8 +65,18 @@ for inline in 0 1; do
 	done
 done
 
-# Observable compiler instrumentation must also execute on HashLink with either inlining mode.
+# Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/struct-array-places-inline-$inline.hl" \
+		--entry=struct-array-places --root=tests/programs tests/programs/struct-array-places.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/struct-array-places-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Struct array fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
 	HAXEON_INLINE="$inline" haxeon_compile \
 		--target=hl --output="$parity_output_dir/observable-tracking-inline-$inline.hl" \
 		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
@@ -215,6 +226,17 @@ async function run(name, target) {
     for (const target of ["wasm32", "wasm-gc"])
       if (results[target].failure !== undefined)
         failures.push(`${name} (${target}): ${results[target].failure}`);
+  }
+  for (const inline of [0, 1]) {
+    for (const target of ["wasm32", "wasm-gc"]) {
+      const result = await run(`struct-array-places-inline-${inline}`, target);
+      if (result.failure === undefined && result.exit !== 42)
+        result.failure = `expected 42, got ${result.exit}`;
+      if (result.failure !== undefined)
+        failures.push(`struct-array-places (inline=${inline}, ${target}): ${result.failure}`);
+      else
+        console.log(`PASS: struct-array-places on ${target}, inline=${inline}`);
+    }
   }
   for (const inline of [0, 1]) {
     for (const target of ["wasm32", "wasm-gc"]) {
