@@ -470,6 +470,19 @@ class WasmLinearGc {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.call(builder.functionRef(mark));
+			builder.localGet(value);
+			builder.emit(I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET));
+			builder.i32Const(WasmLayout.VALUE_ARRAY_MARKER);
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				for (offset in [WasmLayout.VALUE_ARRAY_REFERENCE_DATA_OFFSET, WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,
+						WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET, WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET,
+						WasmLayout.VALUE_ARRAY_FORWARD_HEADER_OFFSET]) {
+					builder.localGet(value);
+					builder.emit(I32Load(offset));
+					builder.call(builder.functionRef(mark));
+				}
+			});
 		});
 		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract("realtime_iterator")), function(builder) {
 			builder.localGet(value);
@@ -520,6 +533,17 @@ class WasmLinearGc {
 		builder.localGet(owner);
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.localSet(entryCount);
+		builder.localGet(owner);
+		builder.emit(I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET));
+		builder.i32Const(WasmLayout.VALUE_ARRAY_MARKER);
+		builder.emit(I32Eq);
+		builder.if_(function(builder) {
+			builder.localGet(entryCount);
+			builder.localGet(owner);
+			builder.emit(I32Load(WasmLayout.VALUE_ARRAY_REFERENCE_STRIDE_OFFSET));
+			builder.emit(I32Mul);
+			builder.localSet(entryCount);
+		});
 		builder.i32Const(0);
 		builder.localSet(entryIndex);
 		builder.block(function(builder) {

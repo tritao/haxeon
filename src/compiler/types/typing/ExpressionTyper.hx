@@ -1457,7 +1457,9 @@ class ExpressionTyper {
 				if (typedIndex.type != TInt)
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = arrayElementType(typedArray.type, span);
-				new TypedExpression(TIndex(typedArray, typedIndex), element, span);
+				var access = new TypedExpression(TIndex(typedArray, typedIndex), element, span), path = FlowAnalysis.accessPath(access),
+					refined = path == null ? null : scope.resolveExpression(path);
+				refined == null || TypeRelations.equals(refined, element) ? access : new TypedExpression(TCast(access), refined, span);
 		};
 	}
 

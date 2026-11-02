@@ -174,6 +174,8 @@ class IrInterpreter {
 			case Call(_, name, arguments) if (name == IrHlScalarRef.CHECK_RECEIVER):
 				if (value(values, arguments[0]) == null) throw "Null access";
 				null;
+			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
+				value(values, arguments[0]);
 			case Call(_, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				functions.exists(name) ? execute(functions.get(name), args) : executeNative(name, args);

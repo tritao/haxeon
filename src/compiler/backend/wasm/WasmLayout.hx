@@ -45,6 +45,20 @@ class WasmLayout {
 	public static inline final ARRAY_ELEMENT_TYPE_OFFSET = 20;
 
 	public static inline final ARRAY_HEADER_SIZE = 24;
+
+	/** Extended header for inline value arrays. Ordinary arrays retain the 24-byte header. */
+	public static inline final VALUE_ARRAY_MARKER = 0x56414c41;
+	public static inline final VALUE_ARRAY_FORWARD_MARKER = 0x56414657;
+	public static inline final VALUE_ARRAY_MARKER_OFFSET = 4;
+	public static inline final VALUE_ARRAY_SCALAR_STRIDE_OFFSET = 24;
+	public static inline final VALUE_ARRAY_REFERENCE_STRIDE_OFFSET = 28;
+	public static inline final VALUE_ARRAY_REFERENCE_DATA_OFFSET = 32;
+	public static inline final VALUE_ARRAY_VALIDITY_OFFSET = 36;
+	public static inline final VALUE_ARRAY_READ_BRIDGE_OFFSET = 40;
+	public static inline final VALUE_ARRAY_WRITE_BRIDGE_OFFSET = 44;
+	public static inline final VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET = 48;
+	public static inline final VALUE_ARRAY_FORWARD_HEADER_OFFSET = 52;
+	public static inline final VALUE_ARRAY_HEADER_SIZE = 56;
 	public static inline final ITERATOR_ARRAY_OFFSET = 8;
 	public static inline final ITERATOR_POSITION_OFFSET = 12;
 	public static inline final ITERATOR_SIZE = 16;

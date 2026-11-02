@@ -590,11 +590,18 @@ class IrGenerator {
 						}
 				case TVar(name, initializer, span):
 					builder.debugLocal(name, span, scopeEnd);
+					var arrayPlace = switch initializer.expression {
+						case TCall("$value.place", [inner]): arrayValuePlace(inner);
+						default: null;
+					};
 					var place = switch initializer.expression {
 						case TCall("$value.place", [inner]): optionalFieldPlace(inner);
 						default: null;
 					};
-					if (place == null)
+					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
+						var inner = switch initializer.expression { case TCall(_, [value]): value; default: throw "Invalid array place binding"; };
+						initializeLocal(name, lowerArrayValueReceiver(inner, arrayPlace, builder, localTypes), builder, localTypes);
+					} else if (place == null)
 						initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
 					else {
 						var owner = prepareOptionalFieldPlace(place, builder, localTypes), declaring = optionalFieldOwner(owner.type, place.field),
@@ -658,8 +665,10 @@ class IrGenerator {
 						localTypes.set(rootObjectName, rootObjectType);
 						builder.store(arrayName, operands[0]);
 						builder.store(indexName, operands[1]);
+						var placeOrigin = builder.beginGenerated(ArrayValuePlaceReason);
 						var rawRoot = elementGet(builder, builder.load(arrayName, operands[0].type),
 							builder.load(indexName, operands[1].type), rootType);
+						builder.restoreSource(placeOrigin);
 						builder.store(rootName, rawRoot);
 						switch rootType {
 							case Nullable(_):
@@ -682,7 +691,7 @@ class IrGenerator {
 						if (!builder.isTerminated()) {
 							builder.fieldSet(builder.load(receiverName, receiver.type), name, assigned);
 							elementSet(builder, builder.load(arrayName, operands[0].type), builder.load(indexName, operands[1].type),
-								rootType == rootObjectType ? builder.load(rootObjectName, rootObjectType)
+								sameIrType(rootType, rootObjectType) ? builder.load(rootObjectName, rootObjectType)
 									: builder.toDyn(builder.load(rootObjectName, rootObjectType), rootType));
 						}
 					} else if (projection == null && optionalPlace == null && copy != null && targetOwner != null
@@ -1612,7 +1621,7 @@ class IrGenerator {
 	}
 
 
-	static function lowerBoxedMapValues(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
+	static function lowerValueMapValues(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
 			valueType:CompilerType):CfgValue {
 		var box = mapValueBox(valueType),
 			elementType = lowerType(valueType),
@@ -1636,7 +1645,8 @@ class IrGenerator {
 		builder.select(bodyBlock);
 		var index = builder.load(indexName, I32),
 			stored = elementGet(builder, builder.load(boxesName, Array(Dyn)), index, Dyn);
-		elementSet(builder, builder.load(resultName, resultType), index, unboxMapValue(builder, stored, box, elementType));
+		var value = box == null ? abiBoundaryCast(builder, stored, elementType) : unboxMapValue(builder, stored, box, elementType);
+		elementSet(builder, builder.load(resultName, resultType), index, value);
 		builder.store(indexName, builder.add(index, builder.constInt(1)));
 		builder.jump(conditionBlock);
 		builder.select(afterBlock);
@@ -1880,7 +1890,7 @@ class IrGenerator {
 		return switch expression.expression {
 			case TIndex(array, index):
 				var element = switch array.type { case TArray(value): value; default: null; };
-				element != null && isNullableValueType(element)
+				element != null && (isValueType(element) || isNullableValueType(element))
 					? {array: array, index: index, root: expression, elementType: element, path: []} : null;
 			case TField(parent, field) if (isValueType(expression.type)):
 				var parentPlace = arrayValuePlace(parent);
@@ -1917,6 +1927,28 @@ class IrGenerator {
 			case TCall("$value.place", [inner]): new TypedExpression(TCall("$value.place", [replaceArrayValueRoot(inner, place, replacement)]), expression.type, expression.span);
 			default: expression;
 		};
+
+	/** Evaluate an array-backed receiver once and keep its root marked as a writable place. */
+	static function lowerArrayValueReceiver(expression:TypedExpression, place:ArrayValuePlace, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var operands = lowerOperands([place.array, place.index], builder, localTypes), rootType = lowerType(place.elementType),
+			valueType = switch place.elementType { case TNullable(inner): inner; default: place.elementType; },
+			rootName = '$' + 'array-place-binding:${arrayValuePlaceSerial++}';
+		var previous = builder.beginGenerated(ArrayValuePlaceReason);
+		var root = elementGet(builder, operands[0], operands[1], rootType);
+		builder.restoreSource(previous);
+		if (!sameIrType(rootType, lowerType(valueType))) {
+			var missing = builder.createBlock(), present = builder.createBlock(), rawName = rootName + ":nullable";
+			localTypes.set(rawName, rootType); builder.store(rawName, root);
+			builder.branch(builder.equal(builder.load(rawName, rootType), builder.constNull(rootType)), missing, present);
+			builder.select(missing); builder.throwValue(builder.toDyn(builder.constString("Null access")));
+			builder.select(present); root = builder.safeCast(builder.load(rawName, rootType), lowerType(valueType));
+		}
+		localTypes.set(rootName, root.type);
+		builder.store(rootName, root);
+		var replacement = new TypedExpression(TLocal(rootName), valueType, place.root.span);
+		return lowerExpression(replaceArrayValueRoot(expression, place, replacement), builder, localTypes);
+	}
 
 	static function optionalCellPlace(name:String, cellClass:String, captured:Bool, span:compiler.Source.SourceSpan):OptionalFieldPlace {
 		var marker = new TypedExpression(TLocal(name), TDynamic, span),
@@ -2159,6 +2191,10 @@ class IrGenerator {
 	/** A new instance with the same field values; nested value classes that need copying are copied in turn. */
 	/** Origin reason on the instructions of a value copy, so a later pass can recognize and drop unneeded ones. */
 	public static inline var ValueCopyReason = "value-copy";
+	/** Distinguishes a mutable element receiver from a value copied out of an array. */
+	public static inline var ArrayValuePlaceReason = "array-value-place";
+	/** Existing boxed collections copy their elements after a range operation. */
+	public static inline var ArrayValueCopyReason = "array-value-copy";
 
 	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
 		var previous = builder.beginGenerated(ValueCopyReason);
@@ -2398,6 +2434,9 @@ class IrGenerator {
 						optionalSlotName(place.field, place.path.concat([field.field]), true), Bool);
 				}
 				builder.equal(present, builder.constBool(false));
+			case TEqual(a, b) if (nullableScalarEquality(a, b)):
+				var operands = lowerOperands([a, b], builder, localTypes);
+				lowerNullableScalarEquality(operands[0], operands[1], builder, localTypes);
 			case TEqual(a, b): var operands = lowerOperands([a, b], builder, localTypes),
 					left = operands[0],
 					right = operands[1]; if (isNullableEnumExpression(a) || isNullableEnumExpression(b)) return lowerNullableEnumEquality(a, b, left, right,
@@ -2524,6 +2563,10 @@ class IrGenerator {
 						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
 					case TArray(element) if (operation == "remove" && isEnumType(element)):
 						lowerEnumArrayRemove(builder, localTypes, element, lowered);
+					case TArray(element) if (operation == "value_index_of" && arrayValueElement(lowerType(element))):
+						lowerValueArrayIndexOf(builder, localTypes, element, lowered);
+					case TArray(element) if (operation == "remove" && arrayValueElement(lowerType(element))):
+						lowerValueArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, localTypes, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys" && customMap):
@@ -2532,8 +2575,8 @@ class IrGenerator {
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
 					case TMap(key, value) if (operation == "values" && customMap):
 						lowerHashableMapValues(builder, localTypes, lowered[0], key, value);
-					case TMap(key, value) if (operation == "values" && mapValueBox(value) != null):
-						lowerBoxedMapValues(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value) if (operation == "values" && arrayValueElement(lowerType(value))):
+						lowerValueMapValues(builder, localTypes, lowered[0], key, value);
 					case TMap(key, value) if (operation == "size" && customMap):
 						builder.fieldGet(lowered[0], "size", I32);
 					case TMap(key, value) if (operation == "clear" && customMap):
@@ -3084,12 +3127,29 @@ class IrGenerator {
 					? builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type))
 					: lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
 			case TMethodCall(object, name, args):
-				var place = optionalFieldPlace(object);
+				var place = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
 				if (place != null) {
 					var owner = prepareOptionalFieldPlace(place, builder, localTypes), arguments = lowerOperands(args, builder, localTypes),
 						declaring = optionalFieldOwner(owner.type, place.field), receiver = builder.load(owner.name, owner.type);
 					if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
 					builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
+						lowerType(expression.type));
+				} else if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
+					// Preserve the evaluated array and index as the receiver's place, before evaluating method arguments.
+					var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
+						rootType = lowerType(arrayPlace.root.type), rootName = '$' + 'array-method-place-root:${arrayValuePlaceSerial++}',
+						receiverName = '$' + 'array-method-place-receiver:${arrayValuePlaceSerial - 1}';
+					var previous = builder.beginGenerated(ArrayValuePlaceReason);
+					var root = elementGet(builder, operands[0], operands[1], rootType);
+					builder.restoreSource(previous);
+					localTypes.set(rootName, rootType);
+					builder.store(rootName, root);
+					var replacement = new TypedExpression(TLocal(rootName), arrayPlace.root.type, arrayPlace.root.span),
+						receiver = lowerExpression(replaceArrayValueRoot(object, arrayPlace, replacement), builder, localTypes);
+					localTypes.set(receiverName, receiver.type);
+					builder.store(receiverName, receiver);
+					var arguments = lowerOperands(args, builder, localTypes), separator = IrGenerator.lastSeparator(name);
+					builder.methodCall(builder.load(receiverName, receiver.type), name.substring(separator + 1, name.length), arguments,
 						lowerType(expression.type));
 				} else {
 					var operands:Array<TypedExpression> = [object];
@@ -3136,7 +3196,7 @@ class IrGenerator {
 				oldValue;
 			case TPostfixField(object, name, delta):
 					var observableBit = observableFieldBit(object.type, name),
-						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object);
+						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
 					if (observableBit != null) {
 						var receiver = lowerExpression(object, builder, localTypes),
 							before = builder.fieldGet(receiver, name, lowerType(expression.type)),
@@ -3163,7 +3223,8 @@ class IrGenerator {
 					builder.memoryStore(address, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one), layout.size);
 					oldValue;
 				} else {
-					var receiver = lowerExpression(object, builder, localTypes),
+					var receiver = arrayPlace != null && simpleArrayValuePath(arrayPlace)
+						? lowerArrayValueReceiver(object, arrayPlace, builder, localTypes) : lowerExpression(object, builder, localTypes),
 						oldValue = builder.fieldGet(receiver, name, lowerType(expression.type)),
 						one = incrementOne(expression.type, builder);
 					builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
@@ -3924,6 +3985,7 @@ class IrGenerator {
 	};
 
 	static function copyArrayValues(builder:CfgBuilder, array:CfgValue, element:IrType, localTypes:Map<String, IrType>):CfgValue {
+		var previous = builder.beginGenerated(ArrayValueCopyReason);
 		var suffix = Std.string(array.id), arrayName = '$' + 'array-value-copy:' + suffix,
 			indexName = '$' + 'array-value-copy-index:' + suffix;
 		localTypes.set(arrayName, array.type);
@@ -3958,7 +4020,9 @@ class IrGenerator {
 		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 		builder.jump(check);
 		builder.select(done);
-		return builder.load(arrayName, array.type);
+		var result = builder.load(arrayName, array.type);
+		builder.restoreSource(previous);
+		return result;
 	}
 
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
@@ -4023,6 +4087,72 @@ class IrGenerator {
 			case TNullable(inner), TAbstract(_, _, inner): enumLookupName(inner);
 			default: throw "Enum array lookup requires a resolved enum element";
 		};
+
+	static function nullableScalarEquality(left:TypedExpression, right:TypedExpression):Bool {
+		if (isNullExpression(left) || isNullExpression(right)) return false;
+		var leftType = lowerType(left.type), rightType = lowerType(right.type);
+		if (!Type.enumEq(leftType, rightType)) return false;
+		return switch leftType { case Nullable(I32 | I64 | F32 | F64 | Bool): true; default: false; };
+	}
+
+	/** Typed nullable scalar equality compares payloads, preserving IEEE float equality and null semantics. */
+	static function lowerNullableScalarEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var inner = switch left.type { case Nullable(value): value; default: throw "Expected nullable scalar"; },
+			id = arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id',
+			leftName = '$' + 'nullable-equality-left:$id', rightName = '$' + 'nullable-equality-right:$id',
+			absent = builder.createBlock(), present = builder.createBlock(), compare = builder.createBlock(),
+			missing = builder.createBlock(), done = builder.createBlock();
+		localTypes.set(resultName, Bool); localTypes.set(leftName, left.type); localTypes.set(rightName, right.type);
+		builder.store(leftName, left); builder.store(rightName, right);
+		builder.branch(builder.equal(builder.load(leftName, left.type), builder.constNull(left.type)), absent, present);
+		builder.select(absent); builder.store(resultName, builder.equal(builder.load(rightName, right.type), builder.constNull(right.type))); builder.jump(done);
+		builder.select(present); builder.branch(builder.equal(builder.load(rightName, right.type), builder.constNull(right.type)), missing, compare);
+		builder.select(missing); builder.store(resultName, builder.constBool(false)); builder.jump(done);
+		builder.select(compare); builder.store(resultName, builder.equal(builder.safeCast(builder.load(leftName, left.type), inner),
+			builder.safeCast(builder.load(rightName, right.type), inner))); builder.jump(done);
+		builder.select(done); return builder.load(resultName, Bool);
+	}
+
+	/** Compare typed struct elements with their declared equality, without entering a dynamic array view. */
+	static function lowerValueArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
+			arguments:Array<CfgValue>):CfgValue {
+		var array = arguments[0], needle = arguments[1], id = arrayValuePlaceSerial++,
+			arrayName = '$' + 'value-index-array:$id', needleName = '$' + 'value-index-needle:$id',
+			indexName = '$' + 'value-index-position:$id', resultName = '$' + 'value-index-result:$id',
+			check = builder.createBlock(), body = builder.createBlock(), found = builder.createBlock(),
+			next = builder.createBlock(), done = builder.createBlock(), valueType = lowerType(element);
+		localTypes.set(arrayName, array.type); localTypes.set(needleName, needle.type);
+		localTypes.set(indexName, I32); localTypes.set(resultName, I32);
+		builder.store(arrayName, array); builder.store(needleName, needle);
+		builder.store(indexName, builder.constInt(0)); builder.store(resultName, builder.constInt(-1));
+		builder.jump(check); builder.select(check);
+		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, array.type))), body, done);
+		builder.select(body);
+		var value = elementGet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32), valueType),
+			needleValue = builder.load(needleName, needle.type), previous = builder.beginGenerated("value-array-index-equality"),
+			equal = builder.call(ValueEqualityGenerator.equalsName(element), [value, needleValue], Bool);
+		builder.restoreSource(previous);
+		builder.branch(equal, found, next);
+		builder.select(found); builder.store(resultName, builder.load(indexName, I32)); builder.jump(done);
+		builder.select(next); builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1))); builder.jump(check);
+		builder.select(done); return builder.load(resultName, I32);
+	}
+
+	static function lowerValueArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
+			arguments:Array<CfgValue>):CfgValue {
+		var array = arguments[0], id = arrayValuePlaceSerial++, arrayName = '$' + 'value-remove-array:$id',
+			foundName = '$' + 'value-remove-position:$id', resultName = '$' + 'value-remove-result:$id',
+			found = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
+		localTypes.set(arrayName, array.type); localTypes.set(foundName, I32); localTypes.set(resultName, Bool);
+		builder.store(arrayName, array);
+		builder.store(foundName, lowerValueArrayIndexOf(builder, localTypes, element, arguments));
+		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), found, missing);
+		builder.select(found);
+		builder.call("__value_array_remove_at", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
+		builder.store(resultName, builder.constBool(true)); builder.jump(done);
+		builder.select(missing); builder.store(resultName, builder.constBool(false)); builder.jump(done);
+		builder.select(done); return builder.load(resultName, Bool);
+	}
 
 	/** Nullary constructors compare by variant; payload constructors retain reference lookup semantics. */
 	static function lowerEnumArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {

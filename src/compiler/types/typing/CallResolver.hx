@@ -1581,7 +1581,29 @@ class CallResolver {
 			TString, span);
 	}
 
+	function requestArrayValueEquality(element:CompilerType, span:SourceSpan):Void {
+		var value = switch element { case TNullable(inner): inner; default: element; };
+		if (!session.relations.isValueClass(value)) return;
+		if (!DeclaredConformance.has(session, value, "Equatable"))
+			fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.display(value)}" does not conform to Equatable', span);
+		ValueEqualityGenerator.request(session, element, session.currentContext.name, span);
+	}
+
 	public function typeArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
+		var result = typeArrayMethodInner(receiver, name, arguments, span, scope);
+		switch name {
+			case "unshift" | "pop" | "shift" | "resize" | "remove" | "insert" | "reverse" | "splice" | "sort":
+				scope.invalidateExpressionNamespace("array-entry:");
+			default:
+		}
+		var element = switch receiver.type { case TArray(value): value; default: throw "Not an array"; },
+			value = switch element { case TNullable(inner): inner; default: element; };
+		if ((name == "indexOf" || name == "contains" || name == "remove") && session.relations.isValueClass(value))
+			session.invalidateUnknownCall(scope);
+		return result;
+	}
+
+	function typeArrayMethodInner(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var element = switch receiver.type {
 			case TArray(value): value;
 			default: throw "Not an array";
@@ -1661,6 +1683,7 @@ class CallResolver {
 		if (name == "remove") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.remove expects one argument", span);
+			requestArrayValueEquality(element, span);
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
 		}
@@ -1729,14 +1752,18 @@ class CallResolver {
 			}
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
+			requestArrayValueEquality(element, span);
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
-			return new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span);
+			var base = switch element { case TNullable(inner): inner; default: element; };
+			return new TypedExpression(TCollectionCall(receiver, session.relations.isValueClass(base) ? "value_index_of" : "index_of", [value]), TInt, span);
 		}
 		if (name == "contains") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.contains expects one argument", span);
+			requestArrayValueEquality(element, span);
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002"),
-				index = new TypedExpression(TCollectionCall(receiver, "index_of", [value]), TInt, span),
+				base = switch element { case TNullable(inner): inner; default: element; },
+				index = new TypedExpression(TCollectionCall(receiver, session.relations.isValueClass(base) ? "value_index_of" : "index_of", [value]), TInt, span),
 				zero = new TypedExpression(TIntLiteral(0), TInt, span);
 			return new TypedExpression(TLessEqual(zero, index), TBool, span);
 		}

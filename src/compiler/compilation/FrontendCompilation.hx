@@ -559,15 +559,27 @@ class FrontendCompilation {
 		var semantic = context.cachedSemanticProgram;
 		if (context.livePatching && !context.isWasmTarget() && semantic != null)
 			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
+		var valueArrayTarget = context.valueArrayTarget();
+		compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
 		// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 		// further value joins, so it needs a second pass after that rewrite.
-		if (context.isWasmTarget()) compiler.ir.IrValuePhiScalarization.rewrite(ir);
+		if (context.isWasmTarget()) {
+			compiler.ir.IrValueConstructors.rewrite(ir);
+			compiler.ir.IrValuePhiScalarization.rewrite(ir);
+			if (valueArrayTarget == Wasm32 || valueArrayTarget == WasmGc) {
+				compiler.ir.IrScalarArguments.rewrite(ir, true);
+				compiler.ir.IrValuePhiScalarization.rewrite(ir);
+			}
+		}
 		if (!context.isWasmTarget()) {
 			compiler.ir.IrValueConstructors.rewrite(ir);
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
-			compiler.ir.IrHlScalarArguments.rewrite(ir);
+			compiler.ir.IrScalarArguments.rewrite(ir);
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 		}
+		var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
+		ir.functions = [for (fn in ir.functions) compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())];
+		compiler.ir.IrNullableScalarFlow.rewrite(ir);
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
 		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);

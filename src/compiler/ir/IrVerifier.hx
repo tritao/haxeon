@@ -133,9 +133,12 @@ class IrVerifier {
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
 			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {
 		if (IrHlScalarRef.element(fn.result) != null) throw "A scalar stack reference cannot be returned";
+		if (IrValueLaneReference.isCarrier(fn.result)) throw "A value lane reference cannot be returned";
 		for (arg in fn.arguments)
-			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrHlScalarArguments.PREFIX))
+			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX))
 				throw "A scalar stack reference cannot cross an ordinary function boundary";
+			else if (IrValueLaneReference.isCarrier(arg.type))
+				throw "A value lane reference cannot cross an ordinary function boundary";
 		var graph = new IrGraph(fn),
 			values:Map<Int, IrType> = [],
 			definitions:Map<Int, {block:Int, position:Int}> = [];
@@ -213,13 +216,22 @@ class IrVerifier {
 
 	static function verifyScalarReferenceUse(instruction:IrInstruction):Void {
 		var output = IrOperands.output(instruction);
+		if (output != null && IrValueLaneReference.isCarrier(output.type)) switch instruction {
+			case Call(_, name, _) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.READ):
+			default: throw "Only a value lane operation can create a lane reference";
+		}
+		for (input in IrOperands.inputs(instruction)) if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
+			case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
+			case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
+			default: throw "A value lane reference cannot escape its operation";
+		}
 		if (output != null && IrHlScalarRef.element(output.type) != null) switch instruction {
 			case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
 			default: throw "Only a scalar address operation can create a stack reference";
 		}
 		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
 			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
-			case Call(_, name, _) if (StringTools.startsWith(name, IrHlScalarArguments.PREFIX)):
+			case Call(_, name, _) if (StringTools.startsWith(name, IrScalarArguments.PREFIX)):
 			default: throw "A scalar stack reference cannot escape its call";
 		}
 		switch instruction {
@@ -367,6 +379,16 @@ class IrVerifier {
 						&& !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
+				if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK) {
+					switch instruction { case CNativeCall(_, _, _): throw "A lane reference cast is not a C native"; default: }
+					if (args.length != 1) throw 'Wrong lane reference cast arity';
+					require(values, args[0]);
+					if (name == IrValueLaneReference.PACK
+						? !IrValueLaneReference.isCarrier(out.type) || !IrValueLaneReference.canCarry(args[0].type)
+						: !IrValueLaneReference.isCarrier(args[0].type) || !IrValueLaneReference.canCarry(out.type))
+						throw 'Invalid lane reference cast';
+					return;
+				}
 				if (name == IrHlScalarRef.CHECK_RECEIVER) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
 					if (args.length != 1 || out.type != Void || !isReference(args[0].type)) throw "Invalid scalar receiver check";

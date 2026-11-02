@@ -4,11 +4,11 @@ import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
 
-/** Experimental direct-call specialization for nonescaping scalar value arguments on HashLink. */
-class IrHlScalarArguments {
-	public static inline final PREFIX = "$hl:scalar-arguments:";
+/** Direct-call specialization for nonescaping value arguments; HashLink also supports scalar result slots. */
+class IrScalarArguments {
+	public static inline final PREFIX = "$scalar-arguments:";
 
-	public static function rewrite(program:IrProgram):Void {
+	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var methods:Map<String, Null<String>> = [];
 		var candidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [];
@@ -17,8 +17,9 @@ class IrHlScalarArguments {
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
-				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name)) continue;
+				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, argumentCount = 0;
+			if (argumentsOnly && hasValue) eligible = false;
 			if (hasValue) {
 				if (!hasScalarLayout(fn.result, objects)) eligible = false;
 				argumentCount += slots(fn.result, objects).length;
@@ -51,7 +52,7 @@ class IrHlScalarArguments {
 					if (freshOnly.exists(fn.name) && arg.name == "this" && !receiverSnapshotOnly(fn, arg, objects, candidates, methods)) retained = true;
 				}
 				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames, freshOnly);
+				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames, freshOnly, argumentsOnly);
 				// Scalar call rewriting can introduce value constructions into a join. Split those joins before
 				// judging whether the specialized callee can keep its value arguments and result in registers.
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
@@ -70,7 +71,7 @@ class IrHlScalarArguments {
 		}
 		if (!candidates.keys().hasNext()) return;
 		var rewritten:Array<IrFunction> = [];
-		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, objects, methods, methodNames, freshOnly));
+		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, objects, methods, methodNames, freshOnly, argumentsOnly));
 		for (fn in program.functions) if (candidates.exists(fn.name))
 			rewritten.push(clones.get(fn.name));
 		program.functions = rewritten;
@@ -231,7 +232,7 @@ class IrHlScalarArguments {
 
 	static function clone(fn:IrFunction, objects:Map<String, IrObject>):IrFunction {
 		var next = nextId(fn), args:Array<IrValue> = [], prefix:Array<Located<IrInstruction>> = [];
-		var origin = SourceProvenance.generated("hl-scalar-argument");
+		var origin = SourceProvenance.generated("scalar-argument");
 		for (arg in fn.arguments) {
 			if (!isValue(arg.type, objects)) { args.push(arg); continue; }
 			var name = switch arg.type { case Obj(name): name; default: throw "Invalid scalar argument"; };
@@ -285,7 +286,7 @@ class IrHlScalarArguments {
 	}
 
 	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
-			methods:Map<String, Null<String>>, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>):IrFunction {
+			methods:Map<String, Null<String>>, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>, argumentsOnly:Bool):IrFunction {
 		var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [];
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -304,9 +305,10 @@ class IrHlScalarArguments {
 						Call(out, binding.name, binding.receiver == null ? arguments : [binding.receiver].concat(arguments));
 					case MethodCall(out, receiver, method, arguments) if (methodNames.exists(method)):
 						var name = resolveMethod(receiver.type, method, objects, methods);
-						if (name == null || !candidates.exists(name) || (freshOnly.exists(name) && !freshReceiver(fn, receiver, objects))) located.value;
+						if (name == null || !candidates.exists(name) || ((argumentsOnly || freshOnly.exists(name)) && !freshReceiver(fn, receiver, objects)
+							&& !(argumentsOnly && safeArrayEquality(located.provenance, fn.name)))) located.value;
 						else {
-							if (!freshReceiver(fn, receiver, objects)) {
+							if (!argumentsOnly && !freshReceiver(fn, receiver, objects)) {
 								var checked = new IrValue(next++, "$hl:receiver-check", Void);
 								copy.instructions.push(new Located(Call(checked, IrHlScalarRef.CHECK_RECEIVER, [receiver]), located.provenance));
 							}
@@ -316,7 +318,9 @@ class IrHlScalarArguments {
 				};
 				switch instruction {
 				case Call(out, name, arguments) if (candidates.exists(name)
-					&& (!freshOnly.exists(name) || arguments.length > 0 && freshReceiver(fn, arguments[0], objects))):
+					&& (!freshOnly.exists(name) || arguments.length > 0 && freshReceiver(fn, arguments[0], objects)
+						|| argumentsOnly && safeArrayEquality(located.provenance, fn.name))
+					&& (!argumentsOnly || safeArrayEquality(located.provenance, fn.name) || freshValueArguments(fn, arguments, objects))):
 					var target = candidates.get(name), expanded:Array<IrValue> = [];
 					if (target == null) throw 'Missing scalar call target "$name"';
 					for (index in 0...arguments.length) {
@@ -368,6 +372,23 @@ class IrHlScalarArguments {
 			blocks.push(copy);
 		}
 		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+	}
+
+	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;
+		other arguments retain their owning snapshots until the backend can preserve their evaluation point. */
+	static function freshValueArguments(fn:IrFunction, arguments:Array<IrValue>, objects:Map<String, IrObject>):Bool {
+		for (argument in arguments)
+			if (isValue(argument.type, objects) && !freshReceiver(fn, argument, objects)) return false;
+		return true;
+	}
+
+	static function safeArrayEquality(provenance:SourceProvenance, functionName:String):Bool {
+		if (StringTools.startsWith(functionName, "$value$equality:")
+			|| StringTools.startsWith(functionName, PREFIX + "$value$equality:")) return true;
+		return switch provenance.origin {
+			case CompilerGenerated("value-array-index-equality"): true;
+			default: false;
+		};
 	}
 
 	static function fieldOf(type:IrType, name:String, objects:Map<String, IrObject>):IrObjectField {

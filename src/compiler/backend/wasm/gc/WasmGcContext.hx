@@ -2,6 +2,9 @@ package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.backend.wasm.WasmTypes.WasmHeapType;
 
 /** Module-lifetime configuration and indices for native Wasm GC lowering. */
 class WasmGcContext {
@@ -13,6 +16,7 @@ class WasmGcContext {
 	public final methods:Map<String, String>;
 
 	final stringSegments:Map<String, Int> = [];
+	final valueArrayBridgeGlobals:Map<String, Int> = [];
 
 	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>, methods:Map<String, String>) {
 		this.module = module;
@@ -31,5 +35,15 @@ class WasmGcContext {
 			stringSegments.set(value, segment);
 		}
 		return segment;
+	}
+
+	/** One lazily initialized closure per generated bridge, shared by every array of that shape. */
+	public function valueArrayBridgeGlobal(name:String):Int {
+		var existing = valueArrayBridgeGlobals.get(name);
+		if (existing != null) return existing;
+		var index = module.globals.length, heap:WasmHeapType = Type(plan.closureTypeIndex);
+		module.globals.push({type: Ref({nullable: true, heap: heap}), mutable: true, init: [RefNull(heap)]});
+		valueArrayBridgeGlobals.set(name, index);
+		return index;
 	}
 }

@@ -43,7 +43,7 @@ class WasmLinearRuntime {
 	}
 
 	/** Fail a runtime check: throw a null Haxe exception when the program can catch one, else trap. */
-	static function runtimeFailure(builder:WasmFunctionBuilder):Void {
+	public static function runtimeFailure(builder:WasmFunctionBuilder):Void {
 		if (runtimeErrorsThrow) {
 			if (runtimeNeutral) {
 				var pendingFlag = pendingExceptionFlag,

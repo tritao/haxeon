@@ -331,6 +331,11 @@ value semantics; floats retain IEEE behavior, with hashing consistent for `0.0` 
 bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
 are statically dispatched without boxing.
 
+`Array<S>.indexOf`, `contains` and `remove` require `S : Equatable` and use that same declared equality, including a
+handwritten `equals`. They examine inline elements as values and `remove` shifts the lanes in place. Nullable struct
+arrays compare absence with absence and use the declared equality for present elements. Requiring the conformance keeps
+array lookup consistent with `==` instead of inventing an identity for copied values.
+
 These three compiler-known interfaces are erased from HashLink's per-instance virtual-cache slots: their operations are
 statically selected, so retaining an interface cache would enlarge every conforming class and every inline value field.
 Ordinary runtime interfaces keep their cache slots and dispatch behavior.
@@ -491,6 +496,126 @@ exception, before the original exception is rethrown. Narrow fields retain their
 external and other reference-representation boundaries still materialize boxes when required. Eligible optional locals
 use scalar components as described above; array elements retain their boxed representation. Native-memory operations
 continue to use linear memory.
+
+The inline array representation uses one scalar lane and, only when needed, one traced reference lane. Scalar
+fields are interleaved per element in 32-bit words when their stored widths permit it, and in 64-bit words otherwise;
+reference slots have their own fixed per-element stride. Nested values are expanded, including presence flags and
+payloads for optionals. HashLink uses the same split so its collector scans references without interpreting scalar bits.
+The array and its lanes own their storage; an element place retains the array and index, not a pointer that growth could
+invalidate. Growing an array of non-null structs can leave slots unwritten; a validity bitmap in the scalar lane keeps
+those slots distinct from initialized values. Nullable struct elements use their existing presence flag. The bitmap is
+stored after the payload within the same allocation, and growth relocates it when capacity changes. A mutating method
+called on an element place accesses its fields through the retained array and index, so callbacks see completed writes,
+growth cannot strand a write in an old allocation, and writes made before an exception remain visible.
+
+A flat value retains its C field offsets, internal padding and exact byte stride within the scalar lane. That stride
+need not divide a lane word: consecutive three-byte records, for example, can start in different parts of a 32-bit
+word. Reads and writes therefore handle fields crossing word boundaries; padding remains zero. A flat value nested in
+a managed struct retains its C alignment and padding inside that struct's scalar portion. Native-memory copies use the
+same bytes.
+
+Lane classification follows each target's actual representation: for example, a native callback is a traced managed
+handle on HashLink but a scalar function-table index on Wasm. Both use the same two-lane scheme without treating a
+HashLink-managed pointer as untraced data or boxing the Wasm index.
+
+The Wasm GC type plan represents an inline value array as a subtype of the shared array wrapper, preserving an
+`Array<Dynamic>` view's identity. Its inherited data field holds the scalar lane, or the reference lane if there are no
+scalar words; an additional nullable field holds the reference lane when both are needed. This permits one-lane values
+without an empty second backing array. For mixed values the reference lane is allocated on the first non-null store;
+null reads, stores and clears do not allocate it. Generated dynamic bridge closures are shared between arrays of the
+same shape. The plan reserves `i32`, `i64`, and nullable `anyref` lane types only in modules that use the value-array
+allocator.
+
+The Wasm GC array rewrite has been exercised through the frontend and backend with packed values,
+nullable elements, managed references, growth and collection operations. On this machine, an instrumented 100-element
+push-and-iteration test counted 14 Wasm GC objects for scalar values and 25 for nullable values with a managed reference;
+the counts include array growth and shared bridge closures. The scalar test counted 214 before generated element helpers
+were included in the scalar call ABI. These are compiler tests, not editor or Showcase measurements. The rewrite is
+enabled in the normal compilation pipeline.
+
+The same instrumented 100-element tests count 11 allocations on Wasm32 and 14 on Wasm GC for struct elements with
+nullable scalar fields, nullable struct elements, and alternating `pop`/`shift` removals. A lookup test performs 5,050
+handwritten equality calls with the same counts. Non-escaping nullable scalars flow as a presence flag and scalar
+payload through joins; a Dynamic escape still materializes the required box. Generated element boundaries and scalar
+call arguments are lowered independently of the inlining setting.
+
+Compiler-generated reference-slot accesses use an internal lane-reference carrier, separate from Haxe `Dynamic`.
+Packing and unpacking the carrier preserve the reference itself: HashLink reinterprets the traced pointer, Wasm32
+preserves the linear-memory address, and Wasm GC checks the exact reference type on extraction. The verifier confines
+the carrier to lane operations, so an unboxed native handle cannot accidentally be treated as a Dynamic box. Wasm GC
+rejects a scalar handle in this path; its lane layout stores those handles in the scalar lane instead.
+The slot-access emitter uses the planned byte offset, width and signedness for scalar leaves and the reference-slot
+index for managed leaves. It does not allocate a temporary value, and it leaves element growth, initialization and
+optional-ancestor checks to the enclosing array-place operation. Generated place helpers take the array and index on
+every access; their checks distinguish assigning an optional field from dereferencing that field. The place lowering
+must invoke those checks before evaluating later operands.
+When a method reads a nullable scalar from an element, it captures the presence and payload at that read. Both values
+flow separately through control-flow joins, so a later callback cannot change the snapshot and no nullable box is needed.
+For a value copied between two places in one element, the method rewrite reads every source leaf before writing the
+destination leaves. This keeps self-copy and overlapping projections well defined, including nested optional flags and
+references. Constructed values and value arguments, including nullable scalar fields, are split into scalar fields before
+the lane writes.
+
+When a lane-backed array is viewed through `Array<Dynamic>`, the view keeps the same array identity. Its dynamic reads
+materialize a value, and writes check the element type before changing the array and copy the value into the lanes.
+HashLink's array header carries shared type-specific read, write and type-check accessors for this boundary; copies retain
+the same accessors. The compiler must share these accessors per concrete element layout, rather than allocating closures
+for every array or element. Empty HashLink value arrays allocate their backing lanes on the first write, avoiding the
+working-set cost of reserving storage for arrays that remain empty. Ordinary typed accesses do not call these accessors.
+An unwritten slot of a non-null value array reads as null through a dynamic view, matching existing dynamic-array behavior.
+
+A dynamic array that is later checked as `Array<S>` may already have aliases to its original header. On HashLink the
+conversion builds and validates a lane descriptor before changing that header, then keeps the header as a forwarding
+handle to the descriptor. Its length and capacity track the descriptor across growth and shrinking. This extra
+descriptor is only needed for the dynamic conversion; an array created as `Array<S>` directly owns its lanes. A failed
+conversion leaves the dynamic array and its aliases unchanged. Native-created arrays with boxed struct storage use the
+same conversion: HashLink's raw struct pointers acquire a temporary Dynamic wrapper while the fields are copied.
+
+The Wasm GC prototype uses a one-element forwarding lane in the original wrapper when converting ordinary dynamic
+storage. The lane points at the inline descriptor, which in turn retains the original header and synchronizes its
+length. Validation and descriptor construction precede publishing the forwarding lane. Directly created inline arrays
+do not allocate a forwarding lane. Frontend tests cover dynamic aliases, growth, iteration, insertion, copying, reversal,
+resizing, and a rejected conversion; native boxed struct arrays are converted at the dynamic boundary.
+
+The Wasm32 prototype reserves an extended array header for inline values. Its scalar backing is untraced; its separate
+reference backing is traced using the element count times the reference stride. Bridge closures and a forwarding header
+are also traced. Ordinary arrays retain their existing header. A standalone Wasm32 test exercises packed scalar and
+reference-slot reads, writes, clears, bounds checks and initialization bits. The allocator and growth operation have
+also been exercised under forced collection, retaining a reference reachable only through the array and relocating the
+validity bitmap. Frontend-rewritten fixtures also exercise insertion, resize, copy, slice, concat, splice, reversal,
+nested fields and managed references under forced collection. Generated element boundaries are expanded as mandatory
+lowering before scalar replacement, independently of user-controlled inlining. A 100-element push-and-iteration census
+falls from 211 allocations to 11 for scalar values and counts 22 for nullable values with a managed reference. A converted
+dynamic array keeps its original header as a forwarding handle; the descriptor synchronizes its length and traces both
+headers. Frontend tests exercise dynamic aliases, collection operations, nullable references and rejected conversions
+under forced collection. Normal compiler integration and the cross-target parity gates cover these paths.
+
+The generated HashLink bridge has been exercised through dynamic reads and writes, including nested nullable structs
+and reference clearing. Dynamic writes and insertions currently stage the converted element in a temporary lane array
+before changing the destination, so a conversion exception cannot expose partial writes. These temporary allocations
+occur at dynamic escapes; typed element access uses the lanes directly.
+
+On the same machine, the 30-cycle HashLink selection census fell from 342,877 allocations to 342,351. The nine-run
+median RSS growth windows were 30.47 / 4.06 / 0.94 / 4.69 MiB at the original baseline and 30.00 / 3.75 / 0.94 /
+4.84 MiB with lazy lanes. A same-checkout pre-array control measured 30.00 / 3.75 / 0.94 / 4.84 MiB; its last window
+matches the inline-array result. Eagerly allocating lanes for empty arrays raised that last median to 5.47 MiB, which
+is why the runtime waits for the first write. A fixed-time, 120-frame Wasm GC Showcase comparison counted 5,896 objects
+for each of full, static and text-heavy, and 12,835 for editing, both before and after the array change. Browser
+requestAnimationFrame runs varied with frame intervals, so the fixed-time comparison keeps the scenarios identical.
+
+The editor's per-action HashLink allocation medians, in KiB, were:
+
+| Action | Baseline | Inline arrays |
+| --- | ---: | ---: |
+| hierarchy → sensors | 114.6 | 112.6 |
+| sensors → hierarchy | 80.1 | 78.6 |
+| console → telemetry | 74.5 | 74.5 |
+| telemetry → console | 92.9 | 92.9 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
+| scroll inspector | 21.2 | 21.2 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 |
+| type character / backspace | 16.1 / 16.6 | 16.1 / 16.1 |
 
 The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
 

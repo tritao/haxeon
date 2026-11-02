@@ -1270,6 +1270,22 @@ class WasmFunctionLower {
 			case Call(output, name, arguments):
 				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
+				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
+					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+					if (gcRepresentation != null) {
+						var carried = name == compiler.ir.IrValueLaneReference.PACK ? arguments[0].type : output.type;
+						switch gcRepresentation.valueType(carried) {
+							case Ref(reference):
+								if (name == compiler.ir.IrValueLaneReference.UNPACK) switch reference.heap {
+									case Any:
+									default: body.push(RefCast(reference));
+								}
+							default: throw 'A scalar value cannot occupy a Wasm GC reference lane: $carried';
+						}
+					}
+					body.push(LocalSet(requiredLocal(values, output.id)));
+					return;
+				}
 				if (gcRepresentation != null && name == compiler.backend.wasm.gc.WasmGcScalarAbi.RETURN_MARKER) {
 					for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
 					return;

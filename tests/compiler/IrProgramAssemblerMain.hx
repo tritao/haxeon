@@ -11,6 +11,9 @@ class IrProgramAssemblerMain {
 		var simple = Frontend.compile("function main():Int return 42;");
 		expect(hasNative(simple, "__exit"), "every executable program should include the exit native");
 		expect(!hasNative(simple, "__array_alloc_i32"), "unused runtime families should not be assembled");
+		var dynamicEquality = Frontend.compile("function same(a:Dynamic, b:Dynamic):Bool return a == b; function main():Int return 0;");
+		expect(hasNative(dynamicEquality, "__dynamic_equal"), "generated dynamic equality must select its runtime native");
+		compiler.ir.IrVerifier.verify(dynamicEquality);
 		var storageSource = "class Storage { public final length:Int; public function new(length:Int) this.length = length; } "
 			+ "@:forward(length) abstract Buffer(Storage) { public function new(length:Int) this = new Storage(length); } ";
 		Frontend.compile(storageSource + "function main():Int { var buffer = new Buffer(42); return buffer.length; }");

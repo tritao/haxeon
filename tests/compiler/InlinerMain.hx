@@ -6,7 +6,7 @@ import compiler.ir.IrInliner.InlineMemo;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrVerifier;
-import compiler.ir.IrHlScalarArguments;
+import compiler.ir.IrScalarArguments;
 
 class InlinerMain {
 	static function main():Void {
@@ -15,14 +15,14 @@ class InlinerMain {
 			+ "function read(value:Pair):Int return value.x + value.y; "
 			+ "function loop(value:Pair):Int { var total = 0; for (i in 0...4) total += read(value); return total; } "
 			+ "function main():Int return loop(new Pair(1, 2));");
-		IrHlScalarArguments.rewrite(scalarCalls);
+		IrScalarArguments.rewrite(scalarCalls);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(scalarCalls, new IrInlineCache(), false);
 		IrInliner.packedValueFields = false;
 		IrVerifier.verify(scalarCalls);
 		expect(allocations(programFunction(scalarCalls, "loop")) == 0,
 			"a direct scalar argument does not allocate a temporary when ordinary inlining is disabled");
-		expect(allocations(programFunction(scalarCalls, "$hl:scalar-arguments:read")) == 0,
+		expect(allocations(programFunction(scalarCalls, "$scalar-arguments:read")) == 0,
 			"the specialized callee keeps its value argument in scalar slots");
 		var nestedCalls = Frontend.compile("struct Inner { public var n:Int; public var label:String; "
 			+ "public function new(n:Int, label:String) { this.n = n; this.label = label; } } "
@@ -31,12 +31,12 @@ class InlinerMain {
 			+ "function read(value:Outer):Int { if (value.extra > 0) value.inner.n += 1; "
 			+ "return value.inner.n + value.inner.label.length; } "
 			+ "function main():Int return read(new Outer(new Inner(1, 'a')));");
-		IrHlScalarArguments.rewrite(nestedCalls);
+		IrScalarArguments.rewrite(nestedCalls);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(nestedCalls, new IrInlineCache(), false);
 		IrInliner.packedValueFields = false;
 		IrVerifier.verify(nestedCalls);
-		expect(allocations(programFunction(nestedCalls, "$hl:scalar-arguments:read")) == 0,
+		expect(allocations(programFunction(nestedCalls, "$scalar-arguments:read")) == 0,
 			"a nested managed value argument stays scalar across a branch");
 		var receiverProgram = Frontend.compile("struct Value { public final n:Int; public function new(n:Int) this.n = n; "
 			+ "public function doubled():Int return n * 2; public function inspect():Int return observe(doubled()); } "
@@ -44,7 +44,7 @@ class InlinerMain {
 			+ "function read():Int return make().inspect(); function main():Int return read();");
 		compiler.ir.IrValueConstructors.rewrite(receiverProgram);
 		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
-		IrHlScalarArguments.rewrite(receiverProgram);
+		IrScalarArguments.rewrite(receiverProgram);
 		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(receiverProgram, new IrInlineCache(), false);
@@ -52,7 +52,7 @@ class InlinerMain {
 		IrVerifier.verify(receiverProgram);
 		expect(allocations(programFunction(receiverProgram, "read")) == 0,
 			"a fresh receiver stays scalar through a read-only method that calls out");
-		expect(allocations(programFunction(receiverProgram, "$hl:scalar-arguments:Value.inspect")) == 0,
+		expect(allocations(programFunction(receiverProgram, "$scalar-arguments:Value.inspect")) == 0,
 			"a read-only receiver stays scalar through its own nested method");
 		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42,
 			"a scalar fresh receiver preserves its result");
@@ -61,12 +61,12 @@ class InlinerMain {
 			+ "function make():Parent return new Parent('managed'); function main():Int return make().child.text.length;");
 		compiler.ir.IrValueConstructors.rewrite(nestedConstructors);
 		compiler.ir.IrValuePhiScalarization.rewrite(nestedConstructors);
-		IrHlScalarArguments.rewrite(nestedConstructors);
+		IrScalarArguments.rewrite(nestedConstructors);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(nestedConstructors, new IrInlineCache(), false);
 		IrInliner.packedValueFields = false;
 		IrVerifier.verify(nestedConstructors);
-		expect(allocations(programFunction(nestedConstructors, "$hl:scalar-arguments:make")) == 0,
+		expect(allocations(programFunction(nestedConstructors, "$scalar-arguments:make")) == 0,
 			"nested value constructors stay scalar when ordinary inlining is disabled");
 		var equality = Frontend.compile("interface Equatable {} struct Value : Equatable { public final x:Float; public function new(x:Float) this.x = x; } "
 			+ "class Exact { public final v:Value; public function new(v:Value) this.v = v; } "
@@ -76,7 +76,7 @@ class InlinerMain {
 			+ "function main():Int return same(new Holder(), new Holder()) ? 42 : 0;");
 		compiler.ir.IrValueConstructors.rewrite(equality);
 		compiler.ir.IrValuePhiScalarization.rewrite(equality);
-		IrHlScalarArguments.rewrite(equality);
+		IrScalarArguments.rewrite(equality);
 		compiler.ir.IrValuePhiScalarization.rewrite(equality);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(equality, new IrInlineCache(), false);
@@ -98,7 +98,7 @@ class InlinerMain {
 			+ "function main():Int return capture(true)() + capture(false)();");
 		compiler.ir.IrValueConstructors.rewrite(capturedValue);
 		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
-		IrHlScalarArguments.rewrite(capturedValue);
+		IrScalarArguments.rewrite(capturedValue);
 		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
 		IrInliner.packedValueFields = true;
 		IrInliner.run(capturedValue, new IrInlineCache(), false);
@@ -117,12 +117,12 @@ class InlinerMain {
 			+ "return h.read(new Full(42), noop) == 42 && h.narrow(new Narrow(), noop) == 0 ? 42 : 0; }");
 		compiler.ir.IrValueConstructors.rewrite(nativeHandler);
 		compiler.ir.IrValuePhiScalarization.rewrite(nativeHandler);
-		IrHlScalarArguments.rewrite(nativeHandler);
+		IrScalarArguments.rewrite(nativeHandler);
 		IrVerifier.verify(nativeHandler);
 		var nativeClone = false, narrowClone = false;
 		for (fn in nativeHandler.functions) {
-			if (fn.name == "$hl:scalar-arguments:Handler.read") nativeClone = true;
-			if (fn.name == "$hl:scalar-arguments:Handler.narrow") narrowClone = true;
+			if (fn.name == "$scalar-arguments:Handler.read") nativeClone = true;
+			if (fn.name == "$scalar-arguments:Handler.narrow") narrowClone = true;
 		}
 		expect(nativeClone, "full-width native value arguments stay scalar across exception handlers");
 		expect(!narrowClone, "narrow native fields keep their stored representation across exception handlers");

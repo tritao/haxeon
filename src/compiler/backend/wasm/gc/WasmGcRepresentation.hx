@@ -4142,6 +4142,15 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		var tableSlot = tableSlots.get(name);
 		if (tableSlot == null)
 			throw 'Wasm GC closure target "$name" has no stable table slot';
+		if (StringTools.startsWith(name, "$value-array:bridge:")) {
+			var global = gc.valueArrayBridgeGlobal(name);
+			return [
+				GlobalGet(global), RefIsNull, If(null),
+				I32Const(tableSlot * 2 + 1), RefNull(Any), I32Const(WasmGcClosureAdapters.signatureId(plan, type)),
+				StructNew(plan.closureTypeIndex), GlobalSet(global), End,
+				GlobalGet(global), LocalSet(destination)
+			];
+		}
 		return [
 			I32Const(tableSlot * 2 + 1),
 			RefNull(Any),

@@ -1422,6 +1422,10 @@ class HlLower {
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
+		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
+			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			return true;
+		}
 		if (name == compiler.ir.IrHlScalarRef.CHECK_RECEIVER) {
 			instructions.push(HlInstruction.NullCheck(requireRegister(arguments[0], registers)));
 			return true;

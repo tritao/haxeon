@@ -49,6 +49,10 @@ class StructSyntaxMain {
 		expectTypingError("interface HasX { function xValue():Int; } struct Point : HasX { public function xValue():Int return 42; } "
 			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());",
 			"Type mismatch for argument 1 to \"take\"");
+		for (operation in ["indexOf", "contains", "remove"])
+			expectTypingError('struct Point { public var x:Int; public function new(x:Int) this.x=x; } '
+				+ 'function main():Int { var points = [new Point(1)]; points.$operation(new Point(1)); return 0; }',
+				'does not conform to Equatable');
 		Sys.println("PASS: struct declarations retain spans and report malformed forms");
 	}
 

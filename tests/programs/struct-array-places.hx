@@ -21,6 +21,17 @@ struct ArrayRecord {
 		this.optional = optional;
 		this.marker = new ArrayMarker(x);
 	}
+	public function snapshotAfter(callback:Void->Void):Int {
+		var saved = offset;
+		callback();
+		return saved.x;
+	}
+}
+
+function changeOtherField(records:Array<ArrayRecord>):Int {
+	records[0].text = "changed during assignment";
+	for (i in 0...256) records.push(new ArrayRecord(i, "assignment growth", null));
+	return 30;
 }
 
 function main():Int {
@@ -56,6 +67,22 @@ function main():Int {
 		records[0].offset.x = 20;
 	});
 	if (records[0].offset.x != 22 || records.length != 192) failures += 16;
+	// Evaluating the right-hand side may mutate another field of the same element.
+	records[0].offset.x = changeOtherField(records);
+	if (records[0].offset.x != 30 || records[0].text != "changed during assignment" || records.length != 448) return 5;
+	var saved = records[0].snapshotAfter(function() { records[0].offset.x = 44; });
+	if (saved != 30 || records[0].offset.x != 44) return 6;
+	records[0].offset = records[1].offset;
+	records[1].offset.x = 81;
+	if (records[0].offset.x != 50 || records[1].offset.x != 81) return 7;
+	records[1].optional = new ArrayOffset(12);
+	records[0].optional = records[1].optional;
+	if (records[1].optional != null) records[1].optional.x = 13;
+	var copiedOptional = records[0].optional;
+	if (copiedOptional == null || copiedOptional.x != 12) return 8;
+	records[1].optional = null;
+	records[0].optional = records[1].optional;
+	if (records[0].optional != null) return 9;
 	var nullable:Array<Null<ArrayRecord>> = [new ArrayRecord(9, "nullable", null), null];
 	var nullableCopy = nullable.copy();
 	var copiedFirst = nullableCopy[0];
@@ -69,5 +96,10 @@ function main():Int {
 	grown[1].offset.x = 14;
 	if (grownCopy.length != 3 || grownSlice.length != 2 || grownConcat.length != 3
 		|| grownCopy[1].offset.x != 13 || grownSlice[1].offset.x != 13 || grownConcat[1].offset.x != 13) failures += 128;
+	var increments = [new ArrayRecord(10, "increment", null), new ArrayRecord(20, "increment", null)];
+	var index = 0;
+	increments[index++].offset.x += 3;
+	var old = increments[1].offset.x++;
+	if (index != 1 || increments[0].offset.x != 13 || old != 20 || increments[1].offset.x != 21) return 10;
 	return failures == 0 ? 42 : 1;
 }

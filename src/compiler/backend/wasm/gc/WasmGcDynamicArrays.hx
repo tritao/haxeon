@@ -44,6 +44,7 @@ class WasmGcDynamicArrays {
 	];
 
 	final plan:WasmGcTypePlan;
+	final module:WasmModule;
 	final program:IrProgram;
 	final functions:Map<String, Int>;
 	final representation:WasmGcRepresentation;
@@ -70,11 +71,15 @@ class WasmGcDynamicArrays {
 		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int, result:IrType = Bytes):Void {
 			if (functions.exists(name))
 				return;
-			var helper = new WasmGcDynamicArrays(plan, program, representation, arguments.length, functions),
+			var helper = new WasmGcDynamicArrays(module, plan, program, representation, arguments.length, functions),
 				local = build(helper);
 			if (result != Void)
 				helper.body.push(LocalGet(local));
 			helper.body.push(Return);
+			if (name == "$value-array:runtime:get") {
+				var prefix = WasmGcValueArrays.resolveForward(plan, 0);
+				for (index in 0...prefix.length) helper.body.insert(index, prefix[index]);
+			}
 			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, result), helper.locals, helper.body)));
 		}
 		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
@@ -85,6 +90,16 @@ class WasmGcDynamicArrays {
 			helper.push(handled(helper.representation.dynamicEqual(equal, 0, 1)));
 			equal;
 		}, Bool);
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var needsRead = false;
+			for (native in operations) if (native.name == "__array_pop_any" || native.name == "__array_shift_any"
+					|| native.name == "__array_index_of_any" || native.name == "__array_remove_any" || native.name == "__array_concat_any") needsRead = true;
+			if (needsRead) shared("$value-array:runtime:get", [Array(Dyn), I32], helper -> {
+				var result = helper.allocateLocal(plan.valueType(Dyn));
+				helper.get(0, 1, result);
+				result;
+			}, Dyn);
+		}
 		shared(CAST_MESSAGE, [Dyn, I32], helper -> helper.concatenate([
 			helper.literal("Can't cast "),
 			helper.valueTypeName(0),
@@ -102,10 +117,11 @@ class WasmGcDynamicArrays {
 							-1;
 						}, Void);
 		for (native in operations)
-			functions.set(native.name, new WasmGcDynamicArrays(plan, program, representation, native.arguments.length, functions).emit(module, native));
+			functions.set(native.name, new WasmGcDynamicArrays(module, plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
 
-	function new(plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int, functions:Map<String, Int>) {
+	function new(module:WasmModule, plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int, functions:Map<String, Int>) {
+		this.module = module;
 		this.plan = plan;
 		this.functions = functions;
 		this.program = program;
@@ -149,6 +165,10 @@ class WasmGcDynamicArrays {
 
 	function emit(module:WasmModule, native:IrNative):Int {
 		var result = native.result == Void ? -1 : allocateLocal(plan.valueType(native.result));
+		if (plan.valueArrayWrapperTypeIndex >= 0 && native.name != "__array_alloc_typed_ref" && native.name != "__array_check_cast") {
+			push(WasmGcValueArrays.resolveForward(plan, 0));
+			if (native.name == "__array_concat_any") push(WasmGcValueArrays.resolveForward(plan, 1));
+		}
 		switch native.name {
 			case "__array_alloc_typed_ref":
 				allocTypedRef(0, 1, result);
@@ -659,12 +679,37 @@ class WasmGcDynamicArrays {
 
 	function get(array:Int, index:Int, result:Int):Void {
 		checkIndex(array, index);
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
+				signature = module.typeIndex(plan.wasmFunctionType([Array(Dyn), I32], Dyn));
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null)]);
+			push(WasmGcValueArrays.initialized(plan));
+			push([I32Eqz, If(null), RefNull(Any), Return, End,
+				LocalGet(array), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_READ_BRIDGE_FIELD), LocalSet(closure),
+				LocalGet(closure), RefIsNull, If(null)]);
+			raiseText("Missing inline value array read bridge");
+			push([End, LocalGet(array), LocalGet(index), LocalGet(closure), RefCast({nullable:false, heap:Type(plan.closureTypeIndex)}),
+				StructGet(plan.closureTypeIndex, 0), I32Const(1), I32ShrU, CallIndirect(signature), Return, End]);
+		}
 		var current = elementType(array);
 		dispatch(current, function(element) push([LocalGet(read(element, array, index)), LocalSet(result)]));
 	}
 
 	/** Write through the storage element type, converting before the array grows. */
 	function set(array:Int, index:Int, valueLocal:Int):Void {
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
+				accepts = module.typeIndex(plan.wasmFunctionType([Dyn], Bool));
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null),
+				LocalGet(array), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_ACCEPTS_BRIDGE_FIELD), LocalSet(closure),
+				LocalGet(closure), RefIsNull, If(null)]);
+			raiseText("Missing inline value array type bridge");
+			push([End, LocalGet(valueLocal), LocalGet(closure), RefCast({nullable:false, heap:Type(plan.closureTypeIndex)}),
+				StructGet(plan.closureTypeIndex, 0), I32Const(1), I32ShrU, CallIndirect(accepts), I32Eqz, If(null)]);
+			raiseText("Array element type mismatch");
+			push([End, LocalGet(array), LocalGet(index), LocalGet(valueLocal),
+				Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:store-value")), Return, End]);
+		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var encoded = encode(element, valueLocal, current);
@@ -674,6 +719,24 @@ class WasmGcDynamicArrays {
 
 	/** push, unshift and insert: encode for the storage, then run the concrete operation. */
 	function valueOperation(operation:String, array:Int, extra:Array<Int>, valueLocal:Int, result:Int):Void {
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
+				position = allocateLocal(I32), accepts = module.typeIndex(plan.wasmFunctionType([Dyn], Bool));
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null),
+				LocalGet(array), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_ACCEPTS_BRIDGE_FIELD), LocalSet(closure),
+				LocalGet(closure), RefIsNull, If(null)]);
+			raiseText("Missing inline value array type bridge");
+			push([End, LocalGet(valueLocal), LocalGet(closure), RefCast({nullable:false, heap:Type(plan.closureTypeIndex)}),
+				StructGet(plan.closureTypeIndex, 0), I32Const(1), I32ShrU, CallIndirect(accepts), I32Eqz, If(null)]);
+			raiseText("Array element type mismatch");
+			push([End]);
+			if (operation == "push") push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(position)]));
+			else push(operation == "unshift" ? [I32Const(0), LocalSet(position)] : [LocalGet(extra[0]), LocalSet(position)]);
+			push([LocalGet(array), LocalGet(position), LocalGet(valueLocal), Call(WasmModuleSupport.requiredFunctionIndex(functions,
+				operation == "push" ? "$value-array:runtime:store-value" : "$value-array:runtime:insert-value"))]);
+			if (result >= 0) push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()));
+			push([Return, End]);
+		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var encoded = encode(element, valueLocal, current),
@@ -687,6 +750,16 @@ class WasmGcDynamicArrays {
 		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(0), I32LeS, If(null)]));
 		raiseText(emptyMessage);
 		body.push(End);
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var position = allocateLocal(I32), saved = allocateLocal(plan.valueType(Dyn));
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null)]);
+			if (operation == "pop") push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(1), I32Sub, LocalSet(position)]));
+			else push([I32Const(0), LocalSet(position)]);
+			push([LocalGet(array), LocalGet(position), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:get")), LocalSet(saved), LocalGet(array)]);
+			if (operation == "pop") push([LocalGet(position), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:resize"))]);
+			else push([I32Const(0), I32Const(1), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:splice")), Drop]);
+			push([LocalGet(saved), Return, End]);
+		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var taken = allocateLocal(plan.valueType(element));
@@ -702,6 +775,15 @@ class WasmGcDynamicArrays {
 			equal = allocateLocal(I32),
 			current = elementType(array);
 		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length), I32Const(-1), LocalSet(result)]));
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null), Block(null)]);
+			forEach(index, length, function() {
+				push([LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:get")),
+					LocalGet(searched), Call(WasmModuleSupport.requiredFunctionIndex(functions, DYNAMIC_EQUAL)), LocalSet(equal),
+					LocalGet(equal), If(null), LocalGet(index), LocalSet(result), Br(3), End]);
+			});
+			push([End, Else]);
+		}
 		dispatch(current, function(element) {
 			push([Block(null)]);
 			forEach(index, length, function() {
@@ -716,6 +798,7 @@ class WasmGcDynamicArrays {
 			});
 			body.push(End);
 		});
+		if (plan.valueArrayWrapperTypeIndex >= 0) push([End]);
 	}
 
 	function indexOf(array:Int, searched:Int, result:Int):Void
@@ -735,16 +818,50 @@ class WasmGcDynamicArrays {
 			I32Const(1),
 			LocalSet(one)
 		]);
+		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
+			LocalGet(array), LocalGet(index), I32Const(1), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:splice")), Drop, Else]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var removed = allocateLocal(plan.valueType(Array(element)));
 			lower(concrete("splice", element), value(Array(element)), [value(Array(element)), value(I32), value(I32)], removed, [array, index, one]);
 		});
+		if (plan.valueArrayWrapperTypeIndex >= 0) push([End]);
 		push([I32Const(1), LocalSet(result), End]);
 	}
 
 	/** Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 	function concat(left:Int, right:Int, result:Int):Void {
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			var wrapper = plan.valueArrayWrapperTypeIndex, total = allocateLocal(I32), offset = allocateLocal(I32),
+				index = allocateLocal(I32), length = allocateLocal(I32), boxed = allocateLocal(plan.valueType(Dyn));
+			push([LocalGet(left), RefTest({nullable:false, heap:Type(wrapper)}), LocalGet(right), RefTest({nullable:false, heap:Type(wrapper)}), I32Or, If(null),
+				LocalGet(left), RefTest({nullable:false, heap:Type(wrapper)}), LocalGet(right), RefTest({nullable:false, heap:Type(wrapper)}), I32And, If(null)]);
+			for (field in [WasmGcTypePlan.arrayElementTypeFieldIndex(), WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD,
+					WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD]) {
+				push([LocalGet(left), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, field),
+					LocalGet(right), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, field), I32Eq]);
+				if (field != WasmGcTypePlan.arrayElementTypeFieldIndex()) push([I32And]);
+			}
+			push([If(null), LocalGet(left), LocalGet(right), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:concat")), Return, End, End]);
+			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U]));
+			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U, I64Add, I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)]));
+			raiseText("Array is too large");
+			push([End]);
+			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()));
+			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Add, LocalSet(total)]));
+			lower("__array_alloc_ref", value(Array(Dyn)), [value(I32)], result, [total]);
+			for (source in [{array:left, first:true}, {array:right, first:false}]) {
+				if (source.first) push([I32Const(0), LocalSet(offset)]);
+				push(loadField(source.array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length)]));
+				forEach(index, length, function() {
+					push([LocalGet(source.array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:get")), LocalSet(boxed)]);
+					push(loadStorage(result, Dyn));
+					push([LocalGet(index), LocalGet(offset), I32Add, LocalGet(boxed), ArraySet(plan.arrayStorageType(Dyn))]);
+				});
+				push([LocalGet(length), LocalSet(offset)]);
+			}
+			push([LocalGet(result), Return, End]);
+		}
 		var leftType = elementType(left),
 			rightType = elementType(right),
 			total = allocateLocal(I32),
@@ -787,6 +904,11 @@ class WasmGcDynamicArrays {
 
 	/** copy, slice, splice and reverse operate on storage without converting elements. */
 	function storageOperation(operation:String, array:Int, extra:Array<Int>, resultType:IrType, result:Int):Void {
+		if (plan.valueArrayWrapperTypeIndex >= 0) {
+			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null), LocalGet(array)]);
+			for (argument in extra) push([LocalGet(argument)]);
+			push([Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:" + operation)), Return, End]);
+		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var output = resultType == Void ? Void : Array(element);
@@ -798,6 +920,8 @@ class WasmGcDynamicArrays {
 		push([LocalGet(length), I32Const(0), I32LtS, If(null)]);
 		raiseText("Array.resize length must be non-negative");
 		body.push(End);
+		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
+			LocalGet(array), LocalGet(length), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:resize")), Return, End]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			lower(concrete("resize", element), value(Void), [value(Array(element)), value(I32)], -1, [array, length]);

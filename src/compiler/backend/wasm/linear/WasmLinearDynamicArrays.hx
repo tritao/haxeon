@@ -402,6 +402,13 @@ class WasmLinearDynamicArrays {
 				elementType = builder.local("elementType", I32),
 				boxed = builder.local("boxed", I32),
 				allocator = context.allocatorFunction;
+			if (context.functions.exists("$linear-value-array:initialized")) {
+				builder.emitAll(WasmLinearValueArrays.resolveForward(array));
+				builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
+					LocalGet(array), LocalGet(index), Call(concrete("$linear-value-array:initialized")), I32Eqz, If(null), I32Const(0), Return, End,
+					LocalGet(array), LocalGet(index), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+					CallIndirect(module.typeIndex({parameters:[I32,I32], results:[I32]})), Return, End]);
+			}
 			function allocateBox(builder:WasmFunctionBuilder, size:Int):Void {
 				builder.i32Const(size);
 				builder.call(builder.functionRef(allocator));
@@ -926,6 +933,19 @@ class WasmLinearDynamicArrays {
 			encodedI64 = builder.local("encodedI64", I64),
 			strideLocal = builder.local("stride", I32),
 			slot = builder.local("slot", I32);
+		if (context.functions.exists("$linear-value-array:new-like")) {
+			var staged = builder.local("value-stage", I32);
+			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
+			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
+				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
+			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
+			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$linear-value-array:new-like")), LocalSet(staged),
+				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]})), LocalGet(array), LocalGet(index),
+				Call(concrete("$linear-value-array:ensure")), LocalGet(array), LocalGet(index), LocalGet(staged), I32Const(0),
+				Call(concrete("$linear-value-array:move-element")), Return, End]);
+		}
 		loadElementType(builder, array);
 		builder.localSet(elementType);
 		function encodeInto(kind:WasmValueType, reference:Bool, target:WasmLocalRef):WasmFunctionBuilder->Void
@@ -984,6 +1004,30 @@ class WasmLinearDynamicArrays {
 			position = positioned ? builder.parameter("position", 1) : null,
 			value = builder.parameter("value", positioned ? 2 : 1),
 			elementType = builder.local("elementType", I32);
+		if (context.functions.exists("$linear-value-array:new-like")) {
+			var staged = builder.local("value-stage", I32), at = builder.local("value-position", I32);
+			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
+			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
+				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
+			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
+			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$linear-value-array:new-like")), LocalSet(staged),
+				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]}))]);
+			if (operation == "push") builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(at),
+				LocalGet(array), LocalGet(at), Call(concrete("$linear-value-array:ensure"))]);
+			else {
+				builder.localGet(array);
+				if (operation == "unshift") builder.i32Const(0); else {
+					if (position == null) throw "Positioned array insertion requires an index";
+					builder.localGet(position);
+				}
+				builder.emitAll([Call(concrete("$linear-value-array:insert")), LocalSet(at)]);
+			}
+			builder.emitAll([LocalGet(array), LocalGet(at), LocalGet(staged), I32Const(0), Call(concrete("$linear-value-array:move-element"))]);
+			if (!positioned) builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET)]);
+			builder.emitAll([Return, End]);
+		}
 		loadElementType(builder, array);
 		builder.localSet(elementType);
 		dispatchEncoded(builder, operation, array, position == null ? [] : [position], value, elementType, positioned ? null : I32);
@@ -999,6 +1043,7 @@ class WasmLinearDynamicArrays {
 			length = builder.local("length", I32),
 			index = builder.local("index", I32),
 			value = builder.local("value", I32);
+		if (context.functions.exists("$linear-value-array:initialized")) builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 		builder.localGet(array);
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.localTee(length);
@@ -1020,6 +1065,12 @@ class WasmLinearDynamicArrays {
 		builder.localGet(index);
 		builder.call(builder.functionRef(box()));
 		builder.localSet(value);
+		if (context.functions.exists("$linear-value-array:operation:splice")) {
+			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null), LocalGet(array)]);
+			if (first) builder.emitAll([I32Const(0), I32Const(1), Call(concrete("$linear-value-array:operation:splice")), Drop]);
+			else builder.emitAll([LocalGet(index), Call(concrete("$linear-value-array:operation:resize"))]);
+			builder.emitAll([LocalGet(value), Return, End]);
+		}
 		// f64 and i32 variants move eight- and four-byte slots respectively; the result is dropped.
 		var strideOf = stride();
 		builder.localGet(array);
@@ -1096,6 +1147,7 @@ class WasmLinearDynamicArrays {
 			index = builder.local("index", I32),
 			length = builder.local("length", I32),
 			strideLocal = builder.local("stride", I32);
+		if (context.functions.exists("$linear-value-array:initialized")) builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 		builder.localGet(array);
 		builder.localGet(searched);
 		builder.call(builder.functionRef(indexOf()));
@@ -1106,6 +1158,9 @@ class WasmLinearDynamicArrays {
 			builder.i32Const(0);
 			builder.return_();
 		});
+		if (context.functions.exists("$linear-value-array:operation:splice")) builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET),
+			I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null), LocalGet(array), LocalGet(index), I32Const(1),
+			Call(concrete("$linear-value-array:operation:splice")), Drop, I32Const(1), Return, End]);
 		builder.localGet(array);
 		builder.call(builder.functionRef(stride()));
 		builder.localSet(strideLocal);
@@ -1144,10 +1199,24 @@ class WasmLinearDynamicArrays {
 	function addConcat(name:String):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}), left = builder.parameter("left", 0),
 			right = builder.parameter("right", 1), leftLength = builder.local("leftLength", I32), result = builder.local("result", I32),
-			index = builder.local("index", I32), boxed = builder.local("boxed", I32), read = box();
+			index = builder.local("index", I32), boxed = builder.local("boxed", I32), hasInline = builder.local("has-inline", I32), read = box();
+		if (context.functions.exists("$linear-value-array:operation:concat")) {
+			builder.emitAll(WasmLinearValueArrays.resolveForward(left)); builder.emitAll(WasmLinearValueArrays.resolveForward(right));
+			builder.emitAll([LocalGet(left), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq,
+				LocalGet(right), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, I32Or, LocalSet(hasInline),
+				LocalGet(left), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq,
+				LocalGet(right), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, I32And, If(null)]);
+			for (offset in [WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET, WasmLayout.VALUE_ARRAY_SCALAR_STRIDE_OFFSET,
+					WasmLayout.VALUE_ARRAY_REFERENCE_STRIDE_OFFSET, WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET]) {
+				builder.emitAll([LocalGet(left), I32Load(offset), LocalGet(right), I32Load(offset), I32Eq]);
+				if (offset != WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET) builder.emit(I32And);
+			}
+			builder.emitAll([If(null), LocalGet(left), LocalGet(right), Call(concrete("$linear-value-array:operation:concat")), Return, End, End]);
+		}
 		loadElementType(builder, left);
 		loadElementType(builder, right);
 		builder.emit(I32Eq);
+		builder.emitAll([LocalGet(hasInline), I32Eqz, I32And]);
 		builder.if_(function(builder) {
 			dispatchStride(builder, "concat", left, function(builder) {
 				builder.localGet(left);
@@ -1209,6 +1278,12 @@ class WasmLinearDynamicArrays {
 	function addStorageOperation(name:String, operation:String, parameters:Array<WasmValueType>, results:Array<WasmValueType>):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: parameters, results: results}),
 			locals = [for (index in 0...parameters.length) builder.parameter('argument_$index', index)];
+		if (context.functions.exists("$linear-value-array:operation:" + operation)) {
+			builder.emitAll(WasmLinearValueArrays.resolveForward(locals[0]));
+			builder.emitAll([LocalGet(locals[0]), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null)]);
+			for (local in locals) builder.localGet(local);
+			builder.emitAll([Call(concrete("$linear-value-array:operation:" + operation)), Return, End]);
+		}
 		dispatchStride(builder, operation, locals[0], function(builder) {
 			for (local in locals)
 				builder.localGet(local);
@@ -1229,6 +1304,11 @@ class WasmLinearDynamicArrays {
 			builder.i32Const(string("Array.resize length must be non-negative"));
 			raise(builder);
 		});
+		if (context.functions.exists("$linear-value-array:operation:resize")) {
+			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
+			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
+				LocalGet(array), LocalGet(length), Call(concrete("$linear-value-array:operation:resize")), Return, End]);
+		}
 		dispatchStride(builder, "resize", array, function(builder) {
 			builder.localGet(array);
 			builder.localGet(length);

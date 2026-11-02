@@ -536,6 +536,7 @@ class IrProgramAssembler {
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
+			needsDynamicEquality = false,
 			needsDynamicObjectRuntime = false,
 			needsInt64ToInt = false,
 			mapRuntimeNames:Map<String, Bool> = [];
@@ -550,6 +551,8 @@ class IrProgramAssembler {
 								needsExceptionRuntime = true;
 							if (name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
+							if (name == "__dynamic_equal")
+								needsDynamicEquality = true;
 							if (name == "__std_is_exact_type")
 								needsExactTypeTestRuntime = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
@@ -603,6 +606,8 @@ class IrProgramAssembler {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsDynamicEquality && !hasNative(natives, "__dynamic_equal"))
+			program.natives.push({name: "__dynamic_equal", library: "haxeon_runtime", symbol: "__dynamic_equal", arguments: [Dyn, Dyn], result: Bool});
 		if (needsInt64ToInt && !hasNative(natives, "haxe.Int64.toInt"))
 			program.natives.push({
 				name: "haxe.Int64.toInt",
@@ -651,194 +656,7 @@ class IrProgramAssembler {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
-		if (needsArrayRuntime) {
-			program.natives.push({
-				name: "__array_alloc_i32",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_i32",
-				arguments: [I32],
-				result: Array(I32)
-			});
-			program.natives.push({
-				name: "__array_alloc_i64",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_i64",
-				arguments: [I32],
-				result: Array(I64)
-			});
-			program.natives.push({
-				name: "__array_alloc_f64",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_f64",
-				arguments: [I32],
-				result: Array(F64)
-			});
-			program.natives.push({
-				name: "__array_alloc_bytes",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_bytes",
-				arguments: [I32],
-				result: Array(Bytes)
-			});
-			program.natives.push({
-				name: "__array_alloc_bool",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_bool",
-				arguments: [I32],
-				result: Array(Bool)
-			});
-			program.natives.push({
-				name: "__array_alloc_ref",
-				library: "haxeon_runtime",
-				symbol: "__array_alloc_ref",
-				arguments: [I32],
-				result: Array(Dyn)
-			});
-			if (needsTypedRefArrayRuntime)
-				program.natives.push({
-					name: "__array_alloc_typed_ref",
-					library: "haxeon_runtime",
-					symbol: "__array_alloc_typed_ref",
-					arguments: [I32, TypeRef],
-					result: Array(Dyn)
-				});
-			if (needsArrayCastRuntime)
-				program.natives.push({
-					name: "__array_check_cast",
-					library: "haxeon_runtime",
-					symbol: "__array_check_cast",
-					arguments: [Array(Dyn), TypeRef],
-					result: Array(Dyn)
-				});
-			var arrayKinds:Array<{name:String, type:IrType}> = [
-				{name: "i32", type: I32},
-				{name: "i64", type: I64},
-				{name: "f64", type: F64},
-				{name: "bytes", type: Bytes},
-				{name: "bool", type: Bool},
-				{name: "ref", type: Dyn}
-			];
-			// Array<Dynamic> views may alias any storage; emitted for targets with exact array storage.
-			if (needsAnyArrayRuntime) {
-				arrayKinds.push({name: "any", type: Dyn});
-				program.natives.push({
-					name: "__array_get_any",
-					library: "haxeon_runtime",
-					symbol: "__array_get_any",
-					arguments: [Array(Dyn), I32],
-					result: Dyn
-				});
-				program.natives.push({
-					name: "__array_set_any",
-					library: "haxeon_runtime",
-					symbol: "__array_set_any",
-					arguments: [Array(Dyn), I32, Dyn],
-					result: Void
-				});
-			}
-			for (entry in arrayKinds) {
-				var arrayType:IrType = Array(entry.type);
-				program.natives.push({
-					name: '__array_copy_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_copy_${entry.name}',
-					arguments: [arrayType],
-					result: arrayType
-				});
-				if (entry.name == "bytes")
-					program.natives.push({
-						name: "__array_join_bytes",
-						library: "haxeon_runtime",
-						symbol: "__array_join_bytes",
-						arguments: [arrayType, Bytes],
-						result: Bytes
-					});
-				program.natives.push({
-					name: '__array_concat_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_concat_${entry.name}',
-					arguments: [arrayType, arrayType],
-					result: arrayType
-				});
-				program.natives.push({
-					name: '__array_slice_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_slice_${entry.name}',
-					arguments: [arrayType, I32, I32],
-					result: arrayType
-				});
-				program.natives.push({
-					name: '__array_splice_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_splice_${entry.name}',
-					arguments: [arrayType, I32, I32],
-					result: arrayType
-				});
-				program.natives.push({
-					name: '__array_index_of_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_index_of_${entry.name}',
-					arguments: [arrayType, entry.type],
-					result: I32
-				});
-				program.natives.push({
-					name: '__array_push_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_push_${entry.name}',
-					arguments: [arrayType, entry.type],
-					result: I32
-				});
-				program.natives.push({
-					name: '__array_unshift_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_unshift_${entry.name}',
-					arguments: [arrayType, entry.type],
-					result: I32
-				});
-				program.natives.push({
-					name: '__array_insert_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_insert_${entry.name}',
-					arguments: [arrayType, I32, entry.type],
-					result: Void
-				});
-				program.natives.push({
-					name: '__array_pop_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_pop_${entry.name}',
-					arguments: [arrayType],
-					result: entry.type
-				});
-				program.natives.push({
-					name: '__array_shift_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_shift_${entry.name}',
-					arguments: [arrayType],
-					result: entry.type
-				});
-				program.natives.push({
-					name: '__array_resize_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_resize_${entry.name}',
-					arguments: [arrayType, I32],
-					result: Void
-				});
-				program.natives.push({
-					name: '__array_remove_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_remove_${entry.name}',
-					arguments: [arrayType, entry.type],
-					result: Bool
-				});
-				program.natives.push({
-					name: '__array_reverse_${entry.name}',
-					library: "haxeon_runtime",
-					symbol: '__array_reverse_${entry.name}',
-					arguments: [arrayType],
-					result: Void
-				});
-			}
-		}
+		if (needsArrayRuntime) ensureArrayRuntime(program, needsTypedRefArrayRuntime, needsArrayCastRuntime, needsAnyArrayRuntime);
 		var fastPathNames = [for (name in stringFastPathNames.keys()) name];
 		fastPathNames.sort(Reflect.compare);
 		for (name in fastPathNames)
@@ -1041,6 +859,199 @@ class IrProgramAssembler {
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
 		return program;
+	}
+
+	/** Add the concrete storage operations required by dynamic array views. */
+	public static function ensureArrayRuntime(program:IrProgram, needsTypedRefArrayRuntime:Bool, needsArrayCastRuntime:Bool, needsAnyArrayRuntime:Bool):Void {
+		var existing:Map<String, Bool> = [for (native in program.natives) native.name => true], before = program.natives.length;
+		program.natives.push({
+			name: "__array_alloc_i32",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_i32",
+			arguments: [I32],
+			result: Array(I32)
+		});
+		program.natives.push({
+			name: "__array_alloc_i64",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_i64",
+			arguments: [I32],
+			result: Array(I64)
+		});
+		program.natives.push({
+			name: "__array_alloc_f64",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_f64",
+			arguments: [I32],
+			result: Array(F64)
+		});
+		program.natives.push({
+			name: "__array_alloc_bytes",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_bytes",
+			arguments: [I32],
+			result: Array(Bytes)
+		});
+		program.natives.push({
+			name: "__array_alloc_bool",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_bool",
+			arguments: [I32],
+			result: Array(Bool)
+		});
+		program.natives.push({
+			name: "__array_alloc_ref",
+			library: "haxeon_runtime",
+			symbol: "__array_alloc_ref",
+			arguments: [I32],
+			result: Array(Dyn)
+		});
+		if (needsTypedRefArrayRuntime)
+			program.natives.push({
+				name: "__array_alloc_typed_ref",
+				library: "haxeon_runtime",
+				symbol: "__array_alloc_typed_ref",
+				arguments: [I32, TypeRef],
+				result: Array(Dyn)
+			});
+		if (needsArrayCastRuntime)
+			program.natives.push({
+				name: "__array_check_cast",
+				library: "haxeon_runtime",
+				symbol: "__array_check_cast",
+				arguments: [Array(Dyn), TypeRef],
+				result: Array(Dyn)
+			});
+		var arrayKinds:Array<{name:String, type:IrType}> = [
+			{name: "i32", type: I32},
+			{name: "i64", type: I64},
+			{name: "f64", type: F64},
+			{name: "bytes", type: Bytes},
+			{name: "bool", type: Bool},
+			{name: "ref", type: Dyn}
+		];
+		// Array<Dynamic> views may alias any storage; emitted for targets with exact array storage.
+		if (needsAnyArrayRuntime) {
+			arrayKinds.push({name: "any", type: Dyn});
+			program.natives.push({
+				name: "__array_get_any",
+				library: "haxeon_runtime",
+				symbol: "__array_get_any",
+				arguments: [Array(Dyn), I32],
+				result: Dyn
+			});
+			program.natives.push({
+				name: "__array_set_any",
+				library: "haxeon_runtime",
+				symbol: "__array_set_any",
+				arguments: [Array(Dyn), I32, Dyn],
+				result: Void
+			});
+		}
+		for (entry in arrayKinds) {
+			var arrayType:IrType = Array(entry.type);
+			program.natives.push({
+				name: '__array_copy_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_copy_${entry.name}',
+				arguments: [arrayType],
+				result: arrayType
+			});
+			if (entry.name == "bytes")
+				program.natives.push({
+					name: "__array_join_bytes",
+					library: "haxeon_runtime",
+					symbol: "__array_join_bytes",
+					arguments: [arrayType, Bytes],
+					result: Bytes
+				});
+			program.natives.push({
+				name: '__array_concat_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_concat_${entry.name}',
+				arguments: [arrayType, arrayType],
+				result: arrayType
+			});
+			program.natives.push({
+				name: '__array_slice_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_slice_${entry.name}',
+				arguments: [arrayType, I32, I32],
+				result: arrayType
+			});
+			program.natives.push({
+				name: '__array_splice_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_splice_${entry.name}',
+				arguments: [arrayType, I32, I32],
+				result: arrayType
+			});
+			program.natives.push({
+				name: '__array_index_of_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_index_of_${entry.name}',
+				arguments: [arrayType, entry.type],
+				result: I32
+			});
+			program.natives.push({
+				name: '__array_push_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_push_${entry.name}',
+				arguments: [arrayType, entry.type],
+				result: I32
+			});
+			program.natives.push({
+				name: '__array_unshift_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_unshift_${entry.name}',
+				arguments: [arrayType, entry.type],
+				result: I32
+			});
+			program.natives.push({
+				name: '__array_insert_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_insert_${entry.name}',
+				arguments: [arrayType, I32, entry.type],
+				result: Void
+			});
+			program.natives.push({
+				name: '__array_pop_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_pop_${entry.name}',
+				arguments: [arrayType],
+				result: entry.type
+			});
+			program.natives.push({
+				name: '__array_shift_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_shift_${entry.name}',
+				arguments: [arrayType],
+				result: entry.type
+			});
+			program.natives.push({
+				name: '__array_resize_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_resize_${entry.name}',
+				arguments: [arrayType, I32],
+				result: Void
+			});
+			program.natives.push({
+				name: '__array_remove_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_remove_${entry.name}',
+				arguments: [arrayType, entry.type],
+				result: Bool
+			});
+			program.natives.push({
+				name: '__array_reverse_${entry.name}',
+				library: "haxeon_runtime",
+				symbol: '__array_reverse_${entry.name}',
+				arguments: [arrayType],
+				result: Void
+			});
+		}
+		var added = program.natives.splice(before, program.natives.length - before);
+		for (native in added) if (!existing.exists(native.name)) { existing.set(native.name, true); program.natives.push(native); }
 	}
 
 	static function hasNative(natives:Null<Array<IrNative>>, name:String):Bool {

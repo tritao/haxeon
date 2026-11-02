@@ -30,7 +30,23 @@
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
 #include "runtime/dir_watch.c"
+/* Dynamic array views preserve the backing representation when performing structural operations. */
+HL_PRIM bool HL_NAME(__value_array_is)(varray *array);
+HL_PRIM bool HL_NAME(__value_array_compatible)(varray *left, varray *right);
+HL_PRIM varray *HL_NAME(__value_array_copy)(varray *array);
+HL_PRIM varray *HL_NAME(__value_array_concat)(varray *left, varray *right);
+HL_PRIM varray *HL_NAME(__value_array_slice)(varray *array, int start, int end);
+HL_PRIM varray *HL_NAME(__value_array_splice)(varray *array, int position, int length);
+HL_PRIM void HL_NAME(__value_array_reverse)(varray *array);
+HL_PRIM void HL_NAME(__value_array_resize)(varray *array, int length);
+HL_PRIM vdynamic *HL_NAME(__value_array_dynamic_read)(varray *array, int index);
+HL_PRIM bool HL_NAME(__value_array_dynamic_accepts)(varray *array, vdynamic *value);
+HL_PRIM void HL_NAME(__value_array_dynamic_write)(varray *array, int index, vdynamic *value);
+HL_PRIM void HL_NAME(__value_array_dynamic_store)(varray *array, int index, vdynamic *value);
+HL_PRIM void HL_NAME(__value_array_dynamic_insert)(varray *array, int position, vdynamic *value);
+HL_PRIM int HL_NAME(__value_array_insert_empty)(varray *array, int position);
 #include "runtime/arrays.c"
+#include "runtime/value_arrays.c"
 #include "runtime/iterators.c"
 #include "runtime/maps.c"
 #include "runtime/strings.c"

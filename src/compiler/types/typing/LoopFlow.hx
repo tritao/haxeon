@@ -46,11 +46,13 @@ class LoopFlow {
 			session.invalidateUnknownCall(scope);
 		else {
 			// Stores forget only what the same store forgets in straight-line code, and also map-entry facts, which a
-			// later iteration's store could falsify. An array element carries no facts.
+			// later iteration's store could falsify, including facts about array elements reached through aliases.
 			for (field in stores.fields)
 				scope.invalidateField(field);
-			if (stores.indexed)
+			if (stores.indexed) {
 				scope.invalidateExpressionNamespace("map-entry:");
+				scope.invalidateExpressionNamespace("array-entry:");
+			}
 		}
 		if (AstScan.mayRemoveMapEntries(statements))
 			scope.invalidateExpressionNamespaceCompletely("map-entry:");

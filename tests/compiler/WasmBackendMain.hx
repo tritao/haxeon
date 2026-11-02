@@ -642,13 +642,6 @@ class WasmBackendMain {
 	static function compileGcDynamicProgram():haxe.io.Bytes {
 		var source = File.getContent("tests/programs/wasm-gc-dynamic.hx"),
 			program = Frontend.compile(source);
-		program.natives.push({
-			name: "__dynamic_equal",
-			library: "haxeon_runtime",
-			symbol: "__dynamic_equal",
-			arguments: [Dyn, Dyn],
-			result: Bool
-		});
 		var bytes = new WasmBackend().compile(program, {target: WasmGc, debugNames: true}).bytes;
 		for (forbidden in [
 			"__haxeon_alloc",
@@ -695,13 +688,6 @@ class WasmBackendMain {
 	static function compileGcStringProgram():haxe.io.Bytes {
 		var source = File.getContent("tests/programs/wasm-gc-strings.hx"),
 			program = Frontend.compile(source);
-		program.natives.push({
-			name: "__dynamic_equal",
-			library: "haxeon_runtime",
-			symbol: "__dynamic_equal",
-			arguments: [Dyn, Dyn],
-			result: Bool
-		});
 		var bytes = new WasmBackend().compile(program, {target: WasmGc, debugNames: true}).bytes;
 		for (forbidden in [
 			"__haxeon_alloc",

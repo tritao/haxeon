@@ -440,6 +440,18 @@ static void *realtime_any_slot(varray *array, int index) {
 }
 
 static vdynamic *realtime_any_read(varray *array, int index) {
+	if (HL_NAME(__value_array_is)(array)) return HL_NAME(__value_array_dynamic_read)(array, index);
+	if (array->at->kind == HSTRUCT) {
+		void *source = *(void**)realtime_any_slot(array, index);
+		if (source == NULL) return NULL;
+		hl_runtime_obj *layout = hl_get_obj_rt(array->at);
+		vdynamic *boxed = hl_alloc_dynamic(array->at);
+		void *copy = hl_gc_alloc_gen_owner(array->at, layout->size,
+			(layout->hasPtr ? MEM_KIND_RAW : MEM_KIND_NOPTR) | MEM_ZERO, array->at->gc_owner);
+		hl_gc_store_ref(&boxed->v.ptr, copy, array->at);
+		hl_gc_copy_packed(copy, source, layout->size, array->at);
+		return boxed;
+	}
 	return hl_make_dyn(realtime_any_slot(array, index), array->at);
 }
 
@@ -482,6 +494,11 @@ HL_PRIM vdynamic *HL_NAME(__array_get_any)( varray *array, int index ) {
 }
 
 HL_PRIM void HL_NAME(__array_set_any)( varray *array, int index, vdynamic *value ) {
+	if (HL_NAME(__value_array_is)(array)) {
+		if (!HL_NAME(__value_array_dynamic_accepts)(array, value)) hl_error("Array element type mismatch");
+		HL_NAME(__value_array_dynamic_store)(array, index, value);
+		return;
+	}
 	realtime_any_element element = realtime_any_encode(array, value);
 	int size = array->size;
 	hl_array_ensure(array, index);
@@ -493,6 +510,11 @@ HL_PRIM void HL_NAME(__array_set_any)( varray *array, int index, vdynamic *value
 }
 
 HL_PRIM int HL_NAME(__array_push_any)( varray *array, vdynamic *value ) {
+	if (HL_NAME(__value_array_is)(array)) {
+		if (!HL_NAME(__value_array_dynamic_accepts)(array, value)) hl_error("Array element type mismatch");
+		HL_NAME(__value_array_dynamic_store)(array, array->size, value);
+		return array->size;
+	}
 	realtime_any_element element = realtime_any_encode(array, value);
 	realtime_any_reserve(array, array->size + 1);
 	array->size++;
@@ -506,6 +528,11 @@ HL_PRIM int HL_NAME(__array_unshift_any)( varray *array, vdynamic *value ) {
 }
 
 HL_PRIM void HL_NAME(__array_insert_any)( varray *array, int position, vdynamic *value ) {
+	if (HL_NAME(__value_array_is)(array)) {
+		if (!HL_NAME(__value_array_dynamic_accepts)(array, value)) hl_error("Array element type mismatch");
+		HL_NAME(__value_array_dynamic_insert)(array, position, value);
+		return;
+	}
 	realtime_any_element element = realtime_any_encode(array, value);
 	if (position < 0) position += array->size;
 	if (position < 0) position = 0;
@@ -522,6 +549,10 @@ HL_PRIM vdynamic *HL_NAME(__array_pop_any)( varray *array ) {
 	if (array->size <= 0)
 		hl_error("Array.pop on an empty array");
 	vdynamic *value = realtime_any_read(array, array->size - 1);
+	if (HL_NAME(__value_array_is)(array)) {
+		HL_NAME(__value_array_resize)(array, array->size - 1);
+		return value;
+	}
 	array->size--;
 	hl_gc_clear_values(realtime_any_slot(array, array->size), hl_type_size(array->at),array->at);
 	return value;
@@ -531,6 +562,10 @@ HL_PRIM vdynamic *HL_NAME(__array_shift_any)( varray *array ) {
 	if (array->size <= 0)
 		hl_error("Array.shift on an empty array");
 	vdynamic *value = realtime_any_read(array, 0);
+	if (HL_NAME(__value_array_is)(array)) {
+		HL_NAME(__value_array_splice)(array, 0, 1);
+		return value;
+	}
 	int stride = hl_type_size(array->at);
 	array->size--;
 	hl_gc_move_values(hl_aptr(array, vbyte), hl_aptr(array, vbyte) + stride, (size_t)array->size * stride,array->at);
@@ -547,6 +582,10 @@ HL_PRIM int HL_NAME(__array_index_of_any)( varray *array, vdynamic *value ) {
 HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
 	int index = HL_NAME(__array_index_of_any)(array, value);
 	if (index < 0) return false;
+	if (HL_NAME(__value_array_is)(array)) {
+		HL_NAME(__value_array_splice)(array, index, 1);
+		return true;
+	}
 	int stride = hl_type_size(array->at);
 	vbyte *values = hl_aptr(array, vbyte);
 	hl_gc_move_values(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride,array->at);
@@ -557,7 +596,10 @@ HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
 
 /* Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 HL_PRIM varray *HL_NAME(__array_concat_any)( varray *left, varray *right ) {
-	if (realtime_array_same_storage(left->at, right->at))
+	bool left_value = HL_NAME(__value_array_is)(left), right_value = HL_NAME(__value_array_is)(right);
+	if (left_value && right_value && HL_NAME(__value_array_compatible)(left, right))
+		return HL_NAME(__value_array_concat)(left, right);
+	if (!left_value && !right_value && realtime_array_same_storage(left->at, right->at))
 		return realtime_array_concat(left, right);
 	varray *result = hl_alloc_array(&hlt_dyn, left->size + right->size);
 	vdynamic **values = hl_aptr(result, vdynamic *);
@@ -566,12 +608,24 @@ HL_PRIM varray *HL_NAME(__array_concat_any)( varray *left, varray *right ) {
 	return result;
 }
 
-HL_PRIM varray *HL_NAME(__array_copy_any)( varray *array ) { return realtime_array_copy(array); }
-HL_PRIM varray *HL_NAME(__array_slice_any)( varray *array, int start, int end ) { return realtime_array_slice(array, start, end); }
-HL_PRIM varray *HL_NAME(__array_splice_any)( varray *array, int position, int length ) { return realtime_array_splice(array, position, length); }
-HL_PRIM void HL_NAME(__array_reverse_any)( varray *array ) { realtime_array_reverse(array); }
+HL_PRIM varray *HL_NAME(__array_copy_any)( varray *array ) {
+	return HL_NAME(__value_array_is)(array) ? HL_NAME(__value_array_copy)(array) : realtime_array_copy(array);
+}
+HL_PRIM varray *HL_NAME(__array_slice_any)( varray *array, int start, int end ) {
+	return HL_NAME(__value_array_is)(array) ? HL_NAME(__value_array_slice)(array, start, end) : realtime_array_slice(array, start, end);
+}
+HL_PRIM varray *HL_NAME(__array_splice_any)( varray *array, int position, int length ) {
+	return HL_NAME(__value_array_is)(array) ? HL_NAME(__value_array_splice)(array, position, length) : realtime_array_splice(array, position, length);
+}
+HL_PRIM void HL_NAME(__array_reverse_any)( varray *array ) {
+	if (HL_NAME(__value_array_is)(array)) HL_NAME(__value_array_reverse)(array); else realtime_array_reverse(array);
+}
 
 HL_PRIM void HL_NAME(__array_resize_any)( varray *array, int length ) {
+	if (HL_NAME(__value_array_is)(array)) {
+		HL_NAME(__value_array_resize)(array, length);
+		return;
+	}
 	if (length < 0)
 		hl_error("Array.resize length must be non-negative");
 	int old_length = array->size;

@@ -150,12 +150,54 @@ class IrOptionalScalarFlow {
 		return name;
 	}
 
-	function aliases(fn:IrFunction):Map<Int, OptionalAlias> {
+	/** Array-backed mutable places retain their identity until the lane-place rewrite. */
+	function arrayPlaceValues(fn:IrFunction):Map<Int, Bool> {
+		var places:Map<Int, Bool> = [], nulls:Map<Int, Bool> = [];
+		for (block in fn.blocks) for (located in block.instructions) {
+			switch located.value { case ConstNull(out): nulls.set(out.id, true); default: }
+			switch located.provenance.origin {
+				case CompilerGenerated(reason) if (reason == IrGenerator.ArrayValuePlaceReason):
+					switch located.value {
+						case ArrayGet(out, _, _) if (optional(out.type) != null): places.set(out.id, true);
+						case Call(out, "__array_get_any", args) if (args.length == 2 && switch args[0].type {
+							case Array(element): optional(element) != null; default: false;
+						}): places.set(out.id, true);
+						default:
+					}
+				default:
+			}
+		}
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case SafeCast(out, value) | ToDyn(out, value) if (places.exists(value.id) && !places.exists(out.id)):
+					switch out.type {
+						case Obj(name) if (objects.exists(name) && objects.get(name).isValue): places.set(out.id, true); changed = true;
+						case Nullable(Obj(_)) if (optional(out.type) != null): places.set(out.id, true); changed = true;
+						default:
+					}
+				case FieldGet(out, owner, _) if (places.exists(owner.id) && !places.exists(out.id)):
+					switch out.type {
+						case Obj(name) if (objects.exists(name) && objects.get(name).isValue): places.set(out.id, true); changed = true;
+						case Nullable(Obj(_)) if (optional(out.type) != null): places.set(out.id, true); changed = true;
+						default:
+					}
+				case Equal(_, left, right):
+					if (places.exists(left.id) && nulls.exists(right.id) && !places.exists(right.id)) { places.set(right.id, true); changed = true; }
+					if (places.exists(right.id) && nulls.exists(left.id) && !places.exists(left.id)) { places.set(left.id, true); changed = true; }
+				default:
+			}
+		}
+		return places;
+	}
+
+	function aliases(fn:IrFunction, places:Map<Int, Bool>):Map<Int, OptionalAlias> {
 		var result:Map<Int, OptionalAlias> = [], changed = true;
 		while (changed) {
 			changed = false;
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case SafeCast(out, source) if (optional(source.type) != null && Type.enumEq(out.type, Obj(optional(source.type)))):
+				case SafeCast(out, source) if (!places.exists(source.id) && optional(source.type) != null && Type.enumEq(out.type, Obj(optional(source.type)))):
 					if (!result.exists(out.id)) { result.set(out.id, {root: source.id, path: [], typeName: optional(source.type)}); changed = true; }
 				case FieldGet(out, owner, field) if (result.exists(owner.id)):
 					switch out.type {
@@ -217,11 +259,12 @@ class IrOptionalScalarFlow {
 		return true;
 	}
 	function eligible(fn:IrFunction):Bool {
-		var nulls:Map<Int, Bool> = [], values:Map<Int, Bool> = [], alias = aliases(fn), bindings = closureBindings(fn), exact = exactTypes(fn);
+		var places = arrayPlaceValues(fn), nulls:Map<Int, Bool> = [], values:Map<Int, Bool> = [], alias = aliases(fn, places),
+			bindings = closureBindings(fn), exact = exactTypes(fn);
 		for (arg in fn.arguments) if (optional(arg.type) != null) values.set(arg.id, true);
 		for (block in fn.blocks) for (located in block.instructions) {
 			var out = IrOperands.output(located.value);
-			if (out != null && optional(out.type) != null) values.set(out.id, true);
+			if (out != null && optional(out.type) != null && !places.exists(out.id)) values.set(out.id, true);
 			switch located.value { case ConstNull(out) if (optional(out.type) != null): nulls.set(out.id, true); default: }
 		}
 		for (block in fn.blocks) {
@@ -291,7 +334,7 @@ class IrOptionalScalarFlow {
 			var out = IrOperands.output(located.value);
 			if (out != null && out.id >= next) next = out.id + 1;
 		}
-		var types:Map<Int, String> = [], components:Map<Int, Array<IrValue>> = [], nulls:Map<Int, Bool> = [];
+		var places = arrayPlaceValues(fn), types:Map<Int, String> = [], components:Map<Int, Array<IrValue>> = [], nulls:Map<Int, Bool> = [];
 		function component(id:Int):Array<IrValue> {
 			var result = components.get(id);
 			if (result == null) throw 'Missing optional scalar components for $id';
@@ -299,7 +342,7 @@ class IrOptionalScalarFlow {
 		}
 		function allocate(value:IrValue):Void {
 			var name = optional(value.type);
-			if (name == null || components.exists(value.id)) return;
+			if (name == null || places.exists(value.id) || components.exists(value.id)) return;
 			types.set(value.id, name);
 			components.set(value.id, [for (slot in slots(name)) new IrValue(next++, "$optional-slot", slot.type)]);
 		}
@@ -309,7 +352,7 @@ class IrOptionalScalarFlow {
 			if (out != null) allocate(out);
 			switch located.value { case ConstNull(out) if (optional(out.type) != null): nulls.set(out.id, true); default: }
 		}
-		var alias = aliases(fn), bindings = closureBindings(fn), exact = exactTypes(fn), substitutions:Map<Int, IrValue> = [], holders:Map<Int, IrValue> = [];
+		var alias = aliases(fn, places), bindings = closureBindings(fn), exact = exactTypes(fn), substitutions:Map<Int, IrValue> = [], holders:Map<Int, IrValue> = [];
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case FieldSet(owner, _, _) if (alias.exists(owner.id)):
 				var receiver:OptionalAlias = cast alias.get(owner.id), root = receiver.root;

@@ -126,6 +126,20 @@ echo 'PASS: software-only test backend avoids proc tracking and requires validat
 for threads in 1 4; do
  HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/runtime-writes"
 done
+
+# Struct-array reference slots and replacement lane blocks need the same barrier and root guarantees.
+"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/value_array_lanes.c" -L"$library" -L"$root/out" -Wl,--allow-shlib-undefined -l:haxeon_runtime.hdll -lhl -lpthread -o "$work/value-array-lanes"
+for threads in 1 4; do
+ HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/value-array-lanes"
+done
+status=0
+HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/value-array-lanes" >"$work/value-array-missing.log" 2>&1 || status=$?
+if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/value-array-missing.log"; then
+ cat "$work/value-array-missing.log"
+ echo 'FAIL: inline value array probe did not detect its missing barrier'
+ exit 1
+fi
+echo 'PASS: inline value array mutation negative control'
 status=0
 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/runtime-writes" >"$work/runtime-missing.log" 2>&1 || status=$?
 if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/runtime-missing.log"; then

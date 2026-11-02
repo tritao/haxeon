@@ -20,6 +20,37 @@ class IrValuePhiScalarization {
 			case Obj(name) if (objects.exists(name) && objects.get(name).isValue): name;
 			default: null;
 		};
+		// Inlining nested generated boundaries can introduce chains of one-input value phis.
+		// Remove those aliases before looking for fresh incoming values; otherwise each phi
+		// hides the allocation from the next scalarization pass.
+		var singles:Map<Int, IrValue> = [];
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case Phi(out, inputs) if (valueName(out.type) != null && inputs.length == 1 && out.id != inputs[0].value.id):
+				singles.set(out.id, inputs[0].value);
+			default:
+		}
+		var substitutions:Map<Int, IrValue> = [];
+		for (id => value in singles) {
+			var seen:Map<Int, Bool> = [id => true], current = value, valid = true;
+			while (singles.exists(current.id)) {
+				if (seen.exists(current.id)) { valid = false; break; }
+				seen.set(current.id, true); current = singles.get(current.id);
+			}
+			if (valid) substitutions.set(id, current);
+		}
+		if (substitutions.keys().hasNext()) {
+			var copies:Array<IrBlock> = [];
+			for (block in fn.blocks) {
+				var copy = new IrBlock(block.id);
+				for (located in block.instructions) switch located.value {
+					case Phi(out, _) if (substitutions.exists(out.id)):
+					default: copy.instructions.push(located);
+				}
+				copy.terminator = block.terminator; copies.push(copy);
+			}
+			var debug = IrInliner.substitute(copies, substitutions, fn.debugBindings);
+			fn = new IrFunction(fn.name, fn.arguments, fn.result, copies, debug, fn.inlineHint, fn.retention);
+		}
 		var known:Map<Int, Bool> = [], next = 0, byId:Map<Int, IrBlock> = [];
 		for (arg in fn.arguments) if (arg.id >= next) next = arg.id + 1;
 		for (block in fn.blocks) {
@@ -33,7 +64,7 @@ class IrValuePhiScalarization {
 				}
 			}
 		}
-		var plans:Map<Int, ValuePhiPlan> = [];
+		var plans:Map<Int, ValuePhiPlan> = [], graph = new IrGraph(fn);
 		function isolated(input:IrPhiInput, destination:Int, output:IrValue):Bool {
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
@@ -46,7 +77,9 @@ class IrValuePhiScalarization {
 					var used = false;
 					for (operand in IrOperands.inputs(located.value)) if (operand.id == input.value.id) used = true;
 					if (!used) continue;
-					if (block.id != input.block) return false;
+					// Construction can span several blocks, but every access to the incoming object must
+					// precede the edge being snapshotted. Otherwise a later mutation could observe an alias.
+					if (!graph.dominates(block.id, input.block)) return false;
 					switch located.value {
 						case FieldGet(_, owner, _) if (owner.id == input.value.id):
 						case FieldSet(owner, _, value) if (owner.id == input.value.id && value.id != input.value.id):

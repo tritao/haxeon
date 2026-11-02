@@ -246,6 +246,7 @@ class WasmLinearModuleBuilder {
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
+		WasmLinearValueArrays.register(linear);
 		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
 		WasmLinearArrays.registerNativeAllocators(linear);
 		WasmLinearDynamicArrays.register(linear);

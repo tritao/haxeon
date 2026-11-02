@@ -69,6 +69,23 @@ class WasmGcTypePlan {
 
 	public var byteArrayTypeIndex(default, null):Int = -1;
 
+	/** Lane-array types are reserved only when a program contains an inline value-array allocator. */
+	public var valueArrayWrapperTypeIndex(default, null):Int = -1;
+	public var valueArrayI32LaneTypeIndex(default, null):Int = -1;
+	public var valueArrayI64LaneTypeIndex(default, null):Int = -1;
+	public var valueArrayReferenceLaneTypeIndex(default, null):Int = -1;
+	public var valueArrayForwardLaneTypeIndex(default, null):Int = -1;
+	public static inline final VALUE_ARRAY_REFERENCE_FIELD = 3;
+	public static inline final VALUE_ARRAY_SCALAR_STRIDE_FIELD = 4;
+	public static inline final VALUE_ARRAY_REFERENCE_STRIDE_FIELD = 5;
+	public static inline final VALUE_ARRAY_WORD_BITS_FIELD = 6;
+	public static inline final VALUE_ARRAY_VALIDITY_FIELD = 7;
+	public static inline final VALUE_ARRAY_READ_BRIDGE_FIELD = 8;
+	public static inline final VALUE_ARRAY_WRITE_BRIDGE_FIELD = 9;
+	public static inline final VALUE_ARRAY_ACCEPTS_BRIDGE_FIELD = 10;
+	public static inline final VALUE_ARRAY_CAPACITY_FIELD = 11;
+	public static inline final VALUE_ARRAY_FORWARD_HEADER_FIELD = 12;
+
 	/** The `i32` array behind every map's hash index: a slot holds an entry position plus one, and zero means empty. */
 	public var mapIndexTypeIndex(default, null):Int = -1;
 
@@ -646,6 +663,16 @@ class WasmGcTypePlan {
 			var key = typeKey(element);
 			arrayTypes.set(key, {storageTypeIndex: reserveType(), wrapperTypeIndex: wrapperTypeIndex});
 		}
+		var needsValueArrays = false;
+		for (native in program.natives) if (native.symbol == "__value_array_alloc") needsValueArrays = true;
+		if (needsValueArrays) {
+			if (wrapperTypeIndex < 0) throw "Inline value arrays require an array wrapper type";
+			valueArrayWrapperTypeIndex = reserveType();
+			valueArrayI32LaneTypeIndex = reserveType();
+			valueArrayI64LaneTypeIndex = reserveType();
+			valueArrayReferenceLaneTypeIndex = reserveType();
+			valueArrayForwardLaneTypeIndex = reserveType();
+		}
 		for (element in iteratorElements)
 			iteratorTypeIndices.set(typeKey(element), reserveType());
 	}
@@ -754,12 +781,33 @@ class WasmGcTypePlan {
 			var plan = arrayPlan(element), wasmElement = valueType(element);
 			setType(plan.storageTypeIndex, true, [], Array({type: Value(wasmElement), mutable: true}));
 		}
-		if (arrayElements.length != 0)
-			setType(arrayPlan(arrayElements[0]).wrapperTypeIndex, true, [], Struct([
+		if (arrayElements.length != 0) {
+			var wrapper = arrayPlan(arrayElements[0]).wrapperTypeIndex, base:Array<WasmFieldType> = [
 				{type: Value(I32), mutable: true},
 				{type: Value(Ref({nullable: false, heap: WasmHeapType.Array})), mutable: true},
 				{type: Value(I32), mutable: true}
-			]));
+			];
+			setType(wrapper, valueArrayWrapperTypeIndex < 0, [], Struct(base));
+			if (valueArrayWrapperTypeIndex >= 0) {
+				// The inherited data field holds the scalar lane, or the reference lane when there are no scalar words.
+				// The extra lane is nullable so a one-lane value does not allocate a second backing array.
+				setType(valueArrayWrapperTypeIndex, true, [wrapper], Struct(base.concat([
+					{type: Value(Ref({nullable: true, heap: WasmHeapType.Array})), mutable: true},
+					{type: Value(I32), mutable: false}, {type: Value(I32), mutable: false},
+					{type: Value(I32), mutable: false}, {type: Value(I32), mutable: false},
+					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
+					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
+					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
+					{type: Value(I32), mutable: true},
+					{type: Value(Ref({nullable: true, heap: Type(wrapper)})), mutable: true}
+				])));
+				setType(valueArrayI32LaneTypeIndex, true, [], Array({type: Value(I32), mutable: true}));
+				setType(valueArrayI64LaneTypeIndex, true, [], Array({type: Value(I64), mutable: true}));
+				setType(valueArrayReferenceLaneTypeIndex, true, [], Array({type: Value(Ref({nullable: true, heap: Any})), mutable: true}));
+				// An ordinary dynamic header can forward to a lane descriptor without changing its identity.
+				setType(valueArrayForwardLaneTypeIndex, true, [], Array({type: Value(Ref({nullable: true, heap: Type(valueArrayWrapperTypeIndex)})), mutable: true}));
+			}
+		}
 		for (element in iteratorElements) {
 			var arrayIndex = arrayType(element),
 				iteratorIndex = iteratorType(element);

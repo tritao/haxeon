@@ -84,6 +84,13 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
+	public function valueArrayTarget():compiler.ir.IrValueLaneLayout.IrValueLaneTarget
+		return switch owner.defines.get("target") {
+			case "wasmgc" | "wasm-gc": WasmGc;
+			case "wasm32": Wasm32;
+			default: HashLink;
+		};
+
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 
