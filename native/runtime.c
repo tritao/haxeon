@@ -26,6 +26,7 @@
    by runtime domain below while remaining one translation unit, which lets the
    existing HDLL build commands and private helpers stay unchanged. */
 #include "runtime/core.c"
+#include "runtime/reactive.c"
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
 #include "runtime/dir_watch.c"

@@ -147,6 +147,13 @@ values changes, and updates the existing nodes. This record makes that idea the 
    verify runs. A compile-time
    purity contract (`docs/PURITY.md`) is deferred until these checks show real holes.
 
+   Tracking scopes belong to the thread executing the computation. A worker reading an Observable while the UI builds
+   must not append to the UI's collector or inherit its write restrictions. The active collector is thread-local and is
+   restored on normal and exceptional scope exit; an inactive thread holds no TLS root. HashLink roots a native
+   thread-local collector directly, avoiding a heap-allocated TLS slot for every scope. Wasm's synchronous stand-in
+   threads drop cleared worker slots. Reactive graph mutation and effect flushing remain owned by the application
+   thread; this isolation does not make shared graphs thread-safe.
+
 For example, a panel reads its model directly and constructs keyed children explicitly:
 
 ```haxe

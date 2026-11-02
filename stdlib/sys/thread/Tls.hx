@@ -17,6 +17,20 @@ class Tls<T> {
 
 	function set_value(value:T):T {
 		var index = threads.indexOf(ThreadState.current);
+		// Stand-in thread identities are never reused. Drop an explicitly cleared worker slot so
+		// repeated short-lived threads do not retain an unbounded list of empty entries.
+		if (value == null && ThreadState.current != 0) {
+			if (index >= 0) {
+				var last = threads.length - 1;
+				if (index != last) {
+					threads[index] = threads[last];
+					values[index] = values[last];
+				}
+				threads.resize(last);
+				values.resize(last);
+			}
+			return value;
+		}
 		if (index < 0) {
 			threads.push(ThreadState.current);
 			values.push(value);

@@ -525,7 +525,8 @@ if(NK_BUILD_EXAMPLES)
     endif()
     if(EXISTS "${NKUI_HAXEON_HAXE_BIN}")
         file(GLOB_RECURSE NKUI_HAXEON_DEPS CONFIGURE_DEPENDS
-            "${NKUI_HAXEON_DIR}/src/*.hx")
+            "${NKUI_HAXEON_DIR}/src/*.hx"
+            "${NKUI_HAXEON_DIR}/stdlib/*.hx")
         add_custom_target(nativekit_ui_showcase
             COMMAND ${CMAKE_COMMAND} -E env
                 "NATIVEKIT_BUILD_DIR=${CMAKE_BINARY_DIR}"

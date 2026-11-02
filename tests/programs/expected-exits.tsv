@@ -433,3 +433,4 @@ struct-inline-store-flow	42
 struct-native-store-forward	42
 struct-native-handler-flow	42
 observable-generic-runtime	42
+reactive-thread-isolation	42
