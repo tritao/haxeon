@@ -66,6 +66,7 @@ class UiContext {
 	var inspectionEnabled = false;
 	var inspectionNode:Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
+	var pendingFocusLabel:Null<String> = null;
 	var windowFocused:Bool = true;
 	var focusBeforeWindowBlur:Null<WidgetId> = null;
 	/** Called when an active animation needs another host frame. */
@@ -174,7 +175,7 @@ class UiContext {
 		hitTestIds = [];
 		disposed = false;
 		buildContext.setFocusRequester(function(id) { return focusWidget(id); });
-		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; commands.refresh(); });
+		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; pendingFocusLabel = buildContext.deferredFocusLabel; commands.refresh(); });
 		customCanvases = new Map();
 		customLists = new Map();
 		customGeometries = new Map();
@@ -618,9 +619,13 @@ class UiContext {
 		var routedInteractionRevision = interactionStates.revision;
 		var previousFocus = focus.focusedId;
 		focus.rebuild(next);
-		var requestedFocus = pendingFocus;
-		pendingFocus = null;
-		if (requestedFocus != null) focus.focus(requestedFocus);
+		var requestedFocus = pendingFocus, requestedLabel = pendingFocusLabel;
+		pendingFocus = null; pendingFocusLabel = null;
+		if (requestedFocus != null && !focus.focus(requestedFocus) && requestedLabel != null) {
+			// A restored context keeps rows from an earlier build, so the id asked for may belong to a build that was discarded.
+			var stand = focus.eligibleTreeItemByLabel(requestedLabel);
+			if (stand != null) focus.focus(stand.id);
+		}
 		var nextFocus = focus.focusedId;
 		var focusChanged = (previousFocus == null && nextFocus != null) ||
 			(previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)));

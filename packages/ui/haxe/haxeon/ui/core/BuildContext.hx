@@ -248,9 +248,13 @@ class BuildContext {
 	}
 
 	/** Focus a newly built or scrolled-into-view widget after geometry is resolved. */
-	public function requestFocusAfterLayout(id:WidgetId):Void {
+	public function requestFocusAfterLayout(id:WidgetId, ?label:String):Void {
+		deferredFocusLabel = label;
 		if (id != null) deferredFocusRequester(id);
 	}
+
+	/** The accessibility label given with the latest deferred focus request: a stand-in when the widget's id does not survive. */
+	public var deferredFocusLabel(default, null):Null<String>;
 
 	/** Provides the font collection used by text-layout-backed widgets. */
 	public function setFonts(fonts:FontCollection):Void {

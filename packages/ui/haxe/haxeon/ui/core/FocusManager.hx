@@ -88,6 +88,22 @@ class FocusManager {
 	public function eligibleNode(id:WidgetId):Null<RenderNode>
 		return id == null ? null : eligible.get(id.value);
 
+	/**
+		Stand-in for a request whose widget id did not survive a rebuild: the one eligible tree item with this label. Another
+		kind of widget with the same label (two Close buttons, a menu item named like a tree key) never matches, and nothing
+		is picked when two tree items share the label.
+	**/
+	public function eligibleTreeItemByLabel(label:String):Null<RenderNode> {
+		var found:Null<RenderNode> = null;
+		for (node in eligible) {
+			var semantics = node.semantics;
+			if (semantics == null || semantics.role != haxeon.ui.semantics.AccessibilityRole.TreeItem || semantics.label != label) continue;
+			if (found != null) return null;
+			found = node;
+		}
+		return found;
+	}
+
 	public function contains(id:WidgetId):Bool
 		return find(id) != null;
 
