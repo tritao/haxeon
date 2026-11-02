@@ -36,14 +36,14 @@ class ObservableTrackingMain {
 
 	static function runtimeSource():String
 		return 'package haxeon.reactive;\n'
-			+ 'class ReactiveRuntime { public static var tracking:Bool = false; '
+			+ 'class ReactiveRuntime { public static var tracking:Bool = false; public static var wrongThread:Bool = false; '
 			+ 'public static function isTracking():Bool return tracking; '
 			+ 'public static function recordObservableRead(source:ObservableSource, bit:Int, count:Int):ObservableSource { '
 			+ 'if (source == null) source = new ObservableSource(count); source.recordFieldRead(bit); return source; } '
 			+ 'public static function invalidateObservable(source:ObservableSource, bit:Int):Void '
 			+ 'if (source != null) source.invalidateField(bit); '
-			+ 'public static function observableWriteBlocked(source:ObservableSource, bit:Int):Bool '
-			+ 'return tracking && source != null && source.hasFieldReaders(bit); }\n';
+			+ 'public static function observableWriteStatus(source:ObservableSource, bit:Int):Int '
+			+ 'return source == null || !source.hasFieldReaders(bit) ? 0 : wrongThread ? 2 : tracking ? 1 : 0; }\n';
 
 	static function probeSource():String
 		return 'package haxeon.reactive;\n'
@@ -80,9 +80,10 @@ class ObservableTrackingMain {
 			+ 'model.ratio = -0.0; model.ratio = 0.0 / 0.0; model.ratio = 0.0 / 0.0; '
 			+ 'var threw = false, cacheWriteThrew = false; ReactiveRuntime.tracking = true; '
 			+ 'try model.count = 3 catch (_:Dynamic) threw = true; try model.cache = 9 catch (_:Dynamic) cacheWriteThrew = true; '
-			+ 'ReactiveRuntime.tracking = false; '
+			+ 'ReactiveRuntime.tracking = false; var ownerWriteThrew = false; ReactiveRuntime.wrongThread = true; '
+			+ 'try model.count = 4 catch (_:Dynamic) ownerWriteThrew = true; ReactiveRuntime.wrongThread = false; '
 			+ 'return count == 1 && item.value == 2 && base == 7 && constructedValue == 9 '
-			+ '&& helperConstructedWhileTracking.value == 8 && ignored == 0 && threw && !cacheWriteThrew && model.cache == 9 '
+			+ '&& helperConstructedWhileTracking.value == 8 && ignored == 0 && threw && ownerWriteThrew && !cacheWriteThrew && model.cache == 9 '
 			+ '&& ObservableProbe.created == 1 && ObservableProbe.readCount == 3 && ObservableProbe.readMask == 7 '
 			+ '&& ObservableProbe.writeCount == 4 && ObservableProbe.writeMask == 14 ? 42 : 0; }';
 }

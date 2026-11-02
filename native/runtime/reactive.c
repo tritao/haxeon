@@ -6,6 +6,17 @@
 #endif
 
 static REALTIME_REACTIVE_TLS vdynamic *realtime_reactive_collector;
+/* Module initialization claims the process-wide application thread. */
+static _Atomic(uintptr_t) realtime_reactive_owner;
+
+HL_PRIM bool HL_NAME(__reactive_claim_owner)( void ) {
+	uintptr_t current = (uintptr_t)&realtime_reactive_collector, expected = 0;
+	return atomic_compare_exchange_strong(&realtime_reactive_owner, &expected, current) || expected == current;
+}
+
+HL_PRIM bool HL_NAME(__reactive_is_owner)( void ) {
+	return atomic_load(&realtime_reactive_owner) == (uintptr_t)&realtime_reactive_collector;
+}
 
 HL_PRIM bool HL_NAME(__reactive_is_tracking)( void ) {
 	return realtime_reactive_collector != NULL;

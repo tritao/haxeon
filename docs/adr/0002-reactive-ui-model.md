@@ -151,8 +151,11 @@ values changes, and updates the existing nodes. This record makes that idea the 
    must not append to the UI's collector or inherit its write restrictions. The active collector is thread-local and is
    restored on normal and exceptional scope exit; an inactive thread holds no TLS root. HashLink roots a native
    thread-local collector directly, avoiding a heap-allocated TLS slot for every scope. Wasm's synchronous stand-in
-   threads drop cleared worker slots. Reactive graph mutation and effect flushing remain owned by the application
-   thread; this isolation does not make shared graphs thread-safe.
+   threads drop cleared worker slots. Runtime initialization binds the reactive graph to the application thread;
+   later subscriptions and writes to a source field with readers reject other threads before changing the graph. The
+   write check names the source type and field, and performs no thread check or allocation when that field has no
+   readers. Unobserved state may still be prepared on a worker. These checks run with the other tracked-write guards in
+   debug builds and gates; they do not make shared graphs thread-safe.
 
 For example, a panel reads its model directly and constructs keyed children explicitly:
 

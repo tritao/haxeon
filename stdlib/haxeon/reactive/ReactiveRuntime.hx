@@ -4,6 +4,9 @@ package haxeon.reactive;
 class ReactiveRuntime {
 	#if wasm
 	static final tracking = new sys.thread.Tls<ReactiveCollector>();
+	static final ownerThread:Int = sys.thread.ThreadState.current;
+	#else
+	static final ownerClaimed:Bool = reactiveClaimOwner();
 	#end
 	static final pendingEffects:Array<Effect> = [];
 	static var flushing:Bool = false;
@@ -31,6 +34,21 @@ class ReactiveRuntime {
 		tracking.value = value;
 		#else
 		reactiveSetCollector(value);
+		#end
+	}
+
+	/** Reactive subscriptions and observed writes belong to the application thread. */
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	static function claimSubscriptionOwner(source:ReactiveSource, fieldBit:Int):Void {
+		if (!isOwnerThread())
+			throw 'Cannot subscribe to reactive source ${source.reactiveId} field $fieldBit from a non-owner thread';
+	}
+
+	static function isOwnerThread():Bool {
+		#if wasm
+		return ownerThread == sys.thread.ThreadState.current;
+		#else
+		return ownerClaimed && reactiveIsOwner();
 		#end
 	}
 
@@ -111,14 +129,20 @@ class ReactiveRuntime {
 
 	/** A signal write is forbidden while tracking only after a computation has subscribed to its value. */
 	public static function assertSignalWritable(source:ReactiveSource, ?operation:String):Void {
-		if (isTracking() && source.hasFieldReaders(0))
+		if (!source.hasFieldReaders(0)) return;
+		if (!isOwnerThread())
+			throw 'Cannot write Signal.value of reactive source ${source.reactiveId} from a non-owner thread';
+		if (isTracking())
 			throw "Cannot write " + (operation == null ? "a signal, State or Observable field" : operation) +
 				" inside a reactive tracking scope";
 	}
 
-	/** An Observable field is protected only after another computation has subscribed to that field. */
-	public static function observableWriteBlocked(source:Null<ObservableSource>, fieldBit:Int):Bool
-		return isTracking() && source != null && source.hasFieldReaders(fieldBit);
+	/** 0 permits a write, 1 rejects a tracked write, and 2 rejects a write by another thread. */
+	public static function observableWriteStatus(source:Null<ObservableSource>, fieldBit:Int):Int {
+		if (source == null || !source.hasFieldReaders(fieldBit)) return 0;
+		if (!isOwnerThread()) return 2;
+		return isTracking() ? 1 : 0;
+	}
 
 	@:allow(haxeon.reactive.Effect)
 	static function enqueue(effect:Effect):Void {
@@ -155,6 +179,12 @@ class ReactiveRuntime {
 #if !wasm
 @:hlNative("haxeon_runtime", "__reactive_is_tracking")
 extern function reactiveIsTracking():Bool;
+
+@:hlNative("haxeon_runtime", "__reactive_claim_owner")
+extern function reactiveClaimOwner():Bool;
+
+@:hlNative("haxeon_runtime", "__reactive_is_owner")
+extern function reactiveIsOwner():Bool;
 
 @:hlNative("haxeon_runtime", "__reactive_current_collector")
 extern function reactiveCurrentCollector():Dynamic;

@@ -58,6 +58,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		}
 		var edge = findEdge(source, fieldBit);
 		if (edge == null) {
+			ReactiveRuntime.claimSubscriptionOwner(source, fieldBit);
 			edge = new ReactiveEdge(source, this, fieldBit);
 			if (edgesBySource == null) edgesBySource = new Map();
 			edgesBySource.set(dependencyId, edge);

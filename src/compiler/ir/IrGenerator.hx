@@ -3792,11 +3792,19 @@ class IrGenerator {
 			sourceName = '$' + 'observable-write-source:$serial';
 		localTypes.set(sourceName, sourceType);
 		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiver.type), ObservableStateField, sourceType));
-		var blocked = builder.call(ReactiveRuntimeClass + ".observableWriteBlocked",
-			[builder.load(sourceName, sourceType), builder.constInt(fieldBit)], Bool);
-		var blockedBlock = builder.createBlock(), allowedBlock = builder.createBlock();
-		builder.branch(blocked, blockedBlock, allowedBlock);
+		var statusName = '$' + 'observable-write-status:$serial';
+		localTypes.set(statusName, I32);
+		builder.store(statusName, builder.call(ReactiveRuntimeClass + ".observableWriteStatus",
+			[builder.load(sourceName, sourceType), builder.constInt(fieldBit)], I32));
+		var blockedBlock = builder.createBlock(), allowedBlock = builder.createBlock(), wrongThreadBlock = builder.createBlock(), trackingBlock = builder.createBlock();
+		builder.branch(builder.equal(builder.load(statusName, I32), builder.constInt(0)), allowedBlock, blockedBlock);
 		builder.select(blockedBlock);
+		builder.branch(builder.equal(builder.load(statusName, I32), builder.constInt(2)), wrongThreadBlock, trackingBlock);
+		builder.select(wrongThreadBlock);
+		var sourceLabel = switch receiver.type { case Obj(name): name + "." + field; default: field; };
+		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + sourceLabel +
+			" from a non-owner thread")));
+		builder.select(trackingBlock);
 		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + field +
 			" inside a reactive tracking scope")));
 		builder.select(allowedBlock);
