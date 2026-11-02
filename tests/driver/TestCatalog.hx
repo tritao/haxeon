@@ -50,6 +50,7 @@ class TestCatalog {
 		"OpportunityCensusMain",
 		"AllocationReportMain",
 		"GenericDynamicArgumentMain",
+		"GenericStructFunctionMain",
 		"FinalFieldMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",

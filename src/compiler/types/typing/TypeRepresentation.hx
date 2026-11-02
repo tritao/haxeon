@@ -143,20 +143,20 @@ class TypeRepresentation {
 		return {substitutions: substitutions, policies: policies};
 	}
 
-	/** Source Flat structs have layouts too, even though they are represented as class types in the semantic model. */
+	/** Value types need their exact storage and calling convention, including managed structs without a native layout. */
 	function requiresLayoutSpecialization(type:CompilerType):Bool
-		return NativeLayout.containsNativeLayoutType(type) || containsSourceNativeLayout(type, null);
+		return NativeLayout.containsNativeLayoutType(type) || containsExactValueLayout(type, null);
 
-	function containsSourceNativeLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+	function containsExactValueLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
-			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name)): true;
+			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name) || session.relations.isValueClass(type)): true;
 			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
-				containsSourceNativeLayout(representation, explored);
-			case TMap(key, value): containsSourceNativeLayout(key, explored) || containsSourceNativeLayout(value, explored);
+				containsExactValueLayout(representation, explored);
+			case TMap(key, value): containsExactValueLayout(key, explored) || containsExactValueLayout(value, explored);
 			case TFunction(arguments, result):
-				var found = containsSourceNativeLayout(result, explored);
+				var found = containsExactValueLayout(result, explored);
 				for (argument in arguments)
-					if (containsSourceNativeLayout(argument, explored))
+					if (containsExactValueLayout(argument, explored))
 						found = true;
 				found;
 			case TAnonymous(_, fields):
@@ -164,7 +164,7 @@ class TypeRepresentation {
 				if (walked.indexOf(fields) < 0) {
 					walked.push(fields);
 					for (field in fields)
-						if (containsSourceNativeLayout(field.type, walked))
+						if (containsExactValueLayout(field.type, walked))
 							found = true;
 				}
 				found;
