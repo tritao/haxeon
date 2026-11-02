@@ -11,6 +11,11 @@ class UiHostContext {
 	public final fonts:FontCollection;
 	/** Present only when the desktop host has enabled custom native chrome. */
 	public var windowControls:Null<WindowControls> = null;
+	/**
+		Reads where the window is now, for the application to save; null when the host has no native window. The
+		function returns null when the placement cannot be read, or is not worth keeping (minimized, fullscreen).
+	**/
+	public var windowPlacement:Null<Void->Null<WindowPlacement>> = null;
 	/** Application zoom is independent of the monitor pixel scale. */
 	public var zoom(get, set):Float;
 	var applicationZoom:Float = 1.0;

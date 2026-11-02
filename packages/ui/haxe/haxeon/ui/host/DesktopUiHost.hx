@@ -157,8 +157,15 @@ class DesktopUiHost {
 				if (NativeKit.nk_window_set_icons(window, pixels, images) != Result.Ok)
 					throw "Window icons failed: " + NativeKit.nk_last_error();
 			}
+			// A saved placement is applied while the window is still hidden (Windows), so it opens there without a jump.
+			// A placement that cannot be applied is ignored: the window keeps the place the system gave it.
+			var placement = options.placement;
+			if (placement != null && placement.width > 0 && placement.height > 0)
+				NativeKit.nk_window_set_bounds(window, placement.x, placement.y, placement.width, placement.height);
 			if (deferShowForIcon && NativeKit.nk_window_show(window, true) != Result.Ok)
 				throw "Window show failed: " + NativeKit.nk_last_error();
+			if (placement != null && placement.maximized)
+				NativeKit.nk_window_maximize(window);
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
 			var surfaceOptions = new NativeSurfaceOptions();
@@ -254,6 +261,30 @@ class DesktopUiHost {
 			var hostContext = new DesktopUiHostContext(fonts, pump, window, surface,
 				function() session.stop(), scheduleFrame);
 			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
+			// The bounds a maximized window restores to are the last ones read while it was not maximized.
+			var restoredPlacement:Null<WindowPlacement> = options.placement;
+			hostContext.windowPlacement = function():Null<WindowPlacement> {
+				var state = NativeKit.nk_window_get_state(window);
+				if (state.status != Result.Ok) return null;
+				var flags = state.out_state.get_flags();
+				if ((flags & (WindowStateFlags.Minimized | WindowStateFlags.Fullscreen)) != 0) return null;
+				var last = restoredPlacement;
+				if ((flags & WindowStateFlags.Maximized) != 0)
+					return last == null ? null : new WindowPlacement(last.x, last.y, last.width, last.height, true);
+				var position = NativeKit.nk_window_get_position(window);
+				var size = NativeKit.nk_window_get_size(window);
+				if (position.status != Result.Ok || size.status != Result.Ok) return null;
+				// The size is the client area's; the bounds set on the next run are the outer frame's.
+				var width = size.out_width, height = size.out_height;
+				var frame = NativeKit.nk_window_get_frame_extents(window);
+				if (frame.status == Result.Ok) {
+					width += frame.out_extents.get_left() + frame.out_extents.get_right();
+					height += frame.out_extents.get_top() + frame.out_extents.get_bottom();
+				}
+				var current = new WindowPlacement(position.out_x, position.out_y, width, height, false);
+				restoredPlacement = current;
+				return current;
+			};
 			var liveRuntime = new UiHostRuntime(session, hostContext, window, surface,
 				initialWidth, initialHeight, applySizeLimits);
 			runtime = liveRuntime;

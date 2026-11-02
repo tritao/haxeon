@@ -5,6 +5,8 @@ class DesktopUiHostOptions extends UiHostOptions {
 	/** Stable application identity, including Windows taskbar grouping. */
 	public var applicationId:Null<String> = null;
 	public var customTitlebar:Bool = false;
+	/** Where to put the window before it is first shown, such as where it was on the last run; null lets the system choose. */
+	public var placement:Null<WindowPlacement> = null;
 	/** Minimum application layout size, scaled by application zoom for native limits.
 	 * Zero leaves an axis unconstrained. */
 	public var minimumWidth:Int = 0;
