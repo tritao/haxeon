@@ -107,6 +107,7 @@ DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_14,_BYTES _BYTES _BY
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_15,_BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN);
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_16,_BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN);
 DEFINE_PRIM(_BOOL,native_trace_install,_STRING);
+DEFINE_PRIM(_F64,native_qpc,_NO_ARG);
 DEFINE_PRIM(_BOOL,native_pointer_close,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_BOOL,native_pointer_is_closed,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_alloc,_I32);
