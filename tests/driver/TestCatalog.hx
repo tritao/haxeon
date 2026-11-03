@@ -82,6 +82,7 @@ class TestCatalog {
 		"InvalidationMain",
 		"LambdaNameMain",
 		"IrProgramAssemblerMain",
+		"EnumInterpreterTypeMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",
 		"DeclarationAliasCacheMain",

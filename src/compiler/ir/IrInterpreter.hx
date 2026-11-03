@@ -234,12 +234,14 @@ class IrInterpreter {
 				var reference:InterpTypeRef = cast arguments[1], input:Dynamic = arguments[0];
 				switch reference.type {
 					case Obj(target): Std.isOfType(input, InterpObject) && cast(input, InterpObject).type == target;
+					case Enum(target): Std.isOfType(input, InterpEnum) && cast(input, InterpEnum).type == target;
 					default: false;
 				};
 			case "__std_is_of_type":
 				var reference:InterpTypeRef = cast arguments[1], input = arguments[0];
 				switch reference.type {
 					case Obj(target): objectIsOfType(input, target);
+					case Enum(target): Std.isOfType(input, InterpEnum) && cast(input, InterpEnum).type == target;
 					case Virtual(target): objectImplements(input, target);
 					case I32: switch Type.typeof(input) { case TInt: true; default: false; };
 					case F64: switch Type.typeof(input) { case TFloat: true; default: false; };
