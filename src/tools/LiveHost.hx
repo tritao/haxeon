@@ -250,7 +250,7 @@ class LiveHost {
 			recordForCompiler:Bool):String {
 		if (recordForCompiler)
 			try
-				File.saveContent(LiveRefusal.path(path), new LiveRefusal(current.moduleIdentity, revision, candidate.revision).encode())
+				sys.io.AtomicFile.write(LiveRefusal.path(path), new LiveRefusal(current.moduleIdentity, revision, candidate.revision).encode())
 			catch (error:Dynamic)
 				report('haxeon: could not tell the compiler about the refusal: ${Std.string(error)}');
 		banner('LIVE PATCH REFUSED (--strict-live): revision ${candidate.revision} was not applied; still running revision $revision',
