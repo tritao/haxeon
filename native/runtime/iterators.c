@@ -21,12 +21,25 @@ HL_PRIM bool HL_NAME(__iterator_has_next)(realtime_iterator *iterator) {
 	return iterator != NULL && iterator->values != NULL && iterator->position < iterator->values->size;
 }
 
+HL_PRIM realtime_iterator *HL_NAME(__value_iterator_new)(varray *array) {
+	if (!HL_NAME(__value_array_is)(array)) hl_error("Expected an inline value array");
+	return HL_NAME(__iterator_new)((vdynamic *)array);
+}
+
+HL_PRIM varray *HL_NAME(__value_iterator_array)(realtime_iterator *iterator) {
+	if (iterator == NULL || iterator->values == NULL) hl_error("Invalid iterator");
+	return iterator->values;
+}
+
+HL_PRIM int HL_NAME(__value_iterator_advance)(realtime_iterator *iterator) {
+	if (!HL_NAME(__iterator_has_next)(iterator)) hl_error("Iterator has no next value");
+	return iterator->position++;
+}
+
 HL_PRIM vdynamic *HL_NAME(__iterator_next)(realtime_iterator *iterator) {
 	if (!HL_NAME(__iterator_has_next)(iterator))
 		hl_error("Iterator has no next value");
-	hl_type *type = iterator->values->at;
-	void *source = hl_aptr(iterator->values, vbyte) + (size_t)iterator->position++ * (size_t)hl_type_size(type);
-	return hl_make_dyn(source, type);
+	return realtime_any_read(iterator->values, iterator->position++);
 }
 
 // Typed variants for the Float and Int element reads the compiler selects: reading the element in place avoids
@@ -35,6 +48,10 @@ HL_PRIM vdynamic *HL_NAME(__iterator_next)(realtime_iterator *iterator) {
 HL_PRIM double HL_NAME(__iterator_next_f64)(realtime_iterator *iterator) {
 	if (!HL_NAME(__iterator_has_next)(iterator))
 		hl_error("Iterator has no next value");
+	if (HL_NAME(__value_array_is)(iterator->values)) {
+		vdynamic *value = realtime_any_read(iterator->values, iterator->position++);
+		return hl_dyn_castd(&value, &hlt_dyn);
+	}
 	hl_type *type = iterator->values->at;
 	if (type->kind == HF64)
 		return hl_aptr(iterator->values, double)[iterator->position++];
@@ -45,6 +62,10 @@ HL_PRIM double HL_NAME(__iterator_next_f64)(realtime_iterator *iterator) {
 HL_PRIM int HL_NAME(__iterator_next_i32)(realtime_iterator *iterator) {
 	if (!HL_NAME(__iterator_has_next)(iterator))
 		hl_error("Iterator has no next value");
+	if (HL_NAME(__value_array_is)(iterator->values)) {
+		vdynamic *value = realtime_any_read(iterator->values, iterator->position++);
+		return hl_dyn_casti(&value, &hlt_dyn, &hlt_i32);
+	}
 	hl_type *type = iterator->values->at;
 	if (type->kind == HI32)
 		return hl_aptr(iterator->values, int)[iterator->position++];

@@ -571,6 +571,22 @@ for every array or element. Empty HashLink value arrays allocate their backing l
 working-set cost of reserving storage for arrays that remain empty. Ordinary typed accesses do not call these accessors.
 An unwritten slot of a non-null value array reads as null through a dynamic view, matching existing dynamic-array behavior.
 
+Explicit typed iterators retain the array and an index, and read values through the lane accessors. Their generated
+structural adapters use the scalar value calling convention, so iterating does not allocate a box per element, even
+with inlining disabled. Dynamic iteration and reflection materialize a value at the escape. HashLink array string
+conversion uses the array representation's read accessor, including for arrays nested in other arrays; it must not
+interpret the scalar lane as a contiguous array of object pointers. Allocation tests count zero allocations for 8 and
+1,024 typed reads on HashLink, Wasm32 and Wasm GC in both inlining modes.
+
+On the same machine as the original value-struct baseline, the iterator safety fix preserved the four tab-switch
+allocation medians at 112.6, 78.1, 74.5 and 92.9 KiB. Nine paired interaction captures with the previous and current
+native libraries matched on every action; hover-field was 12.4 KiB in every capture. The 30-cycle selection census
+counted 342,096 allocations, versus 342,877 at the original baseline. Wasm GC Showcase counts for full, static,
+text-heavy and editing were 5,896, 5,896, 5,896 and 12,622, respectively (original: 5,896, 5,896, 5,896, 12,835).
+Nine paired 500-cycle captures using the same editor bytecode and the previous/current native libraries had median RSS
+window growth of 30.00/4.06/0.78/4.84 MiB and 30.00/3.91/0.78/4.84 MiB. Their median paired first-window delta was
++0.15 MiB; an identical-runtime control had a +0.31 MiB paired median, so the difference is within observed variation.
+
 A dynamic array that is later checked as `Array<S>` may already have aliases to its original header. On HashLink the
 conversion builds and validates a lane descriptor before changing that header, then keeps the header as a forwarding
 handle to the descriptor. Its length and capacity track the descriptor across growth and shrinking. This extra

@@ -69,7 +69,7 @@ class IrValueArrayProgramRewrite {
 		for (slot in factory.layout.lanes.slots) if (slot.nullablePayload) nullableScalars = true;
 		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
-		for (native in factory.natives().concat(factory.helpers.natives())) if (!nativeNames.exists(native.name)) {
+		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives())) if (!nativeNames.exists(native.name)) {
 			nativeNames.set(native.name, true); program.natives.push(native);
 		}
 		// Dynamic views can be introduced after initial assembly; their Wasm dispatch also needs all concrete storage operations.

@@ -541,6 +541,7 @@ class WasmGcModuleBuilder {
 	}
 
 	static function isSupportedGcRuntimeNative(name:String):Bool {
+		if (name == "__value_iterator_new" || name == "__value_iterator_array" || name == "__value_iterator_advance") return true;
 		if (WasmGcValueArrays.supports(name)) return true;
 		if (WasmModuleSupport.mapNativeParts(name) != null || WasmGcDynamicArrays.isOperation(name))
 			return true;

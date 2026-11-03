@@ -4048,6 +4048,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
+	public function valueIteratorArray(iterator:IrValue, destination:Int, iteratorLocal:Int):Array<WasmInstruction> {
+		var iteratorType = plan.iteratorType(requireIteratorElement(iterator.type));
+		return [LocalGet(iteratorLocal), StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()), LocalSet(destination)];
+	}
+
+	public function valueIteratorAdvance(iterator:IrValue, destination:Int, iteratorLocal:Int):Array<WasmInstruction> {
+		var element = requireIteratorElement(iterator.type), iteratorType = plan.iteratorType(element), arrayType = plan.arrayType(element),
+			position = WasmGcTypePlan.iteratorPositionFieldIndex();
+		var body:Array<WasmInstruction> = [LocalGet(iteratorLocal), StructGet(iteratorType, position),
+			LocalGet(iteratorLocal), StructGet(iteratorType, WasmGcTypePlan.iteratorArrayFieldIndex()),
+			StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()), I32LtS, If(null),
+			LocalGet(iteratorLocal), StructGet(iteratorType, position), LocalSet(destination),
+			LocalGet(iteratorLocal), LocalGet(destination), I32Const(1), I32Add, StructSet(iteratorType, position), Else];
+		body = body.concat(trapInstructions()); body.push(End); return body;
+	}
+
 	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult {
 		var element = requireIteratorElement(iterator.type),
 			iteratorType = plan.iteratorType(element),

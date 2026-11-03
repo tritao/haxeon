@@ -1383,6 +1383,27 @@ class WasmFunctionLower {
 					for (native in context.program.natives)
 						if (native.name == name)
 							runtimeName = native.symbol;
+					if (runtimeName == "__value_iterator_new") {
+						lowerInstruction(body, IteratorNew(output, arguments[0]), values, functions, layout, allocator, globals, strings, methods, closureTypes);
+						return;
+					}
+					if (runtimeName == "__value_iterator_array" || runtimeName == "__value_iterator_advance") {
+						var iterator = arguments[0], iteratorLocal = requiredLocal(values, iterator.id), destination = requiredLocal(values, output.id);
+						if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
+							var gc:WasmGcRepresentation = cast context.representation.values;
+							emit(body, runtimeName == "__value_iterator_array" ? gc.valueIteratorArray(iterator, destination, iteratorLocal)
+								: gc.valueIteratorAdvance(iterator, destination, iteratorLocal));
+						} else if (runtimeName == "__value_iterator_array") {
+							emit(body, [LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET), LocalSet(destination)]);
+						} else {
+							var sequence:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_POSITION_OFFSET),
+								LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), I32LtS, If(null),
+								LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_POSITION_OFFSET), LocalSet(destination),
+								LocalGet(iteratorLocal), LocalGet(destination), I32Const(1), I32Add, I32Store(WasmLayout.ITERATOR_POSITION_OFFSET), Else];
+							sequence = sequence.concat(trapOrThrow(1)); sequence.push(End); emit(body, sequence);
+						}
+						return;
+					}
 					var outputLocal = output.type == Void ? -1 : requiredLocal(values, output.id),
 						interop = context.representation.interop,
 						represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,

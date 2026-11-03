@@ -156,8 +156,7 @@ HL_PRIM vdynamic *HL_NAME(__reflect_array_get)(vdynamic *value, int index) {
 	if (!value || value->t->kind != HARRAY) hl_error("Value is not an array");
 	varray *array = (varray *)value;
 	hl_array_check(array, index);
-	return hl_make_dyn(hl_aptr(array, vbyte) + index * hl_type_size(array->at),
-		array->at);
+	return realtime_any_read(array, index);
 }
 
 HL_PRIM int HL_NAME(__reflect_array_length)(vdynamic *value) {

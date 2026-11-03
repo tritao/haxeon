@@ -48,7 +48,12 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 # Run declared conformance and struct array places with inlining both enabled and disabled.
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
-		for value_case in member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=IteratorCensus.prepare --export=IteratorCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-iterator-census-inline-$inline.wasm" \
+			--entry=struct-array-iterator-escape --root=tests/programs tests/programs/struct-array-iterator-escape.hx
+		for value_case in struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -153,7 +158,7 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	for value_case in member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+	for value_case in struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -361,7 +366,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
+    for (const name of ["struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         if (result.failure === undefined && result.exit !== 42)
@@ -501,6 +506,16 @@ async function run(name, target) {
 	const neutralInline = (await WebAssembly.instantiate(neutralInlineBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
 	if (neutralInline.exports.main() !== 42) failures.push(`inlined null method exception (wasm32 runtime-neutral, inline=${inline})`);
 	for (const target of ["wasm32", "wasm-gc"]) {
+	  const iteratorBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-iterator-census-inline-${inline}.wasm`));
+	  const iterator = (await WebAssembly.instantiate(iteratorBytes, {haxeon_runtime: runtime, std})).instance;
+	  const iteratorCount = target === "wasm32" ? iterator.exports["haxeon.memory.allocation_count"] : iterator.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    iterator.exports["IteratorCensus.prepare"](n);
+	    const before = iteratorCount(), result = iterator.exports["IteratorCensus.perform"](), allocations = iteratorCount() - before;
+	    if (result !== n * (n - 1) / 2 || allocations !== 0)
+	      failures.push(`struct iterator census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: struct iterator census on ${target}, inline=${inline}, n=${n}`);
+	  }
 	  const signalBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-signal-census-inline-${inline}.wasm`));
 	  const signal = (await WebAssembly.instantiate(signalBytes, {haxeon_runtime: runtime, std})).instance;
 	  signal.exports["SignalCensus.prepare"]();

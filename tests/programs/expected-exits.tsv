@@ -459,3 +459,6 @@ null-method-inlining	42
 generic-struct-reflection	42
 struct-reflection	42
 generic-struct-signal-allocations	42
+struct-array-iterator-escape	42
+struct-array-reflection-escape	42
+struct-array-string-escape	42

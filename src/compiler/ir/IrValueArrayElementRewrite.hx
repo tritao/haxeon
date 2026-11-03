@@ -20,6 +20,12 @@ class IrValueArrayElementRewrite {
 			for (located in block.instructions) {
 				var instruction = located.value;
 				switch instruction {
+					case IteratorNew(out, array) if (Type.enumEq(array.type, arrayType)):
+						helpers.useIterator();
+						instruction = Call(out, helpers.iteratorNewName(), [array]); changed = true;
+					case IteratorNext(out, iterator) if (Type.enumEq(iterator.type, Iterator(element))):
+						helpers.useIterator();
+						instruction = Call(out, helpers.iteratorNextName(), [iterator]); changed = true;
 					case ArrayGet(out, array, index) if (Type.enumEq(array.type, arrayType)):
 						if (!Type.enumEq(out.type, element)) throw 'Wrong inline array read type ${out.type}';
 						instruction = Call(out, helpers.getName(), [array, index]); changed = true;

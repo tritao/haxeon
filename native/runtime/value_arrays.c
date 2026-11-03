@@ -3,9 +3,11 @@
 
 /* HARRAY has the same runtime type identity as an ordinary HashLink array, but this distinct type word lets dynamic
  * array operations recognize the extended header without reading past an ordinary varray. */
-static hl_type realtime_value_array_type = { .kind = HARRAY };
+static vdynamic *realtime_value_array_access(varray *array, int index);
+static hl_array_access realtime_value_array_accessors = { realtime_value_array_access };
+static hl_type realtime_value_array_type = { .kind = HARRAY, .array_access = &realtime_value_array_accessors };
 /* A pre-existing Array<Dynamic> header cannot grow; its data field roots this same lane descriptor instead. */
-static hl_type realtime_value_array_forward_type = { .kind = HARRAY };
+static hl_type realtime_value_array_forward_type = { .kind = HARRAY, .array_access = &realtime_value_array_accessors };
 
 typedef struct {
 	varray array;
@@ -179,6 +181,10 @@ HL_PRIM void HL_NAME(__value_array_set_bridge)(varray *value, vclosure *read, vc
 	hl_gc_store_ref(&array->dynamic_read, read, &hlt_dyn);
 	hl_gc_store_ref(&array->dynamic_write, write, &hlt_dyn);
 	hl_gc_store_ref(&array->dynamic_accepts, accepts, &hlt_dyn);
+}
+
+static vdynamic *realtime_value_array_access(varray *array, int index) {
+	return HL_NAME(__value_array_dynamic_read)(array, index);
 }
 
 HL_PRIM vdynamic *HL_NAME(__value_array_dynamic_read)(varray *value, int index) {

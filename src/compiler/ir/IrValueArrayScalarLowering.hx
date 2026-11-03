@@ -9,7 +9,8 @@ class IrValueArrayScalarLowering {
 		var suffix = ":" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element));
 		for (fn in program.functions) if (StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)
 				&& StringTools.endsWith(fn.name, suffix)
-				&& (expandAll || StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-"))) helpers.set(fn.name, fn);
+				&& (expandAll || StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-")
+					|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "iterator-next:"))) helpers.set(fn.name, fn);
 		program.functions = [for (fn in program.functions) rewriteFunction(fn, helpers)];
 	}
 
