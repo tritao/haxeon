@@ -107,6 +107,7 @@ DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_14,_BYTES _BYTES _BY
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_15,_BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN);
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_invoke_16,_BYTES _BYTES _BYTES _BYTES _BYTES _BOOL _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN _DYN);
 DEFINE_PRIM(_BOOL,native_trace_install,_STRING);
+DEFINE_PRIM(_F64,native_qpc,_NO_ARG);
 DEFINE_PRIM(_BOOL,native_pointer_close,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_BOOL,native_pointer_is_closed,_ABSTRACT(native_pointer));
 DEFINE_PRIM(_ABSTRACT(native_pointer),native_pointer_alloc,_I32);
@@ -642,5 +643,6 @@ DEFINE_PRIM(_VOID,__host_install_stop_signals,_NO_ARG);
 DEFINE_PRIM(_BOOL,__host_stop_requested,_NO_ARG);
 DEFINE_PRIM(_STRING,__host_regular_file_identity,_STRING);
 DEFINE_PRIM(_ABSTRACT(realtime_process_identity),__host_process_identity_open,_I32 _STRING);
+DEFINE_PRIM(_BOOL,__host_process_alive,_I32 _STRING);
 DEFINE_PRIM(_BOOL,__host_process_identity_terminate,_ABSTRACT(realtime_process_identity));
 DEFINE_PRIM(_VOID,__host_process_identity_close,_ABSTRACT(realtime_process_identity));

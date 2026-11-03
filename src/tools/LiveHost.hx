@@ -30,6 +30,9 @@ class LiveHost {
 		if (args.length != 3)
 			throw "Usage: LiveHost <module.hl> <entry> <arguments-json>";
 		var path = args[0], entry = args[1], arguments = args[2];
+		// An application that starts another copy of itself (a second window) starts it through a host the same way.
+		Sys.putEnv("HAXEON_LIVE_MODULE", FileSystem.absolutePath(path));
+		Sys.putEnv("HAXEON_LIVE_ENTRY", entry);
 		var stamp = readStamp(path);
 		var description = readDescription(path);
 		// The compiler publishes a patch before the full module, so the description can lead the module files.

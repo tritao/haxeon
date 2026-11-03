@@ -10,6 +10,11 @@ class ProfileNativeTrace {
   public static function install(library:String):Bool {
     return nativeTraceInstall(library);
   }
+
+  /** The performance counter's ticks (Windows: QueryPerformanceCounter, the clock of NK_LATENCY_TRACE and of an input hook). */
+  public static function ticks():Float {
+    return nativeQpc();
+  }
 }
 
 #if wasm
@@ -17,7 +22,13 @@ class ProfileNativeTrace {
 function nativeTraceInstall(library:String):Bool {
   return false;
 }
+function nativeQpc():Float {
+  return Sys.time() * 1e9;
+}
 #else
 @:hlNative("haxeon_runtime", "native_trace_install")
 extern function nativeTraceInstall(library:String):Bool;
+
+@:hlNative("haxeon_runtime", "native_qpc")
+extern function nativeQpc():Float;
 #end

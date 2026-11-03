@@ -407,6 +407,14 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	BOOL started = CreateProcessW(NULL, command_line, NULL, NULL, TRUE, flags, environment, directory,
 		&startup.StartupInfo, &information);
 	DWORD error = started ? ERROR_SUCCESS : GetLastError();
+	// A job that does not allow breakaway (a sandbox, a CI runner, some terminals) refuses CREATE_BREAKAWAY_FROM_JOB
+	// with ERROR_ACCESS_DENIED. The detached child then starts inside that job instead: it still outlives this
+	// process, but not the job.
+	if (!started && detached && error == ERROR_ACCESS_DENIED) {
+		started = CreateProcessW(NULL, command_line, NULL, NULL, TRUE, flags & ~CREATE_BREAKAWAY_FROM_JOB, environment,
+			directory, &startup.StartupInfo, &information);
+		error = started ? ERROR_SUCCESS : GetLastError();
+	}
 	DeleteProcThreadAttributeList(attributes); free(attributes);
 	realtime_child_handle_close(&child_stdin); realtime_child_handle_close(&child_stdout);
 	realtime_child_handle_close(&child_stderr);

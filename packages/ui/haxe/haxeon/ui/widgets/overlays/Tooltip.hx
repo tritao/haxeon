@@ -140,8 +140,9 @@ class Tooltip implements View {
 				if (moved && !state.value && (showWhen == null || showWhen())) state.update(true);
 			});
 			anchorNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
-			tooltipNode.on(UiEventKind.HoverEnter, function(_) { state.update(true); });
-			tooltipNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
+			// A tooltip never takes pointer input: in a dense list it can be drawn over the next row, and that row must get the
+			// pointer. Hovering the tooltip therefore does not keep it open; it belongs to its anchor alone.
+			tooltipNode.walk(function(node) { node.hitTestSelf = false; });
 			root.hitTestSelf = false;
 			return root;
 		});
