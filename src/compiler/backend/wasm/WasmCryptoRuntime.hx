@@ -38,7 +38,7 @@ class WasmCryptoRuntime {
 			if (native.symbol != "haxeon_sha256" || type.parameters.length != 6 || type.results.length != 0)
 				throw 'Invalid crypto kernel signature "${native.symbol}"';
 			for (parameter in type.parameters)
-				if (parameter != compiler.backend.wasm.WasmTypes.WasmValueType.I32)
+				if ((switch (parameter) { case compiler.backend.wasm.WasmTypes.WasmValueType.I32: false; default: true; }))
 					throw 'Invalid crypto kernel argument "${native.symbol}"';
 			functions.set(native.name, index);
 		}

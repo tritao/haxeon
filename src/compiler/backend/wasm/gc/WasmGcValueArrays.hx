@@ -44,6 +44,7 @@ class WasmGcValueArrays {
 				case "__array_slice_any": rangeUsed = true; dynamicOperations.set("slice", true);
 				case "__array_splice_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
 				case "__array_pop_any": resizeUsed = true; dynamicOperations.set("resize", true);
+				case "__array_remove_at_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("remove_at", true);
 				case "__array_shift_any", "__array_remove_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
 				case "__array_concat_any": rangeUsed = true; dynamicOperations.set("concat", true);
 				default:
@@ -95,20 +96,21 @@ class WasmGcValueArrays {
 			retypeAllocator = module.addFunction(allocate(plan, allocator, throws));
 			break;
 		}
-		for (operation in ["resize", "reverse", "copy", "slice", "splice", "concat"]) if (dynamicOperations.exists(operation)) {
+		for (operation in ["resize", "reverse", "copy", "slice", "splice", "concat", "remove_at"]) if (dynamicOperations.exists(operation)) {
 			var arguments:Array<IrType> = switch operation {
-				case "resize": [Array(Dyn), I32];
+				case "resize", "remove_at": [Array(Dyn), I32];
 				case "slice", "splice": [Array(Dyn), I32, I32];
 				case "concat": [Array(Dyn), Array(Dyn)];
 				default: [Array(Dyn)];
 			};
-			var result:IrType = operation == "resize" || operation == "reverse" ? Void : Array(Dyn);
+			var result:IrType = operation == "resize" || operation == "reverse" || operation == "remove_at" ? Void : Array(Dyn);
 			var internal:IrNative = {name:"$value-array:runtime:" + operation, library:"haxeon_runtime", symbol:"__value_array_" + operation, arguments:arguments, result:result};
 			var fn = switch operation {
 				case "resize": resize(plan, internal, throws, ensureIndex, clearIndex);
 				case "reverse": reverse(plan, internal, throws, swapIndex);
 				case "copy", "slice": rangeCopy(plan, internal, throws, newLikeIndex, moveIndex);
 				case "splice": splice(plan, internal, throws, newLikeIndex, moveIndex, resizeIndex);
+				case "remove_at": removeAt(plan, internal, throws, moveIndex, resizeIndex);
 				case "concat": concat(plan, internal, throws, newLikeIndex, moveIndex);
 				default: throw "Invalid dynamic inline array operation";
 			};

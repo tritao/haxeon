@@ -114,33 +114,33 @@ class IrVerifier {
 		if (native.pointerSize != null && native.pointerSize != 4 && native.pointerSize != 8)
 			throw 'C native "${native.name}" has invalid pointer-size metadata';
 		if (native.fixedResult != null
-			&& (native.result != ManagedBytes || !validAggregateLayout(native.fixedResult.size, native.fixedResult.alignment)))
+			&& ((switch (native.result) { case ManagedBytes: false; default: true; }) || !validAggregateLayout(native.fixedResult.size, native.fixedResult.alignment)))
 			throw 'C native "${native.name}" has invalid fixed aggregate result metadata';
 		for (index in 0...native.argumentModes.length)
 			switch native.argumentModes[index] {
 				case BytesInput(lengthArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
 				case BytesInputOutput(lengthArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !validByteInputCount(native.arguments[lengthArgument]))
 						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
 				case BytesOutput(sizeArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| sizeArgument < 0
 						|| sizeArgument >= native.arguments.length
-						|| native.arguments[sizeArgument] != ManagedBytes)
+						|| (switch (native.arguments[sizeArgument]) { case ManagedBytes: false; default: true; }))
 						throw 'C native "${native.name}" has invalid output-buffer argument metadata';
 				case BytesSize:
-					if (native.arguments[index] != ManagedBytes)
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; }))
 						throw 'C native "${native.name}" has invalid output-buffer size metadata';
 				case FixedInput(size, alignment, _) | FixedValue(size, alignment, _) | FixedOutput(size, alignment, _) | FixedInputOutput(size, alignment, _):
-					if (native.arguments[index] != ManagedBytes || !validAggregateLayout(size, alignment))
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; }) || !validAggregateLayout(size, alignment))
 						throw 'C native "${native.name}" has invalid fixed output layout metadata';
 				case Value | Output | InputOutput:
 			}
@@ -148,7 +148,7 @@ class IrVerifier {
 
 	/** Counted byte inputs use the integer width declared by the native ABI. */
 	public static function validByteInputCount(type:IrType):Bool
-		return type == I32 || type == I64;
+		return (switch (type) { case I32: true; default: false; }) || (switch (type) { case I64: true; default: false; });
 
 	static function validAggregateLayout(size:Int, alignment:Int):Bool
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
@@ -226,11 +226,11 @@ class IrVerifier {
 						throw 'Wrong return type in ${fn.name}';
 				case Throw(value), Rethrow(value):
 					verifyUse(value, id, block.instructions.length, values, definitions, graph);
-					if (value.type != Dyn)
+					if ((switch (value.type) { case Dyn: false; default: true; }))
 						throw "IR throw value is not Dyn";
 				case Branch(condition, _, _):
 					verifyUse(condition, id, block.instructions.length, values, definitions, graph);
-					if (condition.type != Bool)
+					if ((switch (condition.type) { case Bool: false; default: true; }))
 						throw "IR branch condition is not Bool";
 				case Jump(_):
 			}
@@ -318,7 +318,7 @@ class IrVerifier {
 					default: throw 'IR integer constant ${out.id} must produce I32 or I64';
 				}
 			case ConstFloat(out, _):
-				if (out.type != F64 && out.type != F32)
+				if ((switch (out.type) { case F64: false; default: true; }) && (switch (out.type) { case F32: false; default: true; }))
 					throw 'IR float constant ${out.id} must produce F32 or F64';
 			case ConstString(out, _):
 				expect(out, Bytes);
@@ -356,23 +356,23 @@ class IrVerifier {
 			case ToDyn(out, value):
 				require(values, value);
 				// Boxing a primitive may keep it on record as a nullable of its own type.
-				if (out.type != Dyn && !(nullableOf(out.type) != null && sameType(nullableOf(out.type), value.type)))
+				if ((switch (out.type) { case Dyn: false; default: true; }) && !(nullableOf(out.type) != null && sameType(nullableOf(out.type), value.type)))
 					throw 'IR dynamic conversion must produce Dyn or the nullable of its input';
 			case IntToFloat(out, value):
 				require(values, value);
-				if (value.type != I32 || out.type != F64)
+				if ((switch (value.type) { case I32: false; default: true; }) || (switch (out.type) { case F64: false; default: true; }))
 					throw "IR Int-to-Float conversion requires I32 input and F64 output";
 			case IntToInt64(out, value):
 				require(values, value);
-				if (value.type != I32 || out.type != I64)
+				if ((switch (value.type) { case I32: false; default: true; }) || (switch (out.type) { case I64: false; default: true; }))
 					throw "IR Int-to-Int64 conversion requires I32 input and I64 output";
 			case FloatToInt(out, value):
 				require(values, value);
-				if (value.type != F64 || out.type != I32)
+				if ((switch (value.type) { case F64: false; default: true; }) || (switch (out.type) { case I32: false; default: true; }))
 					throw "IR Float-to-Int conversion requires F64 input and I32 output";
 			case FloatToFloat(out, value):
 				require(values, value);
-				if (!((value.type == F64 && out.type == F32) || (value.type == F32 && out.type == F64)))
+				if (!(((switch (value.type) { case F64: true; default: false; }) && (switch (out.type) { case F32: true; default: false; })) || ((switch (value.type) { case F32: true; default: false; }) && (switch (out.type) { case F64: true; default: false; }))))
 					throw "IR Float-to-Float conversion requires F64/F32 or F32/F64 types";
 			case SafeCast(out, value):
 				require(values, value);
@@ -381,7 +381,7 @@ class IrVerifier {
 			case BeginTry(catchBlock, afterBlock):
 			case EndTry(_):
 			case Catch(out):
-				if (out.type != Dyn)
+				if ((switch (out.type) { case Dyn: false; default: true; }))
 					throw 'IR catch value must be Dyn';
 			case GlobalGet(out, name):
 				if (!globals.exists(name))
@@ -404,23 +404,23 @@ class IrVerifier {
 				require(values, a);
 				require(values, b);
 			case Mod(out, a, b):
-				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })))
 					throw "IR modulo requires matching integer values";
 				require(values, a);
 				require(values, b);
 			case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
-				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+				if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })))
 					throw "IR bitwise operation requires matching integer values";
 				require(values, a);
 				require(values, b);
 			case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
-				if (!sameType(out.type, a.type) || (a.type != I32 && a.type != I64) || b.type != I32)
+				if (!sameType(out.type, a.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })) || (switch (b.type) { case I32: false; default: true; }))
 					throw "IR shift requires an Int or Int64 value and an Int count";
 				require(values, a);
 				require(values, b);
 			case Less(out, a, b), LessEqual(out, a, b):
 				expect(out, Bool);
-				if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F32 && a.type != F64))
+				if (!sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; }) && (switch (a.type) { case F32: false; default: true; }) && (switch (a.type) { case F64: false; default: true; })))
 					throw 'IR ordered comparison requires matching numeric values';
 				require(values, a);
 				require(values, b);
@@ -445,7 +445,7 @@ class IrVerifier {
 				}
 				if (name == IrReceiverCheck.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
-					if (args.length != 1 || out.type != Void || !isReference(args[0].type)) throw "Invalid receiver check";
+					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || !isReference(args[0].type)) throw "Invalid receiver check";
 					require(values, args[0]);
 					return;
 				}
@@ -458,9 +458,9 @@ class IrVerifier {
 					if (args.length != expected) throw 'Wrong scalar reference intrinsic arity for $name';
 					for (arg in args) require(values, arg);
 					var element = IrHlScalarRef.element(name == IrHlScalarRef.ADDRESS ? out.type : args[0].type);
-					if (element == null || element == Void || IrHlScalarRef.element(element) != null
+					if (element == null || (switch (element) { case Void: true; default: false; }) || IrHlScalarRef.element(element) != null
 						|| !sameType(name == IrHlScalarRef.ADDRESS ? args[0].type : name == IrHlScalarRef.LOAD ? out.type : args[1].type, element)
-						|| (name == IrHlScalarRef.STORE && out.type != Void))
+						|| (name == IrHlScalarRef.STORE && (switch (out.type) { case Void: false; default: true; })))
 						throw 'Invalid scalar reference intrinsic type for $name';
 					return;
 				}
@@ -610,7 +610,7 @@ class IrVerifier {
 					case Iterator(element): expect(out, element);
 					default: throw 'IR next requires an Iterator value';
 				}
-				if (out.type == Void)
+				if ((switch (out.type) { case Void: true; default: false; }))
 					throw 'IR iterator next cannot produce Void';
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
@@ -809,7 +809,7 @@ class IrVerifier {
 						}
 					default: false;
 				};
-			default: left == right;
+			default: Type.enumEq(left, right);
 		};
 
 	static function isReference(type:IrType):Bool
@@ -860,7 +860,7 @@ class IrVerifier {
 					default: false;
 				};
 			case Array(actualElement): switch expected {
-					case Array(expectedElement): expectedElement == Dyn ? isReference(actualElement) : sameType(actualElement, expectedElement);
+					case Array(expectedElement): (switch (expectedElement) { case Dyn: true; default: false; }) ? isReference(actualElement) : sameType(actualElement, expectedElement);
 					case Dyn: true;
 					default: false;
 				};

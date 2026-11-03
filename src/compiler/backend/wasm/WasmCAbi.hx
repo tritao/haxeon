@@ -100,7 +100,7 @@ class WasmCAbi {
 				}
 		], floatArguments = [
 			for (index in 0...argumentDescriptors.length)
-				native.argumentModes[index] == Value && argumentDescriptors[index] == FLOAT
+				(switch (native.argumentModes[index]) { case Value: true; default: false; }) && argumentDescriptors[index] == FLOAT
 			];
 		if (native.fixedResult == null)
 			return new WasmCAbi(directArguments, null, false, floatArguments, floatResult);

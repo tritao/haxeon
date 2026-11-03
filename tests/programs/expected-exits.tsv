@@ -459,6 +459,14 @@ null-method-inlining	42
 generic-struct-reflection	42
 struct-reflection	42
 generic-struct-signal-allocations	42
+enum-value-map	42
+enum-custom-equality	42
+enum-dynamic-equality	42
+enum-reflected-array	42
+enum-generic-owner	42
+enum-dynamic-writes	42
+enum-dynamic-allocations	42
+enum-native-fallback	42
 struct-array-iterator-escape	42
 struct-array-reflection-escape	42
 struct-array-string-escape	42

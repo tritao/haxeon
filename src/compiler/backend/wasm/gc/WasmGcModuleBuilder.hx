@@ -92,8 +92,8 @@ class WasmGcModuleBuilder {
 			requiresLinearMemory = false;
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
-				if (native.result == Bytes
-					|| (native.result == ManagedBytes && native.pointerLength != null)
+				if ((switch (native.result) { case Bytes: true; default: false; })
+					|| ((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null)
 					|| native.fixedResult != null)
 					requiresLinearMemory = true;
 				for (index in 0...native.argumentModes.length)
@@ -101,7 +101,7 @@ class WasmGcModuleBuilder {
 						case BytesInput(_) | BytesInputOutput(_) | BytesOutput(_) | BytesSize | Output | InputOutput | FixedInput(_, _, _) |
 							FixedValue(_, _, _) | FixedOutput(_, _, _) | FixedInputOutput(_, _, _):
 							requiresScratchMemory = true;
-						case Value if (native.arguments[index] == Bytes || native.arguments[index] == ManagedBytes):
+						case Value if ((switch (native.arguments[index]) { case Bytes: true; default: false; }) || (switch (native.arguments[index]) { case ManagedBytes: true; default: false; })):
 							requiresScratchMemory = true;
 						case Value:
 					}
@@ -350,7 +350,7 @@ class WasmGcModuleBuilder {
 						throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
 					validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
 				}
-				if (native.result == ManagedBytes && native.pointerLength != null) {
+				if ((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null) {
 					var lengthNative = requiredCNativeBySymbol(program, native.pointerLength);
 					validateGcCNative(lengthNative);
 					validateGcPointerLength(native, lengthNative);
@@ -388,7 +388,7 @@ class WasmGcModuleBuilder {
 							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
-						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || receiver.type == Dyn)):
+						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || (switch (receiver.type) { case Dyn: true; default: false; }))):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
@@ -511,14 +511,14 @@ class WasmGcModuleBuilder {
 					for (index in 0...native.arguments.length)
 						new IrValue(index, native.name + "_argument_" + index, native.arguments[index])
 				], result = new IrValue(-1, native.name + "_result",
-					native.result), resultLocal = native.result == Void ? -1 : allocateLocal(plan.valueType(native.result)),
+					native.result), resultLocal = (switch (native.result) { case Void: true; default: false; }) ? -1 : allocateLocal(plan.valueType(native.result)),
 					bodyResult = functionRepresentation.lowerRuntimeCall(native.symbol, result, arguments, resultLocal,
 						[for (index in 0...arguments.length) index]),
 					body = switch bodyResult {
 						case Handled(instructions): instructions;
 						case UseDefault: throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
 					};
-				if (native.result != Void)
+				if ((switch (native.result) { case Void: false; default: true; }))
 					body.push(LocalGet(resultLocal));
 				body.push(Return);
 				functions.set(native.name, module.addFunction(new WasmFunction(native.name, functionType, locals, body)));
@@ -608,29 +608,29 @@ class WasmGcModuleBuilder {
 					catch (error:Dynamic)
 						throw 'Wasm GC C native "${native.name}" value argument $index is unsupported: $error';
 				case BytesInput(lengthArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
 						throw 'Wasm GC C native "${native.name}" requires byte input with an integer length';
 				case BytesInputOutput(lengthArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
 						throw 'Wasm GC C native "${native.name}" requires mutable byte input with an integer length';
 				case BytesOutput(sizeArgument):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| sizeArgument < 0
 						|| sizeArgument >= native.arguments.length
-						|| native.arguments[sizeArgument] != ManagedBytes
-						|| native.argumentModes[sizeArgument] != BytesSize)
+						|| (switch (native.arguments[sizeArgument]) { case ManagedBytes: false; default: true; })
+						|| (switch (native.argumentModes[sizeArgument]) { case BytesSize: false; default: true; }))
 						throw 'Wasm GC C native "${native.name}" requires a GC byte size pointer for output buffers';
 				case BytesSize:
-					if (native.arguments[index] != ManagedBytes)
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; }))
 						throw 'Wasm GC C native "${native.name}" requires a GC byte view for output size pointers';
 				case FixedInput(size, alignment, _) | FixedValue(size, alignment, _) | FixedOutput(size, alignment, _) | FixedInputOutput(size, alignment, _):
-					if (native.arguments[index] != ManagedBytes
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; })
 						|| size <= 0
 						|| size > 0x10000000
 						|| alignment <= 0
@@ -638,7 +638,7 @@ class WasmGcModuleBuilder {
 						|| (alignment & (alignment - 1)) != 0)
 						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer with a valid fixed aggregate layout';
 				case Output | InputOutput:
-					if (native.arguments[index] != ManagedBytes)
+					if ((switch (native.arguments[index]) { case ManagedBytes: false; default: true; }))
 						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer for scalar output pointers';
 			}
 		switch native.result {
@@ -669,7 +669,7 @@ class WasmGcModuleBuilder {
 			for (blockId in graph.order)
 				for (located in graph.block(blockId).instructions)
 					switch located.value {
-						case Call(output, name, _) if (output.type != Void):
+						case Call(output, name, _) if ((switch (output.type) { case Void: false; default: true; })):
 							var parts = WasmModuleSupport.mapNativeParts(name);
 							if (parts != null && (parts.operation == "keys" || parts.operation == "values")) {
 								var native:Null<IrNative> = null;
@@ -689,30 +689,30 @@ class WasmGcModuleBuilder {
 	}
 
 	static function validateGcPointerLength(pointer:IrCNative, length:IrCNative):Void {
-		if (length.result != I32 || pointer.arguments.length != length.arguments.length)
+		if ((switch (length.result) { case I32: false; default: true; }) || pointer.arguments.length != length.arguments.length)
 			throw 'Wasm GC C native "${pointer.name}" has an incompatible byte-result length import';
 		for (index in 0...pointer.arguments.length)
 			if (!Type.enumEq(pointer.arguments[index], length.arguments[index])
-				|| pointer.argumentModes[index] != Value
-				|| length.argumentModes[index] != Value)
+				|| (switch (pointer.argumentModes[index]) { case Value: false; default: true; })
+				|| (switch (length.argumentModes[index]) { case Value: false; default: true; }))
 				throw 'Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import';
 	}
 
 	static function validateGcPointerRelease(pointer:IrCNative, release:IrCNative):Void {
 		if (pointer.pointerOwnership != "owned"
 			|| pointer.pointerRelease != release.symbol
-			|| release.result != Void
+			|| (switch (release.result) { case Void: false; default: true; })
 			|| release.arguments.length != 1
 			|| !isGcNativePointerArgument(release.arguments[0])
-			|| release.argumentModes[0] != Value)
+			|| (switch (release.argumentModes[0]) { case Value: false; default: true; }))
 			throw 'Wasm GC C native "${pointer.name}" requires a void release import accepting one raw native pointer';
 	}
 
 	static function validateGcPointerReleaseImport(release:IrCNative):Void {
-		if (release.result != Void
+		if ((switch (release.result) { case Void: false; default: true; })
 			|| release.arguments.length != 1
 			|| !isGcNativePointerArgument(release.arguments[0])
-			|| release.argumentModes[0] != Value)
+			|| (switch (release.argumentModes[0]) { case Value: false; default: true; }))
 			throw 'Wasm GC C release import "${release.name}" must accept one raw native pointer and return void';
 	}
 
@@ -821,7 +821,7 @@ class WasmGcModuleBuilder {
 		var result = WasmModuleSupport.reachableCNatives(program, reachable);
 		for (native in program.cNatives)
 			if (result.exists(native.name)) {
-				if (native.result == ManagedBytes && native.pointerLength != null) {
+				if ((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null) {
 					result.set(requiredCNativeBySymbol(program, native.pointerLength).name, true);
 					if (native.pointerOwnership == "owned" && native.pointerRelease != null)
 						result.set(requiredCNativeBySymbol(program, native.pointerRelease).name, true);
@@ -839,7 +839,7 @@ class WasmGcModuleBuilder {
 		for (native in program.cNatives)
 			if (native.pointerOwnership == "owned"
 				&& native.pointerRelease == candidate.symbol
-				&& ((native.result == ManagedBytes && native.pointerLength != null)
+				&& (((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null)
 					|| (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerLength == null)))
 				return true;
 		return false;
@@ -959,7 +959,7 @@ class WasmGcModuleBuilder {
 				&& native.pointerOwnership == "owned"
 				&& native.pointerRelease != null
 				&& ((WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerLength == null)
-					|| (native.result == ManagedBytes && native.pointerLength != null)))
+					|| ((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null)))
 				result.set(native.pointerRelease, true);
 		for (fn in program.functions)
 			if (reachable.exists(fn.name)) {

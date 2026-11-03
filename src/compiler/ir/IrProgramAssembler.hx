@@ -49,7 +49,7 @@ class IrProgramAssembler {
 	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
 		return [
 			for (native in typed.natives)
-				if (native.convention == HashLinkNative) {
+				if ((switch (native.convention) { case HashLinkNative: true; default: false; })) {
 					name: native.name,
 					library: native.library,
 					symbol: native.symbol,
@@ -346,7 +346,7 @@ class IrProgramAssembler {
 						methods.push({name: methodName, functionName: functionName});
 						// HashLink string conversion calls a proto method named `__string`; the runtime reads the
 						// String object it returns.
-						if (methodName == "toString" && methodDecl.arguments.length == 0 && methodDecl.result == TString)
+						if (methodName == "toString" && methodDecl.arguments.length == 0 && (switch (methodDecl.result) { case TString: true; default: false; }))
 							methods.push({name: "__string", functionName: functionName});
 					}
 				objects.push({
@@ -514,6 +514,8 @@ class IrProgramAssembler {
 		for (fn in functions)
 			allFunctions.push(fn);
 		if (objects != null)
+			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
+		if (objects != null)
 			GenericOwnerErasure.generate(allFunctions, objects);
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
@@ -621,7 +623,9 @@ class IrProgramAssembler {
 						case _:
 					}
 		program.interfaces = interfaces == null ? [] : interfaces;
-		program.enums = enums == null ? [] : enums;
+		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
+			objects == null ? [] : objects, staticFields == null ? [] : staticFields, natives == null ? [] : natives,
+			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives);
 		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",
@@ -878,7 +882,7 @@ class IrProgramAssembler {
 		if (staticInitializers != null && staticInitializers.length > 0)
 			entry.call("__init", [], Void);
 		var result = entry.call(mainFunction.name, [], mainFunction.result);
-		if (mainFunction.result == I32)
+		if ((switch (mainFunction.result) { case I32: true; default: false; }))
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
@@ -964,6 +968,7 @@ class IrProgramAssembler {
 				arguments: [Array(Dyn), I32],
 				result: Dyn
 			});
+			program.natives.push({name: "__array_remove_at_any", library: "haxeon_runtime", symbol: "__array_remove_at_any", arguments: [Array(Dyn), I32], result: Void});
 			program.natives.push({
 				name: "__array_set_any",
 				library: "haxeon_runtime",

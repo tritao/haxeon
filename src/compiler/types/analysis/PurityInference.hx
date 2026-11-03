@@ -80,7 +80,7 @@ class PurityInference {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), inference.classNameOfType(argument.type),
-				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), (switch (argument.type) { case StringType: true; default: false; }),
 				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		if (!walker.statements(body))
@@ -236,7 +236,7 @@ class PurityInference {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue))
 				return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
-				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), (switch (argument.type) { case StringType: true; default: false; }),
 				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		if (!walker.statements(fn.statements))
@@ -277,7 +277,7 @@ class PurityInference {
 		if (fn != null) for (argument in fn.arguments) {
 			if (argument.defaultValue != null && !walker.value(argument.defaultValue)) return null;
 			walker.declare(argument.name, PurityWalker.isNumericType(argument.type), classNameOfType(argument.type),
-				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), argument.type == StringType,
+				PurityWalker.isIterableType(argument.type), PurityWalker.isArrayType(argument.type), (switch (argument.type) { case StringType: true; default: false; }),
 				PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		for (field in declaration.fields) {
@@ -519,16 +519,16 @@ private class PurityWalker {
 		return switch value {
 			case ErrorStatement(_): false;
 			case UninitializedDeclaration(name, type, _):
-				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
+				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), (switch (type) { case StringType: true; default: false; }),
 					isStringArrayType(type), isMapType(type));
 				true;
 			case VarDeclaration(name, type, initializer, _):
 				var pure = expression(initializer);
-				if (type == null || type == InferredType)
+				if (type == null || (switch (type) { case InferredType: true; default: false; }))
 					declare(name, isNumeric(initializer), null, isIterableInitializer(initializer), isArrayInitializer(initializer),
 						isStringReceiver(initializer), isStringArrayInitializer(initializer), isMapInitializer(initializer));
 				else
-					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), type == StringType,
+					declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), (switch (type) { case StringType: true; default: false; }),
 						isStringArrayType(type), isMapType(type));
 				pure;
 			case Assignment(name, value, _) if (freshReceiver != null && freshAssignment(name)): expression(value);
@@ -767,8 +767,8 @@ private class PurityWalker {
 			case StringLiteral(_, _): true;
 			case Variable(name, _):
 				var fact = localFact(name);
-				fact == null ? inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType : fact.string;
-			case Member(Variable("this", _), name, _): inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType;
+				fact == null ? (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) { case StringType: true; default: false; }) : fact.string;
+			case Member(Variable("this", _), name, _): (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) { case StringType: true; default: false; });
 			case Conditional(_, left, right, _), Add(left, right, _): isStringReceiver(left) && isStringReceiver(right);
 			case MethodCall(receiver, name, _, _): stringResult(name) && isStringReceiver(receiver) || name == "join" && isStringArrayReceiver(receiver);
 			case Call(name, _, _): var parts = name.split("."); parts.length == 2 && stringResult(parts[1]) && isStringName(parts[0]);
@@ -777,7 +777,7 @@ private class PurityWalker {
 
 	function isStringName(name:String):Bool {
 		var fact = localFact(name);
-		return fact == null ? inference.ownFieldType(compiler.QualifiedName.parent(functionName), name) == StringType
+		return fact == null ? (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) { case StringType: true; default: false; })
 			&& readsProperty(name) : fact.string;
 	}
 

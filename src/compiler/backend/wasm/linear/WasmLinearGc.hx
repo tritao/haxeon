@@ -46,10 +46,10 @@ class WasmLinearGc {
 			runtimeNeutral = context.options.wasmRuntimeNeutral == true;
 		var rootSlots:Array<Int> = [];
 		for (index in 0...fn.type.parameters.length)
-			if (fn.type.parameters[index] == I32)
+			if ((switch (fn.type.parameters[index]) { case I32: true; default: false; }))
 				rootSlots.push(index);
 		for (index in 0...fn.locals.length)
-			if (fn.locals[index].type == I32)
+			if ((switch (fn.locals[index].type) { case I32: true; default: false; }))
 				rootSlots.push(fn.type.parameters.length + index);
 		if (rootSlots.length == 0 && !runtimeNeutral)
 			return fn;
@@ -95,7 +95,7 @@ class WasmLinearGc {
 		for (instruction in fn.body) {
 			if (frame != null && (isRuntimeCall(instruction) || (runtimeNeutral && isRuntimeIndirectCall(instruction))))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
-			if (instruction == Return && frame != null) {
+			if ((switch (instruction) { case Return: true; default: false; }) && frame != null) {
 				emitRuntimeRootFrameRestore(body, frame, context);
 			}
 			body.push(instruction);
@@ -111,7 +111,7 @@ class WasmLinearGc {
 		// explicit Return instruction. Balance their shadow-root frame on that
 		// normal fallthrough path as well; otherwise each helper call permanently
 		// consumes root-stack space until a later call traps at rootLimit.
-		if (frame != null && (fn.body.length == 0 || fn.body[fn.body.length - 1] != Return))
+		if (frame != null && (fn.body.length == 0 || (switch (fn.body[fn.body.length - 1]) { case Return: false; default: true; })))
 			emitRuntimeRootFrameRestore(body, frame, context);
 		if (exceptionTag != null) {
 			var wrapper = new WasmFunctionBuilder(fn.name, fn.type);

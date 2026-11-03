@@ -45,7 +45,7 @@ class WasmValuePlacement {
 			for (block in fn.blocks)
 				for (located in block.instructions) {
 					var output = IrOperands.output(located.value);
-					if (output != null && output.type != Void && !values.exists(output.id)) {
+					if (output != null && (switch (output.type) { case Void: false; default: true; }) && !values.exists(output.id)) {
 						values.set(output.id, nextLocal++);
 						locals.push({type: representation.valueType(output.type)});
 					}
@@ -59,7 +59,7 @@ class WasmValuePlacement {
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				for (input in IrOperands.inputs(located.value))
-					if (WasmTarget.isReference(input.type) || input.type != IrType.Void)
+					if (WasmTarget.isReference(input.type) || (switch (input.type) { case IrType.Void: false; default: true; }))
 						ends.set(input.id, position);
 				switch located.value {
 					case Phi(_, inputs):
@@ -68,7 +68,7 @@ class WasmValuePlacement {
 					default:
 				}
 				var output = IrOperands.output(located.value);
-				if (output != null && output.type != Void && !starts.exists(output.id)) {
+				if (output != null && (switch (output.type) { case Void: false; default: true; }) && !starts.exists(output.id)) {
 					starts.set(output.id, position);
 					ends.set(output.id, position);
 				}
@@ -83,7 +83,7 @@ class WasmValuePlacement {
 		for (block in fn.blocks)
 			for (located in block.instructions) {
 				var output = IrOperands.output(located.value);
-				if (output != null && output.type != Void && starts.exists(output.id))
+				if (output != null && (switch (output.type) { case Void: false; default: true; }) && starts.exists(output.id))
 					intervals.push({
 						valueId: output.id,
 						type: representation.valueType(output.type),

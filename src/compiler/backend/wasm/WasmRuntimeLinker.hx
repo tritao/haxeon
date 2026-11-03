@@ -93,7 +93,7 @@ class WasmRuntimeLinker {
 						var type = valueType(),
 							mutable = bytes.get(position++) != 0,
 							initializer:Array<WasmInstruction> = [];
-						if (type != I32)
+						if ((switch (type) { case I32: false; default: true; }))
 							throw "The runtime-neutral Wasm runtime defines a non-i32 global";
 						if (bytes.get(position++) != 0x41)
 							throw "The runtime-neutral Wasm runtime uses a non-constant global initializer";

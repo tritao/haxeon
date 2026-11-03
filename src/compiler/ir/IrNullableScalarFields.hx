@@ -55,7 +55,7 @@ class IrNullableScalarFields {
 			case Nullable(I64): I64;
 			default: throw 'Invalid nullable scalar field type $type';
 		};
-		var bits = element == I64 ? 64 : 32, width = storage.size * 8;
+		var bits = (switch (element) { case I64: true; default: false; }) ? 64 : 32, width = storage.size * 8;
 		if (width <= 0 || width >= bits) throw 'Invalid nullable scalar width $width for $type';
 		var name = '$' + 'nullable-scalar-normalize:' + bits + ':' + width + ':' + storage.signed;
 		if (helpers.exists(name)) return name;

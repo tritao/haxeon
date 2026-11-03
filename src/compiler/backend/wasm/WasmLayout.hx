@@ -301,7 +301,7 @@ class WasmLayout {
 		};
 
 	public static function arrayStride(type:IrType):Int
-		return type == F32 || type == F64 || type == I64 ? 8 : 4;
+		return (switch (type) { case F32: true; default: false; }) || (switch (type) { case F64: true; default: false; }) || (switch (type) { case I64: true; default: false; }) ? 8 : 4;
 
 	public static function arrayAllocationSize(type:IrType, length:Int):Int
 		return ARRAY_HEADER_SIZE + arrayStride(type) * length;
@@ -328,7 +328,7 @@ class WasmLayout {
 	public static inline final CLOSURE_TYPE_ID = 0x484C4346;
 
 	public static function alignmentOf(type:IrType):Int
-		return type == F32 || type == F64 || type == I64 ? 8 : 4;
+		return (switch (type) { case F32: true; default: false; }) || (switch (type) { case F64: true; default: false; }) || (switch (type) { case I64: true; default: false; }) ? 8 : 4;
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);

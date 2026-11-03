@@ -413,7 +413,7 @@ class IrOptionalScalarFlow {
 				add(block, ShiftLeft(shifted, value, shift), from);
 				add(block, native.signed ? ShiftRight(result, shifted, shift) : UnsignedShiftRight(result, shifted, shift), from);
 				value = result;
-			} else if (value.type == F32) {
+			} else if ((switch (value.type) { case F32: true; default: false; })) {
 				var wide = new IrValue(next++, "$optional-f64", F64), rounded = new IrValue(next++, "$optional-f32", F32);
 				add(block, FloatToFloat(wide, value), from);
 				add(block, FloatToFloat(rounded, wide), from);

@@ -23,9 +23,17 @@ function isPhysical(access:Null<Access>):Bool
 		default: true;
 	};
 
+function isMissing(value:Null<OptionalValue>):Bool
+	return switch value {
+		case OptionalValue.Missing: true;
+		default: false;
+	};
+
 function main():Int
 	return !isPhysical(Get)
 		&& !isPhysical(Never)
 		&& isPhysical(Default)
 		&& isPhysical(null)
+		&& !isMissing(null)
+		&& isMissing(OptionalValue.Missing)
 		&& read(OptionalValue.Found(40)) + read(null) == 42 ? 42 : 1;

@@ -4,7 +4,7 @@ enum Color {
 	Blue;
 }
 
-enum Shape {
+enum Shape : Equatable {
 	Dot;
 	Circle(radius:Int);
 }
@@ -19,10 +19,10 @@ function main():Int {
 		half:Dynamic = 0.5;
 	var mixed:Array<Dynamic> = [Red, Green, Blue];
 	var checks = [
-		// Constructors without arguments are one value; others are separate objects.
+		// Dynamic enum equality follows declared value equality.
 		green == otherGreen
 		&& green != red,
-		circle != otherCircle
+		circle == otherCircle
 		&& circle == circle,
 		mixed.indexOf(Green) == 1
 		&& mixed.contains(Blue)

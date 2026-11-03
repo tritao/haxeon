@@ -308,6 +308,145 @@ existing backing place, including nested value fields, so a receiver already bou
 callback. A field's first assignment adopts its newly copied value. This does not add a box per replacement; value reads
 still make their usual independent copies. Wasm GC uses flattened fields for the same place semantics.
 
+## Enum value semantics and inline layout
+
+An enum value has no identity. Recursive enums, enums with a disproportionately large case, and values boxed at Dynamic,
+reflection or native boundaries retain exactly the same value semantics as inline values. A payload enum declares
+`enum E : Equatable` or `enum E : Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
+an error, as for structs. Checking a payload enum against a payload-free case uses a `switch` or pattern match; the
+constant case does not create an exception to the conformance rule. App and library code use declared equality or case
+patterns rather than reflective `Type.enumEq`. Synthesized equality compares the case tag and then its payload fields
+according to their own declared equality. Synthesized hashing uses the same tag and payload distinctions. Handwritten
+implementations are allowed under the same equality/hash contract as structs. Enums without payloads have tag equality and are trivially
+`Equatable` and `Hashable`. `Type.enumEq` remains reflective structural comparison and agrees with synthesized equality
+for a conforming enum.
+
+`Reflect.compare` does not define an order for enum values. Comparing an enum through that API returns its existing
+invalid-comparison result (`0xAABBCCDD`), including when both operands are the same boxed value. Equality conformance
+does not imply an ordering, and using an allocation address would make boxing observable. This rule applies across
+HashLink, Wasm32 and Wasm GC; reflective structural equality remains available through `Type.enumEq`.
+
+Handwritten payload-enum conformance uses instance methods inside the enum declaration, matching structs:
+`equals(other:E):Bool` and, for `Hashable`, `hash():Int`. Direct calls and declared equality use those methods; a
+handwritten equality on a `Hashable` enum requires a handwritten hash. The methods are statically dispatched for each
+concrete enum type so generic arguments retain their type semantics. `Type.enumEq` deliberately remains structural,
+including when the enum supplies handwritten equality. Nullary enums retain tag equality and do not override it.
+
+At a genuine conversion to `Dynamic`, a generic enum needs its concrete type arguments to select handwritten or
+constrained equality after the escape. The boxed enum's runtime descriptor carries that type; an already-boxed enum
+therefore does not need a second wrapper allocation. Declared equality and reflective structural equality use separate
+generated operations. Casts, type tests, reflection and native boundaries preserve the source enum type; a raw pointer or
+object identity comparison is not a fallback. Dynamic array reads and writes use the same enum descriptor as typed access.
+An erased `Array<E<T>>` view must retain the concrete enum type at each element escape, including when the array was
+created and populated before that view. The current boxed enum ABI erases `T`, so inspecting the nominal enum name or
+its payload cannot recover the right conformance in general (a case may not contain `T` at all). Preserving array
+aliases therefore also requires carrying the concrete type through the boxed representation; choosing equality by nominal
+name, payload shape, or object identity would change program meaning. The selected design gives each concrete boxed enum
+specialization a canonical runtime type descriptor, sharing its physical layout when possible. The descriptor selects the
+conformance and survives ordinary array reads and native/reflection escapes. It is per type, not an allocation or side
+table entry per element. Inline enum values keep their statically known type and materialize the same descriptor only at
+a genuine erased boundary. Generic code that constructs or erases such an enum must retain the concrete specialization,
+as described in `GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
+representation remains pending.
+
+The candidate inline layout uses tag zero for null and one-based case tags, followed by the maximum scalar-word and
+reference-slot counts across cases. The scalar and reference payloads overlap across cases. Classification is stable
+across targets: a recursive enum stays boxed, as does an enum whose largest case needs more than eight 64-bit scalar
+words plus reference slots and more than twice the next-largest case (using one as the minimum comparison size). This
+bounds the cost of putting one exceptional payload in every containing value. The thresholds are an implementation
+choice to be checked against the required no-regression measurements; this layout is not implemented yet.
+
+This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
+and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
+express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline
+enum lowering remains pending.
+
+### Enum equality checkpoint measurements (candidate)
+
+On the same machine, the starting baseline was Haxeon `ca255ae6` and outer `045d3585c`. The candidate keeps the
+existing boxed enum layout while adding declared equality and specialized generic enum descriptors. Allocation medians
+are KiB per action:
+
+| Action | Starting baseline | Candidate |
+| --- | ---: | ---: |
+| hierarchy → sensors | 114.6 | 112.6 |
+| sensors → hierarchy | 80.1 | 78.1 |
+| console → telemetry | 74.5 | 74.5 |
+| telemetry → console | 92.9 | 92.9 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
+| scroll inspector | 21.2 | 21.2 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 |
+| type character / backspace | 16.1 / 16.6 | 16.1 / 16.2 |
+
+The 30-cycle selection-stress census measured 342,877 allocations at the starting baseline and 342,100 in the candidate;
+five alternating pairs against the previous semantic checkpoint had a median of 342,098 on each side. Wasm GC Showcase
+object counts were 5,896 / 5,896 / 5,896 / 12,835 at baseline and 5,896 / 5,896 / 5,896 / 12,622 in the candidate
+(full, static, text-heavy, editing; the baseline editing repeats were 12,835 / 12,833 / 12,835).
+
+The nine starting-baseline headless RSS window medians were [30.47, 4.06, 0.94, 4.69] MiB. In 27 alternating pairs
+against the previous semantic checkpoint, control medians were [30.00, 3.59, 0.78, 4.84] and candidate medians were
+[29.84, 3.75, 0.78, 5.00] MiB; median paired differences were [-0.16, 0.16, 0.00, 0.00] MiB. A separate 27-pair
+calibration using identical control bytecode on both sides produced medians [30.00, 3.75, 0.78, 5.00] and
+[30.00, 3.75, 0.78, 4.84] MiB, with a -0.15 MiB median paired difference in the fourth window. The second-window
+candidate difference is not explained by that calibration and remains an open measurement. A matched 500-cycle census
+recorded 1,825,372 versus 1,825,376 allocations; the four extra allocations were 1,424 bytes of byte buffers. A
+30-cycle every-allocation stack census attributed differences to `JsonPrinter` and headless profile output, but does not
+prove the cause of the RSS difference. No ceiling was raised. Inline enum lowering and its allocation measurements remain
+pending.
+
+After adding native-signature descriptor discovery, the same action medians were unchanged and the selection census was
+342,098. The Wasm GC Showcase counts were 5,894 / 5,896 / 5,896 / 12,620. In 27 alternating pairs against the same
+previous semantic checkpoint, both control and candidate had RSS window medians [29.84, 3.75, 0.78, 5.00] MiB; the
+median paired differences were [0.15, 0.00, 0.00, 0.00] MiB. A matched 500-cycle allocation census recorded 1,825,380
+versus 1,825,371 allocations and 151,717,696 versus 151,715,344 bytes; all of the difference was in byte buffers.
+The `+0.15` MiB paired first-window difference remains visible even though the window medians match; it is not claimed
+as a measured improvement.
+
+After removing the extra Dynamic enum wrapper and rejecting enum ordering in `Reflect.compare`, the Wasm GC Showcase
+counts were 5,896 / 5,896 / 5,896 / 12,622 (full, static, text-heavy, editing). The same-machine starting baseline
+was 5,896 / 5,896 / 5,896 / 12,835. The interaction allocation medians in the table above were unchanged in five alternating
+interaction pairs against the previous semantic checkpoint; one separate candidate capture measured hover-away at
+12.1 KiB, but four of five paired captures measured 13.6 KiB, so its ceiling was not lowered. Selection stress counted
+342,098 allocations. Its `@haxeon.ui.TextStyle` and `@haxeon.ui.ParagraphStyle` counts were 140 each; the starting
+baseline had 161 and 140 respectively, plus 240 `@haxeon.ui.widgets.docking.DockTextWidthKey` allocations, now zero.
+
+For the same revision, 27 alternating RSS pairs against the previous semantic checkpoint gave control window medians
+[30.00, 3.91, 0.78, 4.84] MiB and candidate medians [30.00, 3.59, 0.78, 4.84] MiB, with median paired differences
+[+0.16, -0.15, 0.00, 0.00] MiB. A separate 27-pair calibration using identical control bytecode on both sides gave
+paired differences [-0.15, +0.15, 0.00, 0.00] MiB. Three alternating allocation-census pairs around the affected
+window gave 100-cycle control/candidate medians of 399,162 / 399,161 allocations and 32,784,344 / 32,784,600 bytes,
+and 200-cycle medians of 755,678 / 755,673 allocations and 62,475,528 / 62,474,784 bytes. These results show
+page-scale variation and no material increase in counted allocations, but the positive paired first-window difference
+remains visible; it is not reported as a measured improvement.
+
+The candidate now removes reflective enum helpers that no `Type.enumEq` operation can reach, while preserving the
+concrete descriptors used by Dynamic equality. Nested typed reflection and adding reflection during an incremental
+compile have dedicated tests. In the editor profile this removed 201 helpers and reduced bytecode from 102,820,303 to
+102,226,757 bytes. A fresh 27-pair RSS comparison against the same control had window medians [30.00, 3.59, 0.78, 4.84]
+MiB for control and [30.16, 3.59, 0.78, 4.84] MiB for the reduced candidate; median paired differences were
+[-0.31, 0.00, 0.00, 0.00] MiB. The starting-baseline fourth-window median was 4.69 MiB; both current group medians are
+0.15 MiB higher, within the page-scale variation shown by the identical-bytecode calibrations above. The measured
+numbers are retained here rather than presenting the first-window paired result as a general RSS improvement.
+
+The reduced candidate's first interaction capture reported hover-field at 12.6 KiB versus the starting 12.4 KiB. In a
+fixed nine-pair comparison, the median was 12.4 KiB on both sides and one capture on each side reported 12.6 KiB; all
+other interaction allocation medians matched. The 30-cycle selection census was 342,099 allocations, with 140
+`@haxeon.ui.TextStyle` and 140 `@haxeon.ui.ParagraphStyle` allocations. No budget ceiling was raised or lowered on the
+basis of the variable hover measurements.
+
+
+After the struct-array iterator and verifier fixes, the semantic-equality candidate was measured again against the
+previous lane-safe editor build. Nine alternating interaction pairs had identical per-action allocation medians; a
+single candidate backspace sample was 16.6 KiB while the paired median was 16.2 KiB on both sides. Nine alternating
+selection-stress censuses had medians of 342,097 allocations on both sides and a paired median difference of +1. The
+original selection baseline was 342,877. Nine alternating 500-cycle headless RSS captures had control window medians
+[30.00, 3.91, 0.78, 5.00] MiB and candidate medians [30.31, 3.59, 0.78, 4.84] MiB, with paired median differences
+[+0.62, 0.00, 0.00, 0.00] MiB. The first-window difference remains an open measurement; prior identical-bytecode
+calibration showed page-level variation, but does not establish the cause of this result. Five alternating Wasm GC
+Showcase pairs had equal full and text-heavy medians of 5,896 objects; one control text-heavy sample had 5,894.
+Static and editing counts were 5,896 and 12,622 respectively. No performance ceiling was raised.
+
 ## Equality and hashing
 
 Decided and implemented 2026-11-01. Value equality is declared by interface conformance, following Swift's

@@ -214,7 +214,7 @@ class WasmLinearClosureAdapters {
 			for (index in 0...sourceArguments.length)
 				convert(builder, targetArguments[index], sourceArguments[index])
 			], sourceResult = result(sourceType), targetResult = result(targetType), value = builder.callClosure(callee, converted, sourceResult);
-		builder.returnValue(targetResult == Void ? (sourceResult == Void ? value : builder.constVoid()) : sourceResult == Void ? zero(builder,
+		builder.returnValue((switch (targetResult) { case Void: true; default: false; }) ? ((switch (sourceResult) { case Void: true; default: false; }) ? value : builder.constVoid()) : (switch (sourceResult) { case Void: true; default: false; }) ? zero(builder,
 			targetResult) : convert(builder, value, targetResult));
 		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks, null, false, Keep);
 	}
@@ -222,11 +222,11 @@ class WasmLinearClosureAdapters {
 	static function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		if (Type.enumEq(value.type, type))
 			return value;
-		if (value.type == I32 && type == Bool)
+		if ((switch (value.type) { case I32: true; default: false; }) && (switch (type) { case Bool: true; default: false; }))
 			return builder.equal(builder.equal(value, builder.constInt(0)), builder.constBool(false));
-		if (type == Dyn)
+		if ((switch (type) { case Dyn: true; default: false; }))
 			return builder.toDyn(value);
-		return builder.safeCast(value.type == Dyn ? value : builder.toDyn(value), type);
+		return builder.safeCast((switch (value.type) { case Dyn: true; default: false; }) ? value : builder.toDyn(value), type);
 	}
 
 	static function zero(builder:IrBuilder, type:IrType):IrValue

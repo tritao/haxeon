@@ -866,13 +866,13 @@ class WasmValidator {
 						isHeapSubtype(root, expected, module);
 					default: false;
 				};
-			case I31: expected == Eq || expected == Any;
-			case Struct, Array: expected == Eq || expected == Any;
-			case Eq: expected == Any;
-			case None: expected == Any || expected == Eq || expected == I31 || expected == Struct || expected == Array;
-			case NoFunc: expected == Func;
-			case NoExtern: expected == Extern;
-			case NoExn: expected == Exn;
+			case I31: (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case Any: true; default: false; });
+			case Struct, Array: (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case Any: true; default: false; });
+			case Eq: (switch (expected) { case Any: true; default: false; });
+			case None: (switch (expected) { case Any: true; default: false; }) || (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case I31: true; default: false; }) || (switch (expected) { case Struct: true; default: false; }) || (switch (expected) { case Array: true; default: false; });
+			case NoFunc: (switch (expected) { case Func: true; default: false; });
+			case NoExtern: (switch (expected) { case Extern: true; default: false; });
+			case NoExn: (switch (expected) { case Exn: true; default: false; });
 			default: false;
 		};
 	}

@@ -51,7 +51,8 @@ private typedef ArrayValuePlace = {final array:TypedExpression; final index:Type
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	static var enumConstructorCounts:Map<String, Int> = [];
-	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
+	static var enumEquatableTypes:Map<String, Bool> = [];
+	static var enumPayloadTypes:Map<String, Bool> = [];
 	static var valueClasses:Map<String, Bool> = [];
 	static var classBases:Map<String, String> = [];
 	static var genericOwnerAliases:Map<String, String> = [];
@@ -80,13 +81,12 @@ class IrGenerator {
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
 		enumConstructorCounts = [];
-		nullaryEnumConstructors = [];
+		enumEquatableTypes = [];
+		enumPayloadTypes = [];
 		for (enumDecl in enums) {
+			for (constructor in enumDecl.cases) if (constructor.params.length > 0) enumPayloadTypes.set(enumDecl.name, true);
+			if (enumDecl.equatable == true) enumEquatableTypes.set(enumDecl.name, true);
 			enumConstructorCounts.set(enumDecl.name, enumDecl.cases.length);
-			nullaryEnumConstructors.set(enumDecl.name, [
-				for (index in 0...enumDecl.cases.length)
-					if (enumDecl.cases[index].params.length == 0) index
-			]);
 		}
 	}
 
@@ -334,7 +334,7 @@ class IrGenerator {
 	}
 
 	static function isSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return RuntimeType.usesSpecializedMap(key, value, mapValueType, isHashableMapKey);
+		return isPayloadEnumKey(key) || RuntimeType.usesSpecializedMap(key, value, mapValueType, isHashableMapKey);
 
 	static function mapValueType(type:CompilerType):Bool return switch type {
 		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
@@ -349,7 +349,7 @@ class IrGenerator {
 	};
 
 	static function specializedMapOwner(key:CompilerType, value:CompilerType):String {
-		var semantic:CompilerType = TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [RuntimeType.specializedMapKey(key), value]),
+		var semantic:CompilerType = TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key), value]),
 			owner = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(semantic));
 		if (owner == null) throw 'Missing specialized generic map owner for $key -> $value';
 		return owner;
@@ -398,7 +398,7 @@ class IrGenerator {
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
 	static function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
 		switch expression.expression {
-			case TAdd(left, right) if (lowerType(expression.type) == Bytes):
+			case TAdd(left, right) if ((switch (lowerType(expression.type)) { case Bytes: true; default: false; })):
 				collectStringConcatOperands(left, into);
 				collectStringConcatOperands(right, into);
 			case TStringLiteral(text):
@@ -549,7 +549,7 @@ class IrGenerator {
 		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
 		observableConstructorInitialization = previousObservableConstructorInitialization;
 		if (!builder.isTerminated()) {
-			if (lowerType(fn.result) == Void)
+			if ((switch (lowerType(fn.result)) { case Void: true; default: false; }))
 				builder.returnVoid();
 			else
 				throw 'Function ${fn.name} does not return on every path';
@@ -636,7 +636,7 @@ class IrGenerator {
 					if (isErasedGenericOwner(object.type) && observableBit == null) {
 						var operands = lowerOperands([object, value], builder, localTypes, true);
 						if (!builder.isTerminated()) {
-							if (operands[0].type == Dyn)
+							if ((switch (operands[0].type) { case Dyn: true; default: false; }))
 								builder.call(erasedOwnerOperation(object.type, "set", name), operands, Void);
 							else builder.fieldSet(operands[0], name, operands[1]);
 						}
@@ -803,7 +803,7 @@ class IrGenerator {
 						var catchClause = catches[i],
 							catchIrType = lowerType(catchClause.type),
 							nextDispatch:Null<CfgBlock> = null;
-						if (catchClause.type != TDynamic) {
+						if ((switch (catchClause.type) { case TDynamic: false; default: true; })) {
 							var handlerBlock = builder.createBlock(),
 								mismatchBlock = builder.createBlock();
 							nextDispatch = mismatchBlock;
@@ -815,7 +815,7 @@ class IrGenerator {
 						localTypes.set(catchClause.name, catchIrType);
 						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
 						var caught = builder.load(exceptionLocal, Dyn);
-						initializeLocal(catchClause.name, catchClause.type == TDynamic ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
+						initializeLocal(catchClause.name, (switch (catchClause.type) { case TDynamic: true; default: false; }) ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
 						lowerStatements(catchClause.statements, builder, localTypes, catchClause.span.end);
 						if (!builder.isTerminated()) {
 							catchActive = true;
@@ -845,18 +845,18 @@ class IrGenerator {
 					builder.jump(loop.continueBlock);
 				case TIncrement(name, delta, _):
 					var type = requireLocalType(localTypes, name, 'Missing increment local "$name"');
-					var one = type == I32 ? builder.constInt(1) : builder.constFloat(1.0);
+					var one = (switch (type) { case I32: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TCellIncrement(name, cellClass, valueType, delta, _):
 					var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
+						one = (switch (valueType) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TCellCapturedIncrement(name, cellClass, valueType, delta, _):
 					var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
 					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = valueType == TInt ? builder.constInt(1) : builder.constFloat(1.0);
+						one = (switch (valueType) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TIf(condition, thenBranch, elseBranch, span) if (isBoolLiteral(condition)):
 					// A bare block `{ ... }` is an `if (true)` without an `else`: only the branch that runs is lowered, so the
@@ -1100,7 +1100,7 @@ class IrGenerator {
 								builder.jump(predicateBlock);
 							else {
 								var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
-									builder.constNull(switchType)); else if (switchType == Bytes) builder.call("__string_equal", [switchValue, caseValue],
+									builder.constNull(switchType)); else if ((switch (switchType) { case Bytes: true; default: false; })) builder.call("__string_equal", [switchValue, caseValue],
 									Bool); else builder.equal(switchValue, caseValue);
 								builder.branch(matches, predicateBlock, nextBlock);
 							}
@@ -1152,7 +1152,7 @@ class IrGenerator {
 					}
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
-					if (expression.type == TNever)
+					if ((switch (expression.type) { case TNever: true; default: false; }))
 						builder.markUnreachable();
 			}
 		}
@@ -1308,18 +1308,23 @@ class IrGenerator {
 			case name: name;
 		};
 
+	static function isPayloadEnumKey(type:CompilerType):Bool {
+		var name = mapEnumName(type);
+		return name != null && enumPayloadTypes.exists(name);
+	}
+
 	static function lowerMapKey(builder:CfgBuilder, key:CfgValue, keyType:CompilerType):CfgValue
-		return mapEnumName(keyType) == null ? key : builder.enumIndex(key);
+		return mapEnumName(keyType) == null || isPayloadEnumKey(keyType) ? key : builder.enumIndex(key);
 
 	/** Convert an int-backed enum key array back to source-level enum values. */
 	static function lowerMapKeys(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
 		var specialized = isSpecializedMap(keyType, valueType), nativeKeyArrayType:IrType = Array(I32),
 			sourceKeyArrayType:IrType = Array(lowerType(keyType));
-		if (mapEnumName(keyType) == null)
+		if (mapEnumName(keyType) == null || isPayloadEnumKey(keyType))
 			return specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType, sourceKeyArrayType)
 				: builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], sourceKeyArrayType);
 
-		var enumName = requireMapEnumName(keyType),
+		var enumName = requireMapEnumName(keyType), runtimeName = compiler.types.typing.EnumRuntimeType.name(keyType),
 			enumConstructorCount = enumConstructorCounts.get(enumName);
 		if (enumConstructorCount == null || enumConstructorCount == 0)
 			throw 'Missing non-empty enum layout for map key "$enumName"';
@@ -1356,7 +1361,7 @@ class IrGenerator {
 				nextBlock = builder.createBlock();
 			builder.branch(builder.equal(builder.load(rawKeyName, I32), builder.constInt(constructor)), constructorBlock, nextBlock);
 			builder.select(constructorBlock);
-			builder.store(enumKeyName, builder.makeEnum(enumName, constructor, []));
+			builder.store(enumKeyName, builder.makeEnum(runtimeName, constructor, []));
 			builder.jump(enumJoinBlock);
 			nextCheckBlock = nextBlock;
 		}
@@ -1402,7 +1407,7 @@ class IrGenerator {
 	static function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
 			return value;
-		if (target == Dyn)
+		if ((switch (target) { case Dyn: true; default: false; }))
 			return builder.toDyn(value);
 		var nullableTarget = IrTypeTools.nullableElement(target);
 		if (nullableTarget != null) {
@@ -1466,7 +1471,7 @@ class IrGenerator {
 						}
 					default: false;
 				};
-			default: left == right;
+			default: Type.enumEq(left, right);
 		};
 
 	static function flatValueObjectName(type:CompilerType):Null<String>
@@ -1916,8 +1921,8 @@ class IrGenerator {
 			case TStringLiteral(value): builder.constString(value);
 			case TRuntimeDataAddress(bytes): builder.staticDataAddress(bytes);
 			case TBoolLiteral(value): builder.constBool(value);
-			case TEnumLiteral(name, index): builder.makeEnum(name, index, []);
-			case TEnumConstruct(name, index, arguments): builder.makeEnum(name, index, lowerOperands(arguments, builder, localTypes));
+			case TEnumLiteral(name, index): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, []);
+			case TEnumConstruct(name, index, arguments): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, lowerOperands(arguments, builder, localTypes));
 			case TEnumIndex(value): builder.enumIndex(lowerExpression(value, builder, localTypes));
 			case TEnumField(value, constructor,
 				field): builder.enumField(lowerExpression(value, builder, localTypes), constructor, field, lowerType(expression.type));
@@ -2017,7 +2022,7 @@ class IrGenerator {
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
-			case TAdd(a, b) if (lowerType(expression.type) == Bytes):
+			case TAdd(a, b) if ((switch (lowerType(expression.type)) { case Bytes: true; default: false; })):
 				lowerStringConcat(expression, builder, localTypes);
 			case TAdd(a, b):
 				var operands = lowerOperands([a, b], builder, localTypes);
@@ -2093,12 +2098,9 @@ class IrGenerator {
 				} // A test against a literal null is a pointer test, not a call into the runtime's equality: it lowers to one
 				// OJNull whatever the other side's reference type (a boxed Null<Int>, a Dynamic, a String).
 				isNullExpression(a) || isNullExpression(b) ? builder.equal(left,
-					right) : lowerType(a.type) == Bytes ? builder.call("__string_equal", [left, right],
+					right) : (switch (lowerType(a.type)) { case Bytes: true; default: false; }) ? builder.call("__string_equal", [left, right],
 					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
 				|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
-			case TCall("$enum.equal", arguments):
-				var operands = lowerOperands([arguments[0], arguments[1]], builder, localTypes);
-				return lowerEnumIdentityEquality(arguments, operands[0], operands[1], builder, localTypes);
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
@@ -2159,7 +2161,7 @@ class IrGenerator {
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
 					throw "The Std.string fast path lost its primitive operand";
-				builder.call(primitive.type == TInt ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
+				builder.call((switch (primitive.type) { case TInt: true; default: false; }) ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
 			case TCall("__reference_equal", [left, right]):
 				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
 			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
@@ -2170,8 +2172,13 @@ class IrGenerator {
 						case TInstance(NominalKind.Class, name, _) if (genericClasses.exists(name)): name;
 						default: null;
 					};
-				if (origin == null) builder.call(intrinsic, [input, builder.typeValue(lowerType(args[1].type))], Bool);
-				else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"), [input], Bool);
+				if (origin == null) {
+					var target = switch args[1].type {
+						case TInstance(NominalKind.Enum, name, _): Enum(name);
+						default: lowerType(args[1].type);
+					};
+					builder.call(intrinsic, [input, builder.typeValue(target)], Bool);
+				} else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"), [input], Bool);
 			case TCall(name, args) if (StringTools.startsWith(name, "$generic:") && args.length > 0 && optionalFieldPlace(args[0]) != null):
 				var place = optionalFieldPlace(args[0]);
 				if (place == null) throw "Missing optional generic receiver";
@@ -2200,13 +2207,9 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
-					case TArray(element) if (operation == "index_of" && isEnumType(element)):
-						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
-					case TArray(element) if (operation == "remove" && isEnumType(element)):
-						lowerEnumArrayRemove(builder, localTypes, element, lowered);
-					case TArray(element) if (operation == "value_index_of" && arrayValueElement(lowerType(element))):
+					case TArray(element) if (operation == "value_index_of" && (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
 						lowerValueArrayIndexOf(builder, localTypes, element, lowered);
-					case TArray(element) if (operation == "remove" && arrayValueElement(lowerType(element))):
+					case TArray(element) if (operation == "remove" && (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
 						lowerValueArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, localTypes, lowered[0], lowered[1], lowered[2], key, value);
@@ -2287,22 +2290,22 @@ class IrGenerator {
 				if (sameIrType(source.type,
 					target)) source; else if (IrTypeTools.nullableElement(source.type) != null
 					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source,
-						target); else if (source.type == Dyn) checkedCast(builder, source,
-					target); else if (target == Dyn) builder.toDyn(source); else if (isUpcast(source.type, target)) builder.upcast(source,
+						target); else if ((switch (source.type) { case Dyn: true; default: false; })) checkedCast(builder, source,
+					target); else if ((switch (target) { case Dyn: true; default: false; })) builder.toDyn(source); else if (isUpcast(source.type, target)) builder.upcast(source,
 					target); else if (referenceCastType(source.type) && referenceCastType(target))
 					checkedCast(builder, builder.toDyn(source),
-					target); else if (source.type == I64 && target == I32) builder.call("haxe.Int64.toInt", [source], I32);
-				else if (source.type == I32 && target == I64) {
+					target); else if ((switch (source.type) { case I64: true; default: false; }) && (switch (target) { case I32: true; default: false; })) builder.call("haxe.Int64.toInt", [source], I32);
+				else if ((switch (source.type) { case I32: true; default: false; }) && (switch (target) { case I64: true; default: false; })) {
 					var extended = builder.intToInt64(source);
 					if (isUnsigned32(value.type))
 						builder.bitAnd(extended, builder.unsignedShiftRight(builder.constInt(-1, I64), builder.constInt(32)));
 					else
 						extended;
 				}
-				else if (source.type == F64 && target == I32) builder.floatToInt(source); else if (source.type == I32 && target == F64)
-					builder.intToFloat(source); else if ((source.type == F64
-					&& target == F32)
-					|| (source.type == F32 && target == F64)) builder.floatToFloat(source,
+				else if ((switch (source.type) { case F64: true; default: false; }) && (switch (target) { case I32: true; default: false; })) builder.floatToInt(source); else if ((switch (source.type) { case I32: true; default: false; }) && (switch (target) { case F64: true; default: false; }))
+					builder.intToFloat(source); else if (((switch (source.type) { case F64: true; default: false; })
+					&& (switch (target) { case F32: true; default: false; }))
+					|| ((switch (source.type) { case F32: true; default: false; }) && (switch (target) { case F64: true; default: false; }))) builder.floatToFloat(source,
 						target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
@@ -2360,7 +2363,7 @@ class IrGenerator {
 						var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes),
 							matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
-								builder.constNull(subjectType)); else if (subjectType == Bytes) builder.call("__string_equal", [comparisonValue, caseValue],
+								builder.constNull(subjectType)); else if ((switch (subjectType) { case Bytes: true; default: false; })) builder.call("__string_equal", [comparisonValue, caseValue],
 								Bool); else builder.equal(comparisonValue, caseValue);
 						if (switchCase.isCatchAll || switchCase.subjectBinding != null || isExhaustiveFinalCase)
 							builder.jump(bodyBlock);
@@ -2435,7 +2438,7 @@ class IrGenerator {
 					builder.call('$physicalName.new', constructorArgs, Void);
 				}
 				var constructed = builder.load(objectName, objectType);
-				resultType == Dyn ? builder.toDyn(constructed) : constructed;
+				(switch (resultType) { case Dyn: true; default: false; }) ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
@@ -2765,7 +2768,7 @@ class IrGenerator {
 					lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
 				else {
 					var receiver = lowerOwnerReceiver(object, builder, localTypes);
-					if (receiver.type == Dyn && isErasedGenericOwner(object.type))
+					if ((switch (receiver.type) { case Dyn: true; default: false; }) && isErasedGenericOwner(object.type))
 						builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], lowerType(expression.type));
 					else builder.fieldGet(receiver, name, lowerType(expression.type));
 				}
@@ -2805,7 +2808,7 @@ class IrGenerator {
 						callArgs.push(loweredOperands[index]);
 					var separator = IrGenerator.lastSeparator(name);
 					var method = name.substring(separator + 1, name.length);
-					if (receiver.type == Dyn && isErasedGenericOwner(object.type))
+					if ((switch (receiver.type) { case Dyn: true; default: false; }) && isErasedGenericOwner(object.type))
 						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
 					else builder.methodCall(receiver, method, callArgs, lowerType(expression.type));
 				}
@@ -2849,10 +2852,10 @@ class IrGenerator {
 						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
 					if (isErasedGenericOwner(object.type) && observableBit == null) {
 						var receiver = lowerOwnerReceiver(object, builder, localTypes), type = lowerType(expression.type),
-							oldValue = receiver.type == Dyn ? builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], type)
+							oldValue = (switch (receiver.type) { case Dyn: true; default: false; }) ? builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], type)
 								: builder.fieldGet(receiver, name, type),
 							one = incrementOne(expression.type, builder), after = delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one);
-						if (receiver.type == Dyn) builder.call(erasedOwnerOperation(object.type, "set", name), [receiver, after], Void);
+						if ((switch (receiver.type) { case Dyn: true; default: false; })) builder.call(erasedOwnerOperation(object.type, "set", name), [receiver, after], Void);
 						else builder.fieldSet(receiver, name, after);
 						oldValue;
 					} else if (observableBit != null) {
@@ -3225,58 +3228,6 @@ class IrGenerator {
 			default: false;
 		};
 
-	/**
-	 * `$enum.equal(left, right, nullary indices...)`: equal when it is the same value, or when both are the same constructor
-	 * and that constructor has no fields. The second case is what makes `Dot == Dot` true on a target that builds a fresh
-	 * value for each `Dot`. A null operand equals only another null.
-	 */
-	static function lowerEnumIdentityEquality(arguments:Array<TypedExpression>, left:CfgValue, right:CfgValue, builder:CfgBuilder,
-			localTypes:Map<String, IrType>):CfgValue {
-		var leftName = '$' + 'enum-identity-left:${left.id}',
-			rightName = '$' + 'enum-identity-right:${right.id}',
-			resultName = '$' + 'enum-identity-result:${left.id}:${right.id}',
-			nullable = isNullableEnumExpression(arguments[0]) || isNullableEnumExpression(arguments[1]);
-		localTypes.set(leftName, left.type);
-		localTypes.set(rightName, right.type);
-		localTypes.set(resultName, Bool);
-		builder.store(leftName, left);
-		builder.store(rightName, right);
-		var yes = builder.createBlock(), no = builder.createBlock(), join = builder.createBlock(), compare = builder.createBlock();
-		builder.branch(builder.equal(builder.load(leftName, left.type), builder.load(rightName, right.type)), yes, compare);
-		builder.select(compare);
-		if (nullable)
-			for (name in [leftName, rightName]) {
-				var type = name == leftName ? left.type : right.type, present = builder.createBlock();
-				builder.branch(builder.equal(builder.load(name, type), builder.constNull(type)), no, present);
-				builder.select(present);
-			}
-		var leftIndex = builder.enumIndex(builder.load(leftName, left.type)),
-			rightIndex = builder.enumIndex(builder.load(rightName, right.type)),
-			sameConstructor = builder.createBlock();
-		builder.branch(builder.equal(leftIndex, rightIndex), sameConstructor, no);
-		builder.select(sameConstructor);
-		// Same constructor: equal only if it has no fields.
-		var index = builder.enumIndex(builder.load(leftName, left.type));
-		for (position in 2...arguments.length) {
-			var constructor = switch arguments[position].expression {
-				case TIntLiteral(value): value;
-				default: throw "Enum equality needs constant constructor indices";
-			};
-			var next = builder.createBlock();
-			builder.branch(builder.equal(index, builder.constInt(constructor)), yes, next);
-			builder.select(next);
-			index = builder.enumIndex(builder.load(leftName, left.type));
-		}
-		builder.jump(no);
-		builder.select(yes);
-		builder.store(resultName, builder.constBool(true));
-		builder.jump(join);
-		builder.select(no);
-		builder.store(resultName, builder.constBool(false));
-		builder.jump(join);
-		builder.select(join);
-		return builder.load(resultName, Bool);
-	}
 
 	static function lowerNullableEnumEquality(a:TypedExpression, b:TypedExpression, left:CfgValue, right:CfgValue, builder:CfgBuilder,
 			localTypes:Map<String, IrType>):CfgValue {
@@ -3376,7 +3327,7 @@ class IrGenerator {
 						var physical = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
 						Std.string(name) == "haxe.io.Eof" || physical == null && isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
-					case NominalKind.Enum: Enum(name);
+					case NominalKind.Enum: Enum(compiler.types.typing.EnumRuntimeType.name(type));
 					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
 					default: throw 'Unknown nominal kind $kind';
 				}
@@ -3399,7 +3350,7 @@ class IrGenerator {
 		return switch type {
 			case TInstance(NominalKind.Class, name, arguments) if (genericClasses.exists(name)):
 				var erased = false;
-				for (argument in arguments) if (argument == TDynamic) erased = true;
+				for (argument in arguments) if ((switch (argument) { case TDynamic: true; default: false; })) erased = true;
 				erased;
 			default: false;
 		};
@@ -3447,7 +3398,7 @@ class IrGenerator {
 		};
 
 	static function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
-		return type == TInt ? builder.constInt(1) : builder.constFloat(1.0);
+		return (switch (type) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
 
 	static function lowerObservableFieldRead(object:TypedExpression, field:String, fieldBit:Int, resultType:IrType,
 			builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
@@ -3487,38 +3438,10 @@ class IrGenerator {
 		return switch type {
 			case TDynamic:
 				builder.equal(builder.call("__dynamic_equal", [builder.toDyn(before), builder.toDyn(after)], Bool), builder.constBool(false));
-			case TInstance(NominalKind.Enum, name, _):
-				var nullary = nullaryEnumConstructors.get(name);
-				if (nullary == null) throw 'Missing enum constructors for "$name"';
-				var total = enumConstructorCounts.get(name);
-				if (nullary.length == total)
-					builder.equal(builder.equal(builder.enumIndex(before), builder.enumIndex(after)), builder.constBool(false));
-				else {
-					var serial = observableAccessSerial++, resultName = '$' + 'observable-enum-changed:$serial',
-						beforeName = '$' + 'observable-enum-before:$serial', afterName = '$' + 'observable-enum-after:$serial';
-					localTypes.set(resultName, Bool);
-					localTypes.set(beforeName, before.type);
-					localTypes.set(afterName, after.type);
-					builder.store(beforeName, before);
-					builder.store(afterName, after);
-					var same = builder.createBlock(), check = builder.createBlock(), done = builder.createBlock();
-					builder.branch(builder.equal(builder.load(beforeName, before.type), builder.load(afterName, after.type)), same, check);
-					builder.select(same);
-					builder.store(resultName, builder.constBool(false));
-					builder.jump(done);
-					builder.select(check);
-					for (index in nullary) {
-						var next = builder.createBlock(), matching = builder.createBlock();
-						builder.branch(builder.equal(builder.enumIndex(builder.load(beforeName, before.type)), builder.constInt(index)), matching, next);
-						builder.select(matching);
-						builder.branch(builder.equal(builder.enumIndex(builder.load(afterName, after.type)), builder.constInt(index)), same, next);
-						builder.select(next);
-					}
-					builder.store(resultName, builder.constBool(true));
-					builder.jump(done);
-					builder.select(done);
-					builder.load(resultName, Bool);
-				}
+			case TInstance(NominalKind.Enum, name, _) | TNullable(TInstance(NominalKind.Enum, name, _)):
+				if (enumEquatableTypes.exists(name))
+					builder.equal(builder.call(compiler.types.typing.EnumEqualityGenerator.equalsName(type), [before, after], Bool), builder.constBool(false));
+				else builder.constBool(true);
 		case TString, TNullable(TString):
 				builder.equal(builder.call("__string_equal", [before, after], Bool), builder.constBool(false));
 			case _:
@@ -3697,7 +3620,7 @@ class IrGenerator {
 			return builder.arrayGet(array, index, type);
 		if (IrTypeTools.isDynamic(element)) {
 			var value = builder.call("__array_get_any", [array, index], Dyn);
-			return type == Dyn ? value : abiBoundaryCast(builder, value, type);
+			return (switch (type) { case Dyn: true; default: false; }) ? value : abiBoundaryCast(builder, value, type);
 		}
 		var value = builder.arrayGet(array, index, type);
 		return switch type {
@@ -3718,12 +3641,6 @@ class IrGenerator {
 		return nativeArrayChecks
 			&& IrTypeTools.isDynamic(lowerType(element)) ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
 
-	static function enumLookupName(type:CompilerType):String
-		return switch type {
-			case TInstance(NominalKind.Enum, name, _): name;
-			case TNullable(inner), TAbstract(_, _, inner): enumLookupName(inner);
-			default: throw "Enum array lookup requires a resolved enum element";
-		};
 
 	static function nullableScalarEquality(left:TypedExpression, right:TypedExpression):Bool {
 		if (isNullExpression(left) || isNullExpression(right)) return false;
@@ -3750,6 +3667,8 @@ class IrGenerator {
 		builder.select(done); return builder.load(resultName, Bool);
 	}
 
+	static function isSemanticDynamic(type:CompilerType):Bool return switch type { case TDynamic: true; default: false; };
+
 	/** Compare typed struct elements with their declared equality, without entering a dynamic array view. */
 	static function lowerValueArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
 			arguments:Array<CfgValue>):CfgValue {
@@ -3765,9 +3684,10 @@ class IrGenerator {
 		builder.jump(check); builder.select(check);
 		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, array.type))), body, done);
 		builder.select(body);
-		var value = elementGet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32), valueType),
+		var source = builder.load(arrayName, array.type), index = builder.load(indexName, I32),
+			value = isSemanticDynamic(element) ? builder.call("__array_get_any", [source, index], Dyn) : elementGet(builder, source, index, valueType),
 			needleValue = builder.load(needleName, needle.type), previous = builder.beginGenerated("value-array-index-equality"),
-			equal = builder.call(ValueEqualityGenerator.equalsName(element), [value, needleValue], Bool);
+			equal = builder.call(isSemanticDynamic(element) ? "__dynamic_equal" : isEnumType(element) ? compiler.types.typing.EnumEqualityGenerator.equalsName(element) : ValueEqualityGenerator.equalsName(element), [value, needleValue], Bool);
 		builder.restoreSource(previous);
 		builder.branch(equal, found, next);
 		builder.select(found); builder.store(resultName, builder.load(indexName, I32)); builder.jump(done);
@@ -3785,110 +3705,18 @@ class IrGenerator {
 		builder.store(foundName, lowerValueArrayIndexOf(builder, localTypes, element, arguments));
 		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), found, missing);
 		builder.select(found);
-		builder.call("__value_array_remove_at", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
+		if (isSemanticDynamic(element)) {
+			// Keep the storage representation and uninitialized value-array slots intact.
+			builder.call("__array_remove_at_any", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
+		} else if (isEnumType(element))
+			lowerArrayNativeCall(builder, element, "splice", [builder.load(arrayName, array.type), builder.load(foundName, I32), builder.constInt(1)], lowerType(TArray(element)));
+		else
+			builder.call("__value_array_remove_at", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
 		builder.store(resultName, builder.constBool(true)); builder.jump(done);
 		builder.select(missing); builder.store(resultName, builder.constBool(false)); builder.jump(done);
 		builder.select(done); return builder.load(resultName, Bool);
 	}
 
-	/** Nullary constructors compare by variant; payload constructors retain reference lookup semantics. */
-	static function lowerEnumArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
-		var enumName = enumLookupName(element);
-		var nullary = nullaryEnumConstructors.get(enumName);
-		if (nullary == null)
-			throw 'Missing enum constructors for "$enumName"';
-		if (nullary.length == 0)
-			return lowerArrayNativeCall(builder, element, "index_of", arguments, I32);
-		var referenceIndex = builder.constInt(-1);
-		var array = arguments[0],
-			needle = arguments[1],
-			suffix = Std.string(referenceIndex.id),
-			resultName = "$enum-lookup-result:" + suffix,
-			indexName = "$enum-lookup-index:" + suffix,
-			limitName = "$enum-lookup-limit:" + suffix,
-			arrayName = "$enum-lookup-array:" + suffix,
-			needleName = "$enum-lookup-needle:" + suffix,
-			constructorName = "$enum-lookup-constructor:" + suffix,
-			valueName = "$enum-lookup-value:" + suffix,
-			checkNeedle = builder.createBlock(),
-			scan = builder.createBlock(),
-			body = builder.createBlock(),
-			compare = builder.createBlock(),
-			next = builder.createBlock(),
-			found = builder.createBlock(),
-			fallback = builder.createBlock(),
-			done = builder.createBlock();
-		localTypes.set(resultName, I32);
-		localTypes.set(indexName, I32);
-		localTypes.set(limitName, I32);
-		localTypes.set(arrayName, array.type);
-		localTypes.set(needleName, needle.type);
-		localTypes.set(constructorName, I32);
-		localTypes.set(valueName, lowerType(element));
-		builder.store(arrayName, array);
-		builder.store(needleName, needle);
-		builder.store(resultName, referenceIndex);
-		builder.store(indexName, builder.constInt(0));
-		builder.store(limitName, builder.arraySize(array));
-		builder.branch(builder.equal(needle, builder.constNull(needle.type)), fallback, checkNeedle);
-		builder.select(checkNeedle);
-		builder.store(constructorName, builder.enumIndex(builder.load(needleName, needle.type)));
-		for (index in nullary) {
-			var following = builder.createBlock();
-			builder.branch(builder.equal(builder.load(constructorName, I32), builder.constInt(index)), scan, following);
-			builder.select(following);
-		}
-		builder.jump(fallback);
-		builder.select(fallback);
-		builder.store(resultName,
-			lowerArrayNativeCall(builder, element, "index_of", [builder.load(arrayName, array.type), builder.load(needleName, needle.type)], I32));
-		builder.jump(done);
-		builder.select(scan);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.load(limitName, I32)), body, done);
-		builder.select(body);
-		var value = elementGet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32), lowerType(element));
-		builder.store(valueName, value);
-		builder.branch(builder.equal(value, builder.constNull(value.type)), next, compare);
-		builder.select(compare);
-		builder.branch(builder.equal(builder.enumIndex(builder.load(valueName, lowerType(element))), builder.load(constructorName, I32)), found, next);
-		builder.select(found);
-		builder.store(resultName, builder.load(indexName, I32));
-		builder.jump(done);
-		builder.select(next);
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(scan);
-		builder.select(done);
-		return builder.load(resultName, I32);
-	}
-
-	/**
-	 * `Array.remove` on an array of enum values removes the first value `indexOf` finds, which compares as `==` does for
-	 * enums; the array native it would otherwise use compares references and never finds a constructor evaluated elsewhere.
-	 */
-	static function lowerEnumArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
-		var array = arguments[0], id = array.id, arrayName = '$' + 'enum-remove-array:$id', foundName = '$' + 'enum-remove-found:$id',
-			removedName = '$' + 'enum-remove-result:$id', removeBlock = builder.createBlock(), missingBlock = builder.createBlock(),
-			doneBlock = builder.createBlock();
-		localTypes.set(arrayName, array.type);
-		localTypes.set(foundName, I32);
-		localTypes.set(removedName, Bool);
-		builder.store(arrayName, array);
-		builder.store(foundName, lowerEnumArrayIndexOf(builder, localTypes, element, arguments));
-		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), removeBlock, missingBlock);
-		builder.select(removeBlock);
-		lowerArrayNativeCall(builder, element, "splice", [
-			builder.load(arrayName, array.type),
-			builder.load(foundName, I32),
-			builder.constInt(1)
-		], lowerType(TArray(element)));
-		builder.store(removedName, builder.constBool(true));
-		builder.jump(doneBlock);
-		builder.select(missingBlock);
-		builder.store(removedName, builder.constBool(false));
-		builder.jump(doneBlock);
-		builder.select(doneBlock);
-		return builder.load(removedName, Bool);
-	}
 
 	static function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
 		var nativeName = arrayNativeName(element, operation);

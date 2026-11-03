@@ -69,7 +69,7 @@ class WasmLinearValueArrays {
 			var index = context.module.addFunction(fn);
 			context.functions.set(native.name, index);
 			if (native.symbol == "__value_array_copy" || native.symbol == "__value_array_slice" || native.symbol == "__value_array_concat"
-					|| native.symbol == "__value_array_splice" || native.symbol == "__value_array_reverse" || native.symbol == "__value_array_resize")
+					|| native.symbol == "__value_array_splice" || native.symbol == "__value_array_remove_at" || native.symbol == "__value_array_reverse" || native.symbol == "__value_array_resize")
 				context.functions.set("$linear-value-array:operation:" + native.symbol.substr("__value_array_".length), index);
 		}
 	}
@@ -149,7 +149,7 @@ class WasmLinearValueArrays {
 			integer = suffix == "i32" || suffix == "i64", variableWidth = integer || suffix == "ptr" || suffix == "type" || suffix == "clear";
 		var expected = 3 + (variableWidth ? 1 : 0) + (write && !clear ? 1 : 0) + (!write && integer ? 1 : 0);
 		if (native.arguments.length != expected) throw 'Invalid Wasm32 value-array access $symbol';
-		var results:Array<WasmValueType> = native.result == Void ? [] : [WasmModuleSupport.requireValueType(native.result)],
+		var results:Array<WasmValueType> = (switch (native.result) { case Void: true; default: false; }) ? [] : [WasmModuleSupport.requireValueType(native.result)],
 			builder = new WasmFunctionBuilder(native.name, {parameters:[for (arg in native.arguments) WasmModuleSupport.requireValueType(arg)], results:results}),
 			width = builder.local("width", I32), address = builder.local("address", I32), bits = builder.local("bits", I64);
 		// Validate the array and logical element index before dereferencing the header.
@@ -521,7 +521,7 @@ class WasmLinearValueArrays {
 
 	static function buildValidity(native:IrNative):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 2) throw 'Invalid Wasm32 value-array validity operation ${native.symbol}';
-		var builder = new WasmFunctionBuilder(native.name, {parameters:[I32,I32], results:native.result == Void ? [] : [I32]}),
+		var builder = new WasmFunctionBuilder(native.name, {parameters:[I32,I32], results:(switch (native.result) { case Void: true; default: false; }) ? [] : [I32]}),
 			address = builder.local("validity-address", I32), mask = builder.local("validity-mask", I32);
 		builder.emitAll([LocalGet(0), I32Eqz, If(null)]); WasmLinearRuntime.runtimeFailure(builder); builder.emit(End);
 		builder.emitAll([LocalGet(0), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, I32Eqz,

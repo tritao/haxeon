@@ -152,6 +152,8 @@ class TestCatalog {
 		"NativeDescriptorConformanceMain",
 		"NativeAnnotationsMain",
 		"StructSyntaxMain",
+		"EnumConformanceMain",
+		"EnumEqualityIncrementalMain",
 		"StructPropertiesMain",
 		"NativeMemoryMain",
 		"ModuleSourceLoaderCacheMain",

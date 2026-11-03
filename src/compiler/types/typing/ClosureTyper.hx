@@ -70,7 +70,7 @@ class ClosureTyper {
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
 		var expectedFunction = expectedFunctionType(expectedType),
-			inferContextualResult = expectedFunction != null && expectedFunction.result == TDynamic && inferDynamicLambdaResult;
+			inferContextualResult = expectedFunction != null && (switch (expectedFunction.result) { case TDynamic: true; default: false; }) && inferDynamicLambdaResult;
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
@@ -78,9 +78,9 @@ class ClosureTyper {
 		for (i in 0...arguments.length) {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
-			var argumentType = argument.type == InferredType ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
+			var argumentType = (switch (argument.type) { case InferredType: true; default: false; }) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
 			if (argumentType != null
-				&& argument.type != InferredType
+				&& (switch (argument.type) { case InferredType: false; default: true; })
 				&& argument.optional == true
 				&& compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
 				argumentType = switch argumentType {
@@ -184,7 +184,7 @@ class ClosureTyper {
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.resolve("this");
 		context.expectedReturnType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
-		context.contextualVoidLambda = expectedFunction != null && expectedFunction.result == TVoid;
+		context.contextualVoidLambda = expectedFunction != null && (switch (expectedFunction.result) { case TVoid: true; default: false; });
 		for (declaration in AssignedDeclarations.ofFunction(arguments, body).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
@@ -217,7 +217,7 @@ class ClosureTyper {
 			lambdaCellTypes = copyMap(context.storage.types),
 			lambdaCellKinds = copyMap(context.storage.kinds);
 		leaveBody(lambdaContext);
-		if (inferredResult != TVoid && !alwaysReturns(typedBody))
+		if ((switch (inferredResult) { case TVoid: false; default: true; }) && !alwaysReturns(typedBody))
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)

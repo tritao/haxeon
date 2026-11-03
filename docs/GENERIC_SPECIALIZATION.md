@@ -87,6 +87,18 @@ A generic owner with a constrained parameter is specialized for each concrete co
 reference or scalar. Its instance bodies are templates checked with the selected substitutions, so operations such as
 `Hashing.hash(key)` and declared equality resolve to the static conformance instead of attempting to hash `Dynamic`.
 This also lets the same ordinary generic map handle value and reference keys without a compiler-generated map object.
+Boxed generic enums require the full semantic type arguments in their canonical runtime type descriptor, even when
+multiple specializations share one physical payload layout. An `Array<E<T>>` can be viewed through `Array<Dynamic>`
+after it has been populated, and an enum case may contain no `T` payload from which to infer the type. Generic bodies
+that construct or erase `E<T>` therefore retain the concrete enum specialization under the layout policy; generic owners
+whose fields or instance signatures contain `E<T>` likewise specialize the relevant parameter even when it is a reference
+type. They must not collapse it to the nominal enum or infer it from a payload. The descriptor is shared per concrete type and the existing
+boxed enum carries it without a separate per-value allocation or side table. Inline enum storage uses the concrete
+static layout; conversion to Dynamic, reflection, or a native boxed representation materializes the corresponding
+runtime descriptor at that boundary. Generic enum constructors without a contextual enum type do not yet infer their type
+arguments from payloads; that existing compiler gap requires a separate fix. A concrete typed binding preserves the
+specialization before an erased boundary.
+
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
 

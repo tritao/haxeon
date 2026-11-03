@@ -575,7 +575,7 @@ class IrScalarReplacement {
 				origin.provenance));
 			return {value: result, next: next};
 		}
-		if (value.type == F32) {
+		if ((switch (value.type) { case F32: true; default: false; })) {
 			var wide = new IrValue(next++, "$scalar-f64", F64), result = new IrValue(next++, "$scalar-f32", F32);
 			block.instructions.push(new Located(FloatToFloat(wide, value), origin.provenance));
 			block.instructions.push(new Located(FloatToFloat(result, wide), origin.provenance));

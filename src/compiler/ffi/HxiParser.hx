@@ -174,7 +174,7 @@ class HxiParser {
 					name: name,
 					type: type,
 					direction: direction,
-					ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+					ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed ? Borrowed : Unspecified,
 					handleDisposition: metadataHandleDisposition(metadata, "owned"),
 					retained: retained,
 					metadata: metadata,
@@ -341,7 +341,7 @@ class HxiParser {
 				name: fieldName,
 				type: type,
 				offset: offset,
-				ownership: ownership != Unspecified ? ownership : borrowed ? Borrowed : Unspecified,
+				ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed ? Borrowed : Unspecified,
 				handleDisposition: metadataHandleDisposition(fieldMetadata, "owned"),
 				lengthField: lengthField,
 				structSize: structSize,
@@ -371,7 +371,7 @@ class HxiParser {
 			callConvention = metadataValue(metadata, "callconv", false),
 			end = expect(";").span;
 		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
-			ownership: ownership != Unspecified ? ownership : borrowed || span != null ? Borrowed : Unspecified,
+			ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed || span != null ? Borrowed : Unspecified,
 			handleDisposition: metadataHandleDisposition(metadata, "owned"),
 			length: length,
 			span: span,

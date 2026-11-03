@@ -42,16 +42,16 @@ class TypeRelations {
 			return Identity;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return Incompatible;
-		if (actual == TInt && expected == TFloat)
+		if ((switch (actual) { case TInt: true; default: false; }) && (switch (expected) { case TFloat: true; default: false; }))
 			return IntToFloat;
-		if (actual == TInt && expected == TInt64)
+		if ((switch (actual) { case TInt: true; default: false; }) && (switch (expected) { case TInt64: true; default: false; }))
 			return IntToInt64;
-		if (actual == TDynamic)
+		if ((switch (actual) { case TDynamic: true; default: false; }))
 			return switch expected {
 				case TNull, TVoid, TNever: Incompatible;
 				default: FromDynamic;
 			};
-		if (actual == TNull && acceptsNull(expected))
+		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
@@ -84,26 +84,26 @@ class TypeRelations {
 	}
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
-		if (actual == TNever)
+		if ((switch (actual) { case TNever: true; default: false; }))
 			return true;
 		if (IterationProtocol.name(expected) != null)
-			return actual == TNull
+			return (switch (actual) { case TNull: true; default: false; })
 				|| TypeRelations.equals(actual, expected)
 				|| IterationProtocol.conforms(declarations, this, actual, expected);
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
 		if (StructProperties.isConstraintType(expected))
 			return false;
-		if (actual == TNull && acceptsNull(expected))
+		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
 			return true;
-		if (actual == TDynamic)
+		if ((switch (actual) { case TDynamic: true; default: false; }))
 			return switch expected {
 				case TNull, TVoid, TNever: false;
 				default: true;
 			};
-		if (actual == TNull && acceptsNull(expected))
+		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
 			return true;
 		switch actual {
 			case TNullable(element):
@@ -184,6 +184,18 @@ class TypeRelations {
 				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
 					return satisfiesConstraint(representation, expected);
 				case TNullable(element): return satisfiesConstraint(element, expected);
+				case TInstance(NominalKind.Enum, name, _):
+					var declaration = declarations.enums.get(name);
+					if (declaration == null) return false;
+					var hasPayload = false;
+					for (constructor in declaration.cases) if (constructor.params.length > 0) hasPayload = true;
+					if (!hasPayload) return true;
+					if (declaration.conformances != null)
+						for (conformance in declaration.conformances) {
+							var resolved = declarations.resolve(conformance, declaration.span);
+							if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+						}
+					return false;
 				default:
 			}
 		if (isStructType(actual))
@@ -229,7 +241,7 @@ class TypeRelations {
 							return false;
 						var sawDynamic = false;
 						for (index in 0...arguments.length) {
-							if (expectedArguments[index] == TDynamic) {
+							if ((switch (expectedArguments[index]) { case TDynamic: true; default: false; })) {
 								sawDynamic = true;
 								continue;
 							}
@@ -284,7 +296,7 @@ class TypeRelations {
 					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields, visiting);
 					default: false;
 				}
-			default: left == right;
+			default: Type.enumEq(left, right);
 		};
 
 	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>,

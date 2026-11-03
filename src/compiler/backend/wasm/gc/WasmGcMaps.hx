@@ -76,7 +76,7 @@ class WasmGcMaps {
 				nullable: false,
 				heap: Type(indexType)
 			}),
-			stringEqual = map.keyType == Bytes ? ensureStringEqual(module, functions, plan) : -1;
+			stringEqual = (switch (map.keyType) { case Bytes: true; default: false; }) ? ensureStringEqual(module, functions, plan) : -1;
 		/** The key stored at the entry whose position the instructions leave on the stack. */
 		function keyAt(mapLocal:Int, entry:Array<WasmInstruction>):Array<WasmInstruction>
 			return [
@@ -94,7 +94,7 @@ class WasmGcMaps {
 			return index;
 		}
 		// hash(key): a multiplicative mix for Int keys, FNV-1a over the bytes for String keys, then folded
-		var hash = if (map.keyType == Bytes) define(prefix + 'hash_' + mapName, {parameters: [keyValue], results: [I32]}, [
+		var hash = if ((switch (map.keyType) { case Bytes: true; default: false; })) define(prefix + 'hash_' + mapName, {parameters: [keyValue], results: [I32]}, [
 			{type: I32},
 			{type: I32},
 			{type: I32},
@@ -635,7 +635,7 @@ class WasmGcMaps {
 				nullable: true,
 				heap: Any
 			});
-		if (map.valueType == I32 || map.valueType == Bool || map.valueType == I64 || map.valueType == F64)
+		if ((switch (map.valueType) { case I32: true; default: false; }) || (switch (map.valueType) { case Bool: true; default: false; }) || (switch (map.valueType) { case I64: true; default: false; }) || (switch (map.valueType) { case F64: true; default: false; }))
 			body.push(StructNew(plan.boxedPrimitiveType(map.valueType)));
 		body.push(Return);
 		return module.addFunction(new WasmFunction(name, {parameters: [mapReference, plan.valueType(map.keyType)], results: [resultType]}, [{type: I32}],

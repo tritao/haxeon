@@ -219,6 +219,12 @@ class TestMain {
 		packageScopedSourceCompiler.update("app/RobotArm.hx", "class RobotArm { public function new() {} }");
 		packageScopedSourceCompiler.update("app/Main.hx", "package app; import app.RobotArm; function main():Int { new RobotArm(); return 42; }");
 		packageScopedSourceCompiler.compile("app.Main");
+		var enumDependencyCompiler = new Compiler();
+		enumDependencyCompiler.update("Equatable.hx", "interface Equatable {}");
+		enumDependencyCompiler.update("app/Item.hx", "package app; enum Item : Equatable { Value(value:Int); }");
+		enumDependencyCompiler.update("app/Main.hx", "package app; import app.Item; function main():Int return Value(1) == Value(1) ? 42 : 0;");
+		if (new IrInterpreter(enumDependencyCompiler.compile("app.Main").ir).run("main") != 42)
+			throw "root enum conformance dependency did not load for a packaged declaration";
 		Sys.println("PASS: package-scoped roots assign their package to package-less source modules");
 		expectCompileError('typedef OptionalHull = { @:optional hull:Array<Float>; } function hullLength(parts:Array<OptionalHull>, alias:Array<OptionalHull>):Int { if (parts[0].hull == null) return 0; alias[0] = {}; return parts[0].hull.length; } function main():Int return 0;',
 			'Field "length" requires an object');
@@ -320,7 +326,7 @@ class TestMain {
 		if (new IrInterpreter(enumEqProgram).run("main") != 42)
 			throw "Type.enumEq did not lower through the dynamic equality intrinsic";
 		Frontend.compile('class GenericMap { public static function has<T>(values:Map<String, T>):Bool return values.keys().hasNext(); } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return GenericMap.has(values) ? 42 : 0; }');
-		Frontend.compile('enum InferredConstructor { Value(value:Int); } function make():InferredConstructor { var result = Value(42); return result; } function main():Int return make() == Value(42) ? 42 : 0;');
+		Frontend.compile('interface Equatable {} enum InferredConstructor : Equatable { Value(value:Int); } function make():InferredConstructor { var result = Value(42); return result; } function main():Int return make() == Value(42) ? 42 : 0;');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) return values.get(key); return 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; var result = [for (key in values.keys()) values.get(key) ?? 0]; return result[0]; }');
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } function main():Int { var values:Map<String, MapPlan> = []; var result = [for (key in values.keys()) values.get(key).wrapperTypeIndex]; return result.length; }');
@@ -1203,7 +1209,7 @@ class TestMain {
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
 			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
-			'This map key/value type has no compiler-owned runtime ABI');
+			'Type "PayloadMapKey" does not conform to Hashable');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
 		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;

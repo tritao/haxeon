@@ -139,7 +139,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 
 	static function appendScalarNarrowing(body:Array<WasmInstruction>, field:IrObjectField):Void {
 		var native = field.nativeLayout, storage = field.scalarStorage;
-		if (field.type == F32 && (native != null || storage != null)) { body.push(F32DemoteF64); body.push(F64PromoteF32); return; }
+		if ((switch (field.type) { case F32: true; default: false; }) && (native != null || storage != null)) { body.push(F32DemoteF64); body.push(F64PromoteF32); return; }
 		var size = native != null ? native.size : storage != null ? storage.size : 0,
 			signed = native != null ? native.signed : storage != null && storage.signed,
 			bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
@@ -204,13 +204,13 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}
 		if (field.scalarStorage != null) {
 			var storage = field.scalarStorage, read:Array<WasmInstruction> = [];
-			if ((field.type == I32 || field.type == Bool) && storage.size == 1)
+			if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && storage.size == 1)
 				read = [storage.signed ? I32Load8S(field.offset) : I32Load8U(field.offset)];
-			else if (field.type == I32 && storage.size == 2)
+			else if ((switch (field.type) { case I32: true; default: false; }) && storage.size == 2)
 				read = [storage.signed ? I32Load16S(field.offset) : I32Load16U(field.offset)];
-			else if (field.type == I64 && storage.size == 4)
+			else if ((switch (field.type) { case I64: true; default: false; }) && storage.size == 4)
 				read = [I32Load(field.offset), storage.signed ? I64ExtendI32S : I64ExtendI32U];
-			else if (field.type == F32 && storage.size == 4)
+			else if ((switch (field.type) { case F32: true; default: false; }) && storage.size == 4)
 				read = [F32Load(field.offset), F64PromoteF32];
 			else read = [load(field.type, field.offset)];
 			return [LocalGet(objectLocal)].concat(read).concat([LocalSet(destination)]);
@@ -230,7 +230,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			var stored = scalarResults.get(output.id);
 			if (stored == null) throw "Missing scalar closure result locals";
 			results = stored;
-		} else if (output.type != Void) results.push(outputLocal);
+		} else if ((switch (output.type) { case Void: false; default: true; })) results.push(outputLocal);
 		var body:Array<WasmInstruction> = [LocalGet(closureLocal), I32Const(1), I32And, If(null)];
 		for (local in argumentLocals) body.push(LocalGet(local));
 		body = body.concat([LocalGet(closureLocal), I32Const(1), I32ShrU, CallIndirect(staticType)]);
@@ -272,7 +272,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				result.push(LocalGet(local));
 			}
 		}
-		if (signature.result != Void) for (type in abi.valueTypes(signature.result))
+		if ((switch (signature.result) { case Void: false; default: true; })) for (type in abi.valueTypes(signature.result))
 			for (instruction in zeroValue(type)) result.push(instruction);
 		result.push(LocalGet(exception)); result.push(I32Const(1));
 		return result;
@@ -308,7 +308,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			if (locals == null) throw 'Missing scalar result locals for "$name"';
 			var index = locals.length - 1;
 			while (index >= 0) { body.push(LocalSet(locals[index])); index--; }
-		} else if (output.type != Void) body.push(LocalSet(outputLocal));
+		} else if ((switch (output.type) { case Void: false; default: true; })) body.push(LocalSet(outputLocal));
 		return body;
 	}
 
@@ -325,7 +325,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (abi.isValue(virtual.signature.result)) {
 			results = scalarResults.get(output.id);
 			if (results == null) throw 'Missing scalar virtual result locals for "$method"';
-		} else if (virtual.signature.result != Void) results.push(outputLocal);
+		} else if ((switch (virtual.signature.result) { case Void: false; default: true; })) results.push(outputLocal);
 		var body:Array<WasmInstruction> = [];
 		for (index in 0...virtual.targets.length) {
 			var target = virtual.targets[index], functionIndex = functions.get(target.clone);
@@ -355,13 +355,13 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			return assignValueField([LocalGet(objectLocal)], field.offset, [LocalGet(valueLocal)], valueName, []);
 		var body:Array<WasmInstruction> = [LocalGet(objectLocal), LocalGet(valueLocal)], scalar = field.scalarStorage;
 		if (scalar != null) {
-			if ((field.type == I32 || field.type == Bool) && scalar.size == 1) {
+			if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && scalar.size == 1) {
 				body.push(I32Store8(field.offset)); return body;
-			} else if (field.type == I32 && scalar.size == 2) {
+			} else if ((switch (field.type) { case I32: true; default: false; }) && scalar.size == 2) {
 				body.push(I32Store16(field.offset)); return body;
-			} else if (field.type == I64 && scalar.size == 4) {
+			} else if ((switch (field.type) { case I64: true; default: false; }) && scalar.size == 4) {
 				body.push(I32WrapI64); body.push(I32Store(field.offset)); return body;
-			} else if (field.type == F32 && scalar.size == 4) {
+			} else if ((switch (field.type) { case F32: true; default: false; }) && scalar.size == 4) {
 				body.push(F32DemoteF64); body.push(F32Store(field.offset)); return body;
 			}
 		}
@@ -394,21 +394,21 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
 		var body = flatFieldBase(objectLocal, native.offset),
 			load:Array<WasmInstruction> = [];
-		if (field.type == I32 && native.size == 1)
+		if ((switch (field.type) { case I32: true; default: false; }) && native.size == 1)
 			load = [native.signed ? I32Load8S(0) : I32Load8U(0)];
-		else if (field.type == Bool && native.size == 1)
+		else if ((switch (field.type) { case Bool: true; default: false; }) && native.size == 1)
 			load = [I32Load8U(0)];
-		else if (field.type == I32 && native.size == 2)
+		else if ((switch (field.type) { case I32: true; default: false; }) && native.size == 2)
 			load = [native.signed ? I32Load16S(0) : I32Load16U(0)];
-		else if (field.type == I64 && native.size == 4)
+		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 4)
 			load = [I32Load(0), native.signed ? I64ExtendI32S : I64ExtendI32U];
-		else if (field.type == F32 && native.size == 4)
+		else if ((switch (field.type) { case F32: true; default: false; }) && native.size == 4)
 			load = [F32Load(0), F64PromoteF32];
-		else if ((field.type == I32 || field.type == Bool || field.type == RawPtr) && native.size == 4)
+		else if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
 			load = [I32Load(0)];
-		else if (field.type == I64 && native.size == 8)
+		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 8)
 			load = [I64Load(0)];
-		else if (field.type == F64 && native.size == 8)
+		else if ((switch (field.type) { case F64: true; default: false; }) && native.size == 8)
 			load = [F64Load(0)];
 		else
 			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
@@ -420,19 +420,19 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (native == null)
 			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
 		var body:Array<WasmInstruction> = flatFieldBase(objectLocal, native.offset).concat([LocalGet(valueLocal)]);
-		if ((field.type == I32 || field.type == Bool) && native.size == 1)
+		if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && native.size == 1)
 			body.push(I32Store8(0));
-		else if (field.type == I32 && native.size == 2)
+		else if ((switch (field.type) { case I32: true; default: false; }) && native.size == 2)
 			body.push(I32Store16(0));
-		else if (field.type == I64 && native.size == 4)
+		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 4)
 			body = body.concat([I32WrapI64, I32Store(0)]);
-		else if (field.type == F32 && native.size == 4)
+		else if ((switch (field.type) { case F32: true; default: false; }) && native.size == 4)
 			body = body.concat([F32DemoteF64, F32Store(0)]);
-		else if ((field.type == I32 || field.type == Bool || field.type == RawPtr) && native.size == 4)
+		else if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
 			body.push(I32Store(0));
-		else if (field.type == I64 && native.size == 8)
+		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 8)
 			body.push(I64Store(0));
-		else if (field.type == F64 && native.size == 8)
+		else if ((switch (field.type) { case F64: true; default: false; }) && native.size == 8)
 			body.push(F64Store(0));
 		else
 			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
@@ -541,22 +541,22 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 
 	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__int64_to_float") {
-			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+			if ((switch (output.type) { case F64: false; default: true; }) || arguments.length != 1 || (switch (arguments[0].type) { case I64: false; default: true; }) || argumentLocals.length != 1)
 				throw "Invalid Wasm Int64.toFloat signature";
 			return [LocalGet(argumentLocals[0]), F64ConvertI64S, LocalSet(outputLocal)];
 		}
 		if (name == "__wasm_memory_load_i32") {
-			if (output.type != I32 || arguments.length != 1 || arguments[0].type != I32 || argumentLocals.length != 1)
+			if ((switch (output.type) { case I32: false; default: true; }) || arguments.length != 1 || (switch (arguments[0].type) { case I32: false; default: true; }) || argumentLocals.length != 1)
 				throw "Invalid Wasm runtime memory.load i32 signature";
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
 		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
-			if (output.type != I64 || arguments.length != 1 || arguments[0].type != F64 || argumentLocals.length != 1)
+			if ((switch (output.type) { case I64: false; default: true; }) || arguments.length != 1 || (switch (arguments[0].type) { case F64: false; default: true; }) || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.toInt64 signature";
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
 		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
-			if (output.type != F64 || arguments.length != 1 || arguments[0].type != I64 || argumentLocals.length != 1)
+			if ((switch (output.type) { case F64: false; default: true; }) || arguments.length != 1 || (switch (arguments[0].type) { case I64: false; default: true; }) || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.fromInt64 signature";
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
 		}
@@ -566,20 +566,20 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
 		var abi = WasmCAbi.of(native), fixed = native.fixedResult;
-		if (!abi.adjustsCall() && native.result != Bytes)
+		if (!abi.adjustsCall() && (switch (native.result) { case Bytes: false; default: true; }))
 			return UseDefault;
 		var body:Array<WasmInstruction> = [];
 		if (fixed == null) {
 			pushNativeArguments(body, abi, arguments, argumentLocals);
 			body.push(Call(importIndex));
 			body = body.concat(abi.raiseResult());
-			if (native.result == Bytes)
+			if ((switch (native.result) { case Bytes: true; default: false; }))
 				body.push(Call(cstringCopy));
 			if (outputLocal >= 0)
 				body.push(LocalSet(outputLocal));
 			return body;
 		}
-		if (native.result != ManagedBytes || outputLocal < 0)
+		if ((switch (native.result) { case ManagedBytes: false; default: true; }) || outputLocal < 0)
 			throw 'Linear Wasm C native "${native.name}" has an invalid fixed aggregate result contract';
 		var allocationSize = WasmLayout.STRING_DATA_OFFSET + fixed.size;
 		// The record result lands in a managed Bytes value that the generated HXI wrapper then attaches the

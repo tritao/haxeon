@@ -55,7 +55,7 @@ class IrTypeTools {
 	 * another kind, so that a value typed as `Null<Int>` really is an Int box (or null).
 	 */
 	public static function compatible(expected:IrType, actual:IrType):Bool
-		return Std.string(expected) == Std.string(actual) || (expected == Dyn && nullableElement(actual) != null);
+		return Std.string(expected) == Std.string(actual) || ((switch (expected) { case Dyn: true; default: false; }) && nullableElement(actual) != null);
 
 	static function changed(original:IrType, replacement:IrType, element:IrType):IrType
 		return Std.string(erase(element)) == Std.string(element) ? original : replacement;

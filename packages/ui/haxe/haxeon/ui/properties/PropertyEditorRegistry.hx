@@ -46,7 +46,7 @@ class PropertyEditorRegistry {
 
 	public function same(first:Null<PropertyValue>, second:Null<PropertyValue>):Bool {
 		if (first == null || second == null)
-			return first == second;
+			return first == null && second == null;
 		return switch ([first, second]) {
 			case [Custom(typeA, firstData), Custom(typeB, secondData)]:
 				if (typeA != typeB)

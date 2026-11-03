@@ -55,7 +55,7 @@ class IrScalarClosures {
 				case ToDyn(_, input):
 					switch input.type { case Function(_, _): note(input.type); default: excludeNested(input.type); }
 				case SafeCast(output, input):
-					switch output.type { case Function(_, _) if (input.type == Dyn): note(output.type); default: excludeNested(output.type); }
+					switch output.type { case Function(_, _) if ((switch (input.type) { case Dyn: true; default: false; })): note(output.type); default: excludeNested(output.type); }
 					excludeNested(input.type);
 				case TypeValue(_, type): excludeNested(type);
 				default:
@@ -155,7 +155,7 @@ class IrScalarClosures {
 					var erasure = ensureErasure(input.type), boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
 					rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]), located.provenance));
 					rewritten.instructions.push(new Located(ToDyn(map(out), boxed), located.provenance));
-				case SafeCast(out, input) if (input.type == Dyn && candidates.exists(key(out.type))):
+				case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; }) && candidates.exists(key(out.type))):
 					rewritten.instructions.push(new Located(Call(map(out), ensureRestoration(out.type), [map(input)]), located.provenance));
 				case StaticClosure(out, name) if (candidates.exists(key(out.type))):
 					rewritten.instructions.push(new Located(StaticClosure(map(out), IrScalarArguments.PREFIX + name), located.provenance));
@@ -238,9 +238,9 @@ class IrScalarClosures {
 			default: throw "Scalar closure erasure requires a function"; };
 		var body = new IrBuilder(), receiver = body.argument("receiver", Obj(environment)),
 			arguments = [for (index in 0...logical.arguments.length) body.argument('argument$index', Dyn)],
-			adapted = [for (index in 0...logical.arguments.length) logical.arguments[index] == Dyn ? arguments[index] : body.safeCast(arguments[index], logical.arguments[index])],
+			adapted = [for (index in 0...logical.arguments.length) (switch (logical.arguments[index]) { case Dyn: true; default: false; }) ? arguments[index] : body.safeCast(arguments[index], logical.arguments[index])],
 			closure = body.fieldGet(receiver, "closure", type), call = body.callClosure(closure, adapted, logical.result);
-		body.returnValue(logical.result == Void ? body.constNull(Dyn) : logical.result == Dyn ? call : body.toDyn(call));
+		body.returnValue((switch (logical.result) { case Void: true; default: false; }) ? body.constNull(Dyn) : (switch (logical.result) { case Dyn: true; default: false; }) ? call : body.toDyn(call));
 		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks));
 		generatedObjects.push({name: environment, isValue: false, base: null, interfaces: [],
 			fields: [{name: "closure", type: mapType(type)}], methods: []});
@@ -290,9 +290,9 @@ class IrScalarClosures {
 		}
 		var resultSlots = isValue(logical.result) ? slots(logical.result) : [], references:Array<IrValue> = [];
 		for (slot in resultSlots) references.push(call.argument("result." + slot.path.join("."), IrHlScalarRef.type(mapType(slot.type))));
-		var closure = call.fieldGet(receiver, "closure", erasedType(type)), erasedArguments = [for (argument in arguments) argument.type == Dyn ? argument : call.toDyn(argument)],
+		var closure = call.fieldGet(receiver, "closure", erasedType(type)), erasedArguments = [for (argument in arguments) (switch (argument.type) { case Dyn: true; default: false; }) ? argument : call.toDyn(argument)],
 			erasedResult = call.callClosure(closure, erasedArguments, Dyn),
-			result = logical.result == Void ? call.constVoid() : logical.result == Dyn ? erasedResult : call.safeCast(erasedResult, logical.result);
+			result = (switch (logical.result) { case Void: true; default: false; }) ? call.constVoid() : (switch (logical.result) { case Dyn: true; default: false; }) ? erasedResult : call.safeCast(erasedResult, logical.result);
 		if (resultSlots.length == 0) call.returnValue(result); else {
 			for (index in 0...resultSlots.length) {
 				var slot = resultSlots[index], current = result, currentType = logical.result;

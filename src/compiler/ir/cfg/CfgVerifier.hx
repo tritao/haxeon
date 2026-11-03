@@ -72,7 +72,7 @@ class CfgVerifier {
 					}
 					define(out, defined, available, block.id);
 				case ConstFloat(out, _):
-					if (out.type != F64 && out.type != F32)
+					if ((switch (out.type) { case F64: false; default: true; }) && (switch (out.type) { case F32: false; default: true; }))
 						throw 'CFG float constant ${out.id} must produce F32 or F64';
 					define(out, defined, available, block.id);
 				case ConstString(out, _):
@@ -117,7 +117,7 @@ class CfgVerifier {
 					define(out, defined, available, block.id);
 				case ToDyn(out, value):
 					require(value, available, block.id);
-					if (out.type != Dyn
+					if ((switch (out.type) { case Dyn: false; default: true; })
 						&& !(IrTypeTools.nullableElement(out.type) != null && sameType(IrTypeTools.nullableElement(out.type), value.type)))
 						throw 'CFG dynamic conversion ${out.id} must produce Dyn or the nullable of its input';
 					define(out, defined, available, block.id);
@@ -138,7 +138,7 @@ class CfgVerifier {
 					define(out, defined, available, block.id);
 				case FloatToFloat(out, value):
 					require(value, available, block.id);
-					if (!((value.type == F64 && out.type == F32) || (value.type == F32 && out.type == F64)))
+					if (!(((switch (value.type) { case F64: true; default: false; }) && (switch (out.type) { case F32: true; default: false; })) || ((switch (value.type) { case F32: true; default: false; }) && (switch (out.type) { case F64: true; default: false; }))))
 						throw "CFG Float-to-Float conversion requires F64/F32 or F32/F64 types";
 					define(out, defined, available, block.id);
 				case SafeCast(out, value):
@@ -178,26 +178,26 @@ class CfgVerifier {
 				case Mod(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
-					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })))
 						throw "CFG modulo requires matching integer values";
 					define(out, defined, available, block.id);
 				case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
-					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || (a.type != I32 && a.type != I64))
+					if (!sameType(out.type, a.type) || !sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })))
 						throw "CFG bitwise operation requires matching integer values";
 					define(out, defined, available, block.id);
 				case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
-					if (!sameType(out.type, a.type) || (a.type != I32 && a.type != I64) || b.type != I32)
+					if (!sameType(out.type, a.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; })) || (switch (b.type) { case I32: false; default: true; }))
 						throw "CFG shift requires an Int or Int64 value and an Int count";
 					define(out, defined, available, block.id);
 				case Less(out, a, b), LessEqual(out, a, b):
 					require(a, available, block.id);
 					require(b, available, block.id);
 					expect(out, Bool);
-					if (!sameType(a.type, b.type) || (a.type != I32 && a.type != I64 && a.type != F32 && a.type != F64))
+					if (!sameType(a.type, b.type) || ((switch (a.type) { case I32: false; default: true; }) && (switch (a.type) { case I64: false; default: true; }) && (switch (a.type) { case F32: false; default: true; }) && (switch (a.type) { case F64: false; default: true; })))
 						throw "CFG ordered comparison requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Equal(out, a, b):
@@ -329,7 +329,7 @@ class CfgVerifier {
 						case Iterator(element): expect(out, element);
 						default: throw 'CFG next requires an Iterator value';
 					}
-					if (out.type == Void)
+					if ((switch (out.type) { case Void: true; default: false; }))
 						throw 'CFG iterator next cannot produce Void';
 					define(out, defined, available, block.id);
 				case MakeEnum(out, _, _, arguments):
@@ -449,7 +449,7 @@ class CfgVerifier {
 						}
 					default: false;
 				};
-			default: left == right;
+			default: Type.enumEq(left, right);
 		};
 
 	static function isReference(type:IrType):Bool

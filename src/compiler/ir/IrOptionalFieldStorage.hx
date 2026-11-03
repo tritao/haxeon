@@ -304,7 +304,7 @@ class IrOptionalFieldStorage {
 				switch instruction {
 					case Call(out, name, arguments) if (StringTools.startsWith(name, COPY_PREFIX)):
 						var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
-						if (fields.length != 4 || arguments.length != 2 || out.type != Void)
+						if (fields.length != 4 || arguments.length != 2 || (switch (out.type) { case Void: false; default: true; }))
 							throw 'Invalid optional field copy "$name"';
 						var target = plans.get(key(fields[0], fields[1])), source = plans.get(key(fields[2], fields[3]));
 						if (target == null || source == null || !Type.enumEq(target.type, source.type) || target.slots.length != source.slots.length)

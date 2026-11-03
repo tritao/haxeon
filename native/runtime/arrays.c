@@ -455,10 +455,10 @@ static vdynamic *realtime_any_read(varray *array, int index) {
 	return hl_make_dyn(realtime_any_slot(array, index), array->at);
 }
 
-/* Dynamic equality: identity first, then value equality for boxed numbers and strings. */
+/* Dynamic equality preserves each value type's declared semantics. */
 static bool realtime_any_equal(varray *array, int index, vdynamic *value) {
 	vdynamic *element = realtime_any_read(array, index);
-	return element == value || HL_NAME(__dynamic_equal)(element, value);
+	return HL_NAME(__dynamic_equal)(element, value);
 }
 
 /* Converts a value to the array's element representation before any structural change,
@@ -577,6 +577,20 @@ HL_PRIM int HL_NAME(__array_index_of_any)( varray *array, vdynamic *value ) {
 	for (int i = 0; i < array->size; i++)
 		if (realtime_any_equal(array, i, value)) return i;
 	return -1;
+}
+
+/* Remove a known index without boxing or losing uninitialized value-array slots. */
+HL_PRIM void HL_NAME(__array_remove_at_any)(varray *array, int index) {
+	if (index < 0 || index >= array->size) hl_error("Array index out of bounds");
+	if (HL_NAME(__value_array_is)(array)) {
+		HL_NAME(__value_array_remove_at)(array, index);
+		return;
+	}
+	int stride = hl_type_size(array->at);
+	vbyte *values = hl_aptr(array, vbyte);
+	hl_gc_move_values(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride, array->at);
+	array->size--;
+	hl_gc_clear_values(values + array->size * stride, stride, array->at);
 }
 
 HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {

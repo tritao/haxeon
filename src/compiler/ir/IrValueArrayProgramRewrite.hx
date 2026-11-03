@@ -91,7 +91,8 @@ class IrValueArrayProgramRewrite {
 			{name:"__array_pop_any", library:"haxeon_runtime", symbol:"__array_pop_any", arguments:[Array(Dyn)], result:Dyn},
 			{name:"__array_shift_any", library:"haxeon_runtime", symbol:"__array_shift_any", arguments:[Array(Dyn)], result:Dyn},
 			{name:"__array_index_of_any", library:"haxeon_runtime", symbol:"__array_index_of_any", arguments:[Array(Dyn),Dyn], result:I32},
-			{name:"__array_remove_any", library:"haxeon_runtime", symbol:"__array_remove_any", arguments:[Array(Dyn),Dyn], result:Bool}
+			{name:"__array_remove_any", library:"haxeon_runtime", symbol:"__array_remove_any", arguments:[Array(Dyn),Dyn], result:Bool},
+			{name:"__array_remove_at_any", library:"haxeon_runtime", symbol:"__array_remove_at_any", arguments:[Array(Dyn),I32], result:Void}
 		];
 		for (native in dynamicNatives) if (!nativeNames.exists(native.name)) { nativeNames.set(native.name, true); program.natives.push(native); }
 	}
@@ -108,7 +109,7 @@ class IrValueArrayProgramRewrite {
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);
 			for (located in block.instructions) switch located.value {
-				case SafeCast(out, input) if (Type.enumEq(out.type, Array(element)) && input.type == Dyn):
+				case SafeCast(out, input) if (Type.enumEq(out.type, Array(element)) && (switch (input.type) { case Dyn: true; default: false; })):
 					var dynamicView = new IrValue(next++, "$value-array-dynamic-view", Array(Dyn));
 					target.instructions.push(new Located(SafeCast(dynamicView, input), located.provenance));
 					target.instructions.push(new Located(Call(out, retype, [dynamicView]), located.provenance));
@@ -133,9 +134,9 @@ class IrValueArrayProgramRewrite {
 			var target = new IrBlock(block.id);
 			for (located in block.instructions) {
 				var instruction = switch located.value {
-					case ArrayGet(out, array, index) if (Type.enumEq(array.type, Array(Dyn)) && out.type == Dyn):
+					case ArrayGet(out, array, index) if (Type.enumEq(array.type, Array(Dyn)) && (switch (out.type) { case Dyn: true; default: false; })):
 						changed = true; Call(out, "__array_get_any", [array, index]);
-					case ArraySet(array, index, value) if (Type.enumEq(array.type, Array(Dyn)) && value.type == Dyn):
+					case ArraySet(array, index, value) if (Type.enumEq(array.type, Array(Dyn)) && (switch (value.type) { case Dyn: true; default: false; })):
 						changed = true; Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any", [array, index, value]);
 					case Call(out, name, args) if ((name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref"
 							|| name == "__array_reverse_ref" || name == "__array_resize_ref" || name == "__array_copy_ref"

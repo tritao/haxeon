@@ -44,7 +44,7 @@ class EnumTypedefConstructorMain {
 
 		for (body in [
 			'return switch Edit.Empty { case Edit.Empty: 42; case Edit.InsertBlock(_, _): 0; };',
-			'var edit=Edit.Empty; return edit == Edit.Empty ? 42 : 0;',
+			'var edit=Edit.Empty; return switch edit { case Edit.Empty: 42; case Edit.InsertBlock(_, _): 0; };',
 			'var edit:Edit=InsertBlock(["root"],"hello"); return switch edit { case InsertBlock(path,block): path.length + block.length + 36; case Empty: 0; };',
 			'return switch document.Edits.Edit.InsertBlock([],"hello") { case document.Edits.Edit.InsertBlock(_,s): s.length + 37; case document.Edits.Edit.Empty: 0; };'
 		]) {
@@ -68,7 +68,7 @@ class EnumTypedefConstructorMain {
 
 		// A caller that uses the alias only as a nullary value must also be invalidated.
 		var nullary = compiler();
-		nullary.update("Main.hx", program('return Edit.Empty == Edit.Empty ? 42 : 0;'));
+		nullary.update("Main.hx", program('return switch Edit.Empty { case Edit.Empty: 42; case Edit.InsertBlock(_, _): 0; };'));
 		execute(nullary.compile("Main"), 42);
 		nullary.update("document/Edits.hx", "package document; typedef Edit = OtherEdit;");
 		execute(nullary.compile("Main"), 42);

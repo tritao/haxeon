@@ -74,7 +74,7 @@ class InlineConstantEvaluator {
 
 	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan, type:CompilerType):TypedExpression {
 		return switch value {
-			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), type == TInt64 ? TInt64 : TInt, span);
+			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), (switch (type) { case TInt64: true; default: false; }) ? TInt64 : TInt, span);
 			case InlineConstantValue.Floating(number): new TypedExpression(TFloatLiteral(number), TFloat, span);
 			case InlineConstantValue.Text(text): new TypedExpression(TStringLiteral(text), TString, span);
 			case InlineConstantValue.Boolean(flag): new TypedExpression(TBoolLiteral(flag), TBool, span);

@@ -228,14 +228,14 @@ class WasmScalarAbi {
 					if (noteClosure(out.type, candidates) && (values.isValue(receiver.type) || !directClones.exists(name)))
 						excluded.set(Std.string(out.type), true);
 				case CallClosure(_, closure, arguments):
-					if (closure.type == Dyn) {
+					if ((switch (closure.type) { case Dyn: true; default: false; })) {
 						if (!planningBoundaries && !boundariesAdapted) castArities.set(arguments.length, true);
 					} else noteClosure(closure.type, candidates);
 				case SafeCast(out, input):
 					var targetArity = closureArity(out.type), sourceArity = closureArity(input.type);
 					if (planningBoundaries || boundariesAdapted) {
 						if (targetArity >= 0) {
-							if (planningBoundaries && input.type == Dyn) noteClosure(out.type, candidates);
+							if (planningBoundaries && (switch (input.type) { case Dyn: true; default: false; })) noteClosure(out.type, candidates);
 							else excluded.set(Std.string(out.type), true);
 						}
 						if (sourceArity >= 0) excluded.set(Std.string(input.type), true);
@@ -561,7 +561,7 @@ class WasmScalarAbi {
 			}
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case Call(out, name, arguments) if (name == RETHROW_MARKER):
-					if (out.type != Void || arguments.length != 2 || arguments[0].type != Dyn || arguments[1].type != Bool)
+					if ((switch (out.type) { case Void: false; default: true; }) || arguments.length != 2 || (switch (arguments[0].type) { case Dyn: false; default: true; }) || (switch (arguments[1].type) { case Bool: false; default: true; }))
 						throw 'Invalid scalar rethrow in ${fn.name}';
 				case MethodCall(out, receiver, method, arguments) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
 					var virtual = scalarVirtuals.get(virtualKey(receiver.type, method));
@@ -593,7 +593,7 @@ class WasmScalarAbi {
 							throw 'Wrong scalar call argument $index for "$name": got ${arguments[index].type}, expected ${expected[index]}';
 					if (signature.mutatesReceiver || values.isValue(signature.result)) handles.set(out.id, resultTypes(signature));
 				case Call(out, name, arguments) if (name == RETURN_MARKER):
-					if (own == null || out.type != Void) throw 'Unexpected scalar return in ${fn.name}';
+					if (own == null || (switch (out.type) { case Void: false; default: true; })) throw 'Unexpected scalar return in ${fn.name}';
 					var expected = resultTypes(own);
 					if (arguments.length != expected.length) throw 'Wrong scalar result count in ${fn.name}';
 					for (index in 0...expected.length)
@@ -621,7 +621,7 @@ class WasmScalarAbi {
 	public function resultTypes(signature:WasmScalarSignature):Array<IrType> {
 		var result:Array<IrType> = [];
 		if (signature.mutatesReceiver) for (slot in values.leaves(signature.arguments[0])) result.push(slot.type);
-		if (signature.result != Void) {
+		if ((switch (signature.result) { case Void: false; default: true; })) {
 			if (values.isValue(signature.result)) for (slot in values.leaves(signature.result)) result.push(slot.type);
 			else result.push(signature.result);
 		}
@@ -687,7 +687,7 @@ class WasmScalarAbi {
 					if (values.isValue(signature.result)) for (slot in values.leaves(signature.result)) {
 						var read = readLeaf(replacement.instructions, value, slot.path, terminator.provenance, next);
 						next = read.next; parts.push(read.value);
-					} else if (signature.result != Void) parts.push(value);
+					} else if ((switch (signature.result) { case Void: false; default: true; })) parts.push(value);
 					if (signature.throwsReceiver) {
 						var exception = new IrValue(next++, "$wasm-gc-no-exception", Dyn), thrown = new IrValue(next++, "$wasm-gc-not-thrown", Bool);
 						replacement.instructions.push(new Located(ConstNull(exception), terminator.provenance));
@@ -788,7 +788,7 @@ class WasmScalarAbi {
 			next = writeLeaf(block.instructions, originalArgs[0], slot.path, scalar, origin.provenance, next);
 		}
 		if (callee.throwsReceiver) {
-			var resultCount = callee.result == Void ? 0 : values.isValue(callee.result) ? values.leaves(callee.result).length : 1,
+			var resultCount = (switch (callee.result) { case Void: true; default: false; }) ? 0 : values.isValue(callee.result) ? values.leaves(callee.result).length : 1,
 				exception = new IrValue(next++, "$wasm-gc-exception", Dyn), thrown = new IrValue(next++, "$wasm-gc-thrown", Bool),
 				check = new IrValue(next++, "$wasm-gc-rethrow", Void);
 			block.instructions.push(new Located(FieldGet(exception, handle, RESULT_FIELD_PREFIX + (index + resultCount)), origin.provenance));
@@ -802,7 +802,7 @@ class WasmScalarAbi {
 				block.instructions.push(new Located(FieldGet(scalar, handle, RESULT_FIELD_PREFIX + index++), origin.provenance));
 				next = writeLeaf(block.instructions, out, slot.path, scalar, origin.provenance, next);
 			}
-		} else if (out.type == Void) block.instructions.push(new Located(ConstVoid(out), origin.provenance));
+		} else if ((switch (out.type) { case Void: true; default: false; })) block.instructions.push(new Located(ConstVoid(out), origin.provenance));
 		else block.instructions.push(new Located(FieldGet(out, handle, RESULT_FIELD_PREFIX + index), origin.provenance));
 		return next;
 	}

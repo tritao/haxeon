@@ -386,11 +386,27 @@ class Parser {
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
-			typeParameters = parseTypeParameters(typeConstraints), cases = [];
+			typeParameters = parseTypeParameters(typeConstraints), cases = [], conformances = [], methods = [];
+		if (match(TokenKind.Colon)) {
+			conformances.push(parseType());
+			while (match(TokenKind.Comma)) conformances.push(parseType());
+		}
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseMetadata = parseMetadata(),
-				caseToken = consumeName(),
+			var caseMetadata = parseMetadata(), isStatic = false, isInline = false, isPublic:Null<Bool> = null;
+			while (true) switch current().kind {
+				case TokenKind.Public, TokenKind.Private: isPublic = current().kind == TokenKind.Public; advance();
+				case TokenKind.Static: isStatic = true; advance();
+				case TokenKind.Inline: isInline = true; advance();
+				default: break;
+			}
+			if (match(TokenKind.Function)) {
+				var functionStart = previous().span, methodName = consume(TokenKind.Identifier).text;
+				methods.push(parseFunctionBody(functionStart, methodName, false, isStatic, false, caseMetadata, isInline, isPublic));
+				continue;
+			}
+			if (isStatic || isInline || isPublic != null) fail(current(), "Enum constructor cannot have method modifiers");
+			var caseToken = consumeName(),
 				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
 			if (match(TokenKind.LeftParen)) {
 				if (!check(TokenKind.RightParen))
@@ -425,6 +441,8 @@ class Parser {
 			name: name,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
+			conformances: conformances,
+			methods: methods,
 			metadata: metadata,
 			cases: cases,
 			span: start.merge(end)

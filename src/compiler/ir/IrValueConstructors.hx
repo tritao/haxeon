@@ -9,7 +9,7 @@ class IrValueConstructors {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var constructors:Map<String, IrFunction> = [], straight:Map<String, IrFunction> = [];
 		for (fn in program.functions) {
-			if (!StringTools.endsWith(fn.name, ".new") || fn.arguments.length == 0 || fn.result != Void) continue;
+			if (!StringTools.endsWith(fn.name, ".new") || fn.arguments.length == 0 || (switch (fn.result) { case Void: false; default: true; })) continue;
 			var owner = switch fn.arguments[0].type { case Obj(name): objects.get(name); default: null; };
 			if (owner == null || !owner.isValue || fn.blocks.length == 0 || fn.blocks.length > 16) continue;
 			var safe = true, count = 0;

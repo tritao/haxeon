@@ -50,7 +50,7 @@ class FieldInference {
 				return InferredType;
 		var element = literalElementType(values[0]);
 		for (index in 1...values.length)
-			if (literalElementType(values[index]) != element)
+			if (!Type.enumEq(literalElementType(values[index]), element))
 				throw new CompileError(new Diagnostic("E1002", 'Array initializer for field "${field.name}" has mixed element types', field.span));
 		return ArrayType(element);
 	}
@@ -74,7 +74,7 @@ class FieldInference {
 			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
 				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
 				var pair = numericPair(left, right);
-				pair == IntType ? IntType : null;
+				(switch (pair) { case IntType: true; default: false; }) ? IntType : null;
 			default: null;
 		};
 		if (inferred == null) {
@@ -113,13 +113,13 @@ class FieldInference {
 			case Variable(name, _) if (name.indexOf(".") < 0): var ownerClass = classes.get(owner),
 					target:Null<AstField> = null; if (ownerClass != null) for (candidate in ownerClass.fields) if (candidate.isStatic && candidate.name == name) target = candidate; if (target == null
 					|| resolving.exists(owner + "." + name)) return null; var type = resolveField(target, owner, classes, aliases, enums, enumAbstracts,
-					resolving); type == IntType || type == FloatType ? type : null;
+					resolving); (switch (type) { case IntType: true; default: false; }) || (switch (type) { case FloatType: true; default: false; }) ? type : null;
 			case Div(left, right, _): operand(left) == null || operand(right) == null ? null : FloatType;
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): var leftType = operand(left),
-					rightType = operand(right); leftType == null || rightType == null ? null : leftType == FloatType
-				|| rightType == FloatType ? FloatType : IntType;
+					rightType = operand(right); leftType == null || rightType == null ? null : (switch (leftType) { case FloatType: true; default: false; })
+				|| (switch (rightType) { case FloatType: true; default: false; }) ? FloatType : IntType;
 			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
-				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): operand(left) == IntType && operand(right) == IntType ? IntType : null;
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): (switch (operand(left)) { case IntType: true; default: false; }) && (switch (operand(right)) { case IntType: true; default: false; }) ? IntType : null;
 			default: null;
 		};
 	}
@@ -133,7 +133,7 @@ class FieldInference {
 			case Div(left, right, _): numericPair(left, right) == null ? null : FloatType;
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _): numericPair(left, right);
 			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
-				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): numericPair(left, right) == IntType ? IntType : null;
+				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _): (switch (numericPair(left, right)) { case IntType: true; default: false; }) ? IntType : null;
 			default: null;
 		};
 
@@ -142,7 +142,7 @@ class FieldInference {
 			rightType = nullableNumericType(right);
 		if (leftType == null || rightType == null)
 			return null;
-		return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
+		return (switch (leftType) { case FloatType: true; default: false; }) || (switch (rightType) { case FloatType: true; default: false; }) ? FloatType : IntType;
 	}
 
 	/**
@@ -172,7 +172,7 @@ class FieldInference {
 			aliases:AliasTable, enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):AstType {
 		var inferred = parsedType(field, expression);
-		if (inferred != InferredType)
+		if ((switch (inferred) { case InferredType: false; default: true; }))
 			return inferred;
 		switch expression {
 			case ArrayLiteral(values, _):
@@ -326,13 +326,13 @@ class FieldInference {
 			enums:Map<String, compiler.syntax.Ast.AstEnum>, enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):Null<AstType> {
 		function numeric(type:Null<AstType>):Bool
-			return type == IntType || type == FloatType;
+			return (switch (type) { case IntType: true; default: false; }) || (switch (type) { case FloatType: true; default: false; });
 		function pair(left:AstExpression, right:AstExpression):Null<AstType> {
 			var leftType = operandType(left, owner, classes, aliases, enums, enumAbstracts, resolving),
 				rightType = operandType(right, owner, classes, aliases, enums, enumAbstracts, resolving);
 			if (!numeric(leftType) || !numeric(rightType))
 				return null;
-			return leftType == FloatType || rightType == FloatType ? FloatType : IntType;
+			return (switch (leftType) { case FloatType: true; default: false; }) || (switch (rightType) { case FloatType: true; default: false; }) ? FloatType : IntType;
 		}
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
@@ -344,13 +344,13 @@ class FieldInference {
 			case Add(left, right, _):
 				var leftType = operandType(left, owner, classes, aliases, enums, enumAbstracts, resolving),
 					rightType = operandType(right, owner, classes, aliases, enums, enumAbstracts, resolving);
-				if (leftType == StringType && rightType == StringType) StringType; else if (numeric(leftType) && numeric(rightType)) (leftType == FloatType
-					|| rightType == FloatType ? FloatType : IntType); else null;
+				if ((switch (leftType) { case StringType: true; default: false; }) && (switch (rightType) { case StringType: true; default: false; })) StringType; else if (numeric(leftType) && numeric(rightType)) ((switch (leftType) { case FloatType: true; default: false; })
+					|| (switch (rightType) { case FloatType: true; default: false; }) ? FloatType : IntType); else null;
 			case Div(left, right, _): pair(left, right) == null ? null : FloatType;
 			case Sub(left, right, _), Mul(left, right, _): pair(left, right);
 			case Mod(left, right, _), BitAnd(left, right, _), BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _),
 				ShiftRight(left, right, _), UnsignedShiftRight(left, right, _):
-				pair(left, right) == IntType ? IntType : null;
+				(switch (pair(left, right)) { case IntType: true; default: false; }) ? IntType : null;
 			case Call(_, _, _): staticCallResult(expression, owner, classes, aliases);
 			default: staticFieldType(expression, owner, classes, aliases, enums, enumAbstracts, resolving);
 		};
@@ -407,7 +407,7 @@ class FieldInference {
 			return null;
 		}
 		for (method in declaration.methods)
-			if (method.isStatic && method.name == methodName && method.result != InferredType) {
+			if (method.isStatic && method.name == methodName && (switch (method.result) { case InferredType: false; default: true; })) {
 				resolving.remove(owner);
 				return method.result;
 			}

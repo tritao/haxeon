@@ -119,6 +119,8 @@ typedef AstEnum = {
 	final name:String;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
+	final ?conformances:Array<AstType>;
+	final ?methods:Array<AstFunction>;
 	final metadata:Array<AstMetadata>;
 	final cases:Array<AstEnumCase>;
 	final span:SourceSpan;

@@ -94,7 +94,7 @@ class SignatureInference {
 			for (method in methods) {
 				var environment = new InferenceEnvironment();
 				for (argument in method.arguments)
-					if (argument.type != InferredType)
+					if ((switch (argument.type) { case InferredType: false; default: true; }))
 						environment.set(argument.name, argument.type);
 				collectCallConstraints(method.statements, environment, byName, calleeConstraints);
 			}
@@ -141,7 +141,7 @@ class SignatureInference {
 		if (isSetter) {
 			if (arguments.length != 1)
 				return method;
-			if (arguments[0].type == InferredType) {
+			if ((switch (arguments[0].type) { case InferredType: true; default: false; })) {
 				var argument = arguments[0];
 				arguments = [
 					{
@@ -165,7 +165,7 @@ class SignatureInference {
 			typeParameters: method.typeParameters,
 			typeConstraints: method.typeConstraints,
 			arguments: arguments,
-			result: method.result == InferredType ? propertyType : method.result,
+			result: (switch (method.result) { case InferredType: true; default: false; }) ? propertyType : method.result,
 			statements: method.statements,
 			span: method.span
 		};
@@ -222,7 +222,7 @@ class SignatureInference {
 						constraints.set(methodName, inferred);
 					}
 					for (index in 0...arguments.length)
-						if (index < callee.arguments.length && callee.arguments[index].type == InferredType)
+						if (index < callee.arguments.length && (switch (callee.arguments[index].type) { case InferredType: true; default: false; }))
 							switch arguments[index] {
 								case Variable(argumentName, _):
 									if (environment.exists(argumentName)) inferred.set(callee.arguments[index].name, environment.get(argumentName));
@@ -313,7 +313,7 @@ class SignatureInference {
 			return;
 		var callable = callables.get(name);
 		for (index in 0...arguments.length)
-			if (index < callable.arguments.length && callable.arguments[index].type != InferredType)
+			if (index < callable.arguments.length && (switch (callable.arguments[index].type) { case InferredType: false; default: true; }))
 				switch arguments[index] {
 					case Variable(argumentName, _):
 						inferred.set(argumentName, callable.arguments[index].type);
@@ -351,11 +351,11 @@ class SignatureInference {
 	}
 
 	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
-		if (fn.result != InferredType)
+		if ((switch (fn.result) { case InferredType: false; default: true; }))
 			return fn;
 		var environment = new InferenceEnvironment();
 		for (argument in fn.arguments)
-			if (argument.type != InferredType)
+			if ((switch (argument.type) { case InferredType: false; default: true; }))
 				environment.set(argument.name, argument.type);
 		if (owner != null)
 			for (field in owner.fields)
@@ -430,7 +430,7 @@ class SignatureInference {
 			case NewArray(element, _, _): ArrayType(element);
 			case Call(name, _, _):
 				var method = methods == null ? null : methods.get(localMethodName(name));
-				if (method != null && method.result != InferredType) method.result; else inferQualifiedCollectionCall(name, environment);
+				if (method != null && (switch (method.result) { case InferredType: false; default: true; })) method.result; else inferQualifiedCollectionCall(name, environment);
 			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods) {
 					case FunctionType(_, result): result;
 					default: null;
@@ -629,7 +629,7 @@ class SignatureInference {
 	static function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (argument in fn.arguments)
-			if (argument.type == InferredType && argument.defaultValue != null) {
+			if ((switch (argument.type) { case InferredType: true; default: false; }) && argument.defaultValue != null) {
 				var defaultType = inferSimpleExpression(argument.defaultValue, new InferenceEnvironment());
 				if (defaultType != null)
 					inferred.set(argument.name, defaultType);
@@ -640,7 +640,7 @@ class SignatureInference {
 	static function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
 		var changed = false, arguments:Array<AstArgument> = [
 			for (argument in fn.arguments) {
-				var inferredType = argument.type == InferredType && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
+				var inferredType = (switch (argument.type) { case InferredType: true; default: false; }) && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
 				if (inferredType != null) changed = true;
 				{
 					name: argument.name,

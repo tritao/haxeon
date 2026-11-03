@@ -717,6 +717,9 @@ class FrontendCompilation {
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
 				if (!StringTools.startsWith(cached, "$value$equality:")
+					&& !StringTools.startsWith(cached, "$enum-equals:")
+					&& !StringTools.startsWith(cached, "$enum-reflect-equals:")
+					&& !StringTools.startsWith(cached, "$enum-custom:")
 					&& !StringTools.startsWith(cached, "$hash$value$equality:")
 					&& !StringTools.startsWith(cached, "$wire:")
 					&& !StringTools.startsWith(cached, "$json:"))
@@ -846,7 +849,7 @@ class FrontendCompilation {
 	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>, interfaces:Map<String, Bool>):Bool
 		return switch type {
 			case Obj(name): objects.exists(name);
-			case Enum(name): enums.exists(name);
+			case Enum(name): enums.exists(compiler.types.typing.EnumRuntimeType.declaration(name));
 			case Virtual(name): interfaces.exists(name);
 			case Array(element), Iterator(element): typeResolved(element, objects, enums, interfaces);
 			case Function(arguments, result):
@@ -900,10 +903,10 @@ class FrontendCompilation {
 	}
 
 	static function explicitSignature(fn:compiler.syntax.Ast.AstFunction):Bool {
-		if (fn.result == InferredType)
+		if ((switch (fn.result) { case InferredType: true; default: false; }))
 			return false;
 		for (argument in fn.arguments)
-			if (argument.type == InferredType)
+			if ((switch (argument.type) { case InferredType: true; default: false; }))
 				return false;
 		return true;
 	}

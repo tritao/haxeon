@@ -1092,7 +1092,7 @@ class ExpressionTyper {
 			var value = typeExpressionCallback(field.value, scope, expectedField == null ? null : expectedField.type, false);
 			if (expectedField != null)
 				value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
-			else if (value.type == TNull)
+			else if ((switch (value.type) { case TNull: true; default: false; }))
 				value = coerce(value, TDynamic, 'object field "${field.name}"', "E1002");
 			typedFields.push({name: field.name, value: value});
 		}
@@ -1150,7 +1150,7 @@ class ExpressionTyper {
 		var typedValues:Array<TypedExpression> = [],
 			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;
 		for (value in values) {
-			var typedValue = typeExpressionCallback(value, scope, elementType == TNull || dynamicContext ? null : elementType, false);
+			var typedValue = typeExpressionCallback(value, scope, (switch (elementType) { case TNull: true; default: false; }) || dynamicContext ? null : elementType, false);
 			if (expectedElement == null) {
 				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType, typedValue.type);
 				if (joined == null && dynamicContext)
@@ -1193,9 +1193,9 @@ class ExpressionTyper {
 		}
 		if (keyType == null || valueType == null)
 			fail("E1003", "An empty map literal requires an expected key and value type", span);
+		DeclaredConformance.requestHashableMapKey(session, keyType, span);
 		if (session.mapName(keyType, valueType) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-		DeclaredConformance.requestHashableMapKey(session, keyType, span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
 
@@ -1260,9 +1260,9 @@ class ExpressionTyper {
 					fail("E1014", "Key/value array comprehension requires a Map", span);
 				keyType = TInt;
 			case TMap(key, mapValue):
+				DeclaredConformance.requestHashableMapKey(session, key, span);
 				if (session.mapName(key, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-				DeclaredConformance.requestHashableMapKey(session, key, span);
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
@@ -1297,7 +1297,7 @@ class ExpressionTyper {
 			}
 		}
 		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
-		if (typedCondition != null && typedCondition.type != TBool)
+		if (typedCondition != null && (switch (typedCondition.type) { case TBool: false; default: true; }))
 			fail("E1004", "Array comprehension condition must be Bool", span);
 		// The value is only computed where the condition holds, so it sees what the condition proves.
 		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
@@ -1366,9 +1366,9 @@ class ExpressionTyper {
 					fail("E1014", "Key/value map comprehension requires a Map", span);
 				itemType = TInt;
 			case TMap(mapKey, mapValue):
+				DeclaredConformance.requestHashableMapKey(session, mapKey, span);
 				if (session.mapName(mapKey, mapValue) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-				DeclaredConformance.requestHashableMapKey(session, mapKey, span);
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
@@ -1387,7 +1387,7 @@ class ExpressionTyper {
 				default:
 			}
 		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
-		if (typedCondition != null && typedCondition.type != TBool)
+		if (typedCondition != null && (switch (typedCondition.type) { case TBool: false; default: true; }))
 			fail("E1004", "Map comprehension condition must be Bool", span);
 		// The entry is only computed where the condition holds, so it sees what the condition proves.
 		var entryScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
@@ -1398,9 +1398,9 @@ class ExpressionTyper {
 			resultValue = expected == null ? typedValue.type : expected.value;
 		typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
 		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
+		DeclaredConformance.requestHashableMapKey(session, resultKey, span);
 		if (session.mapName(resultKey, resultValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-		DeclaredConformance.requestHashableMapKey(session, resultKey, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TMap(resultKey, resultValue),
 				resultName = "$comprehension-result:" + span.start;
@@ -1431,7 +1431,7 @@ class ExpressionTyper {
 	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedStart = typeExpressionCallback(start, scope, TInt, false),
 			typedEnd = typeExpressionCallback(rangeEnd, scope, TInt, false);
-		if (typedStart.type != TInt || typedEnd.type != TInt)
+		if ((switch (typedStart.type) { case TInt: false; default: true; }) || (switch (typedEnd.type) { case TInt: false; default: true; }))
 			fail("E1014", "Range bounds must be Int values", span);
 		return new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 	}
@@ -1444,17 +1444,17 @@ class ExpressionTyper {
 			typedArray = session.representation.boundaryCast(typedArray, forwardedArray);
 		return switch typedArray.type {
 			case TMap(key, value):
+				DeclaredConformance.requestHashableMapKey(session, key, span);
 				if (session.mapName(key, value) == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-				DeclaredConformance.requestHashableMapKey(session, key, span);
 				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? CallResolver.nullableMapValue(value) : refined, span);
 			default:
-				if (typedIndex.type == TNever)
+				if ((switch (typedIndex.type) { case TNever: true; default: false; }))
 					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-				if (typedIndex.type != TInt)
+				if ((switch (typedIndex.type) { case TInt: false; default: true; }))
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = arrayElementType(typedArray.type, span);
 				var access = new TypedExpression(TIndex(typedArray, typedIndex), element, span), path = FlowAnalysis.accessPath(access),
@@ -1465,7 +1465,7 @@ class ExpressionTyper {
 
 	public function typeNewArray(element:AstType, length:AstExpression, span:SourceSpan, scope:Scope, lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var typedLength = typeExpressionCallback(length, scope, null, false);
-		if (typedLength.type != TInt)
+		if ((switch (typedLength.type) { case TInt: false; default: true; }))
 			fail("E1014", "Array length must be Int", typedLength.span);
 		var loweredElement = lowerType(element);
 		return new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
@@ -1473,9 +1473,9 @@ class ExpressionTyper {
 
 	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan, lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var loweredKey = lowerType(key), loweredValue = lowerType(value);
+		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
 		if (session.mapName(loweredKey, loweredValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
-		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 
@@ -1505,7 +1505,7 @@ class ExpressionTyper {
 		// (for example, `case A: SomeConstructor(...); default: value;`). Seed that
 		// context from the fallback before typing the arms; the normal branch join below
 		// still permits widening and nullable results.
-		if (expectedType == null && typedDefault != null && typedDefault.type != TNever)
+		if (expectedType == null && typedDefault != null && (switch (typedDefault.type) { case TNever: false; default: true; }))
 			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
@@ -1534,7 +1534,7 @@ class ExpressionTyper {
 			var enumName:Null<String> = pattern == null ? null : pattern.enumName,
 				constructorIndex = pattern == null ? -1 : pattern.index,
 				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
-			if (expectedType == null && typedResult.type != TNever) {
+			if (expectedType == null && (switch (typedResult.type) { case TNever: false; default: true; })) {
 				var joined = resultType == null ? typedResult.type : commonConditionalType(resultType, typedResult.type);
 				if (joined == null)
 					fail("E1003", "Switch branches must have matching types", switchCase.span);
@@ -1569,7 +1569,7 @@ class ExpressionTyper {
 				predicates: predicates
 			});
 		}
-		if (typedDefault != null && expectedType == null && typedDefault.type != TNever) {
+		if (typedDefault != null && expectedType == null && (switch (typedDefault.type) { case TNever: false; default: true; })) {
 			var joined = resultType == null ? typedDefault.type : commonConditionalType(resultType, typedDefault.type);
 			if (joined == null)
 				fail("E1003", "Switch branches must have matching types", span);
@@ -1663,7 +1663,7 @@ class ExpressionTyper {
 				contextualType = contextualExpressionType(whenFalse, falseScope);
 			if (contextualType != null
 				&& !isNullable(contextualType)
-				&& contextualType != TNull
+				&& (switch (contextualType) { case TNull: false; default: true; })
 				&& (containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse)))
 				contextualType = TNullable(contextualType);
 		}
@@ -1671,13 +1671,13 @@ class ExpressionTyper {
 		var earlyFalse:Null<TypedExpression> = null;
 		if (contextualType == null && isEmptyLiteral(whenTrue)) {
 			earlyFalse = typeExpressionCallback(whenFalse, falseScope, null, false);
-			if (earlyFalse.type != TNull && earlyFalse.type != TNever)
+			if ((switch (earlyFalse.type) { case TNull: false; default: true; }) && (switch (earlyFalse.type) { case TNever: false; default: true; }))
 				contextualType = earlyFalse.type;
 		}
 		var typedTrue = typeExpressionCallback(whenTrue, trueScope, contextualType, false),
 			branchExpected = expectedType == null
-				&& typedTrue.type != TNull
-				&& typedTrue.type != TNever ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
+				&& (switch (typedTrue.type) { case TNull: false; default: true; })
+				&& (switch (typedTrue.type) { case TNever: false; default: true; }) ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
 			typedFalse = earlyFalse != null ? earlyFalse : typeExpressionCallback(whenFalse, falseScope, branchExpected, false),
 			resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 		if (resultType == null)
@@ -1689,7 +1689,7 @@ class ExpressionTyper {
 
 	/** A branch in a Void context is evaluated for its effects and its value is discarded. */
 	function branchResult(value:TypedExpression, resultType:CompilerType, context:String):TypedExpression {
-		if (resultType != TVoid || value.type == TVoid || value.type == TNever)
+		if ((switch (resultType) { case TVoid: false; default: true; }) || (switch (value.type) { case TVoid: true; default: false; }) || (switch (value.type) { case TNever: true; default: false; }))
 			return coerce(value, resultType, context, "E1003");
 		return new TypedExpression(TBlockExpression([TExpression(value, value.span)], new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
 	}
@@ -1731,7 +1731,7 @@ class ExpressionTyper {
 	}
 
 	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedValue = typeExpressionCallback(value, scope, expectedType == TInt64 ? TInt64 : null, false);
+		var typedValue = typeExpressionCallback(value, scope, (switch (expectedType) { case TInt64: true; default: false; }) ? TInt64 : null, false);
 		var overloaded = callResolver.typeAbstractOperator("u-", [typedValue], span, scope);
 		if (overloaded != null)
 			return overloaded;
@@ -1816,26 +1816,26 @@ class ExpressionTyper {
 		};
 
 	public function commonConditionalType(left:CompilerType, right:CompilerType):Null<CompilerType> {
-		if (left == TNever)
+		if ((switch (left) { case TNever: true; default: false; }))
 			return right;
-		if (right == TNever || sameType(left, right))
+		if ((switch (right) { case TNever: true; default: false; }) || sameType(left, right))
 			return left;
-		if ((left == TInt && right == TFloat) || (left == TFloat && right == TInt))
+		if (((switch (left) { case TInt: true; default: false; }) && (switch (right) { case TFloat: true; default: false; })) || ((switch (left) { case TFloat: true; default: false; }) && (switch (right) { case TInt: true; default: false; })))
 			return TFloat;
 		// Dynamic holds any value, so joining with it is Dynamic. Assignability alone would pick the other side, since
 		// Dynamic converts to anything implicitly, and the Dynamic values would then need a cast that can fail.
-		if (left == TDynamic || right == TDynamic)
+		if ((switch (left) { case TDynamic: true; default: false; }) || (switch (right) { case TDynamic: true; default: false; }))
 			return TDynamic;
 		switch left {
 			case TNull:
-				return right == TVoid ? null : (isNullable(right) ? right : TNullable(right));
+				return (switch (right) { case TVoid: true; default: false; }) ? null : (isNullable(right) ? right : TNullable(right));
 			case TNullable(inner) if (sameType(inner, right)):
 				return TNullable(inner);
 			default:
 		}
 		switch right {
 			case TNull:
-				return left == TVoid ? null : (isNullable(left) ? left : TNullable(left));
+				return (switch (left) { case TVoid: true; default: false; }) ? null : (isNullable(left) ? left : TNullable(left));
 			case TNullable(inner) if (sameType(left, inner)):
 				return TNullable(inner);
 			default:
@@ -1878,14 +1878,14 @@ class ExpressionTyper {
 		if (overloaded != null)
 			return overloaded;
 		if (expected != null && isNumeric(expected)) {
-			if (left.type == TDynamic)
+			if ((switch (left.type) { case TDynamic: true; default: false; }))
 				left = coerce(left, expected, "arithmetic operand", "E1010");
-			if (right.type == TDynamic)
+			if ((switch (right.type) { case TDynamic: true; default: false; }))
 				right = coerce(right, expected, "arithmetic operand", "E1010");
 		}
-		if (left.type == TNever && isNumeric(right.type))
+		if ((switch (left.type) { case TNever: true; default: false; }) && isNumeric(right.type))
 			left = coerce(left, right.type, "arithmetic operand", "E1009");
-		if (right.type == TNever && isNumeric(left.type))
+		if ((switch (right.type) { case TNever: true; default: false; }) && isNumeric(left.type))
 			right = coerce(right, left.type, "arithmetic operand", "E1009");
 		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
 			left = stringify(left);
@@ -1991,7 +1991,7 @@ class ExpressionTyper {
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
 		var result = compareOperands(left, right, operation, span, reversed);
-		return operation == 2 ? enumIdentityComparison(result) : result;
+		return operation == 2 ? enumValueComparison(result) : result;
 	}
 
 	/** Compare already-typed fields with the same operator resolution as a source-level `==`. */
@@ -2000,34 +2000,22 @@ class ExpressionTyper {
 		return overloaded == null ? compareTyped(left, right, 2, span, false) : overloaded;
 	}
 
-	/**
-	 * `==` on two values of an enum with payload constructors compares by identity, as in Haxe: `Circle(1) == Circle(1)` is
-	 * false for two separately built values. A constructor without fields denotes one value, so `Dot == Dot` is true however
-	 * the two came about. The comparison becomes `$enum.equal(left, right, nullary constructor indices...)` for the IR
-	 * generator. An enum with no payload constructor keeps the plain constructor comparison, which is the same thing.
-	 */
-	function enumIdentityComparison(comparison:TypedExpression):TypedExpression {
+	/** Payload-enum equality is a declared value operation, independent of physical storage. */
+	function enumValueComparison(comparison:TypedExpression):TypedExpression {
 		switch comparison.expression {
 			case TEqual(left, right):
-				if (isNullOperand(left) || isNullOperand(right))
-					return comparison;
+				if (isNullOperand(left) || isNullOperand(right)) return comparison;
 				var name = enumNameOf(left.type);
-				if (name == null || name != enumNameOf(right.type) || !session.enumDecls.exists(name))
-					return comparison;
-				var declaration = session.enumDecls.get(name), nullary = [], payload = false;
-				for (index in 0...declaration.cases.length)
-					if (declaration.cases[index].params.length == 0)
-						nullary.push(index);
-					else
-						payload = true;
-				if (!payload)
-					return comparison;
-				var arguments = [left, right];
-				for (index in nullary)
-					arguments.push(new TypedExpression(TIntLiteral(index), TInt, comparison.span));
-				return new TypedExpression(TCall("$enum.equal", arguments), TBool, comparison.span);
-			default:
-				return comparison;
+				if (name == null || name != enumNameOf(right.type) || !session.enumDecls.exists(name)) return comparison;
+				var declaration = session.enumDecls.get(name), payload = false;
+				for (constructor in declaration.cases) if (constructor.params.length > 0) payload = true;
+				if (!payload) return comparison;
+				var type = left.type;
+				if (!DeclaredConformance.has(session, type, "Equatable"))
+					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
+				EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(type), [left, right]), TBool, comparison.span);
+			default: return comparison;
 		}
 	}
 
@@ -2040,7 +2028,7 @@ class ExpressionTyper {
 		};
 
 	static function isNullOperand(expression:TypedExpression):Bool
-		return expression.type == TNull || switch expression.expression {
+		return (switch (expression.type) { case TNull: true; default: false; }) || switch expression.expression {
 			case TNullLiteral: true;
 			case TNullableWrap(value), TCast(value): isNullOperand(value);
 			default: false;
@@ -2071,8 +2059,8 @@ class ExpressionTyper {
 			right = original;
 		}
 		if (operation == 2
-			&& ((sameType(left.type, TNull) && !isNullable(right.type) && right.type != TNull && !TypeRelations.isReference(right.type))
-				|| (sameType(right.type, TNull) && !isNullable(left.type) && left.type != TNull && !TypeRelations.isReference(left.type))))
+			&& ((sameType(left.type, TNull) && !isNullable(right.type) && (switch (right.type) { case TNull: false; default: true; }) && !TypeRelations.isReference(right.type))
+				|| (sameType(right.type, TNull) && !isNullable(left.type) && (switch (left.type) { case TNull: false; default: true; }) && !TypeRelations.isReference(left.type))))
 			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2
 			&& ((sameType(left.type, TNull) && session.relations.isStruct(right.type))

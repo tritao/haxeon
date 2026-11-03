@@ -1,4 +1,4 @@
-enum Choice {
+enum Choice : Equatable {
 	Empty;
 	Other;
 	Value(value:Int);
@@ -11,7 +11,7 @@ function main():Int {
 		return 1;
 	var payload:Choice = Value(7);
 	var payloads:Array<Choice> = [Empty, payload];
-	if (payloads.indexOf(payload) != 1 || payloads.indexOf(Value(7)) != -1)
+	if (payloads.indexOf(payload) != 1 || payloads.indexOf(Value(7)) != 1)
 		return 2;
 	var nullable:Array<Null<Choice>> = [null, Other, Empty];
 	if (nullable.indexOf(null) != 0 || nullable.indexOf(Empty) != 2 || !nullable.contains(Other))

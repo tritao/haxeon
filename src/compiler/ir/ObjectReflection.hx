@@ -127,7 +127,7 @@ class ObjectReflection {
 				};
 				case "__reflect_set_field": (inner, entry, target, args) -> {
 					forEachField(inner, args[0], entry, field -> {
-						inner.fieldSet(logicalObject(inner, entry, target), field.name, field.type == Dyn ? args[1] : inner.safeCast(args[1], field.type));
+						inner.fieldSet(logicalObject(inner, entry, target), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? args[1] : inner.safeCast(args[1], field.type));
 						inner.returnValue(inner.constVoid());
 					});
 					inner.returnValue(inner.call(fallback, [inner.toDyn(target)].concat(args), Void));
@@ -213,7 +213,7 @@ class ObjectReflection {
 	static function setFieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
 		var value = arguments[1];
 		forEachField(builder, arguments[0], layout, field -> {
-			builder.fieldSet(logicalObject(builder, layout, typed), field.name, field.type == Dyn ? value : builder.safeCast(value, field.type));
+			builder.fieldSet(logicalObject(builder, layout, typed), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? value : builder.safeCast(value, field.type));
 			builder.returnValue(builder.constBool(true));
 		});
 		builder.returnValue(builder.constBool(false));

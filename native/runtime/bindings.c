@@ -248,6 +248,7 @@ DEFINE_PRIM(_DYN,__array_pop_any,_ARR);
 DEFINE_PRIM(_DYN,__array_shift_any,_ARR);
 DEFINE_PRIM(_I32,__array_index_of_any,_ARR _DYN);
 DEFINE_PRIM(_BOOL,__array_remove_any,_ARR _DYN);
+DEFINE_PRIM(_VOID,__array_remove_at_any,_ARR _I32);
 DEFINE_PRIM(_ARR,__array_concat_any,_ARR _ARR);
 DEFINE_PRIM(_ARR,__array_copy_any,_ARR);
 DEFINE_PRIM(_ARR,__array_slice_any,_ARR _I32 _I32);

@@ -31,6 +31,7 @@ class WasmLinearDynamicArrays {
 		"__array_shift_any",
 		"__array_index_of_any",
 		"__array_remove_any",
+		"__array_remove_at_any",
 		"__array_concat_any",
 		"__array_copy_any",
 		"__array_slice_any",
@@ -190,6 +191,7 @@ class WasmLinearDynamicArrays {
 			case "__array_shift_any": addTake(name, "shift", true);
 			case "__array_index_of_any": indexOf();
 			case "__array_remove_any": addRemove(name);
+			case "__array_remove_at_any": addRemoveAt(name);
 			case "__array_concat_any": addConcat(name);
 			case "__array_copy_any": addStorageOperation(name, "copy", [I32], [I32]);
 			case "__array_slice_any": addStorageOperation(name, "slice", [I32, I32, I32], [I32]);
@@ -572,7 +574,7 @@ class WasmLinearDynamicArrays {
 			builder.localGet(value);
 			builder.i32Eqz();
 			builder.if_(function(builder) {
-				builder.emit(kind == F64 ? F64Const(0.0) : kind == I64 ? I64Const(0) : I32Const(0));
+				builder.emit((switch (kind) { case F64: true; default: false; }) ? F64Const(0.0) : (switch (kind) { case I64: true; default: false; }) ? I64Const(0) : I32Const(0));
 				builder.return_();
 			});
 			builder.localGet(value);
@@ -857,7 +859,7 @@ class WasmLinearDynamicArrays {
 					// Unbox the payload that the value's own type holds, converted for the target storage.
 					function payload(builder:WasmFunctionBuilder, type:IrType, convert:Array<WasmInstruction>):Void {
 						builder.localGet(value);
-						builder.emit(type == F64 ? F64Load(WasmLayout.DYN_PAYLOAD_OFFSET) : type == I64 ? I64Load(WasmLayout.DYN_PAYLOAD_OFFSET) : I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
+						builder.emit((switch (type) { case F64: true; default: false; }) ? F64Load(WasmLayout.DYN_PAYLOAD_OFFSET) : (switch (type) { case I64: true; default: false; }) ? I64Load(WasmLayout.DYN_PAYLOAD_OFFSET) : I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
 						builder.emitAll(convert);
 					}
 					isOneOf(builder, target, [F64]);
@@ -1192,6 +1194,27 @@ class WasmLinearDynamicArrays {
 		builder.emit(MemoryFill);
 		builder.i32Const(1);
 		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+
+	function addRemoveAt(name:String):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
+			array = builder.parameter("array", 0), index = builder.parameter("index", 1),
+			length = builder.local("length", I32), strideLocal = builder.local("stride", I32), next = builder.local("next", I32);
+		if (context.functions.exists("$linear-value-array:initialized")) builder.emitAll(WasmLinearValueArrays.resolveForward(array));
+		builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(length),
+			LocalGet(index), I32Const(0), I32LtS, LocalGet(index), LocalGet(length), I32LtS, I32Eqz, I32Or, If(null)]);
+		builder.i32Const(string("Array index out of bounds")); raise(builder); builder.emit(End);
+		if (context.functions.exists("$linear-value-array:operation:remove_at")) builder.emitAll([
+			LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
+			LocalGet(array), LocalGet(index), Call(concrete("$linear-value-array:operation:remove_at")), Return, End]);
+		builder.localGet(array); builder.call(builder.functionRef(stride())); builder.localSet(strideLocal);
+		builder.emitAll([LocalGet(index), I32Const(1), I32Add, LocalSet(next)]);
+		slotAddress(builder, array, index, strideLocal); slotAddress(builder, array, next, strideLocal);
+		builder.emitAll([LocalGet(length), LocalGet(next), I32Sub, LocalGet(strideLocal), I32Mul, MemoryCopy,
+			LocalGet(length), I32Const(1), I32Sub, LocalSet(length), LocalGet(array), LocalGet(length), I32Store(WasmLayout.ARRAY_LENGTH_OFFSET)]);
+		slotAddress(builder, array, length, strideLocal); builder.emitAll([I32Const(0), LocalGet(strideLocal), MemoryFill, Return]);
 		return module.addFunction(builder.finish());
 	}
 

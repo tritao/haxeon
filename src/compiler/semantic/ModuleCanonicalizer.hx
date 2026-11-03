@@ -159,11 +159,16 @@ class ModuleCanonicalizer {
 			span: alias.span
 		};
 
-	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:AliasTable, packageName:Null<String>):compiler.syntax.Ast.AstEnum
+	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:AliasTable, packageName:Null<String>, module:String,
+			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnum {
+		var enumAliases = aliases.child();
+		for (parameter in enumDecl.typeParameters) enumAliases.set(parameter, parameter);
 		return {
 			name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
 			typeConstraints: canonicalConstraints(enumDecl.typeConstraints, aliases, enumDecl.typeParameters),
+			conformances: enumDecl.conformances == null ? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
+			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module, entry, locals, method.name, enumAliases)],
 			metadata: enumDecl.metadata,
 			cases: [
 				for (caseDecl in enumDecl.cases)
@@ -184,6 +189,7 @@ class ModuleCanonicalizer {
 			],
 			span: enumDecl.span
 		};
+	}
 
 	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:AliasTable, packageName:Null<String>, module:String,
 			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract

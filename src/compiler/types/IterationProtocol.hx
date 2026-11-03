@@ -148,7 +148,7 @@ class IterationProtocol {
 			return iterator == null ? null : element(declarations, iterator, false);
 		}
 		var next = result(declarations, type, "next");
-		return result(declarations, type, "hasNext") == TBool && next != TVoid && next != TNever ? next : null;
+		return (switch (result(declarations, type, "hasNext")) { case TBool: true; default: false; }) && (switch (next) { case TVoid: false; default: true; }) && (switch (next) { case TNever: false; default: true; }) ? next : null;
 	}
 
 	public static function conforms(declarations:DeclarationIndex, relations:TypeRelations, actual:CompilerType, expected:CompilerType):Bool {

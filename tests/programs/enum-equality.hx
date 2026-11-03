@@ -1,5 +1,5 @@
-// `==` on enums follows Haxe: a constructor without fields denotes one value, and a constructor with fields compares by identity.
-enum Shape {
+// Payload enums declare value equality, independent of how each value is represented.
+enum Shape : Equatable {
 	Dot;
 	Circle(r:Int);
 	Rect(w:Int, h:Int);
@@ -10,7 +10,7 @@ enum Plain {
 	Green;
 }
 
-enum Maybe<T> {
+enum Maybe<T:Equatable> : Equatable {
 	Nothing;
 	Just(value:T);
 }
@@ -29,14 +29,15 @@ function main():Int {
 	var failures = 0;
 	var a = Circle(1), b = Circle(2), c = Circle(1);
 
-	// Payload constructors compare by identity, not by constructor or contents.
+	// Payload constructors compare by case and contents.
 	if (a == b) failures |= 1;
-	if (a == c) failures |= 2;
+	if (!(a == c)) failures |= 2;
 	if (!(a == a)) failures |= 4;
 	if (make(1) == make(5)) failures |= 8;
 	if (!(a != b)) failures |= 16;
-	if (!(a != c)) failures |= 32;
+	if (a != c) failures |= 32;
 	if (a != a) failures |= 64;
+	if (!Type.enumEq(a, c) || Type.enumEq(a, b)) failures |= 64;
 
 	// A constructor without fields is one value, however it was produced.
 	if (!(dot() == Dot)) failures |= 128;
@@ -66,7 +67,7 @@ function main():Int {
 	// A generic enum.
 	var one = justOne(), same = one;
 	if (!(nothing() == nothing())) failures |= 2097152;
-	if (one == justOne()) failures |= 4194304;
+	if (!(one == justOne())) failures |= 4194304;
 	if (!(one == same)) failures |= 8388608;
 
 	return failures == 0 ? 42 : (failures & 0xff) == 0 ? 1 : failures & 0xff;

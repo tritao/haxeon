@@ -137,7 +137,7 @@ class TypingSession {
 
 	/** Whether writes through a binding may update the binding itself rather than a referenced object. */
 	public function mayHoldValue(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
-		if (type != null && type != InferredType) {
+		if (type != null && (switch (type) { case InferredType: false; default: true; })) {
 			var resolved:Null<CompilerType> = null;
 			try {
 				resolved = declarations.resolve(type, null, currentContext.typeSubstitutions);
@@ -286,33 +286,34 @@ class TypingSession {
 		record.set(name, answer);
 	}
 
-	/** Resolve a source Map ABI, restricting enum keys to nullary constructors. */
+	/** Payload enum keys use their declared hash and equality in the ordinary specialized map. */
 	public function mapName(key:CompilerType, value:CompilerType):Null<String> {
-		var enumKey = enumKeyType(key);
-		if (enumKey != null) {
-			if (enumKey.arguments.length != 0)
-				return null;
-			var declaration = enumDecls.get(enumKey.name);
-			if (declaration == null)
-				return null;
-			for (constructor in declaration.cases)
-				if (constructor.params.length != 0)
-					return null;
-		}
-		var builtin = RuntimeType.mapName(key, value);
-		var hashable = DeclaredConformance.has(this, key, "Hashable");
+		var payloadKey = isPayloadEnumKey(key), hashable = DeclaredConformance.has(this, key, "Hashable");
+		if (payloadKey && !hashable) return null;
+		var builtin = payloadKey ? null : RuntimeType.mapName(key, value);
 		if (builtin == null && !hashable) return null;
 		if (requiresSpecializedMap(key, value)) {
 			runtimeDependencyTracker.record(currentContext.name, RuntimeType.SPECIALIZED_MAP);
-			representation.genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP,
-				[RuntimeType.specializedMapKey(key), value]));
+			representation.genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [specializedMapKey(key), value]));
 			return RuntimeType.SPECIALIZED_MAP;
 		}
 		return builtin;
 	}
 
+	public function isPayloadEnumKey(key:CompilerType):Bool {
+		var info = enumKeyType(key);
+		if (info == null) return false;
+		var declaration = enumDecls.get(info.name);
+		if (declaration == null) return false;
+		for (constructor in declaration.cases) if (constructor.params.length > 0) return true;
+		return false;
+	}
+
+	public function specializedMapKey(key:CompilerType):CompilerType
+		return isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key);
+
 	public function requiresSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
+		return isPayloadEnumKey(key) || RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
 
 	function mapValueType(type:CompilerType):Bool return switch type {
 		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);

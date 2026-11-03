@@ -52,7 +52,7 @@ class IrValueArrayOptionalRewrite {
 					case Call(value, helper, args) if (helper == IrOptionalValueFlow.boxName(name) && args.length == 1
 							&& Type.enumEq(value.type, element) && Type.enumEq(args[0].type, wrapperType)):
 						boxes.set(value.id, {block: block.id, position: position, wrapper: args[0]});
-					case ToDyn(out, value) if (Type.enumEq(value.type, element) && out.type == Dyn):
+					case ToDyn(out, value) if (Type.enumEq(value.type, element) && (switch (out.type) { case Dyn: true; default: false; })):
 						dynamicValues.set(out.id, {boxed: value.id, block: block.id, position: position});
 					default:
 				}
@@ -156,10 +156,10 @@ class IrValueArrayOptionalRewrite {
 	static function mutation(name:String, args:Array<IrValue>, output:IrValue, arrayType:IrType):Null<String> {
 		if (args.length == 0 || !Type.enumEq(args[0].type, arrayType)) return null;
 		return switch name {
-			case "__array_set_any" if (args.length == 3 && args[1].type == I32 && output.type == Void): "set";
-			case "__array_push_ref" | "__array_push_any" if (args.length == 2 && output.type == I32): "push";
-			case "__array_unshift_ref" | "__array_unshift_any" if (args.length == 2 && output.type == I32): "unshift";
-			case "__array_insert_ref" | "__array_insert_any" if (args.length == 3 && args[1].type == I32 && output.type == Void): "insert";
+			case "__array_set_any" if (args.length == 3 && (switch (args[1].type) { case I32: true; default: false; }) && (switch (output.type) { case Void: true; default: false; })): "set";
+			case "__array_push_ref" | "__array_push_any" if (args.length == 2 && (switch (output.type) { case I32: true; default: false; })): "push";
+			case "__array_unshift_ref" | "__array_unshift_any" if (args.length == 2 && (switch (output.type) { case I32: true; default: false; })): "unshift";
+			case "__array_insert_ref" | "__array_insert_any" if (args.length == 3 && (switch (args[1].type) { case I32: true; default: false; }) && (switch (output.type) { case Void: true; default: false; })): "insert";
 			default: null;
 		};
 	}

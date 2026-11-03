@@ -32,6 +32,7 @@
 #include "runtime/dir_watch.c"
 /* Dynamic array views preserve the backing representation when performing structural operations. */
 HL_PRIM bool HL_NAME(__value_array_is)(varray *array);
+HL_PRIM void HL_NAME(__value_array_remove_at)(varray *array, int index);
 HL_PRIM bool HL_NAME(__value_array_compatible)(varray *left, varray *right);
 HL_PRIM varray *HL_NAME(__value_array_copy)(varray *array);
 HL_PRIM varray *HL_NAME(__value_array_concat)(varray *left, varray *right);

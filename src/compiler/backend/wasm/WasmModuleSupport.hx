@@ -88,7 +88,7 @@ class WasmModuleSupport {
 							case StaticClosure(_, name):
 								result.set(name, true);
 							// Dynamic iterators read through the Array<Dynamic> element reader.
-							case IteratorNext(output, _) if (output.type == Dyn):
+							case IteratorNext(output, _) if ((switch (output.type) { case Dyn: true; default: false; })):
 								result.set("__array_get_any", true);
 							default:
 						}
@@ -165,7 +165,7 @@ class WasmModuleSupport {
 		};
 
 	public static function resultTypes(type:IrType):Array<WasmValueType>
-		return type == Void ? [] : [requireValueType(type)];
+		return (switch (type) { case Void: true; default: false; }) ? [] : [requireValueType(type)];
 
 	public static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
 		if (!StringTools.startsWith(name, "__map_"))
@@ -234,7 +234,7 @@ class WasmModuleSupport {
 			return {parameters: [for (argument in arguments) requireValueType(argument)], results: resultTypes(result)};
 		var parameters:Array<WasmValueType> = [], results:Array<WasmValueType> = [];
 		for (argument in arguments) for (part in abi.valueTypes(argument)) parameters.push(requireValueType(part));
-		if (result != Void) for (part in abi.valueTypes(result)) results.push(requireValueType(part));
+		if ((switch (result) { case Void: false; default: true; })) for (part in abi.valueTypes(result)) results.push(requireValueType(part));
 		return {parameters: parameters, results: results};
 	}
 

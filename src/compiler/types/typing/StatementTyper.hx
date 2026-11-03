@@ -154,7 +154,7 @@ class StatementTyper {
 			try {
 				type = typeExpression(assigned, speculative, null, false).type;
 			} catch (_:CompileError) {}
-			if (type != null && type != TNull && type != TVoid && type != TNever)
+			if (type != null && (switch (type) { case TNull: false; default: true; }) && (switch (type) { case TVoid: false; default: true; }) && (switch (type) { case TNever: false; default: true; }))
 				return type;
 		}
 		throw new CompileError(new Diagnostic("E1002",
@@ -201,11 +201,11 @@ class StatementTyper {
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
-				var declaredType = declared == InferredType ? inferUninitializedType(name, statements, statementIndex + 1, scope,
+				var declaredType = (switch (declared) { case InferredType: true; default: false; }) ? inferUninitializedType(name, statements, statementIndex + 1, scope,
 					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
-				var uninitializedAbstract = declared == InferredType ? null : EnumAbstractHints.named(session, declared);
+				var uninitializedAbstract = (switch (declared) { case InferredType: true; default: false; }) ? null : EnumAbstractHints.named(session, declared);
 				if (uninitializedAbstract != null)
 					context.declaredAbstracts.set(scope.requireId(name), uninitializedAbstract);
 				[TDeclare(scope.requireId(name), declaredType, span)];
@@ -282,10 +282,10 @@ class StatementTyper {
 					// never produce a value: a throw statement, which leaves the function's
 					// result to its other returns (or Void) instead of inferring Never.
 					output.push(TThrow(thrown, span));
-				} else if (expected == null && value.type == TNever) {
+				} else if (expected == null && (switch (value.type) { case TNever: true; default: false; })) {
 					// Likewise a call that never returns, such as the body of `try fail() catch (e:String) 40`.
 					output.push(TExpression(value, span));
-				} else if (expected != null && expected == TVoid && context.contextualVoidLambda) {
+				} else if (expected != null && (switch (expected) { case TVoid: true; default: false; }) && context.contextualVoidLambda) {
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
 				} else {
@@ -300,7 +300,7 @@ class StatementTyper {
 				var expected = result == null ? context.inferredResult : result;
 				if (expected == null)
 					context.inferredResult = TVoid;
-				else if (expected != TVoid)
+				else if ((switch (expected) { case TVoid: false; default: true; }))
 					fail("E1003", "Return type mismatch", span);
 				[TReturnVoid(span)];
 			case Throw(expression, span):
@@ -320,7 +320,7 @@ class StatementTyper {
 				[TContinue(span)];
 			case Expression(expression, span):
 				[
-					TExpression(typeExpression(expression, scope, result == TVoid
+					TExpression(typeExpression(expression, scope, (switch (result) { case TVoid: true; default: false; })
 						|| context.contextualVoidLambda ? TVoid : null, false), span)
 				];
 			default: null;
@@ -487,9 +487,9 @@ class StatementTyper {
 					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
 				TMapAssign(typedArray, typedIndex, value, span);
 			default:
-				if (typedIndex.type == TNever)
+				if ((switch (typedIndex.type) { case TNever: true; default: false; }))
 					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-				if (typedIndex.type != TInt)
+				if ((switch (typedIndex.type) { case TInt: false; default: true; }))
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = assignmentRules.arrayElementType(typedArray.type, span),
 					value = coerce(typeExpression(expression, scope, element, false), element, "array element", "E1002");

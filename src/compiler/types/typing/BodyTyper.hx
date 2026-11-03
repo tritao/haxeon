@@ -51,6 +51,7 @@ import compiler.Source.SourceSpan;
 @:allow(compiler.types.typing.DiffIntrinsics)
 @:allow(compiler.types.typing.DeclaredConformance)
 @:allow(compiler.types.typing.EnumEqualityGenerator)
+@:allow(compiler.types.typing.EnumConformanceMethods)
 class BodyTyper {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;
@@ -307,7 +308,7 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if (result != TVoid && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if ((switch (result) { case TVoid: false; default: true; }) && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = ownerTypeArguments,
 			typeParameters = fn.typeParameters;
@@ -443,7 +444,7 @@ class BodyTyper {
 		if (output.length == 0)
 			return false;
 		var previousIsNoReturn = switch output[output.length - 1] {
-			case TExpression(expression, _): expression.type == TNever;
+			case TExpression(expression, _): (switch (expression.type) { case TNever: true; default: false; });
 			default: false;
 		};
 		return previousIsNoReturn && switch statement {
@@ -607,7 +608,7 @@ class BodyTyper {
 			return null;
 		try {
 			var type = typeExpression(expression, scope).type;
-			return type == TNull || type == TVoid || type == TNever ? null : type;
+			return (switch (type) { case TNull: true; default: false; }) || (switch (type) { case TVoid: true; default: false; }) || (switch (type) { case TNever: true; default: false; }) ? null : type;
 		} catch (_:Dynamic) {
 			return null;
 		}
@@ -647,13 +648,13 @@ class BodyTyper {
 				case VarDeclaration(declaredName, declared, initializer, span):
 					if (declaredName == name)
 						return null;
-					declareSpeculative(scope, declaredName, declared == null || declared == InferredType ? speculativeValueType(initializer,
+					declareSpeculative(scope, declaredName, declared == null || (switch (declared) { case InferredType: true; default: false; }) ? speculativeValueType(initializer,
 						scope) : lowerType(declared), span);
 					switch initializer {
 						case Lambda(arguments, body, _, _):
 							var inside = new Scope(scope);
 							for (argument in arguments)
-								if (argument.type != InferredType)
+								if ((switch (argument.type) { case InferredType: false; default: true; }))
 									declareSpeculative(inside, argument.name, lowerType(argument.type), argument.span);
 							found = storedIn(name, body, 0, inside, probe);
 						default:
@@ -661,7 +662,7 @@ class BodyTyper {
 				case UninitializedDeclaration(declaredName, declared, span):
 					if (declaredName == name)
 						return null;
-					if (declared != InferredType)
+					if ((switch (declared) { case InferredType: false; default: true; }))
 						declareSpeculative(scope, declaredName, lowerType(declared), span);
 				case If(_, yes, no, _):
 					found = storedIn(name, yes, 0, scope, probe);
@@ -1010,7 +1011,7 @@ class BodyTyper {
 		};
 
 	function constrainLocal(name:String, expected:CompilerType):Bool {
-		if (context.localExpectedTypes.exists(name) || expected == TVoid)
+		if (context.localExpectedTypes.exists(name) || (switch (expected) { case TVoid: true; default: false; }))
 			return false;
 		context.localExpectedTypes.set(name, expected);
 		return true;
@@ -1489,7 +1490,7 @@ class BodyTyper {
 			if (!scope.isAssigned(name))
 				fail("E1023", 'Local "$name" may be used before assignment', span);
 			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.
-			if (type == TNull) {
+			if ((switch (type) { case TNull: true; default: false; })) {
 				var declared = scope.resolveDeclared(name);
 				if (declared != null)
 					switch declared {
@@ -1691,8 +1692,8 @@ class BodyTyper {
 		// Fill only omitted parameter types from the surrounding function context;
 		// keep the explicit result so an incompatible annotation is still rejected.
 		var expression = BlockExpression(statements, result, span);
-		var literal = LambdaSyntax.literal(expression);
-		if (literal != expression && expectedType != null)
+		var literal = LambdaSyntax.annotated(expression);
+		if (literal != null && expectedType != null)
 			switch statements[0] {
 				case VarDeclaration(_, FunctionType(parameters, resultType), _, _):
 					switch expectedType {
@@ -1714,7 +1715,7 @@ class BodyTyper {
 							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
 							var value = typeExpression(literal, scope, TFunction(resolved, result));
 							// An unbound generic result uses Dynamic as an inference hint.
-							return expectedResult == TDynamic ? value : coerce(value, expectedType, "annotated lambda", "E1003");
+							return (switch (expectedResult) { case TDynamic: true; default: false; }) ? value : coerce(value, expectedType, "annotated lambda", "E1003");
 						default:
 					}
 				default:
@@ -1724,7 +1725,7 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
-		if (expectedType == TVoid && typedResult.type != TVoid && typedResult.type != TNever) {
+		if ((switch (expectedType) { case TVoid: true; default: false; }) && (switch (typedResult.type) { case TVoid: false; default: true; }) && (switch (typedResult.type) { case TNever: false; default: true; })) {
 			typedStatements.push(TExpression(typedResult, typedResult.span));
 			typedResult = new TypedExpression(TVoidLiteral, TVoid, typedResult.span);
 		}
@@ -1733,9 +1734,9 @@ class BodyTyper {
 		// TNull is also used as the provisional result while a switch expression is
 		// still inferring its common branch type; defer coercion in that case so a
 		// later non-null branch can widen the result to Null<T>.
-		if (expectedType != null && expectedType != TNull && expectedType != TVoid && typedResult.type != TNever)
+		if (expectedType != null && (switch (expectedType) { case TNull: false; default: true; }) && (switch (expectedType) { case TVoid: false; default: true; }) && (switch (typedResult.type) { case TNever: false; default: true; }))
 			typedResult = coerce(typedResult, expectedType, "block expression", "E1003");
-		if (typedResult.type != TNever) {
+		if ((switch (typedResult.type) { case TNever: false; default: true; })) {
 			scope.mergeAssignmentsFrom([blockScope]);
 			scope.mergeRefinementsFrom([blockScope]);
 		}
@@ -1763,7 +1764,7 @@ class BodyTyper {
 
 	/** A proven-null field has a null value in its declared storage type, not an ABI cast to TNull. */
 	function refinedFieldValue(field:TypedExpression, refined:Null<CompilerType>):TypedExpression {
-		if (refined == TNull)
+		if ((switch (refined) { case TNull: true; default: false; }))
 			switch field.type {
 				case TNullable(_):
 					return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, field.span)), field.type, field.span,
@@ -2094,7 +2095,7 @@ class BodyTyper {
 	}
 
 	function argumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
-		var type = if (argument.type == InferredType && argument.defaultValue != null) {
+		var type = if ((switch (argument.type) { case InferredType: true; default: false; }) && argument.defaultValue != null) {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);

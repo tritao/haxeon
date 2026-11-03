@@ -29,7 +29,7 @@ class GenericOwnerErasure {
 		names.sort(Reflect.compare);
 		for (name in names) {
 			var parts = name.substr(PREFIX.length).split(":"), signature = requests.get(name);
-			if (parts.length != 3 || signature == null || signature.arguments.length == 0 || signature.arguments[0] != Dyn)
+			if (parts.length != 3 || signature == null || signature.arguments.length == 0 || (switch (signature.arguments[0]) { case Dyn: false; default: true; }))
 				throw 'Invalid erased generic operation "$name"';
 			var owner = parts[0], operation = parts[1], member = parts[2],
 				candidates = [for (object in objects) if (!object.isValue && derivesFrom(object, owner, byName)) object];
@@ -54,7 +54,7 @@ class GenericOwnerErasure {
 						if (method.arguments.length != arguments.length + 1) throw 'Incompatible erased method "$name"';
 						var adapted = [for (index in 0...arguments.length) convert(builder, arguments[index], method.arguments[index + 1].type, byName)],
 							result = builder.methodCall(target, member, adapted, method.result);
-						builder.returnValue(signature.result == Void ? result : convert(builder, result, signature.result, byName));
+						builder.returnValue((switch (signature.result) { case Void: true; default: false; }) ? result : convert(builder, result, signature.result, byName));
 					default: throw 'Invalid erased generic operation "$name"';
 				}
 				builder.select(next);
@@ -123,7 +123,7 @@ class GenericOwnerErasure {
 						throw 'Missing target for generic method reference "$name"';
 					var adapted = [for (index in 0...arguments.length) convert(builder, arguments[index], method.arguments[index + 1].type, byName)];
 					var called = builder.methodCall(receiver, member, adapted, method.result);
-					result = signature.result == Void ? called : convert(builder, called, signature.result, byName);
+					result = (switch (signature.result) { case Void: true; default: false; }) ? called : convert(builder, called, signature.result, byName);
 				default: throw 'Invalid receiver for generic method reference "$name"';
 			}
 			builder.returnValue(result);
@@ -133,10 +133,10 @@ class GenericOwnerErasure {
 
 	public static function convert(builder:IrBuilder, value:IrValue, type:IrType, objects:Map<String, IrObject>):IrValue {
 		if (Type.enumEq(value.type, type)) return value;
-		if (type == Dyn) return builder.toDyn(value);
+		if ((switch (type) { case Dyn: true; default: false; })) return builder.toDyn(value);
 		// This boundary accepts a Dynamic value supplied through an erased owner. Check it
 		// before the backend cast so failure is a catchable language exception on every target.
-		if (value.type == Dyn) {
+		if ((switch (value.type) { case Dyn: true; default: false; })) {
 			var target = switch type { case Nullable(inner): inner; default: type; },
 				checks:Array<IrType> = switch target {
 					case Obj(_): [target];

@@ -79,6 +79,10 @@ for inline in 0 1; do
 			tests/programs/wasm-value-interface-reflection.hx
 		if [[ "$target" == wasm32 ]]; then
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=EnumEscapeCensus.prepare --export=EnumEscapeCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm32-enum-escape-census-inline-$inline.wasm" \
+				--entry=enum-dynamic-allocations --root=stdlib --root=tests/programs tests/programs/enum-dynamic-allocations.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=SignalCensus.prepare --export=SignalCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm32-signal-census-inline-$inline.wasm" \
 				--entry=generic-struct-signal-allocations --root=stdlib --root=tests/programs tests/programs/generic-struct-signal-allocations.hx
@@ -120,6 +124,10 @@ for inline in 0 1; do
 				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
 		fi
 		if [[ "$target" == wasm-gc ]]; then
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=EnumEscapeCensus.prepare --export=EnumEscapeCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-enum-escape-census-inline-$inline.wasm" \
+				--entry=enum-dynamic-allocations --root=stdlib --root=tests/programs tests/programs/enum-dynamic-allocations.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
 				--export=SignalCensus.prepare --export=SignalCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-signal-census-inline-$inline.wasm" \
@@ -506,6 +514,17 @@ async function run(name, target) {
 	const neutralInline = (await WebAssembly.instantiate(neutralInlineBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
 	if (neutralInline.exports.main() !== 42) failures.push(`inlined null method exception (wasm32 runtime-neutral, inline=${inline})`);
 	for (const target of ["wasm32", "wasm-gc"]) {
+	  const enumEscapeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-enum-escape-census-inline-${inline}.wasm`));
+	  const enumEscape = (await WebAssembly.instantiate(enumEscapeBytes, {haxeon_runtime: runtime, std})).instance;
+	  enumEscape.exports["EnumEscapeCensus.prepare"]();
+	  enumEscape.exports["EnumEscapeCensus.perform"](1);
+	  const enumEscapeCount = target === "wasm32" ? enumEscape.exports["haxeon.memory.allocation_count"] : enumEscape.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = enumEscapeCount(), result = enumEscape.exports["EnumEscapeCensus.perform"](n), allocations = enumEscapeCount() - before;
+	    if (result !== n || allocations !== 0)
+	      failures.push(`enum dynamic escape census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: enum dynamic escape census on ${target}, inline=${inline}, n=${n}`);
+	  }
 	  const iteratorBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-iterator-census-inline-${inline}.wasm`));
 	  const iterator = (await WebAssembly.instantiate(iteratorBytes, {haxeon_runtime: runtime, std})).instance;
 	  const iteratorCount = target === "wasm32" ? iterator.exports["haxeon.memory.allocation_count"] : iterator.exports.__allocation_count;

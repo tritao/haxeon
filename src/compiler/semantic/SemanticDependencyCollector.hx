@@ -20,6 +20,21 @@ class SemanticDependencyCollector {
 			addBodyDependencies(result, owner, fn.statements, state.name, entry);
 			scanNativeLayoutQueryStatements(result, owner, fn.statements, typeAliases);
 		}
+		for (enumDecl in ast.enums) {
+			var enumName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name);
+			if (enumDecl.conformances != null)
+				for (conformance in enumDecl.conformances)
+					addTypeDependency(result, enumName, SemanticDependencyKind.Layout, conformance, typeAliases);
+			for (constructor in enumDecl.cases)
+				for (parameter in constructor.params)
+					addTypeDependency(result, enumName, SemanticDependencyKind.Layout, parameter.type, typeAliases);
+			if (enumDecl.methods != null) for (method in enumDecl.methods) {
+				for (argument in method.arguments) addTypeDependency(result, enumName, SemanticDependencyKind.Signature, argument.type, typeAliases);
+				addTypeDependency(result, enumName, SemanticDependencyKind.Signature, method.result, typeAliases);
+				addBodyDependencies(result, enumName, method.statements, state.name, entry);
+				scanNativeLayoutQueryStatements(result, enumName, method.statements, typeAliases);
+			}
+		}
 		for (interfaceDecl in ast.interfaces) {
 			var interfaceName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, interfaceDecl.name);
 			for (base in interfaceDecl.bases)

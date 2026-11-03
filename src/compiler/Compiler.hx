@@ -941,11 +941,9 @@ class Compiler {
 
 	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
 		for (fn in functions) {
-			if (fn.result == InferredType)
-				return false;
+			switch fn.result { case InferredType: return false; default: }
 			for (argument in fn.arguments)
-				if (argument.type == InferredType)
-					return false;
+				switch argument.type { case InferredType: return false; default: }
 		}
 		return true;
 	}

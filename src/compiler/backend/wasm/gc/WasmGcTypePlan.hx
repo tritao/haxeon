@@ -319,7 +319,7 @@ class WasmGcTypePlan {
 		var parameters:Array<WasmValueType> = [];
 		for (argument in arguments)
 			for (part in scalarValueTypes(argument)) parameters.push(part);
-		return {parameters: parameters, results: result == Void ? [] : scalarValueTypes(result)};
+		return {parameters: parameters, results: (switch (result) { case Void: true; default: false; }) ? [] : scalarValueTypes(result)};
 	}
 
 	public function scalarSignatureType(signature:WasmScalarAbi.WasmScalarSignature):WasmFunctionType {
@@ -331,7 +331,7 @@ class WasmGcTypePlan {
 	public function scalarResultTypes(signature:WasmScalarAbi.WasmScalarSignature):Array<WasmValueType> {
 		var result:Array<WasmValueType> = [];
 		if (signature.mutatesReceiver) for (part in scalarValueTypes(signature.arguments[0])) result.push(part);
-		if (signature.result != Void) for (part in scalarValueTypes(signature.result)) result.push(part);
+		if ((switch (signature.result) { case Void: false; default: true; })) for (part in scalarValueTypes(signature.result)) result.push(part);
 		if (signature.throwsReceiver) { result.push(valueType(Dyn)); result.push(I32); }
 		return result;
 	}
@@ -535,7 +535,7 @@ class WasmGcTypePlan {
 	}
 
 	function collectType(type:IrType):Void {
-		if (type != Void) {
+		if ((switch (type) { case Void: false; default: true; })) {
 			var key = typeKey(type);
 			if (!seenValueTypes.exists(key)) {
 				seenValueTypes.set(key, true);

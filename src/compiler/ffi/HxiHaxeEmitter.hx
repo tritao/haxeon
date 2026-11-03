@@ -921,7 +921,7 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, $fieldOffset, value, ${value.nullable});\n');
 							continue;
 						}
-						if (value != null && value.code == 11 && value.nativePointer && field.ownership == Borrowed) {
+						if (value != null && value.code == 11 && value.nativePointer && (switch (field.ownership) { case Borrowed: true; default: false; })) {
 							usesPointerFields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_pointer(this, $fieldOffset, ${value.nullable});\n');
@@ -1291,7 +1291,7 @@ class HxiHaxeEmitter {
 
 	public static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
 		for (parameter in parameters)
-			if (parameter.direction != In)
+			if ((switch (parameter.direction) { case In: false; default: true; }))
 				return true;
 		return false;
 	}
@@ -1716,13 +1716,13 @@ class HxiHaxeEmitter {
 				case Out | InOut:
 					var info = outputInfo(parameter, abi, profile),
 						local = "__out_" + parameter.name;
-					if (parameter.direction == InOut)
+					if ((switch (parameter.direction) { case InOut: true; default: false; }))
 						arguments.push('${parameter.name}:${info.haxeType}');
 					if (info.structure)
-						setup.push('var $local:${info.haxeType} = ${parameter.direction == InOut ? parameter.name : "new " + info.haxeType + "()"};');
+						setup.push('var $local:${info.haxeType} = ${(switch (parameter.direction) { case InOut: true; default: false; }) ? parameter.name : "new " + info.haxeType + "()"};');
 					else {
 						setup.push('var $local = haxe.io.Bytes.alloc(${info.size});');
-						if (parameter.direction == InOut) {
+						if ((switch (parameter.direction) { case InOut: true; default: false; })) {
 							var nativeValue = info.handle ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
 						}
@@ -1937,11 +1937,11 @@ class HxiHaxeEmitter {
 			switch parameter.direction {
 				case OutBuffer(count):
 					var countParameter = Lambda.find(parameters, value -> value.name == count);
-					if (countParameter != null && countParameter.direction == InOut)
+					if (countParameter != null && (switch (countParameter.direction) { case InOut: true; default: false; }))
 						result.set(count, parameter.name);
 				case OutArray(count):
 					var countParameter = Lambda.find(parameters, value -> value.name == count);
-					if (countParameter != null && countParameter.direction == InOut)
+					if (countParameter != null && (switch (countParameter.direction) { case InOut: true; default: false; }))
 						result.set(count, parameter.name);
 				case _:
 			}

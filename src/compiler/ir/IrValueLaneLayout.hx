@@ -211,7 +211,7 @@ class IrValueLaneLayout {
 			case Abstract("native_callback") if (target != HashLink): 32;
 			default: return null;
 		};
-		if (storage != null && (type == I32 || type == I64)) bits = storage.size * 8;
+		if (storage != null && ((switch (type) { case I32: true; default: false; }) || (switch (type) { case I64: true; default: false; }))) bits = storage.size * 8;
 		return {bits: bits, signed: storage != null && storage.signed};
 	}
 }

@@ -359,6 +359,9 @@ HL_PRIM vstring *HL_NAME(__std_string)( vdynamic *value ) {
 }
 
 HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
+	/* Enums have no ordering; their allocation address is not part of their value. */
+	if( (left != NULL && left->t->kind == HENUM) || (right != NULL && right->t->kind == HENUM) )
+		return (int)0xAABBCCDD;
 	if( realtime_is_string(left) && realtime_is_string(right) ) {
 		vstring *left_value = (vstring *)left, *right_value = (vstring *)right;
 		int length = left_value->length < right_value->length ? left_value->length : right_value->length;
@@ -370,17 +373,20 @@ HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
 	return hl_dyn_compare(left,right);
 }
 
-/* Constructors without arguments are one value in Haxe, but each evaluation here allocates its own,
-   so two of them are equal when they are the same constructor of the same enum. */
-static bool realtime_nullary_enum_equal(vdynamic *left, vdynamic *right) {
-	if( left == NULL || right == NULL || left->t != right->t || left->t->kind != HENUM )
-		return false;
-	int index = ((venum *)left)->index;
-	return index == ((venum *)right)->index && left->t->tenum->constructs[index].nparams == 0;
-}
-
+/* Generated dispatch supplies declared enum equality. Unknown foreign enums must
+   never fall back to comparing their allocation addresses. Entirely nullary
+   enums have tag equality even without a generated conformance helper. */
 HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
-	return realtime_nullary_enum_equal(left, right) || HL_NAME(__reflect_compare)(left, right) == 0;
+	bool left_enum = left != NULL && left->t->kind == HENUM;
+	bool right_enum = right != NULL && right->t->kind == HENUM;
+	if( left_enum || right_enum ) {
+		if( !left_enum || !right_enum || left->t != right->t ) return false;
+		for( int index = 0; index < left->t->tenum->nconstructs; index++ )
+			if( left->t->tenum->constructs[index].nparams != 0 )
+				hl_error("Enum equality requires a concrete declared conformance");
+		return ((venum *)left)->index == ((venum *)right)->index;
+	}
+	return HL_NAME(__reflect_compare)(left, right) == 0;
 }
 
 HL_PRIM bool HL_NAME(__string_starts_with)( vstring *value, vstring *prefix ) {

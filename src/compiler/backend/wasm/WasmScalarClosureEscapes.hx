@@ -78,7 +78,7 @@ class WasmScalarClosureEscapes {
 					var maker = adapter(input.type);
 					rewritten.instructions.push(new Located(Call(out, maker, [input]), located.provenance));
 					changed = true;
-				case SafeCast(out, input) if (input.type == Dyn && scalar.exists(Std.string(out.type))):
+				case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; }) && scalar.exists(Std.string(out.type))):
 					var maker = restoration(out.type);
 					rewritten.instructions.push(new Located(Call(out, maker, [input]), located.provenance));
 					changed = true;
@@ -103,9 +103,9 @@ class WasmScalarClosureEscapes {
 			arguments = [for (index in 0...signature.arguments.length) call.argument('argument$index', Dyn)],
 			closure = call.fieldGet(receiver, "closure", type), adapted:Array<IrValue> = [];
 		for (index in 0...arguments.length)
-			adapted.push(signature.arguments[index] == Dyn ? arguments[index] : call.safeCast(arguments[index], signature.arguments[index]));
+			adapted.push((switch (signature.arguments[index]) { case Dyn: true; default: false; }) ? arguments[index] : call.safeCast(arguments[index], signature.arguments[index]));
 		var value = call.callClosure(closure, adapted, signature.result);
-		call.returnValue(signature.result == Void ? call.constNull(Dyn) : signature.result == Dyn ? value : call.toDyn(value));
+		call.returnValue((switch (signature.result) { case Void: true; default: false; }) ? call.constNull(Dyn) : (switch (signature.result) { case Dyn: true; default: false; }) ? value : call.toDyn(value));
 		generatedFunctions.push(new IrFunction(invoke, call.arguments, Dyn, call.blocks));
 		var make = new IrBuilder(), original = make.argument("closure", type), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(type)), missing, present);
@@ -133,10 +133,10 @@ class WasmScalarClosureEscapes {
 			fields: [{name: "closure", type: dynamicType}], methods: []});
 		var call = new IrBuilder(), receiver = call.argument("receiver", Obj(environment)),
 			arguments = [for (index in 0...signature.arguments.length) call.argument('argument$index', signature.arguments[index])],
-			closure = call.fieldGet(receiver, "closure", dynamicType), boxed = [for (argument in arguments) argument.type == Dyn ? argument : call.toDyn(argument)],
+			closure = call.fieldGet(receiver, "closure", dynamicType), boxed = [for (argument in arguments) (switch (argument.type) { case Dyn: true; default: false; }) ? argument : call.toDyn(argument)],
 			value = call.callClosure(closure, boxed, Dyn);
-		if (signature.result == Void) call.returnValue(call.constVoid());
-		else call.returnValue(signature.result == Dyn ? value : call.safeCast(value, signature.result));
+		if ((switch (signature.result) { case Void: true; default: false; })) call.returnValue(call.constVoid());
+		else call.returnValue((switch (signature.result) { case Dyn: true; default: false; }) ? value : call.safeCast(value, signature.result));
 		generatedFunctions.push(new IrFunction(invoke, call.arguments, signature.result, call.blocks));
 		var make = new IrBuilder(), original = make.argument("closure", Dyn), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(Dyn)), missing, present);

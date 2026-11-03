@@ -8,7 +8,7 @@ import sys.io.File;
  * again at every evaluation. Constructors with fields still make a value each time, and still match in a switch.
  */
 class EnumConstantsMain {
-	static final source = 'enum Mode { Auto; None; Wide(n:Int); }
+	static final source = 'interface Equatable {} enum Mode : Equatable { Auto; None; Wide(n:Int); }
 function pick(i:Int):Mode return i % 3 == 0 ? Mode.Auto : i % 3 == 1 ? Mode.None : Mode.Wide(i);
 function main():Int {
 	var kept:Array<Mode> = [for (_ in 0...1000) Mode.Auto];

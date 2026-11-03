@@ -80,7 +80,7 @@ class IrValueArrayPlaceRewrite {
 					aliases.set(out.id, {array: parent.array, index: parent.index, path: parent.path.concat([field])}); changed = true;
 				case SafeCast(out, value) if (aliases.exists(value.id) && isValue(out.type) && !aliases.exists(out.id)):
 					aliases.set(out.id, requiredPlace(value.id)); changed = true;
-				case ToDyn(out, value) if (aliases.exists(value.id) && (Type.enumEq(out.type, element) || out.type == Dyn) && !aliases.exists(out.id)):
+				case ToDyn(out, value) if (aliases.exists(value.id) && (Type.enumEq(out.type, element) || (switch (out.type) { case Dyn: true; default: false; })) && !aliases.exists(out.id)):
 					aliases.set(out.id, requiredPlace(value.id)); changed = true;
 				default:
 			}

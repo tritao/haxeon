@@ -23,7 +23,7 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
-			case TInstance(NominalKind.Class, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
 		};
 
@@ -32,12 +32,19 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
-			case TInstance(NominalKind.Class, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
+			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
 			default: false;
 		};
 
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
+		if (session.isPayloadEnumKey(type)) {
+			if (!has(session, type, "Hashable"))
+				BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
+			HashGenerator.request(session, type, session.currentContext.name, span);
+			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
+			return;
+		}
 		if (RuntimeType.mapName(type, TInt) == null) {
 			if (has(session, type, "Hashable")) {
 				HashGenerator.request(session, type, session.currentContext.name, span);

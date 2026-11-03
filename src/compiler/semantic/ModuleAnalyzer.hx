@@ -233,10 +233,16 @@ class ModuleAnalyzer {
 		var ast = state.parsedAst();
 		for (alias in ast.aliases)
 			addModuleTypeDependency(alias.type, state, dependencies);
-		for (enumDecl in ast.enums)
+		for (enumDecl in ast.enums) {
+			if (enumDecl.conformances != null)
+				for (conformance in enumDecl.conformances) addModuleTypeDependency(conformance, state, dependencies);
 			for (caseDecl in enumDecl.cases)
 				for (parameter in caseDecl.params)
 					addModuleTypeDependency(parameter.type, state, dependencies);
+			if (enumDecl.methods != null)
+				for (method in enumDecl.methods)
+					addFunctionTypeDependencies(method, state, dependencies, enumDecl.typeParameters);
+		}
 		for (interfaceDecl in ast.interfaces) {
 			for (base in interfaceDecl.bases)
 				addModuleTypeDependency(base, state, dependencies);
@@ -433,7 +439,10 @@ class ModuleAnalyzer {
 			module = sourceModuleForDependency(qualified);
 		if (module != null)
 			return module;
-		return declarationOwners.get(qualified);
+		var declared = declarationOwners.get(qualified);
+		if (declared != null) return declared;
+		// A package-local lookup can fall back to a root declaration such as Equatable.
+		return qualified != typeName ? sourceModuleForDependency(typeName) : null;
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {

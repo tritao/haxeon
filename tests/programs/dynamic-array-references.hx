@@ -15,7 +15,7 @@ class Cat extends Animal {
 		super(name);
 }
 
-enum Shape {
+enum Shape : Equatable {
 	Circle(radius:Float);
 	Square;
 }

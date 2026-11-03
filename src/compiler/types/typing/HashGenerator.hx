@@ -24,7 +24,7 @@ class HashGenerator {
 			session.hashRequests.set(name, {type: type, origin: origin, span: span});
 	}
 
-	public static function generate(session:TypingSession):Array<TypedFunction> {
+	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
 			var pending = [for (name in session.hashRequests.keys()) if (!generated.exists(name)) name];
@@ -39,6 +39,11 @@ class HashGenerator {
 					context = session.enterBody(requested.origin, null, owner == null ? "$hash" : owner);
 				try {
 					generated.set(name, hashFunction(session, requested));
+					var custom = EnumConformanceMethods.method(session, requested.type, "hash");
+					if (custom != null) {
+						var customName = EnumConformanceMethods.name(requested.type, "hash");
+						if (!generated.exists(customName)) generated.set(customName, EnumConformanceMethods.typeMethod(session, typer, requested.type, custom, name));
+					}
 					session.leaveBody(context);
 				} catch (error:Dynamic) {
 					session.leaveBody(context);
@@ -78,6 +83,36 @@ class HashGenerator {
 				request(session, element, req.origin, span);
 				statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span));
 				statements.push(TReturn(call(element, present, span), span));
+			case TInstance(NominalKind.Enum, name, _):
+				var declaration = session.enumDecls.get(name);
+				if (declaration == null)
+					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable', span);
+				var custom = EnumConformanceMethods.method(session, type, "hash");
+				if (custom != null) {
+					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "hash"), [value]), TInt, span), span));
+				} else {
+				var index = new TypedExpression(TEnumIndex(value), TInt, span);
+				for (constructorIndex in 0...declaration.cases.length) {
+					var constructor = declaration.cases[constructorIndex],
+						body:Array<TypedStatement> = [], hashName = "$enumHash";
+					body.push(TVar(hashName, new TypedExpression(TIntLiteral(31 + constructorIndex), TInt, span), span));
+					for (fieldIndex in 0...constructor.params.length) {
+						var parameter = constructor.params[fieldIndex],
+							fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter),
+							fieldValue = session.representation.boundaryCast(new TypedExpression(TEnumField(value, constructorIndex, fieldIndex), storageType, span), fieldType);
+						request(session, fieldType, req.origin, parameter.span);
+						var running = new TypedExpression(TLocal(hashName), TInt, span),
+							mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running,
+								new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span), call(fieldType, fieldValue, span)), TInt, span);
+						body.push(TAssign(hashName, mixed, span));
+					}
+					body.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
+					var selected = new TypedExpression(TEqual(index, new TypedExpression(TIntLiteral(constructorIndex), TInt, span)), TBool, span);
+					statements.push(TIf(selected, body, [], span));
+				}
+				statements.push(TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span));
+				}
 			case TInstance(NominalKind.Class, name, arguments):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)

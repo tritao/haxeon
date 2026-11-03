@@ -104,7 +104,7 @@ class DockNodeTools {
 
 	public static function same(first:DockNode, second:DockNode):Bool {
 		if (first == null || second == null)
-			return first == second;
+			return first == null && second == null;
 		return switch ([first, second]) {
 			case [Empty, Empty]: true;
 			case [Panel(firstId), Panel(secondId)]: firstId == secondId;

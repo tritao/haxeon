@@ -56,7 +56,7 @@ class ConstructorMutation {
 	public function new(model:Model) model.other = 9;
 }
 
-enum ObservablePhase { Idle; Busy(value:Int); }
+enum ObservablePhase : Equatable { Idle; Busy(value:Int); }
 
 class EnumModel implements Observable {
 	public var phase:ObservablePhase;
@@ -216,6 +216,8 @@ function main():Int {
 	enumModel.phase = busy;
 	if (enumReader.dirty) return fail(43);
 	enumModel.phase = Busy(1);
+	if (enumReader.dirty) return fail(44);
+	enumModel.phase = Busy(2);
 	if (!enumReader.dirty) return fail(44);
 	ReactiveRuntime.flushEffects();
 	enumReader.dispose();

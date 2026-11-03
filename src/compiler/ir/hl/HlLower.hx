@@ -222,7 +222,7 @@ class HlLower {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case CallClosure(_, closure, _) if (closure.type == IrType.Dyn):
+							case CallClosure(_, closure, _) if ((switch (closure.type) { case IrType.Dyn: true; default: false; })):
 								ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
 								ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32], IrType.Bytes);
 							case PointerOffset(_, _, _):
@@ -820,7 +820,7 @@ class HlLower {
 					case IteratorNext(output, iterator):
 						var destination = defineRegister(output, registers, registerTypes),
 							nextNative = iteratorNextNative(output.type);
-						if (nextNative.result == IrType.Dyn) {
+						if ((switch (nextNative.result) { case IrType.Dyn: true; default: false; })) {
 							var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
 							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name), requireRegister(iterator, registers)));
 							instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
@@ -833,7 +833,7 @@ class HlLower {
 						for (type in native.arguments)
 							if (unsupportedCDispatchArgument(type))
 								throw 'Ordinary C function "$functionName" uses an unsupported executable argument type $type';
-						if (native.result != Void && unsupportedCDispatchResult(native.result))
+						if ((switch (native.result) { case Void: false; default: true; }) && unsupportedCDispatchResult(native.result))
 							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
 						var callArguments = [
 							temporaryRegister(IrType.RawPtr, registerTypes),
@@ -876,7 +876,7 @@ class HlLower {
 						instructions.push(HlInstruction.CallN(dynamicResult,
 							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
 							callArguments));
-						if (native.result == Void)
+						if ((switch (native.result) { case Void: true; default: false; }))
 							defineRegister(output, registers, registerTypes);
 						else if (pointerResult || bytesResult || aggregateResult || utf8Result)
 							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
@@ -889,7 +889,7 @@ class HlLower {
 							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
-						if (closure.type == IrType.Dyn) {
+						if ((switch (closure.type) { case IrType.Dyn: true; default: false; })) {
 							var callable = temporaryRegister(IrType.Bool, registerTypes),
 								error = temporaryRegister(IrType.Bytes, registerTypes),
 								valid = "$callable:" + instructions.length;
@@ -946,7 +946,7 @@ class HlLower {
 						var destination = defineRegister(output, registers, registerTypes),
 							nativeLayout = objectFieldNativeLayout(object, fieldName),
 							storageType = symbols.internNativeFieldStorageType(output.type, nativeLayout);
-						if (output.type == I64 && storageType != null) {
+						if ((switch (output.type) { case I64: true; default: false; }) && storageType != null) {
 							var stored = temporaryRegisterType(storageType, registerTypes);
 							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers), requireObjectField(object, fieldName)));
 							instructions.push(HlInstruction.ToInt(destination, stored));

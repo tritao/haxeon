@@ -35,7 +35,7 @@ class IrCheckedObjectCasts {
 			for (block in fn.blocks) {
 				var target = new IrBlock(block.id);
 				for (located in block.instructions) switch located.value {
-					case SafeCast(out, input) if (input.type == Dyn):
+					case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; })):
 						switch out.type {
 							case Obj(name) if (declarations.exists(name) && (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
 								var declaration = declarations.get(name);

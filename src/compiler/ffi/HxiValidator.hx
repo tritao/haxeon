@@ -60,7 +60,7 @@ class HxiValidator {
 			fail('Callback parameter "${parameter.name}" cannot use output direction metadata', parameter.span);
 		if (callback && metadata.exists("retained"))
 			fail('Callback parameter "${parameter.name}" cannot use @retained', parameter.span);
-		if ((metadata.exists("borrowed") || metadata.exists("owned")) && parameter.direction != Out)
+		if ((metadata.exists("borrowed") || metadata.exists("owned")) && (switch (parameter.direction) { case Out: false; default: true; }))
 			fail('Parameter "${parameter.name}" can use @borrowed or @owned only with @out', parameter.span);
 	}
 
@@ -177,7 +177,7 @@ class HxiValidator {
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
-							if (field.ownership != Borrowed
+							if ((switch (field.ownership) { case Borrowed: false; default: true; })
 								|| (!bytePointerLike(field.type, declarationsByName)
 									&& structurePointerType(field.type, declarationsByName) == null
 									&& !utf8ArrayPointer(field.type)))
@@ -303,7 +303,7 @@ class HxiValidator {
 								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
 								if (count == null)
 									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
-								if (count.direction != In)
+								if ((switch (count.direction) { case In: false; default: true; }))
 									fail('Input array count parameter "${count.name}" must be passed by value', count.span);
 								switch abi.classify(count.type) {
 									case IntegerValue(8 | 16 | 32 | 64, Unsigned):
@@ -331,11 +331,11 @@ class HxiValidator {
 					// change between the calls, and nothing it hands over may be dropped.
 					var hasQueries = queried.keys().hasNext();
 					for (parameter in parameters) {
-						if (hasQueries && parameter.direction == InOut && !queried.exists(parameter.name))
+						if (hasQueries && (switch (parameter.direction) { case InOut: true; default: false; }) && !queried.exists(parameter.name))
 							fail('Function "$name" cannot combine the @inout parameter "${parameter.name}" with queried outputs, which may call it twice',
 								parameter.span);
 						if (hasQueries
-							&& parameter.direction == Out
+							&& (switch (parameter.direction) { case Out: true; default: false; })
 							&& transfersOwnership(parameter.ownership, parameter.handleDisposition))
 							fail('Function "$name" cannot combine the owned output "${parameter.name}" with queried outputs, which may call it twice',
 								parameter.span);
@@ -421,7 +421,7 @@ class HxiValidator {
 						&& releasePointee != null
 						&& (canonicalTypeKey(releasePointee, declarations) == canonicalTypeKey(Primitive("void"), declarations)
 							|| canonicalTypeKey(resultPointee, declarations) == canonicalTypeKey(releasePointee, declarations));
-				if (callConvention != "cdecl" || parameters.length != 1 || parameters[0].direction != In || !matchesPointee || !returnsVoid)
+				if (callConvention != "cdecl" || parameters.length != 1 || (switch (parameters[0].direction) { case In: false; default: true; }) || !matchesPointee || !returnsVoid)
 					fail('Release function "$releaseName" for owned result "$owner" must be cdecl, accept one compatible input pointer, and return void',
 						releaseSpan);
 			case _:
@@ -518,7 +518,7 @@ class HxiValidator {
 				if (handleDisposition == Owned)
 					requireValueHandleDestroy(name, handleName, declarations, span);
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
-				if (ownership != Unspecified || handleDisposition != Unspecified)
+				if ((switch (ownership) { case Unspecified: false; default: true; }) || handleDisposition != Unspecified)
 					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
 				switch ownership {
@@ -554,7 +554,7 @@ class HxiValidator {
 		switch destroy {
 			case Function(functionName, parameters, result, _, _, callConvention, _, functionSpan):
 				var acceptsHandle = parameters.length == 1
-					&& parameters[0].direction == In
+					&& (switch (parameters[0].direction) { case In: true; default: false; })
 					&& canonicalTypeKey(parameters[0].type, declarations) == canonicalTypeKey(Named(name), declarations),
 					returnsSupported = switch abi.classify(result, true) {
 						case VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value: true;
@@ -575,7 +575,7 @@ class HxiValidator {
 				size = parameter;
 		if (size == null)
 			fail('Output buffer "${buffer.name}" references missing size parameter "${buffer.sizeParameter}"', buffer.span);
-		if (size.direction != InOut)
+		if ((switch (size.direction) { case InOut: false; default: true; }))
 			fail('Output buffer size parameter "${size.name}" must use @inout', size.span);
 		var pointee = switch size.type {
 			case Pointer(value): value;
@@ -622,7 +622,7 @@ class HxiValidator {
 			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"', array.span);
 		var outputType = arrayType(array.name, parameters),
 			isUtf8Array = utf8ArrayPointer(outputType),
-			queried = count.direction == InOut;
+			queried = (switch (count.direction) { case InOut: true; default: false; });
 		if (isUtf8Array && !queried)
 			fail('Output array count parameter "${count.name}" must use @inout', count.span);
 		if (queried) {
@@ -638,7 +638,7 @@ class HxiValidator {
 					fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
 			}
 		} else {
-			if (count.direction != In)
+			if ((switch (count.direction) { case In: false; default: true; }))
 				fail('Typed output array count parameter "${count.name}" must be passed by value', count.span);
 			switch abi.classify(count.type) {
 				case IntegerValue(8 | 16 | 32 | 64, Unsigned):
@@ -786,7 +786,7 @@ class HxiValidator {
 
 	static function hasDirectedParameter(parameters:Array<HxiParameter>):Bool {
 		for (parameter in parameters)
-			if (parameter.direction != In)
+			if ((switch (parameter.direction) { case In: false; default: true; }))
 				return true;
 		return false;
 	}

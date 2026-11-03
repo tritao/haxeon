@@ -104,8 +104,8 @@ class GenericInstantiation {
 			var argument = arguments[index],
 				expected = semanticExpected[index];
 			if (IterationProtocol.name(expected) != null
-				&& argument.type != TNull
-				&& argument.type != TNever
+				&& (switch (argument.type) { case TNull: false; default: true; })
+				&& (switch (argument.type) { case TNever: false; default: true; })
 				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name, fn.arguments[index].span))) {
 				if (!session.relations.isAssignable(argument.type, expected))
 					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
@@ -180,9 +180,9 @@ class GenericInstantiation {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
 				if (substitutions.exists(name)) {
 					var previous = requiredMapValue(substitutions, name);
-					if (previous == TDynamic)
+					if ((switch (previous) { case TDynamic: true; default: false; }))
 						substitutions.set(name, actual);
-					else if (actual != TDynamic && !TypeRelations.equals(previous, actual)) {
+					else if ((switch (actual) { case TDynamic: false; default: true; }) && !TypeRelations.equals(previous, actual)) {
 						if (session.relations.isAssignable(actual, previous))
 							substitutions.set(name, actual);
 						else if (!session.relations.isAssignable(previous, actual))

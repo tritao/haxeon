@@ -63,9 +63,9 @@ class IrLoopBounds {
 			if (native.library == "haxeon_runtime")
 				switch native.symbol {
 					case "__math_sqrt", "__math_abs", "__math_floor", "__math_ceil", "__math_min", "__math_max", "__math_is_finite", "__math_is_nan":
-						var scalar = native.result == F64 || native.result == I32 || native.result == Bool;
+						var scalar = (switch (native.result) { case F64: true; default: false; }) || (switch (native.result) { case I32: true; default: false; }) || (switch (native.result) { case Bool: true; default: false; });
 						for (argument in native.arguments)
-							if (argument != F64 && argument != I32 && argument != Bool)
+							if ((switch (argument) { case F64: false; default: true; }) && (switch (argument) { case I32: false; default: true; }) && (switch (argument) { case Bool: false; default: true; }))
 								scalar = false;
 						if (scalar)
 							result.set(native.name, true);
@@ -149,7 +149,7 @@ class IrLoopBounds {
 			default:
 		}
 		var home = homes.get(phi.id);
-		if (home == null || home != loop.header || phi.type != I32)
+		if (home == null || home != loop.header || (switch (phi.type) { case I32: false; default: true; }))
 			return null;
 		var inputs = switch definitions.get(phi.id) {
 			case Phi(_, incoming): incoming;

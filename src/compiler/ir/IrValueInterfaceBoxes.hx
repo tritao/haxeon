@@ -53,7 +53,7 @@ class IrValueInterfaceBoxes {
 				var adapted = [for (index in 0...arguments.length)
 					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type, objectMap)];
 				var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
-				builder.returnValue(contract.result == Void ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
+				builder.returnValue((switch (contract.result) { case Void: true; default: false; }) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 				methods.push({name: methodName, functionName: wrapper});
 				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks));
 			}
@@ -174,7 +174,7 @@ class IrValueInterfaceBoxes {
 						if (object == null || !object.isValue || object.interfaces.length == 0) target.instructions.push(located);
 						else {
 							var erased = input;
-							if (input.type != Dyn) {
+							if ((switch (input.type) { case Dyn: false; default: true; })) {
 								erased = new IrValue(next++, "$interface-erased", Dyn);
 								target.instructions.push(new Located(ToDyn(erased, input), located.provenance));
 							}

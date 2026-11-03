@@ -27,6 +27,10 @@ class StructSyntaxMain {
 			throw "struct generic parameters or colon interface list were parsed incorrectly";
 		if (source.substring(declaration.fields[0].span.start, declaration.fields[0].span.end).indexOf("x:Int") < 0)
 			throw "struct field source span did not cover its declaration";
+		var enumSource = "enum Message<T> : Equatable, Hashable { Text(value:T); Empty; }",
+			enumProgram = new Parser(new Lexer(new SourceFile("EnumConformance.hx", enumSource)).tokenize()).parseProgram();
+		if (enumProgram.enums.length != 1 || enumProgram.enums[0].conformances == null || enumProgram.enums[0].conformances.length != 2)
+			throw "enum conformances must survive parsing";
 		var annotationSource = "@:annotation enum abstract Replicate(Int) { var all; var owner; }",
 			annotationProgram = new Parser(new Lexer(new SourceFile("Annotation.hx", annotationSource)).tokenize()).parseProgram();
 		if (annotationProgram.enumAbstracts.length != 1

@@ -245,11 +245,11 @@ class WasmGcClosureAdapters {
 			for (index in 0...sourceArguments.length)
 				convert(lowering, allocateLocal, body, targetArguments[index], sourceArguments[index], index + 1)
 		];
-		var result = sourceResult == Void ? -1 : allocateLocal(plan.valueType(sourceResult));
+		var result = (switch (sourceResult) { case Void: true; default: false; }) ? -1 : allocateLocal(plan.valueType(sourceResult));
 		body = body.concat(handled(lowering.callClosure(signature(module, plan, types.get(source)), instanceType(module, plan, types.get(source)),
 			[for (argument in sourceArguments) value(argument)], closure, result, converted)));
-		if (targetResult != Void) {
-			if (sourceResult == Void)
+		if ((switch (targetResult) { case Void: false; default: true; })) {
+			if ((switch (sourceResult) { case Void: true; default: false; }))
 				body = body.concat(lowering.zeroValue(targetResult));
 			else
 				body.push(LocalGet(convert(lowering, allocateLocal, body, sourceResult, targetResult, result)));
@@ -260,7 +260,7 @@ class WasmGcClosureAdapters {
 
 	/** Converts a value between closure parameter or result types, through Dynamic when their Wasm types differ. */
 	function convert(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, body:Array<WasmInstruction>, from:IrType, to:IrType, local:Int):Int {
-		if (from == I32 && to == Bool) {
+		if ((switch (from) { case I32: true; default: false; }) && (switch (to) { case Bool: true; default: false; })) {
 			var result = allocateLocal(plan.valueType(Bool));
 			body.push(LocalGet(local));
 			body.push(I32Eqz);
@@ -271,12 +271,12 @@ class WasmGcClosureAdapters {
 		if (Type.enumEq(plan.valueType(from), plan.valueType(to)))
 			return local;
 		var boxed = local;
-		if (from != Dyn) {
+		if ((switch (from) { case Dyn: false; default: true; })) {
 			boxed = allocateLocal(plan.valueType(Dyn));
 			for (instruction in handled(lowering.toDynamic(value(from), boxed, local)))
 				body.push(instruction);
 		}
-		if (to == Dyn)
+		if ((switch (to) { case Dyn: true; default: false; }))
 			return boxed;
 		var output = allocateLocal(plan.valueType(to));
 		for (instruction in handled(lowering.safeCast(value(to), value(Dyn), output, boxed)))

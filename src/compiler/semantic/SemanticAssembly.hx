@@ -281,7 +281,7 @@ class SemanticAssembly {
 			for (alias in ast.aliases)
 				typeAliases.push(ModuleCanonicalizer.canonicalAlias(alias, aliases, ast.packageName));
 			for (enumDecl in ast.enums)
-				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName));
+				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName, name, entryModule, locals));
 			for (abstractDecl in ast.enumAbstracts)
 				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
 			for (abstractDecl in ast.abstracts) {
@@ -673,8 +673,16 @@ class SemanticAssembly {
 					callers.push(purityDependencyOwner(caller));
 				}
 		}
+		// A generated helper can depend on a type that its source function does not mention in its signature.
+		// When that helper is invalidated, retype its origin so the helper and its dependencies are requested again.
+		var helperOrigins:Map<String, String> = [];
+		for (moduleName in names) if (modules.exists(moduleName))
+			for (name => fn in modules.get(moduleName).typedFunctions)
+				if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
+					helperOrigins.set(name, fn.origin);
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
+		for (name in invalid.keys()) if (helperOrigins.exists(name)) work.push(name);
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
 				work.push(name);
@@ -698,6 +706,11 @@ class SemanticAssembly {
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
+			var helperOrigin = helperOrigins.get(changed);
+			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
+				work.push(helperOrigin);
+				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId, "generated-helper");
+			}
 			if (changedId != null && reverseBodyDependencies.exists(changedId))
 				for (ownerName in reverseBodyDependencies.get(changedId)) {
 					var owner = enclosingFunction(ownerName);

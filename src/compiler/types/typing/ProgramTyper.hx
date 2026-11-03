@@ -57,6 +57,7 @@ class ProgramTyper {
 					'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
 		session.bindNominalDeclarations();
+		for (declaration in program.enums) validateEnumConformance(declaration);
 		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
@@ -141,13 +142,15 @@ class ProgramTyper {
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
-			if (main.arguments.length != 0 || (bodyTyper.lowerType(main.result) != TInt && bodyTyper.lowerType(main.result) != TVoid))
+			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result)) { case TInt: false; default: true; }) && (switch (bodyTyper.lowerType(main.result)) { case TVoid: false; default: true; })))
 				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
 		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
+					equatable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Equatable"),
+					hashable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Hashable"),
 					metadata: enumDecl.metadata,
 					cases: [
 						for (caseDecl in enumDecl.cases)
@@ -263,12 +266,33 @@ class ProgramTyper {
 			typedFunctions.push(codec);
 		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
-		for (hash in HashGenerator.generate(session))
-			typedFunctions.push(hash);
-		for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues))
-			typedFunctions.push(equality);
-		for (equality in EnumEqualityGenerator.generate(session))
-			typedFunctions.push(equality);
+		// Reflection can expose a field as Dynamic without a source-level enum conversion.
+		// Keep the concrete enum operations available for those raw runtime descriptors.
+		for (classDecl in typedClasses) for (field in classDecl.fields) {
+			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : typedFunctions.length > 0 ? typedFunctions[0].name : null;
+			if (origin != null) EnumDynamicBox.requestReflectedTypes(session, field.type, origin, field.span);
+		}
+		// Native signatures can expose a typed enum (including a container element) as Dynamic.
+		if (typedFunctions.length > 0) for (native in typedNatives) {
+			var owner = typedFunctions[0];
+			for (argument in native.arguments) EnumDynamicBox.requestReflectedTypes(session, argument, owner.name, owner.span);
+			EnumDynamicBox.requestReflectedTypes(session, native.result, owner.name, owner.span);
+		}
+		// Equality and hash bodies can request each other, including through handwritten enum methods.
+		var equalities:Map<String, TypedFunction> = [], hashes:Map<String, TypedFunction> = [];
+		while (true) {
+			var before = Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests);
+			for (hash in HashGenerator.generate(session, bodyTyper)) hashes.set(hash.name, hash);
+			for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues)) equalities.set(equality.name, equality);
+			for (equality in EnumEqualityGenerator.generate(session, bodyTyper)) equalities.set(equality.name, equality);
+			if (before == Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)) break;
+		}
+		var hashNames = [for (name in hashes.keys()) name];
+		hashNames.sort(Reflect.compare);
+		for (name in hashNames) typedFunctions.push(hashes.get(name));
+		var equalityNames = [for (name in equalities.keys()) name];
+		equalityNames.sort(Reflect.compare);
+		for (name in equalityNames) typedFunctions.push(equalities.get(name));
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterBodies = AllocationMeter.sample();
@@ -403,7 +427,7 @@ class ProgramTyper {
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
 			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
-			if (type == TVoid)
+			if ((switch (type) { case TVoid: true; default: false; }))
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
@@ -518,7 +542,13 @@ class ProgramTyper {
 		for (field in DiffIntrinsics.storedFields(classDecl)) {
 			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
 				classSemanticSubstitutions);
-			if (DeclaredConformance.usesEquality(session, fieldType))
+			var enumField = switch fieldType {
+				case TInstance(NominalKind.Enum, _, _), TNullable(TInstance(NominalKind.Enum, _, _)): true;
+				default: false;
+			};
+			if (enumField && DeclaredConformance.supportsEquality(session, fieldType))
+				EnumEqualityGenerator.request(session, fieldType, classDecl.name + ".new", field.span);
+			else if (DeclaredConformance.usesEquality(session, fieldType))
 				ValueEqualityGenerator.request(session, fieldType, classDecl.name + ".new", field.span);
 		}
 	}
@@ -563,6 +593,58 @@ class ProgramTyper {
 							BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": mutable field "${field.name}" must be final on a class', field.span);
 			}
 	}
+	}
+
+	/** Equality and hashing are properties of the enum type, not its chosen physical representation. */
+	function validateEnumConformance(declaration:compiler.syntax.Ast.AstEnum):Void {
+		if (declaration.conformances != null) for (conformance in declaration.conformances) {
+			var resolved = session.declarations.resolve(conformance, declaration.span);
+			switch resolved {
+				case TInstance(NominalKind.Interface, "Equatable" | "Hashable", _):
+				default: BodyTyper.fail("E1025", 'Enum "${declaration.name}" supports only Equatable and Hashable conformance', declaration.span);
+			}
+		}
+		var substitutions:Map<String, CompilerType> = [];
+		for (parameter in declaration.typeParameters) substitutions.set(parameter, TTypeParameter(declaration.name, parameter));
+		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
+			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
+			equatable = DeclaredConformance.has(session, type, "Equatable"),
+			hashable = DeclaredConformance.has(session, type, "Hashable"), hasEquals = false, hasHash = false;
+		var hasPayload = false;
+		for (constructor in declaration.cases) if (constructor.params.length > 0) hasPayload = true;
+		if (!hasPayload && declaration.methods != null && declaration.methods.length > 0)
+			BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', declaration.span);
+		if (declaration.methods != null) for (method in declaration.methods) {
+			if (method.name != "equals" && method.name != "hash")
+				BodyTyper.fail("E1025", 'Enum "${declaration.name}" only supports handwritten equals and hash methods', method.span);
+			if ((method.name == "equals" && hasEquals) || (method.name == "hash" && hasHash))
+				BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
+			if (method.name == "equals") {
+				hasEquals = true;
+				if (!equatable) BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals', method.span);
+				if (method.isStatic || method.arguments.length != 1 || (method.typeParameters != null && method.typeParameters.length > 0)
+					|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), type)
+					|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
+					BodyTyper.fail("E1003", 'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool', method.span);
+			} else {
+				hasHash = true;
+				if (!hashable) BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Hashable to define hash', method.span);
+				if (method.isStatic || method.arguments.length != 0 || (method.typeParameters != null && method.typeParameters.length > 0)
+					|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
+					BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int', method.span);
+			}
+		}
+		if (hashable && hasEquals && !hasHash)
+			BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}" with a handwritten equals; provide hash():Int', declaration.span);
+		if (!equatable) return;
+		for (constructor in declaration.cases) for (parameter in constructor.params) {
+			var fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+				field = parameter.name == null ? "payload" : parameter.name;
+			if (!hasEquals && !DeclaredConformance.supportsEquality(session, fieldType))
+				BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable', parameter.span);
+			if (hashable && !hasHash && !DeclaredConformance.supportsHash(session, fieldType))
+				BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable', parameter.span);
+		}
 	}
 
 	/** A nullable value still contains its payload inline, so it cannot break a by-value cycle. */

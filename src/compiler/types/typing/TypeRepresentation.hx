@@ -9,6 +9,7 @@ import compiler.runtime.RuntimeType;
 import compiler.semantic.GenericSpecializationPolicy;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.Ast.AstEnumParameter;
 import compiler.syntax.Ast.AstExpression;
@@ -176,12 +177,12 @@ class TypeRepresentation {
 		if (declaration.typeConstraints != null)
 			for (constraint in declaration.typeConstraints) {
 				var index = declaration.typeParameters.indexOf(constraint.parameter);
-				if (index >= 0 && arguments[index] == TDynamic) return null;
+				if (index >= 0 && (switch (arguments[index]) { case TDynamic: true; default: false; })) return null;
 			}
-		for (argument in arguments) {
-			if (containsTypeParameter(argument, []))
-				return null;
-			if (ownerContainsValue(argument))
+		for (index in 0...arguments.length) {
+			var argument = arguments[index];
+			if (containsTypeParameter(argument, [])) return null;
+			if (ownerContainsValue(argument) || (switch argument { case TDynamic: false; default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index]); }))
 				needsSpecialization = true;
 		}
 		if (!needsSpecialization)
@@ -244,7 +245,7 @@ class TypeRepresentation {
 			case TMap(key, value):
 				if (session.requiresSpecializedMap(key, value)) {
 					if (origin != null) session.runtimeDependencyTracker.record(origin, RuntimeType.SPECIALIZED_MAP);
-					genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [RuntimeType.specializedMapKey(key), value]));
+					genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [session.specializedMapKey(key), value]));
 				}
 				discoverOwners(key, explored, origin); discoverOwners(value, explored, origin);
 			case TFunction(arguments, result):
@@ -259,7 +260,7 @@ class TypeRepresentation {
 		}
 	}
 
-	function containsTypeParameter(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+	public function containsTypeParameter(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
 		return switch type {
 			case TTypeParameter(_, _): true;
 			case TInstance(_, _, arguments): anyTypeParameter(arguments, explored);
@@ -284,12 +285,81 @@ class TypeRepresentation {
 		return false;
 	}
 
+	/** A boxed generic enum needs its concrete descriptor throughout an owner's ABI. */
+	function ownerUsesGenericEnum(owner:AstClass, parameter:String, ?seen:Array<String>):Bool {
+		if (seen == null) seen = [];
+		var key = owner.name + ":" + parameter;
+		if (seen.indexOf(key) >= 0) return false;
+		seen.push(key);
+		var found = owner.base != null && enumContainsParameter(owner.base, parameter, seen);
+		for (contract in owner.interfaces) if (enumContainsParameter(contract, parameter, seen)) found = true;
+		for (field in owner.fields) if (!field.isStatic && field.type != null && enumContainsParameter(field.type, parameter, seen)) found = true;
+		for (method in owner.methods) {
+			if (method.isStatic || method.typeParameters != null && method.typeParameters.indexOf(parameter) >= 0) continue;
+			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, seen)) found = true;
+			if (enumContainsParameter(method.result, parameter, seen)) found = true;
+		}
+		seen.pop();
+		return found;
+	}
+
+	function enumContainsParameter(type:AstType, parameter:String, seen:Array<String>):Bool return switch type {
+		case AppliedType(name, arguments):
+			var found = false, alias = session.declarations.aliases.get(name), owner = session.classDecls.get(name);
+			if (session.enumDecls.exists(name)) for (argument in arguments) if (containsSyntaxParameter(argument, parameter)) found = true;
+			if (alias != null) {
+				var key = "alias:" + name;
+				if (seen.indexOf(key) < 0) {
+					seen.push(key);
+					for (index in 0...arguments.length)
+						if (index < alias.typeParameters.length && containsSyntaxParameter(arguments[index], parameter)
+							&& enumContainsParameter(alias.type, alias.typeParameters[index], seen)) found = true;
+					seen.pop();
+				}
+			}
+			if (owner != null) for (index in 0...arguments.length)
+				if (index < owner.typeParameters.length && containsSyntaxParameter(arguments[index], parameter)
+					&& ownerUsesGenericEnum(owner, owner.typeParameters[index], seen)) found = true;
+			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
+			found;
+		case ArrayType(element), NullableType(element): enumContainsParameter(element, parameter, seen);
+		case MapType(key, value): enumContainsParameter(key, parameter, seen) || enumContainsParameter(value, parameter, seen);
+		case FunctionType(arguments, result):
+			var found = enumContainsParameter(result, parameter, seen);
+			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
+			found;
+		case AnonymousType(fields):
+			var found = false;
+			for (field in fields) if (enumContainsParameter(field.type, parameter, seen)) found = true;
+			found;
+		default: false;
+	};
+
+	static function containsSyntaxParameter(type:AstType, parameter:String):Bool return switch type {
+		case NamedType(name): name == parameter;
+		case AppliedType(_, arguments):
+			var found = false;
+			for (argument in arguments) if (containsSyntaxParameter(argument, parameter)) found = true;
+			found;
+		case ArrayType(element), NullableType(element): containsSyntaxParameter(element, parameter);
+		case MapType(key, value): containsSyntaxParameter(key, parameter) || containsSyntaxParameter(value, parameter);
+		case FunctionType(arguments, result):
+			var found = containsSyntaxParameter(result, parameter);
+			for (argument in arguments) if (containsSyntaxParameter(argument, parameter)) found = true;
+			found;
+		case AnonymousType(fields):
+			var found = false;
+			for (field in fields) if (containsSyntaxParameter(field.type, parameter)) found = true;
+			found;
+		default: false;
+	};
+
 	/** Reference containers already own their element representation; they do not put it in this owner. */
 	function ownerContainsValue(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation), TNullable(representation): ownerContainsValue(representation);
 			case TInstance(NominalKind.Class, _, _): session.relations.isValueClass(type);
-			case TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_): true;
+			case TInstance(NominalKind.Enum, _, _), TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_): true;
 			default: false;
 		};
 
@@ -300,6 +370,7 @@ class TypeRepresentation {
 	function containsExactValueLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
 			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name) || session.relations.isValueClass(type)): true;
+			case TInstance(NominalKind.Enum, _, _): true;
 			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
 				containsExactValueLayout(representation, explored);
 			case TMap(key, value): containsExactValueLayout(key, explored) || containsExactValueLayout(value, explored);

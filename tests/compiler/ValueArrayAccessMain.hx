@@ -1328,7 +1328,7 @@ class ValueArrayAccessMain {
 						+ 'const result=i.exports.main(); if(result!==42) throw Error("result="+result);';
 					var process = new sys.io.Process("node", ["-e", script, linearPath]), error = process.stderr.readAll().toString(), status = process.exitCode();
 					process.close();
-					if (status != 0) throw 'Wasm32 dynamic inline array returned $status: $error';
+					if (status != 0) throw 'Wasm32 dynamic inline array ${test.element} (checked=${test.checked}) returned $status: $error';
 				} catch (error:Dynamic) { if (sys.FileSystem.exists(linearPath)) sys.FileSystem.deleteFile(linearPath); throw error; }
 				if (sys.FileSystem.exists(linearPath)) sys.FileSystem.deleteFile(linearPath);
 			}

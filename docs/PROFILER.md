@@ -500,3 +500,24 @@ sent when the session starts, so changing it needs no rebuild.
 5. **Recording controls:** manual start and stop, duration and size limits,
    and the example exclude lists.
 6. **Other viewers:** Tracy and others.
+
+## Known sampling and census deadlock
+
+On Linux with the HashLink sampling profiler enabled, an editor selection-stress
+allocation census has hung while dumping its census. From an outer Materia
+checkout with a built headless editor, the reproducer was an alternating series
+of runs of:
+
+```sh
+python3 app/tools/profile-editor.py --scenario selection-stress --cycles 30 \
+  --census --no-baseline --skip-build --output-dir /dev/shm/selection-census
+```
+
+Use a fresh output directory for each run. The fifth candidate run timed out
+with `editor did not finish within 60 seconds`. GDB showed the main thread in
+`sigprof_handler`, interrupted inside `hl_module_resolve_symbol_full` while
+`hl_gc_census_dump` held the module-registry mutex. The sampler was waiting in
+`hl_module_registry_snapshot` for that same mutex. This is a lock inversion
+between sampling and the suspended thread, not an editor retention failure.
+The defect is pending a runtime fix and regression test; disabling the profiler
+with `--no-profile --census` avoids the hang but does not test the sampler.

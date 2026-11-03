@@ -1995,10 +1995,10 @@ class WasmLinearRuntime {
 			"_bytes")) Bytes; else if (StringTools.endsWith(mapName, "_ref")) Dyn; else throw 'Unknown Wasm map value ABI "$mapName"';
 
 	public static function mapEntrySize(valueType:IrType):Int
-		return valueType == F64 || valueType == I64 ? 16 : 8;
+		return (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 16 : 8;
 
 	public static function mapValueOffset(valueType:IrType):Int
-		return valueType == F64 || valueType == I64 ? 8 : 4;
+		return (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 8 : 4;
 
 	static function ensureStringEqual(module:WasmModule, functions:Map<String, Int>):Int {
 		var result = functions.get("__string_equal");
@@ -2020,11 +2020,11 @@ class WasmLinearRuntime {
 	}
 
 	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int, valueType:IrType):Int {
-		var suffix = valueType == F64 ? "f64" : valueType == I64 ? "i64" : "i32",
+		var suffix = (switch (valueType) { case F64: true; default: false; }) ? "f64" : (switch (valueType) { case I64: true; default: false; }) ? "i64" : "i32",
 			name = "__array_alloc_" + suffix,
 			result = functions.get(name);
 		if (result == null) {
-			result = WasmLinearArrays.addArrayAllocator(module, name, valueType == F64 || valueType == I64 ? 8 : 4, allocator);
+			result = WasmLinearArrays.addArrayAllocator(module, name, (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 8 : 4, allocator);
 			functions.set(name, result);
 		}
 		return result;
@@ -2033,7 +2033,7 @@ class WasmLinearRuntime {
 	static function addMapRuntimeFunction(module:WasmModule, functions:Map<String, Int>, name:String, mapName:String, operation:String, allocator:Int):Int {
 		var keyType = mapKeyType(mapName),
 			valueType = mapValueType(mapName),
-			stringEqual = keyType == Bytes ? ensureStringEqual(module, functions) : 0;
+			stringEqual = (switch (keyType) { case Bytes: true; default: false; }) ? ensureStringEqual(module, functions) : 0;
 		var entrySize = mapEntrySize(valueType),
 			valueOffset = mapValueOffset(valueType);
 		return switch operation {
@@ -2100,13 +2100,13 @@ class WasmLinearRuntime {
 			body.push(instruction);
 
 	static function mapKeyCompare(keyType:IrType, stringEqual:Int):Array<WasmInstruction>
-		return keyType == Bytes ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
+		return (switch (keyType) { case Bytes: true; default: false; }) ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
 
 	static function loadMapValue(type:IrType, offset:Int):WasmInstruction
-		return type == F64 ? F64Load(offset) : type == I64 ? I64Load(offset) : I32Load(offset);
+		return (switch (type) { case F64: true; default: false; }) ? F64Load(offset) : (switch (type) { case I64: true; default: false; }) ? I64Load(offset) : I32Load(offset);
 
 	static function storeMapValue(type:IrType, offset:Int):WasmInstruction
-		return type == F64 ? F64Store(offset) : type == I64 ? I64Store(offset) : I32Store(offset);
+		return (switch (type) { case F64: true; default: false; }) ? F64Store(offset) : (switch (type) { case I64: true; default: false; }) ? I64Store(offset) : I32Store(offset);
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
@@ -2134,7 +2134,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.emit(I32Load(0));
 					builder.localGet(key);
-					if (keyType == Bytes)
+					if ((switch (keyType) { case Bytes: true; default: false; }))
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
@@ -2194,7 +2194,7 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.emit(I32Load(0));
 					builder.localGet(key);
-					if (keyType == Bytes)
+					if ((switch (keyType) { case Bytes: true; default: false; }))
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
@@ -2315,7 +2315,7 @@ class WasmLinearRuntime {
 			builder.localGet(map);
 			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 			builder.localSet(entries);
-			if (valueType == I32 || valueType == Bool) {
+			if ((switch (valueType) { case I32: true; default: false; }) || (switch (valueType) { case Bool: true; default: false; })) {
 				builder.i32Const(WasmLayout.DYN_I32_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -2330,7 +2330,7 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(I32Load(valueOffset));
 				builder.emit(I32Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			} else if (valueType == F64) {
+			} else if ((switch (valueType) { case F64: true; default: false; })) {
 				builder.i32Const(WasmLayout.DYN_F64_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -2345,7 +2345,7 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(F64Load(valueOffset));
 				builder.emit(F64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			} else if (valueType == I64) {
+			} else if ((switch (valueType) { case I64: true; default: false; })) {
 				builder.i32Const(WasmLayout.DYN_I64_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -4316,5 +4316,5 @@ class WasmLinearRuntime {
 	}
 
 	static function resultTypes(type:IrType):Array<WasmValueType>
-		return type == Void ? [] : [WasmModuleSupport.requireValueType(type)];
+		return (switch (type) { case Void: true; default: false; }) ? [] : [WasmModuleSupport.requireValueType(type)];
 }

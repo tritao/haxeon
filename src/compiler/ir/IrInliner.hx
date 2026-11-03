@@ -252,7 +252,7 @@ class IrInliner {
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
 	static function describe(object:IrObject):String {
 		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
-		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.nullableScalarStorage != null || field.type == F32) {
+		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.nullableScalarStorage != null || (switch (field.type) { case F32: true; default: false; })) {
 			var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field), nullable = field.nullableScalarStorage;
 			field.name + "=" + Std.string(field.type)
 				+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
@@ -719,7 +719,7 @@ class IrInliner {
 			case Return(value): use(value);
 			default: throw "A straight-line callee must return";
 		};
-		if (callOutput.type == Void)
+		if ((switch (callOutput.type) { case Void: true; default: false; }))
 			copies.push(new Located(ConstVoid(callOutput), call.provenance));
 		else
 			substitutions.set(callOutput.id, returned);
@@ -874,7 +874,7 @@ class IrInliner {
 			cloned.push(copy);
 		}
 		// The continuation defines the call's output, then runs whatever followed the call.
-		if (callOutput.type == Void)
+		if ((switch (callOutput.type) { case Void: true; default: false; }))
 			continuation.instructions.push(new Located(ConstVoid(callOutput), call.provenance));
 		else
 			continuation.instructions.push(new Located(Phi(callOutput, returned), call.provenance));

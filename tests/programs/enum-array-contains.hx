@@ -5,7 +5,7 @@ enum Color {
 	Blue;
 }
 
-enum Shape {
+enum Shape : Equatable {
 	Dot;
 	Circle(r:Int);
 	Pair(a:Int, b:Int);
@@ -42,6 +42,8 @@ function main():Int {
 	var shapes = [Dot, Circle(1), Pair(1, 2)];
 	check("payload-less in mixed", shapes.contains(Dot), failed);
 	check("payload constructor by its index", shapes.indexOf(Dot) == 0, failed);
+	check("payload value equality", shapes.contains(Circle(1)) && shapes.indexOf(Pair(1, 2)) == 2, failed);
+	check("payload remove", shapes.remove(Circle(1)) && !shapes.contains(Circle(1)), failed);
 	var levels = [Low, High];
 	var unknownLevel:Level = cast 3;
 	check("enum abstract contains", levels.contains(High) && !levels.contains(unknownLevel), failed);

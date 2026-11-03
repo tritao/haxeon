@@ -35,6 +35,7 @@ class WasmGcDynamicArrays {
 		"__array_shift_any",
 		"__array_index_of_any",
 		"__array_remove_any",
+		"__array_remove_at_any",
 		"__array_concat_any",
 		"__array_copy_any",
 		"__array_slice_any",
@@ -73,7 +74,7 @@ class WasmGcDynamicArrays {
 				return;
 			var helper = new WasmGcDynamicArrays(module, plan, program, representation, arguments.length, functions),
 				local = build(helper);
-			if (result != Void)
+			if ((switch (result) { case Void: false; default: true; }))
 				helper.body.push(LocalGet(local));
 			helper.body.push(Return);
 			if (name == "$value-array:runtime:get") {
@@ -164,7 +165,7 @@ class WasmGcDynamicArrays {
 		};
 
 	function emit(module:WasmModule, native:IrNative):Int {
-		var result = native.result == Void ? -1 : allocateLocal(plan.valueType(native.result));
+		var result = (switch (native.result) { case Void: true; default: false; }) ? -1 : allocateLocal(plan.valueType(native.result));
 		if (plan.valueArrayWrapperTypeIndex >= 0 && native.name != "__array_alloc_typed_ref" && native.name != "__array_check_cast") {
 			push(WasmGcValueArrays.resolveForward(plan, 0));
 			if (native.name == "__array_concat_any") push(WasmGcValueArrays.resolveForward(plan, 1));
@@ -192,6 +193,8 @@ class WasmGcDynamicArrays {
 				indexOf(0, 1, result);
 			case "__array_remove_any":
 				remove(0, 1, result);
+			case "__array_remove_at_any":
+				removeAt(0, 1);
 			case "__array_concat_any":
 				concat(0, 1, result);
 			case "__array_copy_any":
@@ -306,7 +309,7 @@ class WasmGcDynamicArrays {
 				for (local in argumentLocals)
 					body.push(LocalGet(local));
 				body.push(Call(index));
-				if (output.type != Void)
+				if ((switch (output.type) { case Void: false; default: true; }))
 					body.push(LocalSet(outputLocal));
 		}
 
@@ -453,7 +456,7 @@ class WasmGcDynamicArrays {
 			];
 		var target = plan.valueType(element), source = plan.valueType(box);
 		var convert:Array<WasmInstruction> = switch [source, target] {
-			case [I32, I32]: element == Bool ? [I32Eqz, I32Eqz] : [];
+			case [I32, I32]: (switch (element) { case Bool: true; default: false; }) ? [I32Eqz, I32Eqz] : [];
 			case [I64, I32]: [I32WrapI64];
 			case [F64, I32]: [I32TruncF64S];
 			case [I32, I64]: [I64ExtendI32S];
@@ -829,6 +832,16 @@ class WasmGcDynamicArrays {
 		push([I32Const(1), LocalSet(result), End]);
 	}
 
+
+	function removeAt(array:Int, index:Int):Void {
+		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
+			LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:remove_at")), Return, End]);
+		var current = elementType(array);
+		dispatch(current, function(element) {
+			lower(concrete("remove_at", element), value(Void), [value(Array(element)), value(I32)], -1, [array, index]);
+		});
+	}
+
 	/** Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 	function concat(left:Int, right:Int, result:Int):Void {
 		if (plan.valueArrayWrapperTypeIndex >= 0) {
@@ -911,7 +924,7 @@ class WasmGcDynamicArrays {
 		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
-			var output = resultType == Void ? Void : Array(element);
+			var output = (switch (resultType) { case Void: true; default: false; }) ? Void : Array(element);
 			lower(concrete(operation, element), value(output), [value(Array(element))].concat([for (_ in extra) value(I32)]), result, [array].concat(extra));
 		});
 	}

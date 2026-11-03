@@ -143,7 +143,7 @@ class PropertyEditor implements View implements Observable {
 				drafts.remove(descriptor.id); errors.remove(descriptor.id);
 			case Pending(_): throw "Expected a completed edit";
 		}
-		return result == PropertyEditResult.Applied;
+		return switch result { case Applied: true; default: false; };
 	}
 
 	public function resetValue(context:BuildContext, descriptor:PropertyDescriptor):Void {

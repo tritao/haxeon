@@ -36,7 +36,7 @@ class ControlFlow {
 					return true;
 				case TBreak(_), TContinue(_) if (loopExit):
 					return true;
-				case TExpression(expression, _) if (expression.type == TNever):
+				case TExpression(expression, _) if ((switch (expression.type) { case TNever: true; default: false; })):
 					return true;
 				case TIf(condition, yes, no, _):
 					// A bare block `{ ... }` is an `if (true)` without an `else`: it always runs its body.

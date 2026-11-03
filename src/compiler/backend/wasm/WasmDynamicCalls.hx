@@ -77,7 +77,7 @@ class WasmDynamicCalls {
 							emit(InstanceClosure(closure, VARARGS_TARGET, capture));
 							emit(ToDyn(out, closure));
 						case CallClosure(out, closure, args):
-							var dynamicCall = closure.type == Dyn;
+							var dynamicCall = (switch (closure.type) { case Dyn: true; default: false; });
 							if (dynamicCall)
 								needsFunctionTest = true;
 							var signature:IrType = dynamicCall ? Function([for (a in args) a.type], out.type) : closure.type;
@@ -168,11 +168,11 @@ class WasmDynamicCalls {
 		var array = b.call("__array_alloc_ref", [b.constInt(values.length)], Array(Dyn));
 		for (i in 0...values.length) {
 			var index = b.constInt(i),
-				value = values[i].type == Dyn ? values[i] : b.toDyn(values[i]);
+				value = (switch (values[i].type) { case Dyn: true; default: false; }) ? values[i] : b.toDyn(values[i]);
 			b.currentBlock().instructions.push(new Located(ArraySet(array, index, value), SourceProvenance.generated("wasm-varargs")));
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
-		b.returnValue(result == Void ? b.constVoid() : result == Dyn ? called : b.safeCast(called, result));
+		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : b.safeCast(called, result));
 		return new IrFunction(name, b.arguments, result, b.blocks, null, false, Keep);
 	}
 

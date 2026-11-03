@@ -4,7 +4,7 @@ package haxeon.ui.properties;
 class PropertyValueTools {
 	public static function same(first:Null<PropertyValue>, second:Null<PropertyValue>):Bool {
 		if (first == null || second == null)
-			return first == second;
+			return first == null && second == null;
 		return switch ([first, second]) {
 			case [Unavailable, Unavailable] | [Mixed, Mixed]: true;
 			case [Bool(a), Bool(b)]: a == b;

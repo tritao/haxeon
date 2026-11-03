@@ -282,7 +282,7 @@ class CfgBuilder {
 
 	/** Boxes the value. `target` is `Dyn` by default, or `Nullable` of the value's own type to keep the primitive on record. */
 	public function toDyn(value:CfgValue, ?target:IrType):CfgValue {
-		if (value.type == Dyn && target == null)
+		if ((switch (value.type) { case Dyn: true; default: false; }) && target == null)
 			return value;
 		var out = temporary(target == null ? Dyn : target);
 		emit(ToDyn(out, value));
