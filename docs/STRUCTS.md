@@ -447,6 +447,24 @@ calibration showed page-level variation, but does not establish the cause of thi
 Showcase pairs had equal full and text-heavy medians of 5,896 objects; one control text-heavy sample had 5,894.
 Static and editing counts were 5,896 and 12,622 respectively. No performance ceiling was raised.
 
+
+After porting the application and libraries from reflective enum comparison to declared conformance and case
+patterns, nine alternating pairs against the preceding enum checkpoint had the same allocation median for every
+action in the table above. The selection-stress census medians were 342,097 on both sides (paired median delta zero);
+its candidate had 140 `@haxeon.ui.TextStyle`, 140 `@haxeon.ui.ParagraphStyle`, and no
+`@haxeon.ui.widgets.docking.DockTextWidthKey` allocations. The two tab allocation ceilings were lowered to retain the
+measured reduction from the starting baseline.
+
+In nine paired 500-cycle headless captures, control and candidate RSS window medians were
+[29.84, 3.75, 0.78, 4.84] and [30.16, 3.75, 0.78, 5.00] MiB, with paired median differences
+[+0.31, +0.16, 0.00, +0.16] MiB. A separate nine-pair identical-bytecode calibration had window medians
+[30.16, 3.59, 0.78, 5.00] and [29.84, 3.91, 0.78, 5.00] MiB, with paired differences
+[-0.31, +0.47, 0.00, 0.00] MiB. The fourth-window candidate difference remains visible; these measurements do not
+prove an RSS improvement. Five paired allocation censuses of the same workload had control/candidate medians of
+1,825,370 / 1,825,374 allocations and a paired median difference of +6. Three further type comparisons found only
+byte-buffer differences, of -6, -4, and +3 allocations; their source is not established. The 30-cycle selection
+census type comparison found only 176 additional byte-buffer bytes and no allocation-count difference.
+
 ## Equality and hashing
 
 Decided and implemented 2026-11-01. Value equality is declared by interface conformance, following Swift's

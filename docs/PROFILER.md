@@ -501,7 +501,7 @@ sent when the session starts, so changing it needs no rebuild.
    and the example exclude lists.
 6. **Other viewers:** Tracy and others.
 
-## Known sampling and census deadlock
+## Sampling and census lock ordering
 
 On Linux with the HashLink sampling profiler enabled, an editor selection-stress
 allocation census has hung while dumping its census. From an outer Materia
@@ -519,5 +519,10 @@ with `editor did not finish within 60 seconds`. GDB showed the main thread in
 `hl_gc_census_dump` held the module-registry mutex. The sampler was waiting in
 `hl_module_registry_snapshot` for that same mutex. This is a lock inversion
 between sampling and the suspended thread, not an editor retention failure.
-The defect is pending a runtime fix and regression test; disabling the profiler
-with `--no-profile --census` avoids the hang but does not test the sampler.
+The sampler now pins a module-registry snapshot before it stops the target and
+releases it after resuming the thread. Stack capture therefore takes no module
+registry lock while the sampled thread is suspended. `tests/integration/test-profiler-census-sampling.sh` delays the main thread while it owns that lock
+and checks that sampling and census dumping both finish; it timed out with the
+old runtime and passes with the fix. Five subsequent runs of the editor
+reproducer with sampling enabled all completed; their 30-cycle selection
+censuses counted 342,094, 342,097, 342,097, 342,095, and 342,099 allocations.
