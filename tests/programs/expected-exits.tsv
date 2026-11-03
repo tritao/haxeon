@@ -472,3 +472,4 @@ struct-array-reflection-escape	42
 struct-array-string-escape	42
 hash-float-extremes	42
 hash-float-dependency	42
+specialized-map-scalar-keys	42

@@ -294,7 +294,7 @@ class TypingSession {
 		if (builtin == null && !hashable) return null;
 		if (requiresSpecializedMap(key, value)) {
 			runtimeDependencyTracker.record(currentContext.name, RuntimeType.SPECIALIZED_MAP);
-			representation.genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [specializedMapKey(key), value]));
+			representation.specializedMapOwner(key, value);
 			return RuntimeType.SPECIALIZED_MAP;
 		}
 		return builtin;

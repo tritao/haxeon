@@ -63,6 +63,7 @@ class TestCatalog {
 		"DeclaredEqualityInliningMain",
 		"FloatEqualityIrMain",
 		"FloatHashIrMain",
+		"ScalarMapIncrementalMain",
 		"ObservableTrackingMain",
 		"NullableStructIrMain",
 		"NullableScalarFlowMain",

@@ -172,3 +172,19 @@ census medians were 342,098 / 342,097 allocations, with a paired median delta of
 
 The object-count differences are within the observed run-to-run variation. Independent allocation fixtures measured
 zero allocations for 8 and 1,024 Float hashes on HashLink, Wasm32 and Wasm GC, with inlining on and off.
+
+The scalar-map correction was measured against the immediately preceding compiler with nine alternating pairs. Every
+per-action allocation median remained as in the table above, with zero paired median deltas. One unpaired
+sensors-to-hierarchy sample was 80.1 KiB; the paired control and candidate medians were both 78.1 KiB. The
+selection-stress census median was 342,097 allocations on both sides, with a zero paired median delta. The 500-cycle
+RSS window medians were 30.00 / 3.59 / 0.94 / 4.84 MiB before and 30.00 / 3.75 / 0.78 / 4.84 MiB after; the paired
+median deltas were 0 / 0 / -0.16 / 0 MiB. These paired measurements do not establish an RSS improvement.
+
+| Wasm GC Showcase scenario | Before objects | After objects |
+| --- | ---: | ---: |
+| full | 5,896 | 5,894 |
+| static | 5,896 | 5,896 |
+| text-heavy | 5,896 | 5,896 |
+| editing | 12,622 | 12,622 |
+
+The Wasm GC guest binaries were byte-identical; the two-object difference is within observed run-to-run variation.

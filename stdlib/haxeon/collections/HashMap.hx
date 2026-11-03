@@ -25,7 +25,7 @@ class HashMap<K:Hashable, V> {
 		var at = hash & (currentBuckets.length - 1);
 		while (currentBuckets[at] != 0) {
 			var entry = currentBuckets[at] - 1;
-			if (entry >= 0 && currentHashes[entry] == hash && keys[entry] == key) return at;
+			if (entry >= 0 && currentHashes[entry] == hash && Hashing.keyEquals(keys[entry], key)) return at;
 			at = (at + 1) & (currentBuckets.length - 1);
 		}
 		return -1;

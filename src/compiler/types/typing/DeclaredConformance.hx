@@ -48,7 +48,7 @@ class DeclaredConformance {
 		if (RuntimeType.mapName(type, TInt) == null) {
 			if (has(session, type, "Hashable")) {
 				HashGenerator.request(session, type, session.currentContext.name, span);
-				ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
+				if (usesEquality(session, type)) ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else switch type {
 				case TInstance(NominalKind.Class, _, _):
 					BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);

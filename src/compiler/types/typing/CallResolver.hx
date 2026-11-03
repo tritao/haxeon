@@ -263,6 +263,13 @@ class CallResolver {
 		};
 	}
 
+	static function isFloatingMapKey(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(_, _, representation), TNullable(representation): isFloatingMapKey(representation);
+			case TFloat, TNativeScalar("f32" | "f64"): true;
+			default: false;
+		};
+
 	function typeRawPointerMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):Null<TypedExpression> {
 		var typeArguments = switch receiver.type {
@@ -1182,11 +1189,16 @@ class CallResolver {
 			ValuePlaceRules.requireWritable(session, value, span);
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
 		}
-		if (name == "Equality.equals" || name == "haxeon.Equality.equals") {
+		if (name == "Equality.equals" || name == "haxeon.Equality.equals" || name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
 			var left = typeExpressionValue(arguments[0], scope),
 				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
+			var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
+			if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
+				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Hashable', span);
+			if (mapKeyEquality && isFloatingMapKey(left.type))
+				return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
 			if ((switch (left.type) { case TDynamic: true; default: false; }))
 				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);
 			var structType = switch left.type {

@@ -269,6 +269,12 @@ class TypeRepresentation {
 	public function restoreGenericOwnerAliases(previous:Map<String, String>, retained:Map<String, Bool>):Void
 		for (signature => name in previous) if (retained.exists(name)) ownerAliases.set(signature, name);
 
+	/** Record the typer's selected map representation under the source Map type as well as its generic owner. */
+	public function specializedMapOwner(key:CompilerType, value:CompilerType):Void {
+		var owner = genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [session.specializedMapKey(key), value]));
+		if (owner != null) ownerAliases.set(SemanticSignature.type(TMap(key, value)), owner.name);
+	}
+
 	/** Discover owners inside signatures and storage types, including recursive anonymous types. */
 	public function discoverGenericOwners(type:CompilerType, ?origin:String):Void
 		discoverOwners(type, [], origin);
@@ -285,7 +291,7 @@ class TypeRepresentation {
 			case TMap(key, value):
 				if (session.requiresSpecializedMap(key, value)) {
 					if (origin != null) session.runtimeDependencyTracker.record(origin, RuntimeType.SPECIALIZED_MAP);
-					genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [session.specializedMapKey(key), value]));
+					specializedMapOwner(key, value);
 				}
 				discoverOwners(key, explored, origin); discoverOwners(value, explored, origin);
 			case TFunction(arguments, result):

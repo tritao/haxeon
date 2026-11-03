@@ -139,7 +139,7 @@ bucket growth, rather than allocating an object for each inserted struct. A Hash
 three-map workload recorded 458, 529 and 617 allocations respectively: three map objects, one byte buffer and arrays,
 with no `MapKey` or `MapValue` objects at any size.
 
-**Map-key specialization and floating-point keys (decided, pending).**
+**Map-key specialization and floating-point keys.**
 
 The typer chooses the physical map owner once and publishes that choice for IR lowering; lowering consumes the chosen
 owner instead of repeating a separate key classifier. Ordinary specialized `HashMap<K,V>` handles supported keys,
@@ -151,12 +151,16 @@ equivalent, and all other keys use ordinary numeric equality. This key equivalen
 Hash Float keys by their IEEE bits after canonicalizing every NaN to one bit pattern and both zero signs to zero; the
 same bit hashing handles infinities and large finite values without a trapping numeric conversion. The target supplies
 an allocation-free bit reinterpretation. The hash used by synthesized `Hashable` values follows the same canonical
-Float hashing, and equal keys must always have equal hashes. The compiler-generated Float hash now implements this
-bit-based rule on all targets; the duplicated arithmetic helpers have been removed. The map key equivalence and
-lowering rules above remain pending.
+Float hashing, and equal keys must always have equal hashes. The compiler-generated Float hash implements this
+bit-based rule on all targets; the duplicated arithmetic helpers have been removed. Nullable nullary enum keys retain
+their nullable enum representation in the generic map, preserving absence separately from every case; non-null enum
+keys can use their existing integer representation. The compiler records the chosen specialized owner against the
+source `Map` type, including across incremental compilation, so an explicitly used `HashMap<K,V>` cannot accidentally
+change a separate native `Map<K,V>` representation.
 
-At this checkpoint, `Map<Float,Int>` and `Map<Bool,Int>` fail compilation with `Invalid value equality request` for
-the scalar key. The implementation and cross-target tests are the next correctness fix.
+Cross-target tests cover Float, Bool, Int64, UInt32, nullable Float and nullable enum keys, custom reference equality,
+NaNs, signed zero, infinities and large finite values. Updating and looking up a Float-keyed map of structs allocates
+zero objects after setup for 8 and 1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
 
 An explicitly erased `G<Dynamic>` view is a real Dynamic boundary. It must refer to the same generic object as its
 concrete source: reads materialize values for Dynamic, writes check and copy them back to the concrete field, and

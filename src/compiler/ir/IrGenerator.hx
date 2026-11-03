@@ -58,7 +58,6 @@ class IrGenerator {
 	static var genericOwnerAliases:Map<String, String> = [];
 	static var genericClasses:Map<String, Bool> = [];
 	static var genericOwnerOrigins:Map<String, String> = [];
-	static var hashableClasses:Map<String, Bool> = [];
 	static var equatableTypes:Map<String, Bool> = [];
 	static var observableClasses:Map<String, Bool> = [];
 	static var observableStateOwners:Map<String, String> = [];
@@ -98,7 +97,6 @@ class IrGenerator {
 		genericClasses = [];
 		genericOwnerOrigins = [];
 		classBases = [];
-		hashableClasses = [];
 		equatableTypes = [];
 		observableClasses = [];
 		observableStateOwners = [];
@@ -120,44 +118,6 @@ class IrGenerator {
 			if (classDecl.base != null)
 				classBases.set(Std.string(classDecl.name), classDecl.base);
 		}
-		function extendsHashable(name:String, visiting:Map<String, Bool>):Bool {
-			if (name == "Hashable")
-				return true;
-			if (visiting.exists(name))
-				return false;
-			visiting.set(name, true);
-			var bases = interfaceBases.get(name);
-			if (bases != null)
-				for (base in bases)
-					if (extendsHashable(base, visiting))
-						return true;
-			return false;
-		}
-		function classIsHashable(name:String, visiting:Map<String, Bool>):Bool {
-			if (hashableClasses.exists(name))
-				return true;
-			if (visiting.exists(name))
-				return false;
-			visiting.set(name, true);
-			var declaration:Null<TypedClass> = null;
-			for (candidate in classes)
-				if (candidate.name == name)
-					declaration = candidate;
-			if (declaration == null)
-				return false;
-			for (interfaceName in declaration.interfaces)
-				if (extendsHashable(interfaceName, [])) {
-					hashableClasses.set(name, true);
-					return true;
-				}
-			if (declaration.base != null && classIsHashable(declaration.base, visiting)) {
-				hashableClasses.set(name, true);
-				return true;
-			}
-			return false;
-		}
-		for (classDecl in classes)
-			classIsHashable(classDecl.name, []);
 		function extendsEquatable(name:String, visiting:Map<String, Bool>):Bool {
 			if (name == "Equatable" || name == "Hashable")
 				return true;
@@ -333,24 +293,12 @@ class IrGenerator {
 		return false;
 	}
 
+	/** Consume the source Map representation selected by the typer. */
 	static function isSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return isPayloadEnumKey(key) || RuntimeType.usesSpecializedMap(key, value, mapValueType, isHashableMapKey);
-
-	static function mapValueType(type:CompilerType):Bool return switch type {
-		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
-		case TInstance(NominalKind.Class, name, _): valueClasses.exists(name);
-		default: false;
-	};
-
-	static function isHashableMapKey(type:CompilerType):Bool return switch type {
-		case TAbstract(_, _, representation), TNullable(representation): isHashableMapKey(representation);
-		case TInstance(NominalKind.Class, name, _): hashableClasses.exists(name);
-		default: false;
-	};
+		return genericOwnerAliases.exists(compiler.semantic.SemanticSignature.type(TMap(key, value)));
 
 	static function specializedMapOwner(key:CompilerType, value:CompilerType):String {
-		var semantic:CompilerType = TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key), value]),
-			owner = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(semantic));
+		var owner = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(TMap(key, value)));
 		if (owner == null) throw 'Missing specialized generic map owner for $key -> $value';
 		return owner;
 	}
@@ -2162,6 +2110,9 @@ class IrGenerator {
 				if (primitive == null)
 					throw "The Std.string fast path lost its primitive operand";
 				builder.call((switch (primitive.type) { case TInt: true; default: false; }) ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
+			case TCall("$map.floatKeyEquals", [left, right]):
+				var operands = lowerOperands([left, right], builder, localTypes);
+				lowerFloatMapKeyEquality(operands[0], operands[1], builder, localTypes);
 			case TCall("__reference_equal", [left, right]):
 				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
 			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
@@ -3647,6 +3598,29 @@ class IrGenerator {
 		var leftType = lowerType(left.type), rightType = lowerType(right.type);
 		if (!Type.enumEq(leftType, rightType)) return false;
 		return switch leftType { case Nullable(I32 | I64 | F32 | F64 | Bool): true; default: false; };
+	}
+
+	/** Map Float equivalence includes NaNs while preserving null and signed-zero behavior. */
+	static function lowerFloatMapKeyEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var id = arrayValuePlaceSerial++, resultName = '$' + 'float-map-key-equality:$id',
+			leftName = '$' + 'float-map-key-left:$id', rightName = '$' + 'float-map-key-right:$id',
+			equalBlock = builder.createBlock(), checkLeft = builder.createBlock(), checkRight = builder.createBlock(),
+			unequalBlock = builder.createBlock(), done = builder.createBlock();
+		localTypes.set(resultName, Bool); localTypes.set(leftName, left.type); localTypes.set(rightName, right.type);
+		builder.store(leftName, left); builder.store(rightName, right);
+		function equal(a:String, b:String):CfgValue {
+			var first = builder.load(a, left.type), second = builder.load(b, right.type);
+			return switch first.type {
+				case Nullable(_): lowerNullableScalarEquality(first, second, builder, localTypes);
+				default: builder.equal(first, second);
+			};
+		}
+		builder.branch(equal(leftName, rightName), equalBlock, checkLeft);
+		builder.select(checkLeft); builder.branch(equal(leftName, leftName), unequalBlock, checkRight);
+		builder.select(checkRight); builder.branch(equal(rightName, rightName), unequalBlock, equalBlock);
+		builder.select(equalBlock); builder.store(resultName, builder.constBool(true)); builder.jump(done);
+		builder.select(unequalBlock); builder.store(resultName, builder.constBool(false)); builder.jump(done);
+		builder.select(done); return builder.load(resultName, Bool);
 	}
 
 	/** Typed nullable scalar equality compares payloads, preserving IEEE float equality and null semantics. */
