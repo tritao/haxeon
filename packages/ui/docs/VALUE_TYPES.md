@@ -223,3 +223,17 @@ establish a runtime regression or an exact memory match.
 | editing | 12,622 | 12,622 |
 
 The Wasm GC guest was byte-identical before and after the HashLink fork change.
+
+The exact numeric erased-write check was measured with nine alternating control/candidate pairs on the same machine.
+The editor bytecode was byte-identical. All action allocation medians matched the preceding table except
+sensors-to-hierarchy, whose observed control/candidate medians were 78.1 / 78.4 KiB (paired median difference
++0.3 KiB). Individual samples of the identical binary ranged from 78.1 to 80.1 KiB, so this difference does not
+establish a compiler-induced allocation regression. The selection-stress census medians were 342,097 / 342,098
+allocations (paired median +1); three per-type pairs differed only in byte buffers, by +1 / 0 / -2 objects. The
+500-cycle RSS window medians were 29.84 / 3.91 / 0.78 / 4.84 MiB before and 30.00 / 3.75 / 0.78 / 5.00 MiB after,
+with paired median differences of -0.15 / -0.47 / 0 / 0 MiB. These figures include the previously observed
+same-binary noise and do not establish an RSS improvement or an exact match to the original baseline.
+
+The Wasm GC Showcase guest was also byte-identical. Alternating control/candidate object-count medians were 5,896 /
+5,896 for full (nine pairs), 5,896 / 5,896 for static and text-heavy (three pairs each), and 12,622 / 12,622 for
+editing (three pairs); every scenario had a zero paired median difference.

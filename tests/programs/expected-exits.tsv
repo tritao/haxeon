@@ -475,3 +475,4 @@ hash-float-dependency	42
 specialized-map-scalar-keys	42
 scalar-closure-identity	42
 struct-closure-dynamic-array	42
+generic-erased-numeric-checks	42

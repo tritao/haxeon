@@ -176,6 +176,10 @@ not allocate a box or a per-instance bridge; erasure work belongs at the explici
 The representation for an erased owner is the original object reference carried as `Dynamic`. Generated
 operation dispatchers test the actual owner layout and call its physical field or method, checking and copying a struct
 payload at the boundary. They preserve identity without a wrapper and need no additional storage in ordinary instances.
+Numeric erased writes require the exact runtime kind: Int, Float, Bool and Int64 are distinct, including nullable
+values. In particular, a Dynamic Float cannot be truncated into an Int field, and a Dynamic Int is not implicitly
+widened into a Float field at this boundary. A rejected write leaves the existing field unchanged. Typed numeric
+conversions retain their normal rules. Exact checks for the remaining reference-shaped kinds are still pending.
 These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
 owners are not complete until those paths and incremental invalidation are tested.
 Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the

@@ -140,8 +140,7 @@ class GenericOwnerErasure {
 			var target = switch type { case Nullable(inner): inner; default: type; },
 				checks:Array<IrType> = switch target {
 					case Obj(_): [target];
-					case I32 | F64: [I32, F64];
-					case Bool | I64: [target];
+					case I32 | F64 | Bool | I64: [target];
 					default: [];
 				};
 			if (checks.length > 0) {
