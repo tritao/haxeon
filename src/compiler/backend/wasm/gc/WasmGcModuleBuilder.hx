@@ -214,6 +214,49 @@ class WasmGcModuleBuilder {
 		addGcClosureThunks(module, plan, functions, program, reachable);
 		var closureAdapters = WasmGcClosureAdapters.reserve(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		gcContext.tableSlots = tableSlots;
+		// The generated query consumes a static-closure marker solely to identify its target. Resolve it after scalar ABI rewriting.
+		for (fn in program.functions) {
+			var markers:Map<Int, String> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case StaticClosure(output, target): markers.set(output.id, target);
+				default:
+			}
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case Call(_, name, arguments) if (StringTools.startsWith(name, "$wasm:closure-receiver:")):
+					if (arguments.length != 2 || !markers.exists(arguments[1].id)) throw 'Missing static closure marker for $name';
+					var target = markers.get(arguments[1].id), existing = gcContext.closureProbeQueryTargets.get(name);
+					if (existing != null && existing != target) throw 'Conflicting closure adapter markers for $name';
+					gcContext.closureProbeQueryTargets.set(name, target); gcContext.closureProbeTargets.set(target, true);
+				default:
+			}
+		}
+		// A marker may be elided only when its sole use is its matching receiver query.
+		for (fn in program.functions) {
+			var markers:Map<Int, String> = [], uses:Map<Int, Int> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case StaticClosure(output, target) if (gcContext.closureProbeTargets.exists(target)): markers.set(output.id, target);
+				default:
+			}
+			for (block in fn.blocks) {
+				for (located in block.instructions) for (input in compiler.ir.IrOperands.inputs(located.value)) if (markers.exists(input.id)) {
+					switch located.value {
+						case Call(_, name, arguments) if (gcContext.closureProbeQueryTargets.get(name) == markers.get(input.id)
+							&& arguments.length == 2 && arguments[1].id == input.id):
+						default: throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+					}
+					uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
+				}
+				if (block.terminator != null) switch block.terminator.value {
+					case Return(value) | Throw(value) | Rethrow(value) if (value != null && markers.exists(value.id)):
+						throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+					case Branch(condition, _, _) if (markers.exists(condition.id)):
+						throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+					default:
+				}
+			}
+			for (id in markers.keys()) if (uses.get(id) != 1) throw 'Closure adapter marker is not used exactly once in ${fn.name}';
+		}
 		if (reflectionTable != null)
 			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots);
 		closureAdapters.define(functions, gcRepresentation, tableSlots);
@@ -809,6 +852,7 @@ class WasmGcModuleBuilder {
 	}
 
 	static function isSupportedGcNative(program:IrProgram, name:String):Bool {
+		if (StringTools.startsWith(name, "$wasm:closure-receiver:")) return true;
 		if (isSupportedGcRuntimeNative(name))
 			return true;
 		for (native in program.natives)

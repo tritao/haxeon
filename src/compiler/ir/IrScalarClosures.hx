@@ -234,6 +234,7 @@ class IrScalarClosures {
 			wrapper = "$scalar-closure:erased-call:" + suffix, maker = "$scalar-closure:erase:" + suffix,
 			result = {maker: maker, environment: environment};
 		erasures.set(signature, result);
+		ensureRestoration(type);
 		var logical = switch type { case Function(arguments, result): {arguments: arguments, result: result};
 			default: throw "Scalar closure erasure requires a function"; };
 		var body = new IrBuilder(), receiver = body.argument("receiver", Obj(environment)),
@@ -250,11 +251,27 @@ class IrScalarClosures {
 		make.select(missing);
 		make.returnValue(make.constNull(erasedType(type)));
 		make.select(present);
+		var restoredEnvironment = "$scalar-closure:restored-environment:" + suffix,
+			restoredWrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
+			probeType:IrType = switch mapType(type) { case Function(args, result): Function([Obj(restoredEnvironment)].concat(args), result); default: throw "Expected scalar closure"; },
+			probe = make.staticClosure(restoredWrapper, probeType),
+			found = make.call(receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type), probeType), [source, probe], Dyn),
+			allocate = make.createBlock(), unwrap = make.createBlock();
+		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
+		make.select(unwrap);
+		make.returnValue(make.fieldGet(make.safeCast(found, Obj(restoredEnvironment)), "closure", erasedType(type)));
+		make.select(allocate);
 		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", source);
 		make.returnValue(make.instanceClosure(wrapper, captured, erasedType(type)));
 		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks));
 		return result;
+	}
+
+	function receiverQuery(name:String, first:IrType, second:IrType):String {
+		if (!Lambda.exists(program.natives, native -> native.name == name))
+			program.natives.push({name: name, library: "haxeon_runtime", symbol: "__closure_receiver_if_match", arguments: [first, second], result: Dyn});
+		return name;
 	}
 
 	function erasedType(type:IrType):IrType return switch type {
@@ -272,6 +289,7 @@ class IrScalarClosures {
 			logical = switch type { case Function(arguments, result): {arguments: arguments, result: result};
 				default: throw "Scalar closure restoration requires a function"; };
 		restorations.set(signatureKey, maker);
+		ensureErasure(type);
 		generatedObjects.push({name: environment, isValue: false, base: null, interfaces: [], fields: [{name: "closure", type: erasedType(type)}], methods: []});
 		var call = new IrBuilder(), receiver = call.argument("receiver", Obj(environment)), arguments:Array<IrValue> = [];
 		for (index in 0...logical.arguments.length) {
@@ -311,6 +329,15 @@ class IrScalarClosures {
 		make.select(missing);
 		make.returnValue(make.constNull(physical));
 		make.select(present);
+		var erasedEnvironment = "$scalar-closure:environment:" + suffix, erasedWrapper = "$scalar-closure:erased-call:" + suffix,
+			probeType:IrType = switch erasedType(type) { case Function(args, result): Function([Obj(erasedEnvironment)].concat(args), result); default: throw "Expected erased closure"; },
+			probe = make.staticClosure(erasedWrapper, probeType),
+			found = make.call(receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType), [boxed, probe], Dyn),
+			allocate = make.createBlock(), unwrap = make.createBlock();
+		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
+		make.select(unwrap);
+		make.returnValue(make.fieldGet(make.safeCast(found, Obj(erasedEnvironment)), "closure", physical));
+		make.select(allocate);
 		var decoded = make.safeCast(boxed, erasedType(type)), captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(wrapper, captured, physical));

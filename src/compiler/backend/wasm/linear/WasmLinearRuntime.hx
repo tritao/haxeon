@@ -351,6 +351,14 @@ class WasmLinearRuntime {
 					})),
 					Return
 				]));
+			case "__closure_receiver_if_match": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
+					LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End,
+					LocalGet(0), I32Const(1), I32And, If(null), I32Const(0), Return, End,
+					LocalGet(0), I32Load(0), I32Const(WasmLayout.CLOSURE_TYPE_ID), I32Eq, I32Eqz, If(null), I32Const(0), Return, End,
+					LocalGet(0), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), LocalGet(1), I32Const(1), I32ShrU, I32Eq, I32Eqz,
+					If(null), I32Const(0), Return, End,
+					LocalGet(0), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET), Return
+				]));
 			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
 				"__math_ceil", "__math_floor", "__sys_args":

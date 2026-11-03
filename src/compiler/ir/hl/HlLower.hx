@@ -545,7 +545,7 @@ class HlLower {
 		code.natives.push({
 			library: internString(native.library),
 			name: internString(native.symbol),
-			type: internFunctionType(native.arguments, native.result),
+			type: internFunctionType(StringTools.startsWith(native.name, "$scalar-closure:receiver:") && native.symbol == "__closure_receiver_if_match" ? [Dyn, Dyn] : native.arguments, native.result),
 			functionIndex: requireFunction(native.name),
 		});
 	}
@@ -802,6 +802,13 @@ class HlLower {
 							var destination = defineRegister(output, registers, registerTypes);
 							var functionIndex = requireFunction(functionName);
 							var args = [for (argument in arguments) requireRegister(argument, registers)];
+							if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
+								for (index in 0...arguments.length) switch arguments[index].type {
+									case Function(_, _):
+										var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
+										instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index])); args[index] = dynamicClosure;
+									default:
+								}
 							switch args.length {
 								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
 								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));

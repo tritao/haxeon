@@ -217,6 +217,8 @@ class WasmScalarAbi {
 			if (closureArity(fn.result) >= 0) excluded.set(Std.string(fn.result), true);
 		}
 		for (native in program.natives) {
+			// The receiver query only inspects the closure target and cannot call or retain its argument.
+			if (native.symbol == "__closure_receiver_if_match") continue;
 			for (argument in native.arguments) if (closureArity(argument) >= 0) excluded.set(Std.string(argument), true);
 			if (closureArity(native.result) >= 0) excluded.set(Std.string(native.result), true);
 		}

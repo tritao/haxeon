@@ -1410,7 +1410,8 @@ class WasmFunctionLower {
 							[for (argument in arguments) requiredLocal(values, argument.id)]);
 					if (emitIfHandled(body, represented)) {} else {
 						var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
-							WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(runtimeName, output, arguments,
+							WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(
+								StringTools.startsWith(name, "$wasm:closure-receiver:") ? name : runtimeName, output, arguments,
 								outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
 						if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
 							for (argument in arguments)

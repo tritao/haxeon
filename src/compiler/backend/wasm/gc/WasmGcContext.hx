@@ -14,6 +14,10 @@ class WasmGcContext {
 	public final functions:Map<String, Int>;
 	public final globals:Map<String, Int>;
 	public final methods:Map<String, String>;
+	public var tableSlots:Map<String, Int> = [];
+	/** Generated adapter targets whose static closures are only receiver-query markers. */
+	public final closureProbeTargets:Map<String, Bool> = [];
+	public final closureProbeQueryTargets:Map<String, String> = [];
 
 	final stringSegments:Map<String, Int> = [];
 	final valueArrayBridgeGlobals:Map<String, Int> = [];

@@ -1723,6 +1723,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Std.string signature";
 			return dynamicString(argumentLocals[0], outputLocal);
 		}
+		if (StringTools.startsWith(name, "$wasm:closure-receiver:")) {
+			if (arguments.length != 2 || argumentLocals.length != 2) throw "Invalid closure receiver query signature";
+			var target = gc.closureProbeQueryTargets.get(name);
+			if (target == null) throw 'Missing closure adapter marker for $name';
+			var slot = gc.tableSlots.get(WasmGcModuleBuilder.gcClosureThunkName(target));
+			// Without a reachable instance-closure thunk, this module cannot have created a matching adapter.
+			if (slot == null) return [RefNull(Any), LocalSet(outputLocal)];
+			return [
+				LocalGet(argumentLocals[0]), RefTest({nullable: false, heap: Type(plan.closureTypeIndex)}), If(null),
+					LocalGet(argumentLocals[0]), RefCast({nullable: false, heap: Type(plan.closureTypeIndex)}), StructGet(plan.closureTypeIndex, 0),
+					I32Const(slot * 2), I32Eq, If(null),
+						LocalGet(argumentLocals[0]), RefCast({nullable: false, heap: Type(plan.closureTypeIndex)}), StructGet(plan.closureTypeIndex, 1), LocalSet(outputLocal),
+					Else, RefNull(Any), LocalSet(outputLocal), End,
+				Else, RefNull(Any), LocalSet(outputLocal), End
+			];
+		}
 		if (name == "__std_is_of_type" || name == "__std_is_exact_type" || name == "__exception_matches") {
 			// These test a value against every type in the program, so call sites share one function each.
 			if (gc.functions.exists(name))
@@ -4178,6 +4194,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
+		// The receiver-query intrinsic compares the known target slot and never reads its marker operand.
+		if (gc.closureProbeTargets.exists(name)) return [RefNull(Type(plan.closureTypeIndex)), LocalSet(destination)];
 		var tableSlot = tableSlots.get(name);
 		if (tableSlot == null)
 			throw 'Wasm GC closure target "$name" has no stable table slot';

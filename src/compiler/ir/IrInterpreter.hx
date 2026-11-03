@@ -234,6 +234,13 @@ class IrInterpreter {
 	}
 
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
+		if (StringTools.startsWith(name, "$scalar-closure:receiver:") || StringTools.startsWith(name, "$wasm:closure-receiver:")) {
+			var value = arguments[0], probe = arguments[1];
+			if (!Std.isOfType(value, InterpClosure) || !Std.isOfType(probe, InterpClosure)) return null;
+			var closure:InterpClosure = cast value, expected:InterpClosure = cast probe;
+			return closure.target == expected.target ? closure.receiver : null;
+		}
+
 		return switch name {
 			case "__exit": null;
 			case "__std_is_exact_type":

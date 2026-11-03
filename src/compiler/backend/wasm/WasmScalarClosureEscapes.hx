@@ -16,6 +16,7 @@ class WasmScalarClosureEscapes {
 	final restorations:Map<String, String> = [];
 	final generatedFunctions:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
+	final generatedNatives:Array<IrNative> = [];
 
 	public static function rewrite(program:IrProgram, scalar:Map<String, Bool>, exports:Array<String>, exportAdapters:Map<String, String>):IrProgram {
 		var pass = new WasmScalarClosureEscapes(program, scalar), result = new IrProgram(program.entryPoint);
@@ -30,7 +31,7 @@ class WasmScalarClosureEscapes {
 		var generated = IrValueInterfaceBoxes.rewrite(pass.generatedFunctions, result.objects, program.interfaces, result.functions);
 		generated = IrCheckedObjectCasts.rewrite(generated, result.objects, true, result.functions);
 		for (fn in generated) result.functions.push(fn);
-		result.natives = program.natives.copy(); result.cNatives = program.cNatives;
+		result.natives = program.natives.concat(pass.generatedNatives); result.cNatives = program.cNatives;
 		var hasTypeTest = false;
 		for (native in result.natives) if (native.name == "__std_is_of_type") hasTypeTest = true;
 		if (!hasTypeTest && generated.length > 0) result.natives.push({name: "__std_is_of_type", library: "haxeon_runtime",
@@ -90,6 +91,12 @@ class WasmScalarClosureEscapes {
 		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
 	}
 
+	function receiverQuery(name:String, first:IrType, second:IrType):String {
+		if (!Lambda.exists(generatedNatives, native -> native.name == name))
+			generatedNatives.push({name: name, library: "haxeon_runtime", symbol: "__closure_receiver_if_match", arguments: [first, second], result: Dyn});
+		return name;
+	}
+
 	function adapter(type:IrType):String {
 		var key = Std.string(type), found = adapters.get(key);
 		if (found != null) return found;
@@ -98,6 +105,7 @@ class WasmScalarClosureEscapes {
 			signature = switch type { case Function(arguments, result): {arguments: arguments, result: result};
 				default: throw "A scalar closure escape must have a function type"; };
 		adapters.set(key, maker);
+		restoration(type);
 		generatedObjects.push({name: environment, isValue: false, base: null, interfaces: [], fields: [{name: "closure", type: type}], methods: []});
 		var call = new IrBuilder(), receiver = call.argument("receiver", Obj(environment)),
 			arguments = [for (index in 0...signature.arguments.length) call.argument('argument$index', Dyn)],
@@ -112,7 +120,16 @@ class WasmScalarClosureEscapes {
 		make.select(missing);
 		make.returnValue(make.constNull(Dyn));
 		make.select(present);
-		var captured = make.newObject(environment), erasedType:IrType = Function([for (_ in signature.arguments) Dyn], Dyn);
+		var restoredEnvironment = "$wasm:closure-restored:" + suffix, restoredInvoke = RESTORE_CALL_PREFIX + suffix,
+			probeType:IrType = Function([Obj(restoredEnvironment)].concat(signature.arguments), signature.result),
+			probe = make.staticClosure(restoredInvoke, probeType),
+			matchedReceiver = make.call(receiverQuery("$wasm:closure-receiver:typed:" + suffix, type, probeType), [original, probe], Dyn),
+			allocate = make.createBlock(), unwrap = make.createBlock(), erasedType:IrType = Function([for (_ in signature.arguments) Dyn], Dyn);
+		make.branch(make.equal(matchedReceiver, make.constNull(Dyn)), allocate, unwrap);
+		make.select(unwrap);
+		make.returnValue(make.toDyn(make.fieldGet(make.safeCast(matchedReceiver, Obj(restoredEnvironment)), "closure", erasedType)));
+		make.select(allocate);
+		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", original);
 		make.returnValue(make.toDyn(make.instanceClosure(invoke, captured, erasedType)));
 		generatedFunctions.push(new IrFunction(maker, make.arguments, Dyn, make.blocks));
@@ -129,6 +146,7 @@ class WasmScalarClosureEscapes {
 				default: throw "A restored scalar closure must have a function type"; },
 			dynamicType:IrType = Function([for (_ in signature.arguments) Dyn], Dyn);
 		restorations.set(key, maker);
+		adapter(type);
 		generatedObjects.push({name: environment, isValue: false, base: null, interfaces: [],
 			fields: [{name: "closure", type: dynamicType}], methods: []});
 		var call = new IrBuilder(), receiver = call.argument("receiver", Obj(environment)),
@@ -143,6 +161,15 @@ class WasmScalarClosureEscapes {
 		make.select(missing);
 		make.returnValue(make.constNull(type));
 		make.select(present);
+		var escapedEnvironment = "$wasm:closure-escape:" + suffix, escapedInvoke = "$wasm:closure-escape-call:" + suffix,
+			probeType:IrType = Function([Obj(escapedEnvironment)].concat([for (_ in signature.arguments) Dyn]), Dyn),
+			probe = make.staticClosure(escapedInvoke, probeType),
+			matchedReceiver = make.call(receiverQuery("$wasm:closure-receiver:erased:" + suffix, Dyn, probeType), [original, probe], Dyn),
+			allocate = make.createBlock(), unwrap = make.createBlock();
+		make.branch(make.equal(matchedReceiver, make.constNull(Dyn)), allocate, unwrap);
+		make.select(unwrap);
+		make.returnValue(make.fieldGet(make.safeCast(matchedReceiver, Obj(escapedEnvironment)), "closure", type));
+		make.select(allocate);
 		var decoded = make.safeCast(original, dynamicType), captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(invoke, captured, type));

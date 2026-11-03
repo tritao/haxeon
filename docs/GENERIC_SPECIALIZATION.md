@@ -90,6 +90,12 @@ Wasm exports that accept or return a scalar struct closure adapt it at the host 
 its scalar calling convention even when the same signature is exported: a 1,024-call typed loop allocates no objects
 on Wasm32 or Wasm GC, and exported closure arguments and results round-trip through the host. Without the boundary
 adapter, merely exporting the signature forced the loop to allocate once per call on Wasm GC.
+A matching escape or restore adapter unwraps to its stored closure, so a typed-to-Dynamic-to-typed round trip preserves
+closure identity and repeated round trips do not accumulate adapter frames. The inverse round trip preserves a genuine
+Dynamic closure as well. The runtime receiver query matches the compiler-generated adapter target before exposing its
+environment; arbitrary closure receivers are not treated as adapter environments. HashLink uses a static closure marker,
+Wasm32 uses its tagged static target, and Wasm GC resolves the generated target slot directly without allocating a
+marker closure. After initial setup, recognizing an existing adapter allocates zero objects on all three targets.
 An unobserved `Signal<S>` holding an immutable struct with a managed reference also performs 1,024 distinct updates and
 reads without allocation on HashLink, Wasm32 and Wasm GC; the Wasm tests cover both 8 and 1,024 updates and both
 inlining modes. `packages/ui/tools/test-struct-allocations.sh` checks the same workload through a real

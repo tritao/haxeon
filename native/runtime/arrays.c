@@ -33,6 +33,14 @@ HL_PRIM bool HL_NAME(__exception_matches)( vdynamic *value, hl_type *type ) {
 	return realtime_is_of_type(value, type);
 }
 
+/* A matching generated closure target proves that its receiver is the expected adapter environment. */
+HL_PRIM vdynamic *HL_NAME(__closure_receiver_if_match)(vdynamic *value, vdynamic *probe) {
+	if( value == NULL || probe == NULL || value->t->kind != HFUN || probe->t->kind != HFUN ) return NULL;
+	vclosure *closure = (vclosure*)value, *expected = (vclosure*)probe;
+	if( closure->hasValue != 1 || closure->fun != expected->fun ) return NULL;
+	return (vdynamic*)closure->value;
+}
+
 HL_PRIM bool HL_NAME(__std_is_of_type)(vdynamic *value, hl_type *type) {
 	return realtime_is_of_type(value, type);
 }

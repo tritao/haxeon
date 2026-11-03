@@ -188,3 +188,21 @@ median deltas were 0 / 0 / -0.16 / 0 MiB. These paired measurements do not estab
 | editing | 12,622 | 12,622 |
 
 The Wasm GC guest binaries were byte-identical; the two-object difference is within observed run-to-run variation.
+
+The scalar-closure identity correction was compared on the same machine with nine alternating control/candidate pairs.
+All per-action allocation medians matched the table above, with zero paired median differences. The selection-stress
+census medians were 342,096 / 342,097 allocations with a paired median difference of +1. Three further per-type pairs
+showed differences only in byte buffers: 0 / +2 / -3 objects; the `TextStyle` and `ParagraphStyle` counts remained
+140 each and `DockTextWidthKey` remained zero. The 500-cycle RSS window medians were 30.00 / 3.75 / 0.78 / 5.00 MiB
+before and 30.16 / 3.59 / 0.94 / 4.84 MiB after, with paired median differences of 0 / -0.31 / 0 / 0 MiB. These
+measurements do not establish an RSS improvement or an exact match to the original baseline.
+
+| Wasm GC Showcase scenario | Control median objects | Candidate median objects | Pairs |
+| --- | ---: | ---: | ---: |
+| full | 5,896 | 5,896 | 9 |
+| static | 5,896 | 5,896 | 3 |
+| text-heavy | 5,896 | 5,896 | 3 |
+| editing | 12,622 | 12,622 | 3 |
+
+Every paired object-count difference was zero. Once an adapter exists, unwrapping it allocates zero objects for 8 and
+1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
