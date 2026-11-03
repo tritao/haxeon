@@ -4042,6 +4042,12 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
     frame_target.struct_size = sizeof(frame_target);
     if (threaded) {
         drain_orphan_completions();
+#if defined(__ANDROID__)
+        /* The first frame can outlast the next Android frame callback. A frame still in flight on this
+           surface is retryable, not a rendering failure. */
+        if (nk::core::surface_has_open_frame(surface))
+            return NKUI_ERROR_RESOURCE_LIMIT;
+#endif
         if (nk_surface_acquire_frame(surface, &frame, &frame_target) != NK_OK) {
             /* A completion can be retained concurrently after the initial
                platform turn. Drain once more before declaring the surface
@@ -4619,6 +4625,12 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     frame_target.struct_size = sizeof(frame_target);
     if (threaded) {
         drain_orphan_completions();
+#if defined(__ANDROID__)
+        /* The first frame can outlast the next Android frame callback. A frame still in flight on this
+           surface is retryable, not a rendering failure. */
+        if (nk::core::surface_has_open_frame(surface))
+            return NKUI_ERROR_RESOURCE_LIMIT;
+#endif
         if (nk_surface_acquire_frame(surface, &frame, &frame_target) != NK_OK) {
             drain_orphan_completions();
             if (nk_surface_acquire_frame(surface, &frame, &frame_target) != NK_OK)
