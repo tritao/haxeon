@@ -206,3 +206,20 @@ measurements do not establish an RSS improvement or an exact match to the origin
 
 Every paired object-count difference was zero. Once an adapter exists, unwrapping it allocates zero objects for 8 and
 1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
+
+The HashLink Dynamic-callback fix was measured with nine alternating runs of the saved control runtime and the
+candidate runtime using identical editor bytecode. All per-action allocation medians remained as in the table above,
+with zero paired median differences. Selection-stress medians were 342,097 allocations for both runtimes, with zero
+paired median difference; differences by type were confined to byte buffers. The 500-cycle RSS window medians were
+29.84 / 3.91 / 0.78 / 5.00 MiB before and 29.69 / 3.75 / 0.78 / 4.84 MiB after; paired median differences were
+0 / +0.16 / 0 / 0 MiB. The second-window difference is within the earlier same-binary control variation, so it does not
+establish a runtime regression or an exact memory match.
+
+| Wasm GC Showcase scenario | Before objects | After objects |
+| --- | ---: | ---: |
+| full | 5,896 | 5,896 |
+| static | 5,896 | 5,896 |
+| text-heavy | 5,896 | 5,896 |
+| editing | 12,622 | 12,622 |
+
+The Wasm GC guest was byte-identical before and after the HashLink fork change.

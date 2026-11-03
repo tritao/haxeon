@@ -532,6 +532,11 @@ the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fiel
 and per-action measurements are recorded in [UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
 the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
 
+At a genuine Dynamic callback boundary, HashLink boxes a headerless struct as a typed Dynamic value and copies the
+payload; a value returned from the generic callback wrapper is copied into the typed result as well. This keeps a
+saved Dynamic value independent of later writes to either the original argument or the returned value, and keeps its
+managed references alive across GC. Wasm32 and Wasm GC follow the same observable value semantics.
+
 ## Nullable structs
 
 `null` is excluded from struct values, but "absent" is a real state: an optional color or clip rectangle. A `Null<S>`
