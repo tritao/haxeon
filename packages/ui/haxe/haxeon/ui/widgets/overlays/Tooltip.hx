@@ -19,6 +19,8 @@ import haxeon.ui.style.StyleTarget;
 
 /** Informational tooltip layered above its anchor. Content never participates in pointer hit testing. */
 class Tooltip implements View {
+	/** Hosts without a hovering pointer (touch) turn this off; a tooltip then draws only its anchor. */
+	public static var hoverEnabled:Bool = true;
 	/** Preferred side. Null preserves explicit x/y positioning. */
 	public var placement:Null<TooltipPlacement> = null;
 	/** Initial hover delay for side-positioned tooltips. */
@@ -78,6 +80,7 @@ class Tooltip implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
+		if (!hoverEnabled) return context.withScope(key, function() return anchor.build(context));
 		if (placement != null) return buildPositioned(context);
 		return context.withScope(key, function() {
 			var state:State<Bool> = context.state(context.id("visible"), false);
