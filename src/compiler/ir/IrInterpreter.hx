@@ -141,7 +141,13 @@ class IrInterpreter {
 			case UnsignedShiftRight(_, left, right): Std.int(value(values, left)) >>> Std.int(value(values, right));
 			case Less(_, left, right): value(values, left) < value(values, right);
 			case LessEqual(_, left, right): value(values, left) <= value(values, right);
-			case Equal(_, left, right): value(values, left) == value(values, right);
+			case Equal(_, left, right):
+				switch [left.type, right.type] {
+					case [F32 | F64, F32 | F64]:
+						var leftFloat:Float = value(values, left), rightFloat:Float = value(values, right);
+						leftFloat == rightFloat;
+					default: value(values, left) == value(values, right);
+				}
 			case IntToFloat(_, input): value(values, input);
 			case FloatToInt(_, input): Std.int(value(values, input));
 			case FloatToFloat(output, input):
