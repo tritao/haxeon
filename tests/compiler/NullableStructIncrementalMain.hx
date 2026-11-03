@@ -5,6 +5,9 @@ import compiler.Diagnostic.CompileError;
 /** Cached callers must use the current method body and payload shape for inline optional places. */
 class NullableStructIncrementalMain {
 	static function main():Void {
+		var nested = new Compiler();
+		nested.update("Main.hx", "function main():Int { var value:Null<Null<Int>> = 42; var result:Null<Int> = value; return result == null ? 1 : result; }");
+		if (new IrInterpreter(nested.compile("Main").ir).run("main") != 42) throw "nested nullable types must normalize";
 		var compiler = new Compiler();
 		compiler.update("Point.hx", "struct Point { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void x++; }");
 		compiler.update("Holder.hx", "class Holder { public var value:Null<Point>; public function new() value = new Point(1); }");

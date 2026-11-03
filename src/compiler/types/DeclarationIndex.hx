@@ -374,7 +374,9 @@ class DeclarationIndex {
 				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
-			case NullableType(element): TNullable(resolveInner(element, span, resolving, substitutions));
+			case NullableType(element):
+				var resolved = resolveInner(element, span, resolving, substitutions);
+				switch resolved { case TNullable(_): resolved; default: TNullable(resolved); }
 			case FunctionType(arguments, result):
 				TFunction([
 					for (argument in arguments)
