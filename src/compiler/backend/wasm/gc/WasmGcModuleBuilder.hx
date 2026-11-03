@@ -372,6 +372,7 @@ class WasmGcModuleBuilder {
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _) if (name == WasmGcScalarAbi.RETURN_MARKER || name == WasmGcScalarAbi.RETHROW_MARKER
+							|| name == compiler.ir.IrReceiverCheck.NAME
 							|| name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK
 							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):

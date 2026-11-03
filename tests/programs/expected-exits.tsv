@@ -444,3 +444,4 @@ nullable-scalar-ieee-equality	42
 enum-inline-constant-pattern	42
 struct-array-nullable-places	42
 wasm-null-virtual-dispatch	42
+null-method-inlining	42

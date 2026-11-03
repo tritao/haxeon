@@ -171,7 +171,7 @@ class IrInterpreter {
 				var reference:InterpScalarRef = cast value(values, arguments[0]);
 				reference.values.set(reference.id, value(values, arguments[1]));
 				null;
-			case Call(_, name, arguments) if (name == IrHlScalarRef.CHECK_RECEIVER):
+			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME):
 				if (value(values, arguments[0]) == null) throw "Null access";
 				null;
 			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):

@@ -1426,7 +1426,7 @@ class HlLower {
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrHlScalarRef.CHECK_RECEIVER) {
+		if (name == compiler.ir.IrReceiverCheck.NAME) {
 			instructions.push(HlInstruction.NullCheck(requireRegister(arguments[0], registers)));
 			return true;
 		}

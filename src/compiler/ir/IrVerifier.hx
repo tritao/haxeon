@@ -389,9 +389,9 @@ class IrVerifier {
 						throw 'Invalid lane reference cast';
 					return;
 				}
-				if (name == IrHlScalarRef.CHECK_RECEIVER) {
+				if (name == IrReceiverCheck.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
-					if (args.length != 1 || out.type != Void || !isReference(args[0].type)) throw "Invalid scalar receiver check";
+					if (args.length != 1 || out.type != Void || !isReference(args[0].type)) throw "Invalid receiver check";
 					require(values, args[0]);
 					return;
 				}

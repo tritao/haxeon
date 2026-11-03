@@ -9,7 +9,6 @@ class IrHlScalarRef {
 	public static inline final ADDRESS = "$hl:scalar-address";
 	public static inline final LOAD = "$hl:scalar-load";
 	public static inline final STORE = "$hl:scalar-store";
-	public static inline final CHECK_RECEIVER = "$hl:scalar-check-receiver";
 
 	public static function type(value:IrType):IrType
 		return Abstract(TYPE_PREFIX + haxe.crypto.Base64.encode(IrTypeCodec.encode(value)));

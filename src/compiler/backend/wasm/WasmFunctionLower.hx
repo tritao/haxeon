@@ -1267,6 +1267,12 @@ class WasmFunctionLower {
 			case Call(output, name, arguments):
 				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
+				if (name == compiler.ir.IrReceiverCheck.NAME) {
+					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, arguments[0].id)),
+						gcRepresentation == null ? I32Eqz : RefIsNull, If(null)];
+					emit(body, check.concat(trapOrThrow(1)).concat([End]));
+					return;
+				}
 				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 					if (gcRepresentation != null) {

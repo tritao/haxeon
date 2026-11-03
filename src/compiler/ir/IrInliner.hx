@@ -640,7 +640,8 @@ class IrInliner {
 				nextValue = splice(block, position, callee, substitutions, nextValue);
 				continue;
 			}
-			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock);
+			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock,
+				needsReceiverCheck(block.instructions[position].value));
 			nextValue = expansion.nextValue;
 			nextBlock = expansion.nextBlock;
 			// Continue with the first inlined block; calls left in it were not candidates.
@@ -663,6 +664,17 @@ class IrInliner {
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
 	}
 
+	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
+	function needsReceiverCheck(instruction:IrInstruction):Bool return switch instruction {
+		case MethodCall(_, receiver, _, _): switch receiver.type {
+			case Obj(name):
+				var object = table.get(name);
+				object == null || !object.isValue;
+			default: true;
+		};
+		default: false;
+	};
+
 	/** Replaces the call at `block.instructions[position]` by the callee's instructions; the result is substituted for the call's output. */
 	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
 		var call = block.instructions[position],
@@ -679,6 +691,10 @@ class IrInliner {
 				throw "Inliner expected a call";
 		}
 		var source = callee.blocks[0], values:Map<Int, IrValue> = [], copies:Array<Located<IrInstruction>> = [];
+		if (needsReceiverCheck(call.value)) {
+			var checked = new IrValue(nextValue++, "$receiver-check", Void);
+			copies.push(new Located(Call(checked, IrReceiverCheck.NAME, [resolve(actuals[0], substitutions)]), call.provenance));
+		}
 		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies, call.provenance, nextValue);
 		for (located in source.instructions) {
 			var output = IrOperands.output(located.value);
@@ -788,7 +804,8 @@ class IrInliner {
 	 * instructions before the call and jumps into the copy; a fresh continuation block takes the instructions after the
 	 * call and the original terminator, and merges the returned values with a phi.
 	 */
-	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int):{nextValue:Int, nextBlock:Int} {
+	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int,
+			?checkReceiver:Bool):{nextValue:Int, nextBlock:Int} {
 		var head = blocks[index],
 			call = head.instructions[position],
 			callOutput:IrValue = null,
@@ -804,6 +821,11 @@ class IrInliner {
 				throw "Inliner expected a call";
 		}
 		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [], upcasts:Array<Located<IrInstruction>> = [];
+		var mustCheck = checkReceiver == null ? switch call.value { case MethodCall(_, _, _, _): true; default: false; } : checkReceiver;
+		if (mustCheck) {
+			var checked = new IrValue(nextValue++, "$receiver-check", Void);
+			upcasts.push(new Located(Call(checked, IrReceiverCheck.NAME, [actuals[0]]), call.provenance));
+		}
 		nextValue = bindArguments(callee, actuals, values, upcasts, call.provenance, nextValue);
 		// Every definition first, so phis and back edges can refer to values defined later in block order.
 		for (block in callee.blocks) {

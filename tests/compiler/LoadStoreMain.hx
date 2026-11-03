@@ -93,6 +93,7 @@ class LoadStoreMain {
 		fieldCase("alias", function(b, o, a) b.fieldSet(a, "n", b.constInt(8)), 2);
 		fieldCase("other field", function(b, o, a) b.fieldSet(a, "m", b.constInt(8)), 1);
 		fieldCase("call", function(b, o, a) b.call("mutate", [o], Void), 2);
+		fieldCase("receiver check preserves loaded fields", function(b, o, a) b.call(compiler.ir.IrReceiverCheck.NAME, [a], Void), 1);
 		fieldCase("native call", function(b, o, a) b.cNativeCall("mutate", [o], Void), 2);
 		fieldCase("closure", function(b, o, a) b.callClosure(b.argument("closure", Function([], Void)), [], Void), 2);
 		fieldCase("method", function(b, o, a) b.blocks[0].instructions.push(located(MethodCall(new IrValue(100, "call", Void), o, "mutate", []))), 2);

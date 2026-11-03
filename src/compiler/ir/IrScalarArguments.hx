@@ -310,7 +310,7 @@ class IrScalarArguments {
 						else {
 							if (!argumentsOnly && !freshReceiver(fn, receiver, objects)) {
 								var checked = new IrValue(next++, "$hl:receiver-check", Void);
-								copy.instructions.push(new Located(Call(checked, IrHlScalarRef.CHECK_RECEIVER, [receiver]), located.provenance));
+								copy.instructions.push(new Located(Call(checked, IrReceiverCheck.NAME, [receiver]), located.provenance));
 							}
 							Call(out, name, [receiver].concat(arguments));
 						}
