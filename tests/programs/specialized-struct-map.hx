@@ -27,10 +27,19 @@ enum MapEnumKey { First; Second; }
 
 class MapCensus {
 	static var owner:MapOwner;
+	static var emptySink:Map<Int, MapValue>;
 	static var both:Map<MapKey, MapValue>;
 	static var values:Map<Int, MapValue>;
 	static var keys:Map<MapKey, Int>;
 	static var optional:Map<Int, Null<MapValue>>;
+	public static function empty(n:Int):Int {
+		var total = 0;
+		for (_ in 0...n) {
+			emptySink = new Map();
+			total += emptySink.size();
+		}
+		return total;
+	}
 	public static function prepare():Void {
 		owner = new MapOwner(9);
 		both = new Map(); both.set(new MapKey(4), new MapValue(7, owner));
@@ -67,6 +76,12 @@ class MapCensus {
 }
 
 function main():Int {
+	var empty:Map<Int, MapValue> = new Map();
+	if (empty.size() != 0 || empty.exists(1) || empty.get(1) != null || empty.remove(1)) return 14;
+	if (empty.keys().hasNext() || empty.values().hasNext()) return 15;
+	var emptyCopy = empty.copy();
+	empty.clear();
+	if (emptyCopy.size() != 0 || emptyCopy.exists(1)) return 16;
 	var owner = new MapOwner(3), map:Map<MapKey, MapValue> = new Map();
 	for (index in 0...100) map.set(new MapKey(index), new MapValue(index * 2, owner));
 	for (index in 0...100) {

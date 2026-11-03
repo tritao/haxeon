@@ -14,6 +14,25 @@ replacement helpers. `LayoutNode` keeps them in one lazy `LayoutTextStyles` hold
 ordinary nodes retain a single pointer instead of carrying both optional struct payloads inline. This keeps the node
 smaller and allocates one holder rather than separate text and paragraph objects. `DockTextWidthKey` and `Shortcut` are
 `Hashable` structs; `EffectParameter` and `CustomEffectDefinition` are `Equatable`; `InkOverflow` is `Hashable`.
+`PointerLocation` is an immutable struct in a flat array keyed by pointer ID. `TextRangeRect` is an immutable struct
+in a specialized map, and text geometry caches are created only when populated. On Wasm GC, dispatcher setup and the
+first pointer move allocate 78 objects with the class representation and 76 with the flat array. After setup, 1,024
+pointer moves allocate 1,024 objects with the class representation and zero with the struct representation. A paired
+30-cycle HashLink selection census measured medians of 342,111 allocations for the class control and 342,095 for the
+flat-array version. The instrumented Wasm GC Showcase full, static and text-heavy scenarios remain at 5,896 objects
+over 120 frames; editing falls from 12,835 to 12,622.
+
+The 30-cycle HashLink action medians (KiB) for the actions that changed from the starting baseline are:
+
+| Action | Class baseline | Flat storage |
+| --- | ---: | ---: |
+| hierarchy to sensors | 114.6 | 112.6 |
+| sensors to hierarchy | 80.1 | 78.1 |
+| backspace | 16.6 | 16.2 |
+
+The other measured action allocations did not increase. Nine alternating 500-cycle HashLink runs measured identical control and candidate RSS window medians: [30.00, 3.59,
+0.78, 5.00] MiB.
+
 The app's mutable `CncPresentation` and `HobbingTelemetry` snapshots are `Diffable` structs. Their values are owned by
 their containing models, and no caller depends on a stable object identity.
 

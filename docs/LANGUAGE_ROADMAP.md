@@ -110,7 +110,10 @@ Check each against what Haxeon already supports before designing it.
 2. Signals core (ADR 0002 stage 1).
 3. `Observable` (ADR 0002 stage 1b).
 4. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
-5. Flat structs, arrays of structs and generic specialization for structs, with inline enums.
+5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
+   struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums still use
+   boxed identity and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
+   [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Scoped cleanup (`defer`, `Disposable` scoped bindings).
 7. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.

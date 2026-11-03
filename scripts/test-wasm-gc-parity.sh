@@ -93,7 +93,7 @@ for inline in 0 1; do
 				--output="$parity_output_dir/wasm-parity-wasm32-scalar-closure-census-inline-$inline.wasm" \
 				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
-				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow \
+				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow --export=MapCensus.empty \
 				--output="$parity_output_dir/wasm-parity-wasm32-specialized-map-census-inline-$inline.wasm" \
 				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
@@ -129,7 +129,7 @@ for inline in 0 1; do
 				--output="$parity_output_dir/wasm-parity-wasm-gc-scalar-closure-census-inline-$inline.wasm" \
 				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
-				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow \
+				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow --export=MapCensus.empty \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-specialized-map-census-inline-$inline.wasm" \
 				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
@@ -546,6 +546,12 @@ async function run(name, target) {
 	  const map = (await WebAssembly.instantiate(bytes, {haxeon_runtime: runtime, std})).instance;
 	  map.exports["MapCensus.prepare"]();
 	  const count = target === "wasm32" ? map.exports["haxeon.memory.allocation_count"] : map.exports.__allocation_count;
+	  for (const n of [8, 128]) {
+	    const before = count(), result = map.exports["MapCensus.empty"](n), allocations = count() - before;
+	    if (result !== 0 || allocations !== n)
+	      failures.push(`empty map census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: empty map census on ${target}, inline=${inline}, n=${n}`);
+	  }
 	  for (const n of [8, 1024]) {
 	    const before = count(), result = map.exports["MapCensus.perform"](n), allocations = count() - before;
 	    if (result !== n * 28 || allocations !== 0)

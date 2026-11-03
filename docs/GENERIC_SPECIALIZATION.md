@@ -47,9 +47,12 @@ An additional matched 30-cycle census sampled every allocation stack: it recorde
 `JsonPrinter` or `HeadlessEditorProfile` string construction; the net 256-byte difference came from serialization.
 This isolates the observed allocation difference in that capture, but does not prove the cause of the RSS medians.
 
-The policy label and representation signature are both part of the generated function name and persisted registry key. Changing policy therefore creates a new identity instead of reusing an incompatible body.
+The policy label and representation signature are both part of the generated function name and persisted registry
+key. Changing policy therefore creates a new identity instead of reusing an incompatible body.
 
-Generated bodies are owned by the module declaring their generic origin. Incremental compilation regenerates them when a generic body changes and prunes them when that owner becomes unreachable or the specialization is no longer requested.
+Generated bodies are owned by the module declaring their generic origin. Incremental compilation regenerates them
+when a generic body changes and prunes them when that owner becomes unreachable or the specialization is no longer
+requested.
 
 Constraints are semantic signatures. Changing a function or owner constraint invalidates dependent callers even when the runtime ABI shape is unchanged.
 
@@ -68,7 +71,7 @@ on Wasm32 or Wasm GC, and exported closure arguments and results round-trip thro
 adapter, merely exporting the signature forced the loop to allocate once per call on Wasm GC.
 An unobserved `Signal<S>` holding an immutable struct with a managed reference also performs 1,024 distinct updates and
 reads without allocation on HashLink, Wasm32 and Wasm GC; the Wasm tests cover both 8 and 1,024 updates and both
-inlining modes. `packages/ui/tools/test-struct-state-allocations.sh` checks the same workload through a real
+inlining modes. `packages/ui/tools/test-struct-allocations.sh` checks the same workload through a real
 `State<S>` and `StateStore` on all three targets, including managed-reference identity and both inlining modes.
 
 The semantic identity of a generic class remains its source declaration and type arguments. Its physical owner is
@@ -87,7 +90,11 @@ This also lets the same ordinary generic map handle value and reference keys wit
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
 
-The generic map uses dense key, value and hash arrays with an open-addressed integer bucket array. A removal moves the
+The generic map allocates its dense key, value, hash and bucket arrays on first insertion. An empty map therefore
+costs one object, including when its arguments are structs; 128 empty maps allocate 128 objects on each Wasm
+target, compared with 1,283 before lazy storage. Empty reads, removal, iteration, copying and clearing preserve
+ordinary map behavior. After insertion, it uses dense key, value and hash arrays with an open-addressed integer
+bucket array. A removal moves the
 last dense entry into the gap and updates its bucket, so removed managed references are released and no default value
 of `K` or `V` is needed. Tombstones are rehashed before they fill the bucket table, reusing its capacity when live
 entries do not require growth. This keeps struct keys and values in the existing inline array lanes and avoids boxing

@@ -12,11 +12,12 @@ class TextLayout extends NativeKitUIResource {
 	// Canonical grapheme geometry is stable until shaping changes. Bound the cache
 	// for standalone long-line layouts as well as editor paragraph chunks.
 	static inline var maximumCachedGraphemes = 8192;
-	var graphemeGeometry:Map<Int, TextRangeRect> = new Map();
+	var graphemeGeometry:Null<Map<Int, TextRangeRect>> = null;
 	var cachedGraphemes = 0;
 
 	function clearGraphemeGeometry():Void {
-		graphemeGeometry.clear();
+		var geometry = graphemeGeometry;
+		if (geometry != null) geometry.clear();
 		cachedGraphemes = 0;
 	}
 
@@ -285,7 +286,8 @@ class TextLayout extends NativeKitUIResource {
 		var result:Array<TextRangeRect> = [];
 		var cursor = first;
 		while (cursor < last) {
-			var cached = graphemeGeometry.get(cursor);
+			var geometry = graphemeGeometry;
+			var cached = geometry == null ? null : geometry.get(cursor);
 			var canonicalStart = cursor != first || (firstPosition.offset == cursor && firstPosition.affinity == 0);
 			if (cached != null && cached.end <= last && canonicalStart &&
 				(cached.end != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
@@ -317,7 +319,11 @@ class TextLayout extends NativeKitUIResource {
 				result.push(rect);
 				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes &&
 					(next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
-					graphemeGeometry.set(cursor, rect);
+					if (geometry == null) {
+						geometry = new Map();
+						graphemeGeometry = geometry;
+					}
+					geometry.set(cursor, rect);
 					cachedGraphemes++;
 				}
 			}
@@ -446,7 +452,7 @@ class TextRange {
 }
 
 /** Visual rectangle associated with an absolute code-point range. */
-class TextRangeRect {
+struct TextRangeRect {
 	public final start:Int;
 	public final end:Int;
 	public final x:Float;

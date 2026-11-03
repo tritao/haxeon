@@ -15,7 +15,7 @@ class EventDispatcher {
 	var commandRegistry:Null<CommandRegistry>;
 	var commandContext:CommandContext;
 	var hoverPaths:Map<Int, Array<RenderNode>>;
-	final pointerLocations:Map<Int, PointerLocation>;
+	final pointerLocations:Array<PointerLocation>;
 	final pressedIds:Map<Int, WidgetId>;
 	final capturedIds:Map<Int, WidgetId>;
 	final nativeCapturedIds:Map<Int, Bool>;
@@ -41,7 +41,7 @@ class EventDispatcher {
 		this.commandContext = commandContext == null ? new CommandContext() : commandContext;
 		root = null;
 		hoverPaths = new Map();
-		pointerLocations = new Map();
+		pointerLocations = [];
 		pressedIds = new Map();
 		capturedIds = new Map();
 		nativeCapturedIds = new Map();
@@ -119,16 +119,20 @@ class EventDispatcher {
 				pressedButtons.remove(pointerId);
 			}
 		}
-		if (pointerLocations.size() > 0) for (pointerId in pointerLocations.keys()) {
-			var location = pointerLocations.get(pointerId);
-			if (location == null)
-				continue;
-			var x = location.x;
-			var y = location.y;
-			var path = capturedPath(pointerId);
-			if (path.length == 0)
-				path = hitPath(x, y);
-			updateHover(pointerId, path, x, y);
+		if (pointerLocations.length > 0) {
+			var pointerIds:Array<Int> = [];
+			for (location in pointerLocations) pointerIds.push(location.pointerId);
+			for (pointerId in pointerIds) {
+				var index = pointerLocationIndex(pointerId);
+				if (index < 0) continue;
+				var location = pointerLocations[index];
+				var x = location.x;
+				var y = location.y;
+				var path = capturedPath(pointerId);
+				if (path.length == 0)
+					path = hitPath(x, y);
+				updateHover(pointerId, path, x, y);
+			}
 		}
 	}
 
@@ -272,7 +276,7 @@ class EventDispatcher {
 				null, data, 0, pointerId));
 		}
 		updateHover(pointerId, [], x, y);
-		pointerLocations.remove(pointerId);
+		forgetPointer(pointerId);
 	}
 
 	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float,
@@ -351,7 +355,8 @@ class EventDispatcher {
 		if (active.length == 0)
 			return false;
 		var pointerId = active[0];
-		var location = pointerLocations.get(pointerId);
+		var index = pointerLocationIndex(pointerId);
+		var location = index < 0 ? null : pointerLocations[index];
 		pointerCancel(pointerId, location == null ? 0.0 : location.x,
 			location == null ? 0.0 : location.y);
 		return true;
@@ -417,7 +422,7 @@ class EventDispatcher {
 		pressedIds.remove(pointerId);
 		pressedButtons.remove(pointerId);
 		suppressedClicks.remove(pointerId);
-		pointerLocations.remove(pointerId);
+		forgetPointer(pointerId);
 	}
 
 	public function cancelPointers():Void {
@@ -582,8 +587,24 @@ class EventDispatcher {
 		pointerCaptureHandler(requested);
 	}
 
+	function pointerLocationIndex(pointerId:Int):Int {
+		for (index in 0...pointerLocations.length)
+			if (pointerLocations[index].pointerId == pointerId) return index;
+		return -1;
+	}
+
 	function rememberPointer(pointerId:Int, x:Float, y:Float):Void {
-		pointerLocations.set(pointerId, new PointerLocation(x, y));
+		var index = pointerLocationIndex(pointerId);
+		var location = new PointerLocation(pointerId, x, y);
+		if (index < 0) pointerLocations.push(location); else pointerLocations[index] = location;
+	}
+
+	function forgetPointer(pointerId:Int):Void {
+		var index = pointerLocationIndex(pointerId);
+		if (index < 0) return;
+		var last = pointerLocations.length - 1;
+		if (index != last) pointerLocations[index] = pointerLocations[last];
+		pointerLocations.pop();
 	}
 
 	function changeFocus(id:WidgetId):Bool {
@@ -703,11 +724,13 @@ class EventDispatcher {
 	}
 }
 
-private class PointerLocation {
+private struct PointerLocation {
+	public final pointerId:Int;
 	public final x:Float;
 	public final y:Float;
 
-	public function new(x:Float, y:Float) {
+	public function new(pointerId:Int, x:Float, y:Float) {
+		this.pointerId = pointerId;
 		this.x = x;
 		this.y = y;
 	}
