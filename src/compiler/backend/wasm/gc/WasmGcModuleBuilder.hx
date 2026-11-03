@@ -162,7 +162,7 @@ class WasmGcModuleBuilder {
 		// needs every class's toString index and is defined later.
 		if (usedNatives.exists("__std_string"))
 			functions.set("__std_string", module.addFunction(new WasmFunction("__std_string", plan.wasmFunctionType([Dyn], Bytes))));
-		for (name in ["__std_is_of_type", "__std_is_exact_type", "__exception_matches"])
+		for (name in ["__std_is_of_type", "__std_is_exact_type", "__exception_matches", "__closure_is_of_type"])
 			if (usedNatives.exists(name))
 				addGcTypeTest(module, functions, plan, gcRepresentation, name);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
@@ -605,7 +605,7 @@ class WasmGcModuleBuilder {
 				"__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_join_bytes", "__math_ceil", "__math_floor",
 				"__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_sqrt", "__math_abs", "__math_min", "__math_max", "__math_atan2",
 				"__math_fmod", "__math_round", "__math_exp", "__math_log", "Math.mathIsFinite", "__math_is_finite", "Math.mathIsNaN", "__math_is_nan",
-				"__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__std_is_exact_type", "__exception_matches", "__reflect_is_object",
+				"__std_int_f64", "__std_int_dynamic", "__std_string", "__std_is_of_type", "__std_is_exact_type", "__exception_matches", "__closure_is_of_type", "__reflect_is_object",
 				"__dynamic_equal", "fun_compare", "__reflect_is_function", "__haxeon_varargs_call", "__reflect_object_field", "__reflect_object_set_field",
 				"__reflect_object_field_count", "__reflect_object_field_name", "__reflect_object_delete_field", "__f64_to_i64_bits", "__i64_to_f64_bits",
 				"haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.neg", "haxe.Int64.and", "haxe.Int64.or", "haxe.Int64.xor",

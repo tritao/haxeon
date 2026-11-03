@@ -120,6 +120,8 @@ class IrInterpreter {
 			case SafeCast(output, input):
 				var actual:Dynamic = value(values, input);
 				switch output.type {
+					case Array(element) if (actual != null):
+						checkArrayCast(actual, element);
 					case Obj(target) if (actual != null && !objectIsOfType(actual, target)):
 						throw 'Cannot cast to "$target"';
 					case I32 if (input.type == Dyn && actual != null):
@@ -194,11 +196,13 @@ class IrInterpreter {
 				null;
 			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
 				value(values, arguments[0]);
-			case Call(_, name, arguments):
+			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				if (functions.exists(name)) execute(functions.get(name), args);
 				else {
 					var result = executeNative(name, args);
+					if (StringTools.startsWith(name, "__array_alloc_") && name != "__array_alloc_typed_ref" && Std.isOfType(result, InterpArray))
+						switch output.type { case Array(element): cast(result, InterpArray).elementType = element; default: }
 					if (arguments.length > 0 && (StringTools.startsWith(name, "__array_copy_")
 							|| StringTools.startsWith(name, "__array_slice_") || StringTools.startsWith(name, "__array_concat_")))
 						switch arguments[0].type {
@@ -209,8 +213,8 @@ class IrInterpreter {
 				}
 			case CNativeCall(_, name, _):
 				throw 'IR interpreter cannot execute ordinary C native "$name" without a host binding';
-			case StaticClosure(_, name): new InterpClosure(functions.get(name), null);
-			case InstanceClosure(_, name, receiver): new InterpClosure(functions.get(name), value(values, receiver));
+			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type);
+			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name), value(values, receiver), out.type);
 			case CallClosure(_, closure, arguments):
 				var callable:InterpClosure = cast value(values, closure),
 					args = [for (argument in arguments) value(values, argument)];
@@ -261,20 +265,29 @@ class IrInterpreter {
 					case Bool: switch Type.typeof(input) { case TBool: true; default: false; };
 					case I64: haxe.Int64.isInt64(input);
 					case Bytes: Std.isOfType(input, String);
+					case ManagedBytes: Std.isOfType(input, haxe.io.Bytes);
+					case Array(_): Std.isOfType(input, InterpArray);
+					case Iterator(_): Std.isOfType(input, InterpIterator);
 					default: false;
 				};
+			case "__closure_is_of_type":
+				Std.isOfType(arguments[0], InterpClosure) && IrVerifier.sameType(cast(arguments[0], InterpClosure).type, cast(arguments[1], InterpTypeRef).type);
+			case "__array_alloc_typed_ref":
+				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8, cast(arguments[1], InterpTypeRef).type);
+			case "__array_check_cast":
+				checkArrayCast(arguments[0], cast(arguments[1], InterpTypeRef).type);
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
 			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_copy_any":
 				var source = interpArray(arguments[0]);
-				new InterpArray(source.values.copy(), source.capacity);
+				new InterpArray(source.values.copy(), source.capacity, source.elementType);
 			case "__array_slice_i32", "__array_slice_i64", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_slice_any":
 				var source = interpArray(arguments[0]), sliced = source.values.slice(Std.int(arguments[1]), Std.int(arguments[2]));
-				new InterpArray(sliced, sliced.length + 8);
+				new InterpArray(sliced, sliced.length + 8, source.elementType);
 			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref", "__array_concat_any":
 				var left = interpArray(arguments[0]),
 					right = interpArray(arguments[1]);
-				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8);
+				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8, left.elementType);
 			case "__array_push_i32", "__array_push_i64", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
 				var pushed = interpArray(arguments[0]);
 				pushed.values.push(arguments[1]);
@@ -419,6 +432,41 @@ class IrInterpreter {
 	static function numericValue(input:Dynamic):Bool
 		return switch Type.typeof(input) { case TInt, TFloat: true; default: false; };
 
+	function checkArrayCast(input:Dynamic, element:IrType):Dynamic {
+		if (input == null) return null;
+		if (!Std.isOfType(input, InterpArray)) throw "Cannot cast to Array";
+		var array:InterpArray = cast input;
+		if (Type.enumEq(element, Dyn) || IrVerifier.sameType(element, array.elementType)) return array;
+		if (!Type.enumEq(array.elementType, Dyn)) throw "Array element type mismatch";
+		for (item in array.values) if (!matchesArrayElement(item, element)) throw "Array element type mismatch";
+		array.elementType = element;
+		return array;
+	}
+
+	function matchesArrayElement(input:Dynamic, type:IrType):Bool {
+		if (input == null) return switch type {
+			case Nullable(_) | Bytes | Array(_) | Enum(_) | Virtual(_) | Function(_, _) | Dyn: true;
+			case Obj(name): var object = objectDeclaration(name); object == null || !object.isValue;
+			default: false;
+		};
+		return switch type {
+			case Nullable(element): matchesArrayElement(input, element);
+			case Dyn: true;
+			case I32: switch Type.typeof(input) { case TInt: true; default: false; };
+			case F64: switch Type.typeof(input) { case TFloat: true; default: false; };
+			case Bool: switch Type.typeof(input) { case TBool: true; default: false; };
+			case I64: haxe.Int64.isInt64(input);
+			case Bytes: Std.isOfType(input, String);
+			case ManagedBytes: Std.isOfType(input, haxe.io.Bytes);
+			case Obj(name): objectIsOfType(input, name);
+			case Virtual(name): objectImplements(input, name);
+			case Enum(name): Std.isOfType(input, InterpEnum) && cast(input, InterpEnum).type == name;
+			case Array(_): Std.isOfType(input, InterpArray);
+			case Function(_, _): Std.isOfType(input, InterpClosure) && IrVerifier.sameType(cast(input, InterpClosure).type, type);
+			default: false;
+		};
+	}
+
 	function objectField(object:Dynamic, name:String):Dynamic {
 		var value:InterpObject = cast object;
 		if (value == null)
@@ -548,10 +596,12 @@ private class InterpObject {
 private class InterpArray {
 	public final values:Array<Dynamic>;
 	public var capacity:Int;
+	public var elementType:IrType;
 
-	public function new(values:Array<Dynamic>, ?capacity:Int) {
+	public function new(values:Array<Dynamic>, ?capacity:Int, ?elementType:IrType) {
 		this.values = values;
 		this.capacity = capacity == null ? values.length : capacity;
+		this.elementType = elementType == null ? Dyn : elementType;
 	}
 }
 
@@ -591,9 +641,11 @@ private class InterpTypeRef {
 private class InterpClosure {
 	public final target:IrFunction;
 	public final receiver:Dynamic;
+	public final type:IrType;
 
-	public function new(target:IrFunction, receiver:Dynamic) {
+	public function new(target:IrFunction, receiver:Dynamic, type:IrType) {
 		this.target = target;
 		this.receiver = receiver;
+		this.type = type;
 	}
 }

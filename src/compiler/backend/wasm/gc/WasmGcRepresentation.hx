@@ -895,6 +895,23 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, ManagedBytes, plan.managedBytesTypeIndex);
+		var mapNames = [for (name in plan.mapTypes.keys()) name]; mapNames.sort(Reflect.compare);
+		for (name in mapNames)
+			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract(name), plan.mapType(name));
+		for (pair in [{name:"realtime_bytes_input", index:plan.bytesInputTypeIndex},
+				{name:"realtime_bytes_output", index:plan.bytesOutputTypeIndex}, {name:"native_pointer", index:plan.nativePointerTypeIndex}])
+			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract(pair.name), pair.index);
+		var iteratorTypes:Map<String, Bool> = [];
+		for (fn in plan.program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case TypeValue(_, type): switch type {
+				case Iterator(element) if (!iteratorTypes.exists(Std.string(type))):
+					iteratorTypes.set(Std.string(type), true);
+					appendTypeTest(body, valueLocal, typeLocal, outputLocal, type, plan.iteratorType(element));
+				default:
+			}
+			default:
+		}
 		// An exact test rejects every subclass, so each class needs its descendants.
 		var children:Map<String, Array<String>> = [];
 		if (exact)
@@ -944,7 +961,26 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	/** The body of the module's shared function for a Dynamic type test native. */
 	public function typeTestBody(name:String, valueLocal:Int, typeLocal:Int, outputLocal:Int):Array<WasmInstruction>
-		return dynamicTypeTest(valueLocal, typeLocal, outputLocal, name == "__std_is_exact_type");
+		return name == "__closure_is_of_type" ? closureTypeTest(valueLocal, typeLocal, outputLocal) : dynamicTypeTest(valueLocal, typeLocal, outputLocal, name == "__std_is_exact_type");
+
+	function closureTypeTest(valueLocal:Int, typeLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var body:Array<WasmInstruction> = [I32Const(0), LocalSet(outputLocal)], seen:Map<String, Bool> = [];
+		for (fn in plan.program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case TypeValue(_, type):
+				switch type {
+					case Function(_, _) if (!seen.exists(Std.string(type))):
+						seen.set(Std.string(type), true);
+						body = body.concat([LocalGet(typeLocal), I32Const(WasmModuleSupport.typeId(type)), I32Eq,
+							LocalGet(valueLocal), RefTest({nullable:false, heap:Type(plan.closureTypeIndex)}), I32And, If(null),
+							LocalGet(valueLocal), RefCast({nullable:false, heap:Type(plan.closureTypeIndex)}),
+							StructGet(plan.closureTypeIndex, WasmGcTypePlan.CLOSURE_SIGNATURE_FIELD), I32Const(plan.closureSignatureId(type)),
+							I32Eq, LocalSet(outputLocal), End]);
+					default:
+				}
+			default:
+		}
+		return body;
+	}
 
 	/** The body of the module's shared Std.string(Dynamic) function. */
 	public function stdStringBody(valueLocal:Int, outputLocal:Int):Array<WasmInstruction>

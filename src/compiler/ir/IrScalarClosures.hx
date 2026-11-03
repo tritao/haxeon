@@ -14,6 +14,7 @@ class IrScalarClosures {
 	final functions:Map<String, IrFunction>;
 	final erasures:Map<String, {maker:String, environment:String}> = [];
 	final restorations:Map<String, String> = [];
+	final signatureChecks:Map<String, String> = [];
 	final generatedFunctions:Array<IrFunction> = [];
 	final generatedMakers:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
@@ -41,6 +42,22 @@ class IrScalarClosures {
 			excludeNested(native.result);
 		}
 		for (fn in program.functions) {
+			var signatureQueries:Map<Int, Bool> = [], uses:Map<Int, Int> = [];
+			function use(input:IrValue):Void uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
+			for (block in fn.blocks) {
+				for (located in block.instructions) {
+					for (input in IrOperands.inputs(located.value)) use(input);
+					switch located.value {
+						case Phi(_, inputs): for (input in inputs) use(input.value);
+						case Call(_, "__closure_is_of_type", arguments) if (arguments.length == 2): signatureQueries.set(arguments[1].id, true);
+						default:
+					}
+				}
+				if (block.terminator != null) switch block.terminator.value {
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): use(value);
+					default:
+				}
+			}
 			if (fn.name == program.entryPoint || fn.retention != Reachable) {
 				for (argument in fn.arguments) excludeNested(argument.type);
 				excludeNested(fn.result);
@@ -57,7 +74,7 @@ class IrScalarClosures {
 				case SafeCast(output, input):
 					switch output.type { case Function(_, _) if ((switch (input.type) { case Dyn: true; default: false; })): note(output.type); default: excludeNested(output.type); }
 					excludeNested(input.type);
-				case TypeValue(_, type): excludeNested(type);
+				case TypeValue(out, type) if (!signatureQueries.exists(out.id) || uses.get(out.id) != 1): excludeNested(type);
 				default:
 			}
 		}
@@ -140,6 +157,11 @@ class IrScalarClosures {
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		var next = nextId(fn), values:Map<Int, IrValue> = [];
+		var typeValues:Map<Int, IrType> = [];
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case TypeValue(out, type): typeValues.set(out.id, type);
+			default:
+		}
 		function map(value:IrValue):IrValue {
 			var existing = values.get(value.id);
 			if (existing != null) return existing;
@@ -151,6 +173,9 @@ class IrScalarClosures {
 		for (block in fn.blocks) {
 			var rewritten = new IrBlock(block.id);
 			for (located in block.instructions) switch located.value {
+				case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && typeValues.exists(arguments[1].id)
+						&& candidates.exists(key(typeValues.get(arguments[1].id)))):
+					rewritten.instructions.push(new Located(Call(map(out), ensureSignatureCheck(typeValues.get(arguments[1].id)), [map(arguments[0])]), located.provenance));
 				case ToDyn(out, input) if (candidates.exists(key(input.type))):
 					var erasure = ensureErasure(input.type), boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
 					rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]), located.provenance));
@@ -224,6 +249,23 @@ class IrScalarClosures {
 		var debug:Array<compiler.ir.IrFunction.IrDebugBinding> = [for (binding in fn.debugBindings) {identity: binding.identity, name: binding.name, value: map(binding.value),
 			path: binding.path, scopeStart: binding.scopeStart, scopeEnd: binding.scopeEnd}];
 		return new IrFunction(fn.name, [for (argument in fn.arguments) map(argument)], mapType(fn.result), blocks, debug, fn.inlineHint, fn.retention);
+	}
+
+	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
+	function ensureSignatureCheck(type:IrType):String {
+		var signatureKey = key(type), existing = signatureChecks.get(signatureKey);
+		if (existing != null) return existing;
+		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32), name = "$scalar-closure:signature-check:" + suffix,
+			environment = "$scalar-closure:environment:" + suffix, wrapper = "$scalar-closure:erased-call:" + suffix;
+		signatureChecks.set(signatureKey, name);
+		ensureErasure(type);
+		var b = new IrBuilder(), closure = b.argument("closure", Dyn),
+			probeType:IrType = switch erasedType(type) { case Function(args, result): Function([Obj(environment)].concat(args), result); default: throw "Expected erased closure"; },
+			probe = b.staticClosure(wrapper, probeType),
+			found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
+		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
+		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		return name;
 	}
 
 	/** Materialize a boxed closure only at a real Dynamic escape, keeping null and ordinary typed calls unchanged. */

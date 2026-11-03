@@ -477,3 +477,7 @@ scalar-closure-identity	42
 struct-closure-dynamic-array	42
 generic-erased-numeric-checks	42
 generic-erased-reference-checks	42
+generic-erased-array-function-checks	42
+generic-erased-function-reference-shapes	42
+generic-erased-runtime-kinds	42
+generic-erased-bytes-reference-shapes	42

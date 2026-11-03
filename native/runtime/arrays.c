@@ -45,6 +45,12 @@ HL_PRIM bool HL_NAME(__std_is_of_type)(vdynamic *value, hl_type *type) {
 	return realtime_is_of_type(value, type);
 }
 
+HL_PRIM bool HL_NAME(__closure_is_of_type)(vdynamic *value, hl_type *type) {
+	if( value == NULL || type == NULL ) return false;
+	if( (value->t->kind != HFUN && value->t->kind != HMETHOD) || type->kind != HFUN ) return false;
+	return hl_same_type(value->t, type);
+}
+
 HL_PRIM bool HL_NAME(__std_is_exact_type)(vdynamic *value, hl_type *type) {
 	if( value == NULL || type == NULL ) return false;
 	if( value->t->kind == HVIRTUAL ) {

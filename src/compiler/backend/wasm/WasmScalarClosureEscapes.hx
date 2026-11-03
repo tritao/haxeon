@@ -14,6 +14,7 @@ class WasmScalarClosureEscapes {
 	final scalar:Map<String, Bool>;
 	final adapters:Map<String, String> = [];
 	final restorations:Map<String, String> = [];
+	final signatureChecks:Map<String, String> = [];
 	final generatedFunctions:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
 	final generatedNatives:Array<IrNative> = [];
@@ -72,9 +73,18 @@ class WasmScalarClosureEscapes {
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		var blocks:Array<IrBlock> = [], changed = false;
+		var typeValues:Map<Int, IrType> = [];
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case TypeValue(out, type): typeValues.set(out.id, type);
+			default:
+		}
 		for (block in fn.blocks) {
 			var rewritten = new IrBlock(block.id);
 			for (located in block.instructions) switch located.value {
+				case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && typeValues.exists(arguments[1].id)
+						&& scalar.exists(Std.string(typeValues.get(arguments[1].id)))):
+					rewritten.instructions.push(new Located(Call(out, signatureCheck(typeValues.get(arguments[1].id)), [arguments[0]]), located.provenance));
+					changed = true;
 				case ToDyn(out, input) if (scalar.exists(Std.string(input.type))):
 					var maker = adapter(input.type);
 					rewritten.instructions.push(new Located(Call(out, maker, [input]), located.provenance));
@@ -89,6 +99,24 @@ class WasmScalarClosureEscapes {
 			blocks.push(rewritten);
 		}
 		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+	}
+
+	/** The escape adapter's target identifies its original scalar closure signature. */
+	function signatureCheck(type:IrType):String {
+		var key = Std.string(type), existing = signatureChecks.get(key);
+		if (existing != null) return existing;
+		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32), name = "$wasm:closure-signature-check:" + suffix,
+			environment = "$wasm:closure-escape:" + suffix, invoke = "$wasm:closure-escape-call:" + suffix,
+			arguments = switch type { case Function(args, _): args; default: throw "Expected closure signature"; };
+		signatureChecks.set(key, name);
+		adapter(type);
+		var b = new IrBuilder(), closure = b.argument("closure", Dyn),
+			probeType:IrType = Function([Obj(environment)].concat([for (_ in arguments) Dyn]), Dyn),
+			probe = b.staticClosure(invoke, probeType),
+			found = b.call(receiverQuery("$wasm:closure-receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
+		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
+		generatedFunctions.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		return name;
 	}
 
 	function receiverQuery(name:String, first:IrType, second:IrType):String {

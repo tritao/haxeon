@@ -10,6 +10,14 @@ class GenericStructOwnerMain {
 		referenceRuntime.update("Main.hx", File.getContent("tests/programs/generic-erased-reference-checks.hx"));
 		if (new compiler.ir.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased reference writes did not preserve checked value semantics in the interpreter";
+		var arraySource = File.getContent("tests/programs/generic-erased-array-function-checks.hx");
+		arraySource = StringTools.replace(StringTools.replace(StringTools.replace(arraySource, "#if !wasm", ""), "#end", ""), "hl.Gc.totalAllocated()", "0");
+		var checkedArrays = Frontend.compile(arraySource);
+		if (new compiler.ir.IrInterpreter(checkedArrays).run("main") != 42)
+			throw "erased array and function writes did not preserve checked value semantics in the interpreter";
+		var checkedSignatures = Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
+		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
+			throw "the interpreter did not distinguish reference-shaped closure signatures";
 		var program = Frontend.compile(File.getContent("tests/programs/generic-struct-class.hx"));
 		var payloadOwner:Null<String> = null, otherOwner:Null<String> = null;
 		for (object in program.objects) for (field in object.fields)

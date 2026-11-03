@@ -249,3 +249,20 @@ allocation medians and zero paired median differences. Selection-stress medians 
 with a zero paired median difference. The 500-cycle RSS window medians were 30.31 / 3.59 / 0.78 / 4.84 MiB before
 and 30.16 / 3.75 / 0.78 / 5.00 MiB after, with paired median differences of -0.15 / 0 / 0 / 0 MiB. These values
 include the previously observed same-binary variation and do not establish an RSS improvement.
+
+Array and closure erased-boundary checks were measured on the same machine against the preceding compiler. The Wasm GC
+Showcase guest changed; alternating control/candidate object-count medians were 5,896 / 5,898 for full (nine pairs),
+5,896 / 5,896 for static and text-heavy (three pairs each), and 12,622 / 12,622 for editing (three pairs). Every
+scenario's paired median difference was zero; the two-object difference between separate full medians is within the
+observed run variation. A scalar struct closure stored through an erased generic owner then called in typed code
+allocated zero objects for 8 and 1,024 calls on HashLink, Wasm32 and Wasm GC, with inlining on and off. A separate
+managed-reference struct closure gap and its prior-compiler control are recorded in `GENERIC_SPECIALIZATION.md`.
+
+The HashLink comparison alternated the previous and candidate native runtimes with identical editor bytecode. Across
+nine pairs, every action had a zero paired median allocation difference. Separate control/candidate medians were
+78.1 / 78.4 KiB for sensors-to-hierarchy and 12.1 / 13.6 KiB for hover-away; all other action medians matched the
+preceding table. Selection-stress medians were 342,096 / 342,097 allocations, with a zero paired median difference;
+all nine per-type differences were confined to byte buffers. The 500-cycle RSS window medians were 30.16 / 3.59 /
+0.78 / 4.84 MiB before and 30.16 / 3.59 / 0.78 / 5.00 MiB after, with paired median differences of 0 / 0 / 0 /
++0.16 MiB. That last difference is within the previously observed same-binary RSS variation, so these measurements do
+not establish an RSS regression or an exact match to the original baseline.

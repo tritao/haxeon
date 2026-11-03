@@ -139,7 +139,10 @@ class GenericOwnerErasure {
 		if ((switch (value.type) { case Dyn: true; default: false; })) {
 			var target = switch type { case Nullable(inner): inner; default: type; },
 				checks:Array<IrType> = switch target {
-					case Obj(_) | Virtual(_) | Enum(_) | Bytes: [target];
+					case Abstract("native_callback"): [];
+					case Obj(_) | Virtual(_) | Enum(_) | Bytes | ManagedBytes | Abstract(_) | Iterator(_): [target];
+					case Array(_): [Array(Dyn)];
+					case Function(_, _): [target];
 					case I32 | F64 | Bool | I64: [target];
 					default: [];
 				};
@@ -147,14 +150,15 @@ class GenericOwnerErasure {
 				var nullable = switch type {
 					case Nullable(_): true;
 					case Obj(name): var declaration = objects.get(name); declaration == null || !declaration.isValue;
-					case Virtual(_) | Enum(_) | Bytes: true;
+					case Virtual(_) | Enum(_) | Bytes | ManagedBytes | RawPtr | TypeRef | Abstract(_) | Iterator(_) | Array(_) | Function(_, _): true;
 					default: false;
 				}, accepted = builder.createBlock(), checkType = builder.createBlock(), rejected = builder.createBlock();
 				builder.branch(builder.equal(value, builder.constNull(Dyn)), nullable ? accepted : rejected, checkType);
 				builder.select(checkType);
 				for (index in 0...checks.length) {
 					var next = index == checks.length - 1 ? rejected : builder.createBlock();
-					builder.branch(builder.call("__std_is_of_type", [value, builder.typeValue(checks[index])], Bool), accepted, next);
+					var test = switch checks[index] { case Function(_, _): "__closure_is_of_type"; default: "__std_is_of_type"; };
+					builder.branch(builder.call(test, [value, builder.typeValue(checks[index])], Bool), accepted, next);
 					if (next != rejected) builder.select(next);
 				}
 				builder.select(rejected);
@@ -162,7 +166,22 @@ class GenericOwnerErasure {
 				builder.select(accepted);
 			}
 		}
-		return builder.safeCast(IrTypeTools.isDynamic(value.type) ? value : builder.toDyn(value), type);
+		var dynamicValue = IrTypeTools.isDynamic(value.type) ? value : builder.toDyn(value);
+		return switch type {
+			case Array(element) if (!Type.enumEq(element, Dyn) && !isLaneElement(element, objects)):
+				var array = builder.safeCast(dynamicValue, Array(Dyn));
+				var checked = builder.call("__array_check_cast", [array, builder.typeValue(element)], Array(Dyn));
+				builder.safeCast(builder.toDyn(checked), type);
+			default: builder.safeCast(dynamicValue, type);
+		};
+	}
+
+	static function isLaneElement(type:IrType, objects:Map<String, IrObject>):Bool {
+		var element = switch type { case Nullable(inner): inner; default: type; };
+		return switch element {
+			case Obj(name): var object = objects.get(name); object != null && object.isValue;
+			default: false;
+		};
 	}
 
 	static function sameTypes(a:Array<IrType>, b:Array<IrType>):Bool {

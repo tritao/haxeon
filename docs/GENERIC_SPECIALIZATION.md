@@ -180,7 +180,36 @@ Numeric erased writes require the exact runtime kind: Int, Float, Bool and Int64
 values. In particular, a Dynamic Float cannot be truncated into an Int field, and a Dynamic Int is not implicitly
 widened into a Float field at this boundary. A rejected write leaves the existing field unchanged. Typed numeric
 conversions retain their normal rules. String, enum and interface writes likewise check their runtime type before
-changing storage and permit null. Array and function boundary checks are still pending.
+changing storage and permit null. Array writes check the array kind and the concrete element storage before the
+store; a Dynamic array can be validated and retyped in place, while mismatched scalar, reference and struct-lane
+layouts are rejected without changing the destination. Function writes check the closure's arity and recorded
+signature before the store. HashLink and Wasm GC retain semantic function signatures; a scalar struct closure crossing
+Dynamic is recognized by its signature-specific adapter without boxing its ordinary typed calls.
+
+Wasm32 currently records the closure's calling-representation key rather than every source type. It distinguishes
+arity, numeric kinds and named object types, but reference-shaped signatures can share a key: for example,
+`String->String` and `Array<Int>->Array<Int>` are indistinguishable there. A write between those two signatures can
+therefore pass the Wasm32 check; it is rejected on HashLink and Wasm GC. Preserving a semantic signature at closure
+creation, including distinct views of one function slot, is required to close this gap without per-call boxing.
+
+Managed byte buffers and native map abstracts now check their runtime kind too. Wasm32 stores strings and managed
+bytes with the same header, so it cannot distinguish a `String` from `haxe.io.Bytes` at this boundary; HashLink and
+Wasm GC can. HashLink and Wasm32 currently expose only the common iterator kind to this type test, not its element type. A distinct
+managed-bytes header and iterator element descriptor are required to make those checks exact without guessing.
+
+A separate raw-pointer Dynamic boundary is still incomplete: `KindBox<Anchor,hl.Bytes>` accepts an Int through an
+erased view on both Wasm targets (HashLink rejects it). Wasm32 currently carries a raw pointer directly as Dynamic,
+while Wasm GC shares its box type with Int, so neither can safely distinguish the kinds. The planned fix is a distinct
+raw-pointer box at the genuine Dynamic escape, with a matching checked unbox and null handling; keep ordinary typed
+raw-pointer operations unboxed. Native callback handles and runtime type handles likewise need an unambiguous Dynamic
+representation before they can be checked as distinct kinds. Until that fix lands, this is an open part of the
+erased-boundary audit.
+
+A separate Wasm GC scalar-call gap remains for a struct with managed reference fields returned through a closure in a
+specialized generic field. A census with `{number:Int, text:String}` measured 16 / 2,048 allocations for 8 / 1,024
+typed calls, both before and after these checks and with inlining on or off; Wasm32 measured zero. The replacement is
+to keep the value's scalar and traced reference leaves through both argument and result, including the generic field
+call. This path must be fixed and remeasured before relying on it for a no-box UI port.
 These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
 owners are not complete until those paths and incremental invalidation are tested.
 Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the

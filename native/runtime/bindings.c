@@ -658,6 +658,7 @@ DEFINE_PRIM(_STRING,__string_buffer_to_string,_ABSTRACT(realtime_string_buffer))
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
 DEFINE_PRIM(_DYN,__closure_receiver_if_match,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__std_is_of_type,_DYN _TYPE);
+DEFINE_PRIM(_BOOL,__closure_is_of_type,_DYN _TYPE);
 DEFINE_PRIM(_BOOL,__std_is_exact_type,_DYN _TYPE);
 DEFINE_PRIM(_ABSTRACT(hl_process),__process_run,_STRING _ARR);
 DEFINE_PRIM(_STRING,__process_read_stdout,_ABSTRACT(hl_process));

@@ -561,6 +561,7 @@ class IrProgramAssembler {
 			stringFastPathNames:Map<String, Bool> = [],
 			needsExceptionRuntime = false,
 			needsTypeTestRuntime = false,
+			needsClosureTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
 			needsDynamicEquality = false,
 			needsDynamicObjectRuntime = false,
@@ -577,6 +578,8 @@ class IrProgramAssembler {
 								needsExceptionRuntime = true;
 							if (name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
+							if (name == "__closure_is_of_type")
+								needsClosureTypeTestRuntime = true;
 							if (name == "__dynamic_equal")
 								needsDynamicEquality = true;
 							if (name == "__std_is_exact_type")
@@ -673,6 +676,14 @@ class IrProgramAssembler {
 				name: "__std_is_of_type",
 				library: "haxeon_runtime",
 				symbol: "__std_is_of_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
+		if (needsClosureTypeTestRuntime)
+			program.natives.push({
+				name: "__closure_is_of_type",
+				library: "haxeon_runtime",
+				symbol: "__closure_is_of_type",
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});

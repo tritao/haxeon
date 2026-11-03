@@ -203,6 +203,10 @@ class WasmGcValueArrays {
 		// Only a dynamic backing lane may be converted here; validation precedes every mutation of the original header.
 		body = body.concat(fieldAt(base, WasmGcTypePlan.arrayElementTypeFieldIndex(), 0))
 			.concat([I32Const(WasmModuleSupport.typeId(Dyn)), I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
+		// A header alone is not proof that its backing lane contains Dynamic values.
+		// Check before ref.cast so an incompatible concrete reference array raises a language exception.
+		body = body.concat(fieldAt(base, WasmGcTypePlan.arrayDataFieldIndex(), 0))
+			.concat([RefTest({nullable:false, heap:Type(storage)}), I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
 		for (i in [6, 7, 8]) body = body.concat([LocalGet(i), RefIsNull, If(null)]).concat(failure(throws)).concat([End]);
 		body = body.concat(fieldAt(base, WasmGcTypePlan.arrayLengthFieldIndex(), 0)).concat([LocalSet(length), Block(null), Loop(null),
 			LocalGet(index), LocalGet(length), I32Eq, BrIf(1), LocalGet(0), StructGet(base, WasmGcTypePlan.arrayDataFieldIndex()),

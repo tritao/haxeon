@@ -3,8 +3,11 @@ package compiler.backend.wasm.linear;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrBlock;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmProgramIndex;
@@ -158,6 +161,7 @@ class WasmLinearClosureAdapters {
 		for (index in 0...ordered.length)
 			adapters.keyIds.set(ordered[index], index);
 		program.functions.push(adapters.keyQuery());
+		adapters.rewriteSignatureChecks();
 		for (pair in pairs) {
 			var targetType = targetTypes.get(pair.target);
 			for (source in pair.sources)
@@ -166,6 +170,43 @@ class WasmLinearClosureAdapters {
 			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
 		}
 		return adapters;
+	}
+
+	/** Linear closures retain their calling-representation key in their table slot. */
+	function rewriteSignatureChecks():Void {
+		var helpers:Map<String, IrType> = [], rewritten:Array<IrFunction> = [];
+		for (fn in program.functions) {
+			var types:Map<Int, IrType> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case TypeValue(out, type): types.set(out.id, type);
+				default:
+			}
+			var changed = false, blocks:Array<IrBlock> = [];
+			for (block in fn.blocks) {
+				var target = new IrBlock(block.id);
+				for (located in block.instructions) switch located.value {
+					case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && types.exists(arguments[1].id)):
+						var type = types.get(arguments[1].id), name = "$wasm:closure-type-check:" + haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
+						helpers.set(name, type);
+						target.instructions.push(new Located(IrInstruction.Call(out, name, [arguments[0]]), located.provenance));
+						changed = true;
+					default: target.instructions.push(located);
+				}
+				target.terminator = block.terminator; blocks.push(target);
+			}
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+		}
+		var names = [for (name in helpers.keys()) name]; names.sort(Reflect.compare);
+		for (name in names) {
+			var type = helpers.get(name), b = new IrBuilder(), value = b.argument("closure", Dyn), key = b.call(KEY_FUNCTION, [value], I32),
+				second = b.createBlock(), yes = b.createBlock(), no = b.createBlock();
+			b.branch(b.equal(key, b.constInt(code(closureKey(type), false))), yes, second);
+			b.select(second); b.branch(b.equal(key, b.constInt(code(instanceKey(type), true))), yes, no);
+			b.select(yes); b.returnValue(b.constBool(true));
+			b.select(no); b.returnValue(b.constBool(false));
+			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		}
+		program.functions = rewritten;
 	}
 
 	/** A placeholder body; the backend defines the query once table slots are known (see defineKeyQuery). */

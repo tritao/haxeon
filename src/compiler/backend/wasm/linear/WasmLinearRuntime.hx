@@ -812,6 +812,7 @@ class WasmLinearRuntime {
 		builder.ifElse(function(builder) {
 			emitCombineI32(builder, byteLocals, [24, 16, 8, 0]);
 			builder.localSet(result);
+
 		}, function(builder) {
 			emitCombineI32(builder, byteLocals, [0, 8, 16, 24]);
 			builder.localSet(result);
@@ -2665,11 +2666,36 @@ class WasmLinearRuntime {
 			builder.i32Const(0);
 			builder.localSet(result);
 		}, function(builder) {
+			// Static closures are tagged table slots, not heap headers.
+			builder.localGet(value); builder.i32Const(1); builder.emit(I32And);
+			builder.if_(function(builder) { builder.i32Const(0); builder.return_(); });
 			builder.localGet(value);
 			builder.emit(I32Load(0));
 			builder.localGet(typeId);
 			builder.emit(I32Eq);
 			builder.localSet(result);
+			// Linear strings and managed bytes currently share one heap header.
+			builder.localGet(typeId);
+			builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value); builder.emit(I32Load(0)); builder.i32Const(WasmModuleSupport.typeId(Bytes));
+				builder.emit(I32Eq); builder.localSet(result);
+			});
+			var iteratorTypes:Map<String, Bool> = [];
+			for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case TypeValue(_, type): switch type {
+					case Iterator(_) if (!iteratorTypes.exists(Std.string(type))):
+						iteratorTypes.set(Std.string(type), true);
+						builder.localGet(typeId); builder.i32Const(WasmModuleSupport.typeId(type)); builder.emit(I32Eq);
+						builder.if_(function(builder) {
+							builder.localGet(value); builder.emit(I32Load(0)); builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_iterator")));
+							builder.emit(I32Eq); builder.localSet(result);
+						});
+					default:
+				}
+				default:
+			}
 			if (name != "__std_is_exact_type")
 				for (object in program.objects) {
 					var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
