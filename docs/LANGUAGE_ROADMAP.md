@@ -121,7 +121,10 @@ Check each against what Haxeon already supports before designing it.
 1. `Equatable`, `Hashable` and `Diffable`, replacing the former structural metadata; key paths designed alongside.
 2. Signals core (ADR 0002 stage 1).
 3. `Observable` (ADR 0002 stage 1b).
-4. Result builders and lazy parameters, before the ADR 0002 stage 3 component experiment.
+4. Result builders and lazy parameters, only if the ADR 0002 stage 3 component experiment needs them. The experiment
+   runs first with plain Haxe expressions (re-running scopes) against explicit library primitives (run-once
+   bindings); plain code is preferred when it is within 10% on allocation and frame time, because it keeps code
+   meaning what it looks like.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
    value equality and remain boxed, and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
