@@ -134,32 +134,43 @@ class WasmCfgAnalysis {
 		return traversal.result;
 	}
 
-	static function visitScc(graph:IrGraph, id:Int, traversal:WasmSccTraversal):Void {
+	static function visitScc(graph:IrGraph, root:Int, traversal:WasmSccTraversal):Void {
+		var pending:Array<{id:Int, next:Int, successors:Array<Int>}> = [];
+		beginScc(graph, root, traversal, pending);
+		while (pending.length > 0) {
+			var frame = pending[pending.length - 1], id = frame.id;
+			if (frame.next < frame.successors.length) {
+				var successor = frame.successors[frame.next++];
+				if (!traversal.indices.exists(successor)) beginScc(graph, successor, traversal, pending);
+				else if (traversal.onStack.exists(successor))
+					traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.indices, successor))));
+				continue;
+			}
+			pending.pop();
+			if (pending.length > 0) {
+				var parent = pending[pending.length - 1].id;
+				traversal.low.set(parent, Std.int(Math.min(requiredIndex(traversal.low, parent), requiredIndex(traversal.low, id))));
+			}
+			if (requiredIndex(traversal.low, id) != requiredIndex(traversal.indices, id)) continue;
+			var members:Array<Int> = [], member:Int;
+			do {
+				member = traversal.stack.pop();
+				traversal.onStack.remove(member);
+				members.push(member);
+			} while (member != id);
+			var cyclic = members.length > 1;
+			if (!cyclic) for (successor in requiredSuccessors(graph.successors, id)) if (successor == id) cyclic = true;
+			traversal.result.push({blocks: members, cyclic: cyclic});
+		}
+	}
+
+	static function beginScc(graph:IrGraph, id:Int, traversal:WasmSccTraversal,
+			pending:Array<{id:Int, next:Int, successors:Array<Int>}>):Void {
 		traversal.indices.set(id, traversal.nextIndex);
 		traversal.low.set(id, traversal.nextIndex++);
 		traversal.stack.push(id);
 		traversal.onStack.set(id, true);
-		for (successor in requiredSuccessors(graph.successors, id)) {
-			if (!traversal.indices.exists(successor)) {
-				visitScc(graph, successor, traversal);
-				traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.low, successor))));
-			} else if (traversal.onStack.exists(successor))
-				traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.indices, successor))));
-		}
-		if (requiredIndex(traversal.low, id) != requiredIndex(traversal.indices, id))
-			return;
-		var members:Array<Int> = [], member:Int;
-		do {
-			member = traversal.stack.pop();
-			traversal.onStack.remove(member);
-			members.push(member);
-		} while (member != id);
-		var cyclic = members.length > 1;
-		if (!cyclic)
-			for (successor in requiredSuccessors(graph.successors, id))
-				if (successor == id)
-					cyclic = true;
-		traversal.result.push({blocks: members, cyclic: cyclic});
+		pending.push({id: id, next: 0, successors: requiredSuccessors(graph.successors, id)});
 	}
 
 	function isReducible():Bool {
