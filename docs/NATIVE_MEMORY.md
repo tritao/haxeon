@@ -30,6 +30,10 @@ fields are fixed-width scalars, target-defined C scalar aliases, `Int`, `Float`,
 closures, `Dynamic`, and all other GC-managed references are rejected. Fixed
 arrays and automatic field syntax are not implemented yet.
 
+A managed `Array<UInt32>` uses a bit-preserving 32-bit carrier. A field may hold a nullable reference to that array:
+`Null<Array<UInt32>>` represents either no array or the same managed array storage. This does not make a nullable
+`UInt32` scalar or arrays of other native-only scalar types into supported managed values.
+
 ## Raw pointers
 
 `runtime.memory.RawPtr<T>` is a non-owning pointer to unmanaged storage. It has

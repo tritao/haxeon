@@ -38,6 +38,7 @@ class NativeLayout {
 		return switch type {
 			case TNativeScalar("u32"): false;
 			case TNullable(TNativeScalar("u32")): true;
+			case TNullable(TArray(element)): containsUnsupportedRuntimeValueWithin(element, explored);
 			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
 			case TAbstract(_, _, representation), TArray(representation):
 				containsUnsupportedRuntimeValueWithin(representation, explored);

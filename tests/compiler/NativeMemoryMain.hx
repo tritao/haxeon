@@ -125,6 +125,10 @@ class NativeMemoryMain {
 		if (!incrementalFlatResult.retyped.contains("app.Reader.copy") || !sawFlatGetSpecialization || !sawFlatMemoryLoad)
 			throw 'Incremental Flat RawPtr lowering must preserve its cached layout and exact specialization: retyped=${incrementalFlatResult.retyped}';
 
+		expectCompileError('class Bad { public var value:Null<UInt32>; } function main():Int return 0;',
+			"Native layout types can only appear in value structs or native value record fields");
+		expectCompileError('class Bad { public var value:Null<Array<Float32>>; } function main():Int return 0;',
+			"Native layout types can only appear in value structs or native value record fields");
 		expectCompileError('import runtime.memory.RawPtr; function bad(pointer:RawPtr<String>):String return pointer.load(); function main():Int return 0;',
 			"has no fixed native memory layout");
 		expectCompileError('import runtime.memory.RawPtr; struct Rich { public var text:String; } function bad(pointer:RawPtr<Rich>):String return pointer.ref.text; function main():Int return 0;',
