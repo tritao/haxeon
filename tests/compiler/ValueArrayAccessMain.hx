@@ -1574,7 +1574,7 @@ class ValueArrayAccessMain {
 				} catch (error:Dynamic) { if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath); throw error; }
 				if (sys.FileSystem.exists(wasmPath)) sys.FileSystem.deleteFile(wasmPath);
 			}
-			var equalityCensusSource = 'interface Equatable {} struct CensusKey : Equatable { public var x:Int; public function new(x:Int) this.x=x; '
+			var equalityCensusSource = 'interface Equatable {} struct CensusKey implements Equatable { public var x:Int; public function new(x:Int) this.x=x; '
 				+ 'public function equals(other:CensusKey):Bool return x == other.x; } '
 				+ 'function main():Int { var values:Array<CensusKey>=[]; for(i in 0...100) values.push(new CensusKey(i)); '
 				+ 'var total=0; for(i in 0...100) total += values.indexOf(new CensusKey(i)); return total; }';

@@ -6,7 +6,7 @@ section in an existing one, before it is implemented.
 
 The rules for every entry:
 
-- **Capabilities are declared through types.** A type opts into a capability by conformance (`: Hashable`,
+- **Capabilities are declared through types.** A type opts into a capability by conformance (`implements Hashable`,
   `implements Observable`), not by metadata or by the compiler recognizing a library type. The compiler knows general
   mechanisms, never UI or other library concepts.
 - **Narrow, typed, declarative.** Features are typed in place and work on every backend (HashLink, Wasm32, Wasm GC). No
@@ -99,7 +99,7 @@ Check each against what Haxeon already supports before designing it.
 - **`if let` / `guard let`:** unwrap an optional, including `Null<S>`, and narrow in one step.
 - **Default interface methods:** static extensions cover most uses; add on demand.
 - **Serialization by conformance:** express STRUCTS.md's descriptors and the [MessagePack](MESSAGEPACK.md) attributes as
-  a conformance (`: Codable`), consistent with `Hashable`, `Diffable` and `Observable`.
+  a conformance (`implements Codable`), consistent with `Hashable`, `Diffable` and `Observable`.
 
 ### Not planned
 

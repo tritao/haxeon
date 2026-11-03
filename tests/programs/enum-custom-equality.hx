@@ -1,6 +1,6 @@
 import haxeon.Hashing;
 
-enum Key<T> : Hashable {
+enum Key<T> implements Hashable {
 	Item(value:T);
 
 	public function equals(other:Key<T>):Bool {
@@ -12,7 +12,7 @@ enum Key<T> : Hashable {
 	}
 }
 
-enum Outer : Equatable {
+enum Outer implements Equatable {
 	Wrap(key:Key<Int>);
 }
 

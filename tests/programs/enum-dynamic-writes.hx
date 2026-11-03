@@ -1,4 +1,4 @@
-enum Value<T:Equatable> : Equatable { Item(value:T); }
+enum Value<T:Equatable> implements Equatable { Item(value:T); }
 
 function main():Int {
 	var typed:Array<Value<Int>> = [Value.Item(1)], view:Array<Dynamic> = cast typed;

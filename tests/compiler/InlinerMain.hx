@@ -68,7 +68,7 @@ class InlinerMain {
 		IrVerifier.verify(nestedConstructors);
 		expect(allocations(programFunction(nestedConstructors, "$scalar-arguments:make")) == 0,
 			"nested value constructors stay scalar when ordinary inlining is disabled");
-		var equality = Frontend.compile("interface Equatable {} struct Value : Equatable { public final x:Float; public function new(x:Float) this.x = x; } "
+		var equality = Frontend.compile("interface Equatable {} struct Value implements Equatable { public final x:Float; public function new(x:Float) this.x = x; } "
 			+ "class Exact { public final v:Value; public function new(v:Value) this.v = v; } "
 			+ "class Holder { final exact:Null<Exact>; public var value(get, never):Value; public function new() exact = null; "
 			+ "inline function get_value():Value return exact == null ? new Value(4) : exact.v; } "

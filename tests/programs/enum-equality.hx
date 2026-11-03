@@ -1,5 +1,5 @@
 // Payload enums declare value equality, independent of how each value is represented.
-enum Shape : Equatable {
+enum Shape implements Equatable {
 	Dot;
 	Circle(r:Int);
 	Rect(w:Int, h:Int);
@@ -10,7 +10,7 @@ enum Plain {
 	Green;
 }
 
-enum Maybe<T:Equatable> : Equatable {
+enum Maybe<T:Equatable> implements Equatable {
 	Nothing;
 	Just(value:T);
 }

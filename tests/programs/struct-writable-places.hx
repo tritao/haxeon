@@ -1,4 +1,4 @@
-struct Value : Diffable {
+struct Value implements Diffable {
   public var x:Int;
   public function new(x:Int) this.x = x;
   public function bump():Void x++;

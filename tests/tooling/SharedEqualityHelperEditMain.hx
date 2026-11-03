@@ -16,9 +16,9 @@ class SharedEqualityHelperEditMain {
 		FileSystem.createDirectory(root);
 		// Left and Right both contain an Inner, so the helper for Inner is shared by the helpers for Left and Right.
 		var files = [
-			"Inner.hx" => "struct Inner : Equatable { public var a:Int; public var b:Int; public function new(a:Int, b:Int) { this.a = a; this.b = b; } }",
-			"Left.hx" => "struct Left : Equatable { public var inner:Inner; public var x:Int; public function new(inner:Inner, x:Int) { this.inner = inner; this.x = x; } }",
-			"Right.hx" => "struct Right : Equatable { public var inner:Inner; public var y:Int; public function new(inner:Inner, y:Int) { this.inner = inner; this.y = y; } }",
+			"Inner.hx" => "struct Inner implements Equatable { public var a:Int; public var b:Int; public function new(a:Int, b:Int) { this.a = a; this.b = b; } }",
+			"Left.hx" => "struct Left implements Equatable { public var inner:Inner; public var x:Int; public function new(inner:Inner, x:Int) { this.inner = inner; this.x = x; } }",
+			"Right.hx" => "struct Right implements Equatable { public var inner:Inner; public var y:Int; public function new(inner:Inner, y:Int) { this.inner = inner; this.y = y; } }",
 			"P.hx" => "class P { public static function same(a:Left, b:Left):Bool return haxeon.Equality.equals(a, b); }",
 			"Q.hx" => "class Q { public static function same(a:Right, b:Right):Bool return haxeon.Equality.equals(a, b); }",
 			"Main.hx" => "class Main { public static function main():Int {\n" +

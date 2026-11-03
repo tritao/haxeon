@@ -92,7 +92,7 @@ both.
 ## Model
 
 ```haxe
-struct Health : Component {
+struct Health implements Component {
 	@replicate @range(0, 100) var value:Float32;
 	var regenRate:Float32;
 	var lastHitBy:EntityRef;
@@ -113,7 +113,7 @@ struct Health : Component {
   - no identity, and `null` is excluded;
   - no inheritance;
   - constructors and non-virtual methods, called directly.
-- **Conformance.** `struct Name : A, B` declares conformance to interfaces.
+- **Conformance.** `struct Name implements A implements B` declares conformance to interfaces; classes and enums use the same spelling.
   Interfaces remain the abstraction; there is no separate trait feature. A generic bound such as
   `lerp<T:Interpolate>` dispatches statically after specialization for each struct type, without boxing. Converting a
   struct to an interface-typed value boxes it, like a Rust `dyn Trait`; using an interface as a bound does not.
@@ -166,20 +166,20 @@ Requirements propagate transitively through interface conformance. For example,
 a GPU library could define:
 
 ```haxe
-interface GpuRecord : Portable {
+interface GpuRecord extends Portable {
 }
 
-struct Vertex : GpuRecord {
+struct Vertex implements GpuRecord {
     var x:Float32;
     var y:Float32;
 }
 
-struct Invalid : GpuRecord {
+struct Invalid implements GpuRecord {
     var name:String; // Error: GpuRecord requires Portable; name is managed.
 }
 ```
 
-`interface GpuRecord : Portable` requires implementers to be portable; it does
+`interface GpuRecord extends Portable` requires implementers to be portable; it does
 not assert a storage layout for the interface itself. `Vertex : GpuRecord`
 declares conformance, not implementation inheritance. No additional
 `@portable` assertion is necessary on `Vertex`.
@@ -312,7 +312,7 @@ still make their usual independent copies. Wasm GC uses flattened fields for the
 
 An enum value has no identity. Recursive enums, enums with a disproportionately large case, and values boxed at Dynamic,
 reflection or native boundaries retain exactly the same value semantics as inline values. A payload enum declares
-`enum E : Equatable` or `enum E : Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
+`enum E implements Equatable` or `enum E implements Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
 an error, as for structs. Checking a payload enum against a payload-free case uses a `switch` or pattern match; the
 constant case does not create an exception to the conformance rule. App and library code use declared equality or case
 patterns rather than reflective `Type.enumEq`. Synthesized equality compares the case tag and then its payload fields
@@ -471,7 +471,7 @@ Decided and implemented 2026-11-01. Value equality is declared by interface conf
 `Equatable` and `Hashable` model:
 
 ```haxe
-struct Color : Hashable { /* fields */ }
+struct Color implements Hashable { /* fields */ }
 class Record implements Hashable { /* fields */ }
 ```
 
@@ -494,7 +494,7 @@ value semantics; floats retain IEEE behavior, with hashing consistent for `0.0` 
 bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
 are statically dispatched without boxing.
 
-`Array<S>.indexOf`, `contains` and `remove` require `S : Equatable` and use that same declared equality, including a
+`Array<S>.indexOf`, `contains` and `remove` require `S` to implement `Equatable` and use that same declared equality, including a
 handwritten `equals`. They examine inline elements as values and `remove` shifts the lanes in place. Nullable struct
 arrays compare absence with absence and use the declared equality for present elements. Requiring the conformance keeps
 array lookup consistent with `==` instead of inventing an identity for copied values.
@@ -504,7 +504,7 @@ statically selected, so retaining an interface cache would enlarge every conform
 Ordinary runtime interfaces keep their cache slots and dispatch behavior.
 
 Field operations are a separate opt-in through the compiler-known `Diffable` interface, for example
-`struct Style : Diffable, Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
+`struct Style implements Diffable implements Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
 `Diff.all` and `Diff.mask` for conforming types. Masks expose declaration order and field count, so the type's
 author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
 do not synthesize field-level operations by default.

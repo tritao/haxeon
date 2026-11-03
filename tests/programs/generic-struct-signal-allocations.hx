@@ -5,7 +5,7 @@ class SignalAnchor {
 	public function new(id:Int) this.id = id;
 }
 
-struct SignalValue : Equatable {
+struct SignalValue implements Equatable {
 	public final number:Int;
 	public final anchor:SignalAnchor;
 	public function new(number:Int, anchor:SignalAnchor) {

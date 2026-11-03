@@ -5,7 +5,7 @@ enum Poll {
 	Lost(code:Int);
 }
 
-enum Outcome : Equatable {
+enum Outcome implements Equatable {
 	Idle;
 	Resolved(value:Int);
 }

@@ -4,7 +4,7 @@ import Equatable;
 import haxeon.ui.Color;
 
 /** One typed value supplied to a custom effect registration. */
-struct EffectParameter : Equatable {
+struct EffectParameter implements Equatable {
 	public final type:EffectParameterType;
 	public final componentCount:Int;
 	public final x:Float;

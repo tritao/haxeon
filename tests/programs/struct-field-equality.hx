@@ -4,7 +4,7 @@ class Reference implements Equatable {
   public function equals(other:Reference):Bool return id == other.id;
 }
 
-struct Value : Equatable {
+struct Value implements Equatable {
   public var reference:Reference;
   public var optional:Null<Reference>;
   public var number:Float;

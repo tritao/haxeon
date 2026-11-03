@@ -1,4 +1,4 @@
-enum Choice : Equatable {
+enum Choice implements Equatable {
 	Empty;
 	Other;
 	Value(value:Int);

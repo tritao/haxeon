@@ -4,7 +4,7 @@ Value equality is a capability declared through conformance. There is one equali
 `==`, `!=`, `haxeon.Equality.equals`, containing conforming values, and maps keyed by `Hashable` values.
 
 ```haxe
-struct Color : Hashable { /* stored fields */ }
+struct Color implements Hashable { /* stored fields */ }
 class Record implements Hashable { /* stored fields */ }
 ```
 

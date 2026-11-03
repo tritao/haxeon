@@ -2,7 +2,7 @@ import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.reactive.Signal;
 
-struct ValueRecord : Equatable {
+struct ValueRecord implements Equatable {
 	public final value:Int;
 	public function new(value:Int) this.value = value;
 	public function equals(other:ValueRecord):Bool return value == other.value;
@@ -56,7 +56,7 @@ class ConstructorMutation {
 	public function new(model:Model) model.other = 9;
 }
 
-enum ObservablePhase : Equatable { Idle; Busy(value:Int); }
+enum ObservablePhase implements Equatable { Idle; Busy(value:Int); }
 
 class EnumModel implements Observable {
 	public var phase:ObservablePhase;

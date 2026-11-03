@@ -1,5 +1,5 @@
 import haxeon.Hashing;
-struct Key : Hashable { public var x:Int; public function new(x:Int) this.x=x; }
+struct Key implements Hashable { public var x:Int; public function new(x:Int) this.x=x; }
 class RefKey implements Hashable { public final x:Int; public function new(x:Int) this.x=x; }
 struct Value { public var x:Int; public function new(x:Int) this.x=x; }
 class Dense<K:Hashable,V> {

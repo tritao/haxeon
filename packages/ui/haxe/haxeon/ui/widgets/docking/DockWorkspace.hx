@@ -757,7 +757,7 @@ private class DockDropTargetView implements View {
 
 /** Bounded measured-width cache for tab labels during repeated workspace builds. */
 /** What a tab label's measured width depends on; hashed and compared by field, so a new style field joins the key. */
-private struct DockTextWidthKey : Hashable {
+private struct DockTextWidthKey implements Hashable {
 	public final label:String;
 	public final textStyle:TextStyle;
 	public final paragraphStyle:ParagraphStyle;

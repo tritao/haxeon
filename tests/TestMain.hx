@@ -221,7 +221,7 @@ class TestMain {
 		packageScopedSourceCompiler.compile("app.Main");
 		var enumDependencyCompiler = new Compiler();
 		enumDependencyCompiler.update("Equatable.hx", "interface Equatable {}");
-		enumDependencyCompiler.update("app/Item.hx", "package app; enum Item : Equatable { Value(value:Int); }");
+		enumDependencyCompiler.update("app/Item.hx", "package app; enum Item implements Equatable { Value(value:Int); }");
 		enumDependencyCompiler.update("app/Main.hx", "package app; import app.Item; function main():Int return Value(1) == Value(1) ? 42 : 0;");
 		if (new IrInterpreter(enumDependencyCompiler.compile("app.Main").ir).run("main") != 42)
 			throw "root enum conformance dependency did not load for a packaged declaration";
@@ -326,7 +326,7 @@ class TestMain {
 		if (new IrInterpreter(enumEqProgram).run("main") != 42)
 			throw "Type.enumEq did not lower through the dynamic equality intrinsic";
 		Frontend.compile('class GenericMap { public static function has<T>(values:Map<String, T>):Bool return values.keys().hasNext(); } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return GenericMap.has(values) ? 42 : 0; }');
-		Frontend.compile('interface Equatable {} enum InferredConstructor : Equatable { Value(value:Int); } function make():InferredConstructor { var result = Value(42); return result; } function main():Int return make() == Value(42) ? 42 : 0;');
+		Frontend.compile('interface Equatable {} enum InferredConstructor implements Equatable { Value(value:Int); } function make():InferredConstructor { var result = Value(42); return result; } function main():Int return make() == Value(42) ? 42 : 0;');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) return values.get(key); return 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; var result = [for (key in values.keys()) values.get(key) ?? 0]; return result[0]; }');
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } function main():Int { var values:Map<String, MapPlan> = []; var result = [for (key in values.keys()) values.get(key).wrapperTypeIndex]; return result.length; }');
@@ -1138,7 +1138,7 @@ class TestMain {
 			'MessagePack.decode requires an expected result type');
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
 			'Struct "Thing" does not conform to Equatable');
-		var temporaryStruct = 'interface Diffable {} struct Value : Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
+		var temporaryStruct = 'interface Diffable {} struct Value implements Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
 			+ 'struct Nested { public var value:Value; public function new() value = new Value(1); } '
 			+ 'class Holder { public var value(get, never):Value; public var nested(get, never):Nested; public function new() {} '
 			+ 'function get_value():Value return new Value(1); function get_nested():Nested return new Nested(); } '
@@ -1170,7 +1170,7 @@ class TestMain {
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
-		expectCompileError('interface Diffable {} struct Fixed : Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
+		expectCompileError('interface Diffable {} struct Fixed implements Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('struct Inner { public var x:Int; public function new(x:Int) this.x = x; } struct Fixed { public final child:Inner; public function new() this.child = new Inner(1); } function main():Int { var a = new Fixed(); a.child.x = 2; return 0; }',
 			'Final field "Fixed.child" can only be assigned through this in the constructor of "Fixed"');
@@ -1194,13 +1194,13 @@ class TestMain {
 			'Cannot synthesize Hashable for "Holder": field "value" does not conform to Hashable');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { @:isVar public var value(get, never):Int; public function new() {} function get_value():Int return 1; } function main():Int { var a = new Fixed(); var b = new Fixed(); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "value" of "Fixed"');
-		expectCompileError('interface Equatable {} class Opaque {} struct Bad : Equatable { public var item:Opaque; } function main():Int return 42;',
+		expectCompileError('interface Equatable {} class Opaque {} struct Bad implements Equatable { public var item:Opaque; } function main():Int return 42;',
 			'Cannot synthesize Equatable for "Bad": field "item" does not conform to Equatable');
 		expectCompileError('interface Equatable {} class Bad implements Equatable { public function equals(other:Int):Bool return true; } function main():Int return 42;',
 			'Method "Bad.equals" must have signature equals(other:Bad):Bool');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Bad implements Hashable { public function equals(other:Bad):Bool return true; } function main():Int return 42;',
 			'Cannot synthesize Hashable for "Bad" with a handwritten equals; provide hash():Int');
-		expectCompileError('interface Diffable {} struct Fixed : Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
+		expectCompileError('interface Diffable {} struct Fixed implements Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('class Plain { public function new() {} } function main():Int return haxeon.Diff.mask(new Plain(), new Plain());',
 			'haxeon.Diff.mask requires Diffable conformance for "Plain"');
@@ -1500,7 +1500,7 @@ class TestMain {
 				boundedPolicyFound = true;
 		if (!boundedPolicyFound)
 			throw "Bounded specialization did not persist its concrete policy";
-		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable, Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
+		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable implements Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
 		expectCompileError('interface Readable { function read():Int; } interface Writable { function write():Int; } class OnlyRead implements Readable {public function new() {} public function read():Int return 42;} class Reader {public function new(?v:Readable) {}} class Writer {public function new(?v:Writable) {}} function test(flag:Bool):Int {var v=flag ? new OnlyRead() : null;var r=new Reader(v);var w=new Writer(v);return 0;} function main():Int return test(true);',
 			'Type mismatch for argument 1 to "Writer.new"');
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Pair<T, U:T> {} function main():Int { var pair:Pair<Readable, Value>; return 42; }");

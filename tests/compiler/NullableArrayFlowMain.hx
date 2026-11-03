@@ -27,7 +27,7 @@ class NullableArrayFlowMain {
 		effect.update("Main.hx", 'interface Equatable {} class Node { public var x:Int; public function new() x=42; } '
 			+ 'class Holder { public var value:Null<Node>; public function new() value=new Node(); } '
 			+ 'class Global { public static var holder:Holder = new Holder(); } '
-			+ 'struct Key : Equatable { public var x:Int; public function new() x=0; public function equals(other:Key):Bool { Global.holder.value=null; return true; } } '
+			+ 'struct Key implements Equatable { public var x:Int; public function new() x=0; public function equals(other:Key):Bool { Global.holder.value=null; return true; } } '
 			+ 'function main():Int { var holder=Global.holder; var keys=[new Key()]; '
 			+ 'if(holder.value!=null && keys.contains(new Key())) return holder.value.x; return 0; }');
 		var rejected = false;

@@ -9,7 +9,7 @@ import Hashable;
  * between style and rendering without exposing render targets or GPU state to
  * the Haxe style system.
  */
-struct InkOverflow : Hashable {
+struct InkOverflow implements Hashable {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;

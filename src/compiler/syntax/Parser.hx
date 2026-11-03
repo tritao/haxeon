@@ -387,9 +387,11 @@ class Parser {
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = consume(TokenKind.Identifier).text, typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints), cases = [], conformances = [], methods = [];
-		if (match(TokenKind.Colon)) {
+		if (match(TokenKind.Colon))
+			fail(previous(), 'Enum "$name": use "implements" to declare conformance');
+		while (match(TokenKind.Implements)) {
 			conformances.push(parseType());
-			while (match(TokenKind.Comma)) conformances.push(parseType());
+			if (match(TokenKind.Comma)) fail(previous(), 'Enum "$name": repeat "implements" for each interface');
 		}
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
@@ -733,22 +735,14 @@ class Parser {
 			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
 			interfaces = [];
-		if (isStruct) {
-			if (match(TokenKind.Extends))
-				fail(previous(), 'Struct "$name" cannot extend a class; use ":" to declare interface conformance');
-			if (match(TokenKind.Implements))
-				fail(previous(), 'Struct "$name" declares interface conformance with ":", not "implements"');
-			if (match(TokenKind.Colon))
-				do
-					interfaces.push(parseType()) while (match(TokenKind.Comma));
-		} else {
-			if (match(TokenKind.Extends))
-				base = parseType();
-			while (match(TokenKind.Implements)) {
-				interfaces.push(parseType());
-				while (match(TokenKind.Comma))
-					interfaces.push(parseType());
-			}
+		if (isStruct && match(TokenKind.Extends))
+			fail(previous(), 'Struct "$name" cannot extend a class; use "implements" to declare interface conformance');
+		if (!isStruct && match(TokenKind.Extends)) base = parseType();
+		if (isStruct && match(TokenKind.Colon))
+			fail(previous(), 'Struct "$name": use "implements" to declare conformance');
+		while (match(TokenKind.Implements)) {
+			interfaces.push(parseType());
+			if (match(TokenKind.Comma)) fail(previous(), 'Type "$name": repeat "implements" for each interface');
 		}
 		consume(TokenKind.LeftBrace);
 		var fields = [], methods = [], bodyStart = position;

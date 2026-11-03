@@ -1,4 +1,4 @@
-struct Value : Equatable {
+struct Value implements Equatable {
   public final x:Float;
   public final text:String;
   public function new(x:Float, text:String) { this.x = x; this.text = text; }

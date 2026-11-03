@@ -7,7 +7,7 @@ import compiler.types.Typer;
 class StructSyntaxMain {
 	static function main():Void {
 		var source = "package demo;\n"
-			+ "struct Pair<T:Portable> : Component, Serializable<T> {\n"
+			+ "struct Pair<T:Portable> implements Component implements Serializable<T> {\n"
 			+ "  public var x:Int;\n"
 			+ "  public function new(x:Int) this.x = x;\n"
 			+ "}\n",
@@ -24,10 +24,10 @@ class StructSyntaxMain {
 			|| declaration.span.end != structEnd)
 			throw "struct declaration did not preserve its identity and full source span";
 		if (declaration.typeParameters.length != 1 || declaration.interfaces.length != 2 || declaration.base != null)
-			throw "struct generic parameters or colon interface list were parsed incorrectly";
+			throw "struct generic parameters or interface list were parsed incorrectly";
 		if (source.substring(declaration.fields[0].span.start, declaration.fields[0].span.end).indexOf("x:Int") < 0)
 			throw "struct field source span did not cover its declaration";
-		var enumSource = "enum Message<T> : Equatable, Hashable { Text(value:T); Empty; }",
+		var enumSource = "enum Message<T> implements Equatable implements Hashable { Text(value:T); Empty; }",
 			enumProgram = new Parser(new Lexer(new SourceFile("EnumConformance.hx", enumSource)).tokenize()).parseProgram();
 		if (enumProgram.enums.length != 1 || enumProgram.enums[0].conformances == null || enumProgram.enums[0].conformances.length != 2)
 			throw "enum conformances must survive parsing";
@@ -39,18 +39,22 @@ class StructSyntaxMain {
 			throw "metadata on an annotation enum abstract must survive parsing";
 
 		expectError("struct Point extends Base {}", "cannot extend a class", "extends");
-		expectError("struct Point implements Located {}", 'with ":"', "implements");
+		expectError("struct Point : Located {}", 'use "implements"', ":");
+		expectError("enum Message : Equatable { Empty; }", 'use "implements"', ":");
+		expectError("struct Point implements Located, Other {}", 'repeat "implements"', ",");
+		expectError("enum Message implements Equatable, Hashable { Empty; }", 'repeat "implements"', ",");
+		expectError("class Point implements Located, Other {}", 'repeat "implements"', ",");
 		expectError("extern struct Point {}", "cannot be declared extern", "struct");
 		expectError("struct Point { public var x; }", "requires a type or initializer", ";");
 		expectError("struct { public var x:Int; }", "Expected Identifier", "{");
 		expectTypingError("struct Generic<T> { public var value:T; } function main():Int return 0;", 'Generic struct "Generic" is not supported yet');
 		expectTypingError('@:repr("C") struct Point { public var x:Int; } function main():Int return 0;', 'does not use @:repr');
-		expectTypingError("interface HasX { function xValue():Int; } struct Missing : HasX { public var value:Int; } function main():Int return 0;",
+		expectTypingError("interface HasX { function xValue():Int; } struct Missing implements HasX { public var value:Int; } function main():Int return 0;",
 			'does not implement "HasX.xValue"');
 		expectTypingError("interface HasX { function xValue():Int; } struct Missing { public function xValue():Int return 42; } "
 			+ "function read<T:HasX>(value:T):Int return value.xValue(); function main():Int return read(new Missing());",
 			'does not satisfy constraint "interface:HasX');
-		var boxed = compiler.Frontend.compile("interface HasX { function xValue():Int; } struct Point : HasX { public function xValue():Int return 42; } "
+		var boxed = compiler.Frontend.compile("interface HasX { function xValue():Int; } struct Point implements HasX { public function xValue():Int return 42; } "
 			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());");
 		if (new compiler.ir.IrInterpreter(boxed).run("main") != 42) throw "struct interface conversion did not dispatch";
 		for (operation in ["indexOf", "contains", "remove"])

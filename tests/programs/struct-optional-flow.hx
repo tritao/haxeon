@@ -1,8 +1,8 @@
-struct Child : Hashable {
+struct Child implements Hashable {
   public var text:String;
   public function new(text:String) this.text = text;
 }
-struct Value : Hashable {
+struct Value implements Hashable {
   public var n:Int;
   public var child:Null<Child>;
   public function new(n:Int, text:String) { this.n = n; this.child = new Child(text); }
@@ -26,7 +26,7 @@ struct NativeShape {
   public var fraction:Float32;
   public function new(narrow:Int, fraction:Float) { this.narrow = cast narrow; this.unsigned = 0; this.fraction = cast fraction; }
 }
-struct FlatPoint : Hashable {
+struct FlatPoint implements Hashable {
   public final x:Float;
   public final y:Float;
   public function new(x:Float, y:Float) { this.x = x; this.y = y; }
@@ -35,7 +35,7 @@ class PointHolder implements Hashable {
   public final point:FlatPoint;
   public function new(point:FlatPoint) this.point = point;
 }
-struct Choice : Equatable {
+struct Choice implements Equatable {
   public final n:Int;
   public final text:String;
   public function new(n:Int, text:String) { this.n = n; this.text = text; }

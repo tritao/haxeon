@@ -35,7 +35,7 @@ struct SchemaLeaf {
   public var signed32:Int32 = 123456789;
   public var highBit:UInt32 = -1;
 }
-struct SchemaRoot:SchemaBase, GenericMarker<Int>, SchemaRole {
+struct SchemaRoot implements SchemaBase implements GenericMarker<Int> implements SchemaRole {
   public var leaf:SchemaLeaf;
   public var title:String = "root";
 }

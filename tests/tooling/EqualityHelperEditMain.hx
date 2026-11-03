@@ -13,8 +13,8 @@ class EqualityHelperEditMain {
 	static function main():Void {
 		var root = FileSystem.fullPath(".") + "/out/equality-helper-edit-test-" + Std.random(0x3fffffff);
 		FileSystem.createDirectory(root);
-		var point = "struct Point : Equatable { public var x:Int; public var y:Int; public function new(x:Int, y:Int) { this.x = x; this.y = y; } }";
-		var shape = "struct Shape : Equatable { public var point:Point; public function new(point:Point) this.point = point; }";
+		var point = "struct Point implements Equatable { public var x:Int; public var y:Int; public function new(x:Int, y:Int) { this.x = x; this.y = y; } }";
+		var shape = "struct Shape implements Equatable { public var point:Point; public function new(point:Point) this.point = point; }";
 		var shapes = "class Shapes { public static function same(a:Shape, b:Shape):Bool return haxeon.Equality.equals(a, b); }";
 		// Several requests from the edited function, so at least one sorts before the enum's helper.
 		function main(literal:Int):String {

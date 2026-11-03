@@ -57,7 +57,8 @@ values changes, and updates the existing nodes. This record makes that idea the 
    and retain ordinary field syntax. The compiler instruments each field read inside a tracking scope to record the
    object and field bit after one flag check; a changed write marks only that field's readers dirty. One dependency list
    belongs to each object, with no per-field `Signal` objects or revision counters. `Observable` applies to classes;
-   structs have no identity, so a struct-valued observable field is tracked as one field. A signal is effectively a
+   structs have no identity, so a struct-valued observable field is tracked as one field. Struct and enum conformances
+   also use `implements`, as in `struct Value implements Equatable`. A signal is effectively a
    one-field observable. Signal and observable-field writes that do not change the value are skipped, using the type's
    declared `Equatable` conformance or identity for nonconforming classes, as in Compose and Solid.
 

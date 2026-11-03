@@ -3,6 +3,7 @@
 Status: design (2026-11-01); not implemented. Key paths are typed references to
 stored fields, for APIs such as bindings and `Diff.bit`. They are a general
 language feature and do not give the compiler knowledge of UI concepts.
+Capability conformance on classes, structs and enums uses `implements`.
 
 `\T.field` has type `KeyPath<T, V>`, where `V` is the declared field type.
 The compiler resolves the field and its accessibility at the expression site;

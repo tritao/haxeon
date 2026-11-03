@@ -4,7 +4,7 @@ package haxeon.ui;
  * Haxe-owned mutable layout, paint, visibility, and transform inputs. Equality and field masks are generated from the
  * declaration; the scalar cache fingerprint is explicit and is not a map-key hash.
  */
-class LayoutStyle implements Equatable, Diffable {
+class LayoutStyle implements Equatable implements Diffable {
 	public var width:LayoutAxis;
 	public var height:LayoutAxis;
 	/** Width divided by height; zero disables aspect-ratio sizing. */

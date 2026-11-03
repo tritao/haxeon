@@ -1,4 +1,4 @@
-struct ArrayEqualityItem : Equatable {
+struct ArrayEqualityItem implements Equatable {
 	public var value:Int;
 	public function new(value:Int) this.value = value;
 	public function equals(other:ArrayEqualityItem):Bool return value % 10 == other.value % 10;

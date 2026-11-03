@@ -63,8 +63,8 @@ class EnumEqualityIncrementalMain {
 	}
 
 	static function genericSource(result:String):String
-		return 'enum Value<T> : Equatable { Item(value:T); public function equals(other:Value<T>):Bool return $result; }';
+		return 'enum Value<T> implements Equatable { Item(value:T); public function equals(other:Value<T>):Bool return $result; }';
 
 	static function source(result:String):String
-		return 'enum Value : Equatable { Item(value:Int); public function equals(other:Value):Bool return $result; }';
+		return 'enum Value implements Equatable { Item(value:Int); public function equals(other:Value):Bool return $result; }';
 }

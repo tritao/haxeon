@@ -80,7 +80,7 @@ class WasmBackendMain {
 			}
 		}
 		if (!optionalCloneFound) throw "missing Wasm GC scalar optional call";
-		var equalityProgram = Frontend.compile("interface Equatable {} struct V : Equatable { public var x:Int; public var label:String; "
+		var equalityProgram = Frontend.compile("interface Equatable {} struct V implements Equatable { public var x:Int; public var label:String; "
 			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
 			+ "function same(a:Null<V>, b:V):Bool return a == b; "
 			+ "function main():Int { var a:Null<V> = new V(42, 'managed'); var b = new V(42, 'managed'); return same(a, b) ? 42 : 0; }");
@@ -178,8 +178,8 @@ class WasmBackendMain {
 		if (hl.bytes.get(0) != 72 || hl.bytes.get(1) != 76 || hl.bytes.get(2) != 66)
 			throw "The target-neutral backend seam must preserve the HashLink backend";
 		var capabilityCode = HlLower.lower(Frontend.compile("interface Equatable {} interface Hashable extends Equatable {} interface Diffable {} "
-			+ "interface Reader { function read():Int; } struct Point : Hashable, Diffable { public var x:Int; } "
-			+ "class Record implements Hashable, Diffable { public final x:Int; public function new() x = 0; } "
+			+ "interface Reader { function read():Int; } struct Point implements Hashable implements Diffable { public var x:Int; } "
+			+ "class Record implements Hashable implements Diffable { public final x:Int; public function new() x = 0; } "
 			+ "class ReaderImpl implements Reader { public function new() {} public function read():Int return 42; } "
 			+ "function consume(reader:Reader):Int return reader.read(); function main():Int { var p = new Point(); var r = new Record(); "
 			+ "return p.x + r.x + consume(new ReaderImpl()); }"));

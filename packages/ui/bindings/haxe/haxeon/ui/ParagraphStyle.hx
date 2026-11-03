@@ -2,7 +2,7 @@ package haxeon.ui;
 
 import Hashable;
 /** Semantic paragraph inputs shared by all NativeKit text APIs. */
-struct ParagraphStyle : Hashable {
+struct ParagraphStyle implements Hashable {
     public final wrap:TextWrap;
     public final alignment:TextAlignment;
     public final lineHeight:Null<Float>;

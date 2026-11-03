@@ -2,7 +2,7 @@ interface Measured {
 	function measure():Int;
 }
 
-struct ManagedPoint : Measured {
+struct ManagedPoint implements Measured {
 	public var number:Int;
 	public var label:String;
 	public function new(number:Int, label:String) { this.number = number; this.label = label; }

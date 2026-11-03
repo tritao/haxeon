@@ -4,7 +4,7 @@ import Diffable;
 import Hashable;
 
 /** Immutable four-sided inset value. */
-struct Insets : Hashable, Diffable {
+struct Insets implements Hashable implements Diffable {
 	public final left:Float;
 	public final top:Float;
 	public final right:Float;

@@ -1,9 +1,9 @@
-struct Value : Equatable {
+struct Value implements Equatable {
   public var x:Int;
   public function new(x:Int) this.x = x;
 }
 
-struct RichValue : Equatable {
+struct RichValue implements Equatable {
   public var label:String;
   public var child:Value;
   public function new(label:String, child:Value) {

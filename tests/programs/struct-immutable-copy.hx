@@ -1,4 +1,4 @@
-struct Point : Hashable {
+struct Point implements Hashable {
   public final x:Int;
   public final y:Int;
   public function new(x:Int, y:Int) {
@@ -7,7 +7,7 @@ struct Point : Hashable {
   }
 }
 
-struct Bounds : Equatable {
+struct Bounds implements Equatable {
   public final origin:Point;
   public final extent:Int;
   public function new(origin:Point, extent:Int) {
@@ -16,7 +16,7 @@ struct Bounds : Equatable {
   }
 }
 
-struct MutablePoint : Diffable {
+struct MutablePoint implements Diffable {
   public var x:Int;
   public function new(x:Int) this.x = x;
 }

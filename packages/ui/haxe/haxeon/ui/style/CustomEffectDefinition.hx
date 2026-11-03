@@ -9,7 +9,7 @@ import Equatable;
  * it. Haxe carries only this typed contract; shader source, pipelines, and
  * backend-specific mapping remain native concerns.
  */
-struct CustomEffectDefinition : Equatable {
+struct CustomEffectDefinition implements Equatable {
 	public final id:Int;
 	public final name:String;
 	final parameterTypes:Array<EffectParameterType>;

@@ -6,7 +6,7 @@ class Owner {
 	public function new() {}
 }
 
-struct Value : Readable {
+struct Value implements Readable {
 	public var x:Int;
 	public var owner:Owner;
 	public function new(x:Int, owner:Owner) {

@@ -1,11 +1,11 @@
-struct MapKey : Hashable {
+struct MapKey implements Hashable {
 	public var number:Int;
 	public function new(number:Int) this.number = number;
 	public function hash():Int return 1;
 	public function equals(other:MapKey):Bool return number == other.number;
 }
 
-struct ChurnKey : Hashable {
+struct ChurnKey implements Hashable {
 	public var number:Int;
 	public function new(number:Int) this.number = number;
 	public function hash():Int return number;

@@ -3,7 +3,7 @@ class Record implements Equatable {
 	public function new(x:Int) this.x = x;
 }
 
-struct Pair : Hashable, Diffable {
+struct Pair implements Hashable implements Diffable {
 	public final x:Int;
 	public function new(x:Int) this.x = x;
 }
@@ -41,23 +41,23 @@ class RefChanges implements Diffable {
 	public function new(item:Identity) this.item = item;
 }
 
-struct Scalar : Hashable {
+struct Scalar implements Hashable {
 	public final value:Float;
 	public function new(value:Float) this.value = value;
 }
 
-struct Nested : Hashable {
+struct Nested implements Hashable {
 	public final value:Null<Scalar>;
 	public function new(value:Null<Scalar>) this.value = value;
 }
 
-struct Managed : Equatable {
+struct Managed implements Equatable {
 	public final label:String;
 	public final record:Null<Record>;
 	public function new(label:String, record:Null<Record>) { this.label = label; this.record = record; }
 }
 
-struct NativeNumbers : Hashable {
+struct NativeNumbers implements Hashable {
 	public final small:Int16;
 	public final wide:haxe.Int64;
 	public final fraction:Float32;
@@ -68,25 +68,25 @@ struct NativeNumbers : Hashable {
 	}
 }
 
-struct ModValue : Hashable {
+struct ModValue implements Hashable {
 	public final value:Int;
 	public function new(value:Int) this.value = value;
 	public function equals(other:ModValue):Bool return value % 10 == other.value % 10;
 	public function hash():Int return value % 10;
 }
 
-struct EditableValue : Diffable {
+struct EditableValue implements Diffable {
 	public var x:Int;
 	public var y:Int;
 	public function new(x:Int, y:Int) { this.x = x; this.y = y; }
 }
 
-struct FingerprintLeaf : Hashable {
+struct FingerprintLeaf implements Hashable {
 	public final value:Float;
 	public function new(value:Float) this.value = value;
 }
 
-struct FingerprintValues : Diffable {
+struct FingerprintValues implements Diffable {
 	public var whole:Int;
 	public var label:Null<String>;
 	public var nested:FingerprintLeaf;

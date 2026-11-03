@@ -1,8 +1,8 @@
-enum Value : Equatable {
+enum Value implements Equatable {
 	Item(value:Int);
 }
 
-enum Custom : Equatable {
+enum Custom implements Equatable {
 	Item(value:Int);
 
 	public function equals(other:Custom):Bool {
@@ -10,12 +10,12 @@ enum Custom : Equatable {
 	}
 }
 
-enum Never : Equatable {
+enum Never implements Equatable {
 	Item(value:Int);
 	public function equals(other:Never):Bool return false;
 }
 
-enum GenericValue<T:Equatable> : Equatable {
+enum GenericValue<T:Equatable> implements Equatable {
 	Item(value:T);
 	Empty;
 }

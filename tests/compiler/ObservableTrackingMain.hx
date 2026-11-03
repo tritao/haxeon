@@ -25,7 +25,7 @@ class ObservableTrackingMain {
 		try {
 			var invalid = new Compiler();
 			invalid.update("Observable.hx", "interface Observable {}\n");
-			invalid.update("Main.hx", "struct Bad : Observable {} function main():Int return 0;\n");
+			invalid.update("Main.hx", "struct Bad implements Observable {} function main():Int return 0;\n");
 			invalid.compile("Main");
 		} catch (error:CompileError)
 			structRejected = error.diagnostic.message.indexOf("only supported on classes with identity") >= 0;

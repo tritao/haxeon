@@ -11,7 +11,7 @@ class EqualityMain {
 		compiler.addSourceRoot("stdlib");
 		compiler.update("Main.hx", 'import haxeon.Equality;
 import haxeon.Hashing;
-struct Point : Hashable {
+struct Point implements Hashable {
   public var x:Float;
   public var y:Float;
   public function new(x:Float, y:Float) { this.x = x; this.y = y; }

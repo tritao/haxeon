@@ -4,7 +4,7 @@ import Diffable;
 import Hashable;
 
 /** One immutable axis policy encoded into a layout transaction. */
-struct LayoutAxis : Hashable, Diffable {
+struct LayoutAxis implements Hashable implements Diffable {
 	public final sizing:LayoutSizing;
 	/** Exact value for FIXED, or the parent fraction for PERCENT. */
 	public final value:Float;

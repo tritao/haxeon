@@ -6,7 +6,7 @@ interface Writable {
 	function write():Int;
 }
 
-class Value implements Readable, Writable {
+class Value implements Readable implements Writable {
 	public function new() {}
 	public function read():Int
 		return 42;

@@ -4,7 +4,7 @@ import Hashable;
 import haxeon.ui.FontFamily;
 
 /** Semantic font and inline-spacing inputs shared by all NativeKit text APIs. */
-struct TextStyle : Hashable {
+struct TextStyle implements Hashable {
     public final font:FontFamily;
     public final fontSize:Float;
     public final letterSpacing:Float;

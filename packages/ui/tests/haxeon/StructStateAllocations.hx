@@ -8,7 +8,7 @@ class StateAllocationAnchor {
 	public function new(value:Int) this.value = value;
 }
 
-struct StateAllocationValue : Equatable {
+struct StateAllocationValue implements Equatable {
 	public final number:Int;
 	public final anchor:StateAllocationAnchor;
 	public function new(number:Int, anchor:StateAllocationAnchor) {

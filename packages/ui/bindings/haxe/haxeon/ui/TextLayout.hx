@@ -415,7 +415,7 @@ class TextLayout extends NativeKitUIResource {
 }
 
 /** Bounds returned by TextLayout.measure. */
-struct TextMetrics : Equatable {
+struct TextMetrics implements Equatable {
 	public final x:Float;
 	public final y:Float;
 	public final width:Float;
@@ -475,7 +475,7 @@ struct TextRangeRect {
 }
 
 /** Visual geometry for a text caret. */
-struct TextCaret : Equatable {
+struct TextCaret implements Equatable {
 	public final x:Float;
 	public final y:Float;
 	public final ascender:Float;

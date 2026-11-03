@@ -7,7 +7,7 @@ class DeclaredEqualityInliningMain {
 		var source = 'class Record implements Equatable { public final value:Int; public function new(value:Int) this.value = value; } '
 			+ 'class Modulo implements Equatable { public final value:Int; public function new(value:Int) this.value = value; '
 			+ 'public function equals(other:Modulo):Bool return value % 10 == other.value % 10; } '
-			+ 'struct Scalar : Hashable { public final value:Int; public function new(value:Int) this.value = value; } '
+			+ 'struct Scalar implements Hashable { public final value:Int; public function new(value:Int) this.value = value; } '
 			+ 'class Snapshot implements Diffable { public var value:Int; public function new(value:Int) this.value = value; } '
 			+ 'function hashOptional(value:Null<Scalar>):Int return haxeon.Hashing.hash(value); '
 			+ 'inline function snapshotFingerprint(value:Snapshot):Int return haxeon.Diff.fingerprint(value); '

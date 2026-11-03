@@ -1,7 +1,7 @@
 package haxeon.ui.properties;
 
 /** Editor control family used to render and validate a property. */
-enum PropertyType : Equatable {
+enum PropertyType implements Equatable {
 	Bool;
 	Int;
 	Float;

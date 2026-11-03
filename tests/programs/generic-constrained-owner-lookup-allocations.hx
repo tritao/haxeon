@@ -1,6 +1,6 @@
 import haxeon.Hashing;
 
-struct LookupKey : Hashable {
+struct LookupKey implements Hashable {
 	public var number:Int;
 	public function new(number:Int) this.number = number;
 }

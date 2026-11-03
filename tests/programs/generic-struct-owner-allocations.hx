@@ -6,7 +6,7 @@ class AllocationOwner {
 	public function new() {}
 }
 
-struct AllocationValue : AllocationMeasured {
+struct AllocationValue implements AllocationMeasured {
 	public var number:Int;
 	public var owner:AllocationOwner;
 	public function new(number:Int, owner:AllocationOwner) { this.number = number; this.owner = owner; }

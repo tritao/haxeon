@@ -1,6 +1,6 @@
 import haxeon.Hashing;
 
-enum ValueKey : Hashable {
+enum ValueKey implements Hashable {
 	Number(value:Int);
 	Pair(first:Int, second:Int);
 	Empty;

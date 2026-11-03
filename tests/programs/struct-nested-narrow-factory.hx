@@ -5,7 +5,7 @@ struct NarrowLeaf {
   public var small:Int16 = 7;
 }
 
-struct NarrowRoot:NarrowRole {
+struct NarrowRoot implements NarrowRole {
   public var count:Int32 = 3;
   public var high:UInt32 = -1;
   public var nested:NarrowLeaf;

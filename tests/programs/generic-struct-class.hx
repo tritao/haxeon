@@ -13,7 +13,7 @@ class Owner {
 	public function new(id:Int) this.id = id;
 }
 
-struct Payload : MeasuredOwnerValue, ValueSlot<Int> {
+struct Payload implements MeasuredOwnerValue implements ValueSlot<Int> {
 	public var number:Int;
 	public var owner:Owner;
 	public function new(number:Int, owner:Owner) { this.number = number; this.owner = owner; }

@@ -8,7 +8,7 @@ import haxeon.ui.Paint.SolidPaint;
 import NativeKitUI;
 
 /** Immutable normalized RGBA color value. */
-struct Color : Hashable, Diffable {
+struct Color implements Hashable implements Diffable {
 	public final red:Float;
 	public final green:Float;
 	public final blue:Float;

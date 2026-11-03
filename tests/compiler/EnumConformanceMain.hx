@@ -5,27 +5,27 @@ import compiler.ir.IrInterpreter;
 class EnumConformanceMain {
 	static function main():Void {
 		var program = Frontend.compile('interface Equatable {} interface Hashable extends Equatable {} '
-			+ 'enum Value : Hashable { Item(value:Int); Empty; } '
+			+ 'enum Value implements Hashable { Item(value:Int); Empty; } '
 			+ 'function main():Int return Item(1) == Item(1) && Item(1) != Item(2) ? 42 : 1;');
 		if (new IrInterpreter(program).run("main") != 42) throw "enum equality must compare payload values";
 		expectError('enum Value { Item(value:Int); } function main():Int return Item(1) == Item(1) ? 42 : 0;',
 			'does not conform to Equatable');
-		expectError('interface Equatable {} class Ref {} enum Value : Equatable { Item(value:Ref); } function main():Int return 0;',
+		expectError('interface Equatable {} class Ref {} enum Value implements Equatable { Item(value:Ref); } function main():Int return 0;',
 			'does not conform to Equatable');
 		expectError('interface Equatable {} interface Hashable extends Equatable {} '
-			+ 'enum Value : Hashable { Item(value:Int); public function equals(other:Value):Bool return true; } function main():Int return 0;',
+			+ 'enum Value implements Hashable { Item(value:Int); public function equals(other:Value):Bool return true; } function main():Int return 0;',
 			'provide hash():Int');
-		expectError('interface Equatable {} enum Value : Equatable { Item(value:Int); '
+		expectError('interface Equatable {} enum Value implements Equatable { Item(value:Int); '
 			+ 'public static function equals(other:Value):Bool return true; } function main():Int return 0;',
 			'must have signature equals');
-		expectError('interface Equatable {} enum Value : Equatable { Item; public function equals(other:Value):Bool return true; } '
+		expectError('interface Equatable {} enum Value implements Equatable { Item; public function equals(other:Value):Bool return true; } '
 			+ 'function main():Int return 0;', 'uses tag equality');
-		var custom = Frontend.compile('interface Equatable {} class Ref {} enum Value : Equatable { Item(value:Ref); '
+		var custom = Frontend.compile('interface Equatable {} class Ref {} enum Value implements Equatable { Item(value:Ref); '
 			+ 'public function equals(other:Value):Bool return true; } '
 			+ 'function main():Int { var a:Value = Item(new Ref()), b:Value = Item(new Ref()); return a == b ? 42 : 0; }');
 		if (new IrInterpreter(custom).run("main") != 42) throw "handwritten enum equality must handle non-Equatable payloads";
-		var declarations = 'interface Equatable {} enum Inner : Equatable { Item(value:Int); } '
-			+ 'enum Outer : Equatable { Wrap(value:Inner); } '
+		var declarations = 'interface Equatable {} enum Inner implements Equatable { Item(value:Int); } '
+			+ 'enum Outer implements Equatable { Wrap(value:Inner); } '
 			+ 'class Holder { public var value:Outer; public function new(value:Outer) this.value = value; } ';
 		var unusedReflection = Frontend.compile(declarations + 'function main():Int { var holder = new Holder(Outer.Wrap(Inner.Item(1))); return 42; }');
 		for (fn in unusedReflection.functions)

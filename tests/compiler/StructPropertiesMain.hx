@@ -10,7 +10,7 @@ class StructPropertiesMain {
 			+ "@:flat struct Address { public var pointer:RawPtr<Int>; }\n"
 			+ "interface PortableRecord extends Portable {}\n"
 			+ "interface NestedPortableRecord extends PortableRecord {}\n"
-			+ "@:flat @:portable struct Point : NestedPortableRecord {\n"
+			+ "@:flat @:portable struct Point implements NestedPortableRecord {\n"
 			+ "\tpublic var x:Float;\n\tpublic var y:Int;\n"
 			+ "\tpublic function new(x:Float, y:Int) { this.x = x; this.y = y; }\n}\n"
 			+ "function requireFlat<T:Flat>(value:T):T return value;\n"
@@ -27,7 +27,7 @@ class StructPropertiesMain {
 		expectError("abstract RawPtr<T>(hl.Bytes) {} @:portable struct Address { public var pointer:RawPtr<Int>; } function main():Int return 0;",
 			"Address.pointer", "@:portable");
 		expectError("abstract RawPtr<T>(hl.Bytes) {} interface PortableRecord extends Portable {} interface Nested extends PortableRecord {} "
-			+ "struct Address : Nested { public var pointer:RawPtr<Int>; } function main():Int return 0;",
+			+ "struct Address implements Nested { public var pointer:RawPtr<Int>; } function main():Int return 0;",
 			"Address.pointer", "struct Address");
 		expectTypingError("abstract RawPtr<T>(hl.Bytes) {} struct Address { public var pointer:RawPtr<Int>; } "
 			+ "function requirePortable<T:Portable>(value:T):T return value; function main():Int { requirePortable(new Address()); return 42; }",

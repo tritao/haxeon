@@ -2,7 +2,7 @@ interface HasX extends Equatable {
   function xValue():Int;
 }
 
-struct Vec2:HasX {
+struct Vec2 implements HasX {
   public var x:Int;
   public var y:Int;
   public function new(x:Int, y:Int) {
@@ -12,14 +12,14 @@ struct Vec2:HasX {
 
   public function xValue():Int return x;
 }
-struct Holder : Equatable {
+struct Holder implements Equatable {
   public var point:Vec2;
   public function new(point:Vec2) {
     this.point = point;
   }
 }
 
-struct Bounds : Equatable {
+struct Bounds implements Equatable {
   public var origin:Vec2;
   public var extent:Int;
 
@@ -29,7 +29,7 @@ struct Bounds : Equatable {
   }
 }
 
-struct NativeHandle : Equatable {
+struct NativeHandle implements Equatable {
   public var slot:Int32;
   public var generation:Int32;
 
@@ -39,7 +39,7 @@ struct NativeHandle : Equatable {
   }
 }
 
-struct LegacyPoint : Equatable {
+struct LegacyPoint implements Equatable {
   public var x:Int;
   public function new(x:Int) this.x = x;
 }

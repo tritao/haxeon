@@ -4,7 +4,7 @@ import Diffable;
 import Hashable;
 
 /** Six-value affine transform using x'=a*x+c*y+tx and y'=b*x+d*y+ty. */
-struct Transform2D : Hashable, Diffable {
+struct Transform2D implements Hashable implements Diffable {
 	static inline var InvertibilityEpsilon:Float = 0.000001;
 
 	public final a:Float;

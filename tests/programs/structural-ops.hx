@@ -16,7 +16,7 @@ enum abstract Mode(Int) {
 	var Bold = 2;
 }
 
-class Style implements Equatable, Diffable {
+class Style implements Equatable implements Diffable {
 	public var width:Int = 0;
 	public var visible:Bool = true;
 	public var mode:Mode = Plain;

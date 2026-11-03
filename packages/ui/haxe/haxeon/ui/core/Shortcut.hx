@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import Hashable;
 
 /** A normalized key/modifier chord used by application commands. */
-struct Shortcut : Hashable {
+struct Shortcut implements Hashable {
 	public final key:Int;
 	public final modifiers:Int;
 

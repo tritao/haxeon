@@ -3,7 +3,7 @@
 This records the value conversions in stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md), including typed
 style storage and transitions.
 
-`Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable `Hashable` structs. Their fields are final;
+`Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable structs declared with `implements Hashable`. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
 object. Render and style caches use compiler-generated `Diff.fingerprint` snapshots, so their field lists stay aligned
@@ -132,3 +132,27 @@ measured frames after 120 warmup frames, baseline full, static and text-heavy ea
 allocated 12,833. Generated fingerprints had median counts of 5,896 full, 5,894 static, 5,896 text-heavy and 12,833
 editing objects (49.13, 49.12, 49.13 and 106.94 per frame); individual runs varied by at most two objects. Median frame
 times were 1.3 ms full, 1.3 ms static, 1.4 ms text-heavy and 1.6 ms editing.
+
+The 2026-11-03 conformance-spelling port was measured against the immediately preceding compiler and app on the same
+machine. Nine alternating pairs produced these per-action allocation medians (KiB); an initial unpaired
+sensors-to-hierarchy sample was 78.6 KiB, while the paired median on both sides was 78.1 KiB.
+
+| Action | Before | After |
+| --- | ---: | ---: |
+| hierarchy → sensors | 112.6 | 112.6 |
+| sensors → hierarchy | 78.1 | 78.1 |
+| console → telemetry | 74.5 | 74.5 |
+| telemetry → console | 92.9 | 92.9 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
+| scroll inspector | 21.2 | 21.2 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 |
+| type character / backspace | 16.1 / 16.2 | 16.1 / 16.2 |
+
+Nine selection-stress pairs had control/candidate medians of 342,096 / 342,098 allocations and a paired median
+difference of +1; one type comparison found only one fewer byte buffer in the candidate. Its `TextStyle` and
+`ParagraphStyle` counts were 140 each and `DockTextWidthKey` was zero. Nine 500-cycle RSS pairs had window medians
+[29.84, 3.59, 0.78, 4.84] / [30.00, 3.75, 0.78, 4.84] MiB and zero paired median differences. Both Wasm guest
+binaries were byte-for-byte identical. The opt-in Wasm GC Showcase counts were 5,896 / 5,896 / 5,896 / 12,620 for
+full / static / text-heavy / editing, compared with 5,896 / 5,896 / 5,896 / 12,622 immediately before; this is within
+the observed two-object variation.

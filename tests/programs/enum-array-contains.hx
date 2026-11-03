@@ -5,7 +5,7 @@ enum Color {
 	Blue;
 }
 
-enum Shape : Equatable {
+enum Shape implements Equatable {
 	Dot;
 	Circle(r:Int);
 	Pair(a:Int, b:Int);
