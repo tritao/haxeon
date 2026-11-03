@@ -80,6 +80,15 @@ Passing a struct place to a function that edits it in place, with `&` written at
 checked. [SCOPED_PLACES.md](SCOPED_PLACES.md) defers `ref` parameters for lack of a consumer; record-editing helpers in a
 flat node store (ADR 0002 decision 4) would be one. Decide with that prototype.
 
+### Typed storage for the standard collections
+
+The specialized generic `Map` and inline struct arrays store values in their concrete representation, but the standard
+reference maps (`IntMap`, `StringMap`, `ObjectMap`) still keep native values in `Dynamic` boxes, and arrays of nullable
+elements go through the dynamic array ABI. Each needs a checked conversion where the boxed view meets typed code (for
+example when iterating the values of a nested map, or after `copy`/`slice` of a nullable-element array). Give these
+collections the same specialized, typed storage so the values are never boxed, then delete those boundary conversions in
+the same change. Belongs with the flat structs and generic specialization work.
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.
@@ -114,7 +123,9 @@ Check each against what Haxeon already supports before designing it.
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums still use
    boxed identity and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
-6. Scoped cleanup (`defer`, `Disposable` scoped bindings).
-7. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
+6. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
+   conversions.
+7. Scoped cleanup (`defer`, `Disposable` scoped bindings).
+8. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
-8. Smaller conveniences when a concrete use appears.
+9. Smaller conveniences when a concrete use appears.
