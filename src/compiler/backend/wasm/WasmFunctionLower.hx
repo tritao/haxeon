@@ -791,6 +791,10 @@ class WasmFunctionLower {
 						LocalSet(requiredLocal(values, output.id))
 					]);
 			case MethodCall(output, object, methodName, arguments):
+				// Dispatch must fail as a Haxe exception before reading the receiver's type or calling its method.
+				var receiverCheck:Array<WasmInstruction> = [LocalGet(requiredLocal(values, object.id)),
+					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz, If(null)];
+				emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
 				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
 				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
