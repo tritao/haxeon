@@ -5,8 +5,48 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrVerifier;
 import compiler.ir.IrHlScalarRef;
+import compiler.ir.SourceProvenance;
+import compiler.ir.SourceProvenance.Located;
 
 class AuditVerifierMain {
+	static function verifyLaneArrayInvariant():Void {
+		function make(operation:String, element:IrType, valueObject:Bool):IrProgram {
+			var builder = new IrBuilder(), array = builder.argument("array", Array(element)),
+				index = builder.constInt(0), value = builder.argument("value", element),
+				out = new IrValue(1000, "out", element), provenance = SourceProvenance.generated("lane-verifier-test");
+			var instruction:IrInstruction = switch operation {
+				case "get": ArrayGet(out, array, index);
+				case "set": ArraySet(array, index, value);
+				case "iterator": IteratorNew(new IrValue(1001, "iterator", Iterator(element)), array);
+				case "push": Call(new IrValue(1002, "length", I32), "__array_push_ref", [array, value]);
+				case "alias": Call(new IrValue(1002, "length", I32), "$aliased-push", [array, value]);
+				case "concat-second": Call(new IrValue(1003, "array", Array(Dyn)), "__array_concat_ref",
+					[builder.argument("dynamic", Array(Dyn)), array]);
+				default: throw 'Unknown test operation $operation';
+			};
+			builder.currentBlock().instructions.push(new Located(instruction, provenance));
+			builder.returnValue(builder.constInt(0));
+			var program = new IrProgram("main");
+			program.natives.push({name:"$aliased-push", library:"haxeon_runtime", symbol:"__array_push_ref",
+				arguments:[Array(element), element], result:I32});
+			program.objects.push({name:"S", isValue:valueObject, base:null, interfaces:[], fields:[], methods:[]});
+			program.functions.push(new IrFunction("main", builder.arguments, I32, builder.blocks));
+			return program;
+		}
+		for (operation in ["get", "set", "iterator", "push", "alias", "concat-second"]) {
+			for (element in [Obj("S"), Nullable(Obj("S"))]) {
+				var rejected = false;
+				try IrVerifier.verifyValueArraysLowered(make(operation, element, true)) catch (error:String) {
+					if (error.indexOf("ordinary array operation on inline value lanes") < 0) throw error;
+					rejected = true;
+				}
+				if (!rejected) throw 'Verifier accepted $operation on $element lanes';
+			}
+			IrVerifier.verifyValueArraysLowered(make(operation, Obj("S"), false));
+			IrVerifier.verifyValueArraysLowered(make(operation, Dyn, true));
+		}
+	}
+
 	static function rejected(program:IrProgram, expected:String):Void {
 		try {
 			IrVerifier.verify(program);
@@ -41,6 +81,7 @@ class AuditVerifierMain {
 	}
 
 	static function main():Void {
+		verifyLaneArrayInvariant();
 		var refBuilder = new IrBuilder(), initialValue = refBuilder.constInt(0),
 			stackRef = refBuilder.call(IrHlScalarRef.ADDRESS, [initialValue], IrHlScalarRef.type(I32));
 		refBuilder.returnValue(stackRef);

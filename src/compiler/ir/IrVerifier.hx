@@ -7,6 +7,29 @@ import compiler.ir.Ir.IrCNativeArgumentMode;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
+	/** After value-array lowering, ordinary array instructions must never address lane storage. */
+	public static function verifyValueArraysLowered(program:IrProgram):Void {
+		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
+			ordinaryRefNatives:Map<String, Bool> = [];
+		function ordinaryRef(name:String):Bool return StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_ref");
+		for (native in program.natives) if (ordinaryRef(native.symbol)) ordinaryRefNatives.set(native.name, true);
+		function laneArray(type:IrType):Bool return switch type {
+			case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
+			default: false;
+		};
+		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) {
+			var invalid = switch located.value {
+				case ArrayGet(_, array, _) | ArraySet(array, _, _) | IteratorNew(_, array): laneArray(array.type);
+				case Call(_, name, arguments) if (ordinaryRef(name) || ordinaryRefNatives.exists(name)):
+					var found = false;
+					for (argument in arguments) if (laneArray(argument.type)) found = true;
+					found;
+				default: false;
+			};
+			if (invalid) throw 'IR verification failed for ${fn.name}: ordinary array operation on inline value lanes';
+		}
+	}
+
 	public static function verify(program:IrProgram):Void {
 		verifySelected(program, null);
 	}

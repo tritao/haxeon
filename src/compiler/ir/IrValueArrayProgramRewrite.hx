@@ -39,6 +39,7 @@ class IrValueArrayProgramRewrite {
 		}
 		var keys = [for (key in elements.keys()) key]; keys.sort(Reflect.compare);
 		for (key in keys) rewrite(program, elements.get(key), pointerBits, target);
+		IrVerifier.verifyValueArraysLowered(program);
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
