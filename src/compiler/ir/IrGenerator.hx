@@ -2212,6 +2212,13 @@ class IrGenerator {
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, localTypes, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value) if (operation == "values" && !customMap
+						&& StringTools.endsWith(RuntimeType.requireMapName(key, value), "_ref") && requiresDynamicBox(lowerType(value))):
+						// Reference maps box headerless native values. Retype their Dynamic snapshot before
+						// indexed iteration reads those values as native references.
+						var element = lowerType(value), raw = builder.call(nativeName, lowered, Array(Dyn));
+						var checked = builder.call("__array_check_cast", [raw, builder.typeValue(element)], Array(Dyn));
+						builder.safeCast(builder.toDyn(checked), Array(element));
 					case TMap(key, value) if (customMap):
 						var arguments = lowered.slice(1);
 						if ((operation == "exists" || operation == "remove") && arguments.length > 0)
