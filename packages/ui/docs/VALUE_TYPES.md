@@ -156,3 +156,19 @@ difference of +1; one type comparison found only one fewer byte buffer in the ca
 binaries were byte-for-byte identical. The opt-in Wasm GC Showcase counts were 5,896 / 5,896 / 5,896 / 12,620 for
 full / static / text-heavy / editing, compared with 5,896 / 5,896 / 5,896 / 12,622 immediately before; this is within
 the observed two-object variation.
+
+The Float hash correction was compared on the same machine with nine alternating control/candidate pairs. Every
+per-action allocation median was unchanged from the table above, with zero paired median deltas. The selection-stress
+census medians were 342,098 / 342,097 allocations, with a paired median delta of zero. The 500-cycle RSS windows were
+29.84 / 4.06 / 0.78 / 4.84 MiB before and 30.00 / 3.75 / 0.78 / 4.84 MiB after; paired median deltas were
+0 / -0.31 / 0 / 0 MiB. These are measurements of the hash correction, not evidence of an RSS improvement.
+
+| Wasm GC Showcase scenario | Before objects | After objects |
+| --- | ---: | ---: |
+| full | 5,898 | 5,896 |
+| static | 5,896 | 5,894 |
+| text-heavy | 5,896 | 5,896 |
+| editing | 12,624 | 12,622 |
+
+The object-count differences are within the observed run-to-run variation. Independent allocation fixtures measured
+zero allocations for 8 and 1,024 Float hashes on HashLink, Wasm32 and Wasm GC, with inlining on and off.

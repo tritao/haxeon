@@ -69,6 +69,8 @@ class HashGenerator {
 			case TInt64:
 				statements.push(TReturn(new TypedExpression(TCall("haxe.Int64.toInt", [value]), TInt, span), span));
 			case TFloat:
+				session.runtimeDependencyTracker.record(req.origin, "runtime.FloatBits");
+				session.runtimeDependencyTracker.record(req.origin, "haxe.Int64");
 				statements = floatHashStatements(value, span);
 			case TString:
 				statements = stringHashStatements(value, span);
@@ -176,22 +178,15 @@ class HashGenerator {
 		var same = new TypedExpression(TEqual(value, value), TBool, span),
 			zero = new TypedExpression(TFloatLiteral(0.0), TFloat, span),
 			isZero = new TypedExpression(TEqual(value, zero), TBool, span),
-			limit = new TypedExpression(TFloatLiteral(2147483647.0), TFloat, span),
-			negativeLimit = new TypedExpression(TFloatLiteral(-2147483647.0), TFloat, span),
-			clamped = new TypedExpression(TConditional(
-				new TypedExpression(TLessEqual(value, negativeLimit), TBool, span), negativeLimit,
-				new TypedExpression(TConditional(new TypedExpression(TLessEqual(limit, value), TBool, span), limit, value), TFloat, span)),
-				TFloat, span),
-			whole = new TypedExpression(TFloatToInt(clamped), TInt, span),
-			fraction = new TypedExpression(TFloatToInt(new TypedExpression(TMul(
-				new TypedExpression(TSub(value, new TypedExpression(TIntToFloat(whole), TFloat, span)), TFloat, span),
-				new TypedExpression(TFloatLiteral(16777216.0), TFloat, span)), TFloat, span)), TInt, span),
-			combined = new TypedExpression(TAdd(new TypedExpression(TMul(whole, new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span),
-				fraction), TInt, span);
+			bits = new TypedExpression(TLocal("$float-hash-bits"), TInt64, span),
+			shifted = new TypedExpression(TCall("haxe.Int64.ushr", [bits, new TypedExpression(TIntLiteral(32), TInt, span)]), TInt64, span),
+			folded = new TypedExpression(TCall("haxe.Int64.xor", [bits, shifted]), TInt64, span),
+			hash = new TypedExpression(TCall("haxe.Int64.toInt", [folded]), TInt, span);
 		return [
-			TIf(new TypedExpression(TNot(same), TBool, span), [TReturn(new TypedExpression(TIntLiteral(0x7fc00000), TInt, span), span)], [], span),
+			TIf(new TypedExpression(TNot(same), TBool, span), [TReturn(new TypedExpression(TIntLiteral(0x7ff80000), TInt, span), span)], [], span),
 			TIf(isZero, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span),
-			TReturn(combined, span)
+			TVar("$float-hash-bits", new TypedExpression(TCall("runtime.FloatBits.toInt64", [value]), TInt64, span), span),
+			TReturn(hash, span)
 		];
 	}
 

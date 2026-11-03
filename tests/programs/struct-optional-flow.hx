@@ -159,7 +159,7 @@ function main():Int {
 
   var pointHolder = new PointHolder(new FlatPoint(1, 2));
   var expectedHash = haxeon.Hashing.hash(pointHolder), hashBefore = hl.Gc.totalAllocated(), hashTotal = 0;
-  var pointHash = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hashFloat(1)), haxeon.Hashing.hashFloat(2));
+  var pointHash = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hash(1.0)), haxeon.Hashing.hash(2.0));
   if (expectedHash != haxeon.Hashing.mix(17, pointHash)) return 32;
   for (i in 0...10000) if (haxeon.Hashing.hash(pointHolder) == expectedHash) hashTotal++;
   if (hashTotal != 10000 || hl.Gc.totalAllocated() - hashBefore > 4096) return 31;

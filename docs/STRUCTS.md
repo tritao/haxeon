@@ -490,8 +490,9 @@ explicit author contract and may read mutable state only when that state cannot 
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
 conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
-value semantics; floats retain IEEE behavior, with hashing consistent for `0.0` and `-0.0`. With specialized interface
-bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
+value semantics; floats retain IEEE equality. Float hashing folds the IEEE bits after canonicalizing both zero signs
+and all NaNs, so equal values hash alike and infinities or large finite values do not require a numeric conversion. With
+specialized interface bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
 are statically dispatched without boxing.
 
 `Array<S>.indexOf`, `contains` and `remove` require `S` to implement `Equatable` and use that same declared equality, including a

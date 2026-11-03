@@ -151,8 +151,9 @@ equivalent, and all other keys use ordinary numeric equality. This key equivalen
 Hash Float keys by their IEEE bits after canonicalizing every NaN to one bit pattern and both zero signs to zero; the
 same bit hashing handles infinities and large finite values without a trapping numeric conversion. The target supplies
 an allocation-free bit reinterpretation. The hash used by synthesized `Hashable` values follows the same canonical
-Float hashing, and equal keys must always have equal hashes. These rules replace the duplicated arithmetic float-hash
-helpers; they are a design decision awaiting the map and hash fixes, not a claim about the current implementation.
+Float hashing, and equal keys must always have equal hashes. The compiler-generated Float hash now implements this
+bit-based rule on all targets; the duplicated arithmetic helpers have been removed. The map key equivalence and
+lowering rules above remain pending.
 
 At this checkpoint, `Map<Float,Int>` and `Map<Bool,Int>` fail compilation with `Invalid value equality request` for
 the scalar key. The implementation and cross-target tests are the next correctness fix.

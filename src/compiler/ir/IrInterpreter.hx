@@ -281,6 +281,12 @@ class IrInterpreter {
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
+			case "runtime.FloatBits.toInt64", "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
+			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
+			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.toInt":
+				var bits:haxe.Int64 = cast arguments[0];
+				haxe.Int64.toInt(haxe.Int64.shr(haxe.Int64.shl(bits, 32), 32));
 			case "__std_int_f64": Std.int(arguments[0]);
 			case "__std_int_dynamic": Std.int(arguments[0]);
 			case "__math_ceil": Std.int(Math.ceil(arguments[0]));
