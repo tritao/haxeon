@@ -33,7 +33,7 @@ class IrValueArrayAccess {
 
 	/** The caller grows the array before writing and marks the element initialized after all leaves are written. */
 	public function write(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
-		if (!Type.enumEq(value.type, slot.type)) throw 'Wrong value lane slot type: ${value.type}, expected ${slot.type}';
+		if (!IrVerifier.sameType(value.type, slot.type)) throw 'Wrong value lane slot type: ${value.type}, expected ${slot.type}';
 		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
 		if (slot.isReference) {
 			declare(IrValueLaneReference.WRITE, [Array(Dyn), I32, I32, IrValueLaneReference.type()], Void);
@@ -88,9 +88,9 @@ class IrValueArrayAccess {
 	function declare(name:String, arguments:Array<IrType>, result:IrType):Void {
 		var previous = declarations.get(name);
 		if (previous != null) {
-			if (!Type.enumEq(previous.result, result) || previous.arguments.length != arguments.length)
+			if (!IrVerifier.sameType(previous.result, result) || previous.arguments.length != arguments.length)
 				throw 'Conflicting value lane native "$name"';
-			for (i in 0...arguments.length) if (!Type.enumEq(previous.arguments[i], arguments[i]))
+			for (i in 0...arguments.length) if (!IrVerifier.sameType(previous.arguments[i], arguments[i]))
 				throw 'Conflicting value lane native "$name"';
 			return;
 		}

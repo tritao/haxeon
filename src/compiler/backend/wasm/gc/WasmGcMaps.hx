@@ -766,7 +766,7 @@ class WasmGcMaps {
 			StructNew(array),
 			LocalSet(1)
 			];
-		if (sourceElement == element) {
+		if (compiler.ir.IrVerifier.sameType(sourceElement, element)) {
 			appendArrayCopy(body, storage, [
 				LocalGet(1),
 				StructGet(array, WasmGcTypePlan.arrayDataFieldIndex()),

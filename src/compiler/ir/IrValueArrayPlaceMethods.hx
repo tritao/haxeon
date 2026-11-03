@@ -354,7 +354,7 @@ class IrValueArrayPlaceMethods {
 									: entry.slot.nullablePayload ? (scalar == null ? null : scalar.payload) : fieldValue;
 								if (leaf == null)
 									throw 'Constructed array field "${relative[0]}" requires component specialization';
-								if (!Type.enumEq(leaf.type, entry.slot.type))
+								if (!IrVerifier.sameType(leaf.type, entry.slot.type))
 									throw 'Constructed array field "${relative[0]}" requires component specialization';
 								sourceValues.push(leaf);
 							}
@@ -376,7 +376,7 @@ class IrValueArrayPlaceMethods {
 									target.instructions.push(new Located(FieldGet(leaf, current, part), located.provenance));
 									current = leaf;
 								}
-								if (!Type.enumEq(current.type, entry.slot.type)) throw 'Incompatible value source for array place';
+								if (!IrVerifier.sameType(current.type, entry.slot.type)) throw 'Incompatible value source for array place';
 								sourceValues.push(current);
 							}
 							for (i in 0...slots.length) {

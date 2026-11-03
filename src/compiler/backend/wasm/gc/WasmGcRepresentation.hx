@@ -644,7 +644,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				}
 			case Dyn, Abstract(_):
 				[LocalGet(valueLocal), LocalSet(destination)];
-			case _ if (output.type == value.type):
+			case _ if (compiler.ir.IrVerifier.sameType(output.type, value.type)):
 				[LocalGet(valueLocal), LocalSet(destination)];
 			default:
 				throw 'Wasm GC cannot cast ${Std.string(value.type)} to ${Std.string(output.type)} yet';

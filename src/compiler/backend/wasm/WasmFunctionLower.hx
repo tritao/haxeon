@@ -1654,7 +1654,7 @@ class WasmFunctionLower {
 	 * interface erases type parameters to Dynamic while implementations keep primitives.
 	 */
 	function adaptInterfaceValue(sourceType:IrType, targetType:IrType, source:Int, allocator:Int):Array<WasmInstruction> {
-		if (sourceType == targetType)
+		if (compiler.ir.IrVerifier.sameType(sourceType, targetType))
 			return [LocalGet(source)];
 		if (isBoxedPrimitive(sourceType) && targetType == Dyn) {
 			var boxed = context.placement.allocate(I32);

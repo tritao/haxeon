@@ -96,6 +96,7 @@ class TestCatalog {
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",
 		"FunctionTypeSyntaxMain",
+		"FunctionValueLanesMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",

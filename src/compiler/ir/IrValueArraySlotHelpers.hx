@@ -112,7 +112,7 @@ class IrValueArraySlotHelpers {
 	}
 
 	static function compatibleSlots(left:IrValueLaneSlot, right:IrValueLaneSlot):Bool
-		return Type.enumEq(left.type, right.type) && left.isReference == right.isReference
+		return IrVerifier.sameType(left.type, right.type) && left.isReference == right.isReference
 			&& left.bitWidth == right.bitWidth && left.signed == right.signed;
 
 	/** Generate one typed read and write function per lane leaf. Neither function allocates a value box. */
