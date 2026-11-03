@@ -523,7 +523,12 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	for (int i = 0; i < 3 && error == 0; i++)
 		for (int j = 0; j < 2 && error == 0; j++) error = posix_spawn_file_actions_addclose(&actions, pipes[i][j]);
 	if (error == 0 && directory != NULL && directory[0] != 0) {
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__ANDROID__) && __ANDROID_API__ < 34
+		/* The symbol exists only on Android 14 and newer; look it up so older devices still load the library. */
+		typedef int (*addchdir_fn)(posix_spawn_file_actions_t *, const char *);
+		addchdir_fn addchdir = (addchdir_fn)dlsym(RTLD_DEFAULT, "posix_spawn_file_actions_addchdir_np");
+		error = addchdir ? addchdir(&actions, directory) : ENOTSUP;
+#elif defined(__linux__) || defined(__APPLE__)
 		error = posix_spawn_file_actions_addchdir_np(&actions, directory);
 #else
 		error = ENOTSUP;
