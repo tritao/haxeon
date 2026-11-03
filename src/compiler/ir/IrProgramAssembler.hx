@@ -518,7 +518,13 @@ class IrProgramAssembler {
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
 		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
+		var beforeReflection = allFunctions.length;
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
+		if (objects != null && allFunctions.length > beforeReflection) {
+			var existing = allFunctions.slice(0, beforeReflection);
+			allFunctions = existing.concat(IrCheckedObjectCasts.rewrite(allFunctions.slice(beforeReflection), objects,
+				IrGenerator.usesNativeReflectionDispatch(), existing, true));
+		}
 		if (objects != null) {
 			var optionalStorage = new IrOptionalFieldStorage(objects);
 			if (optionalStorage.hasFields()) {

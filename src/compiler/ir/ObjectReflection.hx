@@ -77,7 +77,7 @@ class ObjectReflection {
 		for (object in objects)
 			for (field in object.fields)
 				switch field.type {
-					case Nullable(Obj(name)) if (values.exists(name)): return true;
+					case Obj(name) | Nullable(Obj(name)) if (values.exists(name)): return true;
 					default:
 				}
 		return false;
@@ -89,7 +89,7 @@ class ObjectReflection {
 			var affected = false;
 			for (field in layout.fields)
 				switch field.type {
-					case Nullable(Obj(name)) if (values.exists(name)): affected = true;
+					case Obj(name) | Nullable(Obj(name)) if (values.exists(name)): affected = true;
 					default:
 				}
 			if (affected) layout;
