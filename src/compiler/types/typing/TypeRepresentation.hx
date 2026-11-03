@@ -63,6 +63,9 @@ typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerTyp
  * paths from making independent Dynamic decisions.
  */
 class TypeRepresentation {
+	/** Bound polymorphic owner recursion before it can exhaust the compiler. */
+	static inline var MAX_OWNER_TYPE_DEPTH:Int = 64;
+	static inline var MAX_OWNER_TYPE_NODES:Int = 4096;
 	final session:TypingSession;
 	final conversions:ConversionResolver;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
@@ -195,6 +198,7 @@ class TypeRepresentation {
 			policies.push(decision.policy);
 			representations.push(decision.representation);
 		}
+		validateOwnerComplexity(representations, name, declaration.span);
 		var specialization = session.genericSpecializations.request('$' + 'owner:' + name, representations, policies),
 			existing = ownerRequests.get(specialization.name);
 		ownerAliases.set(SemanticSignature.type(type), specialization.name);
@@ -210,6 +214,42 @@ class TypeRepresentation {
 		ownerRequests.set(result.name, result);
 		requestedOwners.push(result);
 		return result;
+	}
+
+	static function validateOwnerComplexity(arguments:Array<CompilerType>, name:String, span:SourceSpan):Void {
+		var remaining = [MAX_OWNER_TYPE_NODES];
+		for (argument in arguments)
+			if (exceedsOwnerComplexity(argument, 1, [], remaining))
+				throw new CompileError(new Diagnostic("E1028", 'Generic owner "$name" exceeds the specialization type complexity limit ($MAX_OWNER_TYPE_DEPTH nesting levels or $MAX_OWNER_TYPE_NODES type nodes); check for polymorphic recursion', span));
+	}
+
+	/** Follow structural type arguments, stopping at recursive anonymous records. */
+	static function exceedsOwnerComplexity(type:CompilerType, depth:Int, active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
+		remaining[0]--;
+		if (depth > MAX_OWNER_TYPE_DEPTH || remaining[0] < 0) return true;
+		return switch type {
+			case TInstance(_, _, arguments): anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining);
+			case TAbstract(_, arguments, representation):
+				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(representation, depth + 1, active, remaining);
+			case TNullable(inner), TArray(inner), TIterator(inner): exceedsOwnerComplexity(inner, depth + 1, active, remaining);
+			case TMap(key, value): exceedsOwnerComplexity(key, depth + 1, active, remaining) || exceedsOwnerComplexity(value, depth + 1, active, remaining);
+			case TFunction(arguments, result):
+				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(result, depth + 1, active, remaining);
+			case TAnonymous(_, fields):
+				if (active.indexOf(fields) >= 0) false else {
+					active.push(fields);
+					var exceeded = false;
+					for (field in fields) if (exceedsOwnerComplexity(field.type, depth + 1, active, remaining)) { exceeded = true; break; }
+					active.pop();
+					exceeded;
+				}
+			default: false;
+		};
+	}
+
+	static function anyExceedsOwnerComplexity(types:Array<CompilerType>, depth:Int, active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
+		for (type in types) if (exceedsOwnerComplexity(type, depth, active, remaining)) return true;
+		return false;
 	}
 
 	/** Requests can grow as specialized member bodies are typed; callers drain to a fixed point. */

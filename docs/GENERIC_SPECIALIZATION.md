@@ -58,6 +58,27 @@ Constraints are semantic signatures. Changing a function or owner constraint inv
 
 ## Generic owners with value arguments
 
+Owner specialization limits selected representation nesting to 64 levels and its expanded type arguments to 4,096
+nodes; arguments erased to a shared shape do not contribute their source type nesting. A request beyond either limit reports `E1028` at the owner declaration, identifying the owner and suggesting polymorphic
+recursion. This bounds programs such as
+`Box<T>.wrap():Box<Box<T>>` whose specialized methods would otherwise enqueue owners without reaching a fixed point.
+Recursive anonymous records are visited only once on each active path, so their cycles do not consume the limit.
+The limits apply to one owner request, not to the total number of independent specializations.
+
+For the 2026-11-03 editor check, adding the limit left the headless bytecode byte-for-byte identical. Nine paired
+30-cycle selection censuses had medians of 342,097 and 342,098 allocations (paired median difference zero). Nine
+paired 500-cycle RSS captures had control/candidate window medians [29.84, 3.59, 0.78, 5.00] /
+[30.00, 3.75, 0.78, 4.84] MiB and paired median differences [0.00, -0.16, 0.00, 0.00] MiB. Wasm GC Showcase
+full/static/text-heavy/editing counted 5,896 / 5,894 / 5,896 / 12,620 objects, within the previously measured
+2-object variation. Per-action allocation medians were unchanged.
+
+After restricting the guard to selected representations, the editor bytecode was still identical. A further nine
+selection-census pairs had equal group medians of 342,097 and a paired median difference of +1 allocation. RSS group
+medians were [30.62, 3.59, 0.78, 5.00] / [29.84, 3.91, 0.78, 5.00] MiB, with zero paired median differences in all
+four windows. One unpaired sensors-to-hierarchy sample measured 78.4 KiB versus the earlier 78.1 KiB median; both
+occurred in earlier pairs of identical builds. The remaining action allocations matched the preceding medians. The
+final Wasm GC Showcase counts were 5,896 / 5,896 / 5,896 / 12,622 objects in the same scenario order.
+
 The compiler specializes generic class owners for concrete struct arguments and retains the source owner identity
 through erased views. Typed fields, methods, inherited owners, constrained calls, and typed closures use the concrete
 layout; converting a struct to an interface creates a value-copy box at that boundary. Incremental builds retain

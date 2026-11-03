@@ -9,9 +9,11 @@ import compiler.types.typing.TypingSession;
 /** Owner identity must be stable across sessions and retain the layouts it uses. */
 class GenericOwnerPolicyMain {
 	static function main():Void {
-		var source = 'struct First { public var value:Int; } struct Second { public var value:Int; } '
+		var source = 'interface Equatable {} struct First { public var value:Int; } struct Second { public var value:Int; } '
 			+ 'class Reference {} class OtherReference {} '
 			+ 'class Box<T, U> { public var value:T; public var reference:U; } '
+			+ 'class RefBox<T> { public var value:T; } '
+			+ 'class Constrained<T:Equatable> { public var value:T; } '
 			+ 'class Nested<T, U> { public var value:T; public var references:Array<U>; } '
 			+ 'class Parent<T> {} class Derived<T, U> extends Parent<U> { public var value:T; } '
 			+ 'class Recursive<T> { public var next:Recursive<Array<T>>; } '
@@ -37,6 +39,29 @@ class GenericOwnerPolicyMain {
 			throw "reference-only owner should retain its existing shared representation";
 		if (first.representation.genericOwner(instance("Box", [TArray(firstValue), reference])) != null)
 			throw "an array reference should not force the owner's value layout";
+		var deeplyNested:CompilerType = TInt;
+		for (_ in 0...80) deeplyNested = TArray(deeplyNested);
+		if (first.representation.genericOwner(instance("RefBox", [deeplyNested])) != null)
+			throw "a shared reference owner should not be subject to the specialization nesting limit";
+		if (first.representation.genericOwner(instance("Box", [firstValue, deeplyNested])) != box)
+			throw "an erased reference argument must not count toward the specialized owner's limit";
+		var open:CompilerType = TTypeParameter("generic", "T");
+		for (_ in 0...80) open = TArray(open);
+		if (first.representation.genericOwner(instance("Constrained", [open])) != null)
+			throw "an open owner must not be checked as a concrete specialization";
+		var bounded:CompilerType = TInt;
+		for (_ in 0...63) bounded = TArray(bounded);
+		if (first.representation.genericOwner(instance("Constrained", [bounded])) == null)
+			throw "an owner at the nesting limit must still specialize";
+		expectComplexityLimit(first, TArray(bounded));
+		var broad:CompilerType = TInt;
+		for (_ in 0...12) broad = TFunction([broad, broad], TVoid);
+		expectComplexityLimit(first, broad);
+		var fields:Array<compiler.types.Type.AnonymousField> = [];
+		var tree:CompilerType = TAnonymous("Tree", fields);
+		fields.push({name:"children", type:TArray(tree), optional:false, isFinal:false});
+		if (first.representation.genericOwner(instance("Constrained", [tree])) == null)
+			throw "a recursive anonymous record must not exhaust the complexity limit";
 		var recursive = first.representation.genericOwner(instance("Recursive", [firstValue]));
 		if (recursive == null) throw "recursive owner containing a value was not specialized";
 		var beforeNested = first.representation.genericOwnerRequestCount();
@@ -53,6 +78,12 @@ class GenericOwnerPolicyMain {
 		if (first.representation.genericOwner(instance("Box", [firstValue, TTypeParameter("fn", "T")])) != null)
 			throw "an open generic owner was registered as a concrete layout";
 		Sys.println("PASS: generic value owners have deterministic layout-aware identities");
+	}
+
+	static function expectComplexityLimit(session:TypingSession, argument:CompilerType):Void {
+		var failure:Null<String> = null;
+		try session.representation.genericOwner(instance("Constrained", [argument])) catch (error:Dynamic) failure = Std.string(error);
+		if (failure == null || failure.indexOf("E1028") < 0) throw 'expected specialization complexity diagnostic, got $failure';
 	}
 
 	static function instance(name:String, ?arguments:Array<CompilerType>):CompilerType

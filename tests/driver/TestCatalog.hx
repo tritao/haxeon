@@ -52,6 +52,7 @@ class TestCatalog {
 		"GenericDynamicArgumentMain",
 		"GenericStructFunctionMain",
 		"GenericOwnerPolicyMain",
+		"GenericOwnerRecursionMain",
 		"GenericStructOwnerMain",
 		"SpecializedMapIncrementalMain",
 		"FieldAliasFlowMain",
