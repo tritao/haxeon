@@ -49,8 +49,6 @@ class WasmReflectionTable {
 		}
 		var result:Array<ReflectionRow> = [];
 		for (object in program.objects) {
-			if (object.isValue)
-				continue;
 			var functions:Array<Null<String>> = [for (_ in OPERATIONS) null], owner:Null<String> = object.name, found = false;
 			while (owner != null && !found) {
 				for (index in 0...OPERATIONS.length) {

@@ -5,6 +5,7 @@ import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 
 /** Reference executor for the semantic SSA IR, independent of any target ABI. */
@@ -115,7 +116,18 @@ class IrInterpreter {
 			case ConstBool(_, value): value;
 			case ConstNull(_): null;
 			case TypeValue(_, type): new InterpTypeRef(type);
-			case ToDyn(_, input), IntToInt64(_, input), SafeCast(_, input): value(values, input);
+			case ToDyn(_, input), IntToInt64(_, input): value(values, input);
+			case SafeCast(output, input):
+				var actual:Dynamic = value(values, input);
+				switch output.type {
+					case Obj(target) if (actual != null && !objectIsOfType(actual, target)):
+						throw 'Cannot cast to "$target"';
+					case I32 if (input.type == Dyn && actual != null):
+						if (!numericValue(actual)) throw "Cannot cast to Int";
+						actual = Std.int(actual);
+					default:
+				}
+				actual;
 			case Add(_, left, right): value(values, left) + value(values, right);
 			case Sub(_, left, right): value(values, left) - value(values, right);
 			case Mul(_, left, right): value(values, left) * value(values, right);
@@ -178,7 +190,17 @@ class IrInterpreter {
 				value(values, arguments[0]);
 			case Call(_, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
-				functions.exists(name) ? execute(functions.get(name), args) : executeNative(name, args);
+				if (functions.exists(name)) execute(functions.get(name), args);
+				else {
+					var result = executeNative(name, args);
+					if (arguments.length > 0 && (StringTools.startsWith(name, "__array_copy_")
+							|| StringTools.startsWith(name, "__array_slice_") || StringTools.startsWith(name, "__array_concat_")))
+						switch arguments[0].type {
+							case Array(element): copyArrayRangeValues(interpArray(result), element);
+							default:
+						}
+					result;
+				}
 			case CNativeCall(_, name, _):
 				throw 'IR interpreter cannot execute ordinary C native "$name" without a host binding';
 			case StaticClosure(_, name): new InterpClosure(functions.get(name), null);
@@ -208,12 +230,32 @@ class IrInterpreter {
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
 		return switch name {
 			case "__exit": null;
+			case "__std_is_exact_type":
+				var reference:InterpTypeRef = cast arguments[1], input:Dynamic = arguments[0];
+				switch reference.type {
+					case Obj(target): Std.isOfType(input, InterpObject) && cast(input, InterpObject).type == target;
+					default: false;
+				};
+			case "__std_is_of_type":
+				var reference:InterpTypeRef = cast arguments[1], input = arguments[0];
+				switch reference.type {
+					case Obj(target): objectIsOfType(input, target);
+					case Virtual(target): objectImplements(input, target);
+					case I32: switch Type.typeof(input) { case TInt: true; default: false; };
+					case F64: switch Type.typeof(input) { case TFloat: true; default: false; };
+					case Bool: switch Type.typeof(input) { case TBool: true; default: false; };
+					case I64: haxe.Int64.isInt64(input);
+					default: false;
+				};
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
-			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref":
+			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_copy_any":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity);
-			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref":
+			case "__array_slice_i32", "__array_slice_i64", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref", "__array_slice_any":
+				var source = interpArray(arguments[0]), sliced = source.values.slice(Std.int(arguments[1]), Std.int(arguments[2]));
+				new InterpArray(sliced, sliced.length + 8);
+			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref", "__array_concat_any":
 				var left = interpArray(arguments[0]),
 					right = interpArray(arguments[1]);
 				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8);
@@ -273,13 +315,48 @@ class IrInterpreter {
 		return object;
 	}
 
+	/** Targetless IR stores values as interpreter objects, so range copies must copy those values. */
+	function copyArrayRangeValues(array:InterpArray, element:IrType):Void {
+		if (!isInlineValue(element)) return;
+		for (index in 0...array.values.length) array.values[index] = copyInlineValue(array.values[index], element);
+	}
+
+	function isInlineValue(type:IrType):Bool return switch type {
+		case Nullable(element): isInlineValue(element);
+		case Obj(name):
+			var declaration = objectDeclaration(name);
+			declaration != null && declaration.isValue;
+		default: false;
+	};
+
+	function copyInlineValue(input:Dynamic, type:IrType):Dynamic {
+		if (input == null) return null;
+		return switch type {
+			case Nullable(element): copyInlineValue(input, element);
+			case Obj(name):
+				var declaration = objectDeclaration(name);
+				if (declaration == null || !declaration.isValue) input;
+				else {
+					var original = interpObject(input), copy = newObject(name);
+					for (field in declaration.fields) copy.fields.set(field.name, copyInlineValue(original.fields.get(field.name), field.type));
+					copy;
+				}
+			default: input;
+		};
+	}
+
 	function initializeObjectFields(object:InterpObject, declaration:Null<compiler.ir.Ir.IrObject>):Void {
 		if (declaration == null)
 			return;
 		if (declaration.base != null)
 			initializeObjectFields(object, objectDeclaration(declaration.base));
 		for (field in declaration.fields)
-			object.fields.set(field.name, defaultValue(field.type));
+			object.fields.set(field.name, switch field.type {
+				case Obj(name):
+					var nested = objectDeclaration(name);
+					nested != null && nested.isValue ? newObject(name) : null;
+				default: defaultValue(field.type);
+			});
 	}
 
 	function objectDeclaration(typeName:String):Null<compiler.ir.Ir.IrObject> {
@@ -288,6 +365,37 @@ class IrInterpreter {
 				return object;
 		return null;
 	}
+
+	function objectIsOfType(input:Dynamic, target:String):Bool {
+		if (!Std.isOfType(input, InterpObject)) return false;
+		var current = objectDeclaration(cast(input, InterpObject).type);
+		while (current != null) {
+			if (current.name == target) return true;
+			current = current.base == null ? null : objectDeclaration(current.base);
+		}
+		return false;
+	}
+
+	function objectImplements(input:Dynamic, target:String):Bool {
+		if (!Std.isOfType(input, InterpObject)) return false;
+		function reaches(name:String, visited:Map<String, Bool>):Bool {
+			if (name == target) return true;
+			if (visited.exists(name)) return false;
+			visited.set(name, true);
+			for (entry in program.interfaces) if (entry.name == name)
+				for (base in entry.bases) if (reaches(base, visited)) return true;
+			return false;
+		}
+		var current = objectDeclaration(cast(input, InterpObject).type);
+		while (current != null) {
+			for (name in current.interfaces) if (reaches(name, [])) return true;
+			current = current.base == null ? null : objectDeclaration(current.base);
+		}
+		return false;
+	}
+
+	static function numericValue(input:Dynamic):Bool
+		return switch Type.typeof(input) { case TInt, TFloat: true; default: false; };
 
 	function objectField(object:Dynamic, name:String):Dynamic {
 		var value:InterpObject = cast object;

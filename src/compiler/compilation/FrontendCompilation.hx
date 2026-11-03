@@ -164,11 +164,12 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr);
+				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
+				canReuseSemantic ? retainedGenericOwners(context, names, owners, selected, lowerToIr) : null);
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
-			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces);
+			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces, typedNew.genericOwnerAliases);
 			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
 			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
 			IrGenerator.bindNativeArrayChecks(true);
@@ -212,6 +213,8 @@ class FrontendCompilation {
 		var allocationAfterIndexRebuild = AllocationMeter.sample();
 		var retyped = [], regenerated = [];
 		var previousTyped = context.lastTypedProgram;
+		var currentSpecializedOwners:Map<String, Bool> = [for (classDecl in typedNew.classes)
+			if (classDecl.specializationOrigin != null) classDecl.name => true];
 		if (previousTyped != null) {
 			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
 			for (classDecl in previousTyped.classes)
@@ -399,6 +402,21 @@ class FrontendCompilation {
 				if (hasInstanceInitializer || hasConstructor)
 					valid.set(className + ".new", true);
 			}
+			// A specialization cannot survive the removal of its physical owner. Its nested generated
+			// functions belong to that same retired body, even when its generic source method is unchanged.
+			var retired:Map<String, Bool> = [];
+			for (cached => fn in state.typedFunctions)
+				if (fn.physicalOwner != null && !currentSpecializedOwners.exists(fn.physicalOwner)) retired.set(cached, true);
+			var foundRetired = true;
+			while (foundRetired) {
+				foundRetired = false;
+				for (cached => fn in state.typedFunctions)
+					if (!retired.exists(cached) && fn.origin != null && retired.exists(fn.origin)) {
+						retired.set(cached, true);
+						foundRetired = true;
+					}
+			}
+			for (cached in retired.keys()) valid.remove(cached);
 			var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
 			if (removed.length > 0) {
 				state = context.writableState(name, rollbackModules);
@@ -575,6 +593,7 @@ class FrontendCompilation {
 			compiler.ir.IrValueConstructors.rewrite(ir);
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 			compiler.ir.IrScalarArguments.rewrite(ir);
+			compiler.ir.IrScalarClosures.rewrite(ir);
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 		}
 		var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
@@ -628,6 +647,56 @@ class FrontendCompilation {
 			irAssemblyDoneAt: irAssemblyDoneAt,
 			allocationPhases: allocationPhases
 		};
+	}
+
+	/** Physical owners referenced by unchanged cached functions and the generated functions they call. */
+	static function retainedGenericOwners(context:CompilationContext, modules:Array<String>, owners:Map<String, String>,
+			selected:Map<String, Bool>, lowerToIr:Bool):Map<String, Bool> {
+		var result:Map<String, Bool> = [], previous = context.lastTypedProgram;
+		if (previous == null) return result;
+		var known:Map<String, Bool> = [for (entry in previous.classes) if (entry.specializationOrigin != null) entry.name => true];
+		if (!known.keys().hasNext()) return result;
+		// A type-only request has no complete IR graph to inspect.
+		if (!lowerToIr) return known;
+		var functions:Map<String, IrFunction> = [], physicalMethods:Map<String, String> = [];
+		for (module in modules) {
+			var state = context.modules.get(module);
+			if (state == null) continue;
+			for (name => fn in state.irFunctions) functions.set(name, fn);
+			for (name => fn in state.typedFunctions) if (fn.physicalOwner != null) physicalMethods.set(name, fn.physicalOwner);
+		}
+		var pending = [for (name in owners.keys()) if (!selected.exists(name) && functions.exists(name)) name], visited:Map<String, Bool> = [];
+		function visitType(type:IrType):Void {
+			switch type {
+				case Obj(name): if (known.exists(name)) result.set(name, true);
+				case Array(element), Iterator(element), Nullable(element): visitType(element);
+				case Function(arguments, value): for (argument in arguments) visitType(argument); visitType(value);
+				default:
+			}
+		}
+		while (pending.length > 0) {
+			var name = pending.pop();
+			if (visited.exists(name)) continue;
+			visited.set(name, true);
+			var fn = functions.get(name);
+			if (fn == null) continue;
+			var physical = physicalMethods.get(name);
+			if (physical != null && known.exists(physical)) result.set(physical, true);
+			for (argument in fn.arguments) visitType(argument.type);
+			visitType(fn.result);
+			for (block in fn.blocks) for (located in block.instructions) {
+				var instruction = located.value, output = compiler.ir.IrOperands.output(instruction);
+				if (output != null) visitType(output.type);
+				for (input in compiler.ir.IrOperands.inputs(instruction)) visitType(input.type);
+				switch instruction {
+					case TypeValue(_, type): visitType(type);
+					case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
+						if (functions.exists(target) && !selected.exists(target)) pending.push(target);
+					default:
+				}
+			}
+		}
+		return result;
 	}
 
 	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */
@@ -904,7 +973,9 @@ class FrontendCompilation {
 				continue;
 			var fn = typedByName.get(dependency.functionName),
 				owner:Null<String> = null;
-			if (fn != null)
+			if (StringTools.startsWith(dependency.functionName, compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX))
+				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
+			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
 			else
 				owner = initializerModule(dependency.functionName, owners);

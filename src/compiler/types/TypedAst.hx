@@ -304,6 +304,9 @@ typedef TypedFunction = {
 
 	final ?typeArguments:Array<CompilerType>;
 	final owner:Null<String>;
+
+	/** Physical receiver owner for a specialized generic instance method. */
+	final ?physicalOwner:String;
 	final isStatic:Bool;
 	final isConstructor:Bool;
 
@@ -345,6 +348,12 @@ typedef TypedField = {
 /** Class declaration with resolved field, method, and inheritance contracts. */
 typedef TypedClass = {
 	final name:String;
+	/** Type parameter names on the source generic declaration. */
+	final ?genericParameters:Array<String>;
+
+	/** Source declaration and representation arguments for a specialized generic owner. */
+	final ?specializationOrigin:String;
+	final ?specializationArguments:Array<CompilerType>;
 	final isValue:Bool;
 	final isFlat:Bool;
 	final isPortable:Bool;
@@ -430,6 +439,8 @@ typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.T
 /** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {
 	final nativeAbiTarget:String;
+	/** Semantic generic instances mapped to their physical specialized owners. */
+	final genericOwnerAliases:Map<String, String>;
 	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
 	final enums:Array<TypedEnum>;
 	final interfaces:Array<TypedInterface>;

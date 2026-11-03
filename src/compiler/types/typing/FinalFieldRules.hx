@@ -43,7 +43,7 @@ class FinalFieldRules {
 			case TLocal("this"): true;
 			default: false;
 		};
-		if (viaThis && session.currentContext.name == owner + ".new")
+		if (viaThis && session.currentContext.sourceFunctionName == owner + ".new")
 			return;
 		fail("E1026", 'Final field "$owner.$name" can only be assigned through this in the constructor of "$owner"', span);
 	}

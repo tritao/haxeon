@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 /** Accumulates runtime helper dependencies requested by typed functions. */
 class RuntimeDependencyTracker {
+	public static inline final TYPE_ORIGIN_PREFIX = "$type-dependency:";
 	final dependencies:Map<String, Map<String, Bool>> = [];
 
 	public function new() {}

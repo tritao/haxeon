@@ -56,7 +56,8 @@ class WasmTarget {
 
 	public static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Abstract("native_callback"): false;
+			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _), Nullable(_): true;
 			default: false;
 		};
 }

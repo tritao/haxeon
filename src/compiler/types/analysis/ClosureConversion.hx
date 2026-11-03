@@ -35,8 +35,11 @@ class ClosureConversion {
 		environments.push({name: name, captures: captures.copy()});
 	}
 
-	public function generatedFunctions():Array<TypedFunction>
-		return functions.copy();
+	public function generatedFunctionCount():Int
+		return functions.length;
+
+	public function generatedFunction(index:Int):TypedFunction
+		return functions[index];
 
 	public function plan():TypedClosurePlan
 		return {storage: storage.copy(), environments: environments.copy()};

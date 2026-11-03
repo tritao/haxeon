@@ -23,28 +23,33 @@ class TypedProgramAssembler {
 
 	public function registerProgramTypes(functions:Array<TypedFunction>, classes:Array<TypedClass>, interfaces:Array<TypedInterface>, enums:Array<TypedEnum>,
 			natives:Array<TypedNative>):Void {
+		function register(type:CompilerType, ?origin:String):Void {
+			registerAnonymousType(type);
+			session.representation.discoverGenericOwners(type, origin);
+		}
 		for (fn in functions) {
 			for (argument in fn.arguments)
-				registerAnonymousType(argument.type);
-			registerAnonymousType(fn.result);
+				register(argument.type, fn.name);
+			register(fn.result, fn.name);
 		}
 		for (classDecl in classes)
 			for (field in classDecl.fields)
-				registerAnonymousType(field.type);
+				register(field.type, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX +
+					(classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
 		for (interfaceDecl in interfaces)
 			for (method in interfaceDecl.methods) {
 				for (argument in method.arguments)
-					registerAnonymousType(argument);
-				registerAnonymousType(method.result);
+					register(argument, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX + interfaceDecl.name);
+				register(method.result, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX + interfaceDecl.name);
 			}
 		for (enumDecl in enums)
 			for (enumCase in enumDecl.cases)
 				for (parameter in enumCase.params)
-					registerAnonymousType(parameter);
+					register(parameter, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX + enumDecl.name);
 		for (native in natives) {
 			for (argument in native.arguments)
-				registerAnonymousType(argument);
-			registerAnonymousType(native.result);
+				register(argument);
+			register(native.result);
 		}
 	}
 
@@ -52,6 +57,7 @@ class TypedProgramAssembler {
 			natives:Array<TypedNative>, nativeTypeDescriptors:Array<NativeTypeDescriptorData>):TypedProgram {
 		return {
 			nativeAbiTarget: session.nativeAbiTarget,
+			genericOwnerAliases: session.representation.genericOwnerAliases(),
 			nativeTypeDescriptors: nativeTypeDescriptors,
 			enums: enums,
 			interfaces: interfaces,

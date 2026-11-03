@@ -300,12 +300,25 @@ class TypingSession {
 					return null;
 		}
 		var builtin = RuntimeType.mapName(key, value);
-		if (builtin != null)
-			return builtin;
-		return DeclaredConformance.has(this, key, "Hashable") && RuntimeType.hashableMapValueSupported(value)
-			? RuntimeType.hashableMapObjectName(key, value)
-			: null;
+		var hashable = DeclaredConformance.has(this, key, "Hashable");
+		if (builtin == null && !hashable) return null;
+		if (requiresSpecializedMap(key, value)) {
+			runtimeDependencyTracker.record(currentContext.name, RuntimeType.SPECIALIZED_MAP);
+			representation.genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP,
+				[RuntimeType.specializedMapKey(key), value]));
+			return RuntimeType.SPECIALIZED_MAP;
+		}
+		return builtin;
 	}
+
+	public function requiresSpecializedMap(key:CompilerType, value:CompilerType):Bool
+		return RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
+
+	function mapValueType(type:CompilerType):Bool return switch type {
+		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
+		case TInstance(NominalKind.Class, _, _): relations.isValueClass(type);
+		default: false;
+	};
 
 	static function enumKeyType(type:CompilerType):Null<{name:String, arguments:Array<CompilerType>}> {
 		return switch type {
@@ -315,9 +328,9 @@ class TypingSession {
 		};
 	}
 
-	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):TypingContext {
+	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String, ?sourceFunctionName:String):TypingContext {
 		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name) ? currentContext.lexicalOwner : parentPath(name),
-			body = new TypingContext(name, typeSubstitutions, owner);
+			body = new TypingContext(name, typeSubstitutions, owner, sourceFunctionName);
 		bodyContexts.push(body);
 		return body;
 	}

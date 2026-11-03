@@ -94,10 +94,11 @@ class FlowAnalysis {
 	static function typeTest(condition:TypedExpression):Null<{path:String, type:CompilerType, narrowsWhenTrue:Bool}> {
 		return switch condition.expression {
 			case TCall("__std_is_of_type", [value, target]):
-				// A bare Array test proves only HARRAY, not its element representation.
-				// Narrowing to Array<Dynamic> would permit incompatible typed reads.
+				// A runtime test proves the nominal declaration, not generic arguments or array elements.
+				// Narrowing to Dynamic arguments would permit incompatible typed reads and writes.
 				switch target.type {
 					case TArray(_): null;
+					case TInstance(_, _, arguments) if (arguments.length > 0): null;
 					default:
 						var path = accessPath(value);
 						path == null ? null : {path: path, type: target.type, narrowsWhenTrue: true};

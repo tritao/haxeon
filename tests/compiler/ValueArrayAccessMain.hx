@@ -21,10 +21,19 @@ class ValueArrayAccessMain {
 	static function main():Void {
 		var boxedRangeSource = 'struct BoxedPoint { public var x:Int; public function new(x:Int) this.x=x; } '
 			+ 'function main():Int { var source:Array<BoxedPoint>=[new BoxedPoint(1),new BoxedPoint(2)]; '
-			+ 'var copied=source.copy(); var joined=source.concat(source); source[0].x=9; '
-			+ 'return copied[0].x==1 && joined[0].x==1 ? 42 : 0; }';
+			+ 'var copied=source.copy(); var sliced=source.slice(0,1); var joined=source.concat(source); source[0].x=9; '
+			+ 'return copied[0].x==1 && sliced[0].x==1 && joined[0].x==1 ? 42 : 0; }';
 		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(boxedRangeSource)).run("main") != 42)
 			throw "Portable boxed array copies must retain value semantics";
+		var nestedRangeSource = 'class RangeReference { public function new() {} } '
+			+ 'struct RangeLeaf { public var x:Int; public function new(x:Int) this.x=x; } '
+			+ 'struct RangeRecord { public var leaf:RangeLeaf; public var owner:RangeReference; '
+			+ 'public function new(x:Int,o:RangeReference) { leaf=new RangeLeaf(x); owner=o; } } '
+			+ 'function main():Int { var o=new RangeReference(); var a=[new RangeRecord(1,o)]; var b=a.copy(); '
+			+ 'var c=a.slice(0,1); var d=a.concat(a); a[0].leaf.x=9; '
+			+ 'return b[0].leaf.x==1 && c[0].leaf.x==1 && d[0].leaf.x==1 && b[0].owner==o ? 42 : 1; }';
+		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(nestedRangeSource)).run("main") != 42)
+			throw "Portable array ranges must copy nested values and retain reference identity";
 		var frontendSource = 'struct PlaceLeaf { public var x:Int; public function new(x:Int) this.x = x; public function bump(n:Int):Void x += n; } '
 			+ 'struct PlaceRoot { public var leaf:PlaceLeaf; public function new(x:Int) leaf = new PlaceLeaf(x); } '
 			+ 'function missingValue(a:Array<PlaceRoot>):Bool { try { var v = a[15].leaf.x; return false; } catch (error:Dynamic) { return true; } } '
@@ -1366,12 +1375,13 @@ class ValueArrayAccessMain {
 			for (target in [Wasm32, WasmGc]) for (inlineEnabled in [false, true]) {
 				var rangeProgram = compiler.Frontend.compile(rangeSource);
 				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(rangeProgram, 32, target);
-				for (fn in rangeProgram.functions) for (block in fn.blocks) for (located in block.instructions)
-					switch located.provenance.origin {
-						case CompilerGenerated(reason) if (reason == compiler.ir.IrGenerator.ArrayValueCopyReason):
-							throw 'Boxed copy loop remains in $target lane array IR';
+				var rangeCalls = 0;
+				for (fn in rangeProgram.functions) if (fn.name == "RangeCensus.perform")
+					for (block in fn.blocks) for (located in block.instructions) switch located.value {
+						case Call(_, name, _) if (StringTools.startsWith(name, "$value-array:native-")): rangeCalls++;
 						default:
 					}
+				if (rangeCalls != 3) throw 'Expected three direct lane range operations for $target, got $rangeCalls';
 				compiler.ir.IrValueConstructors.rewrite(rangeProgram);
 				compiler.ir.IrValuePhiScalarization.rewrite(rangeProgram);
 				compiler.ir.IrScalarArguments.rewrite(rangeProgram, true);

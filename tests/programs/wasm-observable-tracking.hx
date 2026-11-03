@@ -119,6 +119,15 @@ function main():Int {
 	});
 	if (baseValue != 4 || countValue != 1 || otherValue != 2 || itemValue.value != 7 || ratioValue != 0.0 || labelValue != null) return fail(10);
 	if (base.dirty || count.dirty || other.dirty || item.dirty || ratio.dirty || label.dirty || identity.dirty) return fail(11);
+	var structuredSignal = new Signal<ValueRecord>(new ValueRecord(4)), structuredValue = 0;
+	var structuredReader = new Effect(function() { structuredValue = structuredSignal.value.value; });
+	structuredSignal.value = new ValueRecord(4);
+	if (structuredReader.dirty || structuredValue != 4) return fail(47);
+	structuredSignal.value = new ValueRecord(5);
+	if (!structuredReader.dirty) return fail(48);
+	ReactiveRuntime.flushEffects();
+	if (structuredValue != 5 || structuredReader.dirty) return fail(49);
+	structuredReader.dispose();
 
 	model.other = 3;
 	if (!other.dirty || base.dirty || count.dirty || item.dirty || ratio.dirty || label.dirty || identity.dirty) return fail(12);

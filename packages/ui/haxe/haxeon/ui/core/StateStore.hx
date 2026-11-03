@@ -68,11 +68,11 @@ class StateStore {
 		pathIds.resize(write);
 	}
 
-	public function initialize(id:WidgetId, initial:Dynamic):Void {
+	public function initialize<T>(id:WidgetId, initial:T):Void {
 		if (id == null)
 			throw "State requires a widget ID";
 		if (!handles.exists(id.value))
-			handles.set(id.value, new State<Dynamic>(this, id, initial));
+			handles.set(id.value, new State<T>(this, id, initial));
 		markUsed(id);
 	}
 

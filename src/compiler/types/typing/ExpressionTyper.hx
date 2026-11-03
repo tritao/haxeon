@@ -1776,6 +1776,7 @@ class ExpressionTyper {
 				}
 				FinalFieldRules.rejectInstanceMutation(session, object, name, span);
 				ValuePlaceRules.requireWritable(session, object, span);
+				scope.invalidateField(name);
 				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:

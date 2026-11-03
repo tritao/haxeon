@@ -28,10 +28,13 @@ import compiler.backend.wasm.linear.WasmLinearGc;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrVerifier;
+import compiler.backend.wasm.WasmFlattenValueFields;
+import compiler.backend.wasm.WasmValueLayout;
 
 /** Owns construction and lowering of a complete Linear32 Wasm module. */
 class WasmLinearModuleBuilder {
 	final program:IrProgram;
+	final logicalProgram:IrProgram;
 	final options:BackendOptions;
 	final patchChanged:Null<Array<String>>;
 	final target:WasmTargetConfig;
@@ -40,6 +43,8 @@ class WasmLinearModuleBuilder {
 	var importMemory:Bool;
 	var contract:Null<MemoryContract>;
 	var exportedFunctions:Array<String>;
+	var boundaryExportNames:Array<String>;
+	var boundaryExportAdapters:Map<String, String>;
 	var preferredEntry:String;
 	var reachable:Map<String, Bool>;
 	var usedCNatives:Map<String, Bool>;
@@ -74,9 +79,12 @@ class WasmLinearModuleBuilder {
 	var pendingExceptionValue:Null<Int>;
 	var fuelChargeFunction:Null<Int>;
 	var closureAdapters:WasmLinearClosureAdapters;
+	var scalarAbi:compiler.backend.wasm.WasmScalarAbi;
+	var fieldLowering:compiler.backend.wasm.WasmFlattenValueFields;
 
-	public function new(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
+	public function new(program:IrProgram, logicalProgram:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
 		this.program = program;
+		this.logicalProgram = logicalProgram;
 		this.options = options;
 		this.patchChanged = patchChanged;
 		this.target = target;
@@ -84,12 +92,56 @@ class WasmLinearModuleBuilder {
 	}
 
 	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig):BackendResult {
-		return new WasmLinearModuleBuilder(program, options, patchChanged, target).compileModule();
+		IrVerifier.verify(program);
+		var logical = new IrProgram(program.entryPoint);
+		logical.functions = program.functions.copy(); logical.objects = program.objects.copy(); logical.natives = program.natives.copy();
+		logical.cNatives = program.cNatives; logical.interfaces = program.interfaces; logical.enums = program.enums; logical.staticFields = program.staticFields;
+		logical.positionalFingerprints = program.positionalFingerprints; logical.parameterDefaults = program.parameterDefaults;
+		logical.positionalPlaces = program.positionalPlaces; logical.positionalSources = program.positionalSources;
+		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
+			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true), exportAdapters:Map<String, String> = [];
+		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
+		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures),
+			existing = logical.functions.slice(0, originalCount), generated = logical.functions.slice(originalCount);
+		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
+		generated = compiler.ir.IrCheckedObjectCasts.rewrite(generated, logical.objects, true, existing);
+		logical.functions = existing.concat(generated);
+		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
+			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
+		IrVerifier.verify(logical);
+		var values = new WasmValueLayout(logical), verified = new WasmFlattenValueFields(logical).rewrite();
+		verified.objects = [for (object in logical.objects) {
+			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base, interfaces: object.interfaces,
+			fields: values.fields(object.fields), methods: object.methods
+		}];
+		IrVerifier.verify(verified);
+		var exports = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name],
+			abi = new compiler.backend.wasm.WasmScalarAbi(logical, exports, false, true),
+			scalar = abi.rewrite(), fields = new WasmFlattenValueFields(scalar, name -> {
+				var signature = abi.signatures.get(name);
+				return signature != null && signature.throwsReceiver;
+			}), flattened = fields.rewrite();
+		flattened.objects = [for (object in logical.objects) {
+			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base, interfaces: object.interfaces,
+			fields: values.fields(object.fields), methods: object.methods
+		}];
+		var physicalObjects = compiler.ir.IrObjectTable.of([for (object in flattened.objects) object.name => object]);
+		flattened.functions = [for (fn in flattened.functions) {
+			var signature = abi.signatures.get(fn.name);
+			signature != null && signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
+		}];
+		abi.validate(flattened);
+		adapters.useProgram(flattened);
+		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
+		builder.boundaryExportNames = boundaryExports;
+		builder.boundaryExportAdapters = exportAdapters;
+		builder.closureAdapters = adapters;
+		builder.scalarAbi = abi;
+		builder.fieldLowering = fields;
+		return builder.compileModule();
 	}
 
 	function compileModule():BackendResult {
-		closureAdapters = WasmLinearClosureAdapters.generate(program);
-		IrVerifier.verify(program);
 		prepareModule();
 		buildRuntime();
 		declareFunctions();
@@ -107,7 +159,7 @@ class WasmLinearModuleBuilder {
 		importMemory = options.importMemory == true;
 		contract = options.memoryContract;
 		var memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
-		exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports);
+		exportedFunctions = boundaryExportNames;
 		if (contract != null) {
 			if (!importMemory)
 				throw "A Wasm memory contract requires imported memory";
@@ -124,13 +176,20 @@ class WasmLinearModuleBuilder {
 		}
 		preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
-		var roots = exportedFunctions.copy();
+		var roots = [for (name in exportedFunctions) boundaryExportAdapters.exists(name) ? boundaryExportAdapters.get(name) : name];
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		var changed = true;
+		while (changed) {
+			changed = scalarAbi.retainOriginals(reachable, roots);
+			if (fieldLowering.retainOriginals(reachable, roots)) changed = true;
+			if (scalarAbi.retainVirtualTargets(program, reachable, roots)) changed = true;
+			if (changed) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
-		layout = new WasmLayout(program);
+		layout = new WasmLayout(program, logicalProgram);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
 		for (fn in program.functions)
@@ -318,23 +377,29 @@ class WasmLinearModuleBuilder {
 					parameters.push(WasmModuleSupport.requireValueType(argument.type))
 				catch (error:Dynamic)
 					throw 'Wasm function ${fn.name} has an unsupported parameter type: $error';
-			var results:Array<WasmValueType> = [];
+			var results:Array<WasmValueType> = [], signature = scalarAbi.signatures.get(fn.name);
 			try
-				results = WasmModuleSupport.resultTypes(fn.result)
+				results = signature == null ? WasmModuleSupport.resultTypes(fn.result) :
+					[for (result in scalarAbi.resultTypes(signature)) WasmModuleSupport.requireValueType(result)]
 			catch (error:Dynamic)
 				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
-		closureTypes = WasmModuleSupport.collectClosureTypes(module, program);
+		closureTypes = WasmModuleSupport.collectClosureTypes(module, program, scalarAbi);
 		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
 		if (bytesDataPointer == null)
 			throw "Linear Wasm bytes data pointer helper is missing";
 		var cstringCopy = functions.get("__haxeon_cstring_copy");
 		if (cstringCopy == null)
 			throw "Linear Wasm C string copy helper is missing";
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy);
-		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, null);
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions);
+		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation,
+			context -> {
+				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions,
+					context.irFunction, context.allocateLocal);
+				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
+			});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
 		closureAdapters.defineKeyQuery(module, functions, tableSlots);
 		WasmLinearReflection.finalize(linear, tableSlots);
@@ -392,7 +457,7 @@ class WasmLinearModuleBuilder {
 			module.start = runtimeNeutral ? addNeutralStart(initializer) : initializer;
 		module.exports.push({name: "main", functionIndex: runtimeNeutral ? addNeutralBoundary("__haxeon_export_main", entry) : entry});
 		for (exported in exportedFunctions) {
-			var exportIndex = functions.get(exported);
+			var exportIndex = functions.get(boundaryExportAdapters.exists(exported) ? boundaryExportAdapters.get(exported) : exported);
 			if (exportIndex == null)
 				throw 'Wasm export "$exported" is not a reachable function';
 			module.exports.push({name: exported, functionIndex: runtimeNeutral ? addNeutralBoundary('__haxeon_export_$exported', exportIndex) : exportIndex});

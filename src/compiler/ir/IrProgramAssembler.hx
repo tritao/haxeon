@@ -30,7 +30,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram):IrProgram {
 		IrGenerator.bindEnumConstructors(typed.enums);
-		IrGenerator.bindClasses(typed.classes, typed.interfaces);
+		IrGenerator.bindClasses(typed.classes, typed.interfaces, typed.genericOwnerAliases);
 		var objects = objectsFrom(typed);
 		IrGenerator.bindFlatValueObjects(objects);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
@@ -513,13 +513,31 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
+		if (objects != null)
+			GenericOwnerErasure.generate(allFunctions, objects);
+		if (objects != null && interfaces != null)
+			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
+		// HashLink checks object casts itself, but interface casts need checks on every target.
+		if (objects != null)
+			allFunctions = IrCheckedObjectCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());
 		if (objects != null) {
 			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
 		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
+		if (objects != null && reflectableObjects != null) {
+			reflectableObjects = reflectableObjects.copy();
+			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
+			for (object in objects)
+				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) && !known.exists(object.name)) {
+					reflectableObjects.push(object.name);
+					known.set(object.name, true);
+				}
+		}
 		var beforeReflection = allFunctions.length;
 		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
+		// Reflection helpers are generated after the ordinary cast pass. Check their dynamic
+		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
 			allFunctions = existing.concat(IrCheckedObjectCasts.rewrite(allFunctions.slice(beforeReflection), objects,

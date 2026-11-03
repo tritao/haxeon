@@ -179,7 +179,7 @@ class WasmModuleSupport {
 		};
 	}
 
-	public static function collectClosureTypes(module:WasmModule, program:IrProgram):Map<String, WasmClosureTypes> {
+	public static function collectClosureTypes(module:WasmModule, program:IrProgram, ?abi:WasmScalarAbi):Map<String, WasmClosureTypes> {
 		var result:Map<String, WasmClosureTypes> = [];
 		for (fn in program.functions)
 			for (block in fn.blocks)
@@ -188,10 +188,7 @@ class WasmModuleSupport {
 						case CallClosure(_, closure, _):
 							switch closure.type {
 								case Function(arguments, resultType):
-									var type:WasmFunctionType = {
-										parameters: [for (argument in arguments) requireValueType(argument)],
-										results: resultTypes(resultType)
-									};
+									var type = closureFunctionType(closure.type, arguments, resultType, abi);
 									// Any closure may be an instance closure: a cast adapts closures as instance closures
 									// (WasmLinearClosureAdapters).
 									var key = Std.string(closure.type);
@@ -216,13 +213,11 @@ class WasmModuleSupport {
 								case Function(_, result): result;
 								default: Void;
 							};
-							var staticType = module.typeIndex({
-								parameters: [for (argument in closureArguments) requireValueType(argument)],
-								results: resultTypes(resultType)
-							}), instanceType = module.typeIndex({
-								parameters: [requireValueType(target.arguments[0].type)].concat([for (argument in closureArguments) requireValueType(argument)]),
-								results: resultTypes(resultType)
-							});
+							var closureSignature = closureFunctionType(output.type, closureArguments, resultType, abi),
+								staticType = module.typeIndex(closureSignature), instanceType = module.typeIndex({
+									parameters: [requireValueType(target.arguments[0].type)].concat(closureSignature.parameters),
+									results: closureSignature.results
+								});
 							var key = Std.string(output.type),
 								existing = result.get(key);
 							if (existing == null)
@@ -232,6 +227,15 @@ class WasmModuleSupport {
 						default:
 					}
 		return result;
+	}
+
+	static function closureFunctionType(type:IrType, arguments:Array<IrType>, result:IrType, abi:Null<WasmScalarAbi>):WasmFunctionType {
+		if (abi == null || !abi.scalarClosures.exists(Std.string(type)))
+			return {parameters: [for (argument in arguments) requireValueType(argument)], results: resultTypes(result)};
+		var parameters:Array<WasmValueType> = [], results:Array<WasmValueType> = [];
+		for (argument in arguments) for (part in abi.valueTypes(argument)) parameters.push(requireValueType(part));
+		if (result != Void) for (part in abi.valueTypes(result)) results.push(requireValueType(part));
+		return {parameters: parameters, results: results};
 	}
 
 	/** Puts every named function in the table, sorted by name, or by `group` and then name. */

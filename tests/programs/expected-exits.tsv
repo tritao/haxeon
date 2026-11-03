@@ -184,6 +184,12 @@ optional-argument-forwarding	42
 default-parameter-inference	42
 generic-functions	42
 generic-struct-functions	42
+generic-struct-class	42
+generic-constrained-owner-hash	42
+generic-constrained-owner-lookup-allocations	42
+specialized-struct-map	42
+generic-struct-owner-allocations	42
+checked-dynamic-object-cast	42
 member-module-shadow	42
 generic-abstract	42
 bounded-generic	42
@@ -443,6 +449,12 @@ struct-array-equality	42
 nullable-scalar-ieee-equality	42
 enum-inline-constant-pattern	42
 struct-array-nullable-places	42
+wasm-scalar-closure-census	42
+generic-nullable-substitution	42
+wasm-null-method-dispatch	42
+generic-struct-array-ranges	42
 wasm-null-virtual-dispatch	42
 null-method-inlining	42
+generic-struct-reflection	42
 struct-reflection	42
+generic-struct-signal-allocations	42

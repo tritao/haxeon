@@ -16,6 +16,8 @@ class IrScalarArguments {
 		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
+				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
+				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, argumentCount = 0;

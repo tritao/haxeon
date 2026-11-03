@@ -85,6 +85,11 @@ class IrValueArrayElementRewrite {
 							case SafeCast(out, source) if (source.id == raw.id && Type.enumEq(out.type, element) && uses.get(raw.id) == 1):
 								instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(), args);
 								removed.set(raw.id, true); position++; changed = true;
+							case Call(out, conversion, [source]) if (source.id == raw.id && Type.enumEq(out.type, element) && uses.get(raw.id) == 1
+									&& (StringTools.startsWith(conversion, IrCheckedObjectCasts.PREFIX)
+										|| StringTools.startsWith(conversion, IrValueInterfaceBoxes.UNBOX_PREFIX))):
+								instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(), args);
+								removed.set(raw.id, true); position++; changed = true;
 							default: throw "Invalid checked value array removal conversion";
 						}
 					case Call(raw, "__array_splice_any", args) if (args.length == 3 && Type.enumEq(args[0].type, arrayType)):

@@ -1,4 +1,4 @@
-package compiler.backend.wasm.gc;
+package compiler.backend.wasm;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
@@ -18,34 +18,33 @@ private typedef FlattenedPlace = {
 }
 private typedef PlaceMethod = {final name:String; final original:String; final owner:String; final path:Array<String>; final typeName:String;}
 
-/** Rewrites field places to physical leaf accesses before Wasm GC type planning. */
-class WasmGcFlattenFields {
+/** Rewrites value field places to physical leaf accesses before Wasm type planning. */
+class WasmFlattenValueFields {
 	/** A pseudo-field lowered as a null check on the holder, with no actual storage slot. */
 	public static inline final CHECK_FIELD = "$wasm-gc:check-holder";
 
 	final program:IrProgram;
 	final declarations:Map<String, IrObject>;
-	final values:WasmGcValueLayout;
+	final values:WasmValueLayout;
 	final objects:IrObjectTable;
 	final originals:Map<String, IrFunction>;
 	final methods:Array<PlaceMethod> = [];
 	final requested:Map<String, Bool> = [];
-	final scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>;
+	final throwsReceiver:String->Bool;
 
-	public function new(program:IrProgram, ?scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>) {
+	public function new(program:IrProgram, ?throwsReceiver:String->Bool) {
 		this.program = program;
 		declarations = [for (object in program.objects) object.name => object];
 		objects = IrObjectTable.of(declarations);
-		values = new WasmGcValueLayout(program);
+		values = new WasmValueLayout(program);
 		originals = [for (fn in program.functions) fn.name => fn];
-		this.scalarSignatures = scalarSignatures == null ? [] : scalarSignatures;
+		this.throwsReceiver = throwsReceiver == null ? _ -> false : throwsReceiver;
 	}
 
 	public function rewrite():IrProgram {
 		var functions:Array<IrFunction> = [];
 		for (original in program.functions) {
-			var signature = scalarSignatures.get(original.name),
-				fn = signature != null && signature.throwsReceiver ? original : IrScalarReplacement.rewrite(original, objects, true),
+			var fn = throwsReceiver(original.name) ? original : IrScalarReplacement.rewrite(original, objects, true),
 				rewritten = rewriteFunction(fn, null);
 			functions.push(rewritten);
 		}
@@ -86,7 +85,7 @@ class WasmGcFlattenFields {
 	function rewriteFunction(fn:IrFunction, seed:Null<{id:Int, place:FlattenedPlace}>):IrFunction {
 		// Materializing a phi input may dereference its holder, so do it only on the selected edge.
 		fn = PhiEdges.split(fn);
-		var aliases:Map<Int, FlattenedPlace> = [], changed = true, next = 0;
+		var aliases:Map<Int, FlattenedPlace> = [], fresh:Map<Int, Bool> = [], changed = true, next = 0;
 		if (seed != null) aliases.set(seed.id, seed.place);
 		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
 		while (changed) {
@@ -95,6 +94,7 @@ class WasmGcFlattenFields {
 				var output = IrOperands.output(located.value);
 				if (output != null && output.id >= next) next = output.id + 1;
 				switch located.value {
+					case NewObject(out, _): fresh.set(out.id, true);
 					case FieldGet(out, owner, field) if (values.isValue(out.type) && !aliases.exists(out.id)):
 						var name = switch out.type { case Obj(value): value; default: throw "Invalid value projection"; };
 						var parent = aliases.get(owner.id);
@@ -108,8 +108,7 @@ class WasmGcFlattenFields {
 		var blocks:Array<IrBlock> = [], edgeCopies:Map<Int, Array<Located<IrInstruction>>> = [];
 		for (block in fn.blocks) {
 			var replacement = new IrBlock(block.id);
-			for (position in 0...block.instructions.length) {
-				var located = block.instructions[position];
+			for (located in block.instructions) {
 				switch located.value {
 				case Phi(out, inputs):
 					var mapped:Array<IrPhiInput> = [];
@@ -125,7 +124,7 @@ class WasmGcFlattenFields {
 					replacement.instructions.push(new Located(Phi(out, mapped), located.provenance));
 				case FieldGet(out, object, field) if (aliases.exists(out.id)):
 					// Preserve the original null access point even when the field projection itself has no scalar load.
-					if (!aliases.exists(object.id) && !immediateLeafAccess(block, position, aliases.get(out.id), aliases)) {
+					if (!fresh.exists(object.id) && !aliases.exists(object.id)) {
 						var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
 						replacement.instructions.push(new Located(FieldGet(check, object, CHECK_FIELD), located.provenance));
 					}
@@ -137,8 +136,10 @@ class WasmGcFlattenFields {
 						path = target == null ? [field] : target.path.concat([field]), source = aliases.get(value.id),
 						declared = findField(target == null ? object.type : Obj(target.typeName), field);
 					if (declared != null && values.isValue(declared.type)) {
-						var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
-						replacement.instructions.push(new Located(FieldGet(check, owner, CHECK_FIELD), located.provenance));
+						if (!fresh.exists(owner.id)) {
+							var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
+							replacement.instructions.push(new Located(FieldGet(check, owner, CHECK_FIELD), located.provenance));
+						}
 						var snapshot:Array<{field:String, value:IrValue}> = [];
 						for (slot in values.leaves(declared.type)) {
 							var loaded = new IrValue(next++, "$wasm-gc-copy-field", slot.type), sourceOwner = source == null ? value : source.owner,
@@ -221,25 +222,6 @@ class WasmGcFlattenFields {
 	}
 
 	/** Fold a holder check into an immediately following scalar access, without moving it across evaluation. */
-	static function immediateLeafAccess(block:IrBlock, position:Int, root:FlattenedPlace, aliases:Map<Int, FlattenedPlace>):Bool {
-		for (index in position + 1...block.instructions.length) switch block.instructions[index].value {
-			case FieldGet(out, object, _) if (aliases.exists(object.id)):
-				var place = aliases.get(object.id);
-				if (!isWithin(place, root)) return false;
-				if (!aliases.exists(out.id)) return true;
-			case FieldSet(object, _, _) if (aliases.exists(object.id)):
-				return isWithin(aliases.get(object.id), root);
-			default: return false;
-		}
-		return false;
-	}
-
-	static function isWithin(place:FlattenedPlace, root:FlattenedPlace):Bool {
-		if (place.owner.id != root.owner.id || place.path.length < root.path.length) return false;
-		for (index in 0...root.path.length) if (place.path[index] != root.path[index]) return false;
-		return true;
-	}
-
 	/** Materialize only at a reference-based boundary, after taking a snapshot of every field. */
 	function materialize(value:IrValue, aliases:Map<Int, FlattenedPlace>, block:IrBlock, origin:Located<IrInstruction>,
 			next:Int):{value:IrValue, next:Int} {
@@ -315,7 +297,7 @@ class WasmGcFlattenFields {
 			if (slot.path.length != path.length - 1) continue;
 			var matches = true;
 			for (index in 0...slot.path.length) if (slot.path[index] != path[index + 1]) matches = false;
-			if (matches) return WasmGcValueLayout.fieldName(path[0], slot);
+			if (matches) return WasmValueLayout.fieldName(path[0], slot);
 		}
 		throw 'Missing Wasm GC leaf ${path.join(".")}';
 	}

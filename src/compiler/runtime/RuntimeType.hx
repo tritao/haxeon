@@ -12,6 +12,19 @@ import compiler.types.Type.NominalKind;
  * covered by an end-to-end runtime test.
  */
 class RuntimeType {
+	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
+
+	/** Nullary enum keys use their existing integer representation in the generic map. */
+	public static function specializedMapKey(key:CompilerType):CompilerType
+		return switch key {
+			case TAbstract(_, _, representation): specializedMapKey(representation);
+			case TInstance(NominalKind.Enum, _, _): TInt;
+			default: key;
+		};
+
+	public static function usesSpecializedMap(key:CompilerType, value:CompilerType, isValue:CompilerType->Bool,
+			isHashable:CompilerType->Bool):Bool
+		return isValue(key) || isValue(value) || (mapName(key, value) == null && isHashable(key));
 	public static function arrayName(element:CompilerType):Null<String>
 		return switch element {
 			case TAbstract(_, _, representation): arrayName(representation);
@@ -47,15 +60,6 @@ class RuntimeType {
 			case TInstance(NominalKind.Enum, _, _): mapValueName("map_int_", value);
 			default: null;
 		};
-
-	/** Stable IR object name for a compiler-owned map whose keys use declared Hashable equality. */
-	public static function hashableMapObjectName(key:CompilerType, value:CompilerType):String {
-		var signature = compiler.semantic.SemanticSignature.type(key) + "->" + compiler.semantic.SemanticSignature.type(value);
-		return "__haxeon_hashable_map_" + haxe.crypto.Sha256.encode(signature).substr(0, 24);
-	}
-
-	public static function hashableMapValueSupported(value:CompilerType):Bool
-		return mapValueName("map_int_", value) != null;
 
 	static function mapValueName(prefix:String, value:CompilerType):Null<String>
 		return switch value {

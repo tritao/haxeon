@@ -17,14 +17,14 @@ class WasmGcFunctionContext {
 	public var arrayCapacityLocal:Null<Int>;
 	public final functionStringConstants:Map<Int, String> = [];
 	public final scalarResults:Map<Int, Array<Int>> = [];
-	public final scalarLocals:WasmGcScalarLocals;
+	public final scalarLocals:compiler.backend.wasm.WasmScalarLocals;
 
 	public function new(gc:WasmGcContext, irFunction:Null<IrFunction>, exceptionTag:Null<Int>, allocateLocal:WasmValueType->Int) {
 		this.gc = gc;
 		this.irFunction = irFunction;
 		this.exceptionTag = exceptionTag;
 		this.allocateLocal = allocateLocal;
-		scalarLocals = new WasmGcScalarLocals(gc.plan, irFunction, allocateLocal);
+		scalarLocals = new compiler.backend.wasm.WasmScalarLocals(gc.plan.inlineValueFields ? irFunction : null, gc.plan.values.isValue, gc.plan.physicalFields, gc.plan.valueType, allocateLocal);
 
 		if (irFunction != null)
 			for (block in irFunction.blocks)

@@ -24,6 +24,7 @@ import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionExceptionState
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.gc.WasmGcRepresentation;
+import compiler.backend.wasm.linear.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -40,7 +41,6 @@ private enum StructureFrame {
 	IfFrame;
 }
 
-/** Everything one structured emission shares while it walks a function's dominator tree. */
 /** Pending structured-control emission, held explicitly for arbitrarily deep CFGs. */
 private enum StructureWork {
 	Tree(id:Int);
@@ -131,15 +131,27 @@ class WasmFunctionLower {
 			locals = context.locals;
 		var rootLocals:Array<Int> = [],
 			rootIds:Map<Int, Bool> = [],
-			live:Map<Int, Map<Int, Array<Int>>> = [];
+			live:Map<Int, Map<Int, Array<Int>>> = [], scalarRoots:Map<Int, Array<Int>> = [], synthetic = -1;
+		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
+			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values;
+			for (owner => locals in linear.scalarReferenceLocals()) {
+				var ids:Array<Int> = [];
+				for (local in locals) { var id = synthetic--; valueLocals.set(id, local); ids.push(id); }
+				scalarRoots.set(owner, ids);
+			}
+		}
 		for (point in context.rootPoints) {
 			var blockLive = live.get(point.block);
 			if (blockLive == null) {
 				blockLive = [];
 				live.set(point.block, blockLive);
 			}
-			blockLive.set(point.instruction, point.liveReferences);
-			for (valueId in point.liveReferences) {
+			var references:Array<Int> = [];
+			for (valueId in point.liveReferences)
+				if (scalarRoots.exists(valueId)) for (id in scalarRoots.get(valueId)) references.push(id);
+				else references.push(valueId);
+			blockLive.set(point.instruction, references);
+			for (valueId in references) {
 				rootIds.set(valueId, true);
 			}
 		}
@@ -213,6 +225,13 @@ class WasmFunctionLower {
 		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
 			var gc:WasmGcRepresentation = cast context.representation.values,
 				wrapped = gc.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag);
+			if (wrapped != null) body = wrapped;
+		}
+		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
+			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
+				cleanup:Array<WasmInstruction> = [];
+			restoreRoots(cleanup);
+			var wrapped = linear.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag, cleanup);
 			if (wrapped != null) body = wrapped;
 		}
 		body = WasmOptimizer.optimize(body);
@@ -398,7 +417,16 @@ class WasmFunctionLower {
 		body.push(If(null));
 		emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
 		restoreRoots(body);
-		emit(body, context.representation.values.zeroValue(fn.result));
+		var linear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
+			Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null,
+			signature = linear == null ? null : linear.scalarSignature(fn.name);
+		if (signature != null && signature.throwsReceiver) {
+			emit(body, [GlobalGet(requiredPendingExceptionValue()), LocalSet(exceptionState.exception), I32Const(0),
+				GlobalSet(requiredPendingExceptionFlag()), I32Const(0), GlobalSet(requiredPendingExceptionValue())]);
+			emit(body, linear.scalarExceptionResult(fn, context.valueLocals, exceptionState.exception));
+		} else if (signature != null) {
+			for (type in linear.scalarReturnTypes(signature)) emit(body, context.representation.values.zeroValue(type));
+		} else emit(body, context.representation.values.zeroValue(fn.result));
 		body.push(Return);
 		body.push(Else);
 		emit(body, [
@@ -568,6 +596,11 @@ class WasmFunctionLower {
 			var gc:WasmGcRepresentation = cast context.representation.values, scalar = gc.scalarLocal(instruction, values);
 			if (scalar != null) { emit(body, scalar); return; }
 		}
+		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
+			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
+				scalar = linear.scalarLocal(instruction, values);
+			if (scalar != null) { emit(body, scalar); return; }
+		}
 		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
@@ -714,6 +747,15 @@ class WasmFunctionLower {
 						[for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
 				}
+				var scalarLinear:Null<WasmLinearRepresentation> = Std.isOfType(context.representation.values, WasmLinearRepresentation) ?
+					cast(context.representation.values, WasmLinearRepresentation) : null;
+				if (scalarLinear != null && scalarLinear.hasScalarClosure(closure.type)) {
+					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
+					emit(body, scalarLinear.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
+						requiredLocal(values, closure.id), output, output.type == Void ? -1 : requiredLocal(values, output.id),
+						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					return;
+				}
 				var calls = context.representation.calls,
 					instanceType = typeInfo.instanceType,
 					destination = output.type == Void ? -1 : requiredLocal(values, output.id),
@@ -799,6 +841,14 @@ class WasmFunctionLower {
 					cast(context.representation.values, WasmGcRepresentation) : null;
 				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
 					emit(body, scalarGc.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output,
+						output.type == Void ? -1 : requiredLocal(values, output.id), arguments,
+						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					return;
+				}
+				var scalarLinear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
+					Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
+				if (scalarLinear != null && scalarLinear.hasScalarVirtual(object.type, methodName)) {
+					emit(body, scalarLinear.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output,
 						output.type == Void ? -1 : requiredLocal(values, output.id), arguments,
 						[for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
@@ -979,6 +1029,11 @@ class WasmFunctionLower {
 				emit(body, [LocalGet(requiredLocal(values, value.id))].concat(conversion).concat([LocalSet(requiredLocal(values, output.id))]));
 			case NewObject(output, typeName):
 				emit(body, context.representation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
+			case FieldGet(output, object, fieldName) if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
+				var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, object.id)),
+					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz, If(null)];
+				check = check.concat(trapOrThrow(1)).concat([End, I32Const(0), LocalSet(requiredLocal(values, output.id))]);
+				emit(body, check);
 			case FieldGet(output, object, fieldName):
 				emit(body, context.representation.aggregates.fieldGet(object, fieldName, requiredLocal(values, output.id), requiredLocal(values, object.id)));
 			case FieldSet(object, fieldName, value):
@@ -1289,14 +1344,16 @@ class WasmFunctionLower {
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
-				if (gcRepresentation != null && name == compiler.backend.wasm.gc.WasmGcScalarAbi.RETURN_MARKER) {
+				if (name == compiler.backend.wasm.WasmScalarAbi.RETURN_MARKER) {
 					for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
 					return;
 				}
-				if (gcRepresentation != null && name == compiler.backend.wasm.gc.WasmGcScalarAbi.RETHROW_MARKER) {
+				if (name == compiler.backend.wasm.WasmScalarAbi.RETHROW_MARKER) {
 					body.push(LocalGet(requiredLocal(values, arguments[1].id)));
 					body.push(If(null));
-					if (context.exceptionTag == null) body.push(Unreachable);
+					if (context.runtimeNeutral && context.exceptionState != null)
+						emitNeutralThrow(body, requiredLocal(values, arguments[0].id), context.exceptionDispatchIndex + 1);
+					else if (context.exceptionTag == null) body.push(Unreachable);
 					else { body.push(LocalGet(requiredLocal(values, arguments[0].id))); body.push(Throw(context.exceptionTag)); }
 					body.push(End);
 					return;
@@ -1305,6 +1362,15 @@ class WasmFunctionLower {
 					var index = functions.get(name);
 					if (index == null) throw 'Missing scalar Wasm GC function "$name"';
 					emit(body, gcRepresentation.scalarCall(name, output, arguments, output.type == Void ? -1 : requiredLocal(values, output.id),
+						[for (argument in arguments) requiredLocal(values, argument.id)], index));
+					return;
+				}
+				var linearScalar:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
+					Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
+				if (linearScalar != null && linearScalar.hasScalarCall(name)) {
+					var index = functions.get(name);
+					if (index == null) throw 'Missing scalar Wasm function "$name"';
+					emit(body, linearScalar.scalarCall(name, output, arguments, output.type == Void ? -1 : requiredLocal(values, output.id),
 						[for (argument in arguments) requiredLocal(values, argument.id)], index));
 					return;
 				}

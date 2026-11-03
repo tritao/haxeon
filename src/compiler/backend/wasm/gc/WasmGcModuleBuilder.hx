@@ -1,5 +1,9 @@
 package compiler.backend.wasm.gc;
 
+import compiler.backend.wasm.WasmScalarClosureEscapes;
+import compiler.backend.wasm.WasmValueLayout;
+import compiler.backend.wasm.WasmFlattenValueFields;
+
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContractCodec;
@@ -53,15 +57,22 @@ class WasmGcModuleBuilder {
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
 		IrVerifier.verify(program);
 		var originalProgram = program;
-		var scalarAbi = new WasmGcScalarAbi(program, WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports));
+		var exports = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
+			boundaryPlan = new WasmScalarAbi(program, exports, true), exportAdapters:Map<String, String> = [];
+		program = WasmScalarClosureEscapes.rewrite(program, boundaryPlan.scalarClosures, exports, exportAdapters);
+		var exportRoots = [for (name in exports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
+		var scalarAbi = new WasmScalarAbi(program, exportRoots, false, true);
 		program = scalarAbi.rewrite();
-		var fieldLowering = new WasmGcFlattenFields(program, scalarAbi.signatures), inlineValueFields = true;
+		var fieldLowering = new WasmFlattenValueFields(program, name -> {
+			var signature = scalarAbi.signatures.get(name);
+			return signature != null && signature.throwsReceiver;
+		}), inlineValueFields = true;
 		program = fieldLowering.rewrite();
 		scalarAbi.validate(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
-			exportedFunctions = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
-			roots = exportedFunctions.copy();
+			exportedFunctions = exports,
+			roots = exportRoots.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
@@ -207,7 +218,7 @@ class WasmGcModuleBuilder {
 			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots);
 		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
-		var scalarLayout = new WasmGcValueLayout(program), scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => {
+		var scalarLayout = new WasmValueLayout(program), scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => {
 			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
 			interfaces: object.interfaces, fields: inlineValueFields ? scalarLayout.fields(object.fields) : object.fields, methods: object.methods
 		}]);
@@ -240,7 +251,7 @@ class WasmGcModuleBuilder {
 		module.start = startInit == null ? init : addGcStartFunction(module, startInit, init);
 		module.exports.push({name: "main", functionIndex: entry});
 		for (exported in exportedFunctions) {
-			var exportIndex = functions.get(exported);
+			var exportIndex = functions.get(exportAdapters.exists(exported) ? exportAdapters.get(exported) : exported);
 			if (exportIndex == null)
 				throw 'Wasm GC export "$exported" is not a reachable function';
 			module.exports.push({name: exported, functionIndex: exportIndex});
@@ -371,13 +382,13 @@ class WasmGcModuleBuilder {
 							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _), EndTry(_), Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
-						case Call(_, name, _) if (name == WasmGcScalarAbi.RETURN_MARKER || name == WasmGcScalarAbi.RETHROW_MARKER
+						case Call(_, name, _) if (name == WasmScalarAbi.RETURN_MARKER || name == WasmScalarAbi.RETHROW_MARKER
 							|| name == compiler.ir.IrReceiverCheck.NAME
 							|| name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK
 							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
-						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && isObjectReference(receiver.type)):
+						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || receiver.type == Dyn)):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
@@ -900,8 +911,9 @@ class WasmGcModuleBuilder {
 			var target = findFunction(program, targetName);
 			if (target == null || target.arguments.length == 0)
 				throw 'Wasm GC instance closure target "$targetName" has no receiver parameter';
-			var receiverType = switch target.arguments[0].type {
+			var receiverType:Null<String> = switch target.arguments[0].type {
 				case Obj(name): name;
+				case Dyn: null;
 				default: throw 'Wasm GC instance closure target "$targetName" has unsupported receiver type ${Std.string(target.arguments[0].type)}';
 			}, thunkName = gcClosureThunkName(targetName), functionIndex = functions.get(targetName);
 			if (functionIndex == null)
@@ -917,10 +929,9 @@ class WasmGcModuleBuilder {
 				type:WasmFunctionType = {parameters: parameters, results: results},
 				thunkIndex = module.addFunction(new WasmFunction(thunkName, type));
 			functions.set(thunkName, thunkIndex);
-			var body:Array<WasmInstruction> = [
-				LocalGet(0),
-				RefCast({nullable: false, heap: Type(plan.objectType(receiverType))})
-			];
+			var body:Array<WasmInstruction> = [LocalGet(0)];
+			if (receiverType != null)
+				body.push(RefCast({nullable: false, heap: Type(plan.objectType(receiverType))}));
 			for (index in 1...target.arguments.length)
 				body.push(LocalGet(index));
 			body.push(Call(functionIndex));

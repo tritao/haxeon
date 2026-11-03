@@ -54,6 +54,9 @@ class IrGenerator {
 	static var nullaryEnumConstructors:Map<String, Array<Int>> = [];
 	static var valueClasses:Map<String, Bool> = [];
 	static var classBases:Map<String, String> = [];
+	static var genericOwnerAliases:Map<String, String> = [];
+	static var genericClasses:Map<String, Bool> = [];
+	static var genericOwnerOrigins:Map<String, String> = [];
 	static var hashableClasses:Map<String, Bool> = [];
 	static var equatableTypes:Map<String, Bool> = [];
 	static var observableClasses:Map<String, Bool> = [];
@@ -61,7 +64,6 @@ class IrGenerator {
 	static var observableFieldBits:Map<String, Map<String, Int>> = [];
 	static var observableFieldStride:Int = 1;
 	static var generatedObjects:Array<IrObject> = [];
-	static var generatedHashableMapObjects:Map<String, Bool> = [];
 	static var headerlessValueClasses:Bool = true;
 	static var flatValueObjects:Map<String, IrObject> = [];
 	static var inlineValueObjects:Map<String, IrObject> = [];
@@ -90,8 +92,11 @@ class IrGenerator {
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
 	/** Supply the program's classes: which are value classes (see `isHeaderlessValueClass`) and what each extends (see `isUpcast`). */
-	public static function bindClasses(classes:Array<TypedClass>, ?interfaces:Array<TypedInterface>):Void {
+	public static function bindClasses(classes:Array<TypedClass>, ?interfaces:Array<TypedInterface>, ?ownerAliases:Map<String, String>):Void {
 		valueClasses = [];
+		genericOwnerAliases = ownerAliases == null ? [] : ownerAliases;
+		genericClasses = [];
+		genericOwnerOrigins = [];
 		classBases = [];
 		hashableClasses = [];
 		equatableTypes = [];
@@ -106,6 +111,10 @@ class IrGenerator {
 				interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
 		for (classDecl in classes) {
 			classesByName.set(classDecl.name, classDecl);
+			if (classDecl.specializationOrigin != null)
+				genericOwnerOrigins.set(classDecl.name, classDecl.specializationOrigin);
+			if (classDecl.genericParameters != null && classDecl.genericParameters.length > 0)
+				genericClasses.set(classDecl.name, true);
 			if (classDecl.isValue)
 				valueClasses.set(Std.string(classDecl.name), true);
 			if (classDecl.base != null)
@@ -259,6 +268,11 @@ class IrGenerator {
 			}
 	}
 
+	public static function genericOwnerOrigin(name:String):String {
+		var origin = genericOwnerOrigins.get(name);
+		return origin == null ? name : origin;
+	}
+
 	static function hasUnobservableMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>):Bool {
 		for (entry in metadata)
 			if (entry.name == "unobservable") return true;
@@ -299,7 +313,6 @@ class IrGenerator {
 	/** Bind the mutable object list before lowering fields, so synthetic collection layouts join the same program. */
 	public static function bindGeneratedObjects(objects:Array<IrObject>):Void {
 		generatedObjects = objects;
-		generatedHashableMapObjects = [];
 	}
 
 	/** Whether `source` is an object type extending the object type `target`, so the conversion cannot fail. */
@@ -320,37 +333,26 @@ class IrGenerator {
 		return false;
 	}
 
-	static function isCustomHashableMap(key:CompilerType, value:CompilerType):Bool
-		return RuntimeType.mapName(key, value) == null && RuntimeType.hashableMapValueSupported(value) && isHashableMapKey(key);
+	static function isSpecializedMap(key:CompilerType, value:CompilerType):Bool
+		return RuntimeType.usesSpecializedMap(key, value, mapValueType, isHashableMapKey);
 
-	static function isHashableMapKey(type:CompilerType):Bool
-		return switch type {
-			case TNullable(element): isHashableMapKey(element);
-			case TInstance(NominalKind.Class, name, _): hashableClasses.exists(name);
-			default: false;
-		};
+	static function mapValueType(type:CompilerType):Bool return switch type {
+		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
+		case TInstance(NominalKind.Class, name, _): valueClasses.exists(name);
+		default: false;
+	};
 
-	static function registerHashableMapObject(key:CompilerType, value:CompilerType):String {
-		var name = RuntimeType.hashableMapObjectName(key, value);
-		if (!generatedHashableMapObjects.exists(name)) {
-			generatedHashableMapObjects.set(name, true);
-			generatedObjects.push({
-				name: name,
-				isValue: false,
-				base: null,
-				interfaces: [],
-				fields: [
-					{name: "keys", type: Array(lowerType(key))},
-					{name: "values", type: Array(lowerType(value))},
-					{name: "active", type: Array(Bool)},
-					{name: "free", type: Array(I32)},
-					{name: "buckets", type: Abstract("map_int_ref")},
-					{name: "size", type: I32}
-				],
-				methods: []
-			});
-		}
-		return name;
+	static function isHashableMapKey(type:CompilerType):Bool return switch type {
+		case TAbstract(_, _, representation), TNullable(representation): isHashableMapKey(representation);
+		case TInstance(NominalKind.Class, name, _): hashableClasses.exists(name);
+		default: false;
+	};
+
+	static function specializedMapOwner(key:CompilerType, value:CompilerType):String {
+		var semantic:CompilerType = TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [RuntimeType.specializedMapKey(key), value]),
+			owner = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(semantic));
+		if (owner == null) throw 'Missing specialized generic map owner for $key -> $value';
+		return owner;
 	}
 
 	/** Flat value objects also have a selected native field layout for RawPtr aggregate copies. */
@@ -631,7 +633,14 @@ class IrGenerator {
 					}
 				case TFieldAssign(object, name, value, _):
 					var observableBit = observableFieldBit(object.type, name);
-					if (observableBit != null) {
+					if (isErasedGenericOwner(object.type) && observableBit == null) {
+						var operands = lowerOperands([object, value], builder, localTypes, true);
+						if (!builder.isTerminated()) {
+							if (operands[0].type == Dyn)
+								builder.call(erasedOwnerOperation(object.type, "set", name), operands, Void);
+							else builder.fieldSet(operands[0], name, operands[1]);
+						}
+					} else if (observableBit != null) {
 						var operands = lowerOperands([object, value], builder, localTypes);
 						if (!builder.isTerminated()) {
 							if (observableConstructorInitialization && isCurrentObject(object))
@@ -1168,10 +1177,11 @@ class IrGenerator {
 	static function statementsScopeEnd(statements:Array<TypedStatement>, fallback:Int):Int
 		return statements.length == 0 ? fallback : typedStatementSpan(statements[statements.length - 1]).end;
 
-	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>):Array<CfgValue> {
+	static function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>, firstOwner:Bool = false):Array<CfgValue> {
 		var temporaries:Array<{name:String, type:IrType}> = [];
-		for (expression in expressions) {
-			var value = lowerExpression(expression, builder, localTypes),
+		for (index in 0...expressions.length) {
+			var expression = expressions[index],
+				value = firstOwner && index == 0 ? lowerOwnerReceiver(expression, builder, localTypes) : lowerExpression(expression, builder, localTypes),
 				name = '$' + 'operand:${expression.span.start}:${value.id}';
 			if (builder.isTerminated())
 				return [];
@@ -1184,8 +1194,12 @@ class IrGenerator {
 
 	static function lowerMapGet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType,
 			?resultType:CompilerType):CfgValue {
-		if (isCustomHashableMap(keyType, valueType))
-			return lowerHashableMapGet(builder, localTypes, map, key, keyType, valueType, resultType);
+		if (isSpecializedMap(keyType, valueType)) {
+			var nullable = lowerType(compiler.types.typing.CallResolver.nullableMapValue(valueType)),
+				result = lowerSpecializedMapCall(builder, map, "get", [lowerMapKey(builder, key, keyType)], keyType, valueType, nullable),
+				target = lowerType(resultType == null ? valueType : resultType);
+			return abiBoundaryCast(builder, result, target);
+		}
 		var name = RuntimeType.requireMapName(keyType, valueType),
 			target = lowerType(resultType == null ? valueType : resultType);
 		var value = builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], Dyn);
@@ -1213,8 +1227,8 @@ class IrGenerator {
 
 	static function lowerMapSet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, value:CfgValue, keyType:CompilerType,
 			valueType:CompilerType):CfgValue {
-		if (isCustomHashableMap(keyType, valueType))
-			return lowerHashableMapSet(builder, localTypes, map, key, value, keyType, valueType);
+		if (isSpecializedMap(keyType, valueType))
+			return lowerSpecializedMapCall(builder, map, "set", [lowerMapKey(builder, key, keyType), value], keyType, valueType, Void);
 		var name = RuntimeType.requireMapName(keyType, valueType);
 		var stored = value;
 		if (mapValueBox(valueType) != null)
@@ -1224,356 +1238,15 @@ class IrGenerator {
 		return builder.call('__${name}_set', [map, lowerMapKey(builder, key, keyType), stored], Void);
 	}
 
-	static var hashableMapSerial = 0;
-
-	static function lowerHashableMapAllocation(builder:CfgBuilder, keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var name = registerHashableMapObject(keyType, valueType),
-			map = builder.newObject(name),
-			bucketsType = Abstract(RuntimeType.requireMapName(TInt, TArray(TInt))),
-			keys = lowerArrayAllocation(builder, keyType, builder.constInt(0)),
-			values = lowerArrayAllocation(builder, valueType, builder.constInt(0)),
-			active = lowerArrayAllocation(builder, TBool, builder.constInt(0)),
-			free = lowerArrayAllocation(builder, TInt, builder.constInt(0)),
-			buckets = builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "alloc"), [], bucketsType);
-		builder.fieldSet(map, "keys", keys);
-		builder.fieldSet(map, "values", values);
-		builder.fieldSet(map, "active", active);
-		builder.fieldSet(map, "free", free);
-		builder.fieldSet(map, "buckets", buckets);
-		builder.fieldSet(map, "size", builder.constInt(0));
+	static function lowerSpecializedMapAllocation(builder:CfgBuilder, key:CompilerType, value:CompilerType):CfgValue {
+		var owner = specializedMapOwner(key, value), map = builder.newObject(owner);
+		builder.call(owner + ".new", [map], Void);
 		return map;
 	}
 
-	/** Return the dense key-array index of an equal key, or -1. Hash collisions always go through declared equality. */
-	static function lowerHashableMapFind(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-find-map:$id', keyName = '$' + 'hashable-map-find-key:$id',
-			indexName = '$' + 'hashable-map-index:$id', resultName = '$' + 'hashable-map-result:$id',
-			bucketName = '$' + 'hashable-map-bucket:$id', rawName = '$' + 'hashable-map-raw:$id',
-			positionName = '$' + 'hashable-map-position:$id', bucketType:IrType = Array(I32),
-			search = builder.createBlock(), condition = builder.createBlock(), body = builder.createBlock(),
-			checkActive = builder.createBlock(), compareBlock = builder.createBlock(), found = builder.createBlock(), next = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(keyName, key.type);
-		localTypes.set(indexName, I32);
-		localTypes.set(resultName, I32);
-		localTypes.set(bucketName, bucketType);
-		localTypes.set(rawName, Dyn);
-		localTypes.set(positionName, I32);
-		builder.store(mapName, map);
-		builder.store(keyName, key);
-		var mapType = builder.load(mapName, map.type), hash = builder.call(HashGenerator.hashName(keyType), [builder.load(keyName, key.type)], I32),
-			buckets = builder.fieldGet(mapType, "buckets", Abstract(RuntimeType.requireMapName(TInt, TArray(TInt)))),
-			raw = builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "get"), [buckets, hash], Dyn);
-		builder.store(resultName, builder.constInt(-1));
-		builder.store(rawName, raw);
-		builder.branch(builder.equal(builder.load(rawName, Dyn), builder.constNull(Dyn)), done, search);
-		builder.select(search);
-		builder.store(bucketName, abiBoundaryCast(builder, builder.load(rawName, Dyn), bucketType));
-		builder.store(indexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(bucketName, bucketType))), body, done);
-		builder.select(body);
-		var position = builder.arrayGet(builder.load(bucketName, bucketType), builder.load(indexName, I32), I32);
-		builder.store(positionName, position);
-		// Negative bucket slots are tombstones; skip them before looking up the key.
-		builder.branch(builder.less(builder.load(positionName, I32), builder.constInt(0)), next, checkActive);
-		builder.select(checkActive);
-		var active = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool));
-		builder.branch(builder.equal(elementGet(builder, active, builder.load(positionName, I32), Bool), builder.constBool(true)), compareBlock, next);
-		builder.select(compareBlock);
-		var keys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType))),
-			candidate = elementGet(builder, keys, builder.load(positionName, I32), lowerType(keyType)),
-			equal = builder.call(ValueEqualityGenerator.equalsName(keyType), [candidate, builder.load(keyName, key.type)], Bool);
-		builder.branch(equal, found, next);
-		builder.select(found);
-		builder.store(resultName, builder.load(positionName, I32));
-		builder.jump(done);
-		builder.select(next);
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(done);
-		return builder.load(resultName, I32);
-	}
-
-	static function lowerHashableMapGet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType,
-			valueType:CompilerType, ?resultType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-get-map:$id', indexName = '$' + 'hashable-map-get-index:$id',
-			resultName = '$' + 'hashable-map-get:$id', target = lowerType(resultType == null ? valueType : resultType),
-			storedType = lowerType(valueType), present = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(indexName, I32);
-		localTypes.set(resultName, target);
-		builder.store(mapName, map);
-		var index = lowerHashableMapFind(builder, localTypes, builder.load(mapName, map.type), key, keyType, valueType);
-		builder.store(indexName, index);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.constInt(0)), missing, present);
-		builder.select(present);
-		var values = builder.fieldGet(builder.load(mapName, map.type), "values", Array(storedType)),
-			stored = elementGet(builder, values, builder.load(indexName, I32), storedType);
-		builder.store(resultName, sameIrType(stored.type, target) ? stored : abiBoundaryCast(builder, stored, target));
-		builder.jump(done);
-		builder.select(missing);
-		builder.store(resultName, abiBoundaryCast(builder, builder.constNull(Dyn), target));
-		builder.jump(done);
-		builder.select(done);
-		return builder.load(resultName, target);
-	}
-
-	static function lowerHashableMapSet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, value:CfgValue,
-			keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-set-map:$id', keyName = '$' + 'hashable-map-set-key:$id',
-			valueName = '$' + 'hashable-map-set-value:$id', indexName = '$' + 'hashable-map-set-index:$id',
-			newIndexName = '$' + 'hashable-map-set-new-index:$id', hashName = '$' + 'hashable-map-set-hash:$id', rawName = '$' + 'hashable-map-set-raw:$id',
-			bucketName = '$' + 'hashable-map-set-bucket:$id', bucketIndexName = '$' + 'hashable-map-set-bucket-index:$id',
-			bucketType:IrType = Array(I32), update = builder.createBlock(), insert = builder.createBlock(), done = builder.createBlock(),
-			reuseSlot = builder.createBlock(), appendSlot = builder.createBlock(), haveSlot = builder.createBlock(), makeBucket = builder.createBlock(),
-			useBucket = builder.createBlock(), condition = builder.createBlock(), checkSlot = builder.createBlock(), useHole = builder.createBlock(),
-			advance = builder.createBlock(), append = builder.createBlock(), added = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(keyName, key.type);
-		localTypes.set(valueName, value.type);
-		localTypes.set(indexName, I32);
-		localTypes.set(newIndexName, I32);
-		localTypes.set(hashName, I32);
-		localTypes.set(rawName, Dyn);
-		localTypes.set(bucketName, bucketType);
-		localTypes.set(bucketIndexName, I32);
-		builder.store(mapName, map);
-		builder.store(keyName, key);
-		builder.store(valueName, value);
-		var found = lowerHashableMapFind(builder, localTypes, builder.load(mapName, map.type), builder.load(keyName, key.type), keyType, valueType);
-		builder.store(indexName, found);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.constInt(0)), insert, update);
-		builder.select(update);
-		var updateValues = builder.fieldGet(builder.load(mapName, map.type), "values", Array(lowerType(valueType)));
-		elementSet(builder, updateValues, builder.load(indexName, I32), builder.load(valueName, value.type));
-		builder.jump(done);
-		builder.select(insert);
-		var free = builder.fieldGet(builder.load(mapName, map.type), "free", Array(I32));
-		builder.branch(builder.less(builder.constInt(0), builder.arraySize(free)), reuseSlot, appendSlot);
-		builder.select(reuseSlot);
-		var reused = lowerArrayNativeCall(builder, TInt, "pop", [builder.fieldGet(builder.load(mapName, map.type), "free", Array(I32))], I32),
-			reuseKeys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType))),
-			reuseValues = builder.fieldGet(builder.load(mapName, map.type), "values", Array(lowerType(valueType))),
-			reuseActive = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool));
-		builder.store(newIndexName, reused);
-		elementSet(builder, reuseKeys, reused, builder.load(keyName, key.type));
-		elementSet(builder, reuseValues, reused, builder.load(valueName, value.type));
-		elementSet(builder, reuseActive, reused, builder.constBool(true));
-		builder.jump(haveSlot);
-		builder.select(appendSlot);
-		var appendKeys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType))),
-			appendValues = builder.fieldGet(builder.load(mapName, map.type), "values", Array(lowerType(valueType))),
-			appendActive = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool)), appended = builder.arraySize(appendKeys);
-		builder.store(newIndexName, appended);
-		lowerArrayNativeCall(builder, keyType, "push", [appendKeys, builder.load(keyName, key.type)], I32);
-		lowerArrayNativeCall(builder, valueType, "push", [appendValues, builder.load(valueName, value.type)], I32);
-		lowerArrayNativeCall(builder, TBool, "push", [appendActive, builder.constBool(true)], I32);
-		builder.jump(haveSlot);
-		builder.select(haveSlot);
-		var hash = builder.call(HashGenerator.hashName(keyType), [builder.load(keyName, key.type)], I32),
-			buckets = builder.fieldGet(builder.load(mapName, map.type), "buckets", Abstract(RuntimeType.requireMapName(TInt, TArray(TInt)))),
-			raw = builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "get"), [buckets, hash], Dyn);
-		builder.store(hashName, hash);
-		builder.store(rawName, raw);
-		builder.branch(builder.equal(builder.load(rawName, Dyn), builder.constNull(Dyn)), makeBucket, useBucket);
-		builder.select(makeBucket);
-		var fresh = lowerArrayAllocation(builder, TInt, builder.constInt(0)),
-			newBuckets = builder.fieldGet(builder.load(mapName, map.type), "buckets", Abstract(RuntimeType.requireMapName(TInt, TArray(TInt))));
-		builder.store(bucketName, fresh);
-		builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "set"), [newBuckets, builder.load(hashName, I32), fresh], Void);
-		lowerArrayNativeCall(builder, TInt, "push", [fresh, builder.load(newIndexName, I32)], I32);
-		builder.jump(added);
-		builder.select(useBucket);
-		builder.store(bucketName, abiBoundaryCast(builder, builder.load(rawName, Dyn), bucketType));
-		builder.store(bucketIndexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		var position = builder.load(bucketIndexName, I32), currentBucket = builder.load(bucketName, bucketType);
-		builder.branch(builder.less(position, builder.arraySize(currentBucket)), checkSlot, append);
-		builder.select(checkSlot);
-		var slot = builder.arrayGet(builder.load(bucketName, bucketType), builder.load(bucketIndexName, I32), I32);
-		builder.branch(builder.less(slot, builder.constInt(0)), useHole, advance);
-		builder.select(useHole);
-		builder.arraySet(builder.load(bucketName, bucketType), builder.load(bucketIndexName, I32), builder.load(newIndexName, I32));
-		builder.jump(added);
-		builder.select(advance);
-		builder.store(bucketIndexName, builder.add(builder.load(bucketIndexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(append);
-		lowerArrayNativeCall(builder, TInt, "push", [builder.load(bucketName, bucketType), builder.load(newIndexName, I32)], I32);
-		builder.jump(added);
-		builder.select(added);
-		var targetMap = builder.load(mapName, map.type);
-		builder.fieldSet(targetMap, "size", builder.add(builder.fieldGet(targetMap, "size", I32), builder.constInt(1)));
-		builder.jump(done);
-		builder.select(done);
-		return builder.constInt(0);
-	}
-
-	static function lowerHashableMapExists(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		return builder.equal(builder.less(lowerHashableMapFind(builder, localTypes, map, key, keyType, valueType), builder.constInt(0)), builder.constBool(false));
-	}
-
-	/** Removed entries stay in the high-water arrays and are reused through a free-index stack. */
-	static function lowerHashableMapRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-remove-map:$id', keyName = '$' + 'hashable-map-remove-key:$id',
-			resultName = '$' + 'hashable-map-remove:$id', entryIndexName = '$' + 'hashable-map-remove-entry:$id',
-			bucketName = '$' + 'hashable-map-remove-bucket:$id', scanIndexName = '$' + 'hashable-map-remove-index:$id',
-			rawName = '$' + 'hashable-map-remove-raw:$id', bucketType:IrType = Array(I32),
-			missing = builder.createBlock(), setup = builder.createBlock(), condition = builder.createBlock(), body = builder.createBlock(),
-			remove = builder.createBlock(), next = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(keyName, key.type);
-		localTypes.set(resultName, Bool);
-		localTypes.set(entryIndexName, I32);
-		localTypes.set(bucketName, bucketType);
-		localTypes.set(scanIndexName, I32);
-		localTypes.set(rawName, Dyn);
-		builder.store(mapName, map);
-		builder.store(keyName, key);
-		var found = lowerHashableMapFind(builder, localTypes, builder.load(mapName, map.type), builder.load(keyName, key.type), keyType, valueType);
-		builder.store(entryIndexName, found);
-		builder.store(resultName, builder.constBool(false));
-		builder.branch(builder.less(builder.load(entryIndexName, I32), builder.constInt(0)), missing, setup);
-		builder.select(missing);
-		builder.jump(done);
-		builder.select(setup);
-		var hash = builder.call(HashGenerator.hashName(keyType), [builder.load(keyName, key.type)], I32),
-			buckets = builder.fieldGet(builder.load(mapName, map.type), "buckets", Abstract(RuntimeType.requireMapName(TInt, TArray(TInt)))),
-			raw = builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "get"), [buckets, hash], Dyn);
-		builder.store(rawName, raw);
-		builder.store(bucketName, abiBoundaryCast(builder, builder.load(rawName, Dyn), bucketType));
-		builder.store(scanIndexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		builder.branch(builder.less(builder.load(scanIndexName, I32), builder.arraySize(builder.load(bucketName, bucketType))), body, done);
-		builder.select(body);
-		var slot = builder.arrayGet(builder.load(bucketName, bucketType), builder.load(scanIndexName, I32), I32);
-		builder.branch(builder.equal(slot, builder.load(entryIndexName, I32)), remove, next);
-		builder.select(remove);
-		builder.arraySet(builder.load(bucketName, bucketType), builder.load(scanIndexName, I32), builder.constInt(-1));
-		var active = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool)),
-			free = builder.fieldGet(builder.load(mapName, map.type), "free", Array(I32));
-		elementSet(builder, active, builder.load(entryIndexName, I32), builder.constBool(false));
-		lowerArrayNativeCall(builder, TInt, "push", [free, builder.load(entryIndexName, I32)], I32);
-		var targetMap = builder.load(mapName, map.type);
-		builder.fieldSet(targetMap, "size", builder.sub(builder.fieldGet(targetMap, "size", I32), builder.constInt(1)));
-		builder.store(resultName, builder.constBool(true));
-		builder.jump(done);
-		builder.select(next);
-		builder.store(scanIndexName, builder.add(builder.load(scanIndexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(done);
-		return builder.load(resultName, Bool);
-	}
-
-	static function lowerHashableMapClear(builder:CfgBuilder, map:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var keys = builder.fieldGet(map, "keys", Array(lowerType(keyType))), values = builder.fieldGet(map, "values", Array(lowerType(valueType))),
-			active = builder.fieldGet(map, "active", Array(Bool)), free = builder.fieldGet(map, "free", Array(I32)),
-			buckets = builder.fieldGet(map, "buckets", Abstract(RuntimeType.requireMapName(TInt, TArray(TInt))));
-		lowerArrayNativeCall(builder, keyType, "resize", [keys, builder.constInt(0)], Void);
-		lowerArrayNativeCall(builder, valueType, "resize", [values, builder.constInt(0)], Void);
-		lowerArrayNativeCall(builder, TBool, "resize", [active, builder.constInt(0)], Void);
-		lowerArrayNativeCall(builder, TInt, "resize", [free, builder.constInt(0)], Void);
-		builder.call(RuntimeType.mapNative(TInt, TArray(TInt), "clear"), [buckets], Void);
-		builder.fieldSet(map, "size", builder.constInt(0));
-		return builder.constVoid();
-	}
-
-	static function lowerHashableMapCopy(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-copy-map:$id', copyName = '$' + 'hashable-map-copy-result:$id',
-			indexName = '$' + 'hashable-map-copy-index:$id', condition = builder.createBlock(), body = builder.createBlock(),
-			copyEntry = builder.createBlock(), advance = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(copyName, map.type);
-		localTypes.set(indexName, I32);
-		builder.store(mapName, map);
-		builder.store(copyName, lowerHashableMapAllocation(builder, keyType, valueType));
-		builder.store(indexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		var keys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType)));
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(keys)), body, done);
-		builder.select(body);
-		var active = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool));
-		builder.branch(builder.equal(elementGet(builder, active, builder.load(indexName, I32), Bool), builder.constBool(true)), copyEntry, advance);
-		builder.select(copyEntry);
-		var sourceMap = builder.load(mapName, map.type),
-			entryKeys = builder.fieldGet(sourceMap, "keys", Array(lowerType(keyType))),
-			entryValues = builder.fieldGet(sourceMap, "values", Array(lowerType(valueType))),
-			key = elementGet(builder, entryKeys, builder.load(indexName, I32), lowerType(keyType)),
-			value = elementGet(builder, entryValues, builder.load(indexName, I32), lowerType(valueType));
-		lowerHashableMapSet(builder, localTypes, builder.load(copyName, map.type), key, value, keyType, valueType);
-		builder.jump(advance);
-		builder.select(advance);
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(done);
-		return builder.load(copyName, map.type);
-	}
-
-	static function lowerHashableMapKeys(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-keys-map:$id', resultName = '$' + 'hashable-map-keys:$id',
-			indexName = '$' + 'hashable-map-keys-index:$id', resultType:IrType = Array(lowerType(keyType)),
-			condition = builder.createBlock(), body = builder.createBlock(), append = builder.createBlock(), advance = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(resultName, resultType);
-		localTypes.set(indexName, I32);
-		builder.store(mapName, map);
-		builder.store(resultName, lowerArrayAllocation(builder, keyType, builder.constInt(0)));
-		builder.store(indexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		var keys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType)));
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(keys)), body, done);
-		builder.select(body);
-		var active = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool));
-		builder.branch(builder.equal(elementGet(builder, active, builder.load(indexName, I32), Bool), builder.constBool(true)), append, advance);
-		builder.select(append);
-		var sourceKeys = builder.fieldGet(builder.load(mapName, map.type), "keys", Array(lowerType(keyType)));
-		lowerArrayNativeCall(builder, keyType, "push", [builder.load(resultName, resultType), elementGet(builder, sourceKeys, builder.load(indexName, I32), lowerType(keyType))], I32);
-		builder.jump(advance);
-		builder.select(advance);
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(done);
-		return builder.load(resultName, resultType);
-	}
-
-	static function lowerHashableMapValues(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var id = hashableMapSerial++, mapName = '$' + 'hashable-map-values-map:$id', resultName = '$' + 'hashable-map-values:$id',
-			indexName = '$' + 'hashable-map-values-index:$id', resultType:IrType = Array(lowerType(valueType)),
-			condition = builder.createBlock(), body = builder.createBlock(), append = builder.createBlock(), advance = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(mapName, map.type);
-		localTypes.set(resultName, resultType);
-		localTypes.set(indexName, I32);
-		builder.store(mapName, map);
-		builder.store(resultName, lowerArrayAllocation(builder, valueType, builder.constInt(0)));
-		builder.store(indexName, builder.constInt(0));
-		builder.jump(condition);
-		builder.select(condition);
-		var values = builder.fieldGet(builder.load(mapName, map.type), "values", Array(lowerType(valueType)));
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(values)), body, done);
-		builder.select(body);
-		var active = builder.fieldGet(builder.load(mapName, map.type), "active", Array(Bool));
-		builder.branch(builder.equal(elementGet(builder, active, builder.load(indexName, I32), Bool), builder.constBool(true)), append, advance);
-		builder.select(append);
-		var sourceValues = builder.fieldGet(builder.load(mapName, map.type), "values", Array(lowerType(valueType)));
-		lowerArrayNativeCall(builder, valueType, "push", [builder.load(resultName, resultType), elementGet(builder, sourceValues, builder.load(indexName, I32), lowerType(valueType))], I32);
-		builder.jump(advance);
-		builder.select(advance);
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(condition);
-		builder.select(done);
-		return builder.load(resultName, resultType);
+	static function lowerSpecializedMapCall(builder:CfgBuilder, map:CfgValue, operation:String, arguments:Array<CfgValue>,
+			key:CompilerType, value:CompilerType, result:IrType):CfgValue {
+		return builder.call(specializedMapOwner(key, value) + "." + operation, [map].concat(arguments), result);
 	}
 
 	/**
@@ -1621,37 +1294,6 @@ class IrGenerator {
 	}
 
 
-	static function lowerValueMapValues(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType,
-			valueType:CompilerType):CfgValue {
-		var box = mapValueBox(valueType),
-			elementType = lowerType(valueType),
-			resultType:IrType = Array(elementType),
-			boxes = builder.call(RuntimeType.mapNative(keyType, valueType, "values"), [map], Array(Dyn)),
-			boxesName = '$' + 'map-boxes:${boxes.id}',
-			resultName = '$' + 'map-boxed-values:${boxes.id}',
-			indexName = '$' + 'map-boxes-index:${boxes.id}';
-		localTypes.set(boxesName, Array(Dyn));
-		localTypes.set(resultName, resultType);
-		localTypes.set(indexName, I32);
-		builder.store(boxesName, boxes);
-		builder.store(resultName, lowerArrayAllocation(builder, valueType, builder.arraySize(builder.load(boxesName, Array(Dyn)))));
-		builder.store(indexName, builder.constInt(0));
-		var conditionBlock = builder.createBlock(),
-			bodyBlock = builder.createBlock(),
-			afterBlock = builder.createBlock();
-		builder.jump(conditionBlock);
-		builder.select(conditionBlock);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(boxesName, Array(Dyn)))), bodyBlock, afterBlock);
-		builder.select(bodyBlock);
-		var index = builder.load(indexName, I32),
-			stored = elementGet(builder, builder.load(boxesName, Array(Dyn)), index, Dyn);
-		var value = box == null ? abiBoundaryCast(builder, stored, elementType) : unboxMapValue(builder, stored, box, elementType);
-		elementSet(builder, builder.load(resultName, resultType), index, value);
-		builder.store(indexName, builder.add(index, builder.constInt(1)));
-		builder.jump(conditionBlock);
-		builder.select(afterBlock);
-		return builder.load(resultName, resultType);
-	}
 
 	static function mapEnumName(type:CompilerType):Null<String>
 		return switch type {
@@ -1669,20 +1311,21 @@ class IrGenerator {
 	static function lowerMapKey(builder:CfgBuilder, key:CfgValue, keyType:CompilerType):CfgValue
 		return mapEnumName(keyType) == null ? key : builder.enumIndex(key);
 
-	/** Convert the int-backed native key array back to source-level enum values. */
+	/** Convert an int-backed enum key array back to source-level enum values. */
 	static function lowerMapKeys(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var nativeName = RuntimeType.mapNative(keyType, valueType, "keys"),
-			nativeKeyArrayType:IrType = Array(I32),
+		var specialized = isSpecializedMap(keyType, valueType), nativeKeyArrayType:IrType = Array(I32),
 			sourceKeyArrayType:IrType = Array(lowerType(keyType));
 		if (mapEnumName(keyType) == null)
-			return builder.call(nativeName, [map], sourceKeyArrayType);
+			return specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType, sourceKeyArrayType)
+				: builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], sourceKeyArrayType);
 
 		var enumName = requireMapEnumName(keyType),
 			enumConstructorCount = enumConstructorCounts.get(enumName);
 		if (enumConstructorCount == null || enumConstructorCount == 0)
 			throw 'Missing non-empty enum layout for map key "$enumName"';
 		var sourceKeyType = lowerType(keyType),
-			rawArray = builder.call(nativeName, [map], nativeKeyArrayType),
+			rawArray = specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType, nativeKeyArrayType)
+				: builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], nativeKeyArrayType),
 			rawName = '$' + 'map-enum-keys-raw:${rawArray.id}',
 			resultName = '$' + 'map-enum-keys-result:${rawArray.id}',
 			indexName = '$' + 'map-enum-keys-index:${rawArray.id}',
@@ -2193,8 +1836,6 @@ class IrGenerator {
 	public static inline var ValueCopyReason = "value-copy";
 	/** Distinguishes a mutable element receiver from a value copied out of an array. */
 	public static inline var ArrayValuePlaceReason = "array-value-place";
-	/** Existing boxed collections copy their elements after a range operation. */
-	public static inline var ArrayValueCopyReason = "array-value-copy";
 
 	static function copyValue(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
 		var previous = builder.beginGenerated(ValueCopyReason);
@@ -2337,7 +1978,13 @@ class IrGenerator {
 					builder.fieldGet(cell, "value", lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
-			case TMethodRef(object, name): builder.instanceClosure(name, lowerExpression(object, builder, localTypes), lowerType(expression.type));
+			case TMethodRef(object, name):
+				var separator = lastSeparator(name), owner = name.substring(0, separator), member = name.substring(separator + 1),
+					target = genericClasses.exists(owner)
+						? '$' + 'generic-method-reference:$owner:$member:' + compiler.semantic.SemanticSignature.type(object.type) + ':'
+							+ compiler.semantic.SemanticSignature.type(expression.type)
+						: name;
+				builder.instanceClosure(target, lowerExpression(object, builder, localTypes), lowerType(expression.type));
 			case TLambda(name, environment, captures):
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
 					var object = builder.newObject(environment);
@@ -2515,20 +2162,16 @@ class IrGenerator {
 				builder.call(primitive.type == TInt ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
 			case TCall("__reference_equal", [left, right]):
 				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
-			case TCall("__std_is_of_type", args):
+			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
 				if (args.length != 2)
-					throw "Std.isOfType intrinsic requires value and type operands";
-				builder.call("__std_is_of_type", [
-					lowerExpression(args[0], builder, localTypes),
-					builder.typeValue(lowerType(args[1].type))
-				], Bool);
-			case TCall("__std_is_exact_type", args):
-				if (args.length != 2)
-					throw "Std.isExactType intrinsic requires value and type operands";
-				builder.call("__std_is_exact_type", [
-					lowerExpression(args[0], builder, localTypes),
-					builder.typeValue(lowerType(args[1].type))
-				], Bool);
+					throw "Runtime type test requires value and type operands";
+				var input = lowerExpression(args[0], builder, localTypes),
+					origin = switch args[1].type {
+						case TInstance(NominalKind.Class, name, _) if (genericClasses.exists(name)): name;
+						default: null;
+					};
+				if (origin == null) builder.call(intrinsic, [input, builder.typeValue(lowerType(args[1].type))], Bool);
+				else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"), [input], Bool);
 			case TCall(name, args) if (StringTools.startsWith(name, "$generic:") && args.length > 0 && optionalFieldPlace(args[0]) != null):
 				var place = optionalFieldPlace(args[0]);
 				if (place == null) throw "Missing optional generic receiver";
@@ -2538,11 +2181,13 @@ class IrGenerator {
 				if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
 				builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
 					lowerType(expression.type));
-			case TCall(name, args): builder.call(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
+			case TCall(name, args):
+				var directBase = args.length > 0 && isCurrentObject(args[0]) && directBaseMethod(name, localTypes);
+				builder.call(name, lowerOperands(args, builder, localTypes, directBase), lowerType(expression.type));
 			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var customMap = switch receiver.type {
-					case TMap(key, value): isCustomHashableMap(key, value);
+					case TMap(key, value): isSpecializedMap(key, value);
 					default: false;
 				}, nativeName = switch receiver.type {
 					case TArray(element): RuntimeType.arrayNative(element, operation);
@@ -2555,10 +2200,6 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
-					case TArray(element) if ((operation == "copy" || operation == "slice" || operation == "concat")
-						&& arrayValueElement(lowerType(element))):
-						var result = lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
-						copyArrayValues(builder, result, lowerType(element), localTypes);
 					case TArray(element) if (operation == "index_of" && isEnumType(element)):
 						lowerEnumArrayIndexOf(builder, localTypes, element, lowered);
 					case TArray(element) if (operation == "remove" && isEnumType(element)):
@@ -2569,28 +2210,16 @@ class IrGenerator {
 						lowerValueArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, localTypes, lowered[0], lowered[1], lowered[2], key, value);
-					case TMap(key, value) if (operation == "keys" && customMap):
-						lowerHashableMapKeys(builder, localTypes, lowered[0], key, value);
 					case TMap(key, value) if (operation == "keys"):
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
-					case TMap(key, value) if (operation == "values" && customMap):
-						lowerHashableMapValues(builder, localTypes, lowered[0], key, value);
-					case TMap(key, value) if (operation == "values" && arrayValueElement(lowerType(value))):
-						lowerValueMapValues(builder, localTypes, lowered[0], key, value);
-					case TMap(key, value) if (operation == "size" && customMap):
-						builder.fieldGet(lowered[0], "size", I32);
-					case TMap(key, value) if (operation == "clear" && customMap):
-						lowerHashableMapClear(builder, lowered[0], key, value);
-					case TMap(key, value) if (operation == "copy" && customMap):
-						lowerHashableMapCopy(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value) if (customMap):
+						var arguments = lowered.slice(1);
+						if ((operation == "exists" || operation == "remove") && arguments.length > 0)
+							arguments[0] = lowerMapKey(builder, arguments[0], key);
+						lowerSpecializedMapCall(builder, lowered[0], operation, arguments, key, value, lowerType(expression.type));
 					case TMap(key, value) if (operation == "exists" || operation == "remove"):
-						if (customMap) {
-							if (operation == "exists") lowerHashableMapExists(builder, localTypes, lowered[0], lowered[1], key, value);
-							else lowerHashableMapRemove(builder, localTypes, lowered[0], lowered[1], key, value);
-						} else {
-							lowered[1] = lowerMapKey(builder, lowered[1], key);
-							builder.call(nativeName, lowered, lowerType(expression.type));
-						}
+						lowered[1] = lowerMapKey(builder, lowered[1], key);
+						builder.call(nativeName, lowered, lowerType(expression.type));
 					default:
 						var resultType = lowerType(expression.type);
 						builder.call(nativeName, lowered, resultType);
@@ -2785,8 +2414,9 @@ class IrGenerator {
 			case TToInterface(value, name):
 				builder.toVirtual(lowerExpression(value, builder, localTypes), Virtual(name));
 			case TNew(typeName, args, hasConstructor):
-				var object = builder.newObject(typeName),
-					objectType:IrType = Obj(typeName),
+				var resultType = lowerType(expression.type), physicalName = switch resultType { case Obj(name): name; default: typeName; },
+					object = builder.newObject(physicalName),
+					objectType:IrType = Obj(physicalName),
 					objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
 				localTypes.set(objectName, objectType);
 				builder.store(objectName, object);
@@ -2795,9 +2425,10 @@ class IrGenerator {
 						constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
 					for (argument in loweredArguments)
 						constructorArgs.push(argument);
-					builder.call('$typeName.new', constructorArgs, Void);
+					builder.call('$physicalName.new', constructorArgs, Void);
 				}
-				builder.load(objectName, objectType);
+				var constructed = builder.load(objectName, objectType);
+				resultType == Dyn ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
@@ -2860,8 +2491,8 @@ class IrGenerator {
 				var types = switch expression.type {
 					case TMap(key, value): {key: key, value: value};
 					default: throw "Map literal requires a map type";
-				}, resultType = lowerType(expression.type), map = isCustomHashableMap(types.key, types.value)
-					? lowerHashableMapAllocation(builder, types.key, types.value)
+				}, resultType = lowerType(expression.type), map = isSpecializedMap(types.key, types.value)
+					? lowerSpecializedMapAllocation(builder, types.key, types.value)
 					: builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [], resultType),
 					mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
 				localTypes.set(mapName, resultType);
@@ -3119,13 +2750,18 @@ class IrGenerator {
 			case TNewArray(element, length):
 				lowerArrayAllocation(builder, element, lowerExpression(length, builder, localTypes));
 			case TNewMap(key, value):
-				if (isCustomHashableMap(key, value)) lowerHashableMapAllocation(builder, key, value);
+				if (isSpecializedMap(key, value)) lowerSpecializedMapAllocation(builder, key, value);
 				else builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name):
 				var observableBit = observableFieldBit(object.type, name);
-				observableBit == null
-					? builder.fieldGet(lowerExpression(object, builder, localTypes), name, lowerType(expression.type))
-					: lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
+				if (observableBit != null)
+					lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
+				else {
+					var receiver = lowerOwnerReceiver(object, builder, localTypes);
+					if (receiver.type == Dyn && isErasedGenericOwner(object.type))
+						builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], lowerType(expression.type));
+					else builder.fieldGet(receiver, name, lowerType(expression.type));
+				}
 			case TMethodCall(object, name, args):
 				var place = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
 				if (place != null) {
@@ -3155,18 +2791,25 @@ class IrGenerator {
 					var operands:Array<TypedExpression> = [object];
 					for (argument in args)
 						operands.push(argument);
-					var loweredOperands = lowerOperands(operands, builder, localTypes),
+					var loweredOperands = lowerOperands(operands, builder, localTypes, true),
 						receiver = loweredOperands[0],
 						callArgs:Array<CfgValue> = [];
 					for (index in 1...loweredOperands.length)
 						callArgs.push(loweredOperands[index]);
 					var separator = IrGenerator.lastSeparator(name);
-					builder.methodCall(receiver, name.substring(separator + 1, name.length), callArgs, lowerType(expression.type));
+					var method = name.substring(separator + 1, name.length);
+					if (receiver.type == Dyn && isErasedGenericOwner(object.type))
+						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
+					else builder.methodCall(receiver, method, callArgs, lowerType(expression.type));
 				}
 			case TSuperCall(owner, args):
 				// Arguments may branch; load `this` in the block that performs the call.
 				var loweredArguments = lowerOperands(args, builder, localTypes);
-				builder.call(owner + ".new", [builder.load("this", localTypes.get("this"))].concat(loweredArguments), Void);
+				var receiverType = localTypes.get("this"), physicalBase = switch receiverType {
+					case Obj(name) if (classBases.exists(name)): classBases.get(name);
+					default: owner;
+				};
+				builder.call(physicalBase + ".new", [builder.load("this", receiverType)].concat(loweredArguments), Void);
 			case TIndex(array, index):
 				var operands = lowerOperands([array, index], builder, localTypes);
 				elementGet(builder, operands[0], operands[1], lowerType(expression.type));
@@ -3197,7 +2840,15 @@ class IrGenerator {
 			case TPostfixField(object, name, delta):
 					var observableBit = observableFieldBit(object.type, name),
 						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
-					if (observableBit != null) {
+					if (isErasedGenericOwner(object.type) && observableBit == null) {
+						var receiver = lowerOwnerReceiver(object, builder, localTypes), type = lowerType(expression.type),
+							oldValue = receiver.type == Dyn ? builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], type)
+								: builder.fieldGet(receiver, name, type),
+							one = incrementOne(expression.type, builder), after = delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one);
+						if (receiver.type == Dyn) builder.call(erasedOwnerOperation(object.type, "set", name), [receiver, after], Void);
+						else builder.fieldSet(receiver, name, after);
+						oldValue;
+					} else if (observableBit != null) {
 						var receiver = lowerExpression(object, builder, localTypes),
 							before = builder.fieldGet(receiver, name, lowerType(expression.type)),
 							one = incrementOne(expression.type, builder),
@@ -3355,7 +3006,7 @@ class IrGenerator {
 		var owner = fn.owner;
 		if (owner == null || fn.isStatic)
 			return [];
-		return [{name: "this", type: Obj(owner)}];
+		return [{name: "this", type: Obj(fn.physicalOwner == null ? owner : fn.physicalOwner)}];
 	}
 
 	static function requireLocalType(localTypes:Map<String, IrType>, name:String, message:String):IrType {
@@ -3714,14 +3365,16 @@ class IrGenerator {
 			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
 			case TInstance(kind, name, _):
 				switch kind {
-					case NominalKind.Class: Std.string(name) == "haxe.io.Eof" ? Dyn : Obj(name);
+					case NominalKind.Class:
+						var physical = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
+						Std.string(name) == "haxe.io.Eof" || physical == null && isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(name);
 					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
 					default: throw 'Unknown nominal kind $kind';
 				}
-			case TMap(key, value) if (isCustomHashableMap(key, value)):
-				Obj(registerHashableMapObject(key, value));
+			case TMap(key, value) if (isSpecializedMap(key, value)):
+				Obj(specializedMapOwner(key, value));
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
 			case TNull: Void;
 			// Preserve the payload type in IR so stored optionals can acquire a flag and inline layout. The
@@ -3732,6 +3385,39 @@ class IrGenerator {
 			case TIterator(element): Iterator(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)], lowerType(result));
 			case TAnonymous(name, _): Obj(name);
+		};
+
+	/** An erased generic owner can reference any of its concrete specialized layouts. */
+	static function isErasedGenericOwner(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class, name, arguments) if (genericClasses.exists(name)):
+				var erased = false;
+				for (argument in arguments) if (argument == TDynamic) erased = true;
+				erased;
+			default: false;
+		};
+
+	static function erasedOwnerOperation(type:CompilerType, operation:String, member:String):String
+		return switch type {
+			case TInstance(NominalKind.Class, name, _): '$' + 'generic-erased:$name:$operation:$member';
+			default: throw "Erased generic operation requires a class owner";
+		};
+
+	static function directBaseMethod(name:String, localTypes:Map<String, IrType>):Bool {
+		var current = switch localTypes.get("this") { case Obj(value): value; default: null; };
+		while (current != null && classBases.exists(current)) {
+			current = classBases.get(current);
+			if (StringTools.startsWith(name, current + ".")) return true;
+		}
+		return false;
+	}
+
+	/** Instance bodies keep their concrete receiver even when their shared parameters are Dynamic. */
+	static function lowerOwnerReceiver(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
+		return switch expression.expression {
+			case TLocal("this") if (isErasedGenericOwner(expression.type) && localTypes.exists("this")):
+				builder.load("this", localTypes.get("this"));
+			default: lowerExpression(expression, builder, localTypes);
 		};
 
 	/** `Nullable` of a boxed primitive, `Dyn` for anything else a nullable can hold. */
@@ -3960,7 +3646,7 @@ class IrGenerator {
 	static function arrayAllocatorName(element:CompilerType):String
 		return "__array_alloc_" + RuntimeType.requireArrayName(element);
 
-	/** Collection operations that create a second array must give each array its own value elements. */
+	/** Whether an array operation needs the element's declared value semantics. */
 	static function arrayValueElement(type:IrType):Bool return switch type {
 		case Obj(name), Nullable(Obj(name)):
 			var object = inlineValueObjects.get(name);
@@ -3968,65 +3654,6 @@ class IrGenerator {
 		default: false;
 	};
 
-	static function copyArrayValue(builder:CfgBuilder, source:CfgValue, type:IrType):CfgValue return switch type {
-		case Nullable(Obj(name)):
-			builder.call(IrOptionalValueFlow.copyName(name), [source], type);
-		case Obj(name):
-			var object = inlineValueObjects.get(name);
-			if (object == null || !object.isValue) throw 'Missing value object "$name"';
-			var copy = builder.newObject(name);
-			for (field in object.fields) {
-				var value = builder.fieldGet(source, field.name, field.type);
-				if (arrayValueElement(field.type)) value = copyArrayValue(builder, value, field.type);
-				builder.fieldSet(copy, field.name, value);
-			}
-			copy;
-		default: throw "Expected a value element";
-	};
-
-	// Portable, targetless IR still represents value elements as boxed objects (notably in the IR interpreter).
-	// Concrete target arrays are rewritten to lane range operations and this loop is removed before execution.
-	// Delete this boxed-copy path when struct generic specialization supplies value storage at every typed boundary.
-	static function copyArrayValues(builder:CfgBuilder, array:CfgValue, element:IrType, localTypes:Map<String, IrType>):CfgValue {
-		var previous = builder.beginGenerated(ArrayValueCopyReason);
-		var suffix = Std.string(array.id), arrayName = '$' + 'array-value-copy:' + suffix,
-			indexName = '$' + 'array-value-copy-index:' + suffix;
-		localTypes.set(arrayName, array.type);
-		localTypes.set(indexName, I32);
-		builder.store(arrayName, array);
-		builder.store(indexName, builder.constInt(0));
-		var check = builder.createBlock(), body = builder.createBlock(), done = builder.createBlock();
-		builder.jump(check);
-		builder.select(check);
-		var current = builder.load(arrayName, array.type), index = builder.load(indexName, I32);
-		builder.branch(builder.less(index, builder.arraySize(current)), body, done);
-		builder.select(body);
-		current = builder.load(arrayName, array.type);
-		index = builder.load(indexName, I32);
-		var value = elementGet(builder, current, index, element);
-		switch element {
-			case Obj(_):
-				// Growing an array can leave uninitialized slots. Preserve them without dereferencing a null value.
-				var valueName = '$' + 'array-value-copy-element:' + suffix;
-				localTypes.set(valueName, element);
-				builder.store(valueName, value);
-				var initialized = builder.createBlock(), next = builder.createBlock();
-				builder.branch(builder.equal(value, builder.constNull(element)), next, initialized);
-				builder.select(initialized);
-				elementSet(builder, builder.load(arrayName, array.type), builder.load(indexName, I32),
-					copyArrayValue(builder, builder.load(valueName, element), element));
-				builder.jump(next);
-				builder.select(next);
-			default:
-				elementSet(builder, current, index, copyArrayValue(builder, value, element));
-		}
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(check);
-		builder.select(done);
-		var result = builder.load(arrayName, array.type);
-		builder.restoreSource(previous);
-		return result;
-	}
 
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),

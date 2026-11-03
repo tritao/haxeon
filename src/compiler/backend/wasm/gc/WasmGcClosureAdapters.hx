@@ -96,7 +96,8 @@ class WasmGcClosureAdapters {
 								adapters.types.set(-1, output.type);
 								created.set(-1, true);
 							case StaticClosure(output, _) | InstanceClosure(output, _, _):
-								note(output.type, created);
+								// Scalar closures reach Dynamic through a generated erased wrapper, not this boxed adapter ABI.
+								if (!plan.scalarClosures.exists(Std.string(output.type))) note(output.type, created);
 							case SafeCast(output, _):
 								switch output.type {
 									case Function(_, _): noteTarget(output.type);

@@ -1,5 +1,7 @@
 package compiler.backend.wasm.gc;
 
+import compiler.backend.wasm.WasmValueLayout;
+
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrEnumCase;
 import compiler.ir.Ir.IrObject;
@@ -37,11 +39,11 @@ typedef WasmGcMapTypePlan = {
 **/
 class WasmGcTypePlan {
 	public final program:IrProgram;
-	public final scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>;
+	public final scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>;
 	public final scalarClosures:Map<String, Bool>;
-	public final scalarVirtuals:Map<String, WasmGcScalarAbi.WasmGcScalarVirtual>;
+	public final scalarVirtuals:Map<String, WasmScalarAbi.WasmScalarVirtual>;
 	/** Recursive scalar leaves for value locals, signatures and inline holder fields. */
-	public final values:WasmGcValueLayout;
+	public final values:WasmValueLayout;
 	public final typeGroups:Array<WasmTypeGroup>;
 	public final objectTypeIndices:Map<String, Int> = [];
 	public final objectFieldIndices:Map<String, Map<String, Int>> = [];
@@ -131,14 +133,14 @@ class WasmGcTypePlan {
 	final subtypes:Array<WasmSubtype> = [];
 	final plannedFunctionTypes:Map<String, WasmFunctionType> = [];
 
-	public function new(program:IrProgram, inlineValueFields = false, ?scalarSignatures:Map<String, WasmGcScalarAbi.WasmGcScalarSignature>,
-			?scalarClosures:Map<String, Bool>, ?scalarVirtuals:Map<String, WasmGcScalarAbi.WasmGcScalarVirtual>) {
+	public function new(program:IrProgram, inlineValueFields = false, ?scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>,
+			?scalarClosures:Map<String, Bool>, ?scalarVirtuals:Map<String, WasmScalarAbi.WasmScalarVirtual>) {
 		this.program = program;
 		this.scalarSignatures = scalarSignatures == null ? [] : scalarSignatures;
 		this.scalarClosures = scalarClosures == null ? [] : scalarClosures;
 		this.scalarVirtuals = scalarVirtuals == null ? [] : scalarVirtuals;
 		this.inlineValueFields = inlineValueFields;
-		values = new WasmGcValueLayout(program);
+		values = new WasmValueLayout(program);
 		indexDeclarations();
 		planBytePayloads();
 		collectProgramTypes();
@@ -320,13 +322,13 @@ class WasmGcTypePlan {
 		return {parameters: parameters, results: result == Void ? [] : scalarValueTypes(result)};
 	}
 
-	public function scalarSignatureType(signature:WasmGcScalarAbi.WasmGcScalarSignature):WasmFunctionType {
+	public function scalarSignatureType(signature:WasmScalarAbi.WasmScalarSignature):WasmFunctionType {
 		var parameters:Array<WasmValueType> = [];
 		for (argument in signature.arguments) for (part in scalarValueTypes(argument)) parameters.push(part);
 		return {parameters: parameters, results: scalarResultTypes(signature)};
 	}
 
-	public function scalarResultTypes(signature:WasmGcScalarAbi.WasmGcScalarSignature):Array<WasmValueType> {
+	public function scalarResultTypes(signature:WasmScalarAbi.WasmScalarSignature):Array<WasmValueType> {
 		var result:Array<WasmValueType> = [];
 		if (signature.mutatesReceiver) for (part in scalarValueTypes(signature.arguments[0])) result.push(part);
 		if (signature.result != Void) for (part in scalarValueTypes(signature.result)) result.push(part);

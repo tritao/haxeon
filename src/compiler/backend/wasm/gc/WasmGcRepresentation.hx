@@ -1,5 +1,7 @@
 package compiler.backend.wasm.gc;
 
+import compiler.backend.wasm.WasmFlattenValueFields;
+
 import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -140,15 +142,15 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
-		if (StringTools.startsWith(fieldName, WasmGcScalarAbi.RESULT_FIELD_PREFIX)) {
-			var index = Std.parseInt(fieldName.substr(WasmGcScalarAbi.RESULT_FIELD_PREFIX.length)), results = functionState().scalarResults.get(object.id);
+		if (StringTools.startsWith(fieldName, WasmScalarAbi.RESULT_FIELD_PREFIX)) {
+			var index = Std.parseInt(fieldName.substr(WasmScalarAbi.RESULT_FIELD_PREFIX.length)), results = functionState().scalarResults.get(object.id);
 			if (index == null || results == null || index < 0 || index >= results.length)
 				throw 'Missing scalar Wasm GC call result $fieldName';
 			return [LocalGet(results[index]), LocalSet(destination)];
 		}
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName);
-		if (fieldName == WasmGcFlattenFields.CHECK_FIELD)
+		if (fieldName == WasmFlattenValueFields.CHECK_FIELD)
 			return [LocalGet(objectLocal), StructGet(typeIndex, 0), Drop];
 		var field:IrObjectField = plan.objectField(objectName, fieldName);
 		if (plan.usesBytePayload(objectName) && field.nativeLayout != null)
@@ -165,7 +167,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return plan.scalarClosures.exists(Std.string(type));
 
 	public function hasScalarVirtual(receiver:IrType, method:String):Bool
-		return plan.scalarVirtuals.exists(WasmGcScalarAbi.virtualKey(receiver, method));
+		return plan.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver, method));
 
 	/** Turn an uncaught method exception into receiver state plus the original exception. */
 	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>, tag:Null<Int>):Null<Array<WasmInstruction>> {
@@ -241,7 +243,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue, outputLocal:Int,
 			arguments:Array<IrValue>, argumentLocals:Array<Int>):Array<WasmInstruction> {
-		var virtual = plan.scalarVirtuals.get(WasmGcScalarAbi.virtualKey(receiver.type, method));
+		var virtual = plan.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 		if (virtual == null) throw 'Missing scalar virtual method "$method"';
 		var resultLocals:Array<Int> = [];
 		if (plan.values.isValue(virtual.signature.result)) {
@@ -322,7 +324,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case FieldGet(out, owner, name):
 				var candidate = functionState().scalarLocals.get(owner);
 				if (candidate == null) null;
-				else if (name == WasmGcFlattenFields.CHECK_FIELD) [];
+				else if (name == WasmFlattenValueFields.CHECK_FIELD) [];
 				else [LocalGet(scalarFieldLocal(candidate, name)), LocalSet(scalarValueLocal(locals, out.id))];
 			case FieldSet(owner, name, value):
 				var candidate = functionState().scalarLocals.get(owner);
@@ -337,7 +339,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		};
 	}
 
-	static function scalarFieldLocal(candidate:WasmGcScalarLocals.WasmGcScalarLocal, name:String):Int {
+	static function scalarFieldLocal(candidate:compiler.backend.wasm.WasmScalarLocals.WasmScalarLocal, name:String):Int {
 		var local = candidate.fields.get(name);
 		if (local == null) throw 'Missing scalar Wasm GC field "$name"';
 		return local;

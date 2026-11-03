@@ -28,12 +28,15 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 class WasmLinearClosureAdapters {
 	public static inline final KEY_FUNCTION = "__haxeon_closure_key";
 
-	final program:IrProgram;
+	var program:IrProgram;
 	final keyIds:Map<String, Int> = [];
 	final nativeKeys:Map<String, String> = [];
+	final instanceKeys:Map<String, String> = [];
 
 	function new(program:IrProgram)
 		this.program = program;
+
+	public function useProgram(program:IrProgram):Void this.program = program;
 
 	public static function castName(type:IrType):String
 		return '__haxeon_closure_cast_${closureKey(type)}';
@@ -50,6 +53,7 @@ class WasmLinearClosureAdapters {
 			case F32: "f";
 			case F64: "d";
 			case Void: "v";
+			case Obj(name): "o" + haxe.crypto.Sha256.encode(name).substr(0, 16);
 			default: "r";
 		};
 
@@ -83,7 +87,7 @@ class WasmLinearClosureAdapters {
 	 * Adds a cast function for every function type the program casts to, an adapter from every other closure key
 	 * of the same arity, and the key query, all kept so they reach the module without IR calls naming them.
 	 */
-	public static function generate(program:IrProgram):WasmLinearClosureAdapters {
+	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>):WasmLinearClosureAdapters {
 		var adapters = new WasmLinearClosureAdapters(program);
 		for (native in program.natives)
 			adapters.nativeKeys.set(native.name, functionKey(native.arguments, native.result));
@@ -91,12 +95,19 @@ class WasmLinearClosureAdapters {
 			throw "Linear Wasm closure adapters were generated twice for one program";
 		var targetTypes:Map<String, IrType> = [],
 			sourceTypes:Map<String, IrType> = [];
+		// Scalar closures have already been adapted at Dynamic and host escapes. Including
+		// them as boxed cast sources would manufacture incompatible adapters and disable
+		// scalar calls throughout the module merely because an escape exists.
 		for (fn in program.functions)
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case StaticClosure(output, _) | InstanceClosure(output, _, _):
-							if (!sourceTypes.exists(closureKey(output.type)))
+						case InstanceClosure(output, name, _):
+							adapters.instanceKeys.set(name, instanceKey(output.type));
+							if (!scalarClosures.exists(Std.string(output.type)) && !sourceTypes.exists(closureKey(output.type)))
+								sourceTypes.set(closureKey(output.type), output.type);
+						case StaticClosure(output, _):
+							if (!scalarClosures.exists(Std.string(output.type)) && !sourceTypes.exists(closureKey(output.type)))
 								sourceTypes.set(closureKey(output.type), output.type);
 						case SafeCast(output, _):
 							switch output.type {
@@ -135,6 +146,8 @@ class WasmLinearClosureAdapters {
 		for (fn in program.functions)
 			keys.set(functionKey([for (argument in fn.arguments) argument.type], fn.result), true);
 		for (key in adapters.nativeKeys)
+			keys.set(key, true);
+		for (key in adapters.instanceKeys)
 			keys.set(key, true);
 		keys.set(functionKey([Dyn], Dyn), true);
 		keys.set(functionKey([Dyn], I32), true);
@@ -228,6 +241,8 @@ class WasmLinearClosureAdapters {
 	public function slotOrder(name:String):String {
 		if (name == WasmDynamicCalls.VARARGS_TARGET)
 			return "varargs";
+		var instance = instanceKeys.get(name);
+		if (instance != null) return instance;
 		var fn = WasmProgramIndex.of(program).func(name);
 		var key = fn != null ? functionKey([for (argument in fn.arguments) argument.type], fn.result) : nativeKeys.get(name);
 		return key != null && keyIds.exists(key) ? key : "?";

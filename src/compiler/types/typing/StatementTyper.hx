@@ -384,9 +384,12 @@ class StatementTyper {
 						value = coerce(assignedValue, instanceField, 'field "$name"', "E1002");
 					var receiver = typeExpression(Variable("this", span), scope, null, false),
 						propertySetter = assignmentRules.instancePropertyAccessor(thisType, name, false);
-					if (propertySetter != null)
+					if (propertySetter != null) {
+						session.invalidateCallEffects(propertySetter, scope);
 						return TExpression(assignmentRules.propertySetterCall(receiver, propertySetter, value, span), span);
+					}
 					var receiverPath = FlowAnalysis.accessPath(receiver);
+					scope.invalidateField(name);
 					if (receiverPath != null) {
 						var fieldPath = receiverPath + "." + name;
 						scope.invalidateExpression(fieldPath);
@@ -450,15 +453,18 @@ class StatementTyper {
 					assignedValue = typeExpression(expression, scope, expected, false),
 					value = coerce(assignedValue, expected, 'field "$name"', "E1002"),
 					setter:Null<String> = platformField == null ? null : platformField.set,
+					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName, false) : null,
 					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-						var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
 						propertySetter != null ? TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span) : {
 							value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
 							TFieldAssign(object, fieldName, value, span);
 						};
 					};
+				if (setter != null) session.invalidateUnknownCall(scope);
+				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
+				scope.invalidateField(fieldName);
 				var objectPath = FlowAnalysis.accessPath(object);
-				if (objectPath != null) {
+				if (objectPath != null && setter == null && propertySetter == null) {
 					var fieldPath = objectPath + "." + fieldName;
 					scope.invalidateExpression(fieldPath);
 					scope.refineExpression(fieldPath, assignmentFlowType(assignedValue.type, expected));
@@ -495,8 +501,11 @@ class StatementTyper {
 	}
 
 	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
-	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement
-		return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
+		var value = typeExpression(expression, scope, null, false);
+		scope.invalidateField(fieldName);
+		return dynamicFieldStore(object, fieldName, value, span);
+	}
 
 	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
 		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
@@ -509,7 +518,7 @@ class StatementTyper {
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false));
 		if (sameType(object.type, TDynamic))
-			return dynamicFieldStore(object, fieldName, typeExpression(expression, scope, null, false), span);
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		ValuePlaceRules.requireWritable(session, object, span);
@@ -527,9 +536,9 @@ class StatementTyper {
 					expected = assignmentRules.fieldType(object.type, fieldName, span),
 					assignedValue = typeExpression(expression, scope, expected, false),
 					value = coerce(assignedValue, expected, 'field "$fieldName"', "E1002");
-				var setter:Null<String> = platformField == null ? null : platformField.set;
+				var setter:Null<String> = platformField == null ? null : platformField.set,
+					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName, false) : null;
 				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-					var propertySetter = assignmentRules.instancePropertyAccessor(object.type, fieldName, false);
 					if (propertySetter != null)
 						TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span)
 					else {
@@ -537,8 +546,11 @@ class StatementTyper {
 						TFieldAssign(object, fieldName, value, span);
 					}
 				};
+				if (setter != null) session.invalidateUnknownCall(scope);
+				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
+				scope.invalidateField(fieldName);
 				var objectPath = FlowAnalysis.accessPath(object);
-				if (objectPath != null) {
+				if (objectPath != null && setter == null && propertySetter == null) {
 					var fieldPath = objectPath + "." + fieldName;
 					scope.invalidateExpression(fieldPath);
 					scope.refineExpression(fieldPath, assignmentFlowType(assignedValue.type, expected));

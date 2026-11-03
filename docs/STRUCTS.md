@@ -213,6 +213,12 @@ instead of a full one.
 
 ## Layout and bytes
 
+Wasm32 and Wasm GC flatten struct fields into their containing managed object. Wasm32 uses the native offsets and
+widths for flat fields, including nested records and padding; a managed record can also contain reference slots next
+to its flat fields. A cross-target fixture checks copies and null access, verifies the nested bytes on Wasm32, and
+checks that references survive a stressed collection. With inlining either enabled or disabled, constructing 1,024
+holders allocates 1,024 objects on each Wasm target, with no additional object for the struct field.
+
 - **One layout.** A flat struct uses its `HxiAbi` C layout in every place it
   can live:
   - inline in a GC object or array;
@@ -473,18 +479,19 @@ without inlining.
 ### Dynamic fields holding values
 
 The UI style pipeline stores known types in declarations, computed styles and transitions, using per-kind typed
-implementations until struct-specialized generics exist. `Dynamic` values are materialized for inspection, debugging
+implementations. `Dynamic` values are materialized for inspection, debugging
 and reflection. This removes avoidable erasure and the temporary inline-axis and cached local-snapshot boxing paths,
 without a compiler transformation that would have to preserve dynamic access, reflection, identity, mutation, exception
 order and native escape. A same-machine 30-cycle HashLink census after initial setup found no allocations of the five
 value types in interaction, tab matrix or selection stress; see [UI value types](../packages/ui/docs/VALUE_TYPES.md).
 
-For later stages 2–3, specialize generics for struct type arguments, as in C# and Rust. Monomorphization can replace
-per-kind declaration implementations with `StyleValueOf<T>` and is the general path to unboxed `Array<S>`, `Map<K, S>`,
-`State<S>` and `T`-typed closures. Interface bounds dispatch statically for each specialized struct, without boxing; an
+Generic owners and functions specialize for struct type arguments, providing unboxed `Array<S>`, `Map<K, S>`,
+`State<S>` and typed closures. This also enables later replacement of per-kind declaration implementations with
+`StyleValueOf<T>`. Interface bounds dispatch statically for each specialized struct, without boxing; an
 interface-typed value remains a boxed dynamic boundary. Equality and hashing are compiler-known capabilities declared
 through `Equatable` and `Hashable`, so bounds such as `Map<K:Hashable, V>` are checked at compile time. This remains
-separate from the stage 0 UI migration.
+separate from the stage 0 UI migration. The specialization policies and escape boundaries are documented in
+[GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md).
 
 ## Representation on Wasm GC
 
@@ -595,13 +602,15 @@ and reference clearing. Dynamic writes and insertions currently stage the conver
 before changing the destination, so a conversion exception cannot expose partial writes. These temporary allocations
 occur at dynamic escapes; typed element access uses the lanes directly.
 
-`copy`, `slice` and `concat` on a concrete struct array copy the lanes directly; the compiler removes the portable
-boxed-element copy loop before target code runs. The targetless IR interpreter still uses boxed element storage, so its
-portable IR retains that loop to preserve independent value copies. Remove this boxed-copy path when struct generic
-specialization supplies value storage at every typed boundary; do not keep parallel copy implementations afterward.
+`copy`, `slice` and `concat` on a concrete struct array lower directly to lane range operations. The targetless IR
+interpreter implements the same independent value-copy semantics for these operations in its own representation;
+portable IR no longer contains a generated per-element copy loop or a pass to remove one.
 Allocation tests copy, slice and concatenate arrays of 8 and 5,000 managed-reference values on HashLink: both sizes
 allocate nine objects and no value boxes. The corresponding scalar-array test allocates six objects for 8 or 1,024
 values on Wasm32 and Wasm GC, with inlining both enabled and disabled; all three results remain independent copies.
+A specialized generic function performing the same three operations on structs with a managed reference allocates
+nine objects for either 8 or 1,024 elements on each Wasm target. A HashLink census records nine arrays plus the census
+dump's byte buffer for both sizes, with no struct boxes; the allocation count does not grow per element.
 
 On the same machine, the 30-cycle HashLink selection census fell from 342,877 allocations to 342,351. The nine-run
 median RSS growth windows were 30.47 / 4.06 / 0.94 / 4.69 MiB at the original baseline and 30.00 / 3.75 / 0.94 /
@@ -616,7 +625,7 @@ The editor's per-action HashLink allocation medians, in KiB, were:
 | Action | Baseline | Inline arrays | Current compiler |
 | --- | ---: | ---: | ---: |
 | hierarchy → sensors | 114.6 | 112.6 | 112.6 |
-| sensors → hierarchy | 80.1 | 78.6 | 78.4 |
+| sensors → hierarchy | 80.1 | 78.6 | 80.1 |
 | console → telemetry | 74.5 | 74.5 | 74.5 |
 | telemetry → console | 92.9 | 92.9 | 92.9 |
 | hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 | 0.5 / 0.5 |
@@ -624,6 +633,35 @@ The editor's per-action HashLink allocation medians, in KiB, were:
 | scroll inspector | 21.2 | 21.2 | 21.2 |
 | idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 | 0.2 / 0.2 |
 | type character / backspace | 16.1 / 16.6 | 16.1 / 16.1 | 16.1 / 16.2 |
+
+A subsequent same-checkout comparison of the generic-owner work measured 342,352 selection allocations with both the
+committed and modified compilers. Nine alternating 500-cycle RSS runs gave median growth windows of
+30.31 / 3.75 / 0.78 / 4.84 MiB for the control and 29.84 / 3.75 / 0.94 / 4.84 MiB for the modified compiler. The third
+window is 0.16 MiB higher; the original recorded baseline and the modified result are both 0.94 MiB. A separate
+nine-pair same-binary control produced median differences of up to 0.31 MiB in other windows, so this measurement
+cannot establish an exact RSS match. The 500-cycle allocation census counted 1,827,398 control allocations versus
+1,827,404 modified allocations, while the modified run allocated 129,336 fewer bytes overall; the six extra allocations
+were byte arrays. Further work must retain this evidence when evaluating memory changes.
+
+After generic owners, the specialized map and direct array range lowering, the 30-cycle selection census recorded
+342,111 allocations (the starting baseline was 342,877). In nine alternating 500-cycle runs, the committed control's
+median RSS growth windows were 29.84 / 4.06 / 0.78 / 4.84 MiB and the new compiler's were 29.84 / 3.91 / 0.78 /
+4.84 MiB. The original baseline was 30.47 / 4.06 / 0.94 / 4.69 MiB. The last window remains 0.15 MiB above that
+original measurement but matches the paired control; the earlier same-binary paired control varied by up to 0.31 MiB,
+so the measurements do not establish an exact match to the original. The headless memory gate passed all three runs.
+
+After preserving inlined receiver checks, five alternating 100-cycle interaction runs measured the same 12.41 KiB
+median for hover-field on control and current. Nine alternating 500-cycle runs measured RSS windows of
+30.31 / 3.75 / 0.78 / 4.84 MiB for control and 30.16 / 3.75 / 0.78 / 5.00 MiB for current. The last-window
+difference is smaller than the earlier 0.31 MiB same-binary variation and does not establish an RSS change. The
+selection census remained 342,111; the fixed-time Wasm GC object counts remained 5,896 for full, static and
+text-heavy and 12,835 for editing.
+
+With the final generic map, state and closure work, the 30-cycle selection census recorded 342,112 allocations. Five
+alternating 100-cycle interaction runs matched at the displayed precision, including 12.41 KiB for hover-field. Nine
+alternating RSS runs measured 30.00 / 3.59 / 0.78 / 5.00 MiB for control and 30.16 / 3.59 / 0.78 / 5.00 MiB for
+current; the 0.16 MiB difference in the first window is below the earlier 0.31 MiB same-binary variation. The fixed-time
+Wasm GC Showcase remained at 5,896 objects for full, static and text-heavy, and 12,835 for editing.
 
 The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
 

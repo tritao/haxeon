@@ -9,11 +9,17 @@ class FinalFieldMain {
 	static final classes = "class Pair { public final left:Float; public var right:Float; public static final LIMIT:Int = 4; public static var count:Int = 0; "
 		+ "public function new(left:Float, right:Float) { this.left = left; this.right = right; } "
 		+ "public function mutate():Void { this.right = 1.0; } } "
-		+ "class Generic<T> { public final value:T; public function new(value:T) { this.value = value; } } ";
+		+ "class Generic<T> { public final value:T; public function new(value:T) { this.value = value; } } "
+		+ "struct GenericValue { public var number:Int; public function new(number:Int) this.number = number; } ";
 
 	static function main():Void {
 		expectCompiles("assigning a final field in its own constructor, and non-final fields anywhere",
 			"var p = new Pair(1.0, 2.0); p.right = 3.0; Pair.count = 5; Pair.count++; p.mutate(); var g = new Generic<Int>(4); return g.value;");
+		expectCompiles("assigning a final field in a specialized generic constructor",
+			"var g = new Generic<GenericValue>(new GenericValue(42)); return g.value.number;");
+		expectError("a final field write from a closure in the constructor",
+			"class ClosureWrite<T> { public final value:T; public function new(value:T) { var write = () -> { this.value = value; }; write(); } }",
+			"var g = new ClosureWrite<GenericValue>(new GenericValue(42)); return 0;");
 		expectError("a write through another object", "", "var p = new Pair(1.0, 2.0); p.left = 5.0; return 0;");
 		expectError("a write through this in a method",
 			"class A extends Pair { public function new() { super(1.0, 2.0); } public function breaks():Void { this.left = 1.0; } }",

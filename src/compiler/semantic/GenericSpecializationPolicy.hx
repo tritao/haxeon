@@ -3,6 +3,7 @@ package compiler.semantic;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeShape.RuntimeShapes;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 
@@ -13,6 +14,35 @@ typedef SpecializationDecision = {
 
 /** Chooses stable concrete or shape-shared representations for generic bodies. */
 class GenericSpecializationPolicy {
+	/** Select an owner parameter's representation for a value-specialized class. */
+	public static function decideOwner(owner:AstClass, parameter:String, semantic:CompilerType,
+			requiresLayoutSpecialization:CompilerType->Bool):SpecializationDecision {
+		if (owner.typeConstraints != null)
+			for (constraint in owner.typeConstraints)
+				if (constraint.parameter == parameter)
+					return {representation: semantic, policy: "constrained"};
+		if (requiresLayoutSpecialization(semantic))
+			return {representation: semantic, policy: "layout"};
+		if (owner.base != null && containsNested(owner.base, parameter, false))
+			return {representation: semantic, policy: "layout"};
+		for (interfaceType in owner.interfaces)
+			if (containsNested(interfaceType, parameter, false))
+				return {representation: semantic, policy: "layout"};
+		for (field in owner.fields)
+			if (!field.isStatic && field.type != null && containsNested(field.type, parameter, false))
+				return {representation: semantic, policy: "layout"};
+		for (method in owner.methods) {
+			if (method.isStatic || method.typeParameters != null && method.typeParameters.indexOf(parameter) >= 0)
+				continue;
+			for (argument in method.arguments)
+				if (containsNested(argument.type, parameter, false))
+					return {representation: semantic, policy: "layout"};
+			if (containsNested(method.result, parameter, false))
+				return {representation: semantic, policy: "layout"};
+		}
+		return {representation: RuntimeShapes.representative(semantic), policy: "shape"};
+	}
+
 	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType,
 			requiresLayoutSpecialization:Null<CompilerType->Bool> = null):SpecializationDecision {
 		var constraints = fn.typeConstraints;

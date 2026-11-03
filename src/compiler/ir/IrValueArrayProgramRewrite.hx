@@ -53,8 +53,8 @@ class IrValueArrayProgramRewrite {
 			default: null;
 		};
 		for (fn in program.functions) {
-			var copied = IrValueArrayCopyRewrite.rewrite(fn, element, factory), roots = IrValueArrayPlaceRewrite.roots(copied, element),
-				current = roots.keys().hasNext() ? IrValueArrayPlaceRewrite.rewrite(copied, element, objects, factory.helpers, methods, roots) : copied;
+			var ranged = IrValueArrayRangeRewrite.rewrite(fn, element, factory), roots = IrValueArrayPlaceRewrite.roots(ranged, element),
+				current = roots.keys().hasNext() ? IrValueArrayPlaceRewrite.rewrite(ranged, element, objects, factory.helpers, methods, roots) : ranged;
 			if (optional != null) current = IrValueArrayOptionalRewrite.rewrite(current, element, optional);
 			current = IrValueArrayElementRewrite.rewrite(current, element, elements);
 			current = rewriteDynamicViews(current);

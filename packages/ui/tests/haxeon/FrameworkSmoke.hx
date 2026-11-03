@@ -4645,6 +4645,19 @@ class FrameworkSmoke {
 
 	static function retainedStateUsageValid():Bool {
 		var store = new StateStore();
+		var build = new BuildContext(store);
+		var colorId = new WidgetId(90502);
+		var color:State<Color> = build.state(colorId, Color.rgba(0.1, 0.2, 0.3));
+		var observed = 0.0;
+		var reader = new Effect(function() { observed = color.value.red; });
+		color.value = Color.rgba(0.1, 0.2, 0.3);
+		if (reader.dirty || observed != 0.1) return false;
+		color.value = Color.rgba(0.4, 0.2, 0.3);
+		if (!reader.dirty) return false;
+		ReactiveRuntime.flushEffects();
+		var reopened:State<Color> = build.existingState(colorId);
+		if (reopened != color || observed != 0.4 || reopened.value.red != 0.4) return false;
+		reader.dispose();
 		var id = new WidgetId(90501);
 		var disposals = 0;
 		store.beginFrame();

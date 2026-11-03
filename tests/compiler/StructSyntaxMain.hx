@@ -46,9 +46,9 @@ class StructSyntaxMain {
 		expectTypingError("interface HasX { function xValue():Int; } struct Missing { public function xValue():Int return 42; } "
 			+ "function read<T:HasX>(value:T):Int return value.xValue(); function main():Int return read(new Missing());",
 			'does not satisfy constraint "interface:HasX');
-		expectTypingError("interface HasX { function xValue():Int; } struct Point : HasX { public function xValue():Int return 42; } "
-			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());",
-			"Type mismatch for argument 1 to \"take\"");
+		var boxed = compiler.Frontend.compile("interface HasX { function xValue():Int; } struct Point : HasX { public function xValue():Int return 42; } "
+			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());");
+		if (new compiler.ir.IrInterpreter(boxed).run("main") != 42) throw "struct interface conversion did not dispatch";
 		for (operation in ["indexOf", "contains", "remove"])
 			expectTypingError('struct Point { public var x:Int; public function new(x:Int) this.x=x; } '
 				+ 'function main():Int { var points = [new Point(1)]; points.$operation(new Point(1)); return 0; }',

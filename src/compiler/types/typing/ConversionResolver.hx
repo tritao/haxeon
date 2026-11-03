@@ -68,7 +68,8 @@ class ConversionResolver {
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				new TypedExpression(TToDynamic(ValueCopy.bind(session, value, value.type)), expected, value.span);
 			case ToInterface(name):
-				new TypedExpression(TToInterface(value, name), expected, value.span);
+				// The interface value owns a boxed copy of a struct, not the source place.
+				new TypedExpression(TToInterface(ValueCopy.bind(session, value, value.type), name), expected, value.span);
 			case WrapNullable:
 				new TypedExpression(TNullableWrap(value), expected, value.span);
 			case UnwrapNullable:

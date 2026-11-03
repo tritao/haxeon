@@ -66,8 +66,8 @@ class BodyTyper {
 	inline function get_context():TypingContext
 		return session.currentContext;
 
-	inline function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String):TypingContext
-		return session.enterBody(name, typeSubstitutions, ownerOverride);
+	inline function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String, ?sourceFunctionName:String):TypingContext
+		return session.enterBody(name, typeSubstitutions, ownerOverride, sourceFunctionName);
 
 	inline function leaveBody(body:TypingContext):Void
 		session.leaveBody(body);
@@ -258,7 +258,7 @@ class BodyTyper {
 	}
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
-			?abstractReceiver:CompilerType):TypedFunction {
+			?abstractReceiver:CompilerType, ?physicalOwner:String, ?ownerTypeArguments:Array<CompilerType>):TypedFunction {
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
 			var argumentValueType = argumentType(argument, substitutions);
@@ -268,7 +268,8 @@ class BodyTyper {
 		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
-		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner);
+		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
+			specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.closureWrites.set(binding, true);
@@ -308,7 +309,7 @@ class BodyTyper {
 		var statements = typeStatements(fn.statements, scope, result);
 		if (result != TVoid && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
-		var typeArguments:Null<Array<CompilerType>> = null,
+		var typeArguments:Null<Array<CompilerType>> = ownerTypeArguments,
 			typeParameters = fn.typeParameters;
 		if (specializedName != null && typeParameters != null) {
 			var resolvedArguments:Array<CompilerType> = [];
@@ -325,6 +326,7 @@ class BodyTyper {
 			originKind: specializedName == null ? null : compiler.types.TypedAst.FunctionOriginKind.Specialization,
 			typeArguments: typeArguments,
 			owner: owner,
+			physicalOwner: physicalOwner,
 			isStatic: isStatic,
 			isConstructor: isConstructor,
 			isInline: fn.isInline == true,

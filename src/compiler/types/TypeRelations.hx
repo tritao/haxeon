@@ -94,12 +94,6 @@ class TypeRelations {
 			return equals(actual, expected);
 		if (StructProperties.isConstraintType(expected))
 			return false;
-		if (isStructType(actual))
-			switch expected {
-				case TInstance(NominalKind.Interface, _, _):
-					return false;
-				default:
-			}
 		if (actual == TNull && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
@@ -171,7 +165,7 @@ class TypeRelations {
 		};
 	}
 
-	/** Struct conformance is available to generic constraints without enabling interface boxing. */
+	/** Struct conformance in a generic constraint selects the specialized implementation. */
 	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
 		switch actual {
 			case TTypeParameter(_, _):

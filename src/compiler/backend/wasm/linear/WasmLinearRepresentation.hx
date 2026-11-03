@@ -2,6 +2,11 @@ package compiler.backend.wasm.linear;
 
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrObjectField;
+import compiler.ir.IrFunction;
+import compiler.backend.wasm.WasmScalarAbi;
+import compiler.backend.wasm.WasmScalarLocals;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.backend.wasm.WasmLayout;
@@ -23,13 +28,127 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	final bytesDataPointer:Int;
 	final cstringCopy:Int;
 	final valueObjects:Map<String, Bool> = [];
+	final scalarAbi:Null<WasmScalarAbi>;
+	final scalarLocals:Null<WasmScalarLocals>;
+	final scalarResults:Map<Int, Array<Int>> = [];
+	final scalarResultTypes:Map<Int, Array<IrType>> = [];
+	final allocateLocal:Null<WasmValueType->Int>;
+	final functions:Null<Map<String, Int>>;
 
-	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int) {
+	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int, ?scalarAbi:WasmScalarAbi,
+			?functions:Map<String, Int>, ?fn:IrFunction, ?allocateLocal:WasmValueType->Int) {
 		this.layout = layout;
 		this.allocator = allocator;
 		this.bytesDataPointer = bytesDataPointer;
 		this.cstringCopy = cstringCopy;
+		this.scalarAbi = scalarAbi;
+		this.functions = functions;
+		this.allocateLocal = allocateLocal;
 		for (object in layout.program.objects) if (object.isValue && object.nativeLayout == null) valueObjects.set(object.name, true);
+		scalarLocals = scalarAbi == null || allocateLocal == null ? null :
+			new WasmScalarLocals(fn, scalarAbi.isValue, physicalFields, valueType, allocateLocal);
+		if (scalarAbi != null && allocateLocal != null && fn != null) for (block in fn.blocks) for (located in block.instructions)
+			switch located.value {
+				case Call(out, name, _) if (scalarAbi.signatures.exists(name)):
+					var signature = scalarAbi.signatures.get(name);
+					if (signature.mutatesReceiver || scalarAbi.isValue(signature.result)) reserveScalarResults(out, scalarAbi.resultTypes(signature));
+				case MethodCall(out, receiver, method, _) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
+					var virtual = scalarAbi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
+					if (virtual == null) throw "Missing scalar virtual signature";
+					if (scalarAbi.isValue(virtual.signature.result)) reserveScalarResults(out, scalarAbi.valueTypes(virtual.signature.result));
+				case CallClosure(out, closure, _) if (scalarAbi.scalarClosures.exists(Std.string(closure.type))):
+					if (scalarAbi.isValue(out.type)) reserveScalarResults(out, scalarAbi.valueTypes(out.type));
+				default:
+			}
+	}
+
+	function reserveScalarResults(output:IrValue, types:Array<IrType>):Void {
+		if (allocateLocal == null) throw "Scalar Wasm results require function locals";
+		scalarResultTypes.set(output.id, types);
+		scalarResults.set(output.id, [for (type in types) allocateLocal(valueType(type))]);
+	}
+
+	function physicalFields(name:String):Array<IrObjectField> {
+		for (object in layout.program.objects) if (object.name == name) return object.fields;
+		throw 'Unknown scalar value "$name"';
+	}
+
+	public function scalarLocal(instruction:IrInstruction, locals:Map<Int, Int>):Null<Array<WasmInstruction>> {
+		if (scalarLocals == null) return null;
+		return switch instruction {
+			case NewObject(out, _):
+				var candidate = scalarLocals.get(out);
+				if (candidate == null) null; else {
+					var body:Array<WasmInstruction> = [];
+					for (field in candidate.declarations) {
+						for (item in zeroValue(field.type)) body.push(item);
+						body.push(LocalSet(requiredScalarField(candidate.fields, field.name)));
+					}
+					body;
+				}
+			case FieldGet(out, owner, name):
+				var candidate = scalarLocals.get(owner);
+				if (candidate == null) null;
+				else if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD) [];
+				else [LocalGet(requiredScalarField(candidate.fields, name)), LocalSet(requiredScalarValue(locals, out.id))];
+			case FieldSet(owner, name, value):
+				var candidate = scalarLocals.get(owner);
+				if (candidate == null) null; else {
+					var body:Array<WasmInstruction> = [LocalGet(requiredScalarValue(locals, value.id))], field:Null<IrObjectField> = null;
+					for (item in candidate.declarations) if (item.name == name) field = item;
+					if (field == null) throw 'Missing scalar field "$name"';
+					appendScalarNarrowing(body, field);
+					body.push(LocalSet(requiredScalarField(candidate.fields, name))); body;
+				}
+			default: null;
+		};
+	}
+
+	static function requiredScalarField(fields:Map<String, Int>, name:String):Int {
+		var local = fields.get(name);
+		if (local == null) throw 'Missing scalar field "$name"';
+		return local;
+	}
+
+	static function requiredScalarValue(locals:Map<Int, Int>, id:Int):Int {
+		var local = locals.get(id);
+		if (local == null) throw 'Missing scalar value $id';
+		return local;
+	}
+
+	/** The scalar fields replace an object root and follow the original value's liveness. */
+	public function scalarReferenceLocals():Map<Int, Array<Int>> {
+		var result:Map<Int, Array<Int>> = [];
+		if (scalarLocals == null) return result;
+		for (id => candidate in scalarLocals.all()) {
+			var references:Array<Int> = [];
+			for (field in candidate.declarations) if (compiler.backend.wasm.WasmTarget.isReference(field.type)) {
+				var local = candidate.fields.get(field.name);
+				if (local == null) throw 'Missing scalar reference field "${field.name}"';
+				references.push(local);
+			}
+			result.set(id, references);
+		}
+		for (id => types in scalarResultTypes) {
+			var locals = scalarResults.get(id), references:Array<Int> = [];
+			for (index in 0...types.length) if (compiler.backend.wasm.WasmTarget.isReference(types[index])) references.push(locals[index]);
+			result.set(id, references);
+		}
+		return result;
+	}
+
+	static function appendScalarNarrowing(body:Array<WasmInstruction>, field:IrObjectField):Void {
+		var native = field.nativeLayout, storage = field.scalarStorage;
+		if (field.type == F32 && (native != null || storage != null)) { body.push(F32DemoteF64); body.push(F64PromoteF32); return; }
+		var size = native != null ? native.size : storage != null ? storage.size : 0,
+			signed = native != null ? native.signed : storage != null && storage.signed,
+			bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
+		if (bits > 0 && size > 0 && size * 8 < bits) {
+			var shift = bits - size * 8;
+			body.push(bits == 64 ? I64Const(shift) : I32Const(shift)); body.push(bits == 64 ? I64Shl : I32Shl);
+			body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
+			body.push(bits == 64 ? (signed ? I64ShrS : I64ShrU) : (signed ? I32ShrS : I32ShrU));
+		}
 	}
 
 	public function valueType(type:IrType):WasmValueType
@@ -69,13 +188,159 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	}
 
 	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+		if (StringTools.startsWith(fieldName, WasmScalarAbi.RESULT_FIELD_PREFIX)) {
+			var index = Std.parseInt(fieldName.substr(WasmScalarAbi.RESULT_FIELD_PREFIX.length)), results = scalarResults.get(object.id);
+			if (index == null || results == null || index < 0 || index >= results.length)
+				throw 'Missing scalar Wasm call result $fieldName';
+			return [LocalGet(results[index]), LocalSet(destination)];
+		}
+		if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD)
+			return [LocalGet(objectLocal), I32Load(0), LocalSet(destination)];
 		var field = objectField(object, fieldName);
 		if (field.nativeLayout != null) {
 			if (field.nativeLayout.inlineRecord)
 				return inlineRecordGet(field, destination, objectLocal);
 			return nativeFieldGet(field, destination, objectLocal);
 		}
+		if (field.scalarStorage != null) {
+			var storage = field.scalarStorage, read:Array<WasmInstruction> = [];
+			if ((field.type == I32 || field.type == Bool) && storage.size == 1)
+				read = [storage.signed ? I32Load8S(field.offset) : I32Load8U(field.offset)];
+			else if (field.type == I32 && storage.size == 2)
+				read = [storage.signed ? I32Load16S(field.offset) : I32Load16U(field.offset)];
+			else if (field.type == I64 && storage.size == 4)
+				read = [I32Load(field.offset), storage.signed ? I64ExtendI32S : I64ExtendI32U];
+			else if (field.type == F32 && storage.size == 4)
+				read = [F32Load(field.offset), F64PromoteF32];
+			else read = [load(field.type, field.offset)];
+			return [LocalGet(objectLocal)].concat(read).concat([LocalSet(destination)]);
+		}
 		return [LocalGet(objectLocal), load(field.type, field.offset), LocalSet(destination)];
+	}
+
+	public function hasScalarCall(name:String):Bool return scalarAbi != null && scalarAbi.signatures.exists(name);
+	public function hasScalarClosure(type:IrType):Bool return scalarAbi != null && scalarAbi.scalarClosures.exists(Std.string(type));
+
+	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue,
+			outputLocal:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		var abi = scalarAbi;
+		if (abi == null) throw "Missing scalar ABI";
+		var results:Array<Int> = [];
+		if (abi.isValue(output.type)) {
+			var stored = scalarResults.get(output.id);
+			if (stored == null) throw "Missing scalar closure result locals";
+			results = stored;
+		} else if (output.type != Void) results.push(outputLocal);
+		var body:Array<WasmInstruction> = [LocalGet(closureLocal), I32Const(1), I32And, If(null)];
+		for (local in argumentLocals) body.push(LocalGet(local));
+		body = body.concat([LocalGet(closureLocal), I32Const(1), I32ShrU, CallIndirect(staticType)]);
+		var index = results.length - 1;
+		while (index >= 0) { body.push(LocalSet(results[index])); index--; }
+		body = body.concat([Else, LocalGet(closureLocal), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET)]);
+		for (local in argumentLocals) body.push(LocalGet(local));
+		body = body.concat([LocalGet(closureLocal), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), CallIndirect(instanceType)]);
+		index = results.length - 1;
+		while (index >= 0) { body.push(LocalSet(results[index])); index--; }
+		body.push(End);
+		return body;
+	}
+	public function scalarSignature(name:String):Null<compiler.backend.wasm.WasmScalarAbi.WasmScalarSignature>
+		return scalarAbi == null ? null : scalarAbi.signatures.get(name);
+	public function scalarReturnTypes(signature:compiler.backend.wasm.WasmScalarAbi.WasmScalarSignature):Array<IrType> {
+		var abi = scalarAbi;
+		if (abi == null) throw "Missing scalar ABI";
+		return abi.resultTypes(signature);
+	}
+
+	public function scalarExceptionResult(fn:IrFunction, locals:Map<Int, Int>, exception:Int):Array<WasmInstruction> {
+		var abi = scalarAbi, signature = scalarSignature(fn.name);
+		if (abi == null) throw "Missing scalar ABI";
+		if (signature == null || !signature.throwsReceiver || allocateLocal == null) throw 'Invalid scalar exception return "${fn.name}"';
+		var receiver:Null<IrValue> = null;
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case NewObject(out, _) if (out.id == signature.receiverId): receiver = out;
+			default:
+		}
+		if (receiver == null) throw 'Scalar method "${fn.name}" has no receiver state';
+		var name = switch receiver.type { case Obj(value): value; default: throw "Invalid scalar receiver"; },
+			candidate = scalarLocals == null ? null : scalarLocals.get(receiver), result:Array<WasmInstruction> = [];
+		for (field in physicalFields(name)) {
+			if (candidate != null) result.push(LocalGet(requiredScalarField(candidate.fields, field.name)));
+			else {
+				var local = allocateLocal(valueType(field.type));
+				for (instruction in fieldGet(receiver, field.name, local, requiredScalarValue(locals, receiver.id))) result.push(instruction);
+				result.push(LocalGet(local));
+			}
+		}
+		if (signature.result != Void) for (type in abi.valueTypes(signature.result))
+			for (instruction in zeroValue(type)) result.push(instruction);
+		result.push(LocalGet(exception)); result.push(I32Const(1));
+		return result;
+	}
+
+	/** Preserve an inline receiver's writes when its method throws across the scalar ABI. */
+	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>, tag:Null<Int>,
+			cleanup:Array<WasmInstruction>):Null<Array<WasmInstruction>> {
+		if (scalarAbi == null) return null;
+		var signature = scalarAbi.signatures.get(fn.name);
+		if (signature == null || !signature.throwsReceiver) return null;
+		if (tag == null) return null;
+		if (allocateLocal == null) throw 'Scalar method "${fn.name}" requires function locals';
+		var exception = allocateLocal(valueType(Dyn)),
+			result:Array<WasmInstruction> = [Try(null)];
+		for (instruction in body) result.push(instruction);
+		result.push(Catch(tag)); result.push(LocalSet(exception));
+		for (instruction in cleanup) result.push(instruction);
+		for (instruction in scalarExceptionResult(fn, locals, exception)) result.push(instruction);
+		result.push(Return); result.push(End); result.push(Unreachable);
+		return result;
+	}
+
+	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+			functionIndex:Int):Array<WasmInstruction> {
+		var abi = scalarAbi;
+		if (abi == null) throw "Missing scalar ABI";
+		var signature = abi.signatures.get(name), body:Array<WasmInstruction> = [for (local in argumentLocals) LocalGet(local)];
+		if (signature == null || allocateLocal == null) throw 'Missing scalar call signature "$name"';
+		body.push(Call(functionIndex));
+		if (signature.mutatesReceiver || abi.isValue(signature.result)) {
+			var locals = scalarResults.get(output.id);
+			if (locals == null) throw 'Missing scalar result locals for "$name"';
+			var index = locals.length - 1;
+			while (index >= 0) { body.push(LocalSet(locals[index])); index--; }
+		} else if (output.type != Void) body.push(LocalSet(outputLocal));
+		return body;
+	}
+
+	public function hasScalarVirtual(receiver:IrType, method:String):Bool
+		return scalarAbi != null && scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver, method));
+
+	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue, outputLocal:Int,
+			arguments:Array<IrValue>, argumentLocals:Array<Int>):Array<WasmInstruction> {
+		var abi = scalarAbi;
+		if (abi == null) throw "Missing scalar ABI";
+		var virtual = abi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
+		if (virtual == null || allocateLocal == null || functions == null) throw 'Missing scalar virtual method "$method"';
+		var results:Array<Int> = [];
+		if (abi.isValue(virtual.signature.result)) {
+			results = scalarResults.get(output.id);
+			if (results == null) throw 'Missing scalar virtual result locals for "$method"';
+		} else if (virtual.signature.result != Void) results.push(outputLocal);
+		var body:Array<WasmInstruction> = [];
+		for (index in 0...virtual.targets.length) {
+			var target = virtual.targets[index], functionIndex = functions.get(target.clone);
+			if (functionIndex == null) throw 'Missing scalar virtual target "${target.clone}"';
+			body.push(LocalGet(receiverLocal)); body.push(I32Load(0)); body.push(I32Const(WasmModuleSupport.typeId(Obj(target.typeName))));
+			body.push(I32Eq); body.push(If(null)); body.push(LocalGet(receiverLocal));
+			for (local in argumentLocals) body.push(LocalGet(local));
+			body.push(Call(functionIndex));
+			var resultIndex = results.length - 1;
+			while (resultIndex >= 0) { body.push(LocalSet(results[resultIndex])); resultIndex--; }
+			body.push(Else);
+		}
+		body.push(Unreachable);
+		for (_ in virtual.targets) body.push(End);
+		return body;
 	}
 
 	public function fieldSet(object:IrValue, fieldName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
@@ -90,13 +355,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			return assignValueField([LocalGet(objectLocal)], field.offset, [LocalGet(valueLocal)], valueName, []);
 		var body:Array<WasmInstruction> = [LocalGet(objectLocal), LocalGet(valueLocal)], scalar = field.scalarStorage;
 		if (scalar != null) {
-			var bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
-			if (bits > 0 && scalar.size * 8 < bits) {
-				var shift = bits - scalar.size * 8;
-				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
-				body.push(bits == 64 ? I64Shl : I32Shl);
-				body.push(bits == 64 ? I64Const(shift) : I32Const(shift));
-				body.push(bits == 64 ? (scalar.signed ? I64ShrS : I64ShrU) : (scalar.signed ? I32ShrS : I32ShrU));
+			if ((field.type == I32 || field.type == Bool) && scalar.size == 1) {
+				body.push(I32Store8(field.offset)); return body;
+			} else if (field.type == I32 && scalar.size == 2) {
+				body.push(I32Store16(field.offset)); return body;
+			} else if (field.type == I64 && scalar.size == 4) {
+				body.push(I32WrapI64); body.push(I32Store(field.offset)); return body;
+			} else if (field.type == F32 && scalar.size == 4) {
+				body.push(F32DemoteF64); body.push(F32Store(field.offset)); return body;
 			}
 		}
 		body.push(store(field.type, field.offset));

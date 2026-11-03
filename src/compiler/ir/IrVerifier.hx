@@ -215,6 +215,16 @@ class IrVerifier {
 	}
 
 	static function verifyScalarReferenceUse(instruction:IrInstruction):Void {
+		switch instruction {
+			case StaticClosure(output, name), InstanceClosure(output, name, _) if (scalarClosureType(output.type)
+				&& !StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+				throw "A scalar closure must target a verified scalar function";
+			case ToDyn(_, value) if (scalarClosureType(value.type)):
+				throw "A scalar closure cannot cross a Dynamic boundary without an adapter";
+			case SafeCast(output, value) if (scalarClosureType(output.type) || scalarClosureType(value.type)):
+				throw "A scalar closure cannot cross a cast boundary without an adapter";
+			default:
+		}
 		var output = IrOperands.output(instruction);
 		if (output != null && IrValueLaneReference.isCarrier(output.type)) switch instruction {
 			case Call(_, name, _) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.READ):
@@ -232,6 +242,7 @@ class IrVerifier {
 		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
 			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
 			case Call(_, name, _) if (StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+			case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
 			default: throw "A scalar stack reference cannot escape its call";
 		}
 		switch instruction {
@@ -241,6 +252,26 @@ class IrVerifier {
 			default:
 		}
 	}
+
+	static function scalarClosureArgument(type:IrType, arguments:Array<IrValue>, input:IrValue):Bool
+		return switch type {
+			case Function(expected, _):
+				var found = false;
+				for (index in 0...arguments.length)
+					if (arguments[index].id == input.id && index < expected.length && sameType(expected[index], input.type)) found = true;
+				found;
+			default: false;
+		};
+
+	static function scalarClosureType(type:IrType):Bool
+		return switch type {
+			case Function(arguments, result):
+				var found = IrHlScalarRef.element(result) != null;
+				for (argument in arguments)
+					if (IrHlScalarRef.element(argument) != null) found = true;
+				found;
+			default: false;
+		};
 
 	static function verifyUse(value:IrValue, block:Int, position:Int, values:Map<Int, IrType>, definitions:Map<Int, {block:Int, position:Int}>,
 			graph:IrGraph):Void {
@@ -494,10 +525,15 @@ class IrVerifier {
 				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';
 			case FieldGet(out, object, fieldName):
-				var objectType = requireObject(object, values, objects),
-					field = findField(objectType, fieldName, objects);
-				if (field == null || !sameType(out.type, field.type))
-					throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName": output=${out.type}, declared=${field == null ? "missing" : Std.string(field.type)}';
+				if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD) {
+					requireObject(object, values, objects);
+					expect(out, I32);
+				} else {
+					var objectType = requireObject(object, values, objects),
+						field = findField(objectType, fieldName, objects);
+					if (field == null || !sameType(out.type, field.type))
+						throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName": output=${out.type}, declared=${field == null ? "missing" : Std.string(field.type)}';
+				}
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);

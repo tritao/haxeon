@@ -138,6 +138,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function methodCall(receiver:IrValue, name:String, args:Array<IrValue>, result:IrType):IrValue {
+		var out = temporary(result);
+		emit(MethodCall(out, receiver, name, args));
+		return out;
+	}
+
 	public function cNativeCall(name:String, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
 		emit(CNativeCall(out, name, args));
@@ -242,6 +248,9 @@ class IrBuilder {
 
 	public function returnValue(value:IrValue):Void
 		terminate(Return(value));
+
+	public function throwValue(value:IrValue):Void
+		terminate(Throw(value));
 
 	public function jump(target:IrBlock):Void
 		terminate(Jump(target.id));

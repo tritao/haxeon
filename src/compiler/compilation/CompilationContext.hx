@@ -94,6 +94,9 @@ class CompilationContext {
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 
+	public function declarationOwner(name:String):Null<String>
+		return owner.declarationOwners.get(name);
+
 	public function resolveSemanticEnumCase(name:String, index:Int):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveEnumCaseId(name, index);
 

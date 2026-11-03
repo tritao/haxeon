@@ -47,5 +47,9 @@ function main():Int {
 	if (!rejectedOptional || afterRejected == null || afterRejected.number != 8) return 9;
 	Reflect.setField(optional, "value", null);
 	if (optional.value != null) return 8;
+	var copy:ReflectionBox = cast Reflect.copy(box);
+	if (copy == box || copy.value.number != 36 || copy.value.anchor != anchor) return 10;
+	Reflect.setField(copy, "value", new ReflectionValue(5, anchor));
+	if (copy.value.number != 5 || box.value.number != 36) return 11;
 	return box.value.number + box.value.anchor.id - 1;
 }

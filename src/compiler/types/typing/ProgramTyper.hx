@@ -41,7 +41,7 @@ class ProgramTyper {
 	}
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
-			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts):MeasuredTypedProgram {
+			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts, ?retainedOwners:Map<String, Bool>):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -187,6 +187,15 @@ class ProgramTyper {
 				if (classDecl.isExtern != true
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
 			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
+		if (cachedMetadata != null) {
+			if (retainedOwners == null) retainedOwners = [];
+			session.representation.restoreGenericOwnerAliases(cachedMetadata.genericOwnerAliases, retainedOwners);
+			for (cached in typedClasses)
+				if (cached.specializationOrigin != null && cached.specializationArguments != null
+					&& retainedOwners.exists(cached.name) && session.classDecls.exists(cached.specializationOrigin))
+					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
+			typedClasses = [for (cached in typedClasses) if (cached.specializationOrigin == null) cached];
+		}
 		if (cachedMetadata == null)
 			for (enumDecl in typedEnums)
 				for (caseDecl in enumDecl.cases)
@@ -231,8 +240,24 @@ class ProgramTyper {
 					&& (selected == null || selected.exists(name)))
 					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name), abstractDecl.name, true));
 			}
-		for (lambda in session.closureConversion.generatedFunctions())
-			typedFunctions.push(lambda);
+		// Field and signature types can request owners without a construction expression. A
+		// generated owner's fields and methods can request further owners, so drain to a fixed point.
+		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
+		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0;
+		while (true) {
+			while (generatedIndex < session.closureConversion.generatedFunctionCount()) {
+				var fn = session.closureConversion.generatedFunction(generatedIndex++);
+				typedFunctions.push(fn);
+				assembler.registerProgramTypes([fn], [], [], [], []);
+			}
+			if (ownerIndex >= session.representation.genericOwnerRequestCount()) break;
+			var request = session.representation.genericOwnerRequest(ownerIndex++), declaration = ownerDeclarations.get(request.origin);
+			if (declaration == null) throw 'Missing generic owner declaration "${request.origin}"';
+			var specialized = typeClass(declaration, null, false, request);
+			typedClasses.push(specialized);
+			for (method in specialized.methods) typedFunctions.push(method);
+			assembler.registerProgramTypes(specialized.methods, [specialized], [], [], []);
+		}
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);
@@ -311,6 +336,7 @@ class ProgramTyper {
 					];
 					{
 						name: refreshed.name,
+						genericParameters: refreshed.genericParameters,
 						isValue: refreshed.isValue,
 						isFlat: refreshed.isFlat,
 						isPortable: refreshed.isPortable,
@@ -334,7 +360,8 @@ class ProgramTyper {
 					if (layout.target == session.nativeAbiTarget)
 						session.nativeLayoutsByName.set(classDecl.name, layout);
 
-	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, deferMethodBodies:Bool = false):TypedClass {
+	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, deferMethodBodies:Bool = false,
+			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):TypedClass {
 		var isStruct = classDecl.isStruct == true,
 			requestedValue = isStruct || hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
@@ -365,8 +392,10 @@ class ProgramTyper {
 		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
-			erasedSubstitutions = session.representation.erasedNominalSubstitutions(classDecl.name);
+			erasedSubstitutions = specialization == null ? session.representation.erasedNominalSubstitutions(classDecl.name) : specialization.substitutions;
 		for (field in classDecl.fields) {
+			if (specialization != null && field.isStatic)
+				continue;
 			if (fieldNames.exists(field.name))
 				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
 			if (field.isInline && !field.isStatic)
@@ -389,10 +418,11 @@ class ProgramTyper {
 					initializer = resolved.initializer;
 					inlineValue = resolved.value;
 				} else {
-					var initializerContext = bodyTyper.enterBody(classDecl.name + ".__init", erasedSubstitutions),
+					var initializerContext = bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name) + ".__init",
+						erasedSubstitutions, specialization == null ? null : classDecl.name),
 						scope = new Scope();
 					if (!field.isStatic)
-						scope.defineReceiver(TInstance(NominalKind.Class, classDecl.name, []), field.span);
+						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions), field.span);
 					try {
 						initializer = bodyTyper.coerce(EnumAbstractHints.typed(session, EnumAbstractHints.named(session, field.type), parsedInitializer,
 							() -> bodyTyper.typeExpression(parsedInitializer, scope, type)),
@@ -442,10 +472,17 @@ class ProgramTyper {
 		validateObservable(classDecl, declaredType, classSemanticSubstitutions, isValue, isNativeValue);
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
-		if (parsedBase != null)
+		if (parsedBase != null) {
 			baseName = BodyTyper.inheritanceName(parsedBase);
+			var baseType = session.declarations.resolve(parsedBase, classDecl.span, erasedSubstitutions),
+				baseSpecialization = session.representation.genericOwner(baseType);
+			if (baseSpecialization != null) baseName = baseSpecialization.name;
+		}
 		return {
-			name: classDecl.name,
+			name: specialization == null ? classDecl.name : specialization.name,
+			genericParameters: specialization == null ? classDecl.typeParameters : [],
+			specializationOrigin: specialization == null ? null : specialization.origin,
+			specializationArguments: specialization == null ? null : specialization.typeArguments,
 			isValue: isValue,
 			isFlat: propertyFacts.flat,
 			isPortable: propertyFacts.portable,
@@ -457,7 +494,7 @@ class ProgramTyper {
 					if (!StructProperties.isConstraintSyntax(interfaceType)) BodyTyper.inheritanceName(interfaceType)
 			],
 			fields: fields,
-			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions),
+			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions, specialization),
 			span: classDecl.span
 		};
 	}
@@ -567,6 +604,7 @@ class ProgramTyper {
 					var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
 					{
 						name: typed.name,
+						genericParameters: typed.genericParameters,
 						isValue: typed.isValue,
 						isFlat: typed.isFlat,
 						isPortable: typed.isPortable,
@@ -584,7 +622,7 @@ class ProgramTyper {
 	}
 
 	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>, deferBodies:Bool,
-			substitutions:Map<String, CompilerType>):Array<TypedFunction> {
+			substitutions:Map<String, CompilerType>, ?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):Array<TypedFunction> {
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
 			hasConstructor = false;
@@ -592,36 +630,55 @@ class ProgramTyper {
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
 		for (method in classDecl.methods) {
+			if (specialization != null && method.isStatic)
+				continue;
+			if (specialization == null && !method.isStatic && isConstrainedOwnerTemplate(classDecl.name))
+				continue;
 			if (BodyTyper.isGeneric(method))
 				continue;
 			var qualified = classDecl.name + "." + method.name,
-				typeBody = !deferBodies && (selected == null || selected.exists(qualified)),
+				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified)),
 				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					substitutions) : methodSignature(method, classDecl.name, substitutions);
+					substitutions, specialization == null ? null : specialization.name + "." + method.name, null,
+					specialization == null ? null : specialization.name, specialization == null ? null : specialization.typeArguments)
+					: methodSignature(method, classDecl.name, substitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
-					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
+					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers,
+						specialization == null ? null : session.representation.receiverType(classDecl.name, substitutions));
 			}
 			typedMethods.push(typedMethod);
 		}
 		if (!hasConstructor
+			&& (specialization != null || !isConstrainedOwnerTemplate(classDecl.name))
 			&& instanceInitializers.length > 0
 			&& !deferBodies
-			&& (selected == null || selected.exists(classDecl.name + ".new")))
+			&& (specialization != null || selected == null || selected.exists(classDecl.name + ".new")))
 			typedMethods.push({
-				name: classDecl.name + ".new",
+				name: (specialization == null ? classDecl.name : specialization.name) + ".new",
+				origin: specialization == null ? null : classDecl.name + ".new",
+				originKind: specialization == null ? null : compiler.types.TypedAst.FunctionOriginKind.Specialization,
+				typeArguments: specialization == null ? null : specialization.typeArguments,
 				owner: classDecl.name,
+				physicalOwner: specialization == null ? null : specialization.name,
 				isStatic: false,
 				isConstructor: true,
 				arguments: [],
 				result: TVoid,
-				statements: instanceInitializerStatements(instanceInitializers, classDecl.name),
+				statements: instanceInitializerStatements(instanceInitializers, classDecl.name,
+					specialization == null ? null : session.representation.receiverType(classDecl.name, substitutions)),
 				cells: [],
 				cellCaptures: [],
 				span: classDecl.span
 			});
 		return typedMethods;
+	}
+
+	function isConstrainedOwnerTemplate(name:String):Bool {
+		var declaration = session.classDecls.get(name);
+		return declaration != null && declaration.typeParameters.length > 0
+			&& declaration.typeConstraints != null && declaration.typeConstraints.length > 0;
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
@@ -654,6 +711,7 @@ class ProgramTyper {
 					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
 				{
 					name: classDecl.name,
+					genericParameters: classDecl.genericParameters,
 					isValue: classDecl.isValue,
 					isFlat: classDecl.isFlat,
 					isPortable: classDecl.isPortable,
@@ -807,13 +865,20 @@ class ProgramTyper {
 		};
 	}
 
-	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>):TypedFunction {
-		var statements = instanceInitializerStatements(fields, className);
+	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>, ?receiverType:CompilerType):TypedFunction {
+		var statements = instanceInitializerStatements(fields, className, receiverType);
 		return {
 			name: method.name,
+			origin: method.origin,
+			originKind: method.originKind,
+			typeArguments: method.typeArguments,
 			owner: method.owner,
+			physicalOwner: method.physicalOwner,
 			isStatic: method.isStatic,
 			isConstructor: method.isConstructor,
+			isInline: method.isInline,
+			isKept: method.isKept,
+			isExposed: method.isExposed,
 			arguments: method.arguments,
 			result: method.result,
 			statements: statements.concat(method.statements),
@@ -823,13 +888,13 @@ class ProgramTyper {
 		};
 	}
 
-	static function instanceInitializerStatements(fields:Array<TypedField>, className:String):Array<TypedStatement> {
+	static function instanceInitializerStatements(fields:Array<TypedField>, className:String, ?receiverType:CompilerType):Array<TypedStatement> {
 		var statements:Array<TypedStatement> = [];
 		for (field in fields) {
 			var initializer = field.initializer;
 			if (initializer == null)
 				throw 'Missing initializer for "$className.${field.name}"';
-			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), TInstance(NominalKind.Class, className, []), field.span), field.name,
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), receiverType == null ? TInstance(NominalKind.Class, className, []) : receiverType, field.span), field.name,
 				initializer, field.span));
 		}
 		return statements;

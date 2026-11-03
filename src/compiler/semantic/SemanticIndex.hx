@@ -193,6 +193,12 @@ class SemanticIndex {
 	static function specializationOrigin(name:String):String {
 		if (!StringTools.startsWith(name, "$generic:"))
 			return name;
+		var ownerPrefix = "$generic:$owner:";
+		if (StringTools.startsWith(name, ownerPrefix)) {
+			var end = name.indexOf("[", ownerPrefix.length), method = name.lastIndexOf(">.");
+			if (end >= 0 && method > end)
+				return name.substring(ownerPrefix.length, end) + "." + name.substr(method + 2);
+		}
 		var end = name.indexOf("[", 9);
 		return end < 0 ? name : name.substring(9, end);
 	}

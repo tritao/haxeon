@@ -1132,11 +1132,13 @@ class CallResolver {
 			fail("E1016", 'super.$name() cannot call a generic method yet', span);
 		var receiver = typeExpressionValue(Variable("this", span), scope),
 			methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
+			physicalOwner = session.representation.genericOwner(methodOwnerType),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
 			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
-			call = new TypedExpression(TCall(methodKey, [receiver].concat(physicalArguments)), methodResult.physical, span);
+			call = new TypedExpression(TCall(physicalOwner == null ? methodKey : physicalOwner.name + "." + name,
+				[receiver].concat(physicalArguments)), methodResult.physical, span);
 		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
 	}
 
@@ -1293,7 +1295,12 @@ class CallResolver {
 						&& !session.interfaceDecls.exists(targetName)
 						&& !session.enumDecls.exists(targetName))
 						fail("E1007", 'Unknown type "$targetName"', span);
-					session.declarations.resolve(NamedType(targetName), span);
+					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
+					if (session.classDecls.exists(targetName))
+						TInstance(NominalKind.Class, targetName, [for (_ in requiredMapValue(session.classDecls, targetName).typeParameters) TDynamic]);
+					else if (session.interfaceDecls.exists(targetName))
+						TInstance(NominalKind.Interface, targetName, [for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters) TDynamic]);
+					else TInstance(NominalKind.Enum, targetName, [for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters) TDynamic]);
 			};
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
@@ -2099,6 +2106,8 @@ class CallResolver {
 		for (constraint in constraints) {
 			var actual = requiredMapValue(substitutions, constraint.parameter),
 				expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
+			if (actual == TDynamic)
+				fail("E1003", 'Cannot construct "$name" with Dynamic for constrained type parameter "${constraint.parameter}"; its conformance must be known', span);
 			if (!session.relations.satisfiesConstraint(actual, expected)) {
 				var detail = session.relations.constraintFailure(actual, expected);
 				fail("E1003",

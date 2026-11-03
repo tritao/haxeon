@@ -48,7 +48,7 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 # Run declared conformance and struct array places with inlining both enabled and disabled.
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
-		for value_case in member-module-shadow generic-struct-functions struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+		for value_case in member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -64,12 +64,96 @@ for inline in 0 1; do
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-generic-runtime-inline-$inline.wasm" \
 			--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
 			tests/programs/observable-generic-runtime.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-generic-struct-reflected-closure-inline-$inline.wasm" \
+			--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
+			tests/programs/wasm-generic-struct-reflected-closure.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target="$target" --output="$parity_output_dir/wasm-parity-$target-value-interface-reflection-inline-$inline.wasm" \
+			--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
+			tests/programs/wasm-value-interface-reflection.hx
+		if [[ "$target" == wasm32 ]]; then
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=SignalCensus.prepare --export=SignalCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm32-signal-census-inline-$inline.wasm" \
+				--entry=generic-struct-signal-allocations --root=stdlib --root=tests/programs tests/programs/generic-struct-signal-allocations.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+				--output="$parity_output_dir/wasm-parity-wasm32-null-inlining-neutral-inline-$inline.wasm" \
+				--entry=null-method-inlining --root=stdlib --root=tests/programs tests/programs/null-method-inlining.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=GenericRangeCensus.prepare --export=GenericRangeCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm32-generic-ranges-census-inline-$inline.wasm" \
+				--entry=generic-struct-array-ranges --root=stdlib --root=tests/programs tests/programs/generic-struct-array-ranges.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+				--output="$parity_output_dir/wasm-parity-wasm32-null-method-neutral-inline-$inline.wasm" \
+				--entry=wasm-null-method-dispatch --root=stdlib --root=tests/programs tests/programs/wasm-null-method-dispatch.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=ClosureCensus.prepare --export=ClosureCensus.perform --export=ClosureCensus.stress \
+				--export=ClosureCensus.apply --export=ClosureCensus.isMissing --export=ClosureCensus.exposeNumber --export=ClosureCensus.applyNumber \
+				--output="$parity_output_dir/wasm-parity-wasm32-scalar-closure-census-inline-$inline.wasm" \
+				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow \
+				--output="$parity_output_dir/wasm-parity-wasm32-specialized-map-census-inline-$inline.wasm" \
+				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+				--export=LookupCensus.prepare --export=LookupCensus.perform --export=LookupCensus.stress \
+				--output="$parity_output_dir/wasm-parity-wasm32-constrained-lookup-census-inline-$inline.wasm" \
+				--entry=generic-constrained-owner-lookup-allocations --root=stdlib --root=tests/programs \
+				tests/programs/generic-constrained-owner-lookup-allocations.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats \
+				--export=Inspect.make --export=Inspect.makeMixed --export=Inspect.checkMixed --export=Census.prepare --export=Census.construct \
+				--output="$parity_output_dir/wasm-parity-wasm32-flat-object-layout-inline-$inline.wasm" \
+				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress \
+				--output="$parity_output_dir/wasm-parity-wasm32-flat-object-stress-inline-$inline.wasm" \
+				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
+		else
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=Census.prepare --export=Census.construct \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-flat-object-layout-inline-$inline.wasm" \
+				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
+		fi
+		if [[ "$target" == wasm-gc ]]; then
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=SignalCensus.prepare --export=SignalCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-signal-census-inline-$inline.wasm" \
+				--entry=generic-struct-signal-allocations --root=stdlib --root=tests/programs tests/programs/generic-struct-signal-allocations.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=GenericRangeCensus.prepare --export=GenericRangeCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-generic-ranges-census-inline-$inline.wasm" \
+				--entry=generic-struct-array-ranges --root=stdlib --root=tests/programs tests/programs/generic-struct-array-ranges.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=ClosureCensus.prepare --export=ClosureCensus.perform \
+				--export=ClosureCensus.apply --export=ClosureCensus.isMissing --export=ClosureCensus.exposeNumber --export=ClosureCensus.applyNumber \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-scalar-closure-census-inline-$inline.wasm" \
+				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-specialized-map-census-inline-$inline.wasm" \
+				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=Main.prepare --export=Main.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-reflected-closure-census-inline-$inline.wasm" \
+				--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
+				tests/programs/wasm-generic-struct-reflected-closure.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=LookupCensus.prepare --export=LookupCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-constrained-lookup-census-inline-$inline.wasm" \
+				--entry=generic-constrained-owner-lookup-allocations --root=stdlib --root=tests/programs \
+				tests/programs/generic-constrained-owner-lookup-allocations.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+				--export=AllocationCensus.prepare --export=AllocationCensus.perform \
+				--output="$parity_output_dir/wasm-parity-wasm-gc-constrained-owner-census-inline-$inline.wasm" \
+				--entry=generic-struct-owner-allocations --root=tests/programs \
+				tests/programs/generic-struct-owner-allocations.hx
+		fi
 	done
 done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	for value_case in member-module-shadow generic-struct-functions struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+	for value_case in member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -102,6 +186,38 @@ for inline in 0 1; do
 		--target=hl --output="$parity_output_dir/observable-generic-runtime-inline-$inline.hl" \
 		--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
 		tests/programs/observable-generic-runtime.hx
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/generic-struct-reflected-closure-inline-$inline.hl" \
+		--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
+		tests/programs/wasm-generic-struct-reflected-closure.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/generic-struct-reflected-closure-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Reflected struct closure fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/value-interface-reflection-inline-$inline.hl" \
+		--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
+		tests/programs/wasm-value-interface-reflection.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/value-interface-reflection-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Reflected value interface fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+	HAXEON_INLINE="$inline" haxeon_compile \
+		--target=hl --output="$parity_output_dir/flat-object-layout-inline-$inline.hl" \
+		--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/flat-object-layout-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Flat object layout fixture (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
 	status=0
 	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/observable-generic-runtime-inline-$inline.hl" || status=$?
@@ -245,7 +361,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["member-module-shadow", "generic-struct-functions", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
+    for (const name of ["member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         if (result.failure === undefined && result.exit !== 42)
@@ -288,6 +404,164 @@ async function run(name, target) {
       else
         console.log(`PASS: observable-generic-runtime on ${target}, inline=${inline}`);
     }
+  }
+  for (const inline of [0, 1]) {
+    for (const target of ["wasm32", "wasm-gc"]) {
+      const result = await run(`generic-struct-reflected-closure-inline-${inline}`, target);
+      if (result.failure === undefined && result.exit !== 42)
+        result.failure = `expected 42, got ${result.exit}`;
+      if (result.failure !== undefined)
+        failures.push(`generic-struct-reflected-closure (inline=${inline}, ${target}): ${result.failure}`);
+      else
+        console.log(`PASS: generic-struct-reflected-closure on ${target}, inline=${inline}`);
+	  const reflectedValue = await run(`value-interface-reflection-inline-${inline}`, target);
+	  if (reflectedValue.failure === undefined && reflectedValue.exit !== 42)
+	    reflectedValue.failure = `expected 42, got ${reflectedValue.exit}`;
+	  if (reflectedValue.failure !== undefined)
+	    failures.push(`value-interface-reflection (inline=${inline}, ${target}): ${reflectedValue.failure}`);
+	  else
+	    console.log(`PASS: value-interface-reflection on ${target}, inline=${inline}`);
+	  const flatBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-flat-object-layout-inline-${inline}.wasm`));
+	  const flat = (await WebAssembly.instantiate(flatBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	  if (flat.main() !== 42) failures.push(`flat object semantics (inline=${inline}, ${target})`);
+	  if (target === "wasm32") {
+	    const pointer = flat["Inspect.make"]();
+	    const actual = Array.from(new Uint8Array(flat.memory.buffer, pointer + 8, 12));
+	    const expected = [1, 0, 250, 0, 46, 251, 0, 0, 42, 0, 0, 0];
+	    if (actual.join(",") !== expected.join(","))
+	      failures.push(`flat object bytes (inline=${inline}): ${actual}`);
+	    const mixedPointer = flat["Inspect.makeMixed"]();
+	    const mixedBytes = Array.from(new Uint8Array(flat.memory.buffer, mixedPointer + 16, 12));
+	    if (mixedBytes.join(",") !== expected.join(",") || flat["Inspect.checkMixed"]() !== 73)
+	      failures.push(`nested flat object bytes or references (inline=${inline}): ${mixedBytes}`);
+	    const stressBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-flat-object-stress-inline-${inline}.wasm`));
+	    const stress = (await WebAssembly.instantiate(stressBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	    if (stress.main() !== 42) failures.push(`flat object GC stress (inline=${inline})`);
+	  }
+	  flat["Census.prepare"](1024);
+	  const count = target === "wasm32" ? () => flat["haxeon.memory.allocation_count"]() : () => flat.__allocation_count();
+	  const before = count(), sum = flat["Census.construct"](1024), allocated = count() - before;
+	  if (sum !== 43008 || allocated !== 1024)
+	    failures.push(`flat object census (inline=${inline}, ${target}): sum=${sum}, allocations=${allocated}`);
+	  else
+	    console.log(`PASS: flat object census on ${target}, inline=${inline}`);
+    }
+    const bytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm-gc-reflected-closure-census-inline-${inline}.wasm`));
+    const instance = (await WebAssembly.instantiate(bytes, {haxeon_runtime: runtime, std})).instance;
+    const prepared = instance.exports["Main.prepare"]();
+    const before = instance.exports.__allocation_count();
+    const result = instance.exports["Main.perform"](1024);
+    const allocations = instance.exports.__allocation_count() - before;
+    if (prepared !== 42 || result !== 17408 || allocations !== 0)
+      failures.push(`reflected closure census (inline=${inline}): prepare=${prepared}, result=${result}, allocations=${allocations}`);
+    else
+      console.log(`PASS: reflected closure census on wasm-gc, inline=${inline}`);
+	const constrainedBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm-gc-constrained-owner-census-inline-${inline}.wasm`));
+	const constrained = (await WebAssembly.instantiate(constrainedBytes, {haxeon_runtime: runtime, std})).instance;
+	constrained.exports["AllocationCensus.prepare"]();
+	for (const n of [8, 1024]) {
+	  const before = constrained.exports.__allocation_count();
+	  const result = constrained.exports["AllocationCensus.perform"](n);
+	  const allocations = constrained.exports.__allocation_count() - before;
+	  if (result !== n * (n - 1) / 2 || allocations !== 0)
+	    failures.push(`constrained owner census (inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	  else
+	    console.log(`PASS: constrained owner census on wasm-gc, inline=${inline}, n=${n}`);
+	}
+	const lookupBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm-gc-constrained-lookup-census-inline-${inline}.wasm`));
+	const lookup = (await WebAssembly.instantiate(lookupBytes, {haxeon_runtime: runtime, std})).instance;
+	lookup.exports["LookupCensus.prepare"]();
+	for (const n of [8, 1024]) {
+	  const before = lookup.exports.__allocation_count();
+	  const result = lookup.exports["LookupCensus.perform"](n);
+	  const allocations = lookup.exports.__allocation_count() - before;
+	  if (result !== n * 14 || allocations !== 0)
+	    failures.push(`constrained lookup census (inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	  else
+	    console.log(`PASS: constrained lookup census on wasm-gc, inline=${inline}, n=${n}`);
+	}
+	const linearLookupBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-constrained-lookup-census-inline-${inline}.wasm`));
+	const linearLookup = (await WebAssembly.instantiate(linearLookupBytes, {haxeon_runtime: runtime, std})).instance;
+	linearLookup.exports["LookupCensus.prepare"]();
+	for (const n of [8, 1024]) {
+	  const before = linearLookup.exports["haxeon.memory.allocation_count"]();
+	  const result = linearLookup.exports["LookupCensus.perform"](n);
+	  const allocations = linearLookup.exports["haxeon.memory.allocation_count"]() - before;
+	  if (result !== n * 14 || allocations !== 0)
+	    failures.push(`constrained lookup census (wasm32, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	  else
+	    console.log(`PASS: constrained lookup census on wasm32, inline=${inline}, n=${n}`);
+	}
+	if (linearLookup.exports["LookupCensus.stress"](256) !== 2304)
+	  failures.push(`constrained lookup lost live references (wasm32 stress GC, inline=${inline})`);
+	const neutralNullBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-null-method-neutral-inline-${inline}.wasm`));
+	const neutralNull = (await WebAssembly.instantiate(neutralNullBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
+	if (neutralNull.exports.main() !== 42) failures.push(`null method exception (wasm32 runtime-neutral, inline=${inline})`);
+	const neutralInlineBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-null-inlining-neutral-inline-${inline}.wasm`));
+	const neutralInline = (await WebAssembly.instantiate(neutralInlineBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
+	if (neutralInline.exports.main() !== 42) failures.push(`inlined null method exception (wasm32 runtime-neutral, inline=${inline})`);
+	for (const target of ["wasm32", "wasm-gc"]) {
+	  const signalBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-signal-census-inline-${inline}.wasm`));
+	  const signal = (await WebAssembly.instantiate(signalBytes, {haxeon_runtime: runtime, std})).instance;
+	  signal.exports["SignalCensus.prepare"]();
+	  const signalCount = target === "wasm32" ? signal.exports["haxeon.memory.allocation_count"] : signal.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = signalCount(), result = signal.exports["SignalCensus.perform"](n), allocations = signalCount() - before;
+	    if (result !== n * (n - 1) / 2 || allocations !== 0)
+	      failures.push(`struct signal census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: struct signal census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const rangesBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-generic-ranges-census-inline-${inline}.wasm`));
+	  const ranges = (await WebAssembly.instantiate(rangesBytes, {haxeon_runtime: runtime, std})).instance;
+	  const rangeCount = target === "wasm32" ? ranges.exports["haxeon.memory.allocation_count"] : ranges.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    ranges.exports["GenericRangeCensus.prepare"](n);
+	    const before = rangeCount(), result = ranges.exports["GenericRangeCensus.perform"](), allocations = rangeCount() - before;
+	    if (result !== 42 || allocations !== 9)
+	      failures.push(`generic range census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: generic range census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const closureBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-scalar-closure-census-inline-${inline}.wasm`));
+	  const closure = (await WebAssembly.instantiate(closureBytes, {haxeon_runtime: runtime, std})).instance;
+	  closure.exports["ClosureCensus.prepare"]();
+	  const closureCount = target === "wasm32" ? closure.exports["haxeon.memory.allocation_count"] : closure.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = closureCount(), result = closure.exports["ClosureCensus.perform"](n), allocations = closureCount() - before;
+	    if (result !== n * 11 || allocations !== 0)
+	      failures.push(`scalar closure census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: scalar closure census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const exportedRead = closure.exports["ClosureCensus.expose"]();
+	  const exportedNumber = closure.exports["ClosureCensus.exposeNumber"]();
+	  const missingClosure = target === "wasm32" ? 0 : null;
+	  if (closure.exports["ClosureCensus.apply"](exportedRead) !== 11
+	      || closure.exports["ClosureCensus.applyNumber"](exportedNumber) !== 11
+	      || closure.exports["ClosureCensus.isMissing"](missingClosure) !== 1
+	      || closure.exports["ClosureCensus.isMissing"](exportedRead) !== 0)
+	    failures.push(`exported scalar closure round trip (${target}, inline=${inline})`);
+	  else console.log(`PASS: exported scalar closures on ${target}, inline=${inline}`);
+	  if (target === "wasm32" && closure.exports["ClosureCensus.stress"](256) !== 35456)
+	    failures.push(`scalar closure lost live references (wasm32 stress GC, inline=${inline})`);
+	  const bytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-specialized-map-census-inline-${inline}.wasm`));
+	  const map = (await WebAssembly.instantiate(bytes, {haxeon_runtime: runtime, std})).instance;
+	  map.exports["MapCensus.prepare"]();
+	  const count = target === "wasm32" ? map.exports["haxeon.memory.allocation_count"] : map.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = count(), result = map.exports["MapCensus.perform"](n), allocations = count() - before;
+	    if (result !== n * 28 || allocations !== 0)
+	      failures.push(`specialized map census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: specialized map census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const growth = [];
+	  for (const n of [512, 1024, 2048]) {
+	    const before = count(), result = map.exports["MapCensus.grow"](n), allocations = count() - before;
+	    if (result !== 42) failures.push(`specialized map growth (${target}, inline=${inline}, n=${n}): result=${result}`);
+	    growth.push(allocations);
+	  }
+	  if (growth[1] - growth[0] > 80 || growth[2] - growth[1] > 80)
+	    failures.push(`specialized map growth allocates per entry (${target}, inline=${inline}): ${growth}`);
+	  else console.log(`PASS: specialized map growth on ${target}, inline=${inline}: ${growth}`);
+	}
   }
   const stressBytes = fs.readFileSync(path.join(outputDir, "wasm-parity-wasm32-bytes-view-stress.wasm"));
   const stressInstance = await WebAssembly.instantiate(stressBytes, {});

@@ -1,4 +1,8 @@
-package compiler.backend.wasm.gc;
+package compiler.backend.wasm;
+
+import compiler.backend.wasm.WasmScalarClosureEscapes;
+
+import compiler.backend.wasm.WasmValueLayout;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
@@ -10,28 +14,28 @@ import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmProgramIndex;
 
 /** Source signature retained while a direct function uses scalar Wasm parameters and results. */
-typedef WasmGcScalarSignature = {
+typedef WasmScalarSignature = {
 	final arguments:Array<IrType>;
 	final result:IrType;
 	final mutatesReceiver:Bool;
 	final throwsReceiver:Bool;
 	final receiverId:Int;
 }
-typedef WasmGcScalarVirtualTarget = {final typeName:String; final clone:String;}
-typedef WasmGcScalarVirtual = {final signature:WasmGcScalarSignature; final targets:Array<WasmGcScalarVirtualTarget>;}
+typedef WasmScalarVirtualTarget = {final typeName:String; final clone:String;}
+typedef WasmScalarVirtual = {final signature:WasmScalarSignature; final targets:Array<WasmScalarVirtualTarget>;}
 
 /** Expands direct value calls before field flattening. Dynamic and method boundaries retain their reference ABI. */
-class WasmGcScalarAbi {
-	public static inline final RETURN_MARKER = "$wasm-gc:scalar-return";
-	public static inline final RESULT_FIELD_PREFIX = "$wasm-gc:scalar-result:";
-	public static inline final RETHROW_MARKER = "$wasm-gc:scalar-rethrow";
+class WasmScalarAbi {
+	public static inline final RETURN_MARKER = "$wasm:scalar-return";
+	public static inline final RESULT_FIELD_PREFIX = "$wasm:scalar-result:";
+	public static inline final RETHROW_MARKER = "$wasm:scalar-rethrow";
 
-	public final signatures:Map<String, WasmGcScalarSignature> = [];
+	public final signatures:Map<String, WasmScalarSignature> = [];
 	/** Function types whose typed closure calls use the scalar ABI without an adapter. */
 	public final scalarClosures:Map<String, Bool> = [];
-	public final scalarVirtuals:Map<String, WasmGcScalarVirtual> = [];
+	public final scalarVirtuals:Map<String, WasmScalarVirtual> = [];
 	final program:IrProgram;
-	final values:WasmGcValueLayout;
+	final values:WasmValueLayout;
 	final objects:Map<String, IrObject>;
 	final methodClones:Map<String, String> = [];
 	final receiverSafe:Map<String, Bool> = [];
@@ -39,10 +43,15 @@ class WasmGcScalarAbi {
 	final directClones:Map<String, String> = [];
 	final originals:Map<String, IrFunction>;
 	final roots:Array<String>;
+	final planningBoundaries:Bool;
+	final boundariesAdapted:Bool;
 
-	public function new(program:IrProgram, ?exports:Array<String>) {
+	public function new(program:IrProgram, ?exports:Array<String>, planningBoundaries:Bool = false, boundariesAdapted:Bool = false,
+			planClosures:Bool = true) {
 		this.program = program;
-		values = new WasmGcValueLayout(program);
+		this.planningBoundaries = planningBoundaries;
+		this.boundariesAdapted = boundariesAdapted;
+		values = new WasmValueLayout(program);
 		objects = [for (object in program.objects) object.name => object];
 		originals = [for (fn in program.functions) fn.name => fn];
 		roots = exports == null ? [] : exports.copy();
@@ -62,7 +71,7 @@ class WasmGcScalarAbi {
 				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
 				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
-			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:")
+			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)
@@ -70,7 +79,7 @@ class WasmGcScalarAbi {
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
 			if (hasValue && safe) {
-				var name = "$wasm-gc:scalar-function:" + fn.name.length + ":" + fn.name;
+				var name = "$wasm:scalar-function:" + fn.name.length + ":" + fn.name;
 				directClones.set(fn.name, name);
 				signatures.set(name, {arguments: args, result: fn.result, mutatesReceiver: false, throwsReceiver: false, receiverId: -1});
 			}
@@ -130,13 +139,13 @@ class WasmGcScalarAbi {
 		for (name in methodNames) if (candidates.exists(name) && !methodClones.exists(name)) {
 			var fn = originals.get(name);
 			if (fn == null) throw 'Missing scalar method "$name"';
-			var args = [for (argument in fn.arguments) argument.type], clone = "$wasm-gc:scalar-method:" + name.length + ":" + name;
+			var args = [for (argument in fn.arguments) argument.type], clone = "$wasm:scalar-method:" + name.length + ":" + name;
 			methodClones.set(name, clone);
 			signatures.set(clone, {arguments: args, result: fn.result, mutatesReceiver: true,
 				throwsReceiver: throwing.exists(name), receiverId: fn.arguments[0].id});
 		}
 		planScalarVirtuals();
-		planScalarClosures();
+		if (planClosures) planScalarClosures();
 	}
 
 	function scalarizable(type:IrType):Bool {
@@ -160,7 +169,7 @@ class WasmGcScalarAbi {
 					case Virtual(name): index.implementorsOf(name);
 					default: [];
 				};
-				var targets:Array<WasmGcScalarVirtualTarget> = [], arguments:Null<Array<IrType>> = null,
+				var targets:Array<WasmScalarVirtualTarget> = [], arguments:Null<Array<IrType>> = null,
 					result:IrType = out.type, valid = possible.length > 0, hasValue = values.isValue(result);
 				for (object in possible) {
 					if (object.isValue) { valid = false; break; }
@@ -201,7 +210,8 @@ class WasmGcScalarAbi {
 				WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		if (WasmModuleSupport.hasFunction(program, "__init")) roots.push("__init");
 		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
-		for (fn in program.functions) if (fn.name == entry || roots.indexOf(fn.name) >= 0 || fn.retention != Reachable) {
+		// A kept function is still internal; retention alone is not a host ABI boundary.
+		for (fn in program.functions) if (fn.name == entry || (!planningBoundaries && (roots.indexOf(fn.name) >= 0 || fn.retention == Expose))) {
 			for (argument in fn.arguments) if (closureArity(argument.type) >= 0) excluded.set(Std.string(argument.type), true);
 			if (closureArity(fn.result) >= 0) excluded.set(Std.string(fn.result), true);
 		}
@@ -217,13 +227,23 @@ class WasmGcScalarAbi {
 					if (noteClosure(out.type, candidates) && (values.isValue(receiver.type) || !directClones.exists(name)))
 						excluded.set(Std.string(out.type), true);
 				case CallClosure(_, closure, arguments):
-					if (closure.type == Dyn) castArities.set(arguments.length, true); else noteClosure(closure.type, candidates);
+					if (closure.type == Dyn) {
+						if (!planningBoundaries && !boundariesAdapted) castArities.set(arguments.length, true);
+					} else noteClosure(closure.type, candidates);
 				case SafeCast(out, input):
 					var targetArity = closureArity(out.type), sourceArity = closureArity(input.type);
-					if (targetArity >= 0) castArities.set(targetArity, true);
-					if (sourceArity >= 0) castArities.set(sourceArity, true);
+					if (planningBoundaries || boundariesAdapted) {
+						if (targetArity >= 0) {
+							if (planningBoundaries && input.type == Dyn) noteClosure(out.type, candidates);
+							else excluded.set(Std.string(out.type), true);
+						}
+						if (sourceArity >= 0) excluded.set(Std.string(input.type), true);
+					} else {
+						if (targetArity >= 0) castArities.set(targetArity, true);
+						if (sourceArity >= 0) castArities.set(sourceArity, true);
+					}
 				case ToDyn(_, input):
-					if (closureArity(input.type) >= 0) excluded.set(Std.string(input.type), true);
+					if (!planningBoundaries && closureArity(input.type) >= 0) excluded.set(Std.string(input.type), true);
 				default:
 			}
 		for (fn in program.functions) if (reachable.exists(fn.name)) for (block in fn.blocks) {
@@ -263,6 +283,7 @@ class WasmGcScalarAbi {
 
 	function safeClosureUse(instruction:IrInstruction, value:IrValue):Bool {
 		return switch instruction {
+			case ToDyn(_, input) if (planningBoundaries && input.id == value.id): true;
 			case Call(_, name, arguments):
 				var target = originals.get(name), expected:Null<Array<IrType>> = target == null ? null : [for (arg in target.arguments) arg.type];
 				if (expected == null) for (native in program.natives) if (native.name == name) expected = native.arguments;
@@ -551,7 +572,7 @@ class WasmGcScalarAbi {
 							throw 'Wrong scalar virtual argument $index in ${fn.name}';
 					if (values.isValue(virtual.signature.result)) handles.set(out.id, resultTypes(virtual.signature));
 				case CallClosure(out, closure, arguments) if (scalarClosures.exists(Std.string(closure.type))):
-					var signature:WasmGcScalarSignature = switch closure.type {
+					var signature:WasmScalarSignature = switch closure.type {
 						case Function(args, result): {arguments: args, result: result, mutatesReceiver: false, throwsReceiver: false, receiverId: -1};
 						default: throw "Invalid scalar closure type";
 					};
@@ -596,7 +617,7 @@ class WasmGcScalarAbi {
 		return result;
 	}
 
-	function resultTypes(signature:WasmGcScalarSignature):Array<IrType> {
+	public function resultTypes(signature:WasmScalarSignature):Array<IrType> {
 		var result:Array<IrType> = [];
 		if (signature.mutatesReceiver) for (slot in values.leaves(signature.arguments[0])) result.push(slot.type);
 		if (signature.result != Void) {
@@ -606,6 +627,10 @@ class WasmGcScalarAbi {
 		if (signature.throwsReceiver) { result.push(Dyn); result.push(Bool); }
 		return result;
 	}
+
+	public function isValue(type:IrType):Bool return values.isValue(type);
+	public function valueTypes(type:IrType):Array<IrType>
+		return values.isValue(type) ? [for (slot in values.leaves(type)) slot.type] : [type];
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		var signature = signatures.get(fn.name), next = nextId(fn), args:Array<IrValue> = [], prefix:Array<Located<IrInstruction>> = [];

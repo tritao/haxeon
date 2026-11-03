@@ -5,7 +5,9 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
+import compiler.runtime.RuntimeType;
 import compiler.semantic.GenericSpecializationPolicy;
+import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.Ast.AstEnumParameter;
@@ -26,6 +28,15 @@ typedef TypeRepresentationResult = {
 
 /** Generic substitutions selected for a shared generic function body. */
 typedef GenericRepresentationResult = {
+	final substitutions:Map<String, CompilerType>;
+	final policies:Array<String>;
+};
+
+/** One concrete physical owner and the substitutions used to type its instance members. */
+typedef GenericOwnerRepresentation = {
+	final origin:String;
+	final name:String;
+	final typeArguments:Array<CompilerType>;
 	final substitutions:Map<String, CompilerType>;
 	final policies:Array<String>;
 };
@@ -53,6 +64,9 @@ typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerTyp
 class TypeRepresentation {
 	final session:TypingSession;
 	final conversions:ConversionResolver;
+	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
+	final requestedOwners:Array<GenericOwnerRepresentation> = [];
+	final ownerAliases:Map<String, String> = [];
 
 	public function new(session:TypingSession) {
 		this.session = session;
@@ -93,6 +107,7 @@ class TypeRepresentation {
 	/** Adapt constructor arguments, including constructors without a declaration. */
 	public function adaptConstructorArguments(receiver:CompilerType, owner:String, method:Null<AstFunction>,
 			arguments:Array<TypedExpression>):Array<TypedExpression> {
+		genericOwner(receiver);
 		if (method != null)
 			return adaptMethodArguments(receiver, owner, method, arguments);
 		return isGenericNominal(receiver) ? [for (argument in arguments) boundaryCast(argument, TDynamic)] : arguments;
@@ -142,6 +157,141 @@ class TypeRepresentation {
 		}
 		return {substitutions: substitutions, policies: policies};
 	}
+
+	/**
+	 * Discover the physical owner for a class instance with a value or constrained argument.
+	 * The queue belongs to this typing session, independently of the persistent naming
+	 * registry: a known name still needs its body emitted in a fresh compilation.
+	 */
+	public function genericOwner(type:CompilerType):Null<GenericOwnerRepresentation> {
+		var name:String, arguments:Array<CompilerType>;
+		switch type {
+			case TInstance(NominalKind.Class, owner, values): name = owner; arguments = values;
+			default: return null;
+		}
+		var declaration = session.classDecls.get(name);
+		if (declaration == null || declaration.typeParameters.length == 0 || arguments.length != declaration.typeParameters.length)
+			return null;
+		var needsSpecialization = declaration.typeConstraints != null && declaration.typeConstraints.length > 0;
+		if (declaration.typeConstraints != null)
+			for (constraint in declaration.typeConstraints) {
+				var index = declaration.typeParameters.indexOf(constraint.parameter);
+				if (index >= 0 && arguments[index] == TDynamic) return null;
+			}
+		for (argument in arguments) {
+			if (containsTypeParameter(argument, []))
+				return null;
+			if (ownerContainsValue(argument))
+				needsSpecialization = true;
+		}
+		if (!needsSpecialization)
+			return null;
+		var substitutions:Map<String, CompilerType> = [], policies:Array<String> = [], representations:Array<CompilerType> = [];
+		for (index in 0...arguments.length) {
+			var parameter = declaration.typeParameters[index],
+				decision = GenericSpecializationPolicy.decideOwner(declaration, parameter, arguments[index], requiresLayoutSpecialization);
+			substitutions.set(parameter, decision.representation);
+			policies.push(decision.policy);
+			representations.push(decision.representation);
+		}
+		var specialization = session.genericSpecializations.request('$' + 'owner:' + name, representations, policies),
+			existing = ownerRequests.get(specialization.name);
+		ownerAliases.set(SemanticSignature.type(type), specialization.name);
+		if (existing != null)
+			return existing;
+		var result:GenericOwnerRepresentation = {
+			origin: name,
+			name: specialization.name,
+			typeArguments: representations,
+			substitutions: substitutions,
+			policies: policies
+		};
+		ownerRequests.set(result.name, result);
+		requestedOwners.push(result);
+		return result;
+	}
+
+	/** Requests can grow as specialized member bodies are typed; callers drain to a fixed point. */
+	public function genericOwnerRequestCount():Int
+		return requestedOwners.length;
+
+	public function genericOwnerRequest(index:Int):GenericOwnerRepresentation
+		return requestedOwners[index];
+
+	public function genericOwnerAliases():Map<String, String> {
+		var result:Map<String, String> = [];
+		for (signature => name in ownerAliases) result.set(signature, name);
+		return result;
+	}
+
+	/** Preserve aliases referenced by unchanged cached callers during incremental typing. */
+	public function restoreGenericOwnerAliases(previous:Map<String, String>, retained:Map<String, Bool>):Void
+		for (signature => name in previous) if (retained.exists(name)) ownerAliases.set(signature, name);
+
+	/** Discover owners inside signatures and storage types, including recursive anonymous types. */
+	public function discoverGenericOwners(type:CompilerType, ?origin:String):Void
+		discoverOwners(type, [], origin);
+
+	function discoverOwners(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>, origin:Null<String>):Void {
+		switch type {
+			case TInstance(_, _, arguments):
+				genericOwner(type);
+				for (argument in arguments) discoverOwners(argument, explored, origin);
+			case TAbstract(_, arguments, representation):
+				for (argument in arguments) discoverOwners(argument, explored, origin);
+				discoverOwners(representation, explored, origin);
+			case TNullable(inner), TArray(inner), TIterator(inner): discoverOwners(inner, explored, origin);
+			case TMap(key, value):
+				if (session.requiresSpecializedMap(key, value)) {
+					if (origin != null) session.runtimeDependencyTracker.record(origin, RuntimeType.SPECIALIZED_MAP);
+					genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [RuntimeType.specializedMapKey(key), value]));
+				}
+				discoverOwners(key, explored, origin); discoverOwners(value, explored, origin);
+			case TFunction(arguments, result):
+				for (argument in arguments) discoverOwners(argument, explored, origin);
+				discoverOwners(result, explored, origin);
+			case TAnonymous(_, fields):
+				if (explored.indexOf(fields) < 0) {
+					explored.push(fields);
+					for (field in fields) discoverOwners(field.type, explored, origin);
+				}
+			default:
+		}
+	}
+
+	function containsTypeParameter(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+		return switch type {
+			case TTypeParameter(_, _): true;
+			case TInstance(_, _, arguments): anyTypeParameter(arguments, explored);
+			case TAbstract(_, arguments, representation): anyTypeParameter(arguments, explored) || containsTypeParameter(representation, explored);
+			case TNullable(inner), TArray(inner), TIterator(inner): containsTypeParameter(inner, explored);
+			case TMap(key, value): containsTypeParameter(key, explored) || containsTypeParameter(value, explored);
+			case TFunction(arguments, result): anyTypeParameter(arguments, explored) || containsTypeParameter(result, explored);
+			case TAnonymous(_, fields):
+				var found = false;
+				if (explored.indexOf(fields) < 0) {
+					explored.push(fields);
+					for (field in fields)
+						if (containsTypeParameter(field.type, explored)) found = true;
+				}
+				found;
+			default: false;
+		};
+
+	function anyTypeParameter(types:Array<CompilerType>, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
+		for (type in types)
+			if (containsTypeParameter(type, explored)) return true;
+		return false;
+	}
+
+	/** Reference containers already own their element representation; they do not put it in this owner. */
+	function ownerContainsValue(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(_, _, representation), TNullable(representation): ownerContainsValue(representation);
+			case TInstance(NominalKind.Class, _, _): session.relations.isValueClass(type);
+			case TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_): true;
+			default: false;
+		};
 
 	/** Value types need their exact storage and calling convention, including managed structs without a native layout. */
 	function requiresLayoutSpecialization(type:CompilerType):Bool
@@ -250,7 +400,9 @@ class TypeRepresentation {
 	public function methodSubstitutions(receiver:CompilerType, owner:String):{semantic:Map<String, CompilerType>, physical:Map<String, CompilerType>} {
 		var projected = projectNominal(receiver, owner),
 			semantic = nominalSubstitutions(projected),
-			physical = isGenericNominal(projected) ? erasedNominalSubstitutions(owner) : copyMap(semantic);
+			specialization = genericOwner(projected),
+			physical = specialization != null ? copyMap(specialization.substitutions)
+				: isGenericNominal(projected) ? erasedNominalSubstitutions(owner) : copyMap(semantic);
 		return {semantic: semantic, physical: physical};
 	}
 
@@ -327,7 +479,8 @@ class TypeRepresentation {
 		return switch type {
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
 				var declaration = requiredMapValue(session.classDecls, className),
-					substitutions = erasedNominalSubstitutions(className),
+					specialization = genericOwner(type),
+					substitutions = specialization == null ? erasedNominalSubstitutions(className) : specialization.substitutions,
 					result:Null<CompilerType> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic)

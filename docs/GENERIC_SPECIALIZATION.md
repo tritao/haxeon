@@ -9,15 +9,15 @@ Generic calls retain their semantic type arguments while emitted bodies use a de
 An unconstrained struct argument also uses `layout`, including a struct with managed references that has no native
 layout. Its fields and value calling convention depend on the declared struct, so two different structs do not share
 the erased reference body even when their current fields have the same shapes. Ordinary class arguments continue to
-share the `shape` body. Generic class fields and methods are still erased; this function policy does not yet provide
-specialized generic owner storage or guarantee allocation-free value returns on every target.
+share the `shape` body unless a constraint requires their concrete conformance. Generic owners with struct arguments
+also specialize their stored fields and methods, as described below.
 
 With inlining disabled, a managed `struct` with a null reference field passed through `identity<T>(value:T):T` allocates
 zero times for 1,024 calls on Wasm GC and 2,048 times on Wasm32. The equivalent class allocates 1,024 times on either
-target. Wasm GC uses its scalar-result ABI for this case; Wasm32 needs a value-result convention that keeps scalar and
-reference lanes in locals before generic value returns meet the no-allocation goal. A separate Wasm GC regression test
-keeps a non-null managed object in the value, passes it through a typed closure and checks zero allocations for 8 and
-1,024 calls, with inlining on and off.
+target. Those numbers describe the earlier function-only checkpoint. The shared Wasm scalar-result ABI now keeps value
+lanes in locals on both targets. A regression test keeps a non-null managed object in the value and passes it through
+instance and static typed closures: both Wasm targets allocate zero objects for 8 and 1,024 calls, with inlining on
+and off. The Wasm32 test also uses stress GC to check that the reference lanes stay live.
 
 The initial editor measurement after this policy change reported 12.6 KiB for `hover-field`, versus 12.4 KiB at the
 starting baseline and in a build made with the committed pre-change compiler. In matched 60-cycle allocation censuses,
@@ -52,3 +52,63 @@ The policy label and representation signature are both part of the generated fun
 Generated bodies are owned by the module declaring their generic origin. Incremental compilation regenerates them when a generic body changes and prunes them when that owner becomes unreachable or the specialization is no longer requested.
 
 Constraints are semantic signatures. Changing a function or owner constraint invalidates dependent callers even when the runtime ABI shape is unchanged.
+
+## Generic owners with value arguments
+
+The compiler specializes generic class owners for concrete struct arguments and retains the source owner identity
+through erased views. Typed fields, methods, inherited owners, constrained calls, and typed closures use the concrete
+layout; converting a struct to an interface creates a value-copy box at that boundary. Incremental builds retain
+specializations used by unchanged callers and retire unused layouts. HashLink, Wasm32 and Wasm GC scalarize supported
+typed closure calls; conversion to or from Dynamic uses a boundary adapter. The generic map described below replaces
+the earlier compiler-generated hashable-map object.
+
+Wasm exports that accept or return a scalar struct closure adapt it at the host boundary. The internal closure keeps
+its scalar calling convention even when the same signature is exported: a 1,024-call typed loop allocates no objects
+on Wasm32 or Wasm GC, and exported closure arguments and results round-trip through the host. Without the boundary
+adapter, merely exporting the signature forced the loop to allocate once per call on Wasm GC.
+An unobserved `Signal<S>` holding an immutable struct with a managed reference also performs 1,024 distinct updates and
+reads without allocation on HashLink, Wasm32 and Wasm GC; the Wasm tests cover both 8 and 1,024 updates and both
+inlining modes. `packages/ui/tools/test-struct-state-allocations.sh` checks the same workload through a real
+`State<S>` and `StateStore` on all three targets, including managed-reference identity and both inlining modes.
+
+The semantic identity of a generic class remains its source declaration and type arguments. Its physical owner is
+specialized when an argument needs a struct layout; every stored field, constructor, instance method and inherited
+generic base must use that same substitution. Other arguments follow the existing shape, layout and constrained policies;
+an unconstrained owner with no value argument keeps its current shared representation. Specialization identities include the exact
+value arguments and the representation policy, so distinct structs cannot silently share an incompatible layout.
+Static fields belong to the source declaration and are not duplicated by a
+specialization. Discover specializations to a fixed point, including those requested by generated method bodies, and
+retain and invalidate them with their declaring module and the value layouts they depend on.
+
+A generic owner with a constrained parameter is specialized for each concrete constrained argument even when it is a
+reference or scalar. Its instance bodies are templates checked with the selected substitutions, so operations such as
+`Hashing.hash(key)` and declared equality resolve to the static conformance instead of attempting to hash `Dynamic`.
+This also lets the same ordinary generic map handle value and reference keys without a compiler-generated map object.
+An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
+`Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
+
+The generic map uses dense key, value and hash arrays with an open-addressed integer bucket array. A removal moves the
+last dense entry into the gap and updates its bucket, so removed managed references are released and no default value
+of `K` or `V` is needed. Tombstones are rehashed before they fill the bucket table, reusing its capacity when live
+entries do not require growth. This keeps struct keys and values in the existing inline array lanes and avoids boxing
+a hash or bucket index on each lookup. Repeated updates and lookups of maps with struct keys and values allocate zero
+objects after setup for 8 and 1,024 operations on all three targets, with inlining on and off. Growing three maps
+(struct keys and values, integer keys with struct values, and struct keys with integer values) to 512, 1,024 and 2,048
+entries allocated 287, 331 and 384 objects respectively on both Wasm targets. The increments follow backing-array and
+bucket growth, rather than allocating an object for each inserted struct. A HashLink allocation census of the same
+three-map workload recorded 458, 529 and 617 allocations respectively: three map objects, one byte buffer and arrays,
+with no `MapKey` or `MapValue` objects at any size.
+
+An explicitly erased `G<Dynamic>` view is a real Dynamic boundary. It must refer to the same generic object as its
+concrete source: reads materialize values for Dynamic, writes check and copy them back to the concrete field, and
+identity, aliases, exceptions and inherited dispatch remain observable. A view cannot be implemented by copying the
+owner or by keeping an independently mutable Dynamic field beside the inline field. The normal typed `G<S>` path must
+not allocate a box or a per-instance bridge; erasure work belongs at the explicit boundary and its operations.
+The representation for an erased owner is the original object reference carried as `Dynamic`. Generated
+operation dispatchers test the actual owner layout and call its physical field or method, checking and copying a struct
+payload at the boundary. They preserve identity without a wrapper and need no additional storage in ordinary instances.
+These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
+owners are not complete until those paths and incremental invalidation are tested.
+Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the
+field. The cross-target reflection tests cover direct and generic owners, optional payloads, null and invalid writes,
+reference identity within the copied value, and both inlining modes.

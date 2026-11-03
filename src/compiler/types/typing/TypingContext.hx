@@ -7,6 +7,8 @@ import compiler.types.analysis.Scope;
 /** Mutable state owned by one function or lambda while its body is checked. */
 class TypingContext {
 	public final functionName:String;
+	/** Source function whose body is being typed; generated bodies keep their declaration identity. */
+	public final sourceFunctionName:String;
 	public final owner:Null<String>;
 	public var name(get, never):String;
 	public var lexicalOwner(get, never):Null<String>;
@@ -42,8 +44,9 @@ class TypingContext {
 	inline function get_lexicalOwner():Null<String>
 		return owner;
 
-	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?lexicalOwner:String) {
+	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?lexicalOwner:String, ?sourceFunctionName:String) {
 		this.functionName = name;
+		this.sourceFunctionName = sourceFunctionName == null ? name : sourceFunctionName;
 		this.owner = lexicalOwner;
 		this.typeSubstitutions = typeSubstitutions == null ? [] : typeSubstitutions;
 	}
