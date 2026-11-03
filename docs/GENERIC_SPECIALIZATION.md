@@ -139,6 +139,24 @@ bucket growth, rather than allocating an object for each inserted struct. A Hash
 three-map workload recorded 458, 529 and 617 allocations respectively: three map objects, one byte buffer and arrays,
 with no `MapKey` or `MapValue` objects at any size.
 
+**Map-key specialization and floating-point keys (decided, pending).**
+
+The typer chooses the physical map owner once and publishes that choice for IR lowering; lowering consumes the chosen
+owner instead of repeating a separate key classifier. Ordinary specialized `HashMap<K,V>` handles supported keys,
+including concrete scalar keys and nullable enum keys. A nullable enum retains absence separately
+from its case tag, including when a nullary enum uses an integer tag. Payload enums still require `Hashable`.
+
+Hash maps require a reflexive key equivalence. For Float keys, two NaNs are equivalent, positive and negative zero are
+equivalent, and all other keys use ordinary numeric equality. This key equivalence does not change IEEE `==` elsewhere.
+Hash Float keys by their IEEE bits after canonicalizing every NaN to one bit pattern and both zero signs to zero; the
+same bit hashing handles infinities and large finite values without a trapping numeric conversion. The target supplies
+an allocation-free bit reinterpretation. The hash used by synthesized `Hashable` values follows the same canonical
+Float hashing, and equal keys must always have equal hashes. These rules replace the duplicated arithmetic float-hash
+helpers; they are a design decision awaiting the map and hash fixes, not a claim about the current implementation.
+
+At this checkpoint, `Map<Float,Int>` and `Map<Bool,Int>` fail compilation with `Invalid value equality request` for
+the scalar key. The implementation and cross-target tests are the next correctness fix.
+
 An explicitly erased `G<Dynamic>` view is a real Dynamic boundary. It must refer to the same generic object as its
 concrete source: reads materialize values for Dynamic, writes check and copy them back to the concrete field, and
 identity, aliases, exceptions and inherited dispatch remain observable. A view cannot be implemented by copying the
