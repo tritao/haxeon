@@ -92,6 +92,16 @@ example when iterating the values of a nested map, or after `copy`/`slice` of a 
 collections the same specialized, typed storage so the values are never boxed, then delete those boundary conversions in
 the same change. Belongs with the flat structs and generic specialization work.
 
+### Optional flat values in native layout
+
+`Null<S>` is not Flat today, so an optional value cannot appear in an FFI record, `RawPtr`/`NativeSpan` memory or a
+native node-store record; code must spell an explicit presence field and convert at the boundary. Decided: when `S` is
+Flat, `Null<S>` is Flat, with a defined C layout `{ uint8_t present; padding to S's alignment; S value; }` whose payload
+is zeroed when absent, so records compare byte for byte. It is Portable when `S` is. Generated C headers emit one named
+optional type per use (for example `hx_optional_rect`). Wasm GC keeps its flattened managed form; the C layout applies
+wherever bytes are exposed. Implement with native memory and the node-store prototype (ADR 0002 stage 2), with
+cross-target layout tests, and record it in STRUCTS.md "Flat and Portable".
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.
