@@ -237,3 +237,15 @@ same-binary noise and do not establish an RSS improvement or an exact match to t
 The Wasm GC Showcase guest was also byte-identical. Alternating control/candidate object-count medians were 5,896 /
 5,896 for full (nine pairs), 5,896 / 5,896 for static and text-heavy (three pairs each), and 12,622 / 12,622 for
 editing (three pairs); every scenario had a zero paired median difference.
+
+The reference-shaped erased-write checks were compared against the preceding compiler. The Wasm GC Showcase guest
+was byte-identical. Alternating object-count medians were 5,910 / 5,914 for full (nine pairs), 5,896 / 5,896 for
+static and text-heavy (three pairs each), and 12,622 / 12,622 for editing (three pairs); every paired median difference
+was zero. The full scenario ran while a compiler workload was active, and its observed counts varied above the prior
+idle-machine samples despite the identical guest.
+
+On HashLink, the editor bytecode was byte-identical to the control. Nine alternating pairs had matching per-action
+allocation medians and zero paired median differences. Selection-stress medians were 342,097 / 342,097 allocations,
+with a zero paired median difference. The 500-cycle RSS window medians were 30.31 / 3.59 / 0.78 / 4.84 MiB before
+and 30.16 / 3.75 / 0.78 / 5.00 MiB after, with paired median differences of -0.15 / 0 / 0 / 0 MiB. These values
+include the previously observed same-binary variation and do not establish an RSS improvement.

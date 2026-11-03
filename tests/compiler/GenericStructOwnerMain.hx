@@ -5,6 +5,11 @@ import sys.io.File;
 /** Generic class fields and methods use the concrete value representation, including inherited owners. */
 class GenericStructOwnerMain {
 	static function main():Void {
+		var referenceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		referenceRuntime.addSourceRoot("stdlib");
+		referenceRuntime.update("Main.hx", File.getContent("tests/programs/generic-erased-reference-checks.hx"));
+		if (new compiler.ir.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
+			throw "erased reference writes did not preserve checked value semantics in the interpreter";
 		var program = Frontend.compile(File.getContent("tests/programs/generic-struct-class.hx"));
 		var payloadOwner:Null<String> = null, otherOwner:Null<String> = null;
 		for (object in program.objects) for (field in object.fields)

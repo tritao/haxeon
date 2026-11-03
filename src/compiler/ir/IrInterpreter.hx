@@ -260,6 +260,7 @@ class IrInterpreter {
 					case F64: switch Type.typeof(input) { case TFloat: true; default: false; };
 					case Bool: switch Type.typeof(input) { case TBool: true; default: false; };
 					case I64: haxe.Int64.isInt64(input);
+					case Bytes: Std.isOfType(input, String);
 					default: false;
 				};
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":

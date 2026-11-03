@@ -179,7 +179,8 @@ payload at the boundary. They preserve identity without a wrapper and need no ad
 Numeric erased writes require the exact runtime kind: Int, Float, Bool and Int64 are distinct, including nullable
 values. In particular, a Dynamic Float cannot be truncated into an Int field, and a Dynamic Int is not implicitly
 widened into a Float field at this boundary. A rejected write leaves the existing field unchanged. Typed numeric
-conversions retain their normal rules. Exact checks for the remaining reference-shaped kinds are still pending.
+conversions retain their normal rules. String, enum and interface writes likewise check their runtime type before
+changing storage and permit null. Array and function boundary checks are still pending.
 These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
 owners are not complete until those paths and incremental invalidation are tested.
 Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the

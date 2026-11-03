@@ -139,7 +139,7 @@ class GenericOwnerErasure {
 		if ((switch (value.type) { case Dyn: true; default: false; })) {
 			var target = switch type { case Nullable(inner): inner; default: type; },
 				checks:Array<IrType> = switch target {
-					case Obj(_): [target];
+					case Obj(_) | Virtual(_) | Enum(_) | Bytes: [target];
 					case I32 | F64 | Bool | I64: [target];
 					default: [];
 				};
@@ -147,6 +147,7 @@ class GenericOwnerErasure {
 				var nullable = switch type {
 					case Nullable(_): true;
 					case Obj(name): var declaration = objects.get(name); declaration == null || !declaration.isValue;
+					case Virtual(_) | Enum(_) | Bytes: true;
 					default: false;
 				}, accepted = builder.createBlock(), checkType = builder.createBlock(), rejected = builder.createBlock();
 				builder.branch(builder.equal(value, builder.constNull(Dyn)), nullable ? accepted : rejected, checkType);
