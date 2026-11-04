@@ -484,4 +484,5 @@ generic-erased-bytes-reference-shapes	42
 generic-managed-reference-closure	42
 generic-erased-raw-pointer	42
 generic-interface-value-carriers	42
+generic-erased-native-callback	42
 wasm-raw-pointer-gc-leaf	42

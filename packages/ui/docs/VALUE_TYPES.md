@@ -263,6 +263,32 @@ and three pairs each of static, text-heavy and editing all had zero paired media
 receiver clones, the same alternating measurement again found 4,440 / 4,440 / 4,440 / 8,724 objects on both sides.
 The checked pointer boundary and interface allocation tests are specified in `docs/GENERIC_SPECIALIZATION.md`.
 
+Giving native callback and runtime type handles distinct Dynamic representations was measured against the preceding
+compiler with the browser-loaded Wasm GC Showcase. Nine full pairs and three pairs each of static, text-heavy and
+editing again measured 4,440 / 4,440 / 4,440 / 8,724 objects on both sides, with zero paired median differences.
+The final Wasm GC guest was byte-identical to the measured candidate. Typed callback operations allocate zero times
+for 8 and 1,024 calls on HashLink, Wasm32 and Wasm GC, with inlining enabled and disabled.
+
+On outer revision `a653ff227`, nine alternating HashLink control/candidate runs used identical source manifests and
+byte-identical editor bytecode, with the pre-change and candidate native runtimes. Per-action allocation medians in
+KiB and paired median differences were:
+
+| Action | Control | Candidate | Paired difference |
+| --- | ---: | ---: | ---: |
+| hierarchy → sensors / sensors → hierarchy | 112.6 / 80.1 | 112.6 / 80.1 | 0 / 0 |
+| console → telemetry / telemetry → console | 74.5 / 93.1 | 72.5 / 93.1 | -2.0 / 0 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 | 0 / 0 |
+| hover other / field / away | 10.0 / 12.6 / 13.6 | 10.0 / 12.4 / 13.6 | 0 / 0 / 0 |
+| scroll inspector | 21.2 | 21.2 | 0 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 | 0 / 0 |
+| type / backspace | 16.1 / 16.2 | 16.1 / 16.2 | 0 / 0 |
+
+The console difference falls within observed same-binary variation, and the hover-field paired difference was zero;
+these samples do not establish a permanent reduction. Selection-stress census medians were 342,098 / 342,097 allocations, with a paired difference of -1;
+individual differences were confined to byte buffers. Nine 500-cycle RSS pairs had control window medians
+[30.16, 3.75, 0.78, 5.00] MiB and candidate medians [30.16, 3.44, 0.78, 4.84] MiB, with paired median differences
+[-0.16, -0.15, 0, 0] MiB. The samples vary and do not establish an exact memory match.
+
 The pointer-boundary change was also measured on the current outer `HEAD` against a control built with compiler
 `38db19f0` from the same source tree. Nine alternating HashLink pairs had equal per-action medians: 112.6, 80.1,
 72.5 and 93.1 KiB for the four tab switches, and 0.5, 0.5, 10.0, 12.4, 13.6, 21.2, 0.2, 0.2, 16.1 and 16.2 KiB

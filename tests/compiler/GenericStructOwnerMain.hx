@@ -1,4 +1,5 @@
 import compiler.Frontend;
+import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import sys.io.File;
 
@@ -26,6 +27,16 @@ class GenericStructOwnerMain {
 		pointerRuntime.update("Main.hx", pointerSource);
 		if (new compiler.ir.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased pointer writes and checked casts failed in the interpreter";
+		var callbackSource = File.getContent("tests/programs/generic-erased-native-callback.hx");
+		callbackSource = callbackSource.substring(0, callbackSource.indexOf("function main():Int"))
+			+ "function main():Int return checkCallback(null);";
+		var callbackRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		callbackRuntime.addSourceRoot("stdlib");
+		callbackRuntime.update("Main.hx", callbackSource);
+		if (new compiler.ir.IrInterpreter(callbackRuntime.compile("Main").ir).run("main") != 42)
+			throw "erased callback writes and null handling failed in the interpreter";
+		checkTypeHandleDynamic();
+		checkCallbackAllocations();
 		var interfaceSource = File.getContent("tests/programs/generic-interface-value-carriers.hx");
 		interfaceSource = StringTools.replace(StringTools.replace(StringTools.replace(interfaceSource, "#if !wasm", ""), "#end", ""), "hl.Gc.totalAllocated()", "0");
 		var interfaceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
@@ -82,6 +93,116 @@ class GenericStructOwnerMain {
 		incrementalRetainedOwner();
 		checkWasmGcAllocations();
 		Sys.println("PASS: generic owners retain concrete struct storage and identity through erased views");
+	}
+
+	static function checkCallbackAllocations():Void {
+		var source = 'class CallbackCensus { static var value:hl.Abstract<"native_callback">; '
+			+ 'public static function prepare(callback:hl.Abstract<"native_callback">):Void value=callback; '
+			+ 'public static function perform(n:Int):Int { var count=0; for (_ in 0...n) if (identity(value)==value) count++; return count; } '
+			+ 'static function identity(callback:hl.Abstract<"native_callback">):hl.Abstract<"native_callback"> return callback; } '
+			+ 'function main():Int return 42;';
+		for (inlineEnabled in [false, true]) for (target in [Wasm32, WasmGc]) {
+			var program = Frontend.compile(source);
+			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: target, debugNames: true,
+				wasmMemoryStats: target == Wasm32, wasmGcAllocationCount: target == WasmGc,
+				exports: ["CallbackCensus.prepare", "CallbackCensus.perform"]}).bytes,
+				directory = Sys.getEnv("TMPDIR");
+			if (directory == null || directory == "") directory = Sys.getCwd() + "/out/test-tools";
+			if (!sys.FileSystem.exists(directory)) sys.FileSystem.createDirectory(directory);
+			var path = '$directory/haxeon-callback-census-${Std.random(0x7fffffff)}.wasm';
+			File.saveBytes(path, bytes);
+			var script = 'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+				+ 'i.exports.main(); i.exports["CallbackCensus.prepare"](123); '
+				+ 'const counter=i.exports.__allocation_count||i.exports["haxeon.memory.allocation_count"]; '
+				+ 'for(const n of [8,1024]) { const before=counter(), result=i.exports["CallbackCensus.perform"](n), count=counter()-before; '
+				+ 'if(result!==n || count!==0) throw Error("n="+n+", result="+result+", allocations="+count); }';
+			var process = new sys.io.Process("node", ["-e", script, path]);
+			var error = process.stderr.readAll().toString(), status = process.exitCode();
+			process.close(); sys.FileSystem.deleteFile(path);
+			if (status != 0) throw 'Typed callback census failed on $target (inline=$inlineEnabled): $error';
+		}
+	}
+
+	static function checkTypeHandleDynamic():Void {
+		var builder = new compiler.ir.IrBuilder(),
+			handle = builder.typeValue(I32), boxed = builder.toDyn(handle),
+			tested = builder.call("__std_is_of_type", [boxed, builder.typeValue(TypeRef)], Bool),
+			restored = builder.safeCast(boxed, TypeRef),
+			matched = builder.call("__std_is_of_type", [builder.toDyn(builder.constInt(7)), restored], Bool),
+			bad = builder.call("__std_is_of_type", [builder.toDyn(builder.constInt(12)), builder.typeValue(TypeRef)], Bool),
+			passed = builder.createBlock(), failed = builder.createBlock(), badValue = builder.createBlock(), badType = builder.createBlock(),
+			checkValue = builder.createBlock(), checkBad = builder.createBlock();
+		builder.branch(tested, checkValue, failed);
+		builder.select(checkValue); builder.branch(matched, checkBad, badValue);
+		builder.select(checkBad); builder.branch(bad, badType, passed);
+		builder.select(passed); builder.returnValue(builder.constInt(42));
+		builder.select(failed); builder.returnValue(builder.constInt(1));
+		builder.select(badValue); builder.returnValue(builder.constInt(2));
+		builder.select(badType); builder.returnValue(builder.constInt(3));
+		var program = new IrProgram("main");
+		program.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
+		program.functions.push(new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks));
+		for (isNull in [false, true]) {
+			var invalid = new compiler.ir.IrBuilder(), wrong = isNull ? invalid.constNull(Dyn) : invalid.toDyn(invalid.constInt(12)),
+				tryBody = invalid.createBlock(), handler = invalid.createBlock(), after = invalid.createBlock(),
+				provenance = compiler.ir.SourceProvenance.generated("type-handle-test");
+			invalid.currentBlock().instructions.push(new compiler.ir.SourceProvenance.Located(BeginTry(handler.id, after.id), provenance));
+			invalid.jump(tryBody);
+			invalid.select(tryBody);
+			var recovered = invalid.safeCast(wrong, TypeRef), nullMatches = isNull ? invalid.equal(invalid.toDyn(recovered), wrong) : null;
+			tryBody.instructions.push(new compiler.ir.SourceProvenance.Located(EndTry(handler.id), provenance));
+			invalid.jump(after);
+			invalid.select(handler);
+			handler.instructions.push(new compiler.ir.SourceProvenance.Located(Catch(new IrValue(1000000, "$caught", Dyn)), provenance));
+			invalid.returnValue(invalid.constInt(isNull ? 1 : 42));
+			invalid.select(after);
+			if (isNull) {
+				var matchedNull = invalid.createBlock(), mismatchedNull = invalid.createBlock();
+				invalid.branch(nullMatches, matchedNull, mismatchedNull);
+				invalid.select(matchedNull); invalid.returnValue(invalid.constInt(42));
+				invalid.select(mismatchedNull); invalid.returnValue(invalid.constInt(1));
+			} else invalid.returnValue(invalid.constInt(1));
+			program.functions.push(new compiler.ir.IrFunction(isNull ? "nullHandle" : "invalidHandle", [], I32, invalid.blocks));
+		}
+		if (new compiler.ir.IrInterpreter(program).run() != 42) throw "interpreter lost a Dynamic type handle";
+		if (new compiler.ir.IrInterpreter(program).run("invalidHandle") != 42) throw "interpreter accepted an invalid type handle";
+		if (new compiler.ir.IrInterpreter(program).run("nullHandle") != 42) throw "interpreter lost a null type handle";
+		var hlProgram = new IrProgram("__entry"), entry = new compiler.ir.IrBuilder();
+		hlProgram.natives = program.natives.copy();
+		hlProgram.natives.push({name: "__exit", library: "std", symbol: "sys_exit", arguments: [I32], result: Void});
+		var valid = entry.equal(entry.call("main", [], I32), entry.constInt(42)), validBlock = entry.createBlock(), invalidBlock = entry.createBlock();
+		entry.branch(valid, validBlock, invalidBlock);
+		entry.select(validBlock);
+		var validInvalid = entry.equal(entry.call("invalidHandle", [], I32), entry.constInt(42)), nullBlock = entry.createBlock();
+		entry.branch(validInvalid, nullBlock, invalidBlock);
+		entry.select(nullBlock); entry.call("__exit", [entry.call("nullHandle", [], I32)], Void); entry.returnValue(entry.constVoid());
+		entry.select(invalidBlock); entry.call("__exit", [entry.constInt(1)], Void); entry.returnValue(entry.constVoid());
+		hlProgram.functions = program.functions.concat([new compiler.ir.IrFunction("__entry", [], Void, entry.blocks)]);
+		var hashlink = new compiler.backend.hl.HlBackend().compile(hlProgram, {target: HashLink, debugNames: true});
+		var hlDirectory = Sys.getEnv("TMPDIR");
+		if (hlDirectory == null || hlDirectory == "") hlDirectory = Sys.getCwd() + "/out/test-tools";
+		if (!sys.FileSystem.exists(hlDirectory)) sys.FileSystem.createDirectory(hlDirectory);
+		var hlPath = '$hlDirectory/haxeon-type-handle-${Std.random(0x7fffffff)}.hl';
+		File.saveBytes(hlPath, hashlink.bytes);
+		var hlStatus = Sys.command(Sys.getCwd() + "/.tools/hashlink/hl", [hlPath]);
+		sys.FileSystem.deleteFile(hlPath);
+		if (hlStatus != 42) throw 'HashLink lost a Dynamic type handle: $hlStatus';
+		for (target in [Wasm32, WasmGc]) {
+			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: target, debugNames: true, exports: ["invalidHandle", "nullHandle"]}).bytes,
+				directory = Sys.getEnv("TMPDIR");
+			if (directory == null || directory == "") directory = Sys.getCwd() + "/out/test-tools";
+			if (!sys.FileSystem.exists(directory)) sys.FileSystem.createDirectory(directory);
+			var path = '$directory/haxeon-type-handle-${Std.random(0x7fffffff)}.wasm';
+			File.saveBytes(path, bytes);
+			var script = 'const fs=require("fs"), m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
+				+ 'const i=new WebAssembly.Instance(m,{haxeon_runtime:{},std:{sys_exit(){}}}); const result=i.exports.main(), invalid=i.exports.invalidHandle(), nil=i.exports.nullHandle(); '
+				+ 'if(result!==42 || invalid!==42 || nil!==42) { console.error("result="+result+", invalid="+invalid+", null="+nil); process.exit(1); }';
+			var process = new sys.io.Process("node", ["-e", script, path]);
+			var error = process.stderr.readAll().toString(), status = process.exitCode();
+			process.close(); sys.FileSystem.deleteFile(path);
+			if (status != 0) throw 'Dynamic type handle failed on $target: $error';
+		}
 	}
 
 	static function checkWasmGcAllocations():Void {

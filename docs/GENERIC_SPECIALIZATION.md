@@ -225,8 +225,22 @@ A separate owner-policy gap remains when a reference field's type argument uses 
 concrete layout and makes the setter reject the write. The owner must retain enough semantic type information to check
 shape-erased fields without conflating it with the pointer box representation.
 
-Native callback handles and runtime type handles still need an unambiguous Dynamic representation before they can be
-checked as distinct kinds. Until that fix lands, this is an open part of the erased-boundary audit.
+The descriptor cannot be recovered solely at the owner allocation: in
+`make<T>(value:T):Dynamic { return new Box<Anchor,T>(new Anchor(1), value); }`,
+the shape-shared body has already replaced `T` with `Dynamic` before lowering the
+allocation. Both this factory and a plain `Box<String>` accept an `Int` through
+an erased view on HashLink, Wasm32 and Wasm GC. The remaining runtime change must
+carry semantic descriptors through shape-shared function and method calls,
+forwarding and captured closures, and retain them on the owner for checked
+erased writes. It must preserve shared code and typed-call allocation counts;
+deriving a descriptor from the physical field or only from a direct construction
+would leave the factory case unsound.
+
+Native callback handles and runtime type handles have distinct Dynamic representations. Typed Wasm calls retain
+their unboxed word carriers; a callback or type handle is boxed only at a Dynamic boundary, and recovery checks the
+handle kind. HashLink compares erased callback handles by their underlying value. With inlining enabled and disabled,
+8 and 1,024 typed callback calls allocate zero times on Wasm32 and Wasm GC before and after the change; the paired
+HashLink census allocates zero bytes on both sides.
 
 A closure in a specialized generic field carries a struct's scalar and traced reference leaves through its typed
 argument and result. In a Wasm GC census, the apparent 16 / 2,048 allocations for 8 / 1,024 calls came from evaluating

@@ -379,7 +379,7 @@ class WasmGcTypePlan {
 			case I32: "i32";
 			case Bool: "bool";
 			case RawPtr: "raw-ptr";
-			case Abstract("native_callback"): "i32";
+			case Abstract("native_callback"): "native-callback";
 			case I64: "i64";
 			case F32: "f64";
 			case F64: "f64";
@@ -639,6 +639,7 @@ class WasmGcTypePlan {
 		closureTypeIndex = reserveType();
 		boxedPrimitiveTypeIndices.set("i32", reserveType());
 		boxedPrimitiveTypeIndices.set("raw-ptr", reserveType());
+		boxedPrimitiveTypeIndices.set("native-callback", reserveType());
 		boxedPrimitiveTypeIndices.set("bool", reserveType());
 		boxedPrimitiveTypeIndices.set("i64", reserveType());
 		boxedPrimitiveTypeIndices.set("f64", reserveType());
@@ -771,6 +772,7 @@ class WasmGcTypePlan {
 		var boxedEntries:Array<{key:String, type:WasmValueType}> = [
 			{key: "i32", type: I32},
 			{key: "raw-ptr", type: I32},
+			{key: "native-callback", type: I32},
 			{key: "bool", type: I32},
 			{key: "i64", type: I64},
 			{key: "f64", type: F64},

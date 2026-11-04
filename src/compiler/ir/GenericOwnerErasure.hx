@@ -139,8 +139,7 @@ class GenericOwnerErasure {
 		if ((switch (value.type) { case Dyn: true; default: false; })) {
 			var target = switch type { case Nullable(inner): inner; default: type; },
 				checks:Array<IrType> = switch target {
-					case Abstract("native_callback"): [];
-					case Obj(_) | Virtual(_) | Enum(_) | Bytes | ManagedBytes | Abstract(_) | Iterator(_): [target];
+					case Obj(_) | Virtual(_) | Enum(_) | Bytes | ManagedBytes | Abstract(_) | Iterator(_) | TypeRef: [target];
 					case Array(_): [Array(Dyn)];
 					case Function(_, _): [target];
 					case I32 | F64 | Bool | I64 | RawPtr: [target];

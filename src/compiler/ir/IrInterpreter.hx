@@ -124,6 +124,8 @@ class IrInterpreter {
 						checkArrayCast(actual, element);
 					case Obj(target) if (actual != null && !objectIsOfType(actual, target)):
 						throw 'Cannot cast to "$target"';
+					case TypeRef if (actual != null && !Std.isOfType(actual, InterpTypeRef)):
+						throw "Cannot cast to a type handle";
 					case I32 if (input.type == Dyn && actual != null):
 						if (!numericValue(actual)) throw "Cannot cast to Int";
 						actual = Std.int(actual);
@@ -270,6 +272,7 @@ class IrInterpreter {
 					case F64: switch Type.typeof(input) { case TFloat: true; default: false; };
 					case Bool: switch Type.typeof(input) { case TBool: true; default: false; };
 					case I64: haxe.Int64.isInt64(input);
+					case TypeRef: Std.isOfType(input, InterpTypeRef);
 					case Bytes: Std.isOfType(input, String);
 					case ManagedBytes: Std.isOfType(input, haxe.io.Bytes);
 					case Array(_): Std.isOfType(input, InterpArray);

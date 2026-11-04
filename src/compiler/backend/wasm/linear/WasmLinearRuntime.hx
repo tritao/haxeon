@@ -2640,6 +2640,8 @@ class WasmLinearRuntime {
 			WasmModuleSupport.typeId(I64),
 			WasmModuleSupport.typeId(F64),
 			WasmModuleSupport.typeId(RawPtr),
+			WasmModuleSupport.typeId(TypeRef),
+			WasmModuleSupport.typeId(Abstract("native_callback")),
 			WasmModuleSupport.typeId(Bytes)
 		]) {
 			builder.localGet(value);
@@ -4222,6 +4224,14 @@ class WasmLinearRuntime {
 							builder.emit(I32Eq);
 							builder.localGet(leftType);
 							builder.i32Const(WasmModuleSupport.typeId(RawPtr));
+							builder.emit(I32Eq);
+							builder.emit(I32Or);
+							builder.localGet(leftType);
+							builder.i32Const(WasmModuleSupport.typeId(TypeRef));
+							builder.emit(I32Eq);
+							builder.emit(I32Or);
+							builder.localGet(leftType);
+							builder.i32Const(WasmModuleSupport.typeId(Abstract("native_callback")));
 							builder.emit(I32Eq);
 							builder.emit(I32Or);
 							builder.ifElse(function(builder) {

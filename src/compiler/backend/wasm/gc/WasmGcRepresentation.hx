@@ -565,7 +565,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					throw 'Wasm GC cannot convert $value.type to Dynamic yet';
 			};
 		return switch value.type {
-			case RawPtr:
+			case RawPtr, TypeRef, Abstract("native_callback"):
 				[LocalGet(valueLocal), I32Eqz, If(null), RefNull(Any), LocalSet(destination), Else,
 					LocalGet(valueLocal), StructNew(boxed), LocalSet(destination), End];
 			default: [LocalGet(valueLocal), StructNew(boxed), LocalSet(destination)];
@@ -590,7 +590,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(destination)
 			];
 			return switch output.type {
-				case RawPtr:
+				case RawPtr, TypeRef, Abstract("native_callback"):
 					[LocalGet(valueLocal), RefIsNull, If(null), I32Const(0), LocalSet(destination), Else,
 						LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), I32Eqz, If(null)]
 						.concat(trapInstructions()).concat([End]).concat(unbox).concat([End]);
@@ -704,7 +704,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult {
 		var instructions:Array<WasmInstruction> = [I32Const(0), LocalSet(output)];
-		var boxedTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef];
+		var boxedTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef, Abstract("native_callback")];
 		for (type in boxedTypes) {
 			var box = plan.boxedPrimitiveType(type), comparison = switch type {
 				case I64: I64Eq;
@@ -914,6 +914,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, RawPtr, plan.boxedPrimitiveType(RawPtr));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract("native_callback"), plan.boxedPrimitiveType(Abstract("native_callback")));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, TypeRef, plan.boxedPrimitiveType(TypeRef));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, ManagedBytes, plan.managedBytesTypeIndex);
 		var mapNames = [for (name in plan.mapTypes.keys()) name]; mapNames.sort(Reflect.compare);
@@ -1542,7 +1544,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function dynamicIsObject(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Eq})];
-		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.I64, IrType.F64, IrType.RawPtr, IrType.TypeRef];
+		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.I64, IrType.F64, IrType.RawPtr, IrType.TypeRef, IrType.Abstract("native_callback")];
 		for (type in primitiveTypes)
 			body = body.concat([
 				LocalGet(valueLocal),

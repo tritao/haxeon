@@ -377,6 +377,12 @@ HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
    never fall back to comparing their allocation addresses. Entirely nullary
    enums have tag equality even without a generated conformance helper. */
 HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
+	/* Abstract handles are boxed when erased. Compare callback handles, not the
+	   addresses of the independently allocated Dynamic wrappers. */
+	if( left != NULL && right != NULL && left->t->kind == HABSTRACT && right->t->kind == HABSTRACT
+		&& ucmp(left->t->abs_name,USTR("native_callback")) == 0
+		&& ucmp(right->t->abs_name,USTR("native_callback")) == 0 )
+		return left->v.ptr == right->v.ptr;
 	bool left_enum = left != NULL && left->t->kind == HENUM;
 	bool right_enum = right != NULL && right->t->kind == HENUM;
 	if( left_enum || right_enum ) {
