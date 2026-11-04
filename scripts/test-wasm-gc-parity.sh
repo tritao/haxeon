@@ -112,6 +112,7 @@ for inline in 0 1; do
 		if [[ "$target" == wasm32 ]]; then
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress --wasm-memory-stats \
 				--export=PointerGcLeafCensus.make --export=PointerGcLeafCensus.hold --export=PointerGcLeafCensus.collect \
+				--export=CallbackGcLeafCensus.make --export=CallbackGcLeafCensus.hold --export=CallbackGcLeafCensus.collect \
 				--output="$parity_output_dir/wasm-parity-wasm32-raw-pointer-gc-leaf-inline-$inline.wasm" \
 				--entry=wasm-raw-pointer-gc-leaf --root=tests/programs tests/programs/wasm-raw-pointer-gc-leaf.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
@@ -560,6 +561,15 @@ async function run(name, target) {
 	if ((beforeLeaf & 1) === 0 || (afterLeaf & 1) !== 0)
 	  failures.push(`raw pointer box retained a managed object (wasm32, inline=${inline}, before=${beforeLeaf}, after=${afterLeaf})`);
 	else console.log(`PASS: raw pointer box is a GC leaf on wasm32, inline=${inline}`);
+	const callbackLeaf = (await WebAssembly.instantiate(leafBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	const callbackVictim = callbackLeaf["CallbackGcLeafCensus.make"]();
+	callbackLeaf["CallbackGcLeafCensus.hold"](callbackVictim);
+	const beforeCallback = new DataView(callbackLeaf.memory.buffer).getInt32(callbackVictim - 12, true);
+	callbackLeaf["CallbackGcLeafCensus.collect"]();
+	const afterCallback = new DataView(callbackLeaf.memory.buffer).getInt32(callbackVictim - 12, true);
+	if ((beforeCallback & 1) === 0 || (afterCallback & 1) !== 0)
+	  failures.push(`native callback box retained a managed object (wasm32, inline=${inline}, before=${beforeCallback}, after=${afterCallback})`);
+	else console.log(`PASS: native callback box is a GC leaf on wasm32, inline=${inline}`);
 	const neutralPointerBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-raw-pointer-neutral-inline-${inline}.wasm`));
 	const neutralPointer = (await WebAssembly.instantiate(neutralPointerBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
 	if (neutralPointer.exports["PointerBoundaryCensus.prepare"](1234) !== 42)

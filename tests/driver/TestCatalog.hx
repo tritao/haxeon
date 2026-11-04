@@ -54,6 +54,7 @@ class TestCatalog {
 		"GenericOwnerPolicyMain",
 		"GenericOwnerRecursionMain",
 		"GenericStructOwnerMain",
+		"WasmHandleGcLeafMain",
 		"SpecializedMapIncrementalMain",
 		"FieldAliasFlowMain",
 		"MemberModuleShadowMain",

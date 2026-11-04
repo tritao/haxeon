@@ -17,4 +17,15 @@ class PointerGcLeafCensus {
  public static function hold(value:hl.Bytes):Void { pointer = value; victim = null; }
  public static function collect():Void { garbage = new PointerGcGarbage(); }
 }
+#if wasm
+@:hlNative("haxeon_runtime", "nativeCallbackFromIndex") extern function callbackOf(index:Int):hl.Abstract<"native_callback">;
+class CallbackGcLeafCensus {
+ static var victim:PointerGcVictim;
+ static var callback:Dynamic;
+ static var garbage:PointerGcGarbage;
+ public static function make():PointerGcVictim { victim = new PointerGcVictim(); return victim; }
+ public static function hold(index:Int):Void { callback = callbackOf(index); victim = null; }
+ public static function collect():Void { garbage = new PointerGcGarbage(); }
+}
+#end
 function main():Int return 42;

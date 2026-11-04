@@ -241,6 +241,9 @@ their unboxed word carriers; a callback or type handle is boxed only at a Dynami
 handle kind. HashLink compares erased callback handles by their underlying value. With inlining enabled and disabled,
 8 and 1,024 typed callback calls allocate zero times on Wasm32 and Wasm GC before and after the change; the paired
 HashLink census allocates zero bytes on both sides.
+On Wasm32, the collector treats both boxes as leaves: a numeric handle that happens to equal a managed object's
+address does not keep that object alive. The GC-stress regression covers callback and type handles, as well as raw
+pointers, and exercises callback boxes with inlining both enabled and disabled.
 
 A closure in a specialized generic field carries a struct's scalar and traced reference leaves through its typed
 argument and result. In a Wasm GC census, the apparent 16 / 2,048 allocations for 8 / 1,024 calls came from evaluating

@@ -289,6 +289,21 @@ individual differences were confined to byte buffers. Nine 500-cycle RSS pairs h
 [30.16, 3.75, 0.78, 5.00] MiB and candidate medians [30.16, 3.44, 0.78, 4.84] MiB, with paired median differences
 [-0.16, -0.15, 0, 0] MiB. The samples vary and do not establish an exact memory match.
 
+Treating boxed Wasm32 callback and type handles as GC leaves does not change the Wasm GC Showcase guest: the control
+and candidate binaries are byte-identical. Nine full browser pairs and three each of static, text-heavy and editing
+again measured 4,440 / 4,440 / 4,440 / 8,724 objects on both sides. The Wasm32 typed-callback census remained at zero
+allocations for 8 and 1,024 calls before and after, with inlining on and off.
+
+On outer revision `6b05a8376`, the HashLink control and candidate again had identical source manifests and bytecode,
+and used the same native runtime. Nine alternating pairs had matching per-action medians: 112.6 / 80.1 / 72.5 / 93.1
+KiB for the four tab switches; 0.5 / 0.5 / 10.0 / 12.4 / 13.6 KiB for hover enter / inside / other / field / away;
+21.2 KiB for scroll; 0.2 / 0.2 KiB for idle / idle-focused; and 16.1 / 16.2 KiB for type / backspace. Paired median
+differences were zero except telemetry → console (+0.2 KiB), demonstrating capture variation with identical binaries.
+Selection-stress medians were 342,097 / 342,098 allocations, with a zero paired median difference; individual
+differences were byte buffers. The 500-cycle RSS window medians were [30.31, 3.59, 0.78, 4.84] MiB for control and
+[29.84, 3.91, 0.78, 5.00] MiB for candidate, with paired median differences [0, +0.16, 0, 0] MiB. These figures
+measure variation rather than a change in the identical HashLink artifacts.
+
 The pointer-boundary change was also measured on the current outer `HEAD` against a control built with compiler
 `38db19f0` from the same source tree. Nine alternating HashLink pairs had equal per-action medians: 112.6, 80.1,
 72.5 and 93.1 KiB for the four tab switches, and 0.5, 0.5, 10.0, 12.4, 13.6, 21.2, 0.2, 0.2, 16.1 and 16.2 KiB

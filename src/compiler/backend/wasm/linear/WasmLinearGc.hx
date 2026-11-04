@@ -394,7 +394,7 @@ class WasmLinearGc {
 
 		// Primitive boxes are leaves. Byte views trace their backing owner; other
 		// known layouts are traced from declared reference fields.
-		var leafTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr];
+		var leafTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef, Abstract("native_callback")];
 		for (leaf in leafTypes)
 			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(leaf), function(_) {});
 		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Bytes), function(builder) {
