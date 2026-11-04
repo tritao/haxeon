@@ -140,7 +140,7 @@ class IrBuilder {
 
 	public function methodCall(receiver:IrValue, name:String, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
-		emit(MethodCall(out, receiver, name, args));
+		emit(MethodCall(out, receiver, name, args, false));
 		return out;
 	}
 

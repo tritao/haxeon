@@ -1005,6 +1005,15 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		if (check(TokenKind.Identifier) && current().text == "scoped" && peekKind(1) == TokenKind.Var) {
+			var start = advance().span;
+			consume(TokenKind.Var);
+			var name = consume(TokenKind.Identifier).text;
+			var type = match(TokenKind.Colon) ? parseType() : null;
+			consume(TokenKind.Assign);
+			var initializer = parseAnchoredExpression(name + "=");
+			return ScopedDeclaration(name, type, initializer, start.merge(expressionEnd(initializer)));
+		}
 		// `inline` on a local function is only a hint; it is compiled as any local function.
 		var inlined = check(TokenKind.Inline) && peekKind(1) == TokenKind.Function;
 		if (inlined)
@@ -1043,6 +1052,11 @@ class Parser {
 				], result);
 			closeLambda();
 			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span), span);
+		}
+		if (match(TokenKind.Defer)) {
+			var start = previous().span;
+			var body = parseStatementOrBlock();
+			return Defer(body, start.merge(statementEnd(body)));
 		}
 		if (match(TokenKind.Break)) {
 			var start = previous().span;
@@ -2528,8 +2542,13 @@ class Parser {
 	}
 
 	function parseStatementOrBlock():Array<AstStatement> {
-		if (!match(TokenKind.LeftBrace))
+		if (!match(TokenKind.LeftBrace)) {
+			if (check(TokenKind.Defer))
+				fail(current(), "A defer statement requires an enclosing block");
+			if (check(TokenKind.Identifier) && current().text == "scoped" && peekKind(1) == TokenKind.Var)
+				fail(current(), "A scoped binding requires an enclosing block");
 			return parseStatements();
+		}
 		var statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
 			appendStatements(statements, parseStatements());
@@ -2964,8 +2983,8 @@ class Parser {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case ErrorStatement(span): span;
-			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
-				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
+				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
 				DoWhile(_, _,
 					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}

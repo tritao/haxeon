@@ -692,11 +692,11 @@ class HlWriter {
 				case Jump(target):
 					var targetPosition = requireLabel(labels, target);
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
-				case Trap(destination, target):
+				case Trap(destination, target, preserveExceptionStack):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
-				case EndTrap(destination):
-					{opcode: HlOpcode.EndTrap, operands: [destination]};
+					{opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
+				case EndTrap(destination, preserveExceptionStack):
+					{opcode: preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap, operands: [destination]};
 				case Label(_): {opcode: HlOpcode.Label, operands: []};
 				case Return(register):
 					{opcode: HlOpcode.Ret, operands: [register]};

@@ -32,6 +32,7 @@ private typedef ScopeValue = {
 	final id:String;
 	final receiver:Bool;
 	final localFunction:Null<LocalFunction>;
+	var scoped:Bool;
 }
 
 /**
@@ -65,7 +66,8 @@ class Scope {
 			declared: type,
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
 			receiver: receiver,
-			localFunction: localFunction
+			localFunction: localFunction,
+			scoped: false
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
@@ -319,6 +321,19 @@ class Scope {
 	public function resolveId(name:String):Null<String> {
 		var value = resolveLocal(name);
 		return value == null ? null : value.id;
+	}
+
+	/** Mark and query the lexical binding, so a shadowing local does not inherit its lifetime. */
+	public function markScoped(name:String):Void {
+		var value = resolveLocal(name);
+		if (value == null)
+			throw 'Missing scoped binding "$name"';
+		value.scoped = true;
+	}
+
+	public function isScoped(name:String):Bool {
+		var value = resolveLocal(name);
+		return value != null && value.scoped;
 	}
 
 	public function localFunction(name:String):Null<LocalFunction> {

@@ -1,4 +1,5 @@
 # program\texpected exit
+defer-exception-stack	42
 add	42
 json-decoded-object-array	42
 json-typed-object-array	42
@@ -499,3 +500,6 @@ reactive-capture-allocations	42
 reactive-dependency-id-wide	42
 reactive-dependency-id-threads	42
 identity-class	42
+defer-cleanup	42
+scoped-cleanup	42
+enum-interface-conformance	42

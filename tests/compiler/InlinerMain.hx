@@ -443,7 +443,7 @@ function main():Int return stay(1);
 				switch located.value {
 					case Call(_, name, _):
 						names.push(name);
-					case MethodCall(_, _, name, _):
+					case MethodCall(_, _, name, _, _):
 						names.push(name);
 					default:
 				}

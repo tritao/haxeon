@@ -518,6 +518,7 @@ private class PurityWalker {
 	function statement(value:AstStatement):Bool {
 		return switch value {
 			case ErrorStatement(_): false;
+			case ScopedDeclaration(_, _, _, _): false;
 			case UninitializedDeclaration(name, type, _):
 				declare(name, isNumericType(type), classNameOfType(type), isIterableType(type), isArrayType(type), (switch (type) { case StringType: true; default: false; }),
 					isStringArrayType(type), isMapType(type));
@@ -544,6 +545,7 @@ private class PurityWalker {
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
+			case Defer(body, _): statements(body);
 			case Try(body, catches, _):
 				if (!statements(body))
 					return false;

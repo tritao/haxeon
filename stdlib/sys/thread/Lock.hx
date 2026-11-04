@@ -41,6 +41,7 @@ class Lock {
 	**/
 	public function wait(?timeout:Float):Bool {
 		condition.acquire();
+		defer condition.release();
 		if (timeout == null) {
 			while (releases == 0)
 				condition.wait();
@@ -56,16 +57,15 @@ class Lock {
 		var acquired = releases > 0;
 		if (acquired)
 			releases--;
-		condition.release();
 		return acquired;
 	}
 
 	/** Lets one waiter, present or future, through. */
 	public function release():Void {
 		condition.acquire();
+		defer condition.release();
 		releases++;
 		condition.signal();
-		condition.release();
 	}
 }
 #end

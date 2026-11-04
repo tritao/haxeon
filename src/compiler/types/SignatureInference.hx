@@ -199,6 +199,8 @@ class SignatureInference {
 					collectCallConstraints(body, environment.fork(), methods, constraints);
 					for (clause in catches)
 						collectCallConstraints(clause.statements, environment.fork(), methods, constraints);
+				case Defer(body, _):
+					collectCallConstraints(body, environment.fork(), methods, constraints);
 				case Switch(expression, cases, fallback, _, _):
 					collectExpressionCallConstraint(expression, environment, methods, constraints);
 					for (switchCase in cases)

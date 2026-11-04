@@ -17,7 +17,7 @@ class IrValueConstructors {
 				count++;
 				switch located.value {
 					case Phi(_, _) if (fn.blocks.length == 1): safe = false;
-					case BeginTry(_, _) | EndTry(_) | Catch(_): safe = false;
+					case BeginTry(_, _, _) | EndTry(_, _) | Catch(_): safe = false;
 					default:
 				}
 			}

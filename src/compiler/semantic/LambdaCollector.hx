@@ -10,12 +10,14 @@ class LambdaCollector {
 			switch statement {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):
 					collect(tryBranch, functionName, module, generatedByModule);
 					for (catchClause in catches)
 						collect(catchClause.statements, functionName, module, generatedByModule);
+				case Defer(body, _):
+					collect(body, functionName, module, generatedByModule);
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
 					collectLambdaExpression(offset, functionName, module, generatedByModule);

@@ -154,7 +154,7 @@ class WasmFlattenValueFields {
 						replacement.instructions.push(new Located(FieldSet(owner, target == null ? field : physical(owner.type, path), actual.value),
 							located.provenance));
 					}
-				case MethodCall(out, receiver, method, arguments) if (aliases.exists(receiver.id)):
+				case MethodCall(out, receiver, method, arguments, _) if (aliases.exists(receiver.id)):
 					var place = aliases.get(receiver.id), target = methodName(place.typeName, method);
 					if (target == null) throw 'Missing Wasm GC method "${place.typeName}.$method"';
 					var args:Array<IrValue> = [place.owner];

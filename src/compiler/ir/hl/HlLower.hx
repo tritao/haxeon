@@ -665,7 +665,7 @@ class HlLower {
 				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
 				// Emit an explicit check so the active handler works on every thread.
 				var receiver:Null<IrValue> = switch instruction.value {
-					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
+					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
 						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value),
 						EnumIndex(_, value), EnumField(_, value, _, _): value;
 					case _: null;
@@ -733,16 +733,16 @@ class HlLower {
 						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
-					case BeginTry(catchBlock, _):
+					case BeginTry(catchBlock, _, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock'));
-					case EndTry(catchBlock):
+						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock', preserveExceptionStack));
+					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id ends with unknown handler block $catchBlock';
-						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers)));
+						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers), preserveExceptionStack));
 					case Catch(_):
 					case GlobalGet(output, name):
 						var global = symbols.requireGlobalIndex(name);
@@ -913,7 +913,7 @@ class HlLower {
 						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case ToVirtual(output, value):
 						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
-					case MethodCall(output, object, methodName, arguments):
+					case MethodCall(output, object, methodName, arguments, _):
 						var receiver = requireRegister(object, registers),
 							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
 							valueMethod = valueMethodFunction(object, methodName);
@@ -1198,7 +1198,7 @@ class HlLower {
 		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
 		for (instruction in block.instructions)
 			switch instruction.value {
-				case BeginTry(catchBlock, afterBlock):
+				case BeginTry(catchBlock, afterBlock, _):
 					region = {catchBlock: catchBlock, afterBlock: afterBlock};
 				default:
 			}

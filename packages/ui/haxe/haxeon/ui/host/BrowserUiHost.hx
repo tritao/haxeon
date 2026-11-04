@@ -238,9 +238,11 @@ class BrowserUiHost {
 	function advance(timeMilliseconds:Float):Int {
 		if (stopped) return session.state == UiHostLifecycle.Failed ? -1 : 0;
 		try {
-			eventDispatching = true;
-			while (!stopping && events != null && events.poll()) {}
-			eventDispatching = false;
+			{
+				eventDispatching = true;
+				defer eventDispatching = false;
+				while (!stopping && events != null && events.poll()) {}
+			}
 			if (cleanupPending || stopping) {
 				stopHost();
 				return session.state == UiHostLifecycle.Failed ? -1 : 0;
@@ -268,7 +270,6 @@ class BrowserUiHost {
 			}
 			return 1;
 		} catch (error:Dynamic) {
-			eventDispatching = false;
 			fail("browser-frame", error);
 			return -1;
 		}

@@ -56,10 +56,10 @@ inline enum storage remains to be implemented.
 
 Deterministic release is layered by need rather than solved with one mechanism:
 
-1. **Scoped cleanup.** `defer` runs a statement at scope exit, and a scoped binding over a `Disposable` conformance
-   (`scoped var file = File.open(path);`, spelled differently from Haxe's `using` for static extensions) disposes the
-   value when the scope ends, including on exceptions. This covers locks, files, profiler scopes and temporary native
-   buffers, which is most resource code, as C# `using`, Java try-with-resources and Python `with` do.
+1. **Scoped cleanup (implemented).** `defer` runs a statement at block exit, and `scoped var` disposes a value whose
+   type implements `Disposable`. Cleanup runs on normal and exceptional exits in reverse registration order, with the
+   first exception preserved; nullable values are skipped. The compiler rejects direct escapes and reassignment. The
+   syntax, typing and target lowering are in [SCOPED_CLEANUP.md](SCOPED_CLEANUP.md).
 2. **Owner scopes.** UI-held resources (GPU textures and buffers, subscriptions) register cleanup with their reactive
    scope and are released on unmount ([ADR 0002](adr/0002-reactive-ui-model.md) decision 2). No language feature.
 3. **Move-only types,** below, only where a mistake corrupts memory rather than leaks: native memory and GPU handles
@@ -146,7 +146,7 @@ Check each against what Haxeon already supports before designing it.
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
    conversions; generic specialization and inline `Null<T>` for scalars, and native `Int64` operations.
-7. Scoped cleanup (`defer`, `Disposable` scoped bindings).
+7. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented.
 8. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
 9. Smaller conveniences when a concrete use appears.

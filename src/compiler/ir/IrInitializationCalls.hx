@@ -89,7 +89,7 @@ class IrInitializationCalls {
 						origins.set(out.id, globals.get(name).copy());
 					case Call(out, callee, _) if (returns.exists(callee)):
 						origins.set(out.id, returns.get(callee).copy());
-					case MethodCall(out, receiver, method, _):
+					case MethodCall(out, receiver, method, _, _):
 						var found:Array<String> = [];
 						for (callee in methodTargets(receiver, method))
 							if (returns.exists(callee))
@@ -119,7 +119,7 @@ class IrInitializationCalls {
 					case CallClosure(_, closure, _):
 						if (closures.exists(closure.id))
 							result = result.concat(closures.get(closure.id));
-					case MethodCall(_, receiver, method, arguments):
+					case MethodCall(_, receiver, method, arguments, _):
 						for (callee in methodTargets(receiver, method)) {
 							result.push(callee);
 							addCallbacks(callee, arguments, 1);
@@ -196,7 +196,7 @@ class IrInitializationCalls {
 						for (argument in 0...arguments.length)
 							if (aliases.exists(arguments[argument].id) && invokesArgument(callee, argument, seen))
 								found = true;
-					case MethodCall(_, receiver, method, arguments):
+					case MethodCall(_, receiver, method, arguments, _):
 						for (callee in methodTargets(receiver, method))
 							for (argument in 0...arguments.length)
 								if (aliases.exists(arguments[argument].id) && invokesArgument(callee, argument + 1, seen))

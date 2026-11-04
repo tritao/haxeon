@@ -34,7 +34,7 @@ class CfgIteratorReplacement {
 		for (block in cfg.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(_, _):
+					case BeginTry(_, _, _):
 						return cfg;
 					default:
 				}
@@ -184,7 +184,7 @@ class CfgIteratorReplacement {
 	static function operands(instruction:CfgInstruction):Array<CfgValue>
 		return switch instruction {
 			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
-				BeginTry(_, _), EndTry(_), Catch(_), LoadLocal(_, _), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): [];
+				BeginTry(_, _, _), EndTry(_, _), Catch(_), LoadLocal(_, _), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): [];
 			case ToDyn(_, value), IntToFloat(_, value), IntToInt64(_, value), FloatToInt(_, value), FloatToFloat(_, value), SafeCast(_, value),
 				StoreLocal(_, value), GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), Upcast(_, value), FieldGet(_, value, _), ArraySize(_, value),
 				IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value), EnumIndex(_, value), EnumField(_, value, _, _),
@@ -195,6 +195,6 @@ class CfgIteratorReplacement {
 			case ArraySet(array, index, value): [array, index, value];
 			case MemoryStore(pointer, value, _): [pointer, value];
 			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments): arguments;
-			case CallClosure(_, receiver, arguments), MethodCall(_, receiver, _, arguments): [receiver].concat(arguments);
+			case CallClosure(_, receiver, arguments), MethodCall(_, receiver, _, arguments, _): [receiver].concat(arguments);
 		};
 }

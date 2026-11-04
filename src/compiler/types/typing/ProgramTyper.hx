@@ -279,14 +279,29 @@ class ProgramTyper {
 			EnumDynamicBox.requestReflectedTypes(session, native.result, owner.name, owner.span);
 		}
 		// Equality and hash bodies can request each other, including through handwritten enum methods.
-		var equalities:Map<String, TypedFunction> = [], hashes:Map<String, TypedFunction> = [];
+		var equalities:Map<String, TypedFunction> = [], hashes:Map<String, TypedFunction> = [], enumMethods:Map<String, TypedFunction> = [],
+			enumAdapters:Map<String, TypedClass> = [];
 		while (true) {
-			var before = Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests);
+			var before = Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
+				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters);
+			for (adapter in EnumInterfaceAdapter.generate(session)) enumAdapters.set(adapter.name, adapter);
 			for (hash in HashGenerator.generate(session, bodyTyper)) hashes.set(hash.name, hash);
 			for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues)) equalities.set(equality.name, equality);
 			for (equality in EnumEqualityGenerator.generate(session, bodyTyper)) equalities.set(equality.name, equality);
-			if (before == Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)) break;
+			for (method in EnumConformanceMethods.generate(session, bodyTyper)) enumMethods.set(method.name, method);
+			if (before == Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
+				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters)) break;
 		}
+		var adapterNames = [for (name in enumAdapters.keys()) name];
+		adapterNames.sort(Reflect.compare);
+		for (name in adapterNames) {
+			var adapter = enumAdapters.get(name);
+			typedClasses.push(adapter);
+			for (method in adapter.methods) typedFunctions.push(method);
+		}
+		var enumMethodNames = [for (name in enumMethods.keys()) name];
+		enumMethodNames.sort(Reflect.compare);
+		for (name in enumMethodNames) typedFunctions.push(enumMethods.get(name));
 		var hashNames = [for (name in hashes.keys()) name];
 		hashNames.sort(Reflect.compare);
 		for (name in hashNames) typedFunctions.push(hashes.get(name));
@@ -613,30 +628,61 @@ class ProgramTyper {
 	}
 	}
 
+	function validateEnumInterface(declaration:compiler.syntax.Ast.AstEnum, interfaceType:CompilerType, enumSubstitutions:Map<String, CompilerType>,
+			requiredMethods:Map<String, Bool>):Void {
+		var interfaceName = switch interfaceType {
+			case TInstance(NominalKind.Interface, name, _): name;
+			default:
+				BodyTyper.fail("E1007", 'Enum "${declaration.name}" must implement an interface', declaration.span);
+				return;
+		};
+		var contract = session.interfaceDecls.get(interfaceName);
+		if (contract == null)
+			BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', declaration.span);
+		var interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceType);
+		for (base in contract.bases)
+			validateEnumInterface(declaration, session.declarations.resolve(base, contract.span, interfaceSubstitutions), enumSubstitutions, requiredMethods);
+		for (method in contract.methods) {
+			requiredMethods.set(method.name, true);
+			var implementation:Null<AstFunction> = null;
+			if (declaration.methods != null)
+				for (candidate in declaration.methods)
+					if (candidate.name == method.name) implementation = candidate;
+			if (implementation == null || implementation.isStatic)
+				BodyTyper.fail("E1007", 'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"', declaration.span);
+			if ((implementation.typeParameters != null && implementation.typeParameters.length > 0)
+				|| !sameSignature(implementation, method, enumSubstitutions, interfaceSubstitutions))
+				BodyTyper.fail("E1003", 'Method "${declaration.name}.${method.name}" does not match interface "$interfaceName"', implementation.span);
+		}
+	}
+
 	/** Equality and hashing are properties of the enum type, not its chosen physical representation. */
 	function validateEnumConformance(declaration:compiler.syntax.Ast.AstEnum):Void {
-		if (declaration.conformances != null) for (conformance in declaration.conformances) {
-			var resolved = session.declarations.resolve(conformance, declaration.span);
-			switch resolved {
-				case TInstance(NominalKind.Interface, "Equatable" | "Hashable", _):
-				default: BodyTyper.fail("E1025", 'Enum "${declaration.name}" supports only Equatable and Hashable conformance', declaration.span);
-			}
-		}
 		var substitutions:Map<String, CompilerType> = [];
 		for (parameter in declaration.typeParameters) substitutions.set(parameter, TTypeParameter(declaration.name, parameter));
+		var requiredMethods:Map<String, Bool> = [];
+		if (declaration.conformances != null) for (conformance in declaration.conformances) {
+			var resolved = session.declarations.resolve(conformance, declaration.span, substitutions);
+			validateEnumInterface(declaration, resolved, substitutions, requiredMethods);
+		}
 		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
 			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
 			equatable = DeclaredConformance.has(session, type, "Equatable"),
 			hashable = DeclaredConformance.has(session, type, "Hashable"), hasEquals = false, hasHash = false;
 		var hasPayload = false;
 		for (constructor in declaration.cases) if (constructor.params.length > 0) hasPayload = true;
-		if (!hasPayload && declaration.methods != null && declaration.methods.length > 0)
-			BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', declaration.span);
+		var seenMethods:Map<String, Bool> = [];
 		if (declaration.methods != null) for (method in declaration.methods) {
-			if (method.name != "equals" && method.name != "hash")
-				BodyTyper.fail("E1025", 'Enum "${declaration.name}" only supports handwritten equals and hash methods', method.span);
-			if ((method.name == "equals" && hasEquals) || (method.name == "hash" && hasHash))
+			if (seenMethods.exists(method.name))
 				BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
+			seenMethods.set(method.name, true);
+			if (!hasPayload && (method.name == "equals" || method.name == "hash"))
+				BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', method.span);
+			if (method.name != "equals" && method.name != "hash") {
+				if (!requiredMethods.exists(method.name))
+					BodyTyper.fail("E1025", 'Enum method "${declaration.name}.${method.name}" must implement a declared interface method', method.span);
+				continue;
+			}
 			if (method.name == "equals") {
 				hasEquals = true;
 				if (!equatable) BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals', method.span);

@@ -50,6 +50,14 @@ for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=DeferCensus.perform --output="$parity_output_dir/wasm-parity-$target-defer-census-inline-$inline.wasm" \
+			--entry=defer-cleanup --root=tests/programs tests/programs/defer-cleanup.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ScopedCensus.prepare --export=ScopedCensus.perform --export=ScopedCensus.performValue --export=ScopedCensus.performNullableValue \
+			--export=ScopedCensus.performMutableValue --export=ScopedCensus.performNullableMutableValue --export=ScopedCensus.prepareComposite --export=ScopedCensus.performComposite \
+			--output="$parity_output_dir/wasm-parity-$target-scoped-census-inline-$inline.wasm" \
+			--entry=scoped-cleanup --root=tests/programs tests/programs/scoped-cleanup.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=CarrierCensus.prepare --export=CarrierCensus.pointers --export=CarrierCensus.pointerGetter --export=CarrierCensus.ints \
 			--export=CarrierCensus.floats --export=CarrierCensus.values --export=CarrierCensus.genericPointers \
 			--export=CarrierCensus.genericInts --export=CarrierCensus.genericFloats --export=CarrierCensus.genericValues \
@@ -109,7 +117,7 @@ for inline in 0 1; do
 			--export=IdentityClassCensus.prepare --export=IdentityClassCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-identity-class-census-inline-$inline.wasm" \
 			--entry=identity-class --root=stdlib --root=tests/programs tests/programs/identity-class.hx
-		for value_case in identity-class native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+		for value_case in identity-class enum-interface-conformance scoped-cleanup defer-cleanup defer-exception-stack native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -231,7 +239,17 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	for value_case in identity-class native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+		--output="$parity_output_dir/defer-allocation-hl-inline-$inline.hl" \
+		--entry=defer-allocation-hl --root=tests/fixtures/scoped-cleanup tests/fixtures/scoped-cleanup/defer-allocation-hl.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/defer-allocation-hl-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "defer HashLink allocation census (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+	for value_case in identity-class enum-interface-conformance scoped-cleanup defer-cleanup defer-exception-stack native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -439,7 +457,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["identity-class", "native-reference-identity", "reactive-effect-failure-recovery", "reactive-derived-cycle", "generic-interface-value-carriers", "generic-erased-raw-pointer", "generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "wasm-bytes-runtime-kinds", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
+    for (const name of ["identity-class", "enum-interface-conformance", "scoped-cleanup", "defer-cleanup", "defer-exception-stack", "native-reference-identity", "reactive-effect-failure-recovery", "reactive-derived-cycle", "generic-interface-value-carriers", "generic-erased-raw-pointer", "generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "wasm-bytes-runtime-kinds", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         if (result.failure === undefined && result.exit !== 42)
@@ -752,6 +770,42 @@ async function run(name, target) {
 	    if (result !== n * (n + 1) / 2 + n || allocations !== 0)
 	      failures.push(`observable effect census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: observable effect census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const deferBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-defer-census-inline-${inline}.wasm`));
+	  const deferred = (await WebAssembly.instantiate(deferBytes, {haxeon_runtime: runtime, std})).instance;
+	  deferred.exports.main();
+	  const deferCount = target === "wasm32" ? deferred.exports["haxeon.memory.allocation_count"] : deferred.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = deferCount(), result = deferred.exports["DeferCensus.perform"](n), allocations = deferCount() - before;
+	    if (result !== n || allocations !== 0)
+	      failures.push(`defer census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: defer census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const scopedBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-scoped-census-inline-${inline}.wasm`));
+	  const scoped = (await WebAssembly.instantiate(scopedBytes, {haxeon_runtime: runtime, std})).instance;
+	  scoped.exports.main();
+	  scoped.exports["ScopedCensus.prepare"]();
+	  scoped.exports["ScopedCensus.prepareComposite"]();
+	  const scopedCount = target === "wasm32" ? scoped.exports["haxeon.memory.allocation_count"] : scoped.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = scopedCount(), result = scoped.exports["ScopedCensus.perform"](n), allocations = scopedCount() - before;
+	    if (result !== n / 2 || allocations !== 0)
+	      failures.push(`scoped census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: scoped census on ${target}, inline=${inline}, n=${n}`);
+	    const valueBefore = scopedCount(), valueResult = scoped.exports["ScopedCensus.performValue"](n), valueAllocations = scopedCount() - valueBefore;
+	    if (valueResult !== n || valueAllocations !== 0)
+	      failures.push(`scoped value census (${target}, inline=${inline}, n=${n}): result=${valueResult}, allocations=${valueAllocations}`);
+	    else console.log(`PASS: scoped value census on ${target}, inline=${inline}, n=${n}`);
+	    const nullableBefore = scopedCount(), nullableResult = scoped.exports["ScopedCensus.performNullableValue"](n), nullableAllocations = scopedCount() - nullableBefore;
+	    if (nullableResult !== n / 2 || nullableAllocations !== 0)
+	      failures.push(`scoped nullable value census (${target}, inline=${inline}, n=${n}): result=${nullableResult}, allocations=${nullableAllocations}`);
+	    else console.log(`PASS: scoped nullable value census on ${target}, inline=${inline}, n=${n}`);
+	    for (const [name, expected] of [["performMutableValue", n], ["performNullableMutableValue", n / 2], ["performComposite", n * 3]]) {
+	      const before = scopedCount(), result = scoped.exports[`ScopedCensus.${name}`](n), allocations = scopedCount() - before;
+	      if (result !== expected || allocations !== 0)
+	        failures.push(`scoped ${name} census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	      else console.log(`PASS: scoped ${name} census on ${target}, inline=${inline}, n=${n}`);
+	    }
 	  }
 	  const captureBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-reactive-capture-census-inline-${inline}.wasm`));
 	  const capture = (await WebAssembly.instantiate(captureBytes, {haxeon_runtime: runtime, std})).instance;

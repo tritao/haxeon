@@ -328,6 +328,8 @@ class StatementTyper {
 	}
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
+		if (scope.isScoped(name))
+			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 		var current = scope.resolve(name);
 		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
 		var dot = name.indexOf("."),
@@ -373,6 +375,8 @@ class StatementTyper {
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
 		var dot = name.lastIndexOf(".");
 		if (dot < 0) {
+			if (scope.isScoped(name))
+				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 			var expected = scope.resolveDeclared(name);
 			if (expected == null) {
 				var thisType = scope.resolve("this"),

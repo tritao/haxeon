@@ -450,7 +450,7 @@ class IrInliner {
 			case Call(_, functionName, arguments):
 				target = functionName;
 				actuals = arguments;
-			case MethodCall(_, object, methodName, arguments):
+			case MethodCall(_, object, methodName, arguments, _):
 				target = resolveMethod(object, methodName);
 				actuals = [object].concat(arguments);
 			default:
@@ -539,7 +539,7 @@ class IrInliner {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(_, _), EndTry(_), Catch(_):
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						return false;
 					default:
 				}
@@ -666,7 +666,7 @@ class IrInliner {
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
 	function needsReceiverCheck(instruction:IrInstruction):Bool return switch instruction {
-		case MethodCall(_, receiver, _, _): switch receiver.type {
+		case MethodCall(_, receiver, _, _, _): switch receiver.type {
 			case Obj(name):
 				var object = table.get(name);
 				object == null || !object.isValue;
@@ -684,7 +684,7 @@ class IrInliner {
 			case Call(out, _, arguments):
 				callOutput = out;
 				actuals = arguments;
-			case MethodCall(out, object, _, arguments):
+			case MethodCall(out, object, _, arguments, _):
 				callOutput = out;
 				actuals = [object].concat(arguments);
 			default:
@@ -814,14 +814,14 @@ class IrInliner {
 			case Call(out, _, arguments):
 				callOutput = out;
 				actuals = arguments;
-			case MethodCall(out, object, _, arguments):
+			case MethodCall(out, object, _, arguments, _):
 				callOutput = out;
 				actuals = [object].concat(arguments);
 			default:
 				throw "Inliner expected a call";
 		}
 		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [], upcasts:Array<Located<IrInstruction>> = [];
-		var mustCheck = checkReceiver == null ? switch call.value { case MethodCall(_, _, _, _): true; default: false; } : checkReceiver;
+		var mustCheck = checkReceiver == null ? switch call.value { case MethodCall(_, _, _, _, _): true; default: false; } : checkReceiver;
 		if (mustCheck) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
 			upcasts.push(new Located(Call(checked, IrReceiverCheck.NAME, [actuals[0]]), call.provenance));
@@ -900,7 +900,7 @@ class IrInliner {
 		}
 		for (located in continuation.instructions)
 			switch located.value {
-				case BeginTry(catchBlock, afterBlock):
+				case BeginTry(catchBlock, afterBlock, _):
 					successors.push(catchBlock);
 					successors.push(afterBlock);
 				default:
@@ -959,8 +959,8 @@ class IrInliner {
 			case FloatToFloat(out, value): FloatToFloat(use(out), use(value));
 			case SafeCast(out, value): SafeCast(use(out), use(value));
 			// Callees with handlers are never cloned (see fits); these arise when a caller is rewritten in place.
-			case BeginTry(catchBlock, afterBlock): BeginTry(block(catchBlock), block(afterBlock));
-			case EndTry(catchBlock): EndTry(block(catchBlock));
+			case BeginTry(catchBlock, afterBlock, preserveExceptionStack): BeginTry(block(catchBlock), block(afterBlock), preserveExceptionStack);
+			case EndTry(catchBlock, preserveExceptionStack): EndTry(block(catchBlock), preserveExceptionStack);
 			case Catch(out): Catch(use(out));
 			case GlobalGet(out, name): GlobalGet(use(out), name);
 			case GlobalSet(name, value): GlobalSet(name, use(value));
@@ -985,7 +985,7 @@ class IrInliner {
 			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
 			case ToVirtual(out, value): ToVirtual(use(out), use(value));
 			case Upcast(out, value): Upcast(use(out), use(value));
-			case MethodCall(out, object, name, arguments): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)]);
+			case MethodCall(out, object, name, arguments, terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
 			case NewObject(out, typeName): NewObject(use(out), typeName);
 			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);
 			case FieldSet(object, name, value): FieldSet(use(object), name, use(value));

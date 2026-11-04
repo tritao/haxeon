@@ -96,7 +96,7 @@ class SsaBuilder {
 			var handlers:Array<Int> = [];
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(catchBlock, _):
+					case BeginTry(catchBlock, _, _):
 						handlers.push(catchBlock);
 					default:
 				}
@@ -432,10 +432,10 @@ class SsaBuilder {
 				case SafeCast(out, value):
 					var result = define(out);
 					emit(target, SafeCast(result, resolve(value)), provenance);
-				case BeginTry(catchBlock, afterBlock):
-					emit(target, BeginTry(catchBlock, afterBlock), provenance);
-				case EndTry(catchBlock):
-					emit(target, EndTry(catchBlock), provenance);
+				case BeginTry(catchBlock, afterBlock, preserveExceptionStack):
+					emit(target, BeginTry(catchBlock, afterBlock, preserveExceptionStack), provenance);
+				case EndTry(catchBlock, preserveExceptionStack):
+					emit(target, EndTry(catchBlock, preserveExceptionStack), provenance);
 				case Catch(out):
 					var result = define(out);
 					emit(target, Catch(result), provenance);
@@ -507,9 +507,9 @@ class SsaBuilder {
 				case Upcast(out, value):
 					var result = define(out);
 					emit(target, Upcast(result, resolve(value)), provenance);
-				case MethodCall(out, object, methodName, args):
+				case MethodCall(out, object, methodName, args, terminalReceiver):
 					var result = define(out);
-					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)]), provenance);
+					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)], terminalReceiver), provenance);
 				case NewObject(out, typeName):
 					var result = define(out);
 					emit(target, NewObject(result, typeName), provenance);

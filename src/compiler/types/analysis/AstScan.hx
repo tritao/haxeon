@@ -19,6 +19,7 @@ class AstScan {
 		return switch statement {
 			case If(_, yes, no, _): anyExpression(yes, test) || anyExpression(no, test);
 			case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): anyExpression(body, test);
+			case Defer(body, _): anyExpression(body, test);
 			case Try(tryBranch, catches, _):
 				if (anyExpression(tryBranch, test))
 					return true;

@@ -37,6 +37,29 @@ class ConversionResolver {
 				fail(code, 'Type mismatch for $context: iteration requires compatible iterator(), hasNext():Bool and next() methods', value.span);
 			return iterationAdapter(value, expected);
 		}
+		// An optional enum needs an adapter only when present. Bind its expression once before the presence check.
+		switch value.type {
+			case TNullable(TInstance(NominalKind.Enum, enumName, enumArguments)):
+				var element:CompilerType = TInstance(NominalKind.Enum, enumName, enumArguments);
+				var interfaceType = switch expected {
+					case TInstance(NominalKind.Interface, _, _): expected;
+					case TNullable(TInstance(NominalKind.Interface, interfaceName, interfaceArguments)):
+						TInstance(NominalKind.Interface, interfaceName, interfaceArguments);
+					default: null;
+				};
+				if (interfaceType != null && session.relations.satisfiesConstraint(element, interfaceType)) {
+					var span = value.span, id = '$' + 'enum-interface-value:${session.currentContext.enumInterfaceTemporary++}',
+						local = new TypedExpression(TLocal(id), value.type, span),
+						nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+						isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
+						present = coerce(new TypedExpression(TCast(local), element, span), interfaceType, context, code),
+						nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
+						result = (switch expected { case TNullable(_): new TypedExpression(TNullableWrap(present), expected, span); default: present; });
+					return new TypedExpression(TBlockExpression([TVar(id, value, span)],
+						new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
+				}
+			default:
+		}
 		switch expected {
 			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
 			case TNullable(element) if ((switch (value.type) { case TNull: false; default: true; }) && (switch (value.type) { case TDynamic: false; default: true; }) && !isNullable(value.type)):
@@ -78,7 +101,13 @@ class ConversionResolver {
 				};
 			case ToInterface(name):
 				// The interface value owns a boxed copy of a struct, not the source place.
-				new TypedExpression(TToInterface(ValueCopy.bind(session, value, value.type), name), expected, value.span);
+				var converted = switch value.type {
+					case TInstance(NominalKind.Enum, _, _):
+						var adapter = EnumInterfaceAdapter.request(session, value.type, expected, value.span);
+						new TypedExpression(TNew(adapter, [value], true), TInstance(NominalKind.Class, adapter, []), value.span);
+					default: ValueCopy.bind(session, value, value.type);
+				};
+				new TypedExpression(TToInterface(converted, name), expected, value.span);
 			case WrapNullable:
 				new TypedExpression(TNullableWrap(value), expected, value.span);
 			case UnwrapNullable:

@@ -62,7 +62,7 @@ class IrScalarReplacement {
 		for (block in blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(_, _), EndTry(_), Catch(_):
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						hasHandlers = true;
 					default:
 				}

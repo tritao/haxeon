@@ -156,13 +156,8 @@ class RpcConnection {
 		var call = takePending(id);
 		if (call == null)
 			return false;
-		try
-			enqueue(Cancel(id))
-		catch (failure:Dynamic) {
-			call.failure(error("cancelled", true));
-			throw failure;
-		}
-		call.failure(error("cancelled", true));
+		defer call.failure(error("cancelled", true));
+		enqueue(Cancel(id));
 		return true;
 	}
 
@@ -258,17 +253,10 @@ class RpcConnection {
 		if (messageBudget < 1 || bytes < maxMessageBytes)
 			throw "Invalid RPC poll budget";
 		polling = true;
+		defer polling = false;
 		sendMessagesLeft = messageBudget;
 		sendBytesLeft = bytes;
-		var count:Int;
-		try
-			count = pollInternal(messageBudget, bytes)
-		catch (failure:Dynamic) {
-			polling = false;
-			throw failure;
-		}
-		polling = false;
-		return count;
+		return pollInternal(messageBudget, bytes);
 	}
 
 	function pollInternal(messageBudget:Int, byteBudget:Int):Int {
@@ -291,13 +279,8 @@ class RpcConnection {
 		for (id in expired) {
 			var call = takePending(id);
 			if (call != null) {
-				try
-					enqueue(Cancel(id))
-				catch (failure:Dynamic) {
-					call.failure(error("timeout", true));
-					throw failure;
-				}
-				call.failure(error("timeout", true));
+				defer call.failure(error("timeout", true));
+				enqueue(Cancel(id));
 			}
 		}
 		var expiredRequests:Array<Int> = [];

@@ -67,7 +67,7 @@ class IrNestedScalarReplacement {
 		// Restrict this transformation to one block in functions with handlers, as in the ordinary pass.
 		var handlers = false;
 		for (block in copies) for (located in block.instructions) switch located.value {
-			case BeginTry(_, _), EndTry(_), Catch(_): handlers = true;
+			case BeginTry(_, _, _), EndTry(_, _), Catch(_): handlers = true;
 			default:
 		}
 		var result = tryReplace(copies, objects, root, typeName, copiedHome, position, handlers, local, next);
@@ -101,7 +101,7 @@ class IrNestedScalarReplacement {
 					}
 		}
 		var graph = new IrGraph(new IrFunction("nested-scalar-check", [], Void, blocks));
-		if (!onlyFieldUses(blocks, aliases, home, position, hasHandlers, graph)) return nextValue;
+		if (!onlyFieldUses(blocks, aliases, home, position, hasHandlers && !unchangedAfterHandlers(blocks, aliases, home, graph), graph)) return nextValue;
 		var layout = new IrInlineValueLayout(objects), slots = layout.slots(Obj(typeName)), fields:Array<IrObjectField> = [];
 		for (slot in slots) {
 			if (slot.isPresence) return nextValue;
@@ -176,6 +176,40 @@ class IrNestedScalarReplacement {
 		}
 		for (id => value in localSubstitutions) substitutions.set(id, value);
 		return result;
+	}
+
+	/** Values initialized before any handler and not changed afterwards have the same
+	 * field definitions on normal and exceptional edges. Stop at the allocation block:
+	 * a later loop iteration initializes a distinct value. */
+	static function unchangedAfterHandlers(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock, graph:IrGraph):Bool {
+		var writes:Map<Int, Array<Int>> = [], handlers:Array<{block:Int, position:Int}> = [];
+		for (block in blocks) for (position in 0...block.instructions.length) {
+			var instruction = block.instructions[position].value;
+			for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id) && !graph.dominates(home.id, block.id)) return false;
+			switch instruction {
+				case FieldSet(target, _, _) if (aliases.exists(target.id)):
+					if (!writes.exists(block.id)) writes.set(block.id, []);
+					writes.get(block.id).push(position);
+				case BeginTry(_, _, _): handlers.push({block: block.id, position: position});
+				default:
+			}
+		}
+		for (handler in handlers) {
+			var local = writes.get(handler.block);
+			if (local != null) for (position in local) if (position > handler.position) return false;
+			var seen:Map<Int, Bool> = [], pending:Array<Int> = [];
+			var successors = graph.successors.get(handler.block);
+			if (successors != null) for (next in successors) pending.push(next);
+			while (pending.length > 0) {
+				var id = pending.pop();
+				if (id == home.id || seen.exists(id)) continue;
+				seen.set(id, true);
+				if (writes.exists(id)) return false;
+				var next = graph.successors.get(id);
+				if (next != null) for (target in next) pending.push(target);
+			}
+		}
+		return true;
 	}
 
 	static function onlyFieldUses(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock, allocation:Int, singleBlock:Bool,

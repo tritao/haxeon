@@ -57,7 +57,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case Call(out, name, _) if (scalarAbi.signatures.exists(name)):
 					var signature = scalarAbi.signatures.get(name);
 					if (signature.mutatesReceiver || scalarAbi.isValue(signature.result)) reserveScalarResults(out, scalarAbi.resultTypes(signature));
-				case MethodCall(out, receiver, method, _) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
+				case MethodCall(out, receiver, method, _, _) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
 					var virtual = scalarAbi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 					if (virtual == null) throw "Missing scalar virtual signature";
 					if (scalarAbi.isValue(virtual.signature.result)) reserveScalarResults(out, scalarAbi.valueTypes(virtual.signature.result));

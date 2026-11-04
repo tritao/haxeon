@@ -89,7 +89,7 @@ class IrGraph {
 		}
 		for (instruction in block.instructions)
 			switch instruction.value {
-				case BeginTry(handler, after):
+				case BeginTry(handler, after, _):
 					if (!blocks.exists(after))
 						throw 'Unknown IR block $after';
 					if (next.indexOf(handler) < 0)

@@ -74,8 +74,9 @@ enum IrInstruction {
 	FloatToInt(output:IrValue, value:IrValue);
 	FloatToFloat(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
-	BeginTry(catchBlock:Int, afterBlock:Int);
-	EndTry(catchBlock:Int);
+	/** A cleanup guard preserves the pending exception stack across the protected code. */
+	BeginTry(catchBlock:Int, afterBlock:Int, preserveExceptionStack:Bool);
+	EndTry(catchBlock:Int, preserveExceptionStack:Bool);
 	Catch(output:IrValue);
 	GlobalGet(output:IrValue, name:String);
 	GlobalSet(name:String, value:IrValue);
@@ -101,7 +102,8 @@ enum IrInstruction {
 	ToVirtual(output:IrValue, value:IrValue);
 	/** The same object as an instance of one of its base classes: a reinterpretation, never checked or copied. */
 	Upcast(output:IrValue, value:IrValue);
-	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>);
+	/** Terminal receiver means this compiler-owned value place is dead after this call, including on its exception edge. */
+	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>, terminalReceiver:Bool);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);

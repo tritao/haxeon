@@ -140,7 +140,7 @@ class IrOptionalFieldStorage {
 						} else
 							instruction = FieldSet(owner, physical(plan, path, nested != null && nested.presence), actual.value);
 						handled = true;
-					case MethodCall(out, object, method, arguments) if (aliases.exists(object.id)):
+					case MethodCall(out, object, method, arguments, _) if (aliases.exists(object.id)):
 						var resolved = methodName(object.type, method), args:Array<IrValue> = [owner];
 						for (argument in arguments) {
 							var actual = materializeAlias(argument, aliases, plan, owner, target, located, next);

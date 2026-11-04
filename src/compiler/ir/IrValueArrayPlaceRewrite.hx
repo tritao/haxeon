@@ -127,7 +127,7 @@ class IrValueArrayPlaceRewrite {
 					case SafeCast(out, value) if (aliases.exists(value.id) && aliases.exists(out.id)):
 						var place = requiredPlace(value.id), check = new IrValue(next++, "$array-place-check", Void);
 						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]); handled = true;
-					case MethodCall(out, owner, method, arguments) if (aliases.exists(owner.id)):
+					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						for (argument in arguments) if (aliases.exists(argument.id)) throw "Array place argument requires component specialization";
 						var place = requiredPlace(owner.id), name = methods.method(owner.type, method, place.path);
 						instruction = Call(out, name, [place.array, place.index].concat(arguments)); handled = true;

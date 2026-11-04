@@ -93,8 +93,10 @@ class PatchOpcodeTests {
 			{instruction: Throw(0), opcode: 68, operands: [0]},
 			{instruction: Rethrow(0), opcode: 69, operands: [0]},
 			{instruction: NullCheck(0), opcode: 71, operands: [0]},
-			{instruction: Trap(0, "target"), opcode: 72, operands: [0, -2]},
-			{instruction: EndTrap(0), opcode: 73, operands: [0]},
+			{instruction: Trap(0, "target", false), opcode: 72, operands: [0, -2]},
+			{instruction: EndTrap(0, false), opcode: 73, operands: [0]},
+			{instruction: Trap(0, "target", true), opcode: 102, operands: [0, -2]},
+			{instruction: EndTrap(0, true), opcode: 103, operands: [0]},
 			{instruction: GetI8(0, 1, 2), opcode: 74, operands: [0, 1, 2]},
 			{instruction: GetI16(0, 1, 2), opcode: 75, operands: [0, 1, 2]},
 			{instruction: GetMem(0, 1, 2), opcode: 76, operands: [0, 1, 2]},
@@ -282,12 +284,12 @@ class PatchOpcodeTests {
 		// Each path ends its trap, but the end-trap lies after the handler, outside the try region the JIT tracks in
 		// instruction order, where emitting it aborts the process.
 		var trapPastHandler:Array<HlInstruction> = [
-			Trap(0, "handler"),
+			Trap(0, "handler", false),
 			Jump("after"),
 			Label("handler"),
 			Return(0),
 			Label("after"),
-			EndTrap(0),
+			EndTrap(0, false),
 			Return(0)
 		];
 		code.functions = [new HlFunction(2, 0, [1], trapPastHandler)];
@@ -302,6 +304,20 @@ class PatchOpcodeTests {
 		}
 		if (!trapRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 			throw "An end-trap outside its try region changed live state";
+		var mismatchedCleanup:Array<HlInstruction> = [
+			Trap(0, "handler", true), EndTrap(0, false), Return(0), Label("handler"), Return(0)
+		];
+		code.functions = [new HlFunction(2, 0, [1], mismatchedCleanup)];
+		var mismatchedBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),
+			mismatchRejected = false;
+		try {
+			Runtime.patchSet(loaded, new PatchSet(1, 2, mismatchedBytes, [70000]));
+		} catch (error:RuntimeError) {
+			if (error.status != RuntimeStatus.Incompatible) throw error;
+			mismatchRejected = true;
+		}
+		if (!mismatchRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
+			throw "A mismatched cleanup trap changed live state";
 		code.functions = [
 			new HlFunction(2, 0, [1], [LoadInt(0, 0), GlobalSet(0, 0), GlobalGet(0, 0), Return(0)])
 		];

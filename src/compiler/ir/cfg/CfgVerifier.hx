@@ -42,7 +42,7 @@ class CfgVerifier {
 				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(catchBlock, afterBlock):
+					case BeginTry(catchBlock, afterBlock, _):
 						targetBlock(catchBlock, blocks);
 						targetBlock(afterBlock, blocks);
 						work.push(catchBlock);
@@ -146,10 +146,10 @@ class CfgVerifier {
 					if (!IrTypeTools.isDynamic(value.type))
 						throw 'CFG safe cast source ${value.id} must be Dyn or a nullable primitive';
 					define(out, defined, available, block.id);
-				case BeginTry(catchBlock, afterBlock):
+				case BeginTry(catchBlock, afterBlock, _):
 					targetBlock(catchBlock, blocks);
 					targetBlock(afterBlock, blocks);
-				case EndTry(catchBlock):
+				case EndTry(catchBlock, _):
 					targetBlock(catchBlock, blocks);
 				case Catch(out):
 					expect(out, Dyn);
@@ -263,7 +263,7 @@ class CfgVerifier {
 						default: throw 'CFG virtual conversion must produce a virtual value';
 					}
 					define(out, defined, available, block.id);
-				case MethodCall(out, object, _, arguments):
+				case MethodCall(out, object, _, arguments, _):
 					require(object, available, block.id);
 					for (argument in arguments)
 						require(argument, available, block.id);

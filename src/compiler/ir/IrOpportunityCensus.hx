@@ -113,8 +113,8 @@ class IrOpportunityCensus {
 					seen.set(key, true);
 				}
 				switch instruction {
-					case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _), FieldSet(_, _, _), ArraySet(_, _, _),
-						MemoryStore(_, _, _), GlobalSet(_, _), BeginTry(_, _), EndTry(_), Catch(_), SafeCast(_, _), ToDyn(_, _), ToVirtual(_, _):
+					case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), FieldSet(_, _, _), ArraySet(_, _, _),
+						MemoryStore(_, _, _), GlobalSet(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), SafeCast(_, _), ToDyn(_, _), ToVirtual(_, _):
 						seen = [];
 					default:
 				}
@@ -183,7 +183,7 @@ class IrOpportunityCensus {
 							default: return false;
 						}
 					case Call(_, name, _) if (pureCalls.exists(name)):
-					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _), CallClosure(_, _, _), MemoryStore(_, _, _), BeginTry(_, _), EndTry(_),
+					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), MemoryStore(_, _, _), BeginTry(_, _, _), EndTry(_, _),
 						Catch(_):
 						return false;
 					default:
@@ -208,7 +208,7 @@ class IrOpportunityCensus {
 					for (block in fn.blocks)
 						for (located in block.instructions)
 							switch located.value {
-								case BeginTry(_, _), EndTry(_), Catch(_): handlers = true;
+								case BeginTry(_, _, _), EndTry(_, _), Catch(_): handlers = true;
 								default:
 							}
 					if (nested)

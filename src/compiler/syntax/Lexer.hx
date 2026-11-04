@@ -335,6 +335,7 @@ class Lexer {
 			case "function": TokenKind.Function;
 			case "var": TokenKind.Var;
 			case "return": TokenKind.Return;
+			case "defer": TokenKind.Defer;
 			case "throw": TokenKind.Throw;
 			case "try": TokenKind.Try;
 			case "catch": TokenKind.Catch;

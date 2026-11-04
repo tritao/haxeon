@@ -71,7 +71,7 @@ class ModuleCanonicalizer {
 			result:Array<AstStatement> = [];
 		for (statement in statements) {
 			var declared = switch statement {
-				case VarDeclaration(name, _, _, _) | UninitializedDeclaration(name, _, _): name;
+				case VarDeclaration(name, _, _, _) | ScopedDeclaration(name, _, _, _) | UninitializedDeclaration(name, _, _): name;
 				case _: null;
 			}
 			// A local function sees itself; any other initializer sees what was in scope before it.
@@ -383,6 +383,8 @@ class ModuleCanonicalizer {
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
 				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+			case ScopedDeclaration(n, t, e, span):
+				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
 				span): Assignment(canonicalAssignmentTarget(n, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
 			case IndexAssignment(array, offset, e,
@@ -393,6 +395,7 @@ class ModuleCanonicalizer {
 					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
+			case Defer(body, span): Defer(canonicalBlock(body, module, entry, locals, aliases), span);
 			case Try(tryBranch, catches, span): Try(canonicalBlock(tryBranch, module, entry, locals, aliases), [
 					for (catchClause in catches)
 						{

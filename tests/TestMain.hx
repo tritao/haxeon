@@ -442,8 +442,8 @@ class TestMain {
 			new HlFunction(4, 1, [1, 3, 3], [
 				LoadInt(0, 0),
 				ToDyn(1, 0),
-				Trap(2, "catch"),
-				EndTrap(2),
+				Trap(2, "catch", false),
+				EndTrap(2, false),
 				Return(0),
 				Label("catch"),
 				Throw(2)

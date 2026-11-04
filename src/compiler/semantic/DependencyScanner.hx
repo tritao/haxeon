@@ -18,6 +18,11 @@ class DependencyScanner {
 			case ErrorStatement(_):
 			case UninitializedDeclaration(_, type, _):
 				scanAnnotation(type, dependencies, typeParameters);
+			case ScopedDeclaration(_, type, e, _):
+				dependencies.set("Disposable", true);
+				if (type != null)
+					scanAnnotation(type, dependencies, typeParameters);
+				scanExpression(e, dependencies, typeParameters);
 			case VarDeclaration(_, type, e, _):
 				// A type written only in the annotation still has to be loaded.
 				if (type != null)
@@ -25,6 +30,9 @@ class DependencyScanner {
 				scanExpression(e, dependencies, typeParameters);
 			case Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies, typeParameters);
+			case Defer(body, _):
+				for (statement in body)
+					scanStatement(statement, dependencies, typeParameters);
 			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
 					scanStatement(x, dependencies, typeParameters);

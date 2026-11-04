@@ -137,6 +137,9 @@ class BindingWalker {
 						expression(initializer);
 						declare(name, span, Local, type, initializer);
 				}
+			case ScopedDeclaration(name, type, initializer, span):
+				expression(initializer);
+				declare(name, span, Local, type, initializer);
 			case UninitializedDeclaration(name, type, span):
 				declare(name, span, Local, type);
 			case Assignment(name, expression, span):
@@ -183,6 +186,8 @@ class BindingWalker {
 						for (entry in caught.statements)
 							statement(entry);
 					});
+			case Defer(body, _):
+				statements(body);
 			case Switch(subject, cases, defaultBranch, _, _):
 				expression(subject);
 				for (entry in cases)

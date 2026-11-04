@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 6;
+	static inline final VERSION = 8;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -33,6 +33,8 @@ class IrInstructionCodec {
 		"SafeCast" => true,
 		"BeginTry" => true,
 		"EndTry" => true,
+		"BeginCleanupTry" => true,
+		"EndCleanupTry" => true,
 		"Catch" => true,
 		"GlobalGet" => true,
 		"GlobalSet" => true,
@@ -58,6 +60,7 @@ class IrInstructionCodec {
 		"ToVirtual" => true,
 		"Upcast" => true,
 		"MethodCall" => true,
+		"TerminalMethodCall" => true,
 		"NewObject" => true,
 		"FieldGet" => true,
 		"FieldSet" => true,
@@ -168,12 +171,12 @@ class IrInstructionCodec {
 				writeTwoValues(output, "FloatToFloat", outputValue, value);
 			case SafeCast(outputValue, value):
 				writeTwoValues(output, "SafeCast", outputValue, value);
-			case BeginTry(catchBlock, afterBlock):
-				begin(output, "BeginTry", 2);
+			case BeginTry(catchBlock, afterBlock, preserveExceptionStack):
+				begin(output, preserveExceptionStack == true ? "BeginCleanupTry" : "BeginTry", 2);
 				writeInt(output, catchBlock);
 				writeInt(output, afterBlock);
-			case EndTry(catchBlock):
-				begin(output, "EndTry", 1);
+			case EndTry(catchBlock, preserveExceptionStack):
+				begin(output, preserveExceptionStack == true ? "EndCleanupTry" : "EndTry", 1);
 				writeInt(output, catchBlock);
 			case Catch(value):
 				begin(output, "Catch", 1);
@@ -242,8 +245,8 @@ class IrInstructionCodec {
 				writeTwoValues(output, "ToVirtual", outputValue, value);
 			case Upcast(outputValue, value):
 				writeTwoValues(output, "Upcast", outputValue, value);
-			case MethodCall(value, object, name, arguments):
-				begin(output, "MethodCall", 4);
+			case MethodCall(value, object, name, arguments, terminalReceiver):
+				begin(output, terminalReceiver == true ? "TerminalMethodCall" : "MethodCall", 4);
 				writeValue(output, value);
 				writeValue(output, object);
 				writeName(output, name, erase);
@@ -356,10 +359,16 @@ class IrInstructionCodec {
 				SafeCast(readValue(input, values), readValue(input, values));
 			case "BeginTry":
 				arity(2);
-				BeginTry(readInt(input), readInt(input));
+				BeginTry(readInt(input), readInt(input), false);
+			case "BeginCleanupTry":
+				arity(2);
+				BeginTry(readInt(input), readInt(input), true);
 			case "EndTry":
 				arity(1);
-				EndTry(readInt(input));
+				EndTry(readInt(input), false);
+			case "EndCleanupTry":
+				arity(1);
+				EndTry(readInt(input), true);
 			case "Catch":
 				arity(1);
 				Catch(readValue(input, values));
@@ -434,7 +443,10 @@ class IrInstructionCodec {
 				Upcast(readValue(input, values), readValue(input, values));
 			case "MethodCall":
 				arity(4);
-				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values));
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), false);
+			case "TerminalMethodCall":
+				arity(4);
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), true);
 			case "NewObject":
 				arity(2);
 				NewObject(readValue(input, values), readText(input, totalLength));

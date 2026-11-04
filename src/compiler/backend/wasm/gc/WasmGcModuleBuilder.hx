@@ -422,7 +422,7 @@ class WasmGcModuleBuilder {
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
 							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
 							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
-							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _), EndTry(_), Catch(_):
+							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _) if (name == WasmScalarAbi.RETURN_MARKER || name == WasmScalarAbi.RETHROW_MARKER
@@ -433,7 +433,7 @@ class WasmGcModuleBuilder {
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || isVirtualReference(receiver.type) || (switch (receiver.type) { case Dyn: true; default: false; }))):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
-						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
+						case MethodCall(_, receiver, _, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
 							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
 					}

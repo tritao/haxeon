@@ -109,6 +109,10 @@ class SemanticDependencyCollector {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, type, _):
 					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
+				case ScopedDeclaration(_, type, expression, _):
+					addTypeDependency(result, owner, SemanticDependencyKind.Body, NamedType("Disposable"), new AliasTable());
+					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
+					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case VarDeclaration(_, type, expression, _):
 					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
@@ -137,6 +141,8 @@ class SemanticDependencyCollector {
 					addBodyDependencies(result, owner, body, module, entry);
 					for (clause in catches)
 						addBodyDependencies(result, owner, clause.statements, module, entry);
+				case Defer(body, _):
+					addBodyDependencies(result, owner, body, module, entry);
 				case Switch(expression, cases, fallback, _, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 					for (switchCase in cases) {
@@ -152,7 +158,7 @@ class SemanticDependencyCollector {
 			aliases:AliasTable):Void
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
@@ -177,6 +183,8 @@ class SemanticDependencyCollector {
 					scanNativeLayoutQueryStatements(result, owner, body, aliases);
 					for (clause in catches)
 						scanNativeLayoutQueryStatements(result, owner, clause.statements, aliases);
+				case Defer(body, _):
+					scanNativeLayoutQueryStatements(result, owner, body, aliases);
 				case Switch(expression, cases, fallback, _, _):
 					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
 					for (switchCase in cases) {
@@ -300,7 +308,7 @@ class SemanticDependencyCollector {
 			case ErrorStatement(_):
 			case UninitializedDeclaration(name, _, _):
 				aliases.remove(name);
-			case VarDeclaration(name, _, e, _):
+			case VarDeclaration(name, _, e, _), ScopedDeclaration(name, _, e, _):
 				scanCallExpression(e, calls, aliases);
 				rememberAlias(name, e, aliases);
 			case Assignment(name, e, _):
@@ -317,6 +325,9 @@ class SemanticDependencyCollector {
 				scanCallExpression(e, calls, aliases);
 			case Throw(e, _):
 				scanCallExpression(e, calls, aliases);
+			case Defer(body, _):
+				for (statement in body)
+					scanCalls(statement, calls, aliases);
 			case Try(tryBranch, catches, _):
 				for (s in tryBranch)
 					scanCalls(s, calls, aliases);

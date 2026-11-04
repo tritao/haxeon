@@ -599,6 +599,21 @@ class CallResolver {
 				session.invalidateUnknownCall(scope);
 				return new TypedExpression(TCall(HashGenerator.hashName(receiver.type), [receiver]), TInt, span);
 			}
+			var substitutions:Map<String, CompilerType> = [];
+			switch receiver.type {
+				case TInstance(NominalKind.Enum, owner, typeArguments):
+					var declaration = session.enumDecls.get(owner);
+					if (declaration == null) throw 'Missing enum declaration "$owner"';
+					for (index in 0...declaration.typeParameters.length)
+						substitutions.set(declaration.typeParameters[index], index < typeArguments.length ? typeArguments[index]
+							: TTypeParameter(owner, declaration.typeParameters[index]));
+				default: throw "Enum method without an enum receiver";
+			}
+			var typed = typeDeclaredCallArguments(arguments, enumMethod.arguments, scope, name, span, substitutions);
+			var result = session.declarations.resolve(enumMethod.result, enumMethod.span, substitutions);
+			EnumConformanceMethods.request(session, receiver.type, name, session.currentContext.name, span);
+			session.invalidateUnknownCall(scope);
+			return new TypedExpression(TCall(EnumConformanceMethods.name(receiver.type, name), [receiver].concat(typed)), result, span);
 		}
 		var className = switch receiver.type {
 			case TInstance(Class, value, _), TInstance(Interface, value, _):

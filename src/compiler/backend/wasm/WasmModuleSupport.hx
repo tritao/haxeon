@@ -293,7 +293,7 @@ class WasmModuleSupport {
 			for (block in fn.blocks) {
 				for (located in block.instructions)
 					switch located.value {
-						case BeginTry(_, _), EndTry(_), Catch(_):
+						case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 							return true;
 						default:
 					}
@@ -331,7 +331,7 @@ class WasmModuleSupport {
 							enqueueFunction(target, byName, pending);
 						case StaticClosure(_, target), InstanceClosure(_, target, _):
 							enqueueFunction(target, byName, pending);
-						case MethodCall(_, object, method, _):
+						case MethodCall(_, object, method, _, _):
 							switch object.type {
 								case Obj(objectName):
 									for (candidate in index.subtypesOf(objectName))
