@@ -56,6 +56,7 @@ class IrGenerator {
 	static var valueClasses:Map<String, Bool> = [];
 	static var classBases:Map<String, String> = [];
 	static var genericOwnerAliases:Map<String, String> = [];
+	static var typedInterfaceContracts:Map<String, TypedInterface> = [];
 	static var genericClasses:Map<String, Bool> = [];
 	static var genericOwnerOrigins:Map<String, String> = [];
 	static var equatableTypes:Map<String, Bool> = [];
@@ -102,11 +103,14 @@ class IrGenerator {
 		observableStateOwners = [];
 		observableFieldBits = [];
 		observableFieldStride = 1;
+		typedInterfaceContracts = [];
 		var interfaceBases:Map<String, Array<String>> = [];
 		var classesByName:Map<String, TypedClass> = [];
 		if (interfaces != null)
-			for (interfaceDecl in interfaces)
+			for (interfaceDecl in interfaces) {
 				interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
+				typedInterfaceContracts.set(interfaceDecl.name, interfaceDecl);
+			}
 		for (classDecl in classes) {
 			classesByName.set(classDecl.name, classDecl);
 			if (classDecl.specializationOrigin != null)
@@ -1933,7 +1937,15 @@ class IrGenerator {
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TMethodRef(object, name):
 				var separator = lastSeparator(name), owner = name.substring(0, separator), member = name.substring(separator + 1),
-					target = genericClasses.exists(owner)
+					closureType = lowerType(expression.type);
+				var typedDispatch:Null<String> = null;
+				switch closureType {
+					case Function(arguments, result):
+						var interfaceName = typedInterfaceForCall(object.type, member, result, arguments);
+						if (interfaceName != null) typedDispatch = IrTypedInterfaceDispatch.callName(interfaceName, member, arguments, result);
+					default:
+				}
+				var target = typedDispatch != null ? typedDispatch : genericClasses.exists(owner)
 						? '$' + 'generic-method-reference:$owner:$member:' + compiler.semantic.SemanticSignature.type(object.type) + ':'
 							+ compiler.semantic.SemanticSignature.type(expression.type)
 						: name;
@@ -2761,7 +2773,12 @@ class IrGenerator {
 					var method = name.substring(separator + 1, name.length);
 					if ((switch (receiver.type) { case Dyn: true; default: false; }) && isErasedGenericOwner(object.type))
 						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
-					else builder.methodCall(receiver, method, callArgs, lowerType(expression.type));
+					else {
+						var typedInterface = typedInterfaceForCall(object.type, method, lowerType(expression.type), [for (argument in callArgs) argument.type]);
+						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type));
+						else builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
+							lowerType(expression.type)), [receiver].concat(callArgs), lowerType(expression.type));
+					}
 				}
 			case TSuperCall(owner, args):
 				// Arguments may branch; load `this` in the block that performs the call.
@@ -3249,6 +3266,31 @@ class IrGenerator {
 			case TNativeScalar("u32" | "c_uint"): true;
 			default: false;
 		};
+
+	/** Use a typed dispatch ABI only when the instantiated interface signature differs from its erased contract. */
+	static function typedInterfaceForCall(type:CompilerType, method:String, result:IrType, arguments:Array<IrType>):Null<String> {
+		var name:Null<String> = switch type {
+			case TInstance(NominalKind.Interface, interfaceName, _): interfaceName;
+			case TNullable(inner), TAbstract(_, _, inner): return typedInterfaceForCall(inner, method, result, arguments);
+			default: null;
+		};
+		if (name == null) return null;
+		function find(current:String, visited:Map<String, Bool>):Null<compiler.types.TypedAst.TypedInterfaceMethod> {
+			if (visited.exists(current)) return null;
+			visited.set(current, true);
+			var declaration = typedInterfaceContracts.get(current);
+			if (declaration == null) return null;
+			for (candidate in declaration.methods) if (candidate.name == method) return candidate;
+			for (base in declaration.bases) { var candidate = find(base, visited); if (candidate != null) return candidate; }
+			return null;
+		}
+		var contract = find(name, []);
+		if (contract == null || contract.arguments.length != arguments.length) return null;
+		if (!IrVerifier.sameType(lowerType(contract.result), result)) return name;
+		for (index in 0...arguments.length)
+			if (!IrVerifier.sameType(lowerType(contract.arguments[index]), arguments[index])) return name;
+		return null;
+	}
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {

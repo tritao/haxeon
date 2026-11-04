@@ -26,6 +26,13 @@ class GenericStructOwnerMain {
 		pointerRuntime.update("Main.hx", pointerSource);
 		if (new compiler.ir.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased pointer writes and checked casts failed in the interpreter";
+		var interfaceSource = File.getContent("tests/programs/generic-interface-value-carriers.hx");
+		interfaceSource = StringTools.replace(StringTools.replace(StringTools.replace(interfaceSource, "#if !wasm", ""), "#end", ""), "hl.Gc.totalAllocated()", "0");
+		var interfaceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		interfaceRuntime.addSourceRoot("stdlib");
+		interfaceRuntime.update("Main.hx", interfaceSource);
+		if (new compiler.ir.IrInterpreter(interfaceRuntime.compile("Main").ir).run("main") != 42)
+			throw "typed generic interface calls lost their value carriers in the interpreter";
 		var checkedSignatures = Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
 		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
 			throw "the interpreter did not distinguish reference-shaped closure signatures";
@@ -71,6 +78,7 @@ class GenericStructOwnerMain {
 		if (runtimeResult != 42) throw 'HashLink generic value owner returned $runtimeResult';
 		incremental();
 		incrementalTypeTests();
+		incrementalInterfaceDispatch();
 		incrementalRetainedOwner();
 		checkWasmGcAllocations();
 		Sys.println("PASS: generic owners retain concrete struct storage and identity through erased views");
@@ -165,6 +173,23 @@ class GenericStructOwnerMain {
 				throw 'stale generic owner after edit: $expression';
 			var interpreted = new compiler.ir.IrInterpreter(compiled.ir).run("Main.main");
 			if (interpreted != 42) throw 'interpreted generic runtime type test after layout edit returned $interpreted';
+		}
+	}
+
+	static function incrementalInterfaceDispatch():Void {
+		var compiler = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		compiler.update("Reader.hx", 'interface Reader<T> { function read():T; }');
+		compiler.update("Use.hx", 'class Use { public static function read(value:Reader<Int>):Int return value.read(); }');
+		compiler.update("Main.hx", 'class Main { static function main():Int return Use.read(Maker.make()); }');
+		for (number in [41, 42, 41]) {
+			var implementation = number == 42 ? "SecondReader" : "FirstReader";
+			compiler.update("Maker.hx", 'class $implementation implements Reader<Int> { public function new() {} '
+				+ 'public function read():Int return $number; } '
+				+ 'class Maker { public static function make():Reader<Int> return new $implementation(); }');
+			var compiled = compiler.compile("Main"), actual = GeneratedProgramRunner.exitCode(compiled),
+				interpreted = new compiler.ir.IrInterpreter(compiled.ir).run("Main.main");
+			if (actual != number || interpreted != number)
+				throw 'typed interface dispatch after implementation edit: expected $number, got $actual and $interpreted';
 		}
 	}
 

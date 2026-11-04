@@ -483,4 +483,5 @@ generic-erased-runtime-kinds	42
 generic-erased-bytes-reference-shapes	42
 generic-managed-reference-closure	42
 generic-erased-raw-pointer	42
+generic-interface-value-carriers	42
 wasm-raw-pointer-gc-leaf	42

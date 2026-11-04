@@ -1783,7 +1783,7 @@ class TestMain {
 			|| !compiler.types.TypeRelations.equals(nullableResult.physical,
 				compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TDynamic))
 			|| readerResult.semantic != compiler.types.Type.CompilerType.TInt
-			|| readerResult.physical != compiler.types.Type.CompilerType.TDynamic
+			|| readerResult.physical != compiler.types.Type.CompilerType.TInt
 			|| constructorArgument.semantic != compiler.types.Type.CompilerType.TInt
 			|| constructorArgument.physical != compiler.types.Type.CompilerType.TDynamic
 			|| fieldResult.semantic != compiler.types.Type.CompilerType.TInt

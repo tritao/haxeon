@@ -519,6 +519,14 @@ class IrProgramAssembler {
 			GenericOwnerErasure.generate(allFunctions, objects);
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
+		if (objects != null && interfaces != null) {
+			var beforeTypedInterfaces = allFunctions.length;
+			IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces);
+			if (allFunctions.length > beforeTypedInterfaces) {
+				var existing = allFunctions.slice(0, beforeTypedInterfaces);
+				allFunctions = existing.concat(IrValueInterfaceBoxes.rewrite(allFunctions.slice(beforeTypedInterfaces), objects, interfaces, existing));
+			}
+		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
 			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());

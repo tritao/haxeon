@@ -431,7 +431,7 @@ class WasmGcModuleBuilder {
 							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
-						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || (switch (receiver.type) { case Dyn: true; default: false; }))):
+						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || isVirtualReference(receiver.type) || (switch (receiver.type) { case Dyn: true; default: false; }))):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
 						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
@@ -958,7 +958,7 @@ class WasmGcModuleBuilder {
 				throw 'Wasm GC instance closure target "$targetName" has no receiver parameter';
 			var receiverType:Null<String> = switch target.arguments[0].type {
 				case Obj(name): name;
-				case Dyn: null;
+				case Dyn | Virtual(_): null;
 				default: throw 'Wasm GC instance closure target "$targetName" has unsupported receiver type ${Std.string(target.arguments[0].type)}';
 			}, thunkName = gcClosureThunkName(targetName), functionIndex = functions.get(targetName);
 			if (functionIndex == null)

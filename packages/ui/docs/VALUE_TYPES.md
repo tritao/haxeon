@@ -259,8 +259,9 @@ per-type differences were confined to byte buffers. The 500-cycle RSS window med
 
 The raw-pointer Dynamic boundary was measured against the preceding browser-loaded Wasm GC guest. Nine full pairs
 and three pairs each of static, text-heavy and editing all had zero paired median object-count difference: respectively
-4,440 / 4,440 / 4,440 / 8,724 objects before and after. The checked pointer boundary and its allocation tests are
-specified in `docs/GENERIC_SPECIALIZATION.md`, including the separate typed-interface allocation limitation.
+4,440 / 4,440 / 4,440 / 8,724 objects before and after. After typed interface dispatch and pruning unused scalar
+receiver clones, the same alternating measurement again found 4,440 / 4,440 / 4,440 / 8,724 objects on both sides.
+The checked pointer boundary and interface allocation tests are specified in `docs/GENERIC_SPECIALIZATION.md`.
 
 The pointer-boundary change was also measured on the current outer `HEAD` against a control built with compiler
 `38db19f0` from the same source tree. Nine alternating HashLink pairs had equal per-action medians: 112.6, 80.1,
@@ -277,3 +278,28 @@ pairs the first window differed by as much as +1.25 MiB in individual pairs, wit
 measurements do not establish an RSS increase or an exact match. A decoded comparison of the 31,340 HashLink functions
 found identical opcodes and register types, identical integer, float, string, global, constant and native tables, and
 identical type descriptors; the function-name manifest differs only in the checked-cast helper prefix.
+
+The typed-interface ABI and receiver-clone pruning were measured against compiler `e4eeca63` on the same outer
+revision (`4b5983a0f`), using identical source manifests and byte-identical HashLink runtimes. Nine alternating pairs
+gave these per-action allocation medians in KiB:
+
+| Action | Control | Candidate | Paired median difference |
+| --- | ---: | ---: | ---: |
+| hierarchy → sensors | 112.6 | 112.6 | 0 |
+| sensors → hierarchy | 80.1 | 80.1 | 0 |
+| console → telemetry | 72.5 | 74.5 | 0 |
+| telemetry → console | 93.1 | 93.1 | 0 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 | 0 / 0 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 | 0 / 0 / 0 |
+| scroll inspector | 21.2 | 21.2 | 0 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 | 0 / 0 |
+| type / backspace | 16.1 / 16.2 | 16.1 / 16.2 | 0 / 0 |
+
+The selection census medians were 342,097 / 342,097 allocations, with a paired median difference of +1; the
+individual differences were byte buffers. Nine paired 500-cycle RSS captures gave control window medians
+[30.31, 3.75, 0.78, 4.84] MiB and candidate medians [30.00, 3.59, 0.78, 5.00] MiB, with paired median differences
+[-0.31, -0.16, 0, 0] MiB. The editor module gained eight receiver-preserving functions; unused generated clones are
+not emitted. In nine same-binary pairs on this revision, console → telemetry varied from 72.5 to 74.5 KiB, with
+paired differences from -2 to +2 KiB. Selection counts varied from 342,094 to 342,099, with paired differences from
+-4 to +2, all in byte buffers. Same-binary RSS paired differences ranged from -1.40 to +1.25 MiB in the first window
+and from -0.94 to +0.78 MiB in the second. These variations do not establish an exact memory match.

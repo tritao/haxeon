@@ -11,51 +11,64 @@ class IrScalarArguments {
 	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var methods:Map<String, Null<String>> = [];
-		var candidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [];
+		var candidates:Map<String, IrFunction> = [], pinnedCandidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [];
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
 				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
+				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
 				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
-			var hasValue = isValue(fn.result, objects), eligible = true, argumentCount = 0;
+			var hasValue = isValue(fn.result, objects), eligible = true, pinnedEligible = !argumentsOnly, pinnedHasValue = hasValue,
+				argumentCount = 0, pinnedArgumentCount = 1;
 			if (argumentsOnly && hasValue) eligible = false;
 			if (hasValue) {
 				if (!hasScalarLayout(fn.result, objects)) eligible = false;
 				argumentCount += slots(fn.result, objects).length;
+				pinnedArgumentCount += slots(fn.result, objects).length;
 			}
-			for (arg in fn.arguments) if (isValue(arg.type, objects)) {
+			for (index in 0...fn.arguments.length) {
+				var arg = fn.arguments[index];
+				if (!isValue(arg.type, objects)) { argumentCount++; if (index != 0) pinnedArgumentCount++; continue; }
 				hasValue = true;
+				if (index != 0) pinnedHasValue = true;
 				if (arg.name == "this" && !receiverReadOnly(fn)) {
 					if (receiverSnapshotOnly(fn, arg, objects, null, methods)) freshOnly.set(fn.name, true); else eligible = false;
 				}
-				if (!hasScalarLayout(arg.type, objects)) eligible = false;
+				if (!hasScalarLayout(arg.type, objects)) { eligible = false; if (index != 0) pinnedEligible = false; }
 				argumentCount += slots(arg.type, objects).length;
-			} else argumentCount++;
+				if (index != 0) pinnedArgumentCount += slots(arg.type, objects).length;
+			}
 			// The HashLink JIT accepts at most 256 arguments per emitted call. Dynamic calls retain the original ABI.
 			if (argumentCount > 256) eligible = false;
 			if (hasValue && eligible) candidates.set(fn.name, fn);
+			if (pinnedArgumentCount > 256 || isValue(fn.result, objects) && !hasScalarLayout(fn.result, objects)) pinnedEligible = false;
+			if (pinnedEligible && pinnedHasValue && fn.arguments.length > 0 && fn.arguments[0].name == "this"
+				&& isValue(fn.arguments[0].type, objects)) pinnedCandidates.set(fn.name, fn);
 		}
 		var methodNames:Map<String, Bool> = [];
 		for (object in program.objects) for (method in object.methods)
-			if (candidates.exists(method.functionName)) methodNames.set(method.name, true);
+			if (candidates.exists(method.functionName) || pinnedCandidates.exists(method.functionName)) methodNames.set(method.name, true);
 		// Do not redirect a call if reconstructing its value arguments would allocate in the clone. In particular,
 		// handler edges can keep an otherwise field-only value alive across blocks.
-		var clones:Map<String, IrFunction> = [], changed = true;
+		var clones:Map<String, IrFunction> = [], pinnedClones:Map<String, IrFunction> = [], changed = true;
 		while (changed) {
 			changed = false;
 			clones = [];
+			pinnedClones = [];
+			var allCandidates = candidates.copy();
+			for (name in pinnedCandidates.keys()) allCandidates.set(name, pinnedCandidates.get(name));
 			for (fn in program.functions) if (candidates.exists(fn.name)) {
 				var retained = false;
 				for (arg in fn.arguments) if (isValue(arg.type, objects)) {
-					if (!fieldOnly(fn, arg, objects, candidates, methods, methodNames)) retained = true;
+					if (!fieldOnly(fn, arg, objects, allCandidates, methods, methodNames)) retained = true;
 					if (freshOnly.exists(fn.name) && arg.name == "this" && !receiverSnapshotOnly(fn, arg, objects, candidates, methods)) retained = true;
 				}
 				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-				var prepared = rewriteCalls(clone(fn, objects), candidates, objects, methods, methodNames, freshOnly, argumentsOnly);
+				var prepared = rewriteCalls(clone(fn, objects), candidates, pinnedCandidates, objects, methods, methodNames, freshOnly, argumentsOnly);
 				// Scalar call rewriting can introduce value constructions into a join. Split those joins before
 				// judging whether the specialized callee can keep its value arguments and result in registers.
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
@@ -71,12 +84,59 @@ class IrScalarArguments {
 				}
 				if (retained) { candidates.remove(fn.name); changed = true; } else clones.set(fn.name, specialized);
 			}
+			for (fn in program.functions) if (pinnedCandidates.exists(fn.name)) {
+				var retained = false;
+				for (index in 1...fn.arguments.length) {
+					var arg = fn.arguments[index];
+					if (isValue(arg.type, objects) && !fieldOnly(fn, arg, objects, allCandidates, methods, methodNames)) retained = true;
+				}
+				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
+				var prepared = rewriteCalls(clone(fn, objects, true), candidates, pinnedCandidates, objects, methods, methodNames, freshOnly, argumentsOnly);
+				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
+				var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
+				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, objects, _ -> 0);
+				for (block in specialized.blocks) for (located in block.instructions) switch located.value {
+					case NewObject(out, name):
+						for (index in 1...fn.arguments.length) if (isValue(fn.arguments[index].type, objects) && out.id == fn.arguments[index].id && scalarLocals.get(out) == null) retained = true;
+						if (isValue(fn.result, objects) && Type.enumEq(fn.result, Obj(name)) && scalarLocals.get(out) == null) retained = true;
+					case Call(out, _, _) | MethodCall(out, _, _, _) | CallClosure(out, _, _):
+						if (isValue(fn.result, objects) && isValue(out.type, objects)) retained = true;
+					default:
+				}
+				if (retained) { pinnedCandidates.remove(fn.name); changed = true; } else pinnedClones.set(fn.name, specialized);
+			}
 		}
-		if (!candidates.keys().hasNext()) return;
+		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext()) return;
 		var rewritten:Array<IrFunction> = [];
-		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, objects, methods, methodNames, freshOnly, argumentsOnly));
+		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, pinnedCandidates, objects, methods, methodNames, freshOnly, argumentsOnly));
 		for (fn in program.functions) if (candidates.exists(fn.name))
 			rewritten.push(clones.get(fn.name));
+		// Receiver-preserving variants are only useful when a rewritten call selects one.
+		// Keep their transitive dependencies, but do not publish every possible variant into
+		// the program: an unused variant still consumes module and JIT metadata.
+		var pinnedByName:Map<String, IrFunction> = [], needed:Map<String, Bool> = [], pending:Array<String> = [];
+		for (fn in pinnedClones) pinnedByName.set(fn.name, fn);
+		function discover(fn:IrFunction):Void {
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case Call(_, name, _) | StaticClosure(_, name) | InstanceClosure(_, name, _):
+					if (pinnedByName.exists(name) && !needed.exists(name)) {
+						needed.set(name, true);
+						pending.push(name);
+					}
+				default:
+			}
+		}
+		for (fn in rewritten) discover(fn);
+		while (pending.length > 0) {
+			var name = pending.pop(), dependency = pinnedByName.get(name);
+			if (dependency == null) throw 'Missing receiver-preserving clone "$name"';
+			discover(dependency);
+		}
+		for (fn in program.functions) if (pinnedCandidates.exists(fn.name)) {
+			var clone = pinnedClones.get(fn.name);
+			if (clone == null) throw 'Missing receiver-preserving clone for "${fn.name}"';
+			if (needed.exists(clone.name)) rewritten.push(clone);
+		}
 		program.functions = rewritten;
 	}
 
@@ -233,10 +293,12 @@ class IrScalarArguments {
 		return max + 1;
 	}
 
-	static function clone(fn:IrFunction, objects:Map<String, IrObject>):IrFunction {
+	static function clone(fn:IrFunction, objects:Map<String, IrObject>, preserveReceiver:Bool = false):IrFunction {
 		var next = nextId(fn), args:Array<IrValue> = [], prefix:Array<Located<IrInstruction>> = [];
 		var origin = SourceProvenance.generated("scalar-argument");
-		for (arg in fn.arguments) {
+		for (index in 0...fn.arguments.length) {
+			var arg = fn.arguments[index];
+			if (preserveReceiver && index == 0) { args.push(arg); continue; }
 			if (!isValue(arg.type, objects)) { args.push(arg); continue; }
 			var name = switch arg.type { case Obj(name): name; default: throw "Invalid scalar argument"; };
 			prefix.push(new Located(NewObject(arg, name), origin));
@@ -285,17 +347,17 @@ class IrScalarArguments {
 			}
 			blocks.push(copy);
 		}
-		return new IrFunction(PREFIX + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, fn.debugBindings, fn.inlineHint);
+		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, fn.debugBindings, fn.inlineHint);
 	}
 
-	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
+	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
 			methods:Map<String, Null<String>>, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>, argumentsOnly:Bool):IrFunction {
 		var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [];
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case StaticClosure(out, name) if (candidates.exists(name)):
+			case StaticClosure(out, name) if (candidates.exists(name) || pinnedCandidates.exists(name)):
 				closures.set(out.id, {name: name, receiver: null});
-			case InstanceClosure(out, name, receiver) if (candidates.exists(name)):
+			case InstanceClosure(out, name, receiver) if (candidates.exists(name) || pinnedCandidates.exists(name)):
 				closures.set(out.id, {name: name, receiver: receiver});
 			default:
 		}
@@ -308,7 +370,7 @@ class IrScalarArguments {
 						Call(out, binding.name, binding.receiver == null ? arguments : [binding.receiver].concat(arguments));
 					case MethodCall(out, receiver, method, arguments) if (methodNames.exists(method)):
 						var name = resolveMethod(receiver.type, method, objects, methods);
-						if (name == null || !candidates.exists(name) || ((argumentsOnly || freshOnly.exists(name)) && !freshReceiver(fn, receiver, objects)
+						if (name == null || (!candidates.exists(name) && !pinnedCandidates.exists(name)) || ((argumentsOnly || freshOnly.exists(name)) && !pinnedCandidates.exists(name) && !freshReceiver(fn, receiver, objects)
 							&& !(argumentsOnly && safeArrayEquality(located.provenance, fn.name)))) located.value;
 						else {
 							if (!argumentsOnly && !freshReceiver(fn, receiver, objects)) {
@@ -320,14 +382,16 @@ class IrScalarArguments {
 					default: located.value;
 				};
 				switch instruction {
-				case Call(out, name, arguments) if (candidates.exists(name)
-					&& (!freshOnly.exists(name) || arguments.length > 0 && freshReceiver(fn, arguments[0], objects)
+				case Call(out, name, arguments) if ((candidates.exists(name) || pinnedCandidates.exists(name))
+					&& (pinnedCandidates.exists(name) || !freshOnly.exists(name) || arguments.length > 0 && freshReceiver(fn, arguments[0], objects)
 						|| argumentsOnly && safeArrayEquality(located.provenance, fn.name))
 					&& (!argumentsOnly || safeArrayEquality(located.provenance, fn.name) || freshValueArguments(fn, arguments, objects))):
-					var target = candidates.get(name), expanded:Array<IrValue> = [];
+					var pinned = pinnedCandidates.exists(name) && (!candidates.exists(name) || freshOnly.exists(name) && arguments.length > 0 && !freshReceiver(fn, arguments[0], objects));
+					var target = pinned ? pinnedCandidates.get(name) : candidates.get(name), expanded:Array<IrValue> = [];
 					if (target == null) throw 'Missing scalar call target "$name"';
 					for (index in 0...arguments.length) {
 						var arg = arguments[index];
+						if (pinned && index == 0) { expanded.push(arg); continue; }
 						if (!isValue(target.arguments[index].type, objects)) { expanded.push(arg); continue; }
 						for (slot in slots(arg.type, objects)) {
 							var current = arg;
@@ -351,10 +415,11 @@ class IrScalarArguments {
 						copy.instructions.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]), located.provenance));
 						references.push(reference); expanded.push(reference);
 					}
-					if (returnSlots.length == 0) copy.instructions.push(new Located(Call(out, PREFIX + name, expanded), located.provenance));
+					var targetName = PREFIX + (pinned ? "$receiver:" : "") + name;
+					if (returnSlots.length == 0) copy.instructions.push(new Located(Call(out, targetName, expanded), located.provenance));
 					else {
 						var ignored = new IrValue(next++, "$hl:result-call", Void);
-						copy.instructions.push(new Located(Call(ignored, PREFIX + name, expanded), located.provenance));
+						copy.instructions.push(new Located(Call(ignored, targetName, expanded), located.provenance));
 						var typeName = switch out.type { case Obj(value): value; default: throw "Invalid scalar result"; };
 						copy.instructions.push(new Located(NewObject(out, typeName), located.provenance));
 						for (index in 0...returnSlots.length) {

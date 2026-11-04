@@ -201,17 +201,23 @@ managed-bytes header and iterator element descriptor are required to make those 
 Raw pointers specialize generic owners and functions to their scalar pointer representation and remain unboxed in
 typed code. At a genuine Dynamic escape, each Wasm target uses a distinct pointer box, preserving null and checking
 the kind on unbox; an Int cannot be written through an erased view of a concrete pointer field. Dynamic pointer boxes
-compare their contained addresses, including null. Generic interface argument and result adapters use the same checked
-box. Typed pointer access performs no allocations on HashLink, Wasm32 or Wasm GC, with inlining on or off. A raw-pointer box
+compare their contained addresses, including null. Erased generic interface argument and result adapters use the same
+checked box. Typed pointer access performs no allocations on HashLink, Wasm32 or Wasm GC, with inlining on or off. A raw-pointer box
 is a GC leaf: on Wasm32, a managed object is reclaimed even when its address is held as a raw pointer.
 
-A typed generic interface still erases its method signature to `Dynamic`. For example, returning `hl.Bytes` from
-`PointerSource<hl.Bytes>.get()` boxes and immediately unboxes the pointer on each call. Against compiler `38db19f0`,
-1,024 calls on Wasm32 increased from 0 to 1,024 allocations; both inlining modes show the same result. The control
-Wasm GC compiler failed with `Wasm GC cannot return RawPtr from interface method as Dyn`; the new compiler executes the
-calls but allocates 1,024 times. Avoiding that regression needs an interface ABI and dispatch that retain the semantic
-argument and result carriers, including erased views, reflection and scalar-lane methods. This is a separate remaining
-allocation boundary; direct typed generic fields and functions above do not take that path.
+Typed generic interface calls and bound methods retain their semantic argument and result carriers. The compiler
+generates a typed dispatch entry for each used interface method signature, calls the matching implementation with its
+physical carriers, and keeps struct leaves in scalar and reference slots. Generic implementors specialize scalar
+carriers where an inherited interface requires them. A struct converted to an interface is boxed at that conversion;
+calls through it retain the boxed receiver as a mutable place. Erased interface views and reflection continue to use
+checked Dynamic conversions.
+
+With inlining enabled and disabled, the cross-target census performs 8 and 1,024 calls with zero allocations for
+`hl.Bytes`, `Int`, `Float`, and a struct containing an `Int` and a managed reference, through both concrete and generic
+implementations. This includes a `PointerSource<hl.Bytes>.get()` result, struct interface receivers, and captured
+methods. On Wasm32, the pointer getter previously allocated 1,024 times per 1,024 calls (the earlier pre-pointer-box
+compiler allocated zero); it now allocates zero. A paired HashLink argument-and-result census over 1,024 calls changed
+from 0, 16,384, 32,768 and 81,920 allocated bytes respectively for those four carriers to zero for each.
 
 A separate owner-policy gap remains when a reference field's type argument uses a shared shape: its physical field is
 `Dynamic`, and the erased setter has no semantic type descriptor with which to reject a mismatched value. For example,

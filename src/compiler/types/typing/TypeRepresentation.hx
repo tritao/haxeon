@@ -185,6 +185,15 @@ class TypeRepresentation {
 		for (index in 0...arguments.length) {
 			var argument = arguments[index];
 			if (containsTypeParameter(argument, [])) return null;
+			// A generic implementation of a generic interface must retain scalar carriers in
+			// its physical methods. Follow inherited interfaces as well as direct ones.
+			if (switch argument { case TInt | TInt64 | TFloat | TBool: true; default: false; })
+				for (interfaceType in session.declarations.inheritance.inheritedInterfaces(type))
+					switch interfaceType {
+						case TInstance(Interface, _, parameters):
+							for (parameter in parameters) if (TypeRelations.equals(argument, parameter)) needsSpecialization = true;
+						default:
+					}
 			if (ownerContainsValue(argument) || (switch argument { case TDynamic: false; default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index]); }))
 				needsSpecialization = true;
 		}
@@ -519,8 +528,9 @@ class TypeRepresentation {
 		var projected = projectNominal(receiver, owner),
 			semantic = nominalSubstitutions(projected),
 			specialization = genericOwner(projected),
+			typedInterface = switch projected { case TInstance(Interface, _, arguments) if (arguments.length > 0): true; default: false; },
 			physical = specialization != null ? copyMap(specialization.substitutions)
-				: isGenericNominal(projected) ? erasedNominalSubstitutions(owner) : copyMap(semantic);
+				: typedInterface ? copyMap(semantic) : isGenericNominal(projected) ? erasedNominalSubstitutions(owner) : copyMap(semantic);
 		return {semantic: semantic, physical: physical};
 	}
 

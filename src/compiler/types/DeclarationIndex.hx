@@ -754,9 +754,11 @@ class DeclarationIndex {
 			visitClass(name, []);
 			if (!classes.exists(name))
 				throw 'Class "$name" disappeared during cycle validation';
-			var decl = classes.get(name);
+			var decl = classes.get(name), substitutions:Map<String, CompilerType> = [];
+			for (parameter in decl.typeParameters)
+				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (interfaceType in decl.interfaces) {
-				var interfaceName = nominalName(resolve(interfaceType, decl.span));
+				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
 				if (interfaceName == null || (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
 					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
 			}

@@ -45,7 +45,7 @@ class SettingsTests {
 			customShortcuts();
 			shortcutPersistence();
 			shortcutsPanel();
-			Sys.println("Settings tests passed");
+			Sys.println("PASS: settings tests");
 			return 0;
 		} catch (error:Dynamic) {
 			Sys.println('Settings tests failed: $error');
