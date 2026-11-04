@@ -397,20 +397,21 @@ class WasmLinearGc {
 		var leafTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef, Abstract("native_callback")];
 		for (leaf in leafTypes)
 			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(leaf), function(_) {});
-		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Bytes), function(builder) {
-			builder.localGet(value);
-			builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
-			builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
-			builder.emit(I32Eq);
-			builder.if_(function(builder) {
+		for (bytesType in [Bytes, ManagedBytes])
+			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(bytesType), function(builder) {
 				builder.localGet(value);
-				builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
-				builder.call(builder.functionRef(mark));
-				builder.localGet(value);
-				builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
-				builder.call(builder.functionRef(mark));
+				builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
+				builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
+				builder.emit(I32Eq);
+				builder.if_(function(builder) {
+					builder.localGet(value);
+					builder.emit(I32Load(WasmLayout.BYTES_VIEW_OWNER_OFFSET));
+					builder.call(builder.functionRef(mark));
+					builder.localGet(value);
+					builder.emit(I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET));
+					builder.call(builder.functionRef(mark));
+				});
 			});
-		});
 		for (object in program.objects)
 			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Obj(object.name)), function(builder) {
 				if (object.nativeLayout != null) {

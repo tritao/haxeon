@@ -589,7 +589,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		body.push(Call(allocator));
 		body.push(LocalSet(outputLocal));
 		for (field in [
-			{offset: 0, value: WasmModuleSupport.typeId(Bytes)},
+			{offset: 0, value: WasmModuleSupport.typeId(ManagedBytes)},
 			{offset: WasmLayout.STRING_LENGTH_OFFSET, value: fixed.size},
 			{offset: WasmLayout.ARRAY_CAPACITY_OFFSET, value: fixed.size}
 		]) {

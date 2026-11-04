@@ -1203,8 +1203,8 @@ class WasmFunctionLower {
 						I32Const(typeId(Abstract("realtime_iterator"))),
 						I32Store(0),
 						LocalGet(iteratorLocal),
-						I32Const(WasmLayout.ITERATOR_SIZE),
-						I32Store(4),
+						I32Const(typeId(output.type)),
+						I32Store(WasmLayout.ITERATOR_TYPE_OFFSET),
 						LocalGet(iteratorLocal),
 						LocalGet(requiredLocal(values, array.id)),
 						I32Store(WasmLayout.ITERATOR_ARRAY_OFFSET),
@@ -1800,17 +1800,8 @@ class WasmFunctionLower {
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
 		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
-	public static function typeId(type:IrType):Int {
-		var identity = switch type {
-			case Iterator(_): Abstract("realtime_iterator");
-			default: type;
-		}, text = Std.string(identity), hash:Int = -2128831035;
-		for (index in 0...text.length) {
-			hash = Std.int(hash ^ text.charCodeAt(index));
-			hash = Std.int(hash * 16777619);
-		}
-		return hash;
-	}
+	public static function typeId(type:IrType):Int
+		return WasmModuleSupport.typeId(type);
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);

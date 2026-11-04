@@ -344,3 +344,19 @@ not emitted. In nine same-binary pairs on this revision, console → telemetry v
 paired differences from -2 to +2 KiB. Selection counts varied from 342,094 to 342,099, with paired differences from
 -4 to +2, all in byte buffers. Same-binary RSS paired differences ranged from -1.40 to +1.25 MiB in the first window
 and from -0.94 to +0.78 MiB in the second. These variations do not establish an exact memory match.
+
+The Wasm32 managed-bytes and iterator descriptor change was compared with compiler `e5ede6af` using the same
+Wasm GC Showcase host and alternating guests. Nine full-scene pairs and three pairs each for static, text-heavy and
+editing all matched: control and candidate medians were 4,440 / 4,440 / 4,440 / 8,724 objects, respectively, with
+zero paired differences. The guests were byte-identical (SHA-256
+`63b0ae6fa9cf52abb699071ca45eb9986067a9658128f01fc63aab8d8337ede6`).
+
+On HashLink, nine alternating pairs used byte-identical control and candidate editor modules on outer revision
+`6f90b6294`. Per-action allocation medians (KiB) were 112.6 / 80.1 / 74.5 / 93.1 for the four tab switches;
+0.5 / 0.5 / 10.0 / 12.4 / 13.6 for the hover actions; 21.2 for scroll; 0.2 / 0.2 for idle and focused idle;
+and 16.1 / 16.2 for type and backspace. Both sides matched for each action with zero paired median difference.
+The 30-cycle selection census medians were 342,097 / 342,098 allocations, with zero paired median difference.
+One type comparison found 342,098 allocations on each side and only a 112-byte difference in byte buffers.
+The 500-cycle RSS window medians were 30.62 / 3.44 / 0.78 / 5.00 MiB before and 29.69 / 4.06 / 0.78 / 5.00 MiB
+after; paired median differences were -0.47 / +0.31 / 0 / 0 MiB. As the modules are identical, those differences
+reflect run-to-run variation rather than an effect of the Wasm32 changes.

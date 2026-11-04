@@ -8,6 +8,5 @@ function main():Int {
  var byteView:ByteShapeHolder<Dynamic,Dynamic> = bytes; var bytesRejected=false;
  try byteView.value = "wrong" catch (_:Dynamic) bytesRejected=true;
  if (stringRejected && bytesRejected) return 42;
- if (!stringRejected && !bytesRejected) return 43;
  return 1;
 }

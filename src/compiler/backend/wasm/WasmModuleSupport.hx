@@ -429,10 +429,7 @@ class WasmModuleSupport {
 	}
 
 	static function computeTypeId(type:IrType):Int {
-		var identity = switch type {
-			case Iterator(_): Abstract("realtime_iterator");
-			default: type;
-		}, text = Std.string(identity), hash:Int = -2128831035;
+		var text = Std.string(type), hash:Int = -2128831035;
 		for (index in 0...text.length) {
 			hash = Std.int(hash ^ text.charCodeAt(index));
 			hash = Std.int(hash * 16777619);

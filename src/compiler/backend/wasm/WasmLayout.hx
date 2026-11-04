@@ -64,6 +64,8 @@ class WasmLayout {
 	public static inline final VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET = 48;
 	public static inline final VALUE_ARRAY_FORWARD_HEADER_OFFSET = 52;
 	public static inline final VALUE_ARRAY_HEADER_SIZE = 56;
+	/** Semantic Iterator<T> type id; iterator objects otherwise share one GC-scanned kind. */
+	public static inline final ITERATOR_TYPE_OFFSET = 4;
 	public static inline final ITERATOR_ARRAY_OFFSET = 8;
 	public static inline final ITERATOR_POSITION_OFFSET = 12;
 	public static inline final ITERATOR_SIZE = 16;

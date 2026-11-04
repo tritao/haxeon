@@ -193,10 +193,20 @@ arity, numeric kinds and named object types, but reference-shaped signatures can
 therefore pass the Wasm32 check; it is rejected on HashLink and Wasm GC. Preserving a semantic signature at closure
 creation, including distinct views of one function slot, is required to close this gap without per-call boxing.
 
-Managed byte buffers and native map abstracts now check their runtime kind too. Wasm32 stores strings and managed
-bytes with the same header, so it cannot distinguish a `String` from `haxe.io.Bytes` at this boundary; HashLink and
-Wasm GC can. HashLink and Wasm32 currently expose only the common iterator kind to this type test, not its element type. A distinct
-managed-bytes header and iterator element descriptor are required to make those checks exact without guessing.
+Managed byte buffers and native map abstracts check their runtime kind too. Wasm32 gives strings and managed bytes
+distinct type ids in their existing headers, including byte views, stream results and native aggregate buffers. Its
+iterator header retains the semantic `Iterator<T>` descriptor in an existing word while the collector continues to
+scan the common iterator layout. Erased writes therefore reject the wrong byte kind or iterator element type. Wasm GC
+and the interpreter also distinguish runtime iterator element types. HashLink's runtime iterator type test still
+exposes only the common iterator kind; source-level structural iterator adapters can have stricter checks. HashLink
+currently lowers every `Iterator<T>` type value to one abstract type, and the underlying array's physical element
+type cannot distinguish nested semantic shapes such as `Array<Int>` and `Array<String>`. Exact checks there require
+carrying an interned semantic descriptor through iterator construction and erased type tests without enlarging the
+iterator allocation; deriving it from the physical array alone would accept mismatched nested shapes.
+
+The header changes add no allocations: in paired Wasm32 and Wasm GC censuses with inlining on and off, creating 8 /
+1,024 escaped iterators used 8 / 1,024 objects on each side. Allocating 8 / 1,024 managed byte buffers used 8 / 1,024
+objects on Wasm32 and 16 / 2,048 on Wasm GC, unchanged from the control.
 
 Raw pointers specialize generic owners and functions to their scalar pointer representation and remain unboxed in
 typed code. At a genuine Dynamic escape, each Wasm target uses a distinct pointer box, preserving null and checking

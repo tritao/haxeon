@@ -276,7 +276,8 @@ class IrInterpreter {
 					case Bytes: Std.isOfType(input, String);
 					case ManagedBytes: Std.isOfType(input, haxe.io.Bytes);
 					case Array(_): Std.isOfType(input, InterpArray);
-					case Iterator(_): Std.isOfType(input, InterpIterator);
+					case Iterator(element): Std.isOfType(input, InterpIterator)
+						&& IrVerifier.sameType(cast(input, InterpIterator).values.elementType, element);
 					default: false;
 				};
 			case "__closure_is_of_type":
