@@ -64,9 +64,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
 
    Dependency IDs reserve 64-bit positive integer ranges for each source, atomically on multithreaded HashLink. The
    allocator wraps only after the 63-bit positive range is used; it does not fail after the former 32-bit limit. The
-   subscriber index uses the low word as a hash and checks source identity and field on collision. Observable sources
-   currently reserve the program-wide field stride; runtime class-specific layouts are still needed for incremental
-   changes. [Measured reservation rates](../REACTIVE_ID_RESERVATIONS.md) show why the former limit was practical to hit.
+   subscriber index uses the low word as a hash and checks source identity and field on collision. Observable sources reserve only the concrete runtime class’s field count. A generated virtual method supplies that
+   count when the source is created, including when the first read uses a base-class reference; incremental structural
+   edits invalidate dependent field layouts. [Measured reservation rates](../REACTIVE_ID_RESERVATIONS.md) show why the former limit was practical to hit.
 
    The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
    and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those

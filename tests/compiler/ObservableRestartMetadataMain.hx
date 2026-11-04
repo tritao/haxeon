@@ -13,8 +13,8 @@ class ObservableRestartMetadataMain {
     + 'public function hasFieldReaders(bit:Int):Bool return false; public function invalidateField(bit:Int):Void {} }');
    c.update("haxeon/reactive/ReactiveRuntime.hx", 'package haxeon.reactive; class ReactiveRuntime { '
     + 'public static function isTracking():Bool return true; '
-    + 'public static function recordObservableRead(s:ObservableSource, bit:Int, count:Int):ObservableSource { '
-    + 'if (s == null) s = new ObservableSource(count); s.recordFieldRead(bit); return s; } '
+    + 'public static function createObservableSource(count:Int):ObservableSource return new ObservableSource(count); '
+    + 'public static function recordObservableRead(s:ObservableSource, bit:Int):Void s.recordFieldRead(bit); '
     + 'public static function observableWriteStatus(s:ObservableSource, bit:Int):Int return 0; '
     + 'public static function invalidateObservable(s:ObservableSource, bit:Int):Void {} }');
    c.update("Base.hx", 'class Base implements Observable { public var a:Int; public function new() a = 1; }');

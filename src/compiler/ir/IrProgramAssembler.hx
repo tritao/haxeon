@@ -349,6 +349,8 @@ class IrProgramAssembler {
 						if (methodName == "toString" && methodDecl.arguments.length == 0 && (switch (methodDecl.result) { case TString: true; default: false; }))
 							methods.push({name: "__string", functionName: functionName});
 					}
+				if (IrGenerator.observableClassFieldCount(classDecl.name) != null)
+					methods.push({name: "$haxeonObservableFieldCount", functionName: classDecl.name + ".$haxeonObservableFieldCount"});
 				objects.push({
 					name: classDecl.name,
 					isValue: classDecl.isValue,
@@ -513,6 +515,15 @@ class IrProgramAssembler {
 				allFunctions.push(initializer);
 		for (fn in functions)
 			allFunctions.push(fn);
+		if (objects != null)
+			for (object in objects) {
+				var count = IrGenerator.observableClassFieldCount(object.name);
+				if (count == null) continue;
+				var builder = new IrBuilder();
+				builder.argument("this", Obj(object.name));
+				builder.returnValue(builder.constInt(count));
+				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks));
+			}
 		if (objects != null)
 			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
 		if (objects != null)

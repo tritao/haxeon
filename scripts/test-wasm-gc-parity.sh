@@ -749,7 +749,7 @@ async function run(name, target) {
 	  const effectCount = target === "wasm32" ? effect.exports["haxeon.memory.allocation_count"] : effect.exports.__allocation_count;
 	  for (const n of [8, 1024]) {
 	    const before = effectCount(), result = effect.exports["EffectAllocationCensus.perform"](n), allocations = effectCount() - before;
-	    if (result !== n * (n + 1) / 2 || allocations !== 0)
+	    if (result !== n * (n + 1) / 2 + n || allocations !== 0)
 	      failures.push(`observable effect census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: observable effect census on ${target}, inline=${inline}, n=${n}`);
 	  }

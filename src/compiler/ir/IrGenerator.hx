@@ -63,7 +63,6 @@ class IrGenerator {
 	static var observableClasses:Map<String, Bool> = [];
 	static var observableStateOwners:Map<String, String> = [];
 	static var observableFieldBits:Map<String, Map<String, Int>> = [];
-	static var observableFieldStride:Int = 1;
 	static var generatedObjects:Array<IrObject> = [];
 	static var headerlessValueClasses:Bool = true;
 	static var flatValueObjects:Map<String, IrObject> = [];
@@ -102,7 +101,6 @@ class IrGenerator {
 		observableClasses = [];
 		observableStateOwners = [];
 		observableFieldBits = [];
-		observableFieldStride = 1;
 		typedInterfaceContracts = [];
 		var interfaceBases:Map<String, Array<String>> = [];
 		var classesByName:Map<String, TypedClass> = [];
@@ -226,8 +224,6 @@ class IrGenerator {
 				for (index in 0...fields.length)
 					byName.set(fields[index].name, index);
 				observableFieldBits.set(classDecl.name, byName);
-				if (fields.length > observableFieldStride)
-					observableFieldStride = fields.length;
 				stateOwner(classDecl.name, []);
 			}
 	}
@@ -247,8 +243,14 @@ class IrGenerator {
 	public static function observableStateOwner(className:String):Null<String>
 		return observableStateOwners.get(className);
 
-	public static function observableDependencyStride():Int
-		return observableFieldStride;
+	/** Field reservation for an object's concrete Observable class. */
+	public static function observableClassFieldCount(className:String):Null<Int> {
+		var fields = observableFieldBits.get(className);
+		if (fields == null) return null;
+		var count = 0;
+		for (bit in fields) if (bit >= count) count = bit + 1;
+		return count < 1 ? 1 : count;
+	}
 
 	/** Field bit in the flattened, declaration-ordered observable layout. */
 	public static function observableFieldBit(type:CompilerType, fieldName:String):Null<Int> {
@@ -3413,9 +3415,15 @@ class IrGenerator {
 		builder.branch(builder.call(ReactiveRuntimeClass + ".isTracking", [], Bool), trackingBlock, readBlock);
 		builder.select(trackingBlock);
 		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiverValue.type), ObservableStateField, sourceType));
-		var trackedSource = builder.call(ReactiveRuntimeClass + ".recordObservableRead",
-			[builder.load(sourceName, sourceType), builder.constInt(fieldBit), builder.constInt(observableDependencyStride())], sourceType);
-		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField, trackedSource);
+		var initializeBlock = builder.createBlock(), recordBlock = builder.createBlock();
+		builder.branch(builder.equal(builder.load(sourceName, sourceType), builder.constNull(sourceType)), initializeBlock, recordBlock);
+		builder.select(initializeBlock);
+		var count = builder.methodCall(builder.load(receiverName, receiverValue.type), "$haxeonObservableFieldCount", [], I32);
+		builder.store(sourceName, builder.call(ReactiveRuntimeClass + ".createObservableSource", [count], sourceType));
+		builder.fieldSet(builder.load(receiverName, receiverValue.type), ObservableStateField, builder.load(sourceName, sourceType));
+		builder.jump(recordBlock);
+		builder.select(recordBlock);
+		builder.call(ReactiveRuntimeClass + ".recordObservableRead", [builder.load(sourceName, sourceType), builder.constInt(fieldBit)], Void);
 		builder.jump(readBlock);
 		builder.select(readBlock);
 		return builder.fieldGet(builder.load(receiverName, receiverValue.type), field, resultType);

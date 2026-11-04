@@ -69,6 +69,7 @@ class TestCatalog {
 		"ScalarMapIncrementalMain",
 		"ObservableTrackingMain",
 		"ObservableRestartMetadataMain",
+		"ObservableLayoutIncrementalMain",
 		"ReferenceIdentityMain",
 		"NullableStructIrMain",
 		"NullableScalarFlowMain",

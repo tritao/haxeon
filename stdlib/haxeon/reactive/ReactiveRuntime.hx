@@ -67,12 +67,13 @@ class ReactiveRuntime {
 	}
 
 
+	/** Creates a source once, using the concrete object's Observable layout. */
+	public static function createObservableSource(fieldCount:Int):ObservableSource
+		return new ObservableSource(fieldCount);
+
 	/** Shared slow path for a tracked Observable read. */
-	public static function recordObservableRead(source:Null<ObservableSource>, fieldBit:Int, fieldCount:Int):ObservableSource {
-		if (source == null) source = new ObservableSource(fieldCount);
+	public static function recordObservableRead(source:ObservableSource, fieldBit:Int):Void
 		source.recordFieldRead(fieldBit);
-		return source;
-	}
 
 	/** Shared slow path after a changed Observable field has been assigned. */
 	public static function invalidateObservable(source:Null<ObservableSource>, fieldBit:Int):Void {
