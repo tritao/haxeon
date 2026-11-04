@@ -68,6 +68,7 @@ class TestCatalog {
 		"FloatHashIrMain",
 		"ScalarMapIncrementalMain",
 		"ObservableTrackingMain",
+		"ObservableRestartMetadataMain",
 		"ReferenceIdentityMain",
 		"NullableStructIrMain",
 		"NullableScalarFlowMain",

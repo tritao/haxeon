@@ -68,6 +68,10 @@ values changes, and updates the existing nodes. This record makes that idea the 
    currently reserve the program-wide field stride; runtime class-specific layouts are still needed for incremental
    changes. [Measured reservation rates](../REACTIVE_ID_RESERVATIONS.md) show why the former limit was practical to hit.
 
+   The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
+   and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those
+   viewport field annotations land in outer `HEAD`.
+
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its
    declared equality says the result changed. Effects and retained readers therefore stop at equal derived results,

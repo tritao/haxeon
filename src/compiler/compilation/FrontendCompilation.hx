@@ -60,7 +60,8 @@ typedef FrontendResult = {
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true):FrontendResult {
+			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>,
+			?pendingSignatures:Map<String, Bool>, ?pendingStructural:Map<String, Bool>):FrontendResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var modules = context.modules,
 			graph = context.graph,
@@ -68,9 +69,9 @@ class FrontendCompilation {
 			genericSpecializations = context.genericSpecializations;
 		if (token != null)
 			token.check();
-		var bodyChanged:Map<String, Bool> = [],
-			signatureChanged:Map<String, Bool> = [],
-			structuralChanged:Map<String, Bool> = [],
+		var bodyChanged:Map<String, Bool> = pendingBody == null ? [] : pendingBody,
+			signatureChanged:Map<String, Bool> = pendingSignatures == null ? [] : pendingSignatures,
+			structuralChanged:Map<String, Bool> = pendingStructural == null ? [] : pendingStructural,
 			graphParseMs = 0.0,
 			graphDependencyMs = 0.0,
 			graphInitializationMs = 0.0;
@@ -179,7 +180,8 @@ class FrontendCompilation {
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
-				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics);
+				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics,
+					bodyChanged, signatureChanged, structuralChanged);
 			context.cachedSemanticProgram = semantic;
 		} catch (error:CompileError) {
 			for (name in names) {
