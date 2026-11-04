@@ -65,10 +65,17 @@ values changes, and updates the existing nodes. This record makes that idea the 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its
    declared equality says the result changed. Effects and retained readers therefore stop at equal derived results,
-   including through chains and diamonds, without glitches or repeated computation. Dependency edges are intrusive
-   doubly linked nodes shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
+   including through chains and diamonds, without glitches or repeated computation. Effects that throw while running or
+   validating their inputs remain queued for a later flush; the error propagates, and effects not yet visited keep their
+   place ahead of the retry. This includes a failed initial run. Disposing an effect cancels its retry, and a rejected
+   off-thread subscription never queues work on the owner graph. Dependency edges are intrusive doubly linked nodes
+   shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
    stamp deduplicates reads; there is no observer array on every source and no `indexOf` scan in tracking or
-   subscribe/unsubscribe. Frame capture uses two reusable read logs; retained records keep and release only live edges.
+   subscribe/unsubscribe. Observable changes mark only the matching subscriber edges stale; those marks replace a
+   separately allocated per-object field-version array. The single-owner effect queue retains its cursor and initial
+   capacity, so a successful write-and-flush does not allocate after subscription. This also avoids allocating the
+   exception-visible loop cursor as a captured cell on every flush. Frame capture uses two reusable read
+   logs; retained records keep and release only live edges.
    `State` is a `Signal` handle and signal reads are tracked automatically. `DockPanelContent.cacheKey` and
    `cacheKeyHash` are removed in favor of tracked reads. Models we own use `Observable`; there is no polling API or
    adapter unless a real external model appears.

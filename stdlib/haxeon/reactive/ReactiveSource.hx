@@ -74,8 +74,12 @@ class ReactiveSource {
 		var edge = observerHead;
 		while (edge != null) {
 			var next = edge.sourceNext;
-			if (edge.fieldBit == fieldBit)
+			if (edge.fieldBit == fieldBit) {
+				// Observable field versions are represented by each subscribed edge. Marking
+				// the edge stale needs no per-object version array or allocation on first write.
+				edge.seenVersion = -1;
 				edge.reader.markMaybeStale();
+			}
 			edge = next;
 		}
 	}

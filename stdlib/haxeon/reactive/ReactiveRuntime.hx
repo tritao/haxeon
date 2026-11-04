@@ -8,9 +8,19 @@ class ReactiveRuntime {
 	#else
 	static final ownerClaimed:Bool = reactiveClaimOwner();
 	#end
-	static final pendingEffects:Array<Effect> = [];
+	static final pendingEffects:Array<Effect> = makePendingEffects();
 	static var flushing:Bool = false;
+	// The queue has one owner and cannot be flushed recursively. Keeping its cursor with
+	// the queue also lets exception recovery see it without allocating a captured cell.
+	static var flushIndex:Int = 0;
 	public static var version(default, null):Int = 0;
+
+	/** A single pending effect needs no first-use backing-store allocation. */
+	static function makePendingEffects():Array<Effect> {
+		var effects:Array<Effect> = [null];
+		effects.resize(0);
+		return effects;
+	}
 
 	/** Compiler-generated field reads branch on this once before loading per-object tracking state. */
 	public static function isTracking():Bool {
@@ -152,24 +162,35 @@ class ReactiveRuntime {
 		}
 	}
 
+	/** A failed off-thread subscription must not mutate the owner's pending queue. */
+	@:allow(haxeon.reactive.Effect)
+	static function retryFailedEffect(effect:Effect):Void {
+		if (isOwnerThread()) enqueue(effect);
+	}
+
 	/** Recomputes queued effects once after the frame's writes have settled. */
 	public static function flushEffects():Void {
 		if (flushing || isTracking() || pendingEffects.length == 0)
 			return;
 		flushing = true;
-		var index = 0;
+		flushIndex = 0;
 		try {
-			while (index < pendingEffects.length) {
-				var effect = pendingEffects[index++];
+			while (flushIndex < pendingEffects.length) {
+				var effect = pendingEffects[flushIndex++];
 				effect.pending = false;
 				if (!effect.disposed && effect.dirty)
 					effect.run();
 			}
 			pendingEffects.resize(0);
+			flushIndex = 0;
 			flushing = false;
 		} catch (error:Dynamic) {
-			// Keep effects not yet visited queued for the next flush.
-			if (index > 0) pendingEffects.splice(0, index);
+			// Retry a failed validation or run after effects not yet visited.
+			if (flushIndex > 0) {
+				enqueue(pendingEffects[flushIndex - 1]);
+				pendingEffects.splice(0, flushIndex);
+			}
+			flushIndex = 0;
 			flushing = false;
 			throw error;
 		}

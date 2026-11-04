@@ -34,6 +34,7 @@ class Effect extends ReactiveDependencySet {
 			hasRun = true;
 		} catch (error:Dynamic) {
 			markFailed();
+			ReactiveRuntime.retryFailedEffect(this);
 			throw error;
 		}
 	}

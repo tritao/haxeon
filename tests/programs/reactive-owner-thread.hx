@@ -13,12 +13,12 @@ class OwnerModel implements Observable {
 }
 
 function main():Int {
- var earlySource = new Signal<Int>(0), earlyError = [""];
+ var earlySource = new Signal<Int>(0), earlyError = [""], earlyRuns = [0], workerRuns = [0];
  #if !wasm
  var earlyDone = new Lock();
  #end
  Thread.create(function() {
-  try { new Effect(function() { earlySource.value; }); } catch (error:Dynamic) earlyError[0] = Std.string(error);
+  try { new Effect(function() { earlyRuns[0]++; earlySource.value; }); } catch (error:Dynamic) earlyError[0] = Std.string(error);
   #if !wasm
   earlyDone.release();
   #end
@@ -39,7 +39,7 @@ function main():Int {
  Thread.create(function() {
   try model.count = 1 catch (error:Dynamic) failures[0] = Std.string(error);
   try signal.value = 1 catch (error:Dynamic) failures[1] = Std.string(error);
-  try { new Effect(function() { model.count; }); } catch (error:Dynamic) failures[2] = Std.string(error);
+  try { new Effect(function() { workerRuns[0]++; model.count; }); } catch (error:Dynamic) failures[2] = Std.string(error);
   model.unread = 7;
   unobserved.value = "ready";
   workerPassed[0] = model.unread == 7 && unobserved.value == "ready";
@@ -59,6 +59,7 @@ function main():Int {
  if (!effect.dirty) return 5;
  ReactiveRuntime.flushEffects();
  if (observedModel != 2 || observedSignal != 2 || effect.dirty) return 6;
+ if (earlyRuns[0] != 1 || workerRuns[0] != 1) return 11;
  #if !wasm
  var start = hl.Gc.totalAllocated();
  for (i in 0...10000) { model.unread = i; unobserved.value = i % 2 == 0 ? "even" : "odd"; }

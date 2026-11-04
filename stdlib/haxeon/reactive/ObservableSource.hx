@@ -3,8 +3,6 @@ package haxeon.reactive;
 /** One lazily allocated dependency source shared by every observable field on an object. */
 class ObservableSource extends ReactiveSource {
 	final fieldLimit:Int;
-	var fieldVersions:Null<Array<Int>>;
-
 	public function new(fieldCount:Int) {
 		super(fieldCount);
 		fieldLimit = fieldCount;
@@ -17,8 +15,6 @@ class ObservableSource extends ReactiveSource {
 		checkRange(fieldBit);
 		if (!hasFieldReaders(fieldBit))
 			return;
-		var versions = ensureField(fieldBit);
-		versions[fieldBit] = versions[fieldBit] == 0x7fffffff ? 1 : versions[fieldBit] + 1;
 		invalidateFieldReaders(fieldBit);
 	}
 
@@ -29,19 +25,9 @@ class ObservableSource extends ReactiveSource {
 
 	public override function versionAt(fieldBit:Int):Int {
 		checkRange(fieldBit);
-		var versions = fieldVersions;
-		return versions != null && fieldBit < versions.length ? versions[fieldBit] : 0;
-	}
-
-	function ensureField(fieldBit:Int):Array<Int> {
-		var versions = fieldVersions;
-		if (versions == null) {
-			versions = [];
-			fieldVersions = versions;
-		}
-		while (versions.length <= fieldBit)
-			versions.push(0);
-		return versions;
+		// An edge starts at zero; invalidateFieldReaders marks only matching edges as
+		// stale until their readers finish tracking. No shared counter is required.
+		return 0;
 	}
 
 	function checkRange(fieldBit:Int):Void
