@@ -17,11 +17,12 @@ class Signal<T> extends ReactiveSource {
 
 	function set_value(value:T):T {
 		ReactiveRuntime.assertSignalWritable(this);
-		if (haxeon.Equality.equals(current, value))
-			return current;
+		var changed = !haxeon.Equality.sameForChange(current, value);
 		current = value;
-		bumpVersion();
-		invalidateReaders();
+		if (changed) {
+			bumpVersion();
+			invalidateReaders();
+		}
 		return current;
 	}
 

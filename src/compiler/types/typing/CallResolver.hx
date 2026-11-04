@@ -1189,15 +1189,18 @@ class CallResolver {
 			ValuePlaceRules.requireWritable(session, value, span);
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
 		}
-		if (name == "Equality.equals" || name == "haxeon.Equality.equals" || name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals") {
+		if (name == "Equality.equals" || name == "haxeon.Equality.equals" || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange" || name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
 			var left = typeExpressionValue(arguments[0], scope),
 				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
 			var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
+			if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
+					&& (switch left.type { case TTypeParameter(_, _) | TDynamic: true; default: false; }))
+				return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
 			if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
 				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Hashable', span);
-			if (mapKeyEquality && isFloatingMapKey(left.type))
+			if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && isFloatingMapKey(left.type))
 				return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
 			if ((switch (left.type) { case TDynamic: true; default: false; }))
 				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);

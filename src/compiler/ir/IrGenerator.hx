@@ -2061,6 +2061,11 @@ class IrGenerator {
 					right) : (switch (lowerType(a.type)) { case Bytes: true; default: false; }) ? builder.call("__string_equal", [left, right],
 					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
 				|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+			case TCall("$reactive.changeEquals", [left, right]):
+				var operands = lowerOperands([left, right], builder, localTypes);
+				if (IrTypeTools.isDynamic(operands[0].type))
+					lowerDynamicChangeEquality(operands[0], operands[1], builder, localTypes);
+				else builder.equal(observableFieldChanged(left.type, operands[0], operands[1], builder, localTypes), builder.constBool(false));
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
@@ -3424,6 +3429,8 @@ class IrGenerator {
 		};
 
 	static function observableFieldChanged(type:CompilerType, before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		if (switch before.type { case F32 | F64 | Nullable(F32 | F64): true; default: false; })
+			return builder.equal(lowerFloatMapKeyEquality(before, after, builder, localTypes), builder.constBool(false));
 		if (usesDeclaredEquality(type))
 			return builder.equal(builder.call(ValueEqualityGenerator.equalsName(type), [before, after], Bool), builder.constBool(false));
 		if (isValueClassType(type))
@@ -3454,10 +3461,9 @@ class IrGenerator {
 		builder.store(beforeName, before);
 		builder.store(afterName, after);
 		var changed = observableFieldChanged(fieldType, builder.load(beforeName, beforeType), builder.load(afterName, afterType), builder, localTypes),
-			writeBlock = builder.createBlock(),
-			doneBlock = builder.createBlock();
-		builder.branch(changed, writeBlock, doneBlock);
-		builder.select(writeBlock);
+			changedName = '$' + 'observable-write-changed:$serial', doneBlock = builder.createBlock();
+		localTypes.set(changedName, Bool);
+		builder.store(changedName, changed);
 		var sourceType:IrType = Obj(ObservableSourceClass),
 			sourceName = '$' + 'observable-write-source:$serial';
 		localTypes.set(sourceName, sourceType);
@@ -3479,6 +3485,9 @@ class IrGenerator {
 			" inside a reactive tracking scope")));
 		builder.select(allowedBlock);
 		builder.fieldSet(builder.load(receiverName, receiver.type), field, builder.load(afterName, afterType));
+		var invalidateBlock = builder.createBlock();
+		builder.branch(builder.load(changedName, Bool), invalidateBlock, doneBlock);
+		builder.select(invalidateBlock);
 		builder.call(ReactiveRuntimeClass + ".invalidateObservable", [builder.load(sourceName, sourceType), builder.constInt(fieldBit)], Void);
 		builder.jump(doneBlock);
 		builder.select(doneBlock);
@@ -3640,6 +3649,32 @@ class IrGenerator {
 		var leftType = lowerType(left.type), rightType = lowerType(right.type);
 		if (!Type.enumEq(leftType, rightType)) return false;
 		return switch leftType { case Nullable(I32 | I64 | F32 | F64 | Bool): true; default: false; };
+	}
+
+	/** Dynamic reactive values use ordinary dynamic equality, with a reflexive Float NaN case. */
+	static function lowerDynamicChangeEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var id = arrayValuePlaceSerial++, leftName = '$' + 'change-left:$id', rightName = '$' + 'change-right:$id',
+			resultName = '$' + 'change-result:$id', equalBlock = builder.createBlock(), leftTypeBlock = builder.createBlock(),
+			rightTypeBlock = builder.createBlock(), leftNanBlock = builder.createBlock(), rightNanBlock = builder.createBlock(),
+			unequalBlock = builder.createBlock(), done = builder.createBlock();
+		localTypes.set(leftName, left.type); localTypes.set(rightName, right.type); localTypes.set(resultName, Bool);
+		builder.store(leftName, left); builder.store(rightName, right);
+		function eq(a:String, b:String):CfgValue
+			return builder.call("__dynamic_equal", [builder.load(a, left.type), builder.load(b, right.type)], Bool);
+		builder.branch(eq(leftName, rightName), equalBlock, leftTypeBlock);
+		builder.select(leftTypeBlock);
+		builder.branch(builder.call("__std_is_of_type", [builder.load(leftName, left.type), builder.typeValue(F64)], Bool), rightTypeBlock, unequalBlock);
+		builder.select(rightTypeBlock);
+		builder.branch(builder.call("__std_is_of_type", [builder.load(rightName, right.type), builder.typeValue(F64)], Bool), leftNanBlock, unequalBlock);
+		builder.select(leftNanBlock);
+		var leftFloat = builder.safeCast(builder.load(leftName, left.type), F64);
+		builder.branch(builder.equal(leftFloat, leftFloat), unequalBlock, rightNanBlock);
+		builder.select(rightNanBlock);
+		var rightFloat = builder.safeCast(builder.load(rightName, right.type), F64);
+		builder.branch(builder.equal(rightFloat, rightFloat), unequalBlock, equalBlock);
+		builder.select(equalBlock); builder.store(resultName, builder.constBool(true)); builder.jump(done);
+		builder.select(unequalBlock); builder.store(resultName, builder.constBool(false)); builder.jump(done);
+		builder.select(done); return builder.load(resultName, Bool);
 	}
 
 	/** Map Float equivalence includes NaNs while preserving null and signed-zero behavior. */

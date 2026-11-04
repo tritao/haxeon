@@ -219,8 +219,10 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    maybe-stale propagation, version-checked pull recomputation and per-submit effect batching. Equal derived outputs do
    not advance their source version, so downstream effects and retained readers do not rerun. Intrusive source-reader
    edges are reused across runs and removed when a dependency disappears; frame capture uses reusable dependency logs.
-   `State` is a signal handle. Changed signal writes invalidate readers; equal writes do nothing. Observable field reads
-   track one field bit per object, and changed writes invalidate only that field's readers. Signal and `State` writes
+   `State` is a signal handle. Every signal and Observable write stores its supplied value; equality decides only whether
+   readers are invalidated. Floating-point change detection treats NaN as equal to NaN and the two zero signs as equal,
+   while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate
+   only that field's readers. Signal and `State` writes
    always throw inside tracking; Observable writes throw when that field already has readers, allowing fresh object
    initialization. Property readers take no invocation context and track model reads directly. Command buttons read a
    retained derived enabled/checked result, so a context replacement that leaves the result unchanged does not rebuild

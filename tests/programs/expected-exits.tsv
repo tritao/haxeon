@@ -442,6 +442,7 @@ struct-inline-store-flow	42
 struct-native-store-forward	42
 struct-native-handler-flow	42
 observable-generic-runtime	42
+reactive-equal-writes	42
 struct-managed-nullable-narrow	42
 reactive-thread-isolation	42
 reactive-owner-thread	42

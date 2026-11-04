@@ -164,7 +164,7 @@ function main():Int {
 	ReactiveRuntime.flushEffects();
 	if (ratio.dirty) return fail(20);
 	model.ratio = 0.0 / 0.0;
-	if (!ratio.dirty) return fail(21);
+	if (ratio.dirty) return fail(21);
 	ReactiveRuntime.flushEffects();
 	if (ratio.dirty) return fail(22);
 

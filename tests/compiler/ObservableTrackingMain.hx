@@ -76,14 +76,14 @@ class ObservableTrackingMain {
 			+ 'var helperConstructedWhileTracking = new FreshModel(); ReactiveRuntime.tracking = false; '
 			+ 'var constructedValue = constructedWhileTracking.count; '
 			+ 'var cold = new Model(0, new Part(0)); var ignored = cold.count; '
-			+ 'model.count = 1; model.count = 2; model.item = new Part(12); model.item = new Part(3); '
+			+ 'model.count = 1; model.count = 2; model.item = new Part(12); var storedEqualItem = model.item.value == 12; model.item = new Part(3); '
 			+ 'model.ratio = -0.0; model.ratio = 0.0 / 0.0; model.ratio = 0.0 / 0.0; '
 			+ 'var threw = false, cacheWriteThrew = false; ReactiveRuntime.tracking = true; '
 			+ 'try model.count = 3 catch (_:Dynamic) threw = true; try model.cache = 9 catch (_:Dynamic) cacheWriteThrew = true; '
 			+ 'ReactiveRuntime.tracking = false; var ownerWriteThrew = false; ReactiveRuntime.wrongThread = true; '
 			+ 'try model.count = 4 catch (_:Dynamic) ownerWriteThrew = true; ReactiveRuntime.wrongThread = false; '
 			+ 'return count == 1 && item.value == 2 && base == 7 && constructedValue == 9 '
-			+ '&& helperConstructedWhileTracking.value == 8 && ignored == 0 && threw && ownerWriteThrew && !cacheWriteThrew && model.cache == 9 '
+			+ '&& helperConstructedWhileTracking.value == 8 && ignored == 0 && storedEqualItem && threw && ownerWriteThrew && !cacheWriteThrew && model.cache == 9 '
 			+ '&& ObservableProbe.created == 1 && ObservableProbe.readCount == 3 && ObservableProbe.readMask == 7 '
-			+ '&& ObservableProbe.writeCount == 4 && ObservableProbe.writeMask == 14 ? 42 : 0; }';
+			+ '&& ObservableProbe.writeCount == 3 && ObservableProbe.writeMask == 14 ? 42 : 0; }';
 }
