@@ -497,3 +497,4 @@ reactive-effect-allocations	42
 reactive-capture-allocations	42
 reactive-dependency-id-wide	42
 reactive-dependency-id-threads	42
+identity-class	42

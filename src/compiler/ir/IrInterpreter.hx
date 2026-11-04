@@ -324,7 +324,7 @@ class IrInterpreter {
 			case "__math_floor": Std.int(Math.floor(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
 			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
-			case "haxeon.reactive.ReactiveIdentity.same":
+			case "haxeon.IdentityNative.same":
 				if (arguments[0] != null && !Std.isOfType(arguments[0], InterpObject)
 					|| arguments[1] != null && !Std.isOfType(arguments[1], InterpObject))
 					throw "IR interpreter reference identity requires object references";

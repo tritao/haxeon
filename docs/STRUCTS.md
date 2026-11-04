@@ -492,7 +492,9 @@ arguments at each step. A handwritten method is inherited like an ordinary metho
 contract.
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
-conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
+conformance. Classes keep identity equality unless they conform. `haxeon.Identity.same(a, b)` compares class instances
+by reference even when their class implements `Equatable`; it accepts class instances rather than struct, enum or scalar
+values and does not box its arguments. Primitives and integer enum abstracts retain their
 value semantics; floats retain IEEE equality. Float hashing folds the IEEE bits after canonicalizing both zero signs
 and all NaNs, so equal values hash alike and infinities or large finite values do not require a numeric conversion. With
 specialized interface bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls

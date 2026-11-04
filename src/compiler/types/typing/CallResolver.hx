@@ -1189,6 +1189,24 @@ class CallResolver {
 			ValuePlaceRules.requireWritable(session, value, span);
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
 		}
+		if (name == "Identity.same" || name == "haxeon.Identity.same") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
+			var left = typeExpressionValue(arguments[0], scope), right = typeExpressionValue(arguments[1], scope);
+			for (value in [left, right]) {
+				var classType = switch value.type {
+					case TNullable(element): element;
+					default: value.type;
+				};
+				if (!(switch classType {
+					case TInstance(NominalKind.Class, _, _): !session.relations.isStruct(classType);
+					case TNull: true;
+					default: false;
+				})) fail("E1009", "Identity.same requires class instances", span);
+			}
+			return new TypedExpression(TCall("haxeon.IdentityNative.same", [left, right]), TBool, span);
+		}
+
 		if (name == "Equality.equals" || name == "haxeon.Equality.equals" || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange" || name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
