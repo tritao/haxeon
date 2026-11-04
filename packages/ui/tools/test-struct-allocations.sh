@@ -2,7 +2,7 @@
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$root"
-tmp=$(mktemp -d /dev/shm/haxeon-state-census.XXXXXXXX)
+tmp=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-state-census.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
 if [[ ! -f "$compiler" ]]; then

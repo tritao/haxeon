@@ -104,13 +104,11 @@ class TextEditorState implements SemanticsValueSource {
 		var inserted = backwards ? edit.removed : edit.inserted;
 		var selection = backwards ? edit.before : edit.after;
 		replayingHistory = true;
-		try {
-			applyTransaction(new EditTransaction(edit.start, edit.start + TextOffsetMap.countCodepoints(removed), inserted,
-				Std.int(Math.min(selection.anchor, selection.focus)), Std.int(Math.max(selection.anchor, selection.focus)),
-				false, -1, -1, selection.focusAffinity));
-			setAnchoredSelection(selection);
-		} catch (error:Dynamic) { replayingHistory = false; throw error; }
-		replayingHistory = false;
+		defer replayingHistory = false;
+		applyTransaction(new EditTransaction(edit.start, edit.start + TextOffsetMap.countCodepoints(removed), inserted,
+			Std.int(Math.min(selection.anchor, selection.focus)), Std.int(Math.max(selection.anchor, selection.focus)),
+			false, -1, -1, selection.focusAffinity));
+		setAnchoredSelection(selection);
 	}
 
 	function recordHistory(transaction:EditTransaction, before:TextSelection):Void {

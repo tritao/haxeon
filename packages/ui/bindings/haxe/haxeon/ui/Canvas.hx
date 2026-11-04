@@ -65,13 +65,8 @@ class Canvas {
 
 	public function withState(action:Canvas->Void):Void {
 		save();
-		try {
-			action(this);
-		} catch (error:Dynamic) {
-			restore();
-			throw error;
-		}
-		restore();
+		defer restore();
+		action(this);
 	}
 
 	public function setTransform(transform:Transform2D):Void {
@@ -370,13 +365,8 @@ class Canvas {
 	public function withLayer(opacity:Float, action:Canvas->Void, mode:CompositeMode = CompositeMode.SourceOver,
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		beginLayer(opacity, mode, bounds, effects, mask, backdropEffects);
-		try {
-			action(this);
-		} catch (error:Dynamic) {
-			endLayer();
-			throw error;
-		}
-		endLayer();
+		defer endLayer();
+		action(this);
 	}
 
 	public function beginLayer(opacity:Float, mode:CompositeMode = CompositeMode.SourceOver,

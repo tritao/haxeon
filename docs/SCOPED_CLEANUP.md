@@ -1,6 +1,6 @@
 # Scoped cleanup
 
-Status: scoped cleanup is implemented; migrations are in progress. This is layer 1 of the resource cleanup plan in
+Status: scoped cleanup is implemented. This is layer 1 of the resource cleanup plan in
 [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md). It does not introduce ownership or move-only values.
 
 ## Syntax and registration

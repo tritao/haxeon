@@ -189,14 +189,8 @@ class CommandRegistry implements Observable {
 		if (callback == null)
 			throw "Command scope callbacks cannot be null";
 		pushScope(scope);
-		try {
-			var result = callback();
-			popScope(scope);
-			return result;
-		} catch (error:Dynamic) {
-			popScope(scope);
-			throw error;
-		}
+		defer popScope(scope);
+		return callback();
 	}
 
 	/** Executes a command by ID when its current enabled predicate allows it. */

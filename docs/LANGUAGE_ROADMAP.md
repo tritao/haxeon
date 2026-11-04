@@ -146,7 +146,7 @@ Check each against what Haxeon already supports before designing it.
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
    conversions; generic specialization and inline `Null<T>` for scalars, and native `Int64` operations.
-7. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented; migrations of cleanup sites follow.
+7. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented.
 8. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
 9. Smaller conveniences when a concrete use appears.

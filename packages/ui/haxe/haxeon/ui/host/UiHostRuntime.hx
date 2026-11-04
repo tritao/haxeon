@@ -134,17 +134,17 @@ class UiHostRuntime {
 			application == null || renderer == null)
 			return false;
 		var allocatedAt = AllocationProbe.now();
-		// The phase span still open if a phase throws, so a profiler capture stays balanced.
-		var openPhase:Null<String> = null;
 		try {
 			callbackDepth++;
 			var phaseStarted = Sys.time();
 			var phaseAllocated = AllocationProbe.now();
-			ProfileSpan.begin(openPhase = "ui.prepare");
-			var renderSurface = Surface.fromNativeHandle(surface);
-			context.setGpuRenderer(renderer.prepare(renderSurface));
-			ProfileSpan.end(openPhase);
-			openPhase = null;
+			var renderSurface = {
+				ProfileSpan.begin("ui.prepare");
+				defer ProfileSpan.end("ui.prepare");
+				var preparedSurface = Surface.fromNativeHandle(surface);
+				context.setGpuRenderer(renderer.prepare(preparedSurface));
+				preparedSurface;
+			};
 			lastPrepareSeconds = Sys.time() - phaseStarted;
 			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			phaseStarted = Sys.time();
@@ -156,10 +156,11 @@ class UiHostRuntime {
 			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
 			context.repaintOnly = repaintOnly;
 			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
-			ProfileSpan.begin(openPhase = "ui.submit");
-			application.submit(frame);
-			ProfileSpan.end(openPhase);
-			openPhase = null;
+			{
+				ProfileSpan.begin("ui.submit");
+				defer ProfileSpan.end("ui.submit");
+				application.submit(frame);
+			}
 			lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
 			lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			context.repaintOnly = false;
@@ -169,10 +170,11 @@ class UiHostRuntime {
 				return false;
 			}
 			phaseStarted = Sys.time();
-			ProfileSpan.begin(openPhase = "ui.render");
-			application.context().render(renderer, renderSurface, frameInfo);
-			ProfileSpan.end(openPhase);
-			openPhase = null;
+			{
+				ProfileSpan.begin("ui.render");
+				defer ProfileSpan.end("ui.render");
+				application.context().render(renderer, renderSurface, frameInfo);
+			}
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastPaintSeconds = lastContextRenderSeconds;
 			lastFrameAllocatedBytes = AllocationProbe.now() - allocatedAt;
@@ -203,7 +205,6 @@ class UiHostRuntime {
 			if (callbackDepth == 0 && disposeRequested) disposeNow();
 			return true;
 		} catch (error:Dynamic) {
-			if (openPhase != null) ProfileSpan.end(openPhase);
 			context.repaintOnly = false;
 			if (callbackDepth > 0) callbackDepth--;
 			if (Std.isOfType(error, UiError)) {
