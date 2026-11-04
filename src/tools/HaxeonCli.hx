@@ -666,8 +666,10 @@ class HaxeonCli {
 			throw new InternalError('Option "--compiler-only" is only valid with "haxeon build"');
 		if (options.watch && !launch)
 			throw new InternalError('Option "--watch" is only valid with "haxeon run"');
-		if (options.live && !options.watch)
-			throw new InternalError('Option "--live" requires "haxeon run --watch"');
+		// `build --compiler-only --live` publishes the live artifacts (module, .hlp patch, .live.* descriptions) for a host that is not
+		// the desktop's (a phone applies the patch itself); `run --watch --live` is the desktop's loop.
+		if (options.live && !options.watch && !(options.compilerOnly && !launch))
+			throw new InternalError('Option "--live" requires "haxeon run --watch" (or "haxeon build --compiler-only")');
 		if (options.strictLive && !options.live)
 			throw new InternalError('Option "--strict-live" requires "haxeon run --watch --live"');
 		// Every target goes through the structured build (HaxeonProjectBuild); an Android build then has Gradle package it.
