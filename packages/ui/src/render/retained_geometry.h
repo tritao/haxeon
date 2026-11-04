@@ -84,6 +84,18 @@ class RetainedGeometry {
         ++hits;
         return &found->second;
     }
+    /** Drops every version whose meshes sample a glyph atlas the renderer no longer holds: its UVs belong to the old page. */
+    template <class Alive>
+    void drop_stale_atlases(const Alive &alive) {
+        for (auto entry = entries_.begin(); entry != entries_.end();) {
+            bool stale = false;
+            for (const auto &mesh : entry->second.meshes)
+                if (mesh.atlas.texture.value && !alive(mesh.atlas)) { stale = true; break; }
+            if (!stale) { ++entry; continue; }
+            release(entry->second);
+            entry = entries_.erase(entry);
+        }
+    }
     bool admit(const GeometryKey &key) {
         const auto found = entries_.find(key);
         const bool repeated = found != entries_.end() && found->second.first_frame != frame_;
