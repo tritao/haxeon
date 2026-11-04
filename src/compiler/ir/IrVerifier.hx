@@ -531,7 +531,7 @@ class IrVerifier {
 					case Virtual(_):
 					default: throw 'IR virtual conversion must produce a virtual value';
 				}
-			case MethodCall(out, object, methodName, args):
+			case MethodCall(out, object, methodName, args, _):
 				var signature = methodSignature(object.type, methodName, signatures, objects, interfaces);
 				if (signature == null || signature.arguments.length != args.length + 1)
 					throw 'Unknown or mismatched IR method "$methodName"';

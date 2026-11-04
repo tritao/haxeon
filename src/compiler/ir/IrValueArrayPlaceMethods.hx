@@ -416,7 +416,7 @@ class IrValueArrayPlaceMethods {
 						target.instructions.push(new Located(Call(present, helpers.getter(helpers.slot(aliasPath, true)), [array, index]), located.provenance));
 						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
 						instruction = Equal(out, present, no); handled = true;
-					case MethodCall(out, owner, method, arguments) if (aliases.exists(owner.id)):
+					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						for (argument in arguments) if (aliases.exists(argument.id) || optionalScalars.exists(argument.id))
 							throw 'Array place argument requires value specialization';
 						var nested = request(owner.type, method, aliases.get(owner.id));

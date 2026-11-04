@@ -100,7 +100,7 @@ class IrStaticNullChecks {
 				for (instruction in block.instructions) {
 					var receivers:Array<IrValue> = switch instruction.value {
 						case FieldGet(_, value, _), FieldSet(value, _, _), ArrayGet(_, value, _), ArraySet(value, _, _), ArraySize(_, value),
-							IteratorNew(_, value), MethodCall(_, value, _, _), EnumIndex(_, value), EnumField(_, value, _, _): [value];
+							IteratorNew(_, value), MethodCall(_, value, _, _, _), EnumIndex(_, value), EnumField(_, value, _, _): [value];
 						// The copy reads the source before it writes the destination, even when both are null statics.
 						case Call(_, name, arguments) if (IrOptionalFieldStorage.isCopyName(name) && arguments.length == 2): [arguments[1], arguments[0]];
 						case _: [];

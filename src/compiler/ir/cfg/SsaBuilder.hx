@@ -507,9 +507,9 @@ class SsaBuilder {
 				case Upcast(out, value):
 					var result = define(out);
 					emit(target, Upcast(result, resolve(value)), provenance);
-				case MethodCall(out, object, methodName, args):
+				case MethodCall(out, object, methodName, args, terminalReceiver):
 					var result = define(out);
-					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)]), provenance);
+					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)], terminalReceiver), provenance);
 				case NewObject(out, typeName):
 					var result = define(out);
 					emit(target, NewObject(result, typeName), provenance);

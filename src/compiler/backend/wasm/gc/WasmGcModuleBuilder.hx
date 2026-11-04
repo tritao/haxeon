@@ -433,7 +433,7 @@ class WasmGcModuleBuilder {
 						case StaticClosure(_, name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case InstanceClosure(_, name, receiver) if (declaredFunctions.exists(name) && (isObjectReference(receiver.type) || isVirtualReference(receiver.type) || (switch (receiver.type) { case Dyn: true; default: false; }))):
 						case CallClosure(_, closure, _) if (isFunctionType(closure.type)):
-						case MethodCall(_, receiver, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
+						case MethodCall(_, receiver, _, _, _) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
 							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
 					}

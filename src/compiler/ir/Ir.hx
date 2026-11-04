@@ -103,7 +103,7 @@ enum IrInstruction {
 	/** The same object as an instance of one of its base classes: a reinterpretation, never checked or copied. */
 	Upcast(output:IrValue, value:IrValue);
 	/** Terminal receiver means this compiler-owned value place is dead after this call, including on its exception edge. */
-	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>);
+	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>, terminalReceiver:Bool);
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);

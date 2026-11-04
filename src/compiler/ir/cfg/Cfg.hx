@@ -69,7 +69,7 @@ enum CfgInstruction {
 	CallClosure(output:CfgValue, closure:CfgValue, arguments:Array<CfgValue>);
 	ToVirtual(output:CfgValue, value:CfgValue);
 	Upcast(output:CfgValue, value:CfgValue);
-	MethodCall(output:CfgValue, object:CfgValue, methodName:String, arguments:Array<CfgValue>);
+	MethodCall(output:CfgValue, object:CfgValue, methodName:String, arguments:Array<CfgValue>, terminalReceiver:Bool);
 	NewObject(output:CfgValue, typeName:String);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);
 	FieldSet(object:CfgValue, fieldName:String, value:CfgValue);

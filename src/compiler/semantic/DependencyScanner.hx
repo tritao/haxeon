@@ -18,6 +18,11 @@ class DependencyScanner {
 			case ErrorStatement(_):
 			case UninitializedDeclaration(_, type, _):
 				scanAnnotation(type, dependencies, typeParameters);
+			case ScopedDeclaration(_, type, e, _):
+				dependencies.set("Disposable", true);
+				if (type != null)
+					scanAnnotation(type, dependencies, typeParameters);
+				scanExpression(e, dependencies, typeParameters);
 			case VarDeclaration(_, type, e, _):
 				// A type written only in the annotation still has to be loaded.
 				if (type != null)

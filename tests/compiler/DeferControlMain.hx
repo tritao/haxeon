@@ -21,6 +21,12 @@ class DeferControlMain {
    var decoded = compiler.ir.codec.IrInstructionCodec.decode(compiler.ir.codec.IrInstructionCodec.encode(instruction), []);
    if (Std.string(decoded) != Std.string(instruction)) throw "Cleanup guard did not survive IR serialization";
   }
+  var out = new compiler.ir.Ir.IrValue(1, "result", compiler.ir.Ir.IrType.Void);
+  var receiver = new compiler.ir.Ir.IrValue(2, "receiver", compiler.ir.Ir.IrType.Obj("Resource"));
+  var terminal:compiler.ir.Ir.IrInstruction = MethodCall(out, receiver, "dispose", [], true);
+  var values:Map<Int, compiler.ir.Ir.IrValue> = [1 => out, 2 => receiver];
+  var restored = compiler.ir.codec.IrInstructionCodec.decode(compiler.ir.codec.IrInstructionCodec.encode(terminal), values);
+  if (Std.string(restored) != Std.string(terminal)) throw "Terminal disposal did not survive IR serialization";
   Sys.println('PASS: deferred control transfers stay inside their own body');
  }
 }

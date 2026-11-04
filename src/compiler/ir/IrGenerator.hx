@@ -47,11 +47,12 @@ private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
 private typedef OptionalFieldPlace = {final owner:TypedExpression; final field:String; final path:Array<String>; @:optional final checkedDepth:Int;}
 private typedef ArrayValuePath = {final name:String; final type:CompilerType;}
 private typedef ArrayValuePlace = {final array:TypedExpression; final index:TypedExpression; final root:TypedExpression; final elementType:CompilerType; final path:Array<ArrayValuePath>;}
-private typedef CleanupRegion = {final body:Array<TypedStatement>; final span:compiler.Source.SourceSpan; final trapDepth:Int; final loopDepth:Int;}
+private typedef CleanupRegion = {final body:Array<TypedStatement>; final span:compiler.Source.SourceSpan; final trapDepth:Int; final loopDepth:Int; final scopedDisposal:Bool;}
 
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
 	static var cleanupRegions:Array<CleanupRegion> = [];
+	static var loweringScopedDisposal:Bool = false;
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var enumEquatableTypes:Map<String, Bool> = [];
 	static var enumPayloadTypes:Map<String, Bool> = [];
@@ -534,18 +535,29 @@ class IrGenerator {
 	}
 
 	/** Protect the remaining statements from the registration point through block exit. */
+	static function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool,
+			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+		var previous = loweringScopedDisposal;
+		loweringScopedDisposal = scopedDisposal;
+		try lowerStatements(body, builder, localTypes, span.end) catch (error:Dynamic) {
+			loweringScopedDisposal = previous;
+			throw error;
+		}
+		loweringScopedDisposal = previous;
+	}
+
 	static function lowerCleanupRegion(body:Array<TypedStatement>, remainder:Array<TypedStatement>, span:compiler.Source.SourceSpan,
-			builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
+			scopedDisposal:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
 		var handler = builder.createBlock(), after = builder.createBlock();
 		builder.beginTry(handler, after);
-		var region:CleanupRegion = {body: body, span: span, trapDepth: builder.trapDepth(), loopDepth: builder.loopContexts.length};
+		var region:CleanupRegion = {body: body, span: span, trapDepth: builder.trapDepth(), loopDepth: builder.loopContexts.length, scopedDisposal: scopedDisposal};
 		cleanupRegions.push(region);
 		lowerStatements(remainder, builder, localTypes, scopeEnd);
 		cleanupRegions.pop();
 		var continues = !builder.isTerminated();
 		if (continues) {
 			builder.endTry();
-			lowerStatements(body, builder, localTypes, span.end);
+			lowerCleanupBody(body, span, scopedDisposal, builder, localTypes);
 			continues = !builder.isTerminated();
 			if (continues)
 				builder.jump(after);
@@ -560,7 +572,7 @@ class IrGenerator {
 		builder.store(primary, builder.catchValue());
 		var suppressed = builder.createBlock(), rethrow = builder.createBlock();
 		builder.beginTry(suppressed, rethrow, true);
-		lowerStatements(body, builder, localTypes, span.end);
+		lowerCleanupBody(body, span, scopedDisposal, builder, localTypes);
 		if (builder.isTerminated())
 			builder.discardTry();
 		else {
@@ -588,7 +600,7 @@ class IrGenerator {
 			builder.closeTrapsBetween(depth, region.trapDepth - 1);
 			depth = region.trapDepth - 1;
 			cleanupRegions = original.slice(0, index);
-			lowerStatements(region.body, builder, localTypes, region.span.end);
+			lowerCleanupBody(region.body, region.span, region.scopedDisposal, builder, localTypes);
 			if (builder.isTerminated())
 				break;
 		}
@@ -605,8 +617,8 @@ class IrGenerator {
 				break;
 			builder.at(typedStatementSpan(statement));
 			switch statement {
-				case TDefer(body, span):
-					lowerCleanupRegion(body, statements.slice(statementIndex + 1), span, builder, localTypes, scopeEnd);
+				case TDefer(body, span, scopedDisposal):
+					lowerCleanupRegion(body, statements.slice(statementIndex + 1), span, scopedDisposal == true, builder, localTypes, scopeEnd);
 					return;
 				case TDeclare(name, type, span):
 					localTypes.set(name, lowerType(type));
@@ -1205,7 +1217,7 @@ class IrGenerator {
 		return switch statement {
 			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCellAssign(_, _, _, span), TCellCapturedAssign(_, _, _, span),
 				TFieldAssign(_, _, _, span), TStaticFieldAssign(_, _, _, span), TIndexAssign(_, _, _, span), TMapAssign(_, _, _, span), TReturn(_, span),
-				TReturnVoid(span), TThrow(_, span), TDefer(_, span), TTry(_, _, span), TIf(_, _, _, span), TWhile(_, _, span), TDoWhile(_, _, span), TForIn(_, _, _, _, span),
+				TReturnVoid(span), TThrow(_, span), TDefer(_, span, _), TTry(_, _, span), TIf(_, _, _, span), TWhile(_, _, span), TDoWhile(_, _, span), TForIn(_, _, _, _, span),
 				TBreak(span), TContinue(span), TSwitch(_, _, _, _, span), TIncrement(_, _, span), TCellIncrement(_, _, _, _, span),
 				TCellCapturedIncrement(_, _, _, _, span), TExpression(_, span):
 				span;
@@ -2865,7 +2877,7 @@ class IrGenerator {
 						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
 					else {
 						var typedInterface = typedInterfaceForCall(object.type, method, lowerType(expression.type), [for (argument in callArgs) argument.type]);
-						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type));
+						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type), loweringScopedDisposal);
 						else builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
 							lowerType(expression.type)), [receiver].concat(callArgs), lowerType(expression.type));
 					}

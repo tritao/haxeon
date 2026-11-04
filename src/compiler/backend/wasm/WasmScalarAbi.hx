@@ -162,7 +162,7 @@ class WasmScalarAbi {
 	function planScalarVirtuals():Void {
 		var index = WasmProgramIndex.of(program), seen:Map<String, Bool> = [];
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case MethodCall(out, receiver, method, _) if (!values.isValue(receiver.type)):
+			case MethodCall(out, receiver, method, _, _) if (!values.isValue(receiver.type)):
 				var key = virtualKey(receiver.type, method);
 				if (seen.exists(key)) continue;
 				seen.set(key, true);
@@ -374,7 +374,7 @@ class WasmScalarAbi {
 						}
 					case Call(_, name, arguments) if (candidates.exists(name) && arguments.length > 0 && aliases.exists(arguments[0].id)):
 						for (argument in arguments.slice(1)) if (aliases.exists(argument.id)) return false;
-					case MethodCall(_, owner, method, arguments) if (aliases.exists(owner.id)):
+					case MethodCall(_, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						var target = resolveMethod(owner.type, method);
 						if (target == null || !candidates.exists(target)) return false;
 						for (argument in arguments) if (aliases.exists(argument.id)) return false;
@@ -408,7 +408,7 @@ class WasmScalarAbi {
 				case FieldGet(_, owner, _), FieldSet(owner, _, _) if (aliases.exists(owner.id)):
 				case NewObject(out, _) if (values.isValue(out.type)):
 				case Call(_, name, args) if (candidates.exists(name) && args.length > 0 && aliases.exists(args[0].id)):
-				case MethodCall(_, owner, method, _) if (aliases.exists(owner.id)):
+				case MethodCall(_, owner, method, _, _) if (aliases.exists(owner.id)):
 					var target = resolveMethod(owner.type, method);
 					if (target == null || !candidates.exists(target)) return false;
 				case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), ToDyn(_, _),
@@ -440,7 +440,7 @@ class WasmScalarAbi {
 	function callsThrowingMethod(fn:IrFunction, throwing:Map<String, Bool>):Bool {
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case Call(_, name, _) if (throwing.exists(name)): return true;
-			case MethodCall(_, receiver, method, _):
+			case MethodCall(_, receiver, method, _, _):
 				var target = values.isValue(receiver.type) ? resolveMethod(receiver.type, method) : null;
 				if (target != null && throwing.exists(target)) return true;
 			default:
@@ -484,7 +484,7 @@ class WasmScalarAbi {
 							var unique = true;
 							for (argument in arguments.slice(1)) if (roots.exists(argument.id) && roots.get(argument.id) == roots.get(input.id)) unique = false;
 							unique;
-						case MethodCall(_, owner, method, arguments) if (owner.id == input.id):
+						case MethodCall(_, owner, method, arguments, _) if (owner.id == input.id):
 							var target = resolveMethod(owner.type, method), unique = target != null && methodClones.exists(target);
 							for (argument in arguments) if (roots.exists(argument.id) && roots.get(argument.id) == roots.get(input.id)) unique = false;
 							unique;
@@ -541,7 +541,7 @@ class WasmScalarAbi {
 		var added = false;
 		for (fn in lowered.functions) if (reachable.exists(fn.name)) for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
-				case MethodCall(_, receiver, method, _):
+				case MethodCall(_, receiver, method, _, _):
 					var virtual = scalarVirtuals.get(virtualKey(receiver.type, method));
 					if (virtual != null) for (target in virtual.targets) if (roots.indexOf(target.clone) < 0) {
 						roots.push(target.clone); added = true;
@@ -566,7 +566,7 @@ class WasmScalarAbi {
 				case Call(out, name, arguments) if (name == RETHROW_MARKER):
 					if ((switch (out.type) { case Void: false; default: true; }) || arguments.length != 2 || (switch (arguments[0].type) { case Dyn: false; default: true; }) || (switch (arguments[1].type) { case Bool: false; default: true; }))
 						throw 'Invalid scalar rethrow in ${fn.name}';
-				case MethodCall(out, receiver, method, arguments) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
+				case MethodCall(out, receiver, method, arguments, _) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
 					var virtual = scalarVirtuals.get(virtualKey(receiver.type, method));
 					if (virtual == null) throw 'Missing scalar virtual method "$method"';
 					var expected = expandedTypes(virtual.signature.arguments);
@@ -671,9 +671,9 @@ class WasmScalarAbi {
 					else replacement.instructions.push(located);
 				case Call(out, name, originalArgs) if (signatures.exists(name)):
 					next = expandCall(replacement, located, out, name, originalArgs, next);
-				case MethodCall(out, receiver, method, originalArgs) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
+				case MethodCall(out, receiver, method, originalArgs, _) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
 					next = expandVirtualCall(replacement, located, out, receiver, method, originalArgs, next);
-				case MethodCall(out, receiver, method, originalArgs) if (values.isValue(receiver.type)):
+				case MethodCall(out, receiver, method, originalArgs, _) if (values.isValue(receiver.type)):
 					var original = resolveMethod(receiver.type, method), clone = original == null ? null : methodClones.get(original);
 					if (clone == null || (!receiverSafe.exists(original) && !isolated.exists(receiver.id))) replacement.instructions.push(located);
 					else next = expandCall(replacement, located, out, clone, [receiver].concat(originalArgs), next);
@@ -722,11 +722,11 @@ class WasmScalarAbi {
 			}
 		}
 		if (!values.isValue(virtual.signature.result)) {
-			block.instructions.push(new Located(MethodCall(out, receiver, method, expanded), origin.provenance));
+			block.instructions.push(new Located(MethodCall(out, receiver, method, expanded, false), origin.provenance));
 			return next;
 		}
 		var handle = new IrValue(next++, "$wasm-gc-virtual-result", out.type), index = 0;
-		block.instructions.push(new Located(MethodCall(handle, receiver, method, expanded), origin.provenance));
+		block.instructions.push(new Located(MethodCall(handle, receiver, method, expanded, false), origin.provenance));
 		block.instructions.push(new Located(NewObject(out, objectName(out.type)), origin.provenance));
 		for (slot in values.leaves(out.type)) {
 			var scalar = new IrValue(next++, "$wasm-gc-virtual-result-field", slot.type);

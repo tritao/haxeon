@@ -260,6 +260,7 @@ class BodyTyper {
 
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false, ?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType, ?physicalOwner:String, ?ownerTypeArguments:Array<CompilerType>):TypedFunction {
+		compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
 		var functionName = specializedName == null ? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		for (argument in fn.arguments) {
 			var argumentValueType = argumentType(argument, substitutions);
@@ -447,6 +448,28 @@ class BodyTyper {
 					throw "Simple statement was not dispatched";
 				case VarDeclaration(_, _, _, _):
 					throw "Simple statement was not dispatched";
+				case ScopedDeclaration(name, declared, initializer, span):
+					var declaration = VarDeclaration(name, declared, initializer, span);
+					var typed = statementTyper.typeSimpleStatement(declaration, scope, result, statements, statementIndex);
+					if (typed == null) throw "Scoped declaration was not typed";
+					for (item in typed) output.push(item);
+					var boundType = scope.resolveDeclared(name);
+					if (boundType == null) throw "Scoped binding was not declared";
+					// A no-return initializer never registers cleanup and has no value to dispatch on.
+					if ((switch boundType { case TNever: true; default: false; }))
+						continue;
+					var element = switch boundType { case TNullable(inner): inner; default: boundType; };
+					var contract = lowerType(NamedType("Disposable"));
+					if (!satisfiesDisposable(element, contract))
+						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
+					scope.markScoped(name);
+					context.scopedBindings.set(scope.requireId(name), name);
+					var call = Expression(MethodCall(Variable(name, span), "dispose", [], span), span);
+					var cleanup:Array<AstStatement> = switch boundType {
+						case TNullable(_): [If(NotEqual(Variable(name, span), NullLiteral(span), span), [call], [], span)];
+						default: [call];
+					};
+					output.push(TDefer(typeStatements(cleanup, new Scope(scope), result), span, true));
 				case Return(expression, span):
 					throw "Simple statement was not dispatched";
 				case ReturnVoid(span):
@@ -457,7 +480,7 @@ class BodyTyper {
 					output.push(statementTyper.typeTry(tryBranch, catches, span, scope, result));
 				case Defer(body, span):
 					validateDeferredControl(body, 0);
-					output.push(TDefer(typeStatements(body, new Scope(scope), result), span));
+					output.push(TDefer(typeStatements(body, new Scope(scope), result), span, false));
 				case Break(span):
 					throw "Simple statement was not dispatched";
 				case Continue(span):
@@ -2209,7 +2232,27 @@ class BodyTyper {
 			default: throw "Inheritance requires a nominal type";
 		};
 
+	function satisfiesDisposable(actual:CompilerType, contract:CompilerType):Bool {
+		return switch actual {
+			case TDynamic, TNull: false;
+			default: session.relations.satisfiesConstraint(actual, contract);
+		};
+	}
+
+	function scopedSource(value:TypedExpression):Null<String> {
+		return switch value.expression {
+			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): this.context.scopedBindings.get(name);
+			case TCopy(inner, _), TNullableWrap(inner), TCast(inner), TAbiCast(inner): scopedSource(inner);
+			default: null;
+		};
+	}
+
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
+		if ((switch expected { case TDynamic: true; default: false; })) {
+			var name = scopedSource(value);
+			if (name != null)
+				fail("E1002", 'Scoped binding "$name" cannot be converted to Dynamic', value.span);
+		}
 		return conversionResolver.coerce(value, expected, context, code);
 	}
 
@@ -2571,7 +2614,7 @@ class BodyTyper {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case ErrorStatement(span): span;
-			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
 				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
 				DoWhile(_, _,
 					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;

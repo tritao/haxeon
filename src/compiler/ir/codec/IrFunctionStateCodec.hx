@@ -322,14 +322,14 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CNativeCall(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments),
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
 				MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)
 					collectValue(argument, values);
 				switch instruction {
 					case CallClosure(_, closure, _): collectValue(closure, values);
-					case MethodCall(_, object, _, _): collectValue(object, values);
+					case MethodCall(_, object, _, _, _): collectValue(object, values);
 					default:
 				}
 			case GlobalSet(_, value):

@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 7;
+	static inline final VERSION = 8;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -60,6 +60,7 @@ class IrInstructionCodec {
 		"ToVirtual" => true,
 		"Upcast" => true,
 		"MethodCall" => true,
+		"TerminalMethodCall" => true,
 		"NewObject" => true,
 		"FieldGet" => true,
 		"FieldSet" => true,
@@ -244,8 +245,8 @@ class IrInstructionCodec {
 				writeTwoValues(output, "ToVirtual", outputValue, value);
 			case Upcast(outputValue, value):
 				writeTwoValues(output, "Upcast", outputValue, value);
-			case MethodCall(value, object, name, arguments):
-				begin(output, "MethodCall", 4);
+			case MethodCall(value, object, name, arguments, terminalReceiver):
+				begin(output, terminalReceiver == true ? "TerminalMethodCall" : "MethodCall", 4);
 				writeValue(output, value);
 				writeValue(output, object);
 				writeName(output, name, erase);
@@ -442,7 +443,10 @@ class IrInstructionCodec {
 				Upcast(readValue(input, values), readValue(input, values));
 			case "MethodCall":
 				arity(4);
-				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values));
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), false);
+			case "TerminalMethodCall":
+				arity(4);
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), true);
 			case "NewObject":
 				arity(2);
 				NewObject(readValue(input, values), readText(input, totalLength));

@@ -263,7 +263,7 @@ class CfgVerifier {
 						default: throw 'CFG virtual conversion must produce a virtual value';
 					}
 					define(out, defined, available, block.id);
-				case MethodCall(out, object, _, arguments):
+				case MethodCall(out, object, _, arguments, _):
 					require(object, available, block.id);
 					for (argument in arguments)
 						require(argument, available, block.id);

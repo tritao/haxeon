@@ -26,6 +26,9 @@ class TypingContext {
 	public final storage = new BindingStoragePlan();
 
 	public final localExpectedTypes:Map<String, CompilerType> = [];
+	/** Scoped binding identities, used to reject conversions that erase their lifetime. */
+	public final scopedBindings:Map<String, String> = [];
+	public var enumInterfaceTemporary:Int = 0;
 
 	/** Binding ID to the enum abstract a parameter or local was declared as (the type itself lowers to the underlying one). */
 	public final declaredAbstracts:Map<String, String> = [];

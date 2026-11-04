@@ -5,6 +5,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedFunction;
 import haxe.crypto.Sha256;
+import compiler.Source.SourceSpan;
 
 /** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */
 class EnumConformanceMethods {
@@ -21,6 +22,31 @@ class EnumConformanceMethods {
 
 	public static function name(type:CompilerType, method:String):String
 		return "$enum-custom:" + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+
+	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String, span:SourceSpan):Void {
+		var key = name(type, method);
+		if (!session.enumMethodRequests.exists(key))
+			session.enumMethodRequests.set(key, {type: type, method: method, origin: origin, span: span});
+	}
+
+	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
+		var generated:Map<String, TypedFunction> = [];
+		while (true) {
+			var pending = [for (key in session.enumMethodRequests.keys()) if (!generated.exists(key)) key];
+			if (pending.length == 0) break;
+			pending.sort(Reflect.compare);
+			for (key in pending) {
+				var requested = session.enumMethodRequests.get(key);
+				if (requested == null) throw 'Missing enum method request "$key"';
+				var implementation = method(session, requested.type, requested.method);
+				if (implementation == null) throw 'Missing enum method implementation "$key"';
+				generated.set(key, typeMethod(session, typer, requested.type, implementation, requested.origin));
+			}
+		}
+		var keys = [for (key in generated.keys()) key];
+		keys.sort(Reflect.compare);
+		return [for (key in keys) generated.get(key)];
+	}
 
 	public static function typeMethod(session:TypingSession, typer:BodyTyper, type:CompilerType, method:AstFunction, origin:String):TypedFunction {
 		return switch type {

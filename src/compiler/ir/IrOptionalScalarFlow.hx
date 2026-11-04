@@ -245,7 +245,45 @@ class IrOptionalScalarFlow {
 		for (argument in arguments) if (aliases.exists(argument.id)) return true;
 		return false;
 	}
-	function canPassAliases(name:String, arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>):Bool {
+	/** A receiver that is only read can be reconstructed from optional components without changing place semantics. */
+	function snapshotOnlyReceiver(fn:IrFunction, allowWrites:Bool = false):Bool {
+		if (fn.arguments.length == 0 || fn.arguments[0].name != "this") return false;
+		var roots:Map<Int, Bool> = [fn.arguments[0].id => true], changed = true;
+		while (changed) {
+			changed = false;
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case FieldGet(out, owner, _) if (roots.exists(owner.id) && !roots.exists(out.id)):
+					switch out.type {
+						case Obj(name) if (objects.exists(name) && objects.get(name).isValue): roots.set(out.id, true); changed = true;
+						default:
+					}
+				default:
+			}
+		}
+		for (block in fn.blocks) {
+			for (located in block.instructions) {
+				switch located.value {
+					case Phi(_, incoming): for (item in incoming) if (roots.exists(item.value.id)) return false;
+					default:
+				}
+				for (input in IrOperands.inputs(located.value)) if (roots.exists(input.id)) switch located.value {
+					case FieldGet(_, owner, _) if (roots.exists(owner.id)):
+					case FieldSet(owner, _, value) if (allowWrites && roots.exists(owner.id) && !roots.exists(value.id)):
+					default: return false;
+				}
+			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (roots.exists(value.id)): return false;
+				default:
+			}
+		}
+		return true;
+	}
+	function aliasMethod(receiver:IrValue, name:String):Null<String> return switch receiver.type {
+		case Obj(typeName): method(typeName, name);
+		default: null;
+	};
+	function canPassAliases(name:String, arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>, terminalReceiver:Bool = false):Bool {
 		if (!hasAlias(arguments, aliases)) return true;
 		if (StringTools.startsWith(name, "$") && !StringTools.startsWith(name, "$generic:")
 				&& !StringTools.startsWith(name, "$lambda:") && !StringTools.startsWith(name, "$value$equality:")
@@ -254,7 +292,7 @@ class IrOptionalScalarFlow {
 		if (called == null || called.arguments.length != arguments.length) return false;
 		for (index in 0...arguments.length) if (aliases.exists(arguments[index].id)) {
 			var formal = called.arguments[index];
-			if (formal.name == "this" || !Type.enumEq(formal.type, arguments[index].type)) return false;
+			if ((formal.name == "this" && !snapshotOnlyReceiver(called, terminalReceiver)) || !Type.enumEq(formal.type, arguments[index].type)) return false;
 		}
 		return true;
 	}
@@ -308,7 +346,10 @@ class IrOptionalScalarFlow {
 					case CallClosure(_, closure, args) if (bindings.exists(closure.id) && (candidates.exists(bindings.get(closure.id).name) || hasAlias(args, alias))):
 						var binding:OptionalClosure = cast bindings.get(closure.id), actual = binding.receiver == null ? args : [binding.receiver].concat(args);
 						if (!canPassAliases(binding.name, actual, alias)) return false;
-					case MethodCall(_, receiver, name, args) if (!alias.exists(receiver.id) && (hasCandidateMethod(exact, receiver, name) || hasAlias(args, alias))):
+					case MethodCall(_, receiver, name, args, terminalReceiver) if (alias.exists(receiver.id)):
+						var target = aliasMethod(receiver, name);
+						if (target == null || !canPassAliases(target, [receiver].concat(args), alias, terminalReceiver == true)) return false;
+					case MethodCall(_, receiver, name, args, _) if (!alias.exists(receiver.id) && (hasCandidateMethod(exact, receiver, name) || hasAlias(args, alias))):
 						var target = resolvedMethod(exact, receiver, name);
 						if (target == null || !canPassAliases(target, [receiver].concat(args), alias)) return false;
 					default:
@@ -577,7 +618,7 @@ class IrOptionalScalarFlow {
 					case Call(out, name, arguments) if (candidates.exists(name)):
 						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : argument];
 						emitCall(target, out, name, actual, located);
-					case MethodCall(out, receiver, name, arguments) if (!alias.exists(receiver.id) && hasCandidateMethod(exact, receiver, name)):
+					case MethodCall(out, receiver, name, arguments, _) if (!alias.exists(receiver.id) && hasCandidateMethod(exact, receiver, name)):
 						// Method arguments have already been evaluated; preserve the null error at the original call.
 						if (!exact.exists(receiver.id)) switch receiver.type {
 							case Obj(typeName): add(target, Call(new IrValue(next++, "$optional-receiver-check", Void), receiverCheck(typeName), [receiver]), located);
@@ -591,6 +632,9 @@ class IrOptionalScalarFlow {
 							var output = new IrValue(next++, "$optional-boundary-result", out.type);
 							add(target, Call(output, name, actual), located); unbox(target, output, out, located);
 						} else add(target, Call(out, name, actual), located);
+					case MethodCall(out, receiver, name, arguments, terminalReceiver) if (alias.exists(receiver.id)):
+						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
+						add(target, MethodCall(out, aliasValue(target, receiver, located), name, actual, terminalReceiver), located);
 					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id) && bindings.get(closure.id).receiver == null
 							&& functions.exists(bindings.get(closure.id).name) && !hasAlias(arguments, alias)):
 						var binding:OptionalClosure = cast bindings.get(closure.id);
@@ -606,12 +650,12 @@ class IrOptionalScalarFlow {
 							var output = new IrValue(next++, "$optional-boundary-result", out.type);
 							add(target, Call(output, binding.name, actual), located); unbox(target, output, out, located);
 						} else add(target, Call(out, binding.name, actual), located);
-					case MethodCall(out, receiver, name, arguments) if (!alias.exists(receiver.id) && hasAlias(arguments, alias)):
+					case MethodCall(out, receiver, name, arguments, terminalReceiver) if (!alias.exists(receiver.id) && hasAlias(arguments, alias)):
 						var actual = [for (argument in arguments) alias.exists(argument.id) ? aliasValue(target, argument, located) : components.exists(argument.id) ? box(target, argument, located) : argument];
 						if (components.exists(out.id)) {
 							var output = new IrValue(next++, "$optional-boundary-result", out.type);
-							add(target, MethodCall(output, receiver, name, actual), located); unbox(target, output, out, located);
-						} else add(target, MethodCall(out, receiver, name, actual), located);
+							add(target, MethodCall(output, receiver, name, actual, terminalReceiver), located); unbox(target, output, out, located);
+						} else add(target, MethodCall(out, receiver, name, actual, terminalReceiver), located);
 					default:
 						var remapped:Map<Int, IrValue> = [], out = IrOperands.output(op), changed = false;
 						for (input in IrOperands.inputs(op)) if (components.exists(input.id) && !remapped.exists(input.id)) {

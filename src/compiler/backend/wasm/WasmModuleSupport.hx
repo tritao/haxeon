@@ -331,7 +331,7 @@ class WasmModuleSupport {
 							enqueueFunction(target, byName, pending);
 						case StaticClosure(_, target), InstanceClosure(_, target, _):
 							enqueueFunction(target, byName, pending);
-						case MethodCall(_, object, method, _):
+						case MethodCall(_, object, method, _, _):
 							switch object.type {
 								case Obj(objectName):
 									for (candidate in index.subtypesOf(objectName))

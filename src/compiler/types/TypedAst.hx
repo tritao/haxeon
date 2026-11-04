@@ -168,7 +168,7 @@ enum TypedStatement {
 	TReturnVoid(span:SourceSpan);
 	TThrow(expression:TypedExpression, span:SourceSpan);
 	/** Cleanup registered at this point and executed on exit from the containing block. */
-	TDefer(body:Array<TypedStatement>, span:SourceSpan);
+	TDefer(body:Array<TypedStatement>, span:SourceSpan, scopedDisposal:Bool);
 	TTry(tryBranch:Array<TypedStatement>, catches:Array<TypedCatch>, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);

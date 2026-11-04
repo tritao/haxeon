@@ -374,9 +374,9 @@ class CfgBuilder {
 		return out;
 	}
 
-	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType):CfgValue {
+	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType, terminalReceiver:Bool = false):CfgValue {
 		var out = temporary(result);
-		emit(MethodCall(out, object, methodName, args));
+		emit(MethodCall(out, object, methodName, args, terminalReceiver));
 		return out;
 	}
 

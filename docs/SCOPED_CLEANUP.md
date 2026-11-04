@@ -1,6 +1,6 @@
 # Scoped cleanup
 
-Status: implementation in progress. This is layer 1 of the resource cleanup plan in
+Status: scoped cleanup is implemented; migrations are in progress. This is layer 1 of the resource cleanup plan in
 [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md). It does not introduce ownership or move-only values.
 
 ## Syntax and registration
@@ -62,6 +62,10 @@ other objects are allowed. A callee retaining or returning the argument is not d
 hidden aliases from before the initializer, native code, or arbitrary unsafe operations. These rules do not establish
 unique ownership. Diagnostics should name the scoped binding and the escaping operation. A future checked borrowing
 contract could tighten argument passing without changing cleanup semantics.
+
+Direct and constrained generic calls on an enum conformance use statically generated methods. Converting an enum to an
+interface-typed value creates an adapter at that ordinary interface boundary. This conversion is separate from scoped
+cleanup and from inline enum layout.
 
 ## Lowering and targets
 

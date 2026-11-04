@@ -246,7 +246,7 @@ private class Walker {
 								if (native != null)
 									found(native.kind, native.what);
 							}
-						case MethodCall(_, receiver, methodName, _):
+						case MethodCall(_, receiver, methodName, _, _):
 							var targets = implementations(receiver, methodName);
 							if (targets == null)
 								found(IrAllocationReport.Dynamic, "method call " + methodName + ", target not resolved");

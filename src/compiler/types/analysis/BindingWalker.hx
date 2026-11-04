@@ -137,6 +137,9 @@ class BindingWalker {
 						expression(initializer);
 						declare(name, span, Local, type, initializer);
 				}
+			case ScopedDeclaration(name, type, initializer, span):
+				expression(initializer);
+				declare(name, span, Local, type, initializer);
 			case UninitializedDeclaration(name, type, span):
 				declare(name, span, Local, type);
 			case Assignment(name, expression, span):

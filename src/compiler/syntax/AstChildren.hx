@@ -44,7 +44,7 @@ class AstChildren {
 
 	public static function statementExpressions(statement:AstStatement):Array<AstExpression>
 		return switch statement {
-			case VarDeclaration(_, _, value, _), Assignment(_, value, _), Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
+			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _), Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
 				While(value, _, _), DoWhile(_, value, _), ForIn(_, _, value, _, _): [value];
 			case IndexAssignment(array, offset, value, _): [array, offset, value];
 			case FieldAssignment(receiver, _, value, _): [receiver, value];

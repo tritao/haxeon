@@ -30,6 +30,20 @@ typedef EqualityRequest = {
 	final span:SourceSpan;
 }
 
+typedef EnumMethodRequest = {
+	final type:CompilerType;
+	final method:String;
+	final origin:String;
+	final span:SourceSpan;
+}
+
+typedef EnumInterfaceAdapterRequest = {
+	final type:CompilerType;
+	final interfaceType:CompilerType;
+	final origin:String;
+	final span:SourceSpan;
+}
+
 /** Mutable semantic state shared by all typing phases for one compilation. */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
@@ -69,6 +83,10 @@ class TypingSession {
 	public final valueEqualityRequests:Map<String, EqualityRequest> = [];
 	/** Static Type.enumEq comparisons use enum tags and payloads without declaring enum value conformance. */
 	public final enumEqualityRequests:Map<String, EqualityRequest> = [];
+	/** Concrete enum interface methods requested by statically dispatched calls. */
+	public final enumMethodRequests:Map<String, EnumMethodRequest> = [];
+	/** Real enum-to-interface conversions need an interface-dispatch object. */
+	public final enumInterfaceAdapters:Map<String, EnumInterfaceAdapterRequest> = [];
 	/** Hash implementations generated from declared `Hashable` conformance. */
 	public final hashRequests:Map<String, EqualityRequest> = [];
 	public final cNativeFunctions:Map<String, Bool> = [];

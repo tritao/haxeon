@@ -58,7 +58,7 @@ class WasmRuntimeAbi {
 			case IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _): IteratorOperation;
 			case StaticClosure(_, _), InstanceClosure(_, _, _): MakeClosure;
 			case CallClosure(_, _, _): CallClosure;
-			case MethodCall(_, _, _, _), ToVirtual(_, _): MethodDispatch;
+			case MethodCall(_, _, _, _, _), ToVirtual(_, _): MethodDispatch;
 			case ToDyn(_, _), SafeCast(_, _): DynamicConversion;
 			case TypeValue(_, _): TypeCheck;
 			case MakeEnum(_, _, _, _): EnumConstruction;

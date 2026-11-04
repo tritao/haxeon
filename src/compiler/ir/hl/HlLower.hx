@@ -665,7 +665,7 @@ class HlLower {
 				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
 				// Emit an explicit check so the active handler works on every thread.
 				var receiver:Null<IrValue> = switch instruction.value {
-					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
+					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
 						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value),
 						EnumIndex(_, value), EnumField(_, value, _, _): value;
 					case _: null;
@@ -913,7 +913,7 @@ class HlLower {
 						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case ToVirtual(output, value):
 						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
-					case MethodCall(output, object, methodName, arguments):
+					case MethodCall(output, object, methodName, arguments, _):
 						var receiver = requireRegister(object, registers),
 							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
 							valueMethod = valueMethodFunction(object, methodName);

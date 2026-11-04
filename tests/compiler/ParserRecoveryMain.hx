@@ -81,7 +81,12 @@ class ParserRecoveryMain {
 		}
 		if (!rejected)
 			throw "unbraced defer was accepted";
-
+		var scoped = "function main():Void { scoped var resource:Null<File> = open(); resource.read(); }";
+		var scopedProgram = new Parser(new Lexer(new SourceFile("Scoped.hx", scoped)).tokenize()).parseProgram();
+		switch scopedProgram.functions[0].statements {
+			case [ScopedDeclaration("resource", _, _, _), Expression(_, _)]:
+			default: throw "scoped binding did not retain its initializer or following statement";
+		}
 	}
 
 	static function assertBlocklessClosureTerminators():Void {

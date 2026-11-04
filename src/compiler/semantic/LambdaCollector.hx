@@ -10,7 +10,7 @@ class LambdaCollector {
 			switch statement {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
 					collectExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):
 					collect(tryBranch, functionName, module, generatedByModule);

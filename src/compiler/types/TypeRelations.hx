@@ -70,7 +70,7 @@ class TypeRelations {
 						switch actual {
 							case TInstance(actualKind, _, _):
 								switch actualKind {
-									case NominalKind.Class, NominalKind.Interface: ToInterface(name);
+								case NominalKind.Class, NominalKind.Interface, NominalKind.Enum: ToInterface(name);
 									default: Identity;
 								}
 							default: Identity;
@@ -126,7 +126,8 @@ class TypeRelations {
 								}
 							case NominalKind.Interface:
 								switch actualKind {
-									case NominalKind.Class, NominalKind.Interface: nominalReaches(actual, expected);
+								case NominalKind.Class, NominalKind.Interface: nominalReaches(actual, expected);
+								case NominalKind.Enum: satisfiesConstraint(actual, expected);
 									default: false;
 								}
 							default: false;
@@ -198,6 +199,21 @@ class TypeRelations {
 					return false;
 				default:
 			}
+		switch actual {
+			case TInstance(NominalKind.Enum, name, arguments) if ((switch expected { case TInstance(NominalKind.Interface, _, _): true; default: false; })):
+				var declaration = declarations.enums.get(name);
+				if (declaration == null || declaration.conformances == null) return false;
+				var substitutions:Map<String, CompilerType> = [];
+				for (index in 0...declaration.typeParameters.length)
+					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index]
+						: TTypeParameter(name, declaration.typeParameters[index]));
+				for (conformance in declaration.conformances) {
+					var resolved = declarations.resolve(conformance, declaration.span, substitutions);
+					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+				}
+				return false;
+			default:
+		}
 		if (isStructType(actual))
 			switch expected {
 				case TInstance(NominalKind.Interface, _, _):

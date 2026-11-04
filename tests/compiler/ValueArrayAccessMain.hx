@@ -572,7 +572,7 @@ class ValueArrayAccessMain {
 		var adjustmentFunction = new IrFunction("LaneInner.adjust", adjustment.arguments, Void, adjustment.blocks);
 		var caller = new IrBuilder(), callerReceiver = caller.argument("this", element), callerDelta = caller.argument("delta", I32),
 			callerChild = caller.fieldGet(callerReceiver, "inner", Obj("LaneInner"));
-		caller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust", [callerDelta]),
+		caller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust", [callerDelta], false),
 			SourceProvenance.generated("array-place-test")));
 		caller.returnValue(caller.constVoid());
 		var callerFunction = new IrFunction("LaneElement.nestedCall", caller.arguments, Void, caller.blocks);
@@ -582,7 +582,7 @@ class ValueArrayAccessMain {
 			placeProvenance = SourceProvenance.generated("array-place-caller-test");
 		placeCaller.currentBlock().instructions.push(new Located(ArrayGet(placeRoot, placeArray, placeIndex), placeProvenance));
 		var placeChild = placeCaller.fieldGet(placeRoot, "inner", Obj("LaneInner"));
-		placeCaller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900001, "$place-adjust", Void), placeChild, "adjust", [placeDelta]), placeProvenance));
+		placeCaller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900001, "$place-adjust", Void), placeChild, "adjust", [placeDelta], false), placeProvenance));
 		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot), placeProvenance));
 		placeCaller.returnValue(placeCaller.fieldGet(placeChild, "value", I32));
 		var rewrittenPlaceCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(
@@ -592,7 +592,7 @@ class ValueArrayAccessMain {
 			growthCallback = growthCaller.argument("callback", callbackType), growthRoot = new IrValue(900002, "$growth-place", element);
 		growthCaller.currentBlock().instructions.push(new Located(ArrayGet(growthRoot, growthArray, growthIndex), placeProvenance));
 		growthCaller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900003, "$growth-method", Void), growthRoot,
-			"LaneElement.nestedAround", [growthCallback, growthArray]), placeProvenance));
+			"LaneElement.nestedAround", [growthCallback, growthArray], false), placeProvenance));
 		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot), placeProvenance));
 		growthCaller.returnValue(growthCaller.constVoid());
 		var rewrittenGrowthCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(
