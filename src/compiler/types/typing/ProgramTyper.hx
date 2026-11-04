@@ -570,27 +570,45 @@ class ProgramTyper {
 						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TInt))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int', method.span);
 				}
+			var inheritedEquals = DiffIntrinsics.conformanceMethod(session, declaredType, "equals"),
+				inheritedHash = DiffIntrinsics.conformanceMethod(session, declaredType, "hash");
+			hasEquals = inheritedEquals != null;
+			hasHash = inheritedHash != null;
+			if (inheritedEquals != null && inheritedEquals.declaration.name != classDecl.name) {
+				var method = inheritedEquals.method, substitutions = session.representation.nominalSubstitutions(inheritedEquals.type);
+				if (method.isStatic || method.arguments.length != 1
+						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), inheritedEquals.type)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
+					BodyTyper.fail("E1003", 'Method "${inheritedEquals.declaration.name}.equals" must have signature equals(other:${compiler.semantic.SemanticSignature.display(inheritedEquals.type)}):Bool', method.span);
+			}
+			if (DeclaredConformance.has(session, declaredType, "Hashable") && inheritedHash != null
+					&& inheritedHash.declaration.name != classDecl.name) {
+				var method = inheritedHash.method, substitutions = session.representation.nominalSubstitutions(inheritedHash.type);
+				if (method.isStatic || method.arguments.length != 0
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
+					BodyTyper.fail("E1003", 'Method "${inheritedHash.declaration.name}.hash" must have signature hash():Int', method.span);
+			}
 			if (!hasEquals)
-				for (field in DiffIntrinsics.storedFields(classDecl)) {
-					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
-						classSemanticSubstitutions);
+				for (entry in DiffIntrinsics.conformanceFields(session, declaredType)) {
+					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsEquality(session, fieldType))
 						BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable', field.span);
 				}
 			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
 				if (hasEquals)
 					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int', classDecl.span);
-				var hashFields = DiffIntrinsics.storedFields(classDecl);
-				for (field in hashFields) {
-					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
-						classSemanticSubstitutions);
+				var hashFields = DiffIntrinsics.conformanceFields(session, declaredType);
+				for (entry in hashFields) {
+					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
 						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable', field.span);
 				}
 				if (classDecl.isStruct != true)
-					for (field in hashFields)
+					for (entry in hashFields) {
+						var field = entry.field;
 						if (DiffIntrinsics.isWritable(field))
 							BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": mutable field "${field.name}" must be final on a class', field.span);
+					}
 			}
 	}
 	}

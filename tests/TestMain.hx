@@ -1180,6 +1180,12 @@ class TestMain {
 			'Type "Thing" does not conform to Hashable');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class MutableKey implements Hashable { public var value:Int; public function new() value = 1; } function main():Int return 42;',
 			'Cannot synthesize Hashable for "MutableKey": mutable field "value" must be final on a class');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base { public var value:Int; public function new() value = 1; } class Derived extends Base implements Hashable { public function new() super(); } function main():Int return 42;',
+			'Cannot synthesize Hashable for "Derived": mutable field "value" must be final on a class');
+		expectCompileError('interface Equatable {} class Base { public function new() {} public function equals():Int return 0; } class Derived extends Base implements Equatable { public function new() super(); } function main():Int return 42;',
+			'Method "Base.equals" must have signature equals(other:Base):Bool');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base implements Equatable { public final x:Int; public function new(x:Int) this.x = x; public function equals(other:Base):Bool return x % 10 == other.x % 10; } class Derived extends Base implements Hashable { public function new(x:Int) super(x); } function main():Int return 42;',
+			'Cannot synthesize Hashable for "Derived" with a handwritten equals; provide hash():Int');
 		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(Named, "b");',
 			'Type "Named" has no stored field "b"');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Diff.copy(new Fixed()).a;',

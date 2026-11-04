@@ -124,22 +124,17 @@ class HashGenerator {
 						absent = new TypedExpression(TEqual(value, nil), TBool, span);
 					statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span));
 				}
-				var custom = false;
-				for (method in declaration.methods)
-					if (method.name == "hash")
-						custom = true;
-				if (custom) {
-					statements.push(TReturn(new TypedExpression(TMethodCall(value, name + ".hash", []), TInt, span), span));
+				var custom = DiffIntrinsics.conformanceMethod(session, type, "hash");
+				if (custom != null) {
+					var receiver = new TypedExpression(TCast(value), custom.type, span);
+					statements.push(TReturn(new TypedExpression(TMethodCall(receiver, custom.declaration.name + ".hash", []), TInt, span), span));
 				} else {
 					var hashName = "$hashValue";
 					statements.push(TVar(hashName, new TypedExpression(TIntLiteral(17), TInt, span), span));
-					var substitutions:Map<String, CompilerType> = [];
-					for (index in 0...declaration.typeParameters.length)
-					substitutions.set(declaration.name + "." + declaration.typeParameters[index],
-						index < arguments.length ? arguments[index] : TTypeParameter(declaration.name, declaration.typeParameters[index]));
-					for (field in DiffIntrinsics.storedFields(declaration)) {
-						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span, substitutions),
-							fieldValue = new TypedExpression(TField(value, field.name), fieldType, span);
+					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
+						var field = entry.field, fieldType = entry.type,
+							physical = session.representation.resolveField(type, field.name, field.span).physical,
+							fieldValue = session.representation.boundaryCast(new TypedExpression(TField(value, field.name), physical, span), fieldType);
 						request(session, fieldType, req.origin, field.span);
 						var running = new TypedExpression(TLocal(hashName), TInt, span),
 							mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running,

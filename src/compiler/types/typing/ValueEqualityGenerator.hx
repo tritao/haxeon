@@ -1,8 +1,6 @@
 package compiler.types.typing;
 
 import compiler.Source.SourceSpan;
-import compiler.syntax.Ast.AstFunction;
-import compiler.syntax.Ast.AstClass;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -77,13 +75,9 @@ class ValueEqualityGenerator {
 				if (declaration == null)
 					throw 'Missing value type declaration "$className"';
 				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
-				if (!hasHandwrittenEquals(declaration)) {
-					var substitutions:Map<String, CompilerType> = [];
-					for (index in 0...declaration.typeParameters.length)
-						substitutions.set(declaration.name + "." + declaration.typeParameters[index],
-							index < arguments.length ? arguments[index] : TTypeParameter(declaration.name, declaration.typeParameters[index]));
-					for (field in DiffIntrinsics.storedFields(declaration)) {
-						var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span, substitutions);
+				if (DiffIntrinsics.conformanceMethod(session, type, "equals") == null) {
+					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
+						var fieldType = entry.type;
 						if (needsHelper(session, fieldType))
 							collect(session, fieldType, root, requests, seen);
 					}
@@ -98,12 +92,6 @@ class ValueEqualityGenerator {
 			case TInstance(NominalKind.Class, _, _): DeclaredConformance.has(session, type, "Equatable");
 			default: false;
 		};
-
-	static function hasHandwrittenEquals(declaration:AstClass):Bool {
-		for (method in declaration.methods)
-			if (method.name == "equals") return true;
-		return false;
-	}
 
 	static function compareFunction(session:TypingSession, request:EqualityRequest,
 			compare:(TypedExpression, TypedExpression, SourceSpan)->TypedExpression):TypedFunction {
@@ -132,26 +120,17 @@ class ValueEqualityGenerator {
 					statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
 					statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 				}
-				var substitutions:Map<String, CompilerType> = [];
-				for (index in 0...declaration.typeParameters.length)
-					substitutions.set(declaration.name + "." + declaration.typeParameters[index],
-						index < arguments.length ? arguments[index] : TTypeParameter(declaration.name, declaration.typeParameters[index]));
-				var custom:Null<AstFunction> = null;
-				if (DeclaredConformance.has(session, type, "Equatable"))
-					for (method in declaration.methods)
-						if (method.name == "equals")
-							custom = method;
+				var custom = DiffIntrinsics.conformanceMethod(session, type, "equals");
 				if (custom != null) {
-					if (custom.isStatic || custom.arguments.length != 1
-						|| !compiler.types.TypeRelations.equals(session.declarations.resolve(custom.arguments[0].type, custom.span, substitutions), type)
-						|| !compiler.types.TypeRelations.equals(session.declarations.resolve(custom.result, custom.span, substitutions), TBool))
-						BodyTyper.fail("E1003", 'Method "$name.equals" must have signature equals(other:$name):Bool', custom.span);
-					statements.push(TReturn(new TypedExpression(TMethodCall(left, name + ".equals", [right]), TBool, span), span));
+					var receiver = new TypedExpression(TCast(left), custom.type, span),
+						argument = new TypedExpression(TCast(right), custom.type, span);
+					statements.push(TReturn(new TypedExpression(TMethodCall(receiver, custom.declaration.name + ".equals", [argument]), TBool, span), span));
 				} else {
-					for (field in DiffIntrinsics.storedFields(declaration)) {
-					var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span, substitutions),
-							leftField = new TypedExpression(TField(left, field.name), fieldType, span),
-							rightField = new TypedExpression(TField(right, field.name), fieldType, span),
+					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
+					var field = entry.field, fieldType = entry.type,
+							physical = session.representation.resolveField(type, field.name, field.span).physical,
+							leftField = session.representation.boundaryCast(new TypedExpression(TField(left, field.name), physical, span), fieldType),
+							rightField = session.representation.boundaryCast(new TypedExpression(TField(right, field.name), physical, span), fieldType),
 							comparison = compare(leftField, rightField, span);
 						statements.push(TIf(new TypedExpression(TNot(comparison), TBool, span),
 							[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));

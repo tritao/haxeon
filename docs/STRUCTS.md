@@ -487,6 +487,9 @@ to equal values. The author is responsible for keeping the two methods consisten
 synthesized equality. A class with a synthesized hash must have immutable stored fields; otherwise changing a field while
 the object is a map key could change its hash. The compiler diagnoses writable fields. A handwritten hash is an
 explicit author contract and may read mutable state only when that state cannot change the key's hash while it is stored.
+For classes, synthesis visits stored base fields before fields declared by the derived class, resolving generic base
+arguments at each step. A handwritten method is inherited like an ordinary method, including its equality and hash
+contract.
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
 conformance. Classes keep identity equality unless they conform. Primitives and integer enum abstracts retain their
@@ -509,6 +512,8 @@ Field operations are a separate opt-in through the compiler-known `Diffable` int
 `Diff.all` and `Diff.mask` for conforming types. Masks expose declaration order and field count, so the type's
 author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
 do not synthesize field-level operations by default.
+For a derived class, inherited fields occupy the first bits in base-to-derived declaration order; copying, applying and
+fingerprinting use that same traversal.
 
 `Diff.apply` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
 the field. Struct binding already copies values, so `Diff.copy` is unnecessary for structs and remains for
