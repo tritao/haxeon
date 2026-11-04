@@ -34,15 +34,20 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	final scalarResultTypes:Map<Int, Array<IrType>> = [];
 	final allocateLocal:Null<WasmValueType->Int>;
 	final functions:Null<Map<String, Int>>;
+	public final staticClosureDescriptors:Map<String, Int>;
+	public final closureAdapters:Null<WasmLinearClosureAdapters>;
 
 	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int, ?scalarAbi:WasmScalarAbi,
-			?functions:Map<String, Int>, ?fn:IrFunction, ?allocateLocal:WasmValueType->Int) {
+			?functions:Map<String, Int>, ?fn:IrFunction, ?allocateLocal:WasmValueType->Int, ?staticClosureDescriptors:Map<String, Int>,
+			?closureAdapters:WasmLinearClosureAdapters) {
 		this.layout = layout;
 		this.allocator = allocator;
 		this.bytesDataPointer = bytesDataPointer;
 		this.cstringCopy = cstringCopy;
 		this.scalarAbi = scalarAbi;
 		this.functions = functions;
+		this.staticClosureDescriptors = staticClosureDescriptors == null ? [] : staticClosureDescriptors;
+		this.closureAdapters = closureAdapters;
 		this.allocateLocal = allocateLocal;
 		for (object in layout.program.objects) if (object.isValue && object.nativeLayout == null) valueObjects.set(object.name, true);
 		scalarLocals = scalarAbi == null || allocateLocal == null ? null :
@@ -233,7 +238,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		} else if ((switch (output.type) { case Void: false; default: true; })) results.push(outputLocal);
 		var body:Array<WasmInstruction> = [LocalGet(closureLocal), I32Const(1), I32And, If(null)];
 		for (local in argumentLocals) body.push(LocalGet(local));
-		body = body.concat([LocalGet(closureLocal), I32Const(1), I32ShrU, CallIndirect(staticType)]);
+		body = body.concat([LocalGet(closureLocal), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), CallIndirect(staticType)]);
 		var index = results.length - 1;
 		while (index >= 0) { body.push(LocalSet(results[index])); index--; }
 		body = body.concat([Else, LocalGet(closureLocal), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET)]);

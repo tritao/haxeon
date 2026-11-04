@@ -739,8 +739,12 @@ class WasmFunctionLower {
 					throw 'Wasm closure target "$name" has no stable table slot';
 				var calls = context.representation.calls,
 					represented = calls == null ? UseDefault : calls.staticClosure(name, output.type, context.tableSlots, requiredLocal(values, output.id));
-				if (emitIfHandled(body, represented)) {} else
-					emit(body, [I32Const(tableSlot * 2 + 1), LocalSet(requiredLocal(values, output.id))]);
+				if (emitIfHandled(body, represented)) {} else {
+					var linear:WasmLinearRepresentation = cast context.representation.values;
+					var descriptor = linear.staticClosureDescriptors.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.staticDescriptorKey(name, output.type));
+					if (descriptor == null) throw 'Missing static closure descriptor for $name';
+					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
+				}
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
@@ -772,8 +776,9 @@ class WasmFunctionLower {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					body.push(LocalGet(requiredLocal(values, closure.id)));
-					body.push(I32Const(1));
-					body.push(I32ShrU);
+					body.push(I32Const(-2));
+					body.push(I32And);
+					body.push(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
 					body.push(CallIndirect(typeInfo.staticType));
 					if ((switch (output.type) { case Void: false; default: true; }))
 						body.push(LocalSet(requiredLocal(values, output.id)));
@@ -785,8 +790,9 @@ class WasmFunctionLower {
 					for (argument in arguments)
 						body.push(LocalGet(requiredLocal(values, argument.id)));
 					body.push(LocalGet(requiredLocal(values, closure.id)));
-					body.push(I32Const(1));
-					body.push(I32ShrU);
+					body.push(I32Const(-2));
+					body.push(I32And);
+					body.push(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
 					body.push(CallIndirect(typeInfo.staticType));
 					if ((switch (output.type) { case Void: false; default: true; }))
 						body.push(LocalSet(requiredLocal(values, output.id)));
@@ -812,7 +818,9 @@ class WasmFunctionLower {
 				var calls = context.representation.calls,
 					represented = calls == null ? UseDefault : calls.instanceClosure(name, output.type, context.tableSlots,
 						requiredLocal(values, receiver.id), requiredLocal(values, output.id));
-				if (emitIfHandled(body, represented)) {} else
+				if (emitIfHandled(body, represented)) {} else {
+					var linear:WasmLinearRepresentation = cast context.representation.values;
+					if (linear.closureAdapters == null) throw "Missing Wasm32 closure signatures";
 					emit(body, [
 						I32Const(WasmLayout.CLOSURE_SIZE),
 						Call(allocator),
@@ -820,12 +828,16 @@ class WasmFunctionLower {
 						I32Const(WasmLayout.CLOSURE_TYPE_ID),
 						I32Store(0),
 						LocalGet(requiredLocal(values, output.id)),
+						I32Const(name == WasmDynamicCalls.VARARGS_TARGET ? -1 : linear.closureAdapters.signatureId(output.type)),
+						I32Store(WasmLayout.CLOSURE_SIGNATURE_OFFSET),
+						LocalGet(requiredLocal(values, output.id)),
 						I32Const(tableSlot),
 						I32Store(WasmLayout.CLOSURE_FUNCTION_OFFSET),
 						LocalGet(requiredLocal(values, output.id)),
 						LocalGet(requiredLocal(values, receiver.id)),
 						I32Store(WasmLayout.CLOSURE_RECEIVER_OFFSET)
 					]);
+				}
 			case Upcast(output, value):
 				// Object types declare their base class as their supertype.
 				emit(body, [

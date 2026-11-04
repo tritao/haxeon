@@ -45,6 +45,10 @@ class GenericStructOwnerMain {
 		if (new compiler.ir.IrInterpreter(interfaceRuntime.compile("Main").ir).run("main") != 42)
 			throw "typed generic interface calls lost their value carriers in the interpreter";
 		var checkedSignatures = Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
+		var collisionFirst:IrType = Function([Obj("Cba95abb6358835f5")], Bytes),
+			collisionSecond:IrType = Function([Obj("Cefe1ade6cf91fbfe")], Bytes);
+		if (compiler.backend.wasm.WasmModuleSupport.typeId(collisionFirst) != compiler.backend.wasm.WasmModuleSupport.typeId(collisionSecond))
+			throw "closure signature collision fixture no longer collides";
 		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
 			throw "the interpreter did not distinguish reference-shaped closure signatures";
 		var program = Frontend.compile(File.getContent("tests/programs/generic-struct-class.hx"));

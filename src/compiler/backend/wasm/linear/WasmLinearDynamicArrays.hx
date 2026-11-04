@@ -408,7 +408,7 @@ class WasmLinearDynamicArrays {
 				builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 				builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
 					LocalGet(array), LocalGet(index), Call(concrete("$linear-value-array:initialized")), I32Eqz, If(null), I32Const(0), Return, End,
-					LocalGet(array), LocalGet(index), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+					LocalGet(array), LocalGet(index), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 					CallIndirect(module.typeIndex({parameters:[I32,I32], results:[I32]})), Return, End]);
 			}
 			function allocateBox(builder:WasmFunctionBuilder, size:Int):Void {
@@ -939,11 +939,11 @@ class WasmLinearDynamicArrays {
 			var staged = builder.local("value-stage", I32);
 			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
-				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
 			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
 			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$linear-value-array:new-like")), LocalSet(staged),
-				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]})), LocalGet(array), LocalGet(index),
 				Call(concrete("$linear-value-array:ensure")), LocalGet(array), LocalGet(index), LocalGet(staged), I32Const(0),
 				Call(concrete("$linear-value-array:move-element")), Return, End]);
@@ -1010,11 +1010,11 @@ class WasmLinearDynamicArrays {
 			var staged = builder.local("value-stage", I32), at = builder.local("value-position", I32);
 			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
-				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
 			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
 			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$linear-value-array:new-like")), LocalSet(staged),
-				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(1), I32ShrU,
+				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]}))]);
 			if (operation == "push") builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(at),
 				LocalGet(array), LocalGet(at), Call(concrete("$linear-value-array:ensure"))]);

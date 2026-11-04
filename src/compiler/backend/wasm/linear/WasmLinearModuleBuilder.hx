@@ -69,6 +69,8 @@ class WasmLinearModuleBuilder {
 	var runtimeFunctionCount:Int;
 	var methods:Map<String, String>;
 	var staticDataAddresses:Map<String, Int>;
+	var staticClosureDescriptors:Map<String, Int>;
+	var staticClosureRecords:Map<String, {name:String, bytes:haxe.io.Bytes}>;
 	var closureTypes:Map<String, WasmClosureTypes>;
 	var representation:WasmRepresentationSet;
 	var tableSlots:Map<String, Int>;
@@ -131,7 +133,6 @@ class WasmLinearModuleBuilder {
 			signature != null && signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
 		}];
 		abi.validate(flattened);
-		adapters.useProgram(flattened);
 		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
 		builder.boundaryExportAdapters = exportAdapters;
@@ -218,6 +219,22 @@ class WasmLinearModuleBuilder {
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		staticDataAddresses = staticData.addresses;
+		staticClosureDescriptors = [];
+		staticClosureRecords = [];
+		for (fn in program.functions) if (reachable.exists(fn.name)) for (block in fn.blocks) for (located in block.instructions)
+			switch located.value {
+				case StaticClosure(output, name):
+					var key = WasmLinearClosureAdapters.staticDescriptorKey(name, output.type);
+					if (!staticClosureDescriptors.exists(key)) {
+						var offset = WasmModuleSupport.align(nextData, 8), bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
+						bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
+						module.data.push({offset: offset, bytes: bytes});
+						staticClosureDescriptors.set(key, offset);
+						staticClosureRecords.set(key, {name: name, bytes: bytes});
+						nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
+					}
+				default:
+			}
 		reflectionBytes = null;
 		reflectionTable = 0;
 		reflectionCount = 0;
@@ -393,15 +410,20 @@ class WasmLinearModuleBuilder {
 		var cstringCopy = functions.get("__haxeon_cstring_copy");
 		if (cstringCopy == null)
 			throw "Linear Wasm C string copy helper is missing";
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions);
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, null, null, staticClosureDescriptors, closureAdapters);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation,
 			context -> {
 				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions,
-					context.irFunction, context.allocateLocal);
+					context.irFunction, context.allocateLocal, staticClosureDescriptors, closureAdapters);
 				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
 			});
-		tableSlots = WasmModuleSupport.buildTableSlots(module, functions, closureAdapters.slotOrder);
-		closureAdapters.defineKeyQuery(module, functions, tableSlots);
+		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
+		for (record in staticClosureRecords) {
+			var slot = tableSlots.get(record.name);
+			if (slot == null) throw 'Static closure target ${record.name} has no table slot';
+			record.bytes.setInt32(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET, slot);
+		}
+		closureAdapters.defineSignatureQuery(module, functions);
 		WasmLinearReflection.finalize(linear, tableSlots);
 		var exceptionTagType:Null<Int> = !runtimeNeutral && WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
 			parameters: [I32],
@@ -419,7 +441,7 @@ class WasmLinearModuleBuilder {
 		return WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
 			if (!reachable.exists(fn.name)
 				|| (fn.name == "__entry" && preferredEntry != "__entry")
-				|| fn.name == WasmLinearClosureAdapters.KEY_FUNCTION)
+				|| fn.name == WasmLinearClosureAdapters.SIGNATURE_FUNCTION)
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,

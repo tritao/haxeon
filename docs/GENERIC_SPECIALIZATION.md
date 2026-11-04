@@ -187,11 +187,16 @@ layouts are rejected without changing the destination. Function writes check the
 signature before the store. HashLink and Wasm GC retain semantic function signatures; a scalar struct closure crossing
 Dynamic is recognized by its signature-specific adapter without boxing its ordinary typed calls.
 
-Wasm32 currently records the closure's calling-representation key rather than every source type. It distinguishes
-arity, numeric kinds and named object types, but reference-shaped signatures can share a key: for example,
-`String->String` and `Array<Int>->Array<Int>` are indistinguishable there. A write between those two signatures can
-therefore pass the Wasm32 check; it is rejected on HashLink and Wasm GC. Preserving a semantic signature at closure
-creation, including distinct views of one function slot, is required to close this gap without per-call boxing.
+Wasm32 records the semantic signature separately from the calling representation. A static closure refers to a shared
+immutable module descriptor containing its function slot and signature; a bound closure keeps the signature in its
+existing header. A Dynamic cast to another signature creates a checked adapter, including when both signatures use the
+same machine representation. This keeps distinct views distinct while a matching cast and ordinary typed calls do not
+allocate. The module interns full semantic signatures to distinct identifiers, avoiding hash collisions. Array value
+bridges and reflection use the same static descriptor representation as ordinary calls.
+
+After literal warmup, 8 and 1,024 matching static and bound closure casts and calls allocate zero objects on Wasm32 and
+Wasm GC with inlining on and off; HashLink's allocated-byte counter likewise stays unchanged. The two Wasm GC objects
+used to materialize the first string literals occur in both the control and candidate before warmup.
 
 Managed byte buffers and native map abstracts check their runtime kind too. Wasm32 gives strings and managed bytes
 distinct type ids in their existing headers, including byte views, stream results and native aggregate buffers. Its

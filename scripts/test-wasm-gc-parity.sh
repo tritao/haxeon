@@ -74,6 +74,10 @@ for inline in 0 1; do
 			--output="$parity_output_dir/wasm-parity-$target-scalar-closure-identity-census-inline-$inline.wasm" \
 			--entry=scalar-closure-identity --root=tests/programs tests/programs/scalar-closure-identity.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ClosureSignatureCensus.prepare --export=ClosureSignatureCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-closure-signature-census-inline-$inline.wasm" \
+			--entry=wasm-closure-signature-census --root=tests/programs tests/programs/wasm-closure-signature-census.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=ScalarMapCensus.prepare --export=ScalarMapCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-scalar-map-census-inline-$inline.wasm" \
 			--entry=specialized-map-scalar-keys --root=tests/programs tests/programs/specialized-map-scalar-keys.hx
@@ -399,9 +403,8 @@ async function run(name, target) {
     const results = {};
     for (const target of ["wasm32", "wasm-gc"]) {
       const result = await run(name, target);
-      const targetExpected = name === "generic-erased-function-reference-shapes" && target === "wasm32" ? 43 : expected;
-      if (result.failure === undefined && result.exit !== targetExpected)
-        result.failure = `expected ${targetExpected}, got ${result.exit}`;
+      if (result.failure === undefined && result.exit !== expected)
+        result.failure = `expected ${expected}, got ${result.exit}`;
       results[target] = result;
     }
     const passing = results.wasm32.failure === undefined && results["wasm-gc"].failure === undefined;
@@ -419,9 +422,8 @@ async function run(name, target) {
     for (const name of ["generic-interface-value-carriers", "generic-erased-raw-pointer", "generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "wasm-bytes-runtime-kinds", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
-        const expected = name === "generic-erased-function-reference-shapes" && target === "wasm32" ? 43 : 42;
-        if (result.failure === undefined && result.exit !== expected)
-          result.failure = `expected ${expected}, got ${result.exit}`;
+        if (result.failure === undefined && result.exit !== 42)
+          result.failure = `expected 42, got ${result.exit}`;
         if (result.failure !== undefined)
           failures.push(`${name} (inline=${inline}, ${target}): ${result.failure}`);
         else
@@ -641,6 +643,16 @@ async function run(name, target) {
 	    else console.log(`PASS: erased closure census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const identityBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-scalar-closure-identity-census-inline-${inline}.wasm`));
+	  const signatureBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-closure-signature-census-inline-${inline}.wasm`));
+	  const signature = (await WebAssembly.instantiate(signatureBytes, {haxeon_runtime: runtime, std})).instance;
+	  signature.exports["ClosureSignatureCensus.prepare"]();
+	  const signatureCount = target === "wasm32" ? signature.exports["haxeon.memory.allocation_count"] : signature.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = signatureCount(), result = signature.exports["ClosureSignatureCensus.perform"](n), allocations = signatureCount() - before;
+	    if (result !== n || allocations !== 0)
+	      failures.push(`closure signature census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: closure signature census on ${target}, inline=${inline}, n=${n}`);
+	  }
 	  const identity = (await WebAssembly.instantiate(identityBytes, {haxeon_runtime: runtime, std})).instance;
 	  identity.exports["ScalarClosureIdentityCensus.prepare"]();
 	  const identityCount = target === "wasm32" ? identity.exports["haxeon.memory.allocation_count"] : identity.exports.__allocation_count;

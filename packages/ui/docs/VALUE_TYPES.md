@@ -370,3 +370,13 @@ byte buffer. The 500-cycle RSS window medians were 29.84 / 4.06 / 0.78 / 4.84 Mi
 MiB, with paired median differences +0.46 / -0.47 / 0 / +0.15 MiB. These are same-binary variations. Nine full-scene
 and three pairs per other Wasm GC Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects; the guests
 were byte-identical.
+
+The Wasm32 semantic closure-signature change was compared on outer revision `d9087f6a3` with nine alternating
+HashLink pairs. The editor modules were byte-identical. Per-action allocation medians (KiB) matched at
+112.6 / 80.1 / 74.5 / 93.1 for tab switches, 0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll,
+0.2 / 0.2 for idle and focused idle, and 16.1 / 16.2 for type and backspace; all paired median differences
+were zero. The 30-cycle selection census medians were 342,098 / 342,098 allocations with zero paired median
+difference; one type comparison differed by one byte buffer. The 500-cycle RSS window medians were
+30.00 / 3.75 / 0.78 / 4.84 MiB and 30.16 / 3.59 / 0.94 / 5.00 MiB, with paired median differences
+0 / 0 / +0.16 / +0.16 MiB. These are variations between identical binaries. Nine full-scene and three pairs per
+other Wasm GC Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects; the guests were byte-identical.

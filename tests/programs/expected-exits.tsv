@@ -487,3 +487,4 @@ generic-interface-value-carriers	42
 generic-erased-native-callback	42
 wasm-bytes-runtime-kinds	42
 wasm-raw-pointer-gc-leaf	42
+wasm-closure-signature-census	42

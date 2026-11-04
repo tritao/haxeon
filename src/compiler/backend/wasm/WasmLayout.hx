@@ -323,6 +323,10 @@ class WasmLayout {
 	public static inline final BYTES_VIEW_SIZE = 32;
 	public static inline final BYTES_VIEW_MAGIC = 0x48565756;
 	public static inline final CLOSURE_FUNCTION_OFFSET = 8;
+	public static inline final CLOSURE_SIGNATURE_OFFSET = 4;
+	public static inline final STATIC_CLOSURE_FUNCTION_OFFSET = 0;
+	public static inline final STATIC_CLOSURE_SIGNATURE_OFFSET = 4;
+	public static inline final STATIC_CLOSURE_SIZE = 8;
 	public static inline final CLOSURE_RECEIVER_OFFSET = 12;
 	public static inline final CLOSURE_SIZE = 16;
 

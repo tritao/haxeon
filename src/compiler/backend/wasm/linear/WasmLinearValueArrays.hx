@@ -115,14 +115,14 @@ class WasmLinearValueArrays {
 		for (arg in [6,7,8]) { b.emitAll([LocalGet(arg), I32Eqz, If(null)]); WasmLinearRuntime.runtimeFailure(b); b.emit(End); }
 		b.emitAll([LocalGet(0), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(size), Block(null), Loop(null), LocalGet(index), LocalGet(size), I32Eq, BrIf(1),
 			LocalGet(0), I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(index), I32Const(4), I32Mul, I32Add, I32Load(0), LocalSet(item),
-			LocalGet(item), LocalGet(8), I32Const(1), I32ShrU, CallIndirect(accept), I32Eqz, If(null)]);
+			LocalGet(item), LocalGet(8), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), CallIndirect(accept), I32Eqz, If(null)]);
 		WasmLinearRuntime.runtimeFailure(b); b.emitAll([End, LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End,
 			LocalGet(size), LocalGet(1), LocalGet(2), LocalGet(3), LocalGet(4), LocalGet(5), Call(allocator), LocalSet(candidate)]);
 		for (pair in [{offset:WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,arg:6}, {offset:WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET,arg:7},
 				{offset:WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET,arg:8}]) b.emitAll([LocalGet(candidate), LocalGet(pair.arg), I32Store(pair.offset)]);
 		b.emitAll([I32Const(0), LocalSet(index), Block(null), Loop(null), LocalGet(index), LocalGet(size), I32Eq, BrIf(1),
 			LocalGet(candidate), LocalGet(index), LocalGet(0), I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(index), I32Const(4), I32Mul, I32Add, I32Load(0),
-			LocalGet(7), I32Const(1), I32ShrU, CallIndirect(write), LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End,
+			LocalGet(7), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), CallIndirect(write), LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End,
 			LocalGet(candidate), LocalGet(0), I32Store(WasmLayout.VALUE_ARRAY_FORWARD_HEADER_OFFSET), LocalGet(0), LocalGet(candidate),
 			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(0), LocalGet(1), I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
 			LocalGet(0), I32Const(WasmLayout.VALUE_ARRAY_FORWARD_MARKER), I32Store(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), LocalGet(0), Return]);

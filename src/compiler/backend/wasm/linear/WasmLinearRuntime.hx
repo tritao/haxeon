@@ -286,6 +286,15 @@ class WasmLinearRuntime {
 			I32Const(0),
 			Return,
 			End,
+			LocalGet(0), I32Const(1), I32And,
+			LocalGet(1), I32Const(1), I32And, I32Or,
+			If(null),
+			LocalGet(0), I32Const(1), I32And,
+			LocalGet(1), I32Const(1), I32And, I32And, I32Eqz,
+			If(null), I32Const(0), Return, End,
+			LocalGet(0), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+			LocalGet(1), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+			I32Eq, Return, End,
 			LocalGet(0),
 			I32Load(0),
 			I32Const(WasmLayout.CLOSURE_TYPE_ID),
@@ -355,7 +364,8 @@ class WasmLinearRuntime {
 					LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End,
 					LocalGet(0), I32Const(1), I32And, If(null), I32Const(0), Return, End,
 					LocalGet(0), I32Load(0), I32Const(WasmLayout.CLOSURE_TYPE_ID), I32Eq, I32Eqz, If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), LocalGet(1), I32Const(1), I32ShrU, I32Eq, I32Eqz,
+					LocalGet(0), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), LocalGet(1), I32Const(-2), I32And,
+					I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), I32Eq, I32Eqz,
 					If(null), I32Const(0), Return, End,
 					LocalGet(0), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET), Return
 				]));
@@ -4160,6 +4170,17 @@ class WasmLinearRuntime {
 			result = builder.local("result", I32),
 			leftType = builder.local("leftType", I32),
 			rightType = builder.local("rightType", I32);
+		// Static closures are tagged addresses of immutable descriptors, not heap objects.
+		builder.localGet(left); builder.i32Const(1); builder.emit(I32And);
+		builder.localGet(right); builder.i32Const(1); builder.emit(I32And); builder.emit(I32Or);
+		builder.if_(function(builder) {
+			builder.localGet(left); builder.i32Const(1); builder.emit(I32And);
+			builder.localGet(right); builder.i32Const(1); builder.emit(I32And); builder.emit(I32And);
+			builder.i32Eqz(); builder.if_(function(builder) { builder.i32Const(0); builder.return_(); });
+			builder.localGet(left); builder.i32Const(-2); builder.emit(I32And); builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
+			builder.localGet(right); builder.i32Const(-2); builder.emit(I32And); builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
+			builder.emit(I32Eq); builder.return_();
+		});
 		builder.i32Const(0);
 		builder.localSet(result);
 		builder.localGet(left);
