@@ -112,7 +112,9 @@ class ProcessOutputCapture {
 
 	#if haxeon
 	static function captureHaxeon(command:String, arguments:Array<String>, stderrLimit:Null<Int>, timeoutSeconds:Null<Float>):ProcessCaptureResult {
-		var process = sys.io.Process.run(command, arguments), mutex = new Mutex(), stdout = "", stderr = "", stdoutDone = false, stderrDone = false,
+		var process = sys.io.Process.run(command, arguments);
+		defer process.close();
+		var mutex = new Mutex(), stdout = "", stderr = "", stdoutDone = false, stderrDone = false,
 			failure:Dynamic = null;
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.capture.stdout");
@@ -122,10 +124,10 @@ class ProcessOutputCapture {
 			catch (caught:Dynamic)
 				error = caught;
 			mutex.acquire();
+			defer mutex.release();
 			if (error != null)
 				failure = error;
 			stdoutDone = true;
-			mutex.release();
 		});
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.capture.stderr");
@@ -135,17 +137,20 @@ class ProcessOutputCapture {
 			catch (caught:Dynamic)
 				error = caught;
 			mutex.acquire();
+			defer mutex.release();
 			if (error != null && failure == null)
 				failure = error;
 			stderrDone = true;
-			mutex.release();
 		});
 		var deadline = timeoutSeconds == null ? 0.0 : Sys.time() + timeoutSeconds;
 		var timedOut = false;
 		while (true) {
-			mutex.acquire();
-			var done = stdoutDone && stderrDone;
-			mutex.release();
+			var done:Bool;
+			{
+				mutex.acquire();
+				defer mutex.release();
+				done = stdoutDone && stderrDone;
+			}
 			if (done)
 				break;
 			if (timeoutSeconds != null && Sys.time() >= deadline) {
@@ -157,15 +162,17 @@ class ProcessOutputCapture {
 		}
 		if (timedOut)
 			while (true) {
-				mutex.acquire();
-				var drained = stdoutDone && stderrDone;
-				mutex.release();
+				var drained:Bool;
+				{
+					mutex.acquire();
+					defer mutex.release();
+					drained = stdoutDone && stderrDone;
+				}
 				if (drained)
 					break;
 				Sys.sleep(0.001);
 			}
 		var exitCode = process.exitCode();
-		process.close();
 		if (timedOut)
 			throw 'Process "$command" timed out after $timeoutSeconds seconds';
 		if (failure != null)
