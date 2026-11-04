@@ -3014,6 +3014,17 @@ class IrGenerator {
 			case TArraySort(array, comparator): lowerArraySort(array, comparator, expression.span, builder, localTypes);
 		}
 
+	/** Insertion-sorted runs of this length seed the merge passes of `Array.sort`. */
+	static inline final arraySortRun = 8;
+
+	/**
+	 * Lowers `Array.sort` to a stable bottom-up merge sort: insertion sort over runs of `arraySortRun` elements, then
+	 * passes that merge neighbouring runs of doubling width. A merge copies its left run into one scratch array of the
+	 * element type and merges it with the right run back into the array, so the right run's tail is already in place
+	 * when the left run empties; a pair whose left run already ends at or before its right run's head is skipped. Ties
+	 * take the left element, so equal elements keep their order. Elements stay typed: the comparator receives them through
+	 * the ABI boundary casts it declares, and the scratch array has the element's own storage, so nothing is boxed.
+	 */
 	static function lowerArraySort(array:TypedExpression, comparator:TypedExpression, span:compiler.Source.SourceSpan, builder:CfgBuilder,
 			localTypes:Map<String, IrType>):CfgValue {
 		var element = switch array.type {
@@ -3024,60 +3035,179 @@ class IrGenerator {
 			comparatorType = lowerType(comparator.type),
 			suffix = Std.string(span.start);
 		var arrayType:IrType = Array(elementType);
-		var arrayName = '$' + 'sort-array:$suffix',
-			comparatorName = '$' + 'sort-comparator:$suffix',
-			indexName = '$' + 'sort-index:$suffix',
-			keyName = '$' + 'sort-key:$suffix',
-			scanName = '$' + 'sort-scan:$suffix';
-		var locals:Array<{name:String, type:IrType}> = [
-			{name: arrayName, type: arrayType},
-			{name: comparatorName, type: comparatorType},
-			{name: indexName, type: I32},
-			{name: keyName, type: elementType},
-			{name: scanName, type: I32}
-		];
-		for (entry in locals)
-			localTypes.set(entry.name, entry.type);
-		builder.store(arrayName, lowerExpression(array, builder, localTypes));
-		builder.store(comparatorName, lowerExpression(comparator, builder, localTypes));
-		builder.store(indexName, builder.constInt(1));
-		var outerCondition = builder.createBlock(),
-			outerBody = builder.createBlock(),
-			innerCondition = builder.createBlock(),
-			compare = builder.createBlock(),
-			move = builder.createBlock(),
-			insert = builder.createBlock(),
-			done = builder.createBlock();
-		builder.jump(outerCondition);
-		builder.select(outerCondition);
-		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, arrayType))), outerBody, done);
-		builder.select(outerBody);
-		builder.store(keyName, elementGet(builder, builder.load(arrayName, arrayType), builder.load(indexName, I32), elementType));
-		builder.store(scanName, builder.sub(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(innerCondition);
-		builder.select(innerCondition);
-		builder.branch(builder.lessEqual(builder.constInt(0), builder.load(scanName, I32)), compare, insert);
-		builder.select(compare);
 		var comparatorArguments = switch comparatorType {
 			case Function(arguments, _): arguments;
 			default: throw "Array.sort comparator must be a function";
 		};
-		var order = builder.callClosure(builder.load(comparatorName, comparatorType), [
-			abiBoundaryCast(builder, elementGet(builder, builder.load(arrayName, arrayType), builder.load(scanName, I32), elementType), comparatorArguments[0]),
-			abiBoundaryCast(builder, builder.load(keyName, elementType), comparatorArguments[1])
-		], I32);
-		builder.branch(builder.less(builder.constInt(0), order), move, insert);
-		builder.select(move);
-		var scan = builder.load(scanName, I32);
-		elementSet(builder, builder.load(arrayName, arrayType), builder.add(scan, builder.constInt(1)),
-			elementGet(builder, builder.load(arrayName, arrayType), scan, elementType));
-		builder.store(scanName, builder.sub(scan, builder.constInt(1)));
-		builder.jump(innerCondition);
+		function local(role:String, type:IrType):String {
+			var name = '$' + 'sort-$role:$suffix';
+			localTypes.set(name, type);
+			return name;
+		}
+		var arrayName = local("array", arrayType),
+			comparatorName = local("comparator", comparatorType),
+			scratchName = local("scratch", arrayType),
+			lengthName = local("length", I32),
+			widthName = local("width", I32),
+			lowName = local("low", I32),
+			middleName = local("middle", I32),
+			highName = local("high", I32),
+			leftName = local("left", I32),
+			rightName = local("right", I32),
+			outName = local("out", I32),
+			keyName = local("key", elementType);
+		inline function int(name:String):CfgValue
+			return builder.load(name, I32);
+		inline function sorted():CfgValue
+			return builder.load(arrayName, arrayType);
+		inline function scratch():CfgValue
+			return builder.load(scratchName, arrayType);
+		inline function increment(name:String):Void
+			builder.store(name, builder.add(int(name), builder.constInt(1)));
+		// Whether `cmp(a, b) > 0`, that is `a` sorts after `b`.
+		function after(a:CfgValue, b:CfgValue):CfgValue {
+			var order = builder.callClosure(builder.load(comparatorName, comparatorType), [
+				abiBoundaryCast(builder, a, comparatorArguments[0]),
+				abiBoundaryCast(builder, b, comparatorArguments[1])
+			], I32);
+			return builder.less(builder.constInt(0), order);
+		}
+		function at(array:CfgValue, index:CfgValue):CfgValue
+			return elementGet(builder, array, index, elementType);
+		builder.store(arrayName, lowerExpression(array, builder, localTypes));
+		builder.store(comparatorName, lowerExpression(comparator, builder, localTypes));
+		builder.store(lengthName, builder.arraySize(sorted()));
+
+		// Insertion sort over each run [low, high).
+		var runCondition = builder.createBlock(),
+			runBody = builder.createBlock(),
+			runShortEnd = builder.createBlock(),
+			runFullEnd = builder.createBlock(),
+			insertCondition = builder.createBlock(),
+			insertBody = builder.createBlock(),
+			scanCondition = builder.createBlock(),
+			scanCompare = builder.createBlock(),
+			shift = builder.createBlock(),
+			insert = builder.createBlock(),
+			runNext = builder.createBlock(),
+			mergeEntry = builder.createBlock(),
+			done = builder.createBlock();
+		builder.store(lowName, builder.constInt(0));
+		builder.jump(runCondition);
+		builder.select(runCondition);
+		builder.branch(builder.less(int(lowName), int(lengthName)), runBody, mergeEntry);
+		builder.select(runBody);
+		builder.branch(builder.less(builder.constInt(arraySortRun), builder.sub(int(lengthName), int(lowName))), runFullEnd, runShortEnd);
+		builder.select(runFullEnd);
+		builder.store(highName, builder.add(int(lowName), builder.constInt(arraySortRun)));
+		builder.store(leftName, builder.add(int(lowName), builder.constInt(1)));
+		builder.jump(insertCondition);
+		builder.select(runShortEnd);
+		builder.store(highName, int(lengthName));
+		builder.store(leftName, builder.add(int(lowName), builder.constInt(1)));
+		builder.jump(insertCondition);
+		builder.select(insertCondition);
+		builder.branch(builder.less(int(leftName), int(highName)), insertBody, runNext);
+		builder.select(insertBody);
+		builder.store(keyName, at(sorted(), int(leftName)));
+		builder.store(rightName, builder.sub(int(leftName), builder.constInt(1)));
+		builder.jump(scanCondition);
+		builder.select(scanCondition);
+		builder.branch(builder.lessEqual(int(lowName), int(rightName)), scanCompare, insert);
+		builder.select(scanCompare);
+		builder.branch(after(at(sorted(), int(rightName)), builder.load(keyName, elementType)), shift, insert);
+		builder.select(shift);
+		var scan = int(rightName);
+		elementSet(builder, sorted(), builder.add(scan, builder.constInt(1)), at(sorted(), scan));
+		builder.store(rightName, builder.sub(scan, builder.constInt(1)));
+		builder.jump(scanCondition);
 		builder.select(insert);
-		elementSet(builder, builder.load(arrayName, arrayType), builder.add(builder.load(scanName, I32), builder.constInt(1)),
-			builder.load(keyName, elementType));
-		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
-		builder.jump(outerCondition);
+		elementSet(builder, sorted(), builder.add(int(rightName), builder.constInt(1)), builder.load(keyName, elementType));
+		increment(leftName);
+		builder.jump(insertCondition);
+		builder.select(runNext);
+		builder.store(lowName, int(highName));
+		builder.jump(runCondition);
+
+		// Merge passes; the scratch array holds one left run, which is shorter than the array.
+		var mergeSetup = builder.createBlock(),
+			passBody = builder.createBlock(),
+			pairCondition = builder.createBlock(),
+			pairBody = builder.createBlock(),
+			pairFullEnd = builder.createBlock(),
+			pairShortEnd = builder.createBlock(),
+			pairCheck = builder.createBlock(),
+			copyStart = builder.createBlock(),
+			copyCondition = builder.createBlock(),
+			copyBody = builder.createBlock(),
+			mergeStart = builder.createBlock(),
+			mergeCondition = builder.createBlock(),
+			mergeRight = builder.createBlock(),
+			mergeCompare = builder.createBlock(),
+			takeRight = builder.createBlock(),
+			takeLeft = builder.createBlock(),
+			pairNext = builder.createBlock(),
+			passNext = builder.createBlock();
+		builder.select(mergeEntry);
+		builder.branch(builder.less(builder.constInt(arraySortRun), int(lengthName)), mergeSetup, done);
+		builder.select(mergeSetup);
+		builder.store(scratchName, lowerArrayAllocation(builder, element, int(lengthName)));
+		builder.store(widthName, builder.constInt(arraySortRun));
+		builder.jump(passBody);
+		builder.select(passBody);
+		builder.store(lowName, builder.constInt(0));
+		builder.jump(pairCondition);
+		// A pair exists while a right run starts before the end: width < length - low.
+		builder.select(pairCondition);
+		builder.branch(builder.less(int(widthName), builder.sub(int(lengthName), int(lowName))), pairBody, passNext);
+		builder.select(pairBody);
+		builder.store(middleName, builder.add(int(lowName), int(widthName)));
+		builder.branch(builder.less(int(widthName), builder.sub(int(lengthName), int(middleName))), pairFullEnd, pairShortEnd);
+		builder.select(pairFullEnd);
+		builder.store(highName, builder.add(int(middleName), int(widthName)));
+		builder.jump(pairCheck);
+		builder.select(pairShortEnd);
+		builder.store(highName, int(lengthName));
+		builder.jump(pairCheck);
+		builder.select(pairCheck);
+		builder.branch(after(at(sorted(), builder.sub(int(middleName), builder.constInt(1))), at(sorted(), int(middleName))), copyStart, pairNext);
+		builder.select(copyStart);
+		builder.store(leftName, builder.constInt(0));
+		builder.jump(copyCondition);
+		builder.select(copyCondition);
+		builder.branch(builder.less(builder.add(int(lowName), int(leftName)), int(middleName)), copyBody, mergeStart);
+		builder.select(copyBody);
+		elementSet(builder, scratch(), int(leftName), at(sorted(), builder.add(int(lowName), int(leftName))));
+		increment(leftName);
+		builder.jump(copyCondition);
+		builder.select(mergeStart);
+		builder.store(leftName, builder.constInt(0));
+		builder.store(rightName, int(middleName));
+		builder.store(outName, int(lowName));
+		builder.jump(mergeCondition);
+		// Once the left run is empty the rest of the right run is already in place.
+		builder.select(mergeCondition);
+		builder.branch(builder.less(int(leftName), int(widthName)), mergeRight, pairNext);
+		builder.select(mergeRight);
+		builder.branch(builder.less(int(rightName), int(highName)), mergeCompare, takeLeft);
+		builder.select(mergeCompare);
+		builder.branch(after(at(scratch(), int(leftName)), at(sorted(), int(rightName))), takeRight, takeLeft);
+		builder.select(takeRight);
+		elementSet(builder, sorted(), int(outName), at(sorted(), int(rightName)));
+		increment(rightName);
+		increment(outName);
+		builder.jump(mergeCondition);
+		builder.select(takeLeft);
+		elementSet(builder, sorted(), int(outName), at(scratch(), int(leftName)));
+		increment(leftName);
+		increment(outName);
+		builder.jump(mergeCondition);
+		builder.select(pairNext);
+		builder.store(lowName, int(highName));
+		builder.jump(pairCondition);
+		builder.select(passNext);
+		builder.store(widthName, builder.add(int(widthName), int(widthName)));
+		builder.branch(builder.less(int(widthName), int(lengthName)), passBody, done);
 		builder.select(done);
 		return builder.constVoid();
 	}

@@ -503,3 +503,4 @@ identity-class	42
 defer-cleanup	42
 scoped-cleanup	42
 enum-interface-conformance	42
+array-sort-merge	42
