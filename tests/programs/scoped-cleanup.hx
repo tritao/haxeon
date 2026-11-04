@@ -36,6 +36,12 @@ struct NestedCleanupValue implements Disposable {
  public function new(amount:Int) { part = new NestedCleanupPart(amount); }
  public function dispose():Void { ScopedCensus.count += part.amount; }
 }
+struct CompositeCensusValue implements Disposable {
+ public var inner:NestedCleanupPart;
+ public var optional:Null<NestedCleanupPart>;
+ public function new() { inner = new NestedCleanupPart(1); optional = new NestedCleanupPart(2); }
+ public function dispose():Void { ScopedCensus.count += inner.amount; if (optional != null) ScopedCensus.count += optional.amount; }
+}
 class ThrowingResource implements Disposable {
  public function new() {}
  public function dispose():Void { ScopedLog.value += "d"; throw "dispose"; }
@@ -54,8 +60,16 @@ class ScopedCensus {
  public static var nullableValueResource:Null<CensusValue>;
  public static var mutableValueResource:MutableCensusValue;
  public static var nullableMutableValueResource:Null<MutableCensusValue>;
+ public static var compositeResource:CompositeCensusValue;
  public static var retained:Dynamic;
  public static function prepare():Void { resource = new CensusResource(); valueResource = new CensusValue(1); nullableValueResource = valueResource; mutableValueResource = new MutableCensusValue(1); nullableMutableValueResource = mutableValueResource; }
+ public static function prepareComposite():Void { compositeResource = new CompositeCensusValue(); }
+ public static function performComposite(n:Int):Int {
+  count = 0;
+  var i = 0;
+  while (i < n) { scoped var item = compositeResource; i++; }
+  return count;
+ }
  public static function perform(n:Int):Int {
   count = 0;
   var i = 0;
