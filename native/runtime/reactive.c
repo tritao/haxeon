@@ -12,6 +12,11 @@ static REALTIME_REACTIVE_TLS vdynamic *realtime_reactive_collector;
 static _Atomic(uintptr_t) realtime_reactive_owner;
 static _Atomic(uint64_t) realtime_reactive_next_id;
 
+/* Dynamic operands here are genuine object references; never invoke value comparison. */
+HL_PRIM bool HL_NAME(__reference_identity)( vdynamic *left, vdynamic *right ) {
+	return left == right;
+}
+
 /* Reserve a 63-bit positive range atomically, including across independent threads. */
 HL_PRIM int64_t HL_NAME(__reactive_reserve_ids)( int count ) {
 	uint64_t current = atomic_load_explicit(&realtime_reactive_next_id, memory_order_relaxed);

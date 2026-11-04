@@ -236,6 +236,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    A self-updating build owns its subscriptions while registered or held by a retained interaction snapshot. Pruning
    an unmounted build releases the registry's ownership; the last owner disposes its subscriptions and child snapshots.
    Cached alternatives keep their subscriptions for validation and transfer their invalidation owner when rearmed.
+   `ReactiveIdentity.same` compares managed references by identity without invoking declared value equality. Compiled
+   targets support managed references; the interpreter supports object instances and rejects other non-null kinds.
    `State` is a signal handle. Every signal and Observable write stores its supplied value; equality decides only whether
    readers are invalidated. Floating-point change detection treats NaN as equal to NaN and the two zero signs as equal,
    while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate
@@ -279,7 +281,9 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 4. **General compiler support.** Implement result builders and lazy parameters, with separate designs and target tests;
    runtime debug checks enforce tracked reads.
 5. **Widgets, then panels.** Convert leaf widgets and panels to the builder API; delete `selfUpdating`/`reconcile`,
-   retained caches, patch frames and binding revisions. Interaction signals and derived style replace hover handling.
+   `SelfUpdatingBuild` (including its ownership counter), `RetainedVariants`, `InteractionStateSnapshot`, `BuiltNode`,
+   retained caches, patch frames and binding revisions. Until then, change this machinery only for tested correctness
+   fixes and the required no-regression work. Interaction signals and derived style replace hover handling.
 6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
    backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
    solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback

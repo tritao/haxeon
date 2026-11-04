@@ -217,7 +217,7 @@ class IrInterpreter {
 				}
 			case CNativeCall(_, name, _):
 				throw 'IR interpreter cannot execute ordinary C native "$name" without a host binding';
-			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type);
+			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type, null, functions.exists(name) ? null : name);
 			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name), value(values, receiver), out.type);
 			case CallClosure(_, closure, arguments):
 				var callable:InterpClosure = cast value(values, closure),
@@ -250,7 +250,7 @@ class IrInterpreter {
 			var value = arguments[0], probe = arguments[1];
 			if (!Std.isOfType(value, InterpClosure) || !Std.isOfType(probe, InterpClosure)) return null;
 			var closure:InterpClosure = cast value, expected:InterpClosure = cast probe;
-			return closure.target == expected.target ? closure.receiver : null;
+			return closure.target == expected.target && closure.nativeName == expected.nativeName ? closure.receiver : null;
 		}
 
 		return switch name {
@@ -324,6 +324,11 @@ class IrInterpreter {
 			case "__math_floor": Std.int(Math.floor(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
 			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
+			case "haxeon.reactive.ReactiveIdentity.same":
+				if (arguments[0] != null && !Std.isOfType(arguments[0], InterpObject)
+					|| arguments[1] != null && !Std.isOfType(arguments[1], InterpObject))
+					throw "IR interpreter reference identity requires object references";
+				arguments[0] == arguments[1];
 			case "__reflect_is_object":
 				arguments[0] != null
 				&& !Std.isOfType(arguments[0], Bool)
@@ -449,12 +454,13 @@ class IrInterpreter {
 		var sourceArity = switch source.type { case Function(args, _): args.length; default: -1; };
 		var targetArity = switch type { case Function(args, _): args.length; default: -1; };
 		if (sourceArity < 0 || sourceArity != targetArity) throw "Cannot cast function with a different arity";
-		return new InterpClosure(source.target, source.receiver, type, source);
+		return new InterpClosure(source.target, source.receiver, type, source, source.nativeName);
 	}
 
 	function invokeClosure(closure:InterpClosure, args:Array<Dynamic>):Dynamic {
 		if (closure.source == null) {
 			if (closure.receiver != null) args.unshift(closure.receiver);
+			if (closure.target == null) return executeNative(closure.nativeName, args);
 			return execute(closure.target, args);
 		}
 		var source = closure.source;
@@ -693,15 +699,17 @@ private class InterpTypeRef {
 }
 
 private class InterpClosure {
-	public final target:IrFunction;
+	public final target:Null<IrFunction>;
 	public final receiver:Dynamic;
 	public final type:IrType;
 	public final source:Null<InterpClosure>;
+	public final nativeName:Null<String>;
 
-	public function new(target:IrFunction, receiver:Dynamic, type:IrType, ?source:InterpClosure) {
+	public function new(target:Null<IrFunction>, receiver:Dynamic, type:IrType, ?source:InterpClosure, ?nativeName:String) {
 		this.target = target;
 		this.receiver = receiver;
 		this.type = type;
 		this.source = source;
+		this.nativeName = nativeName;
 	}
 }

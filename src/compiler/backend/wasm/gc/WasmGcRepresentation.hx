@@ -1870,6 +1870,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Reflect.isObject signature";
 			return dynamicIsObject(argumentLocals[0], outputLocal);
 		}
+		if (name == "__reference_identity") {
+			if ((switch (output.type) { case Bool: false; default: true; }) || arguments.length != 2 || argumentLocals.length != 2
+				|| (switch (arguments[0].type) { case Dyn: false; default: true; }) || (switch (arguments[1].type) { case Dyn: false; default: true; }))
+				throw "Invalid Wasm GC reference identity signature";
+			return [LocalGet(argumentLocals[0]), RefCast({nullable: true, heap: Eq}),
+				LocalGet(argumentLocals[1]), RefCast({nullable: true, heap: Eq}), RefEq, LocalSet(outputLocal)];
+		}
 		if (name == "__dynamic_equal") {
 			if ((switch (output.type) { case Bool: false; default: true; }) || arguments.length != 2 || argumentLocals.length != 2 || (switch (arguments[0].type) { case Dyn: false; default: true; }) || (switch (arguments[1].type) { case Dyn: false; default: true; }))
 				throw "Invalid Wasm GC dynamic equality signature";
