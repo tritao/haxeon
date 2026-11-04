@@ -2,7 +2,9 @@ package haxeon.reactive;
 
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
+	#if wasm
 	static var nextId:Int = 0;
+	#end
 	public final reactiveId:Int;
 	final reservedIds:Int;
 	public var version(default, null):Int = 0;
@@ -11,10 +13,16 @@ class ReactiveSource {
 	public function new(reservedIds:Int = 1) {
 		if (reservedIds < 1)
 			throw 'A reactive source must reserve at least one dependency id, got $reservedIds';
+		#if wasm
 		if (nextId > 0x7fffffff - reservedIds)
-			nextId = 0;
+			throw "Reactive dependency IDs exhausted";
 		reactiveId = nextId + 1;
 		nextId += reservedIds;
+		#else
+		var id = reserveReactiveIds(reservedIds);
+		if (id == 0) throw "Reactive dependency IDs exhausted";
+		reactiveId = id;
+		#end
 		this.reservedIds = reservedIds;
 	}
 
@@ -94,3 +102,8 @@ class ReactiveSource {
 		return false;
 	}
 }
+
+#if !wasm
+@:hlNative("haxeon_runtime", "__reactive_reserve_ids")
+extern function reserveReactiveIds(count:Int):Int;
+#end

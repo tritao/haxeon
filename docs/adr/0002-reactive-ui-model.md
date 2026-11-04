@@ -59,8 +59,13 @@ values changes, and updates the existing nodes. This record makes that idea the 
    belongs to each object, with no per-field `Signal` objects or revision counters. `Observable` applies to classes;
    structs have no identity, so a struct-valued observable field is tracked as one field. Struct and enum conformances
    also use `implements`, as in `struct Value implements Equatable`. A signal is effectively a
-   one-field observable. Signal and observable-field writes that do not change the value are skipped, using the type's
-   declared `Equatable` conformance or identity for nonconforming classes, as in Compose and Solid.
+   one-field observable. Signal and observable-field writes always store their value; change detection uses the type's
+   declared `Equatable` conformance or identity for nonconforming classes to decide whether to invalidate readers.
+
+   Dependency IDs reserve disjoint integer ranges for each source, atomically on multithreaded HashLink. Exhaustion
+   throws instead of reusing an ID, since reuse can silently associate a reader with the wrong source. Observable
+   sources currently reserve the program-wide field stride; runtime class-specific layouts are needed to reduce that
+   reservation and support incremental changes.
 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its

@@ -431,3 +431,13 @@ a separate per-type pair differed only by one byte buffer. The 500-cycle RSS win
 Wasm GC Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects; the guests were byte-identical.
 An observed scalar-and-reference struct copy, update, assignment and effect flush allocated zero times on HashLink for
 1,024 updates and on both Wasm targets for 8 and 1,024 updates, with inlining enabled and disabled.
+
+Atomic, nonwrapping reactive dependency-ID reservation was compared on outer revision `40c855d6d` in nine
+alternating HashLink pairs. Per-action allocation medians (KiB) were 112.6 / 80.1 / 74.5 / 93.1 for the control and
+112.6 / 80.1 / 74.5 / 93.2 for the candidate's tab switches; the paired median difference was zero for every action.
+The remaining medians matched at 0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll, 0.2 / 0.2 for idle and
+focused idle, and 16.1 / 16.2 for type and backspace. Selection census medians were 342,091 / 342,091 with zero paired
+difference; a separate per-type pair differed only by one byte buffer. The 500-cycle RSS window medians were
+29.69 / 3.91 / 0.78 / 5.00 MiB and 29.84 / 3.59 / 0.78 / 4.84 MiB, with paired median differences
+0 / 0 / 0 / -0.16 MiB. Nine full-scene and three pairs per other Wasm GC Showcase scenario matched at
+4,440 / 4,440 / 4,440 / 8,724 objects.

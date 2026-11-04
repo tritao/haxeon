@@ -493,3 +493,5 @@ wasm-raw-pointer-gc-leaf	42
 wasm-closure-signature-census	42
 reactive-effect-failure-recovery	42
 reactive-effect-allocations	42
+reactive-dependency-id-exhaustion	42
+reactive-dependency-id-threads	42

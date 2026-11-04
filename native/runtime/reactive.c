@@ -1,3 +1,5 @@
+#include <limits.h>
+
 /* Each active tracking scope roots its collector without allocating a TLS slot. */
 #if defined(_WIN32)
 #define REALTIME_REACTIVE_TLS __declspec(thread)
@@ -8,6 +10,17 @@
 static REALTIME_REACTIVE_TLS vdynamic *realtime_reactive_collector;
 /* Module initialization claims the process-wide application thread. */
 static _Atomic(uintptr_t) realtime_reactive_owner;
+static _Atomic(int) realtime_reactive_next_id;
+
+/* Reserve a disjoint range without wrapping, including across independent threads. */
+HL_PRIM int HL_NAME(__reactive_reserve_ids)( int count ) {
+	int current = atomic_load_explicit(&realtime_reactive_next_id, memory_order_relaxed);
+	for( ;; ) {
+		if( count < 1 || current > INT_MAX - count ) return 0;
+		if( atomic_compare_exchange_weak_explicit(&realtime_reactive_next_id, &current, current + count,
+			memory_order_relaxed, memory_order_relaxed) ) return current + 1;
+	}
+}
 
 HL_PRIM bool HL_NAME(__reactive_claim_owner)( void ) {
 	uintptr_t current = (uintptr_t)&realtime_reactive_collector, expected = 0;
