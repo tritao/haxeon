@@ -99,7 +99,7 @@ class TextInputBridge {
 	public function update(window:TextInputWindow, documentLength:Int, selectionStart:Int,
 			selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
 			inputType:Int, flags:Int, cursor:Rect,
-			selectionRects:Array<TextRangeRect>, compositionRects:Array<TextRangeRect>):Void {
+			selectionRects:Array<TextRangeRect>, compositionRects:Array<TextRangeRect>, action:Int = 0):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed() || !requestedActive || cursor == null ||
 			(platformChecked && !platformSupported))
@@ -116,7 +116,8 @@ class TextInputBridge {
 			publishedState[4] != compositionStart || publishedState[5] != compositionEnd ||
 			publishedState[6] != inputType || publishedState[7] != flags ||
 			publishedState[8] != cursor.x || publishedState[9] != cursor.y ||
-			publishedState[10] != cursor.width || publishedState[11] != cursor.height;
+			publishedState[10] != cursor.width || publishedState[11] != cursor.height ||
+			publishedState[12] != action;
 		if (stateChanged) {
 			var state = new TextInputState(window.text, documentLength, selectionStart, selectionEnd);
 			state.textStart = window.start;
@@ -124,6 +125,7 @@ class TextInputBridge {
 			state.compositionEnd = compositionEnd;
 			state.inputType = cast inputType;
 			state.flags = cast flags;
+			state.action = cast action;
 			state.cursorX = cursor.x;
 			state.cursorY = cursor.y;
 			state.cursorWidth = cursor.width;
@@ -143,6 +145,7 @@ class TextInputBridge {
 			publishedState[9] = cursor.y;
 			publishedState[10] = cursor.width;
 			publishedState[11] = cursor.height;
+			publishedState[12] = action;
 		}
 		if (!stateChanged && publishedGeometry &&
 			matchesRects(selectionRects, publishedSelection) &&
