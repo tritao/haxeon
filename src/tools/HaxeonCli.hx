@@ -604,8 +604,10 @@ class HaxeonCli {
 			throw 'Option "--compiler-only" is only valid with "haxeon build"';
 		if (options.watch && !launch)
 			throw 'Option "--watch" is only valid with "haxeon run"';
-		if (options.live && !options.watch)
-			throw 'Option "--live" requires "haxeon run --watch"';
+		// `build --compiler-only --live` publishes the live artifacts (module, .hlp patch, .live.* descriptions) for a host that is not
+		// the desktop's (a phone applies the patch itself); `run --watch --live` is the desktop's loop.
+		if (options.live && !options.watch && !(options.compilerOnly && !launch))
+			throw 'Option "--live" requires "haxeon run --watch" (or "haxeon build --compiler-only")';
 		if (options.strictLive && !options.live)
 			throw 'Option "--strict-live" requires "haxeon run --watch --live"';
 		if (options.watch
