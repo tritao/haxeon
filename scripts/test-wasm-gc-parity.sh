@@ -97,6 +97,10 @@ for inline in 0 1; do
 			--export=EffectAllocationCensus.prepare --export=EffectAllocationCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-effect-census-inline-$inline.wasm" \
 			--entry=reactive-effect-allocations --root=stdlib --root=tests/programs tests/programs/reactive-effect-allocations.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ReactiveCaptureCensus.prepare --export=ReactiveCaptureCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-reactive-capture-census-inline-$inline.wasm" \
+			--entry=reactive-capture-allocations --root=stdlib --root=tests/programs tests/programs/reactive-capture-allocations.hx
 		for value_case in reactive-effect-failure-recovery generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
@@ -740,6 +744,16 @@ async function run(name, target) {
 	    if (result !== n * (n + 1) / 2 || allocations !== 0)
 	      failures.push(`observable effect census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: observable effect census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const captureBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-reactive-capture-census-inline-${inline}.wasm`));
+	  const capture = (await WebAssembly.instantiate(captureBytes, {haxeon_runtime: runtime, std})).instance;
+	  capture.exports["ReactiveCaptureCensus.prepare"]();
+	  const captureCount = target === "wasm32" ? capture.exports["haxeon.memory.allocation_count"] : capture.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = captureCount(), result = capture.exports["ReactiveCaptureCensus.perform"](n), allocations = captureCount() - before;
+	    if (result !== n * 2 || allocations !== 0)
+	      failures.push(`reactive capture census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: reactive capture census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const rangesBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-generic-ranges-census-inline-${inline}.wasm`));
 	  const ranges = (await WebAssembly.instantiate(rangesBytes, {haxeon_runtime: runtime, std})).instance;

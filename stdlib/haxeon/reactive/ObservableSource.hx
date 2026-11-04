@@ -18,9 +18,9 @@ class ObservableSource extends ReactiveSource {
 		invalidateFieldReaders(fieldBit);
 	}
 
-	public override function dependencyId(fieldBit:Int):Int {
+	public override function dependencyId(fieldBit:Int):haxe.Int64 {
 		checkRange(fieldBit);
-		return reactiveId + fieldBit;
+		return reactiveId + haxe.Int64.ofInt(fieldBit);
 	}
 
 	public override function versionAt(fieldBit:Int):Int {

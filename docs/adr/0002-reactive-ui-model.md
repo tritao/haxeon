@@ -62,10 +62,11 @@ values changes, and updates the existing nodes. This record makes that idea the 
    one-field observable. Signal and observable-field writes always store their value; change detection uses the type's
    declared `Equatable` conformance or identity for nonconforming classes to decide whether to invalidate readers.
 
-   Dependency IDs reserve disjoint integer ranges for each source, atomically on multithreaded HashLink. Exhaustion
-   throws instead of reusing an ID, since reuse can silently associate a reader with the wrong source. Observable
-   sources currently reserve the program-wide field stride; runtime class-specific layouts are needed to reduce that
-   reservation and support incremental changes.
+   Dependency IDs reserve 64-bit positive integer ranges for each source, atomically on multithreaded HashLink. The
+   allocator wraps only after the 63-bit positive range is used; it does not fail after the former 32-bit limit. The
+   subscriber index uses the low word as a hash and checks source identity and field on collision. Observable sources
+   currently reserve the program-wide field stride; runtime class-specific layouts are still needed for incremental
+   changes. [Measured reservation rates](../REACTIVE_ID_RESERVATIONS.md) show why the former limit was practical to hit.
 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its

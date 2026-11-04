@@ -441,3 +441,21 @@ difference; a separate per-type pair differed only by one byte buffer. The 500-c
 29.69 / 3.91 / 0.78 / 5.00 MiB and 29.84 / 3.59 / 0.78 / 4.84 MiB, with paired median differences
 0 / 0 / 0 / -0.16 MiB. Nine full-scene and three pairs per other Wasm GC Showcase scenario matched at
 4,440 / 4,440 / 4,440 / 8,724 objects.
+
+The 64-bit dependency-ID change was compared with outer revision `f1a9e9516` in nine alternating HashLink pairs,
+swapping the matching native runtime with each module. Per-action allocation medians (KiB) were 112.6 / 80.1 / 74.5 /
+93.2 for control and 112.6 / 80.1 / 74.5 / 92.9 for the candidate's tab switches; paired median differences were
+0 / 0 / 0 / -0.3. The remaining medians matched at 0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll,
+0.2 / 0.2 for idle and focused idle, and 16.1 / 16.2 for type and backspace. Selection census medians were
+342,091 / 342,090 with a paired difference of -1; a per-type pair had equal object counts and differed only by 48 bytes
+in byte buffers. The 500-cycle RSS window medians were 30.31 / 3.59 / 0.78 / 5.00 MiB and 29.84 / 3.59 / 0.78 /
+5.00 MiB, with paired median differences -0.15 / -0.15 / 0 / 0 MiB. Nine full-scene and three pairs per other Wasm GC
+Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects. Repeated captured reads and effect flushes allocate
+zero times on HashLink for 1,024 updates and on both Wasm targets for 8 and 1,024 updates, with inlining on and off.
+
+Before choosing 64-bit IDs, an identity-based prototype searched source edges and the current capture slice without a
+global ID. It reduced the selection census by about 1,180 allocations, but hierarchy-to-sensors increased by 2.0 KiB in
+two of three alternating pairs (the third was unchanged), so it did not meet the per-action no-regression rule. A first
+64-bit version using a generic 64-bit map added about 1,160 allocations to the selection census; retaining a 32-bit
+hash index with collision-checked 64-bit IDs removed that cost. The measured 32-bit reservation rates by editor action
+are recorded in [Reactive ID reservation measurements](../../../docs/REACTIVE_ID_RESERVATIONS.md).

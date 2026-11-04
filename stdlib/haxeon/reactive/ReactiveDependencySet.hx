@@ -14,11 +14,11 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	var readerTail:ReactiveEdge;
 	var edgeCount:Int = 0;
 	var runStamp:Int = 0;
-	var captureStampKeys:Array<Int>;
+	var captureStampKeys:Array<haxe.Int64>;
 	var captureStampValues:Array<Int>;
 	var captureStampCount:Int = 0;
 	var captureStampUsed:Int = 0;
-	var captureStampIds:Array<Int>;
+	var captureStampIds:Array<haxe.Int64>;
 	var captureSources:Array<ReactiveSource>;
 	var captureFieldBits:Array<Int>;
 	var captureStamp:Int = 1;
@@ -62,15 +62,42 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			ReactiveRuntime.claimSubscriptionOwner(source, fieldBit);
 			edge = new ReactiveEdge(source, this, fieldBit);
 			if (edgesBySource == null) edgesBySource = new Map();
-			edgesBySource.set(dependencyId, edge);
+			var key = haxe.Int64.toInt(dependencyId);
+			if (edgesBySource.get(key) == null) edgesBySource.set(key, edge);
 			linkReader(edge);
 			source.subscribe(edge);
 		}
 		edge.stamp = runStamp;
 	}
 
-	function findEdge(source:ReactiveSource, fieldBit:Int):Null<ReactiveEdge>
-		return edgesBySource == null ? null : edgesBySource.get(source.dependencyId(fieldBit));
+	function findEdge(source:ReactiveSource, fieldBit:Int):Null<ReactiveEdge> {
+		if (edgesBySource == null) return null;
+		var edge = edgesBySource.get(haxe.Int64.toInt(source.dependencyId(fieldBit)));
+		if (edge == null) return null;
+		if (edge.source == source && edge.fieldBit == fieldBit) return edge;
+		// The low 32 bits are only a map hash; distinct 64-bit IDs can collide.
+		edge = readerHead;
+		while (edge != null) {
+			if (edge.source == source && edge.fieldBit == fieldBit) return edge;
+			edge = edge.readerNext;
+		}
+		return null;
+	}
+
+	/** Retain a representative when another live edge has the same low-word key. */
+	function removeEdgeKey(edge:ReactiveEdge):Void {
+		var key = haxe.Int64.toInt(edge.source.dependencyId(edge.fieldBit));
+		if (edgesBySource.get(key) != edge) return;
+		var other = readerHead;
+		while (other != null) {
+			if (haxe.Int64.toInt(other.source.dependencyId(other.fieldBit)) == key) {
+				edgesBySource.set(key, other);
+				return;
+			}
+			other = other.readerNext;
+		}
+		edgesBySource.remove(key);
+	}
 
 	function linkReader(edge:ReactiveEdge):Void {
 		edge.readerPrevious = readerTail;
@@ -114,7 +141,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			if (edge.stamp != runStamp) {
 				edge.source.unsubscribe(edge);
 				unlinkReader(edge);
-				edgesBySource.remove(edge.source.dependencyId(edge.fieldBit));
+				removeEdgeKey(edge);
 			} else {
 				edge.source.ensureCurrent();
 				edge.seenVersion = edge.source.versionAt(edge.fieldBit);
@@ -132,7 +159,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			if (edge.stamp != runStamp) {
 				edge.source.unsubscribe(edge);
 				unlinkReader(edge);
-				edgesBySource.remove(edge.source.dependencyId(edge.fieldBit));
+				removeEdgeKey(edge);
 			} else edge.seenVersion = edge.source.versionAt(edge.fieldBit);
 			edge = next;
 		}
@@ -273,7 +300,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	}
 
 	/** Open-addressed integer stamps avoid one HashLink map node per source on every frame. */
-	function getCaptureStamp(id:Int):Int {
+	function getCaptureStamp(id:haxe.Int64):Int {
 		if (captureStampKeys == null) return -1;
 		var mask = captureStampKeys.length - 1;
 		var index = captureStampHash(id) & mask;
@@ -286,7 +313,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		return -1;
 	}
 
-	function setCaptureStamp(id:Int, stamp:Int):Void {
+	function setCaptureStamp(id:haxe.Int64, stamp:Int):Void {
 		if (captureStampKeys == null) resizeCaptureStamps(16);
 		var existing = captureStampIndex(id);
 		if (existing >= 0) {
@@ -324,7 +351,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		setCaptureStamp(id, stamp);
 	}
 
-	function removeCaptureStamp(id:Int):Void {
+	function removeCaptureStamp(id:haxe.Int64):Void {
 		if (captureStampKeys == null) return;
 		var mask = captureStampKeys.length - 1;
 		var index = captureStampHash(id) & mask;
@@ -341,7 +368,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		}
 	}
 
-	function captureStampIndex(id:Int):Int {
+	function captureStampIndex(id:haxe.Int64):Int {
 		var mask = captureStampKeys.length - 1;
 		var index = captureStampHash(id) & mask;
 		for (_ in 0...captureStampKeys.length) {
@@ -372,8 +399,8 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		}
 	}
 
-	static inline function captureStampHash(id:Int):Int {
-		var hash = id;
+	static inline function captureStampHash(id:haxe.Int64):Int {
+		var hash = haxe.Int64.toInt(id ^ (id >>> 32));
 		hash ^= hash >>> 16;
 		hash *= 0x7feb352d;
 		hash ^= hash >>> 15;

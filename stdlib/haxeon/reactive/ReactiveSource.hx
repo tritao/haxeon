@@ -3,9 +3,9 @@ package haxeon.reactive;
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
 	#if wasm
-	static var nextId:Int = 0;
+	static var nextId:haxe.Int64 = haxe.Int64.ofInt(0);
 	#end
-	public final reactiveId:Int;
+	public final reactiveId:haxe.Int64;
 	final reservedIds:Int;
 	public var version(default, null):Int = 0;
 	var observerHead:ReactiveEdge;
@@ -14,20 +14,19 @@ class ReactiveSource {
 		if (reservedIds < 1)
 			throw 'A reactive source must reserve at least one dependency id, got $reservedIds';
 		#if wasm
-		if (nextId > 0x7fffffff - reservedIds)
-			throw "Reactive dependency IDs exhausted";
-		reactiveId = nextId + 1;
-		nextId += reservedIds;
+		var count = haxe.Int64.ofInt(reservedIds);
+		var max = haxe.Int64.make(0x7fffffff, -1);
+		if (nextId > max - count) nextId = haxe.Int64.ofInt(0);
+		reactiveId = nextId + haxe.Int64.ofInt(1);
+		nextId = nextId + count;
 		#else
-		var id = reserveReactiveIds(reservedIds);
-		if (id == 0) throw "Reactive dependency IDs exhausted";
-		reactiveId = id;
+		reactiveId = reserveReactiveIds(reservedIds);
 		#end
 		this.reservedIds = reservedIds;
 	}
 
 	/** Identity used by the reader's reusable edge table. Observable objects reserve one ID per field bit. */
-	public function dependencyId(fieldBit:Int):Int {
+	public function dependencyId(fieldBit:Int):haxe.Int64 {
 		if (fieldBit < 0 || fieldBit >= reservedIds)
 			throw 'Reactive dependency bit $fieldBit is outside the reserved range of $reservedIds';
 		return reactiveId;
@@ -105,5 +104,5 @@ class ReactiveSource {
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__reactive_reserve_ids")
-extern function reserveReactiveIds(count:Int):Int;
+extern function reserveReactiveIds(count:Int):haxe.Int64;
 #end

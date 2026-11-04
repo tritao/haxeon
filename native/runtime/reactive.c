@@ -10,15 +10,15 @@
 static REALTIME_REACTIVE_TLS vdynamic *realtime_reactive_collector;
 /* Module initialization claims the process-wide application thread. */
 static _Atomic(uintptr_t) realtime_reactive_owner;
-static _Atomic(int) realtime_reactive_next_id;
+static _Atomic(uint64_t) realtime_reactive_next_id;
 
-/* Reserve a disjoint range without wrapping, including across independent threads. */
-HL_PRIM int HL_NAME(__reactive_reserve_ids)( int count ) {
-	int current = atomic_load_explicit(&realtime_reactive_next_id, memory_order_relaxed);
+/* Reserve a 63-bit positive range atomically, including across independent threads. */
+HL_PRIM int64_t HL_NAME(__reactive_reserve_ids)( int count ) {
+	uint64_t current = atomic_load_explicit(&realtime_reactive_next_id, memory_order_relaxed);
 	for( ;; ) {
-		if( count < 1 || current > INT_MAX - count ) return 0;
-		if( atomic_compare_exchange_weak_explicit(&realtime_reactive_next_id, &current, current + count,
-			memory_order_relaxed, memory_order_relaxed) ) return current + 1;
+		uint64_t base = current > (uint64_t)INT64_MAX - (uint64_t)count ? 0 : current;
+		if( atomic_compare_exchange_weak_explicit(&realtime_reactive_next_id, &current, base + (uint64_t)count,
+			memory_order_relaxed, memory_order_relaxed) ) return (int64_t)(base + 1);
 	}
 }
 
