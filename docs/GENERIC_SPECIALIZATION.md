@@ -205,11 +205,12 @@ raw-pointer operations unboxed. Native callback handles and runtime type handles
 representation before they can be checked as distinct kinds. Until that fix lands, this is an open part of the
 erased-boundary audit.
 
-A separate Wasm GC scalar-call gap remains for a struct with managed reference fields returned through a closure in a
-specialized generic field. A census with `{number:Int, text:String}` measured 16 / 2,048 allocations for 8 / 1,024
-typed calls, both before and after these checks and with inlining on or off; Wasm32 measured zero. The replacement is
-to keep the value's scalar and traced reference leaves through both argument and result, including the generic field
-call. This path must be fixed and remeasured before relying on it for a no-box UI port.
+A closure in a specialized generic field carries a struct's scalar and traced reference leaves through its typed
+argument and result. In a Wasm GC census, the apparent 16 / 2,048 allocations for 8 / 1,024 calls came from evaluating
+a string literal in the loop: its byte array and string wrapper were rebuilt on every iteration. Immutable literals
+are now rooted and reused per module. A previously unseen literal allocates its two objects once; after setup, the
+managed-reference struct closure performs 8 and 1,024 calls with zero allocations on all three targets, with inlining
+on and off.
 These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
 owners are not complete until those paths and incremental invalidation are tested.
 Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the

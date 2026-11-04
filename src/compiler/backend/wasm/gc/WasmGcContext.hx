@@ -20,6 +20,7 @@ class WasmGcContext {
 	public final closureProbeQueryTargets:Map<String, String> = [];
 
 	final stringSegments:Map<String, Int> = [];
+	final stringGlobals:Map<String, Int> = [];
 	final valueArrayBridgeGlobals:Map<String, Int> = [];
 
 	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>, methods:Map<String, String>) {
@@ -39,6 +40,16 @@ class WasmGcContext {
 			stringSegments.set(value, segment);
 		}
 		return segment;
+	}
+
+	/** Literals are immutable, so every evaluation can share one rooted value per module. */
+	public function stringGlobal(value:String):Int {
+		var existing = stringGlobals.get(value);
+		if (existing != null) return existing;
+		var index = module.globals.length, heap:WasmHeapType = Type(plan.bytesTypeIndex);
+		module.globals.push({type: Ref({nullable: true, heap: heap}), mutable: true, init: [RefNull(heap)]});
+		stringGlobals.set(value, index);
+		return index;
 	}
 
 	/** One lazily initialized closure per generated bridge, shared by every array of that shape. */

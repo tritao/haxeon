@@ -98,17 +98,23 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return stringLiteral(value, destination);
 	}
 
-	// A literal is copied from a passive data segment in one instruction rather than stored byte by byte.
+	// Allocate each immutable literal once, lazily, so repeated evaluations reuse its rooted value.
 	function stringLiteral(value:String, destination:Int):Array<WasmInstruction> {
-		var length = HaxeBytes.ofString(value).length;
+		var length = HaxeBytes.ofString(value).length, global = gc.stringGlobal(value);
 		return [
+			GlobalGet(global),
+			LocalTee(destination),
+			RefIsNull,
+			If(null),
 			I32Const(0),
 			I32Const(length),
 			ArrayNewData(plan.byteArrayTypeIndex, gc.stringSegment(value)),
 			I32Const(0),
 			I32Const(length),
 			StructNew(plan.bytesTypeIndex),
-			LocalSet(destination)
+			LocalTee(destination),
+			GlobalSet(global),
+			End
 		];
 	}
 

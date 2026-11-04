@@ -3,6 +3,12 @@
 This records the value conversions in stage 0 of [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md), including typed
 style storage and transitions.
 
+**Measurement correction:** The later Wasm GC paired runs through the erased-boundary change swapped the build-source
+`nativekit_ui_showcase_wasm_gc.wasm`, but the browser loads `nativekit_ui_haxeon_guest.wasm`. Those runs measured the
+candidate guest on both sides, so their claimed paired comparisons were invalid. HashLink pairs and standalone Wasm
+censuses were unaffected. Identical guest hashes remain valid evidence of identical generated code. The boundary and
+literal-cache comparisons below were rerun by swapping the browser-loaded guest itself.
+
 `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable structs declared with `implements Hashable`. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
@@ -153,9 +159,7 @@ Nine selection-stress pairs had control/candidate medians of 342,096 / 342,098 a
 difference of +1; one type comparison found only one fewer byte buffer in the candidate. Its `TextStyle` and
 `ParagraphStyle` counts were 140 each and `DockTextWidthKey` was zero. Nine 500-cycle RSS pairs had window medians
 [29.84, 3.59, 0.78, 4.84] / [30.00, 3.75, 0.78, 4.84] MiB and zero paired median differences. Both Wasm guest
-binaries were byte-for-byte identical. The opt-in Wasm GC Showcase counts were 5,896 / 5,896 / 5,896 / 12,620 for
-full / static / text-heavy / editing, compared with 5,896 / 5,896 / 5,896 / 12,622 immediately before; this is within
-the observed two-object variation.
+binaries were byte-for-byte identical. The earlier claimed paired Showcase counts were invalid for the reason above.
 
 The Float hash correction was compared on the same machine with nine alternating control/candidate pairs. Every
 per-action allocation median was unchanged from the table above, with zero paired median deltas. The selection-stress
@@ -163,15 +167,7 @@ census medians were 342,098 / 342,097 allocations, with a paired median delta of
 29.84 / 4.06 / 0.78 / 4.84 MiB before and 30.00 / 3.75 / 0.78 / 4.84 MiB after; paired median deltas were
 0 / -0.31 / 0 / 0 MiB. These are measurements of the hash correction, not evidence of an RSS improvement.
 
-| Wasm GC Showcase scenario | Before objects | After objects |
-| --- | ---: | ---: |
-| full | 5,898 | 5,896 |
-| static | 5,896 | 5,894 |
-| text-heavy | 5,896 | 5,896 |
-| editing | 12,624 | 12,622 |
-
-The object-count differences are within the observed run-to-run variation. Independent allocation fixtures measured
-zero allocations for 8 and 1,024 Float hashes on HashLink, Wasm32 and Wasm GC, with inlining on and off.
+Independent allocation fixtures measured zero allocations for 8 and 1,024 Float hashes on HashLink, Wasm32 and Wasm GC, with inlining on and off.
 
 The scalar-map correction was measured against the immediately preceding compiler with nine alternating pairs. Every
 per-action allocation median remained as in the table above, with zero paired median deltas. One unpaired
@@ -180,14 +176,7 @@ selection-stress census median was 342,097 allocations on both sides, with a zer
 RSS window medians were 30.00 / 3.59 / 0.94 / 4.84 MiB before and 30.00 / 3.75 / 0.78 / 4.84 MiB after; the paired
 median deltas were 0 / 0 / -0.16 / 0 MiB. These paired measurements do not establish an RSS improvement.
 
-| Wasm GC Showcase scenario | Before objects | After objects |
-| --- | ---: | ---: |
-| full | 5,896 | 5,894 |
-| static | 5,896 | 5,896 |
-| text-heavy | 5,896 | 5,896 |
-| editing | 12,622 | 12,622 |
-
-The Wasm GC guest binaries were byte-identical; the two-object difference is within observed run-to-run variation.
+The Wasm GC guest binaries were byte-identical.
 
 The scalar-closure identity correction was compared on the same machine with nine alternating control/candidate pairs.
 All per-action allocation medians matched the table above, with zero paired median differences. The selection-stress
@@ -197,15 +186,7 @@ showed differences only in byte buffers: 0 / +2 / -3 objects; the `TextStyle` an
 before and 30.16 / 3.59 / 0.94 / 4.84 MiB after, with paired median differences of 0 / -0.31 / 0 / 0 MiB. These
 measurements do not establish an RSS improvement or an exact match to the original baseline.
 
-| Wasm GC Showcase scenario | Control median objects | Candidate median objects | Pairs |
-| --- | ---: | ---: | ---: |
-| full | 5,896 | 5,896 | 9 |
-| static | 5,896 | 5,896 | 3 |
-| text-heavy | 5,896 | 5,896 | 3 |
-| editing | 12,622 | 12,622 | 3 |
-
-Every paired object-count difference was zero. Once an adapter exists, unwrapping it allocates zero objects for 8 and
-1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
+Once an adapter exists, unwrapping it allocates zero objects for 8 and 1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
 
 The HashLink Dynamic-callback fix was measured with nine alternating runs of the saved control runtime and the
 candidate runtime using identical editor bytecode. All per-action allocation medians remained as in the table above,
@@ -214,13 +195,6 @@ paired median difference; differences by type were confined to byte buffers. The
 29.84 / 3.91 / 0.78 / 5.00 MiB before and 29.69 / 3.75 / 0.78 / 4.84 MiB after; paired median differences were
 0 / +0.16 / 0 / 0 MiB. The second-window difference is within the earlier same-binary control variation, so it does not
 establish a runtime regression or an exact memory match.
-
-| Wasm GC Showcase scenario | Before objects | After objects |
-| --- | ---: | ---: |
-| full | 5,896 | 5,896 |
-| static | 5,896 | 5,896 |
-| text-heavy | 5,896 | 5,896 |
-| editing | 12,622 | 12,622 |
 
 The Wasm GC guest was byte-identical before and after the HashLink fork change.
 
@@ -234,15 +208,9 @@ allocations (paired median +1); three per-type pairs differed only in byte buffe
 with paired median differences of -0.15 / -0.47 / 0 / 0 MiB. These figures include the previously observed
 same-binary noise and do not establish an RSS improvement or an exact match to the original baseline.
 
-The Wasm GC Showcase guest was also byte-identical. Alternating control/candidate object-count medians were 5,896 /
-5,896 for full (nine pairs), 5,896 / 5,896 for static and text-heavy (three pairs each), and 12,622 / 12,622 for
-editing (three pairs); every scenario had a zero paired median difference.
+The Wasm GC Showcase guest was byte-identical to its control.
 
-The reference-shaped erased-write checks were compared against the preceding compiler. The Wasm GC Showcase guest
-was byte-identical. Alternating object-count medians were 5,910 / 5,914 for full (nine pairs), 5,896 / 5,896 for
-static and text-heavy (three pairs each), and 12,622 / 12,622 for editing (three pairs); every paired median difference
-was zero. The full scenario ran while a compiler workload was active, and its observed counts varied above the prior
-idle-machine samples despite the identical guest.
+The reference-shaped erased-write checks produced a Wasm GC guest byte-identical to the preceding compiler.
 
 On HashLink, the editor bytecode was byte-identical to the control. Nine alternating pairs had matching per-action
 allocation medians and zero paired median differences. Selection-stress medians were 342,097 / 342,097 allocations,
@@ -250,13 +218,10 @@ with a zero paired median difference. The 500-cycle RSS window medians were 30.3
 and 30.16 / 3.75 / 0.78 / 5.00 MiB after, with paired median differences of -0.15 / 0 / 0 / 0 MiB. These values
 include the previously observed same-binary variation and do not establish an RSS improvement.
 
-Array and closure erased-boundary checks were measured on the same machine against the preceding compiler. The Wasm GC
-Showcase guest changed; alternating control/candidate object-count medians were 5,896 / 5,898 for full (nine pairs),
-5,896 / 5,896 for static and text-heavy (three pairs each), and 12,622 / 12,622 for editing (three pairs). Every
-scenario's paired median difference was zero; the two-object difference between separate full medians is within the
-observed run variation. A scalar struct closure stored through an erased generic owner then called in typed code
-allocated zero objects for 8 and 1,024 calls on HashLink, Wasm32 and Wasm GC, with inlining on and off. A separate
-managed-reference struct closure gap and its prior-compiler control are recorded in `GENERIC_SPECIALIZATION.md`.
+Array and closure erased-boundary checks were measured on the same machine against the preceding compiler. The
+corrected Wasm GC comparison below replaces the invalid earlier paired figures. A scalar struct closure stored through
+an erased generic owner then called in typed code allocated zero objects for 8 and 1,024 calls on HashLink, Wasm32
+and Wasm GC, with inlining on and off.
 
 The HashLink comparison alternated the previous and candidate native runtimes with identical editor bytecode. Across
 nine pairs, every action had a zero paired median allocation difference. Separate control/candidate medians were
@@ -266,3 +231,28 @@ all nine per-type differences were confined to byte buffers. The 500-cycle RSS w
 0.78 / 4.84 MiB before and 30.16 / 3.59 / 0.78 / 5.00 MiB after, with paired median differences of 0 / 0 / 0 /
 +0.16 MiB. That last difference is within the previously observed same-binary RSS variation, so these measurements do
 not establish an RSS regression or an exact match to the original baseline.
+
+The corrected browser-loaded guest comparison for the erased-boundary change used nine alternating full runs and
+three pairs for each other scenario. Its control/candidate median object counts were 5,896 / 5,896 for full, static
+and text-heavy, and 12,622 / 12,622 for editing; every paired median difference was zero.
+
+The Wasm GC literal-cache correction was compared by alternating the actual browser-loaded guests on the same machine:
+
+| Showcase scenario | Before objects | After objects | Pairs |
+| --- | ---: | ---: | ---: |
+| full | 5,896 | 4,440 | 9 |
+| static | 5,896 | 4,440 | 3 |
+| text-heavy | 5,896 | 4,440 | 3 |
+| editing | 12,622 | 8,724 | 3 |
+
+The paired median differences were -1,456 objects for full, static and text-heavy and -3,898 for editing. A struct with
+an Int and a managed String field passed through a specialized generic closure allocated zero objects for 8 and 1,024
+calls after setup on HashLink, Wasm32 and Wasm GC, with inlining off and on. The original unprepared Wasm GC fixture
+fell from 16 / 2,048 allocations to 2 / 0: the remaining two objects initialize the immutable literal once.
+
+On HashLink, the saved control and candidate editor bytecode were identical. Nine alternating runs of the saved
+control and candidate runtimes had equal per-action allocation medians and zero paired median differences. The
+selection-stress census medians were 342,097 / 342,097 allocations, with a paired median difference of +1; the
+per-type differences were confined to byte buffers. The 500-cycle RSS window medians were 30.00 / 3.44 / 0.78 /
+4.84 MiB before and 29.84 / 3.91 / 0.78 / 5.00 MiB after, with paired median differences of -0.31 / -0.15 / 0 /
+0 MiB. These figures include the observed same-binary variation and do not establish an RSS improvement.
