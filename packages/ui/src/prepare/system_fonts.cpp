@@ -20,6 +20,10 @@
 #include <limits.h>
 #endif
 
+#if defined(__ANDROID__)
+#include <sys/stat.h>
+#endif
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -311,6 +315,28 @@ void append_windows_fonts(std::vector<SystemFontFallback> &fonts) {
 }
 #endif
 
+#if defined(__ANDROID__)
+// Android has no Fontconfig. Its system fonts are plain files in /system/fonts; these cover what the UI's own text
+// uses beyond the bundled faces (arrows, geometric shapes and other symbols, then Roboto's wider Latin and
+// punctuation coverage). The caller checks each font's cmap for the character, so listing a font is not a claim that
+// it has the glyph. Collections (.ttc, CJK) are left out: the loader cannot select a face from them, and bitmap color
+// emoji (CBDT) cannot be drawn by the rasterizer.
+void append_android_fonts(std::vector<SystemFontFallback> &fonts) {
+    static const char *const names[] = {
+        "NotoSansSymbols-Regular-Subsetted.ttf",
+        "NotoSansSymbols-Regular-Subsetted2.ttf",
+        "Roboto-Regular.ttf",
+        "DroidSansMono.ttf",
+    };
+    for (const char *name : names) {
+        const std::string path = std::string("/system/fonts/") + name;
+        struct stat info {};
+        if (stat(path.c_str(), &info) == 0 && S_ISREG(info.st_mode))
+            append_unique(fonts, path, false, 0);
+    }
+}
+#endif
+
 } // namespace
 
 std::vector<SystemFontFallback> discover_system_font_fallbacks() {
@@ -346,6 +372,8 @@ std::vector<SystemFontFallback> discover_system_font_fallbacks() {
     append_core_text_match(fonts, "👋", true, 0);
 #elif defined(_WIN32)
     append_windows_fonts(fonts);
+#elif defined(__ANDROID__)
+    append_android_fonts(fonts);
 #endif
 
     return fonts;
@@ -414,6 +442,11 @@ std::vector<SystemFontFallback> system_font_fallbacks_for_codepoint(uint32_t cod
     append_core_text_match(fonts, sample.c_str(), emoji, 0, monospace);
 #elif defined(_WIN32)
     // The registry supplies candidates; the caller verifies the loaded cmap.
+    (void)monospace;
+    for (const auto &font : system_font_fallbacks())
+        if (font.emoji == emoji) fonts.push_back(font);
+#elif defined(__ANDROID__)
+    // The candidates are the fixed list above; the caller verifies the loaded cmap.
     (void)monospace;
     for (const auto &font : system_font_fallbacks())
         if (font.emoji == emoji) fonts.push_back(font);
