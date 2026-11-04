@@ -89,6 +89,7 @@ class TestCatalog {
 		"QualifiedMainTypeMain",
 		"SemanticDependencyCollectorMain",
 		"ResolvedSemanticDependencyMain",
+		"InlineDefaultArgumentMain",
 		"InvalidationMain",
 		"LambdaNameMain",
 		"IrProgramAssemblerMain",

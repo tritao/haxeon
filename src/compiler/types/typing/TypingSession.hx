@@ -292,6 +292,9 @@ class TypingSession {
 
 	public final noReturnQueries:Map<String, Map<String, Bool>> = [];
 
+	/** Constants substituted into each typed body, including its omitted call arguments. */
+	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
+
 	function recordQuery(target:Map<String, Map<String, Bool>>, name:String, answer:Bool):Void {
 		var caller = currentContext.name;
 		if (caller == "")

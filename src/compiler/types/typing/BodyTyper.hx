@@ -62,6 +62,7 @@ class BodyTyper {
 	final genericInstantiation:GenericInstantiation;
 	final inlineConstantResolver:InlineConstantResolver;
 	final anonymousTypeRegistry:AnonymousTypeRegistry;
+	var defaultArgumentCaller:Null<String>;
 	var context(get, never):TypingContext;
 
 	inline function get_context():TypingContext
@@ -1967,6 +1968,15 @@ class BodyTyper {
 	/** Resolve an inline static field to its memoized compile-time value. */
 	function inlineStaticFieldExpression(owner:String, name:String, span:SourceSpan):Null<TypedExpression> {
 		var resolved = resolveInlineConstant(owner, name, span);
+		if (resolved != null) {
+			var caller = defaultArgumentCaller == null ? context.name : defaultArgumentCaller,
+				dependencies = session.inlineConstantDependencies.get(caller);
+			if (dependencies == null) {
+				dependencies = [];
+				session.inlineConstantDependencies.set(caller, dependencies);
+			}
+			dependencies.set(owner + "." + name, true);
+		}
 		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span, false, null, null, owner + "." + name);
 	}
 
@@ -2192,13 +2202,19 @@ class BodyTyper {
 		return CallResolver.isPosInfosParameter(argument);
 
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType, declarationName:String):TypedExpression {
+		// Defaults are resolved in the callee's scope but their substituted constants belong to the caller's artifact.
+		var previousCaller = defaultArgumentCaller;
+		if (defaultArgumentCaller == null)
+			defaultArgumentCaller = context.name;
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
 			leaveBody(body);
+			defaultArgumentCaller = previousCaller;
 			return typed;
 		} catch (error:Dynamic) {
 			leaveBody(body);
+			defaultArgumentCaller = previousCaller;
 			throw error;
 		}
 	}

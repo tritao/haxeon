@@ -28,4 +28,5 @@ typedef MeasuredTypedProgram = {
 	final purityQueries:Map<String, Map<String, Bool>>;
 
 	final noReturnQueries:Map<String, Map<String, Bool>>;
+	final inlineConstantDependencies:Map<String, Map<String, Bool>>;
 }

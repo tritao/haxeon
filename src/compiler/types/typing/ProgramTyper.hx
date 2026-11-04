@@ -324,6 +324,7 @@ class ProgramTyper {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
 			purityQueries: session.purityQueries,
+			inlineConstantDependencies: session.inlineConstantDependencies,
 			noReturnQueries: session.noReturnQueries,
 			metrics: {
 				allocationPhases: [

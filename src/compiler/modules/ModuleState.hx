@@ -15,6 +15,7 @@ enum abstract SemanticDependencyKind(String) {
 	var Body = "body";
 	var Layout = "layout";
 	var Initializer = "initializer";
+	var InlineConstant = "inline-constant";
 }
 
 /** Dependency edge from one declaration artifact to another declaration. */

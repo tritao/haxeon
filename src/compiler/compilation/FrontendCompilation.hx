@@ -148,7 +148,8 @@ class FrontendCompilation {
 		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		var purityQueries:Map<String, Map<String, Bool>>,
-			noReturnQueries:Map<String, Map<String, Bool>>;
+			noReturnQueries:Map<String, Map<String, Bool>>,
+			inlineConstantDependencies:Map<String, Map<String, Bool>>;
 		try {
 			if (token != null)
 				token.check();
@@ -179,6 +180,7 @@ class FrontendCompilation {
 			typerMetrics = typedResult.metrics;
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;
+			inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics,
 					bodyChanged, signatureChanged, structuralChanged);
@@ -263,6 +265,17 @@ class FrontendCompilation {
 			var state = context.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
+			var dependencies = state.semanticDependencies.get(fn.name);
+			if (dependencies != null)
+				state.semanticDependencies.set(fn.name, [
+					for (dependency in dependencies)
+						if (dependency.kind != SemanticDependencyKind.InlineConstant) dependency
+				]);
+			var constants = inlineConstantDependencies.get(fn.name);
+			if (constants != null)
+				for (target in constants.keys())
+					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name, SemanticDependencyKind.InlineConstant, target,
+						context.resolveSemanticSymbol(target));
 			var purityRecord = purityQueries.get(fn.name);
 			if (purityRecord != null)
 				state.purityQueries.set(fn.name, purityRecord);
