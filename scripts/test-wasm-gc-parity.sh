@@ -90,6 +90,10 @@ for inline in 0 1; do
 			--output="$parity_output_dir/wasm-parity-$target-iterator-census-inline-$inline.wasm" \
 			--entry=struct-array-iterator-escape --root=tests/programs tests/programs/struct-array-iterator-escape.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ObservablePlaceCensus.prepare --export=ObservablePlaceCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-observable-place-census-inline-$inline.wasm" \
+			--entry=observable-struct-place --root=stdlib --root=tests/programs tests/programs/observable-struct-place.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=EffectAllocationCensus.prepare --export=EffectAllocationCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-effect-census-inline-$inline.wasm" \
 			--entry=reactive-effect-allocations --root=stdlib --root=tests/programs tests/programs/reactive-effect-allocations.hx
@@ -716,6 +720,16 @@ async function run(name, target) {
 	    if (result !== n * (n - 1) / 2 || allocations !== 0)
 	      failures.push(`struct signal census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: struct signal census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const placeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-observable-place-census-inline-${inline}.wasm`));
+	  const place = (await WebAssembly.instantiate(placeBytes, {haxeon_runtime: runtime, std})).instance;
+	  place.exports["ObservablePlaceCensus.prepare"]();
+	  const placeCount = target === "wasm32" ? place.exports["haxeon.memory.allocation_count"] : place.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = placeCount(), result = place.exports["ObservablePlaceCensus.perform"](n), allocations = placeCount() - before;
+	    if (result !== n * (n - 1) / 2 || allocations !== 0)
+	      failures.push(`observable struct assignment census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: observable struct assignment census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const effectBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-effect-census-inline-${inline}.wasm`));
 	  const effect = (await WebAssembly.instantiate(effectBytes, {haxeon_runtime: runtime, std})).instance;

@@ -230,8 +230,9 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `State` is a signal handle. Every signal and Observable write stores its supplied value; equality decides only whether
    readers are invalidated. Floating-point change detection treats NaN as equal to NaN and the two zero signs as equal,
    while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate
-   only that field's readers. Signal and `State` writes
-   always throw inside tracking; Observable writes throw when that field already has readers, allowing fresh object
+   only that field's readers. A tracked struct field is updated by copying it, modifying the copy, and assigning the
+   whole value back; the compiler rejects in-place mutation until it can track the entire place correctly. Signal and
+   `State` writes always throw inside tracking; Observable writes throw when that field already has readers, allowing fresh object
    initialization. Property readers take no invocation context and track model reads directly. Command buttons read a
    retained derived enabled/checked result, so a context replacement that leaves the result unchanged does not rebuild
    the button. `State.updateQuietly`,

@@ -1959,6 +1959,8 @@ class BodyTyper {
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
 					method = requiredMapValue(session.signatures, methodKey);
+				if (session.relations.isValueClass(typedObject.type) && !session.isPureCall(methodKey) && !session.isReadOnlyReceiver(methodKey))
+					ValuePlaceRules.rejectObservableMutation(session, typedObject, span);
 				if (isGeneric(method))
 					fail("E1007", "Generic instance method values are not supported yet", span);
 				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type, resolvedMethodInfo.owner)),

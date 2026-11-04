@@ -523,6 +523,15 @@ snapshot fingerprint, not a map-key contract, so it is valid for mutable `Diffab
 same `Hashable` behavior: `0.0` and `-0.0` match, and NaNs use the canonical hash. All `@:structural` declarations and
 the old mask and hash APIs have been removed.
 
+An `Observable` field containing a struct must currently be replaced as a whole: copy the field into a local, modify
+the local, and assign it back. The compiler rejects nested field writes, increments, mutating method calls and bound
+mutating method references rooted in a tracked Observable struct field, because those places cannot yet preserve
+invalidation and exception semantics. Reads,
+read-only methods, and places rooted in `@:unobservable` fields remain available. Whole-field assignment tracks the
+change normally and remains eligible for value scalarization. In a scalar-and-reference struct fixture, replacing the
+old in-place write with copy-and-assign retained zero allocations on HashLink for 1,024 writes and on Wasm32 and Wasm GC
+for 8 and 1,024 writes, with inlining enabled and disabled.
+
 Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses
 `derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
 interface methods remain deferred until there is a concrete need.

@@ -1170,6 +1170,18 @@ class TestMain {
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
+		var observablePlace = 'interface Observable {} struct Point { public var x:Int; public function new(x:Int) this.x = x; public function move():Void x++; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } ';
+		for (operation in ['m.pos.x = 2;', 'm.pos.x += 1;', 'm.pos.x++;', 'm.pos.move();', 'var move = m.pos.move; move();'])
+			expectCompileError(observablePlace + 'function main():Int { var m = new Model(); $operation return 42; }',
+				'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
+		expectCompileError(observablePlace + 'class Child extends Model { public function new() super(); } function main():Int { var m = new Child(); m.pos.x = 2; return 42; }',
+			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
+		expectCompileError('interface Observable {} struct Point { public var x:Int; public function new() x = 1; } class Model implements Observable { public var pos:Null<Point>; public function new() pos = new Point(); } function main():Int { var m = new Model(); if (m.pos != null) m.pos.x = 2; return 42; }',
+			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
+		expectCompileError('interface Observable {} struct Point { public var x:Int; public function new() x = 1; } struct Nested { public var point:Point; public function new() point = new Point(); } class Model implements Observable { public var pos:Nested; public function new() pos = new Nested(); } function main():Int { var m = new Model(); m.pos.point.x = 2; return 42; }',
+			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
+		expectCompileError('interface Observable {} interface Diffable {} struct Point implements Diffable { public var x:Int; public function new(x:Int) this.x = x; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } function main():Int { var m = new Model(); return haxeon.Diff.apply(m.pos, new Point(1), new Point(2)); }',
+			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
 		expectCompileError('interface Diffable {} struct Fixed implements Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('struct Inner { public var x:Int; public function new(x:Int) this.x = x; } struct Fixed { public final child:Inner; public function new() this.child = new Inner(1); } function main():Int { var a = new Fixed(); a.child.x = 2; return 0; }',
