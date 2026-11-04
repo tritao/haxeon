@@ -115,12 +115,10 @@ values changes, and updates the existing nodes. This record makes that idea the 
    to create and 0.118 → 0.134 ms to retrack. These timings include the hash and fast-path overhead; unlike the
    original scans, the measured shared-source and capture cases no longer grow quadratically at these sizes.
 
-   Eight alternating Wasm GC full-scene pairs matched at 4,440 objects; the ninth candidate browser run timed out
-   after its renderer disappeared with 8.1 GiB free in `/dev/shm`. Those pairs preceded the final capture-only
-   `clearDependencies` correction, so the final-source full-scene comparison remains open. Three final-source pairs
-   each for static, text-heavy and editing matched at 4,440 / 4,440 / 8,724 objects. The failed command's output and
-   browser log are preserved in `materia-cache/claude-scratch/haxeon-flat-work/scale-measure/`
-   as `web-full-8-candidate-failure.log` and `web-full-8-candidate-browser.log`.
+   Nine alternating final-source Wasm GC full-scene pairs matched at 4,440 objects. Three pairs each for static,
+   text-heavy and editing also matched at 4,440 / 4,440 / 8,724 objects. An earlier run timed out on its ninth
+   candidate after the renderer disappeared with 8.1 GiB free in `/dev/shm`; its browser log reports GPU stalls but
+   no explicit crash or out-of-memory cause. The completed comparison ran without concurrent session builds.
 
    The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
    and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those
