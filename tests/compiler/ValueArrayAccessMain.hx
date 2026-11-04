@@ -1125,11 +1125,11 @@ class ValueArrayAccessMain {
 		var body = exception.createBlock(), handler = exception.createBlock(), after = exception.createBlock(),
 			pass = exception.createBlock(), fail = exception.createBlock();
 		var start = exception.currentBlock(), provenance = SourceProvenance.generated("array-place-test");
-		start.instructions.push(new Located(BeginTry(handler.id, after.id), provenance));
+		start.instructions.push(new Located(BeginTry(handler.id, after.id, false), provenance));
 		exception.jump(body);
 		exception.select(body);
 		exception.call(rewrittenThrow.name, [exceptionArray, exceptionIndex], Void);
-		body.instructions.push(new Located(EndTry(handler.id), provenance));
+		body.instructions.push(new Located(EndTry(handler.id, false), provenance));
 		var notCaught = exception.constBool(false);
 		exception.jump(after);
 		exception.select(handler);
@@ -1153,11 +1153,11 @@ class ValueArrayAccessMain {
 		var scalarExceptionCallback = scalarException.staticClosure("array_place_scalar_callback", callbackType);
 		var scalarBodyBlock = scalarException.createBlock(), scalarHandler = scalarException.createBlock(), scalarAfter = scalarException.createBlock(),
 			scalarPass = scalarException.createBlock(), scalarFail = scalarException.createBlock();
-		scalarException.currentBlock().instructions.push(new Located(BeginTry(scalarHandler.id, scalarAfter.id), provenance));
+		scalarException.currentBlock().instructions.push(new Located(BeginTry(scalarHandler.id, scalarAfter.id, false), provenance));
 		scalarException.jump(scalarBodyBlock);
 		scalarException.select(scalarBodyBlock);
 		scalarException.call(rewrittenScalarSnapshot.name, [scalarExceptionArray, scalarExceptionIndex, scalarExceptionCallback, scalarExceptionArray], I32);
-		scalarBodyBlock.instructions.push(new Located(EndTry(scalarHandler.id), provenance));
+		scalarBodyBlock.instructions.push(new Located(EndTry(scalarHandler.id, false), provenance));
 		var scalarNotCaught = scalarException.constBool(false);
 		scalarException.jump(scalarAfter);
 		scalarException.select(scalarHandler);
@@ -1200,7 +1200,7 @@ class ValueArrayAccessMain {
 			throw "Typed array element calls must use the scalar call ABI";
 		IrVerifier.verify(program);
 
-		var directory = Sys.systemName() == "Linux" ? "/dev/shm" : Sys.getEnv("TMPDIR");
+		var directory = Sys.getEnv("TMPDIR");
 		if (directory == null || directory.length == 0) directory = ".";
 		var path = directory + "/haxeon-value-array-access-" + StringTools.replace(Std.string(Sys.time()), ".", "-")
 			+ "-" + Std.random(0x7fffffff) + ".hl";

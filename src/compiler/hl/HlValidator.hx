@@ -191,11 +191,11 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
 					requireRegister(fn, index);
-				case Trap(destination, target):
+				case Trap(destination, target, _):
 					requireRegister(fn, destination);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
-				case EndTrap(destination):
+				case EndTrap(destination, _):
 					requireRegister(fn, destination);
 				case GlobalGet(destination, global):
 					requireRegister(fn, destination);

@@ -1,6 +1,6 @@
 # Scoped cleanup
 
-Status: design, pending implementation. This is layer 1 of the resource cleanup plan in
+Status: implementation in progress. This is layer 1 of the resource cleanup plan in
 [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md). It does not introduce ownership or move-only values.
 
 ## Syntax and registration
@@ -74,9 +74,11 @@ heap-allocated cleanup stack is introduced. Each syntactic registration can use 
 loop execution uses the loop body's fresh dynamic extent. Preserve source positions for debugging and perform the
 transformation independently of inlining.
 
-HashLink lowers protected regions and rethrow through its exception machinery and direct control-flow edges. Wasm32 and
-Wasm GC use their existing exception/control-flow lowering, with typed locals for exit state and the nullable value's
-native representation. Backends must preserve the same ordering and exception identity; neither interface dispatch nor
+HashLink lowers protected regions and rethrow through its exception machinery and direct control-flow edges. Its cleanup
+handler saves an in-flight exception's native stack trace in the handler's own stack frame and restores it before
+rethrowing; a nested throw, even one caught within cleanup, cannot overwrite the primary trace. Ordinary handlers do not
+reserve this storage. Wasm32 and Wasm GC use their existing exception/control-flow lowering, with typed locals for exit
+state and the nullable value's native representation. Backends must preserve the same ordering and exception identity; neither interface dispatch nor
 nullable checking may introduce a box for a concrete struct. Allocation censuses on all three targets, with inlining
 on and off, must measure repeated scope entry and exit, including mixed registrations. Tests also cover exceptions,
 nested exits, conditional registration, null, loops and compile-time escape errors.
@@ -94,3 +96,11 @@ Owner scopes for UI resources, finalizers, `inout`, move-only types, general bor
 out of scope. The reactive runtime and retained UI machinery are not changed by this feature. No dependency on changes
 to generic specialization or inline enums is intended; allocation requirements must nevertheless be verified for the
 representations supported by each backend.
+
+## Port when the compiler is built only by Haxeon
+
+The pinned stock-Haxe bootstrap must still parse compiler sources. Its cleanup sites therefore keep their existing
+forms until the compiler is built only by Haxeon: `HlWriter.writeFile` closes its Haxe output, the stock-Haxe branches
+of `ProcessOutputCapture` close processes and signal readers, `CompilerServer` closes its files and sockets and signals
+its worker, and `CancellationToken` releases its mutex. The existing Haxeon-only subprocess capture path can use
+`defer` now without changing the bootstrap.

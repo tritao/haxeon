@@ -544,6 +544,7 @@ private class PurityWalker {
 			case IndexAssignment(_, _, _, _), FieldAssignment(_, _, _, _): false;
 			case Return(value, _), Throw(value, _), Expression(value, _): expression(value);
 			case ReturnVoid(_), Break(_), Continue(_): true;
+			case Defer(body, _): statements(body);
 			case Try(body, catches, _):
 				if (!statements(body))
 					return false;

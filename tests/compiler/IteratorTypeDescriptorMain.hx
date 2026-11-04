@@ -69,10 +69,10 @@ class IteratorTypeDescriptorMain {
 		write.call("$generic-erased:Holder:set:value", [receiver, write.toDyn(good)], Void);
 		var wrong = write.toDyn(bad), body = write.createBlock(), caught = write.createBlock(), after = write.createBlock(),
 			unchanged = write.createBlock(), changed = write.createBlock();
-		write.currentBlock().instructions.push(new Located(BeginTry(caught.id, after.id), provenance));
+		write.currentBlock().instructions.push(new Located(BeginTry(caught.id, after.id, false), provenance));
 		write.jump(body);
 		write.select(body); write.call("$generic-erased:Holder:set:value", [receiver, wrong], Void);
-		body.instructions.push(new Located(EndTry(caught.id), provenance));
+		body.instructions.push(new Located(EndTry(caught.id, false), provenance));
 		write.jump(after);
 		write.select(caught); caught.instructions.push(new Located(Catch(new IrValue(1000012, "caught", Dyn)), provenance));
 		write.branch(write.equal(write.fieldGet(holder, "value", Iterator(I32)), good), unchanged, changed);

@@ -59,8 +59,8 @@ enum HlInstruction {
 	Unref(destination:Int, reference:Int);
 	Setref(reference:Int, source:Int);
 	RefOffset(destination:Int, reference:Int, index:Int);
-	Trap(destination:Int, target:String);
-	EndTrap(destination:Int);
+	Trap(destination:Int, target:String, preserveExceptionStack:Bool);
+	EndTrap(destination:Int, preserveExceptionStack:Bool);
 	GlobalGet(destination:Int, global:Int);
 	GlobalSet(global:Int, source:Int);
 	Add(destination:Int, left:Int, right:Int);

@@ -539,7 +539,7 @@ class IrInliner {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(_, _), EndTry(_), Catch(_):
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						return false;
 					default:
 				}
@@ -900,7 +900,7 @@ class IrInliner {
 		}
 		for (located in continuation.instructions)
 			switch located.value {
-				case BeginTry(catchBlock, afterBlock):
+				case BeginTry(catchBlock, afterBlock, _):
 					successors.push(catchBlock);
 					successors.push(afterBlock);
 				default:
@@ -959,8 +959,8 @@ class IrInliner {
 			case FloatToFloat(out, value): FloatToFloat(use(out), use(value));
 			case SafeCast(out, value): SafeCast(use(out), use(value));
 			// Callees with handlers are never cloned (see fits); these arise when a caller is rewritten in place.
-			case BeginTry(catchBlock, afterBlock): BeginTry(block(catchBlock), block(afterBlock));
-			case EndTry(catchBlock): EndTry(block(catchBlock));
+			case BeginTry(catchBlock, afterBlock, preserveExceptionStack): BeginTry(block(catchBlock), block(afterBlock), preserveExceptionStack);
+			case EndTry(catchBlock, preserveExceptionStack): EndTry(block(catchBlock), preserveExceptionStack);
 			case Catch(out): Catch(use(out));
 			case GlobalGet(out, name): GlobalGet(use(out), name);
 			case GlobalSet(name, value): GlobalSet(name, use(value));

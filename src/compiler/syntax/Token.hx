@@ -24,6 +24,7 @@ enum TokenKind {
 	Function;
 	Var;
 	Return;
+	Defer;
 	Throw;
 	Try;
 	Catch;

@@ -11,7 +11,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 6;
+	static inline final VERSION = 7;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -33,6 +33,8 @@ class IrInstructionCodec {
 		"SafeCast" => true,
 		"BeginTry" => true,
 		"EndTry" => true,
+		"BeginCleanupTry" => true,
+		"EndCleanupTry" => true,
 		"Catch" => true,
 		"GlobalGet" => true,
 		"GlobalSet" => true,
@@ -168,12 +170,12 @@ class IrInstructionCodec {
 				writeTwoValues(output, "FloatToFloat", outputValue, value);
 			case SafeCast(outputValue, value):
 				writeTwoValues(output, "SafeCast", outputValue, value);
-			case BeginTry(catchBlock, afterBlock):
-				begin(output, "BeginTry", 2);
+			case BeginTry(catchBlock, afterBlock, preserveExceptionStack):
+				begin(output, preserveExceptionStack == true ? "BeginCleanupTry" : "BeginTry", 2);
 				writeInt(output, catchBlock);
 				writeInt(output, afterBlock);
-			case EndTry(catchBlock):
-				begin(output, "EndTry", 1);
+			case EndTry(catchBlock, preserveExceptionStack):
+				begin(output, preserveExceptionStack == true ? "EndCleanupTry" : "EndTry", 1);
 				writeInt(output, catchBlock);
 			case Catch(value):
 				begin(output, "Catch", 1);
@@ -356,10 +358,16 @@ class IrInstructionCodec {
 				SafeCast(readValue(input, values), readValue(input, values));
 			case "BeginTry":
 				arity(2);
-				BeginTry(readInt(input), readInt(input));
+				BeginTry(readInt(input), readInt(input), false);
+			case "BeginCleanupTry":
+				arity(2);
+				BeginTry(readInt(input), readInt(input), true);
 			case "EndTry":
 				arity(1);
-				EndTry(readInt(input));
+				EndTry(readInt(input), false);
+			case "EndCleanupTry":
+				arity(1);
+				EndTry(readInt(input), true);
 			case "Catch":
 				arity(1);
 				Catch(readValue(input, values));

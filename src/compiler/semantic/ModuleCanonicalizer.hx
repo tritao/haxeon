@@ -393,6 +393,7 @@ class ModuleCanonicalizer {
 					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
+			case Defer(body, span): Defer(canonicalBlock(body, module, entry, locals, aliases), span);
 			case Try(tryBranch, catches, span): Try(canonicalBlock(tryBranch, module, entry, locals, aliases), [
 					for (catchClause in catches)
 						{

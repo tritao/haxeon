@@ -347,7 +347,7 @@ class IrFunctionStateCodec {
 			case MemoryStore(pointer, value, _):
 				collectValue(pointer, values);
 				collectValue(value, values);
-			case BeginTry(_, _), EndTry(_):
+			case BeginTry(_, _, _), EndTry(_, _):
 		}
 	}
 

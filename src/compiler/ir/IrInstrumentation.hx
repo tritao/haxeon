@@ -199,7 +199,7 @@ class IrInstrumentation {
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {
 				switch located.value {
-					case BeginTry(catchBlock, _):
+					case BeginTry(catchBlock, _, _):
 						var depth = value(I32);
 						savedDepth.set(catchBlock, depth);
 						copy.instructions.push(op(Call(depth, Depth, [])));
@@ -240,7 +240,7 @@ class IrInstrumentation {
 	static function hasTry(fn:IrFunction):Bool {
 		for (block in fn.blocks)
 			for (located in block.instructions)
-				if (located.value.match(BeginTry(_, _)))
+				if (located.value.match(BeginTry(_, _, _)))
 					return true;
 		return false;
 	}

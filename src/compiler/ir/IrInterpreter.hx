@@ -66,9 +66,9 @@ class IrInterpreter {
 								}
 							if (!found)
 								throw 'IR interpreter has no phi input from block $predecessor';
-						case BeginTry(catchBlock, _):
+						case BeginTry(catchBlock, _, _):
 							activeCatch = catchBlock;
-						case EndTry(_):
+						case EndTry(_, _):
 							activeCatch = null;
 						case Catch(output):
 							values.set(output.id, thrown);
@@ -641,7 +641,7 @@ class IrInterpreter {
 				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _), NewObject(output, _),
 				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
 				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
-			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
+			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
 }
 

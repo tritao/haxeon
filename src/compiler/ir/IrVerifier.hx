@@ -178,7 +178,7 @@ class IrVerifier {
 					case Phi(_, _):
 						if (ordinary)
 							throw "IR phis must precede ordinary instructions";
-					case BeginTry(_, _):
+					case BeginTry(_, _, _):
 						ordinary = true;
 						if (position != block.instructions.length - 1)
 							throw "IR trap entry must end its block";
@@ -378,8 +378,8 @@ class IrVerifier {
 				require(values, value);
 				if (!IrTypeTools.isDynamic(value.type))
 					throw 'IR safe cast source must be Dyn or a nullable primitive';
-			case BeginTry(catchBlock, afterBlock):
-			case EndTry(_):
+			case BeginTry(catchBlock, afterBlock, _):
+			case EndTry(_, _):
 			case Catch(out):
 				if ((switch (out.type) { case Dyn: false; default: true; }))
 					throw 'IR catch value must be Dyn';

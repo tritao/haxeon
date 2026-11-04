@@ -307,7 +307,7 @@ class IrCopyElision {
 			switch instruction {
 				case Call(_, name, _) if (name == IrReceiverCheck.NAME):
 				case Call(_, _, _), MethodCall(_, _, _, _), CallClosure(_, _, _), CNativeCall(_, _, _), ArraySet(_, _, _), GlobalSet(_, _),
-					MemoryStore(_, _, _), IteratorNext(_, _), BeginTry(_, _), EndTry(_), Catch(_):
+					MemoryStore(_, _, _), IteratorNext(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
 					return false;
 				case FieldSet(target, _, _):
 					if (!fresh.exists(target.id))

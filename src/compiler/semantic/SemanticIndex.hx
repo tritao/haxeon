@@ -313,6 +313,8 @@ class SemanticIndex {
 					indexRecoveredStatements(functionKey, no, span, depth + 1);
 				case While(_, body, span), DoWhile(body, _, span), ForIn(_, _, _, body, span):
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
+				case Defer(body, span):
+					indexRecoveredStatements(functionKey, body, span, depth + 1);
 				case Try(body, catches, span):
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
 					for (caught in catches) {
@@ -380,6 +382,8 @@ class SemanticIndex {
 					indexRecoveredStatementUses(body);
 					for (caught in catches)
 						indexRecoveredStatementUses(caught.statements);
+				case Defer(body, _):
+					indexRecoveredStatementUses(body);
 				case Switch(value, cases, fallback, _, _):
 					indexRecoveredExpression(value);
 					for (item in cases) {
@@ -759,6 +763,8 @@ class SemanticIndex {
 						addCompletionLocal(caught.name, caught.type, caught.span, caught.span, depth + 1);
 						indexCompletionLocals(caught.statements, caught.span, depth + 1);
 					}
+				case TDefer(body, span):
+					indexCompletionLocals(body, span, depth + 1);
 				case TSwitch(_, cases, fallback, _, span):
 					for (item in cases) {
 						for (binding in item.bindings)
@@ -780,6 +786,8 @@ class SemanticIndex {
 					declareLocals(fn, yes);
 					declareLocals(fn, no);
 				case TWhile(_, body, _), TDoWhile(body, _, _), TForIn(_, _, _, body, _):
+					declareLocals(fn, body);
+				case TDefer(body, _):
 					declareLocals(fn, body);
 				case TTry(body, catches, _):
 					declareLocals(fn, body);
@@ -849,6 +857,8 @@ class SemanticIndex {
 					indexStatements(fn, body, resolve, resolveEnumCase);
 					for (caught in catches)
 						indexStatements(fn, caught.statements, resolve, resolveEnumCase);
+				case TDefer(body, _):
+					indexStatements(fn, body, resolve, resolveEnumCase);
 				case TSwitch(value, cases, fallback, _, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
 					for (item in cases) {

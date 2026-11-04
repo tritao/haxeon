@@ -25,6 +25,9 @@ class DependencyScanner {
 				scanExpression(e, dependencies, typeParameters);
 			case Assignment(_, e, _), Return(e, _), Throw(e, _):
 				scanExpression(e, dependencies, typeParameters);
+			case Defer(body, _):
+				for (statement in body)
+					scanStatement(statement, dependencies, typeParameters);
 			case Try(tryBranch, catches, _):
 				for (x in tryBranch)
 					scanStatement(x, dependencies, typeParameters);

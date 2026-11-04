@@ -3,6 +3,7 @@ import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.syntax.Ast.AstStatement;
 
 class ParserRecoveryMain {
 	static function main():Void {
@@ -56,8 +57,31 @@ class ParserRecoveryMain {
 		for (tail in ["consume(", "values[", "true ?", "if (", "switch (", "(item:Int) ->"])
 			assertNestedRecovery(tail);
 		assertBlocklessClosureTerminators();
+		assertDeferSyntax();
 		assertTruncationRecovery();
 		Sys.println("PASS: incomplete member and type recovery support completion");
+	}
+
+	static function assertDeferSyntax():Void {
+		var source = "function main():Void { defer cleanup(); defer { cleanup(); cleanup(); } cleanup(); }";
+		var program = new Parser(new Lexer(new SourceFile("Defer.hx", source)).tokenize()).parseProgram();
+		var body = program.functions[0].statements;
+		if (body.length != 3)
+			throw "defer consumed a following statement";
+		switch [body[0], body[1]] {
+			case [Defer(first, _), Defer(second, _)] if (first.length == 1 && second.length == 2):
+			default: throw "defer did not preserve its statement and block bodies";
+		}
+		var rejected = false;
+		try {
+			var unbraced = "function main():Void { if (true) defer cleanup(); }";
+			new Parser(new Lexer(new SourceFile("UnbracedDefer.hx", unbraced)).tokenize()).parseProgram();
+		} catch (_:CompileError) {
+			rejected = true;
+		}
+		if (!rejected)
+			throw "unbraced defer was accepted";
+
 	}
 
 	static function assertBlocklessClosureTerminators():Void {

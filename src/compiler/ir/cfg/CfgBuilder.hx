@@ -20,7 +20,7 @@ class CfgBuilder {
 
 	var current:CfgBlock;
 	var nextValue:Int = 0;
-	var activeTraps:Array<Int> = [];
+	var activeTraps:Array<{id:Int, preserveExceptionStack:Bool}> = [];
 	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 
 	public function new()
@@ -128,9 +128,9 @@ class CfgBuilder {
 		throwValue(toDyn(constString("Reached compiler-generated unreachable block")));
 	}
 
-	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock):Void {
-		emit(BeginTry(catchBlock.id, afterBlock.id));
-		activeTraps.push(catchBlock.id);
+	public function beginTry(catchBlock:CfgBlock, afterBlock:CfgBlock, preserveExceptionStack:Bool = false):Void {
+		emit(BeginTry(catchBlock.id, afterBlock.id, preserveExceptionStack));
+		activeTraps.push({id: catchBlock.id, preserveExceptionStack: preserveExceptionStack});
 		// Handler state belongs to trap entry, never to definitions after a call
 		// that can throw. Keep the protected body in a separate basic block.
 		var protectedBody = createBlock();
@@ -141,7 +141,8 @@ class CfgBuilder {
 	public function endTry():Void {
 		if (activeTraps.length == 0)
 			throw "No active try block";
-		emit(EndTry(activeTraps.pop()));
+		var trap = activeTraps.pop();
+		emit(EndTry(trap.id, trap.preserveExceptionStack));
 	}
 
 	/** Forget a trap after all paths in the current block have terminated. */
@@ -160,12 +161,18 @@ class CfgBuilder {
 
 	/** Close traps opened inside a destination scope without mutating lexical state. */
 	public function closeTrapsToDepth(depth:Int):Void {
-		if (depth < 0 || depth > activeTraps.length)
+		closeTrapsBetween(activeTraps.length, depth);
+	}
+
+	/** Close a portion of the lexical trap stack on a single exit edge. */
+	public function closeTrapsBetween(from:Int, depth:Int):Void {
+		if (depth < 0 || depth > from || from > activeTraps.length)
 			throw 'Invalid trap depth $depth';
-		var index = activeTraps.length;
+		var index = from;
 		while (index > depth) {
 			index--;
-			emit(EndTry(activeTraps[index]));
+			var trap = activeTraps[index];
+			emit(EndTry(trap.id, trap.preserveExceptionStack));
 		}
 	}
 

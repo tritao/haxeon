@@ -41,8 +41,8 @@ enum CfgInstruction {
 	FloatToInt(output:CfgValue, value:CfgValue);
 	FloatToFloat(output:CfgValue, value:CfgValue);
 	SafeCast(output:CfgValue, value:CfgValue);
-	BeginTry(catchBlock:Int, afterBlock:Int);
-	EndTry(catchBlock:Int);
+	BeginTry(catchBlock:Int, afterBlock:Int, preserveExceptionStack:Bool);
+	EndTry(catchBlock:Int, preserveExceptionStack:Bool);
 	Catch(output:CfgValue);
 	LoadLocal(output:CfgValue, name:String);
 	StoreLocal(name:String, value:CfgValue);

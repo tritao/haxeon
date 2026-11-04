@@ -97,8 +97,8 @@ class LoadStoreMain {
 		fieldCase("native call", function(b, o, a) b.cNativeCall("mutate", [o], Void), 2);
 		fieldCase("closure", function(b, o, a) b.callClosure(b.argument("closure", Function([], Void)), [], Void), 2);
 		fieldCase("method", function(b, o, a) b.blocks[0].instructions.push(located(MethodCall(new IrValue(100, "call", Void), o, "mutate", []))), 2);
-		fieldCase("try", function(b, o, a) b.blocks[0].instructions.push(located(BeginTry(1, 2))), 2);
-		fieldCase("end try", function(b, o, a) b.blocks[0].instructions.push(located(EndTry(1))), 2);
+		fieldCase("try", function(b, o, a) b.blocks[0].instructions.push(located(BeginTry(1, 2, false))), 2);
+		fieldCase("end try", function(b, o, a) b.blocks[0].instructions.push(located(EndTry(1, false))), 2);
 		fieldCase("catch", function(b, o, a) b.blocks[0].instructions.push(located(Catch(new IrValue(100, "error", Dyn)))), 2);
 		fieldCase("raw store", function(b, o, a) b.blocks[0].instructions.push(located(MemoryStore(b.argument("ptr", RawPtr), b.constInt(8), 4))), 2);
 		fieldCase("fresh allocation", function(b, o, a) b.newObject("Box"), 1);

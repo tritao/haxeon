@@ -16,6 +16,8 @@ class LambdaCollector {
 					collect(tryBranch, functionName, module, generatedByModule);
 					for (catchClause in catches)
 						collect(catchClause.statements, functionName, module, generatedByModule);
+				case Defer(body, _):
+					collect(body, functionName, module, generatedByModule);
 				case IndexAssignment(array, offset, expression, _):
 					collectLambdaExpression(array, functionName, module, generatedByModule);
 					collectLambdaExpression(offset, functionName, module, generatedByModule);

@@ -56,6 +56,6 @@ class AstChildren {
 						result.push(arm.guard);
 				}
 				result;
-			case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Try(_, _, _), Break(_), Continue(_), Increment(_, _, _): [];
+			case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Defer(_, _), Try(_, _, _), Break(_), Continue(_), Increment(_, _, _): [];
 		};
 }

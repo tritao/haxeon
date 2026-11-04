@@ -733,16 +733,16 @@ class HlLower {
 						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case SafeCast(output, value):
 						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
-					case BeginTry(catchBlock, _):
+					case BeginTry(catchBlock, _, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock'));
-					case EndTry(catchBlock):
+						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock', preserveExceptionStack));
+					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id ends with unknown handler block $catchBlock';
-						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers)));
+						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers), preserveExceptionStack));
 					case Catch(_):
 					case GlobalGet(output, name):
 						var global = symbols.requireGlobalIndex(name);
@@ -1198,7 +1198,7 @@ class HlLower {
 		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
 		for (instruction in block.instructions)
 			switch instruction.value {
-				case BeginTry(catchBlock, afterBlock):
+				case BeginTry(catchBlock, afterBlock, _):
 					region = {catchBlock: catchBlock, afterBlock: afterBlock};
 				default:
 			}

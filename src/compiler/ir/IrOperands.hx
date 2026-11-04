@@ -14,14 +14,14 @@ class IrOperands {
 				StaticClosure(out, _), InstanceClosure(out, _, _), CallClosure(out, _, _), ToVirtual(out, _), Upcast(out, _), MethodCall(out, _, _, _), NewObject(out, _),
 				FieldGet(out, _, _), ArrayGet(out, _, _), ArraySize(out, _), IteratorNew(out, _), IteratorHasNext(out, _), IteratorNext(out, _),
 				MakeEnum(out, _, _, _), EnumIndex(out, _), EnumField(out, _, _, _): out;
-			case BeginTry(_, _), EndTry(_), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
+			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
 
 	/** Phi inputs are edge uses and are verified separately. */
 	public static function inputs(instruction:IrInstruction):Array<IrValue>
 		return switch instruction {
 			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_),
-				TypeValue(_, _), BeginTry(_, _), EndTry(_), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): [];
+				TypeValue(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): [];
 			case ToDyn(_, value), IntToFloat(_, value), IntToInt64(_, value), FloatToInt(_, value), FloatToFloat(_, value), SafeCast(_, value),
 				GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), Upcast(_, value), FieldGet(_, value, _), ArraySize(_, value), IteratorNew(_, value),
 				IteratorHasNext(_, value), IteratorNext(_, value), EnumIndex(_, value), EnumField(_, value, _, _), MemoryLoad(_, value, _, _): [value];

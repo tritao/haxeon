@@ -151,11 +151,11 @@ class GenericStructOwnerMain {
 			var invalid = new compiler.ir.IrBuilder(), wrong = isNull ? invalid.constNull(Dyn) : invalid.toDyn(invalid.constInt(12)),
 				tryBody = invalid.createBlock(), handler = invalid.createBlock(), after = invalid.createBlock(),
 				provenance = compiler.ir.SourceProvenance.generated("type-handle-test");
-			invalid.currentBlock().instructions.push(new compiler.ir.SourceProvenance.Located(BeginTry(handler.id, after.id), provenance));
+			invalid.currentBlock().instructions.push(new compiler.ir.SourceProvenance.Located(BeginTry(handler.id, after.id, false), provenance));
 			invalid.jump(tryBody);
 			invalid.select(tryBody);
 			var recovered = invalid.safeCast(wrong, TypeRef), nullMatches = isNull ? invalid.equal(invalid.toDyn(recovered), wrong) : null;
-			tryBody.instructions.push(new compiler.ir.SourceProvenance.Located(EndTry(handler.id), provenance));
+			tryBody.instructions.push(new compiler.ir.SourceProvenance.Located(EndTry(handler.id, false), provenance));
 			invalid.jump(after);
 			invalid.select(handler);
 			handler.instructions.push(new compiler.ir.SourceProvenance.Located(Catch(new IrValue(1000000, "$caught", Dyn)), provenance));

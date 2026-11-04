@@ -381,6 +381,50 @@ class BodyTyper {
 			default: session.relations.isValueClass(type);
 		};
 
+	/** A cleanup cannot replace a pending exit with a transfer out of its own body. */
+	function validateDeferredControl(statements:Array<AstStatement>, loopDepth:Int):Void {
+		for (statement in statements) {
+			for (expression in AstChildren.statementExpressions(statement))
+				validateDeferredExpression(expression, loopDepth);
+			switch statement {
+				case Return(_, span), ReturnVoid(span):
+					fail("E1019", "Cannot return from a deferred statement", span);
+				case Break(span), Continue(span) if (loopDepth == 0):
+					fail("E1019", "Cannot leave a deferred statement with break or continue", span);
+				case If(_, yes, no, _):
+					validateDeferredControl(yes, loopDepth);
+					validateDeferredControl(no, loopDepth);
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
+					validateDeferredControl(body, loopDepth + 1);
+				case Try(body, catches, _):
+					validateDeferredControl(body, loopDepth);
+					for (handler in catches)
+						validateDeferredControl(handler.statements, loopDepth);
+				case Switch(_, cases, fallback, _, _):
+					for (arm in cases)
+						validateDeferredControl(arm.statements, loopDepth);
+					validateDeferredControl(fallback, loopDepth);
+				case Defer(body, _):
+					validateDeferredControl(body, 0);
+				default:
+			}
+		}
+	}
+
+	function validateDeferredExpression(expression:AstExpression, loopDepth:Int):Void {
+		switch expression {
+			// A lambda has its own return and loop targets; its body is checked when it is typed.
+			case Lambda(_, _, _, _): return;
+			case BlockExpression(statements, result, _):
+				validateDeferredControl(statements, loopDepth);
+				validateDeferredExpression(result, loopDepth);
+				return;
+			default:
+		}
+		for (child in AstChildren.expressions(expression))
+			validateDeferredExpression(child, loopDepth);
+	}
+
 	function typeStatements(statements:Array<AstStatement>, scope:Scope, result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
@@ -411,6 +455,9 @@ class BodyTyper {
 					throw "Simple statement was not dispatched";
 				case Try(tryBranch, catches, span):
 					output.push(statementTyper.typeTry(tryBranch, catches, span, scope, result));
+				case Defer(body, span):
+					validateDeferredControl(body, 0);
+					output.push(TDefer(typeStatements(body, new Scope(scope), result), span));
 				case Break(span):
 					throw "Simple statement was not dispatched";
 				case Continue(span):
@@ -525,6 +572,10 @@ class BodyTyper {
 						if (type != null)
 							return type;
 					}
+				case Defer(body, _):
+					var type = pushedElementType(name, body, 0, resolvedBindings);
+					if (type != null)
+						return type;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases) {
 						var caseBindings = copyMap(resolvedBindings);
@@ -697,6 +748,8 @@ class BodyTyper {
 						declareSpeculative(caught, catchClause.name, lowerType(catchClause.type), catchClause.span);
 						found = storedIn(name, catchClause.statements, 0, caught, probe);
 					}
+				case Defer(body, _):
+					found = storedIn(name, body, 0, new Scope(scope), probe);
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases) {
 						if (found != null)
@@ -789,6 +842,10 @@ class BodyTyper {
 						if (type != null)
 							return type;
 					}
+				case Defer(body, _):
+					var type = assignedLocalType(name, body, 0);
+					if (type != null)
+						return type;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases) {
 						var type = assignedLocalType(name, switchCase.statements, 0);
@@ -917,6 +974,8 @@ class BodyTyper {
 					changed = inferBodyStatementConstraints(tryBranch, result) || changed;
 					for (catchClause in catches)
 						changed = inferBodyStatementConstraints(catchClause.statements, result) || changed;
+				case Defer(body, _):
+					changed = inferBodyStatementConstraints(body, result) || changed;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (switchCase in cases)
 						changed = inferBodyStatementConstraints(switchCase.statements, result) || changed;
@@ -2513,7 +2572,7 @@ class BodyTyper {
 		return switch statement {
 			case ErrorStatement(span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
-				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
+				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
 				DoWhile(_, _,
 					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}

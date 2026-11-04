@@ -103,6 +103,7 @@ class TestCatalog {
 		"AbiMatrixMain",
 		"AddedFunctionLayoutMain",
 		"ParserRecoveryMain",
+		"DeferControlMain",
 		"TypeConstructorCollisionMain",
 		"ParserRecoveryFuzzMain",
 		"ConditionalCompilationMain",

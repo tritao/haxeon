@@ -26,7 +26,7 @@ class IrLoopBounds {
 					homes.set(output.id, block.id);
 				}
 				switch located.value {
-					case BeginTry(_, _), EndTry(_), Catch(_):
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						handlers = true;
 					default:
 				}

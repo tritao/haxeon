@@ -272,7 +272,9 @@ class LspProtocolMain {
 				hasUnopenedMember = true;
 		if (!hasUnopenedMember)
 			throw "project-backed completion omitted members from unopened dependencies";
-		var watchRoot = "/tmp/haxeon-lsp-watch-" + Std.string(Std.int(Sys.time() * 1000000)),
+		var temporaryRoot = Sys.getEnv("TMPDIR");
+		if (temporaryRoot == null || temporaryRoot.length == 0) temporaryRoot = sys.FileSystem.fullPath(".");
+		var watchRoot = Path.join([temporaryRoot, "haxeon-lsp-watch-" + Std.string(Std.int(Sys.time() * 1000000))]),
 			watchSourceRoot = Path.join([watchRoot, "src"]),
 			watchAppRoot = Path.join([watchSourceRoot, "app"]),
 			watchLibRoot = Path.join([watchSourceRoot, "lib"]),
@@ -438,7 +440,7 @@ class LspProtocolMain {
 		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
 			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
-		var folderRoot = "/tmp/haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000)),
+		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000))]),
 			folderA = Path.join([folderRoot, "folder-a"]),
 			folderB = Path.join([folderRoot, "folder-b"]),
 			folderASource = Path.join([folderA, "src"]),

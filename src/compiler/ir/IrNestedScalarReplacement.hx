@@ -67,7 +67,7 @@ class IrNestedScalarReplacement {
 		// Restrict this transformation to one block in functions with handlers, as in the ordinary pass.
 		var handlers = false;
 		for (block in copies) for (located in block.instructions) switch located.value {
-			case BeginTry(_, _), EndTry(_), Catch(_): handlers = true;
+			case BeginTry(_, _, _), EndTry(_, _), Catch(_): handlers = true;
 			default:
 		}
 		var result = tryReplace(copies, objects, root, typeName, copiedHome, position, handlers, local, next);

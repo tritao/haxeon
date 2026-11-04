@@ -96,7 +96,7 @@ class SsaBuilder {
 			var handlers:Array<Int> = [];
 			for (located in block.instructions)
 				switch located.value {
-					case BeginTry(catchBlock, _):
+					case BeginTry(catchBlock, _, _):
 						handlers.push(catchBlock);
 					default:
 				}
@@ -432,10 +432,10 @@ class SsaBuilder {
 				case SafeCast(out, value):
 					var result = define(out);
 					emit(target, SafeCast(result, resolve(value)), provenance);
-				case BeginTry(catchBlock, afterBlock):
-					emit(target, BeginTry(catchBlock, afterBlock), provenance);
-				case EndTry(catchBlock):
-					emit(target, EndTry(catchBlock), provenance);
+				case BeginTry(catchBlock, afterBlock, preserveExceptionStack):
+					emit(target, BeginTry(catchBlock, afterBlock, preserveExceptionStack), provenance);
+				case EndTry(catchBlock, preserveExceptionStack):
+					emit(target, EndTry(catchBlock, preserveExceptionStack), provenance);
 				case Catch(out):
 					var result = define(out);
 					emit(target, Catch(result), provenance);

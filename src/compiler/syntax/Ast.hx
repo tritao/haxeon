@@ -256,6 +256,8 @@ enum AstStatement {
 	Return(expression:AstExpression, span:SourceSpan);
 	ReturnVoid(span:SourceSpan);
 	Throw(expression:AstExpression, span:SourceSpan);
+	/** Register this body for execution when the enclosing lexical block exits. */
+	Defer(body:Array<AstStatement>, span:SourceSpan);
 	Try(tryBranch:Array<AstStatement>, catches:Array<AstCatch>, span:SourceSpan);
 	If(condition:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan);
 	While(condition:AstExpression, body:Array<AstStatement>, span:SourceSpan);

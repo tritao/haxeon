@@ -619,7 +619,7 @@ class InlineValueLayoutMain {
 		var invalidProgram = new IrProgram("main"); invalidProgram.objects = scalarProgram.objects; invalidProgram.natives = scalarProgram.natives;
 		invalidProgram.functions = [new IrFunction("main", [], I32, invalidBuilder.blocks)];
 		var invalidBytes = new compiler.backend.wasm.WasmBackend().compile(invalidProgram, {target: WasmGc, debugNames: true}).bytes;
-		var directory = Sys.systemName() == "Linux" ? "/dev/shm" : Sys.getEnv("TMPDIR");
+		var directory = Sys.getEnv("TMPDIR");
 		if (directory == null || directory.length == 0) directory = ".";
 		var path = directory + "/haxeon-wasm-bridge-" + Std.random(0x7fffffff) + ".wasm";
 		try {

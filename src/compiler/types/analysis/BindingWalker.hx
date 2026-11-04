@@ -183,6 +183,8 @@ class BindingWalker {
 						for (entry in caught.statements)
 							statement(entry);
 					});
+			case Defer(body, _):
+				statements(body);
 			case Switch(subject, cases, defaultBranch, _, _):
 				expression(subject);
 				for (entry in cases)

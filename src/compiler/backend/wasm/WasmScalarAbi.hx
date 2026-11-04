@@ -416,7 +416,7 @@ class WasmScalarAbi {
 					ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _),
 					IntToFloat(_, _), IntToInt64(_, _), FloatToFloat(_, _):
 					for (input in IrOperands.inputs(located.value)) if (aliases.exists(input.id)) return false;
-				case BeginTry(_, _), EndTry(_), Catch(_):
+				case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 				default: return false;
 			}
 			if (block.terminator == null) return false;
