@@ -9,6 +9,18 @@ static REALTIME_REACTIVE_TLS vdynamic *realtime_reactive_collector;
 /* Module initialization claims the process-wide application thread. */
 static _Atomic(uintptr_t) realtime_reactive_owner;
 
+/* HashLink objects do not move. The hash is only a hint: collisions are
+   resolved by comparing the source references themselves. */
+HL_PRIM int HL_NAME(__reactive_hash)( vdynamic *source ) {
+	uintptr_t address = (uintptr_t)source;
+	uint32_t hash = (uint32_t)address ^ (uint32_t)(address >> 16);
+	hash ^= hash >> 16;
+	hash *= 0x7feb352du;
+	hash ^= hash >> 15;
+	hash *= 0x846ca68bu;
+	return (int)(hash ^ (hash >> 16));
+}
+
 /* Dynamic operands here are genuine object references; never invoke value comparison. */
 HL_PRIM bool HL_NAME(__reference_identity)( vdynamic *left, vdynamic *right ) {
 	return left == right;

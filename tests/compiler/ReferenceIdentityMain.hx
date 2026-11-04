@@ -16,6 +16,14 @@ class ReferenceIdentityMain {
   catch (e:CompileError) if (e.diagnostic.message.indexOf("Identity.same requires class instances") < 0) throw e;
  }
  static function main():Void {
+  var hashCompiler = new Compiler();
+  hashCompiler.update("haxeon/reactive/ReactiveHash.hx", sys.io.File.getContent("stdlib/haxeon/reactive/ReactiveHash.hx"));
+  hashCompiler.update("haxeon/reactive/ReactiveSource.hx", 'package haxeon.reactive; class ReactiveSource { '
+   + 'public final hash:Int; public function new() hash = ReactiveHash.next(this); }');
+  hashCompiler.update("Main.hx", 'import haxeon.reactive.ReactiveSource; '
+   + 'function main():Int { var source = new ReactiveSource(); return source.hash == source.hash ? 42 : 1; }');
+  if (new IrInterpreter(hashCompiler.compile("Main").ir).run("main") != 42)
+   throw "reactive identity hashes did not execute in the interpreter";
   for (inlineEnabled in [false, true]) {
    var compiler = make('class Item { public function new() {} } '
     + 'function main():Int { var a = new Item(), b = new Item(); '

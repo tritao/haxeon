@@ -7,16 +7,28 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	static inline var Dirty:Int = 2;
 	static inline var Failed:Int = 3;
 	static inline var MaxStamp:Int = 0x7fffffff;
+	static inline var IndexThreshold:Int = 1024;
 
 	public final captureOnly:Bool;
 	var readerHead:ReactiveEdge;
-	var readerTail:ReactiveEdge;
+	// The capture-only form has no edge tail and uses this slot for its index.
+	var readerTail:Dynamic;
 	var edgeCount:Int = 0;
 	var runStamp:Int = 0;
-	var captureSources:Array<ReactiveSource>;
+	// Capture-only readers use this for their source array. Subscribing readers
+	// use the otherwise unused slot for their optional large-reader index.
+	var captureSources:Dynamic;
 	var captureFieldBits:Array<Int>;
+	// Capture readers store the slice start; subscribing readers count fallback
+	// scan work until an index is warranted.
 	var captureSliceStart:Int = 0;
 	var status:Int = Dirty;
+
+	inline function captureArray():Array<ReactiveSource> return cast captureSources;
+	inline function getIdentityIndex():ReactiveIdentityIndex return captureOnly ? cast readerTail : cast captureSources;
+	inline function setIdentityIndex(index:ReactiveIdentityIndex):Void {
+		if (captureOnly) readerTail = index else captureSources = index;
+	}
 
 	public var dirty(get, never):Bool;
 	public function get_dirty():Bool return validateIfNeeded();
@@ -37,28 +49,65 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		if (source == null) throw "Reactive dependencies require a source";
 		source.checkFieldBit(fieldBit);
 		if (captureOnly) {
-			if (captureSources == null) captureSources = [];
+			if (captureSources == null) { var initial:Array<ReactiveSource> = []; captureSources = initial; }
 			if (captureFieldBits == null) captureFieldBits = [];
-			for (index in captureSliceStart...captureSources.length)
-				if (haxeon.Identity.same(captureSources[index], source) && captureFieldBits[index] == fieldBit) return;
-			captureSources.push(source);
+			var sources = captureArray(), identityIndex = getIdentityIndex();
+			if (identityIndex != null) {
+				if (identityIndex.contains(source, fieldBit)) return;
+				identityIndex.put(source, fieldBit, null);
+			} else {
+				for (index in captureSliceStart...sources.length)
+					if (haxeon.Identity.same(sources[index], source) && captureFieldBits[index] == fieldBit) return;
+				if (sources.length - captureSliceStart >= IndexThreshold) {
+					identityIndex = new ReactiveIdentityIndex(true);
+					setIdentityIndex(identityIndex);
+					for (index in captureSliceStart...sources.length)
+						identityIndex.put(sources[index], captureFieldBits[index], null);
+					identityIndex.put(source, fieldBit, null);
+				}
+			}
+			sources.push(source);
 			captureFieldBits.push(fieldBit);
 			return;
 		}
-		var edge = source.findReader(this, fieldBit);
+		var edge:ReactiveEdge = null, identityIndex = getIdentityIndex(), tail:ReactiveEdge = cast readerTail;
+		if (identityIndex != null) edge = identityIndex.get(source, fieldBit);
+		else if (tail != null && haxeon.Identity.same(tail.source, source) && tail.fieldBit == fieldBit)
+			edge = tail;
+		else {
+			var first = source.firstReader();
+			if (first != null && haxeon.Identity.same(first.reader, this) && first.fieldBit == fieldBit)
+				edge = first;
+			else if (first != null && first.sourceNext != null) {
+				var candidate = readerHead;
+				while (candidate != null) {
+					if (captureSliceStart < IndexThreshold) captureSliceStart++;
+					if (haxeon.Identity.same(candidate.source, source) && candidate.fieldBit == fieldBit) { edge = candidate; break; }
+					candidate = candidate.readerNext;
+				}
+				if (edgeCount > IndexThreshold && captureSliceStart >= IndexThreshold) {
+					identityIndex = new ReactiveIdentityIndex(false);
+					setIdentityIndex(identityIndex);
+					candidate = readerHead;
+					while (candidate != null) { identityIndex.put(candidate.source, candidate.fieldBit, candidate); candidate = candidate.readerNext; }
+				}
+			}
+		}
 		if (edge == null) {
 			ReactiveRuntime.claimSubscriptionOwner(source, fieldBit);
 			edge = new ReactiveEdge(source, this, fieldBit);
 			linkReader(edge);
 			source.subscribe(edge);
+			if (identityIndex != null) identityIndex.put(source, fieldBit, edge);
 		}
 		edge.stamp = runStamp;
 	}
 
 	function linkReader(edge:ReactiveEdge):Void {
-		edge.readerPrevious = readerTail;
+		var tail:ReactiveEdge = cast readerTail;
+		edge.readerPrevious = tail;
 		edge.readerNext = null;
-		if (readerTail == null) readerHead = edge else readerTail.readerNext = edge;
+		if (tail == null) readerHead = edge else tail.readerNext = edge;
 		readerTail = edge;
 		edgeCount++;
 	}
@@ -70,10 +119,14 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		// Each retained computation needs its own slice even when a sibling read
 		// the same source earlier in this frame. Keep deduplication within a slice.
 		captureSliceStart = marker;
+		var identityIndex = getIdentityIndex();
+		if (identityIndex != null) identityIndex.clear();
 		return marker;
 	}
 
 	function unlinkReader(edge:ReactiveEdge):Void {
+		var identityIndex = getIdentityIndex();
+		if (identityIndex != null) identityIndex.remove(edge.source, edge.fieldBit);
 		if (edge.readerPrevious == null) readerHead = edge.readerNext else edge.readerPrevious.readerNext = edge.readerNext;
 		if (edge.readerNext == null) readerTail = edge.readerPrevious else edge.readerNext.readerPrevious = edge.readerPrevious;
 		edge.readerPrevious = null;
@@ -82,6 +135,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	}
 
 	function beginDependencies():Void {
+		captureSliceStart = 0;
 		if (runStamp == MaxStamp) {
 			var edge = readerHead;
 			while (edge != null) { edge.stamp = 0; edge = edge.readerNext; }
@@ -194,32 +248,41 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	}
 
 	public function pendingCount():Int
-		return captureSources == null ? 0 : captureSources.length;
+		return !captureOnly || captureSources == null ? 0 : captureArray().length;
 
 	public function pendingSourceAt(index:Int):ReactiveSource
-		return captureSources[index];
+		return captureArray()[index];
 
 	public function pendingFieldBitAt(index:Int):Int
 		return captureFieldBits[index];
 
 	public function truncatePending(marker:Int):Void {
+		if (!captureOnly) return;
+		var identityIndex = getIdentityIndex();
+		if (identityIndex != null) identityIndex.clear();
 		if (captureSources != null) {
-			captureSources.resize(marker < 0 ? 0 : marker > captureSources.length ? captureSources.length : marker);
-			captureFieldBits.resize(captureSources.length);
-			captureSliceStart = captureSources.length;
+			var sources = captureArray();
+			sources.resize(marker < 0 ? 0 : marker > sources.length ? sources.length : marker);
+			captureFieldBits.resize(sources.length);
+			captureSliceStart = sources.length;
 		} else captureSliceStart = 0;
 	}
 
 	public function clearPending():Void {
-		if (captureSources != null) captureSources.resize(0);
+		if (!captureOnly) return;
+		var identityIndex = getIdentityIndex();
+		if (identityIndex != null) identityIndex.clear();
+		if (captureSources != null) captureArray().resize(0);
 		if (captureFieldBits != null) captureFieldBits.resize(0);
 		captureSliceStart = 0;
 	}
 
 	public function appendDependenciesTo(target:ReactiveDependencySet):Void {
 		if (captureOnly) {
-			if (captureSources != null) for (index in 0...captureSources.length)
-				target.trackField(captureSources[index], captureFieldBits[index]);
+			if (captureSources != null) {
+				var sources = captureArray();
+				for (index in 0...sources.length) target.trackField(sources[index], captureFieldBits[index]);
+			}
 			return;
 		}
 		var edge = readerHead;
@@ -228,6 +291,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	/** Unsubscribe retained readers when their owning cache or context is released. */
 	public function clearDependencies():Void {
+		// A capture log has no subscriptions; its pending slice remains intact.
+		if (captureOnly) { status = Dirty; return; }
+		var identityIndex = getIdentityIndex();
+		if (identityIndex != null) identityIndex.clear();
 		var edge = readerHead;
 		while (edge != null) {
 			var next = edge.readerNext;

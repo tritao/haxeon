@@ -3,9 +3,12 @@ package haxeon.reactive;
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
 	public var version(default, null):Int = 0;
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	@:allow(haxeon.reactive.ReactiveIdentityIndex)
+	final identityHash:Int;
 	var observerHead:ReactiveEdge;
 
-	public function new() {}
+	public function new() identityHash = ReactiveHash.next(this);
 
 	/** Ordinary reactive sources have one dependency; Observable sources have field bits. */
 	@:allow(haxeon.reactive.ReactiveDependencySet)
@@ -13,16 +16,8 @@ class ReactiveSource {
 		if (fieldBit != 0) throw 'Reactive dependency bit $fieldBit is outside the source';
 	}
 
-	/** Find an existing reader without a global source ID or an allocation. */
 	@:allow(haxeon.reactive.ReactiveDependencySet)
-	function findReader(reader:ReactiveDependencySet, fieldBit:Int):Null<ReactiveEdge> {
-		var edge = observerHead;
-		while (edge != null) {
-			if (haxeon.Identity.same(edge.reader, reader) && edge.fieldBit == fieldBit) return edge;
-			edge = edge.sourceNext;
-		}
-		return null;
-	}
+	function firstReader():Null<ReactiveEdge> return observerHead;
 
 	/** Version of the dependency represented by one edge. Ordinary sources have a single version. */
 	public function versionAt(fieldBit:Int):Int return version;

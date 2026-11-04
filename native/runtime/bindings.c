@@ -6,6 +6,7 @@ HL_PRIM int HL_NAME(inspect_patch)( vbyte *bytes, int length ) {
 }
 
 DEFINE_PRIM(_BOOL,__reactive_is_tracking,_NO_ARG);
+DEFINE_PRIM(_I32,__reactive_hash,_DYN);
 DEFINE_PRIM(_BOOL,__reference_identity,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__reactive_claim_owner,_NO_ARG);
 DEFINE_PRIM(_BOOL,__reactive_is_owner,_NO_ARG);

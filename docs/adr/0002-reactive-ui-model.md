@@ -62,9 +62,16 @@ values changes, and updates the existing nodes. This record makes that idea the 
    one-field observable. Signal and observable-field writes always store their value; change detection uses the type's
    declared `Equatable` conformance or identity for nonconforming classes to decide whether to invalidate readers.
 
-   Dependency edges are deduplicated by source and reader identity plus field bit. A subscribing reader finds an
-   existing edge in the source's intrusive list; a capture-only reader checks the current capture slice. This needs no
-   global IDs, native counter or subscriber index. Observable sources retain the concrete runtime class's field count
+   Dependency edges are deduplicated by source and reader identity plus field bit. Readers first check their last edge
+   and the source's first edge. A capture slice promotes to a reader-local identity table after 1,024 distinct reads;
+   a subscribing reader promotes only after it has over 1,024 edges and has also spent 1,024 steps on fallback scans.
+   The bound limits scan work while avoiding an index for large readers whose sources already find their edge at the
+   head. Table hashes are collision-checked against source identity and never reserve unique IDs: HashLink hashes the
+   non-moving object address, while the single-threaded Wasm runtimes use a wrapping pseudo-random hash stream. A
+   capture table clears only its occupied slots, releasing source references without rescanning a previously large
+   table on every small slice. The two reader modes reuse fields they do not otherwise need, so small readers retain
+   their existing object size and tracked reads allocate nothing. This needs no global IDs, native counter or shared
+   subscriber index. Observable sources retain the concrete runtime class's field count
    for field-bit validation. A generated virtual method supplies that count on the first tracked read, even through a
    base-class reference; incremental structural edits invalidate dependent field layouts.
 
@@ -86,6 +93,34 @@ values changes, and updates the existing nodes. This record makes that idea the 
    Three paired 500-cycle RSS runs had median windows of 30.31 / 3.75 / 0.78 / 4.84 MiB for IDs and
    30.16 / 3.75 / 0.78 / 4.84 MiB for identity. Wasm GC Showcase counts matched in the full, static, text-heavy
    and editing scenes (4,440 / 4,440 / 4,440 / 8,724 objects).
+
+   A 32-entry index threshold caused a real selection-stress increase: about 44 objects and 53 KiB, traced to table
+   growth in docking captures and retained dependency replacement. The 1,024-entry threshold avoids those indexes
+   in the measured editor while keeping the scan bound independent of input size. Three final selection-stress pairs
+   were 340,908 → 340,909, 340,912 → 340,909 and 340,912 → 340,910 allocations. Nine paired action runs had identical
+   allocation medians, including hierarchy → sensors 114.6 KiB, console → telemetry 74.5 KiB, sensors → hierarchy
+   80.1 KiB, telemetry → console 92.9 KiB, hover away 13.6 KiB, hover enter/inside 0.5 KiB, hover field 12.4 KiB,
+   hover other 10.0 KiB, idle/idle-focused 0.2 KiB, scroll inspector 21.2 KiB, backspace 16.2 KiB and type 16.1 KiB.
+   The interaction census matched at 533,526 objects in all three pairs; a full site census traced small byte variation to the
+   byte variation to the benchmark's `HeadlessEditorProfile.submit` JSON timing output, not reactive indexes.
+   Median 500-cycle RSS windows were 30.16 / 3.59 / 0.94 / 5.00 MiB before and 30.16 / 3.91 / 0.78 / 5.00 MiB
+   after; the 0.32 MiB rise in the second window is within the recorded same-binary variation. Frame medians rose
+   modestly in the tab matrix (for example hierarchy → sensors 1.57 → 1.60 ms) and selection 3.04 → 3.08 ms;
+   existing budgets passed.
+
+   In three alternating HashLink timing pairs, creating 10,000 readers of one signal fell from a 131.40 ms median to
+   4.79 ms, and retracking them fell from 101.29 ms to 2.59 ms. Capturing 10,000 distinct sources fell from
+   104.64 ms to 2.36 ms; at 5,000 sources it fell from 25.19 ms to 1.63 ms. A single effect over 10,000 distinct
+   sources took 1.14 → 1.27 ms to create and 0.57 → 0.68 ms to retrack; a 2,000-row effect took 0.245 → 0.258 ms
+   to create and 0.118 → 0.134 ms to retrack. These timings include the hash and fast-path overhead; unlike the
+   original scans, the measured shared-source and capture cases no longer grow quadratically at these sizes.
+
+   Eight alternating Wasm GC full-scene pairs matched at 4,440 objects; the ninth candidate browser run timed out
+   after its renderer disappeared with 8.1 GiB free in `/dev/shm`. Those pairs preceded the final capture-only
+   `clearDependencies` correction, so the final-source full-scene comparison remains open. Three final-source pairs
+   each for static, text-heavy and editing matched at 4,440 / 4,440 / 8,724 objects. The failed command's output and
+   browser log are preserved in `materia-cache/claude-scratch/haxeon-flat-work/scale-measure/`
+   as `web-full-8-candidate-failure.log` and `web-full-8-candidate-browser.log`.
 
    The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
    and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those

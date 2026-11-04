@@ -15,6 +15,8 @@ class IrInterpreter {
 	final globals:Map<String, Dynamic> = [];
 	var steps:Int;
 	var maxSteps:Int;
+	var reactiveHashState:Int = 0x6d2b79f5;
+	final reactiveHashes:haxe.ds.ObjectMap<InterpObject, Int> = new haxe.ds.ObjectMap();
 
 	public function new(program:IrProgram, ?maxSteps:Int = 1000000) {
 		this.program = program;
@@ -324,6 +326,17 @@ class IrInterpreter {
 			case "__math_floor": Std.int(Math.floor(arguments[0]));
 			case "__std_string": Std.string(arguments[0]);
 			case "__dynamic_equal": dynamicEqual(arguments[0], arguments[1]);
+			case "__reactive_hash", "haxeon.reactive.ReactiveHash.reactiveHash":
+				var source:InterpObject = cast arguments[0];
+				if (reactiveHashes.exists(source)) reactiveHashes.get(source) else {
+					var hash = reactiveHashState;
+					hash ^= hash << 13;
+					hash ^= hash >>> 17;
+					hash ^= hash << 5;
+					reactiveHashState = hash;
+					reactiveHashes.set(source, hash);
+					hash;
+				}
 			case "haxeon.IdentityNative.same":
 				if (arguments[0] != null && !Std.isOfType(arguments[0], InterpObject)
 					|| arguments[1] != null && !Std.isOfType(arguments[1], InterpObject))
