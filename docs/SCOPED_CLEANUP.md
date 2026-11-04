@@ -55,14 +55,13 @@ an interface box. For `Null<T>`, test presence and call `dispose()` only on a pr
 assignment, compound assignment, increment and other rebinding are errors. Mutating a value through its permitted
 methods or fields follows ordinary type and place rules; disposal acts on the bound value, not a second copy.
 
-Scoped bindings are a local lifetime aid, not an ownership proof. Reject detectable escapes of the scoped value: return,
-storage in a field, collection or other longer-lived location, conversion to `Dynamic` or an interface object that can
-escape, and capture by a closure. Reject aliases through local assignments when they could evade those checks. A direct
-method call on the binding is allowed; passing it to an ordinary function is rejected unless the compiler can prove the
-argument is not retained or returned. Passing unrelated primitive field values is allowed. These conservative rules do
-not track hidden aliases from before the initializer, native code, or arbitrary unsafe operations; they do not establish
+Scoped bindings are a local lifetime aid, not an ownership proof. Reject direct local escapes of the scoped value:
+returning it, assigning it to a field, static, array or map element, or non-scoped local, capturing it in a closure, and
+converting it to `Dynamic`. Calling methods on the binding and passing it as an argument to functions or methods on
+other objects are allowed. A callee retaining or returning the argument is not detected, as with C# `using`; neither are
+hidden aliases from before the initializer, native code, or arbitrary unsafe operations. These rules do not establish
 unique ownership. Diagnostics should name the scoped binding and the escaping operation. A future checked borrowing
-contract can relax these rules without changing cleanup semantics.
+contract could tighten argument passing without changing cleanup semantics.
 
 ## Lowering and targets
 
