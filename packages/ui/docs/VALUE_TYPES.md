@@ -256,3 +256,24 @@ selection-stress census medians were 342,097 / 342,097 allocations, with a paire
 per-type differences were confined to byte buffers. The 500-cycle RSS window medians were 30.00 / 3.44 / 0.78 /
 4.84 MiB before and 29.84 / 3.91 / 0.78 / 5.00 MiB after, with paired median differences of -0.31 / -0.15 / 0 /
 0 MiB. These figures include the observed same-binary variation and do not establish an RSS improvement.
+
+The raw-pointer Dynamic boundary was measured against the preceding browser-loaded Wasm GC guest. Nine full pairs
+and three pairs each of static, text-heavy and editing all had zero paired median object-count difference: respectively
+4,440 / 4,440 / 4,440 / 8,724 objects before and after. The checked pointer boundary and its allocation tests are
+specified in `docs/GENERIC_SPECIALIZATION.md`, including the separate typed-interface allocation limitation.
+
+The pointer-boundary change was also measured on the current outer `HEAD` against a control built with compiler
+`38db19f0` from the same source tree. Nine alternating HashLink pairs had equal per-action medians: 112.6, 80.1,
+72.5 and 93.1 KiB for the four tab switches, and 0.5, 0.5, 10.0, 12.4, 13.6, 21.2, 0.2, 0.2, 16.1 and 16.2 KiB
+for hover-enter, hover-inside, hover-other, hover-field, hover-away, scroll, idle, idle-focused, type and backspace.
+The paired median differences were zero except telemetry-to-console (+0.2 KiB). In nine control-versus-control
+pairs the same action varied from 92.9 to 94.9 KiB, including 0.2 KiB differences between captures. The selection
+census medians were 342,097 / 342,097 allocations, paired difference zero; per-type differences were confined to byte
+buffers. The budget measurement reports frame time but no per-action allocation for selection.
+
+The nine 500-cycle RSS window medians were 29.84 / 3.75 / 0.78 / 5.00 MiB for the control and 30.47 / 3.59 / 0.78 /
+5.00 MiB for the candidate; paired median differences were +0.47 / -0.31 / 0 / 0 MiB. In nine control-versus-control
+pairs the first window differed by as much as +1.25 MiB in individual pairs, with a paired median of +0.16 MiB. These
+measurements do not establish an RSS increase or an exact match. A decoded comparison of the 31,340 HashLink functions
+found identical opcodes and register types, identical integer, float, string, global, constant and native tables, and
+identical type descriptors; the function-name manifest differs only in the checked-cast helper prefix.

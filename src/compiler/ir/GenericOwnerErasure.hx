@@ -143,7 +143,7 @@ class GenericOwnerErasure {
 					case Obj(_) | Virtual(_) | Enum(_) | Bytes | ManagedBytes | Abstract(_) | Iterator(_): [target];
 					case Array(_): [Array(Dyn)];
 					case Function(_, _): [target];
-					case I32 | F64 | Bool | I64: [target];
+					case I32 | F64 | Bool | I64 | RawPtr: [target];
 					default: [];
 				};
 			if (checks.length > 0) {

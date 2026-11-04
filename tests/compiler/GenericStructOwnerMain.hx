@@ -15,6 +15,17 @@ class GenericStructOwnerMain {
 		var checkedArrays = Frontend.compile(arraySource);
 		if (new compiler.ir.IrInterpreter(checkedArrays).run("main") != 42)
 			throw "erased array and function writes did not preserve checked value semantics in the interpreter";
+		var pointerSource = File.getContent("tests/programs/generic-erased-raw-pointer.hx"),
+			pointerNative = pointerSource.indexOf("#if !wasm"), pointerNativeEnd = pointerSource.indexOf("#end", pointerNative);
+		if (pointerNative < 0 || pointerNativeEnd < 0) throw "missing raw pointer native fixture";
+		pointerSource = pointerSource.substring(0, pointerNative) + pointerSource.substring(pointerNativeEnd + 4);
+		pointerSource = pointerSource.substring(0, pointerSource.indexOf("function main():Int"))
+			+ "function main():Int return PointerBoundaryCensus.prepare(null);";
+		var pointerRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		pointerRuntime.addSourceRoot("stdlib");
+		pointerRuntime.update("Main.hx", pointerSource);
+		if (new compiler.ir.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
+			throw "erased pointer writes and checked casts failed in the interpreter";
 		var checkedSignatures = Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
 		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
 			throw "the interpreter did not distinguish reference-shaped closure signatures";

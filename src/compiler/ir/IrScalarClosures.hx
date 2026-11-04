@@ -130,7 +130,7 @@ class IrScalarClosures {
 			cases: [for (item in entry.cases) {name: item.name, params: [for (type in item.params) mapType(type)]}]}];
 		program.staticFields = [for (field in program.staticFields) {name: field.name, type: mapType(field.type)}];
 		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects, program.interfaces, rewritten);
-		generated = IrCheckedObjectCasts.rewrite(generated, program.objects, false, rewritten);
+		generated = IrCheckedDynamicCasts.rewrite(generated, program.objects, false, rewritten);
 		program.functions = rewritten.concat(generated);
 		var hasTypeTest = false;
 		for (native in program.natives) if (native.name == "__std_is_of_type") hasTypeTest = true;

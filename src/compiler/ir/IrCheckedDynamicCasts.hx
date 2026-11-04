@@ -3,9 +3,9 @@ package compiler.ir;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-/** Check Dynamic-to-object casts before target-specific casts, so failure remains catchable. */
-class IrCheckedObjectCasts {
-	public static inline final PREFIX = "$checked-object-cast:";
+/** Check Dynamic-to-reference casts before target-specific casts, so failure remains catchable. */
+class IrCheckedDynamicCasts {
+	public static inline final PREFIX = "$checked-dynamic-cast:";
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool, ?existingFunctions:Array<IrFunction>,
 			checkValueObjects:Bool = false):Array<IrFunction> {
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object],
@@ -44,6 +44,9 @@ class IrCheckedObjectCasts {
 								changed = true;
 							case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name) && declarations.get(name).isValue):
 								target.instructions.push(new Located(Call(out, helperFor(out.type, Obj(name), name, true), [input]), located.provenance));
+								changed = true;
+							case RawPtr:
+								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, "hl.Bytes", true), [input]), located.provenance));
 								changed = true;
 							case Virtual(name):
 								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, name, true), [input]), located.provenance));

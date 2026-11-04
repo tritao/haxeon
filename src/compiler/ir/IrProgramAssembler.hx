@@ -521,7 +521,7 @@ class IrProgramAssembler {
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = IrCheckedObjectCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());
+			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());
 		if (objects != null) {
 			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
@@ -542,7 +542,7 @@ class IrProgramAssembler {
 		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
-			allFunctions = existing.concat(IrCheckedObjectCasts.rewrite(allFunctions.slice(beforeReflection), objects,
+			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
 				IrGenerator.usesNativeReflectionDispatch(), existing, true));
 		}
 		if (objects != null) {

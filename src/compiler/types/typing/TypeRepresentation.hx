@@ -405,7 +405,7 @@ class TypeRepresentation {
 		return switch type {
 			case TAbstract(_, _, representation), TNullable(representation): ownerContainsValue(representation);
 			case TInstance(NominalKind.Class, _, _): session.relations.isValueClass(type);
-			case TInstance(NominalKind.Enum, _, _), TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_): true;
+			case TInstance(NominalKind.Enum, _, _), TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_), THlBytes: true;
 			default: false;
 		};
 
@@ -415,6 +415,7 @@ class TypeRepresentation {
 
 	function containsExactValueLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
+			case THlBytes: true; // A raw pointer is a scalar carrier, not a shared managed reference.
 			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name) || session.relations.isValueClass(type)): true;
 			case TInstance(NominalKind.Enum, _, _): true;
 			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):

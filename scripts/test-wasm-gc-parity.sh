@@ -50,6 +50,10 @@ for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=PointerBoundaryCensus.prepare --export=PointerBoundaryCensus.perform --export=PointerBoundaryCensus.clear \
+			--output="$parity_output_dir/wasm-parity-$target-raw-pointer-census-inline-$inline.wasm" \
+			--entry=generic-erased-raw-pointer --root=tests/programs tests/programs/generic-erased-raw-pointer.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=ManagedClosureCensus.prepare --export=ManagedClosureCensus.perform --export=ManagedClosureCensus.literalOnly \
 			--output="$parity_output_dir/wasm-parity-$target-managed-closure-census-inline-$inline.wasm" \
 			--entry=generic-managed-reference-closure --root=tests/programs tests/programs/generic-managed-reference-closure.hx
@@ -73,7 +77,7 @@ for inline in 0 1; do
 			--export=IteratorCensus.prepare --export=IteratorCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-iterator-census-inline-$inline.wasm" \
 			--entry=struct-array-iterator-escape --root=tests/programs tests/programs/struct-array-iterator-escape.hx
-		for value_case in generic-managed-reference-closure generic-erased-bytes-reference-shapes generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+		for value_case in generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -98,6 +102,14 @@ for inline in 0 1; do
 			--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
 			tests/programs/wasm-value-interface-reflection.hx
 		if [[ "$target" == wasm32 ]]; then
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress --wasm-memory-stats \
+				--export=PointerGcLeafCensus.make --export=PointerGcLeafCensus.hold --export=PointerGcLeafCensus.collect \
+				--output="$parity_output_dir/wasm-parity-wasm32-raw-pointer-gc-leaf-inline-$inline.wasm" \
+				--entry=wasm-raw-pointer-gc-leaf --root=tests/programs tests/programs/wasm-raw-pointer-gc-leaf.hx
+			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+				--export=PointerBoundaryCensus.prepare \
+				--output="$parity_output_dir/wasm-parity-wasm32-raw-pointer-neutral-inline-$inline.wasm" \
+				--entry=generic-erased-raw-pointer --root=tests/programs tests/programs/generic-erased-raw-pointer.hx
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=EnumEscapeCensus.prepare --export=EnumEscapeCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm32-enum-escape-census-inline-$inline.wasm" \
@@ -186,7 +198,7 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	for value_case in generic-managed-reference-closure generic-erased-bytes-reference-shapes generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+	for value_case in generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -395,7 +407,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
+    for (const name of ["generic-erased-raw-pointer", "generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-managed-narrow", "struct-managed-nullable-narrow"])
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         const expected = (name === "generic-erased-function-reference-shapes" || name === "generic-erased-bytes-reference-shapes") && target === "wasm32" ? 43 : 42;
@@ -529,6 +541,21 @@ async function run(name, target) {
 	}
 	if (linearLookup.exports["LookupCensus.stress"](256) !== 2304)
 	  failures.push(`constrained lookup lost live references (wasm32 stress GC, inline=${inline})`);
+	const leafBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-raw-pointer-gc-leaf-inline-${inline}.wasm`));
+	const leaf = (await WebAssembly.instantiate(leafBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	const victim = leaf["PointerGcLeafCensus.make"]();
+	leaf["PointerGcLeafCensus.hold"](victim);
+	// Linear heap block headers are 16 bytes; flags occupy the second word and bit 0 means allocated.
+	const beforeLeaf = new DataView(leaf.memory.buffer).getInt32(victim - 12, true);
+	leaf["PointerGcLeafCensus.collect"]();
+	const afterLeaf = new DataView(leaf.memory.buffer).getInt32(victim - 12, true);
+	if ((beforeLeaf & 1) === 0 || (afterLeaf & 1) !== 0)
+	  failures.push(`raw pointer box retained a managed object (wasm32, inline=${inline}, before=${beforeLeaf}, after=${afterLeaf})`);
+	else console.log(`PASS: raw pointer box is a GC leaf on wasm32, inline=${inline}`);
+	const neutralPointerBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-raw-pointer-neutral-inline-${inline}.wasm`));
+	const neutralPointer = (await WebAssembly.instantiate(neutralPointerBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
+	if (neutralPointer.exports["PointerBoundaryCensus.prepare"](1234) !== 42)
+	  failures.push(`raw pointer boundary (wasm32 runtime-neutral, inline=${inline})`);
 	const neutralNullBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-wasm32-null-method-neutral-inline-${inline}.wasm`));
 	const neutralNull = (await WebAssembly.instantiate(neutralNullBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
 	if (neutralNull.exports.main() !== 42) failures.push(`null method exception (wasm32 runtime-neutral, inline=${inline})`);
@@ -536,6 +563,23 @@ async function run(name, target) {
 	const neutralInline = (await WebAssembly.instantiate(neutralInlineBytes, {haxeon_host: {fuel_charge: () => 1}})).instance;
 	if (neutralInline.exports.main() !== 42) failures.push(`inlined null method exception (wasm32 runtime-neutral, inline=${inline})`);
 	for (const target of ["wasm32", "wasm-gc"]) {
+	  const pointerBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-raw-pointer-census-inline-${inline}.wasm`));
+	  const pointer = (await WebAssembly.instantiate(pointerBytes, {haxeon_runtime: runtime, std})).instance;
+	  if (pointer.exports["PointerBoundaryCensus.prepare"](0) !== 42)
+	    failures.push(`raw pointer null round trip (${target}, inline=${inline})`);
+	  if (pointer.exports["PointerBoundaryCensus.prepare"](12) !== 42)
+	    failures.push(`raw pointer and Int kinds (${target}, inline=${inline})`);
+	  if (pointer.exports["PointerBoundaryCensus.prepare"](1234) !== 42)
+	    failures.push(`raw pointer boundary (${target}, inline=${inline})`);
+	  const pointerCount = target === "wasm32" ? pointer.exports["haxeon.memory.allocation_count"] : pointer.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = pointerCount(), result = pointer.exports["PointerBoundaryCensus.perform"](n), allocations = pointerCount() - before;
+	    if (result !== n || allocations !== 0)
+	      failures.push(`raw pointer census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: raw pointer census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  if (pointer.exports["PointerBoundaryCensus.clear"]() !== 42)
+	    failures.push(`raw pointer null boundary (${target}, inline=${inline})`);
 	  const managedBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-managed-closure-census-inline-${inline}.wasm`));
 	  const managed = (await WebAssembly.instantiate(managedBytes, {haxeon_runtime: runtime, std})).instance;
 	  managed.exports["ManagedClosureCensus.prepare"]();

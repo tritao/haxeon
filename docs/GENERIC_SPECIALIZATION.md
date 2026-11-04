@@ -102,10 +102,11 @@ inlining modes. `packages/ui/tools/test-struct-allocations.sh` checks the same w
 `State<S>` and `StateStore` on all three targets, including managed-reference identity and both inlining modes.
 
 The semantic identity of a generic class remains its source declaration and type arguments. Its physical owner is
-specialized when an argument needs a struct layout; every stored field, constructor, instance method and inherited
-generic base must use that same substitution. Other arguments follow the existing shape, layout and constrained policies;
-an unconstrained owner with no value argument keeps its current shared representation. Specialization identities include the exact
-value arguments and the representation policy, so distinct structs cannot silently share an incompatible layout.
+specialized when an argument needs a struct layout or raw-pointer carrier; every stored field, constructor, instance
+method and inherited generic base must use that same substitution. Other arguments follow the existing shape, layout
+and constrained policies; an unconstrained owner with no value or raw-pointer argument keeps its current shared
+representation. Specialization identities include the exact value arguments and the representation policy, so
+distinct structs cannot silently share an incompatible layout.
 Static fields belong to the source declaration and are not duplicated by a
 specialization. Discover specializations to a fixed point, including those requested by generated method bodies, and
 retain and invalidate them with their declaring module and the value layouts they depend on.
@@ -197,13 +198,29 @@ bytes with the same header, so it cannot distinguish a `String` from `haxe.io.By
 Wasm GC can. HashLink and Wasm32 currently expose only the common iterator kind to this type test, not its element type. A distinct
 managed-bytes header and iterator element descriptor are required to make those checks exact without guessing.
 
-A separate raw-pointer Dynamic boundary is still incomplete: `KindBox<Anchor,hl.Bytes>` accepts an Int through an
-erased view on both Wasm targets (HashLink rejects it). Wasm32 currently carries a raw pointer directly as Dynamic,
-while Wasm GC shares its box type with Int, so neither can safely distinguish the kinds. The planned fix is a distinct
-raw-pointer box at the genuine Dynamic escape, with a matching checked unbox and null handling; keep ordinary typed
-raw-pointer operations unboxed. Native callback handles and runtime type handles likewise need an unambiguous Dynamic
-representation before they can be checked as distinct kinds. Until that fix lands, this is an open part of the
-erased-boundary audit.
+Raw pointers specialize generic owners and functions to their scalar pointer representation and remain unboxed in
+typed code. At a genuine Dynamic escape, each Wasm target uses a distinct pointer box, preserving null and checking
+the kind on unbox; an Int cannot be written through an erased view of a concrete pointer field. Dynamic pointer boxes
+compare their contained addresses, including null. Generic interface argument and result adapters use the same checked
+box. Typed pointer access performs no allocations on HashLink, Wasm32 or Wasm GC, with inlining on or off. A raw-pointer box
+is a GC leaf: on Wasm32, a managed object is reclaimed even when its address is held as a raw pointer.
+
+A typed generic interface still erases its method signature to `Dynamic`. For example, returning `hl.Bytes` from
+`PointerSource<hl.Bytes>.get()` boxes and immediately unboxes the pointer on each call. Against compiler `38db19f0`,
+1,024 calls on Wasm32 increased from 0 to 1,024 allocations; both inlining modes show the same result. The control
+Wasm GC compiler failed with `Wasm GC cannot return RawPtr from interface method as Dyn`; the new compiler executes the
+calls but allocates 1,024 times. Avoiding that regression needs an interface ABI and dispatch that retain the semantic
+argument and result carriers, including erased views, reflection and scalar-lane methods. This is a separate remaining
+allocation boundary; direct typed generic fields and functions above do not take that path.
+
+A separate owner-policy gap remains when a reference field's type argument uses a shared shape: its physical field is
+`Dynamic`, and the erased setter has no semantic type descriptor with which to reject a mismatched value. For example,
+`Box<Anchor, String>` accepts an Int through `Box<Dynamic, Dynamic>`. Giving that owner an `Array<T>` field forces a
+concrete layout and makes the setter reject the write. The owner must retain enough semantic type information to check
+shape-erased fields without conflating it with the pointer box representation.
+
+Native callback handles and runtime type handles still need an unambiguous Dynamic representation before they can be
+checked as distinct kinds. Until that fix lands, this is an open part of the erased-boundary audit.
 
 A closure in a specialized generic field carries a struct's scalar and traced reference leaves through its typed
 argument and result. In a Wasm GC census, the apparent 16 / 2,048 allocations for 8 / 1,024 calls came from evaluating

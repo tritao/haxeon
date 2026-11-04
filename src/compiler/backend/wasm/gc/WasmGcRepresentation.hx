@@ -564,7 +564,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default:
 					throw 'Wasm GC cannot convert $value.type to Dynamic yet';
 			};
-		return [LocalGet(valueLocal), StructNew(boxed), LocalSet(destination)];
+		return switch value.type {
+			case RawPtr:
+				[LocalGet(valueLocal), I32Eqz, If(null), RefNull(Any), LocalSet(destination), Else,
+					LocalGet(valueLocal), StructNew(boxed), LocalSet(destination), End];
+			default: [LocalGet(valueLocal), StructNew(boxed), LocalSet(destination)];
+		};
 	}
 
 	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
@@ -577,13 +582,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			return dynamicInt(valueLocal, destination);
 		if (boxType != null && (switch (output.type) { case F64: true; default: false; }))
 			return dynamicFloat(valueLocal, destination);
-		if (boxType != null)
-			return [
+		if (boxType != null) {
+			var unbox:Array<WasmInstruction> = [
 				LocalGet(valueLocal),
 				RefCast({nullable: false, heap: Type(boxType)}),
 				StructGet(boxType, 0),
 				LocalSet(destination)
 			];
+			return switch output.type {
+				case RawPtr:
+					[LocalGet(valueLocal), RefIsNull, If(null), I32Const(0), LocalSet(destination), Else,
+						LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), I32Eqz, If(null)]
+						.concat(trapInstructions()).concat([End]).concat(unbox).concat([End]);
+				default: unbox;
+			};
+		}
 		var closureCast = switch output.type {
 			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signatureId(plan, output.type)));
 			default: null;
@@ -691,7 +704,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult {
 		var instructions:Array<WasmInstruction> = [I32Const(0), LocalSet(output)];
-		var boxedTypes:Array<IrType> = [I32, Bool, I64, F64, TypeRef];
+		var boxedTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef];
 		for (type in boxedTypes) {
 			var box = plan.boxedPrimitiveType(type), comparison = switch type {
 				case I64: I64Eq;
@@ -900,6 +913,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bool, plan.boxedPrimitiveType(Bool));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, RawPtr, plan.boxedPrimitiveType(RawPtr));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, ManagedBytes, plan.managedBytesTypeIndex);
 		var mapNames = [for (name in plan.mapTypes.keys()) name]; mapNames.sort(Reflect.compare);
@@ -1528,7 +1542,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function dynamicIsObject(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Eq})];
-		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.I64, IrType.F64, IrType.TypeRef];
+		var primitiveTypes:Array<IrType> = [IrType.I32, IrType.Bool, IrType.I64, IrType.F64, IrType.RawPtr, IrType.TypeRef];
 		for (type in primitiveTypes)
 			body = body.concat([
 				LocalGet(valueLocal),
@@ -1593,9 +1607,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			temporary = allocateLocal(valueType(targetType)),
 			converted:WasmLoweringResult = UseDefault;
 		switch [argument.type, targetType] {
-			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
+			case [I32 | Bool | I64 | F64 | TypeRef | RawPtr, Dyn]:
 				converted = toDynamic(argument, temporary, sourceLocal);
-			case [Dyn, I32 | Bool | I64 | F64 | TypeRef]:
+			case [Dyn, I32 | Bool | I64 | F64 | TypeRef | RawPtr]:
 				converted = safeCast(targetValue, argument, temporary, sourceLocal);
 			case [I32, Bool] | [Bool, I32]:
 				return [LocalGet(sourceLocal)];
@@ -1619,9 +1633,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			temporary = allocateLocal(valueType(sourceType)),
 			converted:WasmLoweringResult = UseDefault;
 		switch [sourceType, output.type] {
-			case [I32 | Bool | I64 | F64 | TypeRef, Dyn]:
+			case [I32 | Bool | I64 | F64 | TypeRef | RawPtr, Dyn]:
 				converted = toDynamic(sourceValue, destination, temporary);
-			case [Dyn, I32 | Bool | I64 | F64 | TypeRef]:
+			case [Dyn, I32 | Bool | I64 | F64 | TypeRef | RawPtr]:
 				converted = safeCast(output, sourceValue, destination, temporary);
 			case [I32, Bool] | [Bool, I32]:
 				return [LocalSet(destination)];

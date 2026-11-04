@@ -104,7 +104,7 @@ class WasmLinearModuleBuilder {
 		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures),
 			existing = logical.functions.slice(0, originalCount), generated = logical.functions.slice(originalCount);
 		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
-		generated = compiler.ir.IrCheckedObjectCasts.rewrite(generated, logical.objects, true, existing);
+		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
 		logical.functions = existing.concat(generated);
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});

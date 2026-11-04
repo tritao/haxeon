@@ -4,7 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrValueInterfaceBoxes;
-import compiler.ir.IrCheckedObjectCasts;
+import compiler.ir.IrCheckedDynamicCasts;
 import compiler.ir.SourceProvenance.Located;
 
 /** Adapts scalar closures only at Dynamic and exported host boundaries. */
@@ -30,7 +30,7 @@ class WasmScalarClosureEscapes {
 		}];
 		result.objects = program.objects.concat(pass.generatedObjects);
 		var generated = IrValueInterfaceBoxes.rewrite(pass.generatedFunctions, result.objects, program.interfaces, result.functions);
-		generated = IrCheckedObjectCasts.rewrite(generated, result.objects, true, result.functions);
+		generated = IrCheckedDynamicCasts.rewrite(generated, result.objects, true, result.functions);
 		for (fn in generated) result.functions.push(fn);
 		result.natives = program.natives.concat(pass.generatedNatives); result.cNatives = program.cNatives;
 		var hasTypeTest = false;

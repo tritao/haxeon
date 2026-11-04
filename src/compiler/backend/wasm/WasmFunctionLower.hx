@@ -687,6 +687,12 @@ class WasmFunctionLower {
 								Unreachable,
 								End
 							]);
+						case RawPtr if ((switch (value.type) { case Dyn: true; default: false; })):
+							emit(body, [LocalGet(requiredLocal(values, value.id)), I32Eqz, If(null), I32Const(0),
+								LocalSet(requiredLocal(values, output.id)), Else,
+								LocalGet(requiredLocal(values, value.id)), I32Load(0), I32Const(typeId(RawPtr)), I32Eq, If(null),
+								LocalGet(requiredLocal(values, value.id)), I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+								LocalSet(requiredLocal(values, output.id)), Else, Unreachable, End, End]);
 						default:
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
@@ -921,12 +927,12 @@ class WasmFunctionLower {
 								for (argumentIndex in 0...arguments.length)
 									emit(body,
 										adaptInterfaceValue(arguments[argumentIndex].type, target.argumentTypes[argumentIndex + 1],
-											requiredLocal(values, arguments[argumentIndex].id), allocator));
+											requiredLocal(values, arguments[argumentIndex].id), allocator, index + 1));
 								body.push(Call(target.functionIndex));
 								if ((switch (output.type) { case Void: false; default: true; })) {
 									var result = context.placement.allocate(WasmModuleSupport.requireValueType(target.resultType));
 									body.push(LocalSet(result));
-									emit(body, adaptInterfaceValue(target.resultType, output.type, result, allocator));
+									emit(body, adaptInterfaceValue(target.resultType, output.type, result, allocator, index + 1));
 									body.push(LocalSet(requiredLocal(values, output.id)));
 								}
 								if (index < targets.length - 1)
@@ -1648,12 +1654,12 @@ class WasmFunctionLower {
 	/** Linear Dynamic representation of a value: primitives are boxed with their runtime type id. */
 	static function boxedValue(type:IrType, source:Int, destination:Int, allocator:Int):Array<WasmInstruction> {
 		var size = switch type {
-			case I32, Bool: WasmLayout.DYN_I32_SIZE;
+			case I32, Bool, RawPtr: WasmLayout.DYN_I32_SIZE;
 			case F64: WasmLayout.DYN_F64_SIZE;
 			case I64: WasmLayout.DYN_I64_SIZE;
 			default: return [LocalGet(source), LocalSet(destination)];
 		};
-		return [
+		var box:Array<WasmInstruction> = [
 			I32Const(size),
 			Call(allocator),
 			LocalTee(destination),
@@ -1663,11 +1669,15 @@ class WasmFunctionLower {
 			LocalGet(source),
 			store(type, WasmLayout.DYN_PAYLOAD_OFFSET)
 		];
+		return switch type {
+			case RawPtr: [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(destination), Else].concat(box).concat([End]);
+			default: box;
+		};
 	}
 
 	static function isBoxedPrimitive(type:IrType):Bool
 		return switch type {
-			case I32, Bool, I64, F64: true;
+			case I32, Bool, I64, F64, RawPtr: true;
 			default: false;
 		};
 
@@ -1675,12 +1685,20 @@ class WasmFunctionLower {
 	 * Convert a value between an interface signature and its implementation's: a generic
 	 * interface erases type parameters to Dynamic while implementations keep primitives.
 	 */
-	function adaptInterfaceValue(sourceType:IrType, targetType:IrType, source:Int, allocator:Int):Array<WasmInstruction> {
+	function adaptInterfaceValue(sourceType:IrType, targetType:IrType, source:Int, allocator:Int, dispatchDepth:Int):Array<WasmInstruction> {
 		if (compiler.ir.IrVerifier.sameType(sourceType, targetType))
 			return [LocalGet(source)];
 		if (isBoxedPrimitive(sourceType) && (switch (targetType) { case Dyn: true; default: false; })) {
 			var boxed = context.placement.allocate(I32);
 			return boxedValue(sourceType, source, boxed, allocator).concat([LocalGet(boxed)]);
+		}
+		if ((switch (sourceType) { case Dyn: true; default: false; }) && (switch (targetType) { case RawPtr: true; default: false; })) {
+			var pointer = context.placement.allocate(I32);
+			return [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(pointer), Else,
+				LocalGet(source), I32Const(1), I32And, If(null)].concat(trapOrThrow(dispatchDepth + 2))
+				.concat([End, LocalGet(source), I32Load(0), I32Const(typeId(RawPtr)), I32Eq, I32Eqz, If(null)])
+				.concat(trapOrThrow(dispatchDepth + 2))
+				.concat([End, LocalGet(source), I32Load(WasmLayout.DYN_PAYLOAD_OFFSET), LocalSet(pointer), End, LocalGet(pointer)]);
 		}
 		if ((switch (sourceType) { case Dyn: true; default: false; }) && isBoxedPrimitive(targetType))
 			return [LocalGet(source), load(targetType, WasmLayout.DYN_PAYLOAD_OFFSET)];

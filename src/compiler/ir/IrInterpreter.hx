@@ -224,10 +224,16 @@ class IrInterpreter {
 			case MethodCall(_, object, methodName, arguments):
 				var receiver = value(values, object),
 					functionName = methodFunction(interpObject(receiver).type, methodName),
-					args = [receiver];
-				for (argument in arguments)
-					args.push(value(values, argument));
-				execute(functions.get(functionName), args);
+					target = functions.get(functionName), args = [receiver];
+				for (index in 0...arguments.length) {
+					var argument = arguments[index], item = value(values, argument);
+					// The interpreter has no non-null native pointer values; a Dynamic value cannot
+					// satisfy a pointer parameter merely because its host representation is an Int.
+					if (item != null && Type.enumEq(argument.type, Dyn) && Type.enumEq(target.arguments[index + 1].type, RawPtr))
+						throw "Invalid cast to hl.Bytes";
+					args.push(item);
+				}
+				execute(target, args);
 			case ToVirtual(_, input), Upcast(_, input): value(values, input);
 			case MakeEnum(_, typeName, constructor, arguments):
 				new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);

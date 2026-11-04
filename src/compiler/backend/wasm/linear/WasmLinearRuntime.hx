@@ -2639,6 +2639,7 @@ class WasmLinearRuntime {
 			WasmModuleSupport.typeId(Bool),
 			WasmModuleSupport.typeId(I64),
 			WasmModuleSupport.typeId(F64),
+			WasmModuleSupport.typeId(RawPtr),
 			WasmModuleSupport.typeId(Bytes)
 		]) {
 			builder.localGet(value);
@@ -4219,6 +4220,10 @@ class WasmLinearRuntime {
 							builder.localGet(leftType);
 							builder.i32Const(WasmModuleSupport.typeId(I32));
 							builder.emit(I32Eq);
+							builder.localGet(leftType);
+							builder.i32Const(WasmModuleSupport.typeId(RawPtr));
+							builder.emit(I32Eq);
+							builder.emit(I32Or);
 							builder.ifElse(function(builder) {
 								builder.localGet(left);
 								builder.emit(I32Load(WasmLayout.DYN_PAYLOAD_OFFSET));
