@@ -120,6 +120,8 @@ class IrInterpreter {
 			case SafeCast(output, input):
 				var actual:Dynamic = value(values, input);
 				switch output.type {
+					case Function(_, _) if (actual != null):
+						actual = closureView(actual, output.type);
 					case Array(element) if (actual != null):
 						checkArrayCast(actual, element);
 					case Obj(target) if (actual != null && !objectIsOfType(actual, target)):
@@ -220,9 +222,7 @@ class IrInterpreter {
 			case CallClosure(_, closure, arguments):
 				var callable:InterpClosure = cast value(values, closure),
 					args = [for (argument in arguments) value(values, argument)];
-				if (callable.receiver != null)
-					args.unshift(callable.receiver);
-				execute(callable.target, args);
+				invokeClosure(callable, args);
 			case MethodCall(_, object, methodName, arguments):
 				var receiver = value(values, object),
 					functionName = methodFunction(interpObject(receiver).type, methodName),
@@ -442,6 +442,50 @@ class IrInterpreter {
 	static function numericValue(input:Dynamic):Bool
 		return switch Type.typeof(input) { case TInt, TFloat: true; default: false; };
 
+	function closureView(input:Dynamic, type:IrType):InterpClosure {
+		if (!Std.isOfType(input, InterpClosure)) throw "Cannot cast to a function";
+		var source:InterpClosure = cast input;
+		if (IrVerifier.sameType(source.type, type)) return source;
+		var sourceArity = switch source.type { case Function(args, _): args.length; default: -1; };
+		var targetArity = switch type { case Function(args, _): args.length; default: -1; };
+		if (sourceArity < 0 || sourceArity != targetArity) throw "Cannot cast function with a different arity";
+		return new InterpClosure(source.target, source.receiver, type, source);
+	}
+
+	function invokeClosure(closure:InterpClosure, args:Array<Dynamic>):Dynamic {
+		if (closure.source == null) {
+			if (closure.receiver != null) args.unshift(closure.receiver);
+			return execute(closure.target, args);
+		}
+		var source = closure.source;
+		var sourceSignature = switch source.type { case Function(arguments, result): {arguments: arguments, result: result}; default: throw "Invalid function type"; };
+		var targetSignature = switch closure.type { case Function(arguments, result): {arguments: arguments, result: result}; default: throw "Invalid function type"; };
+		var converted = [for (index in 0...args.length) closureConvert(args[index], targetSignature.arguments[index], sourceSignature.arguments[index])];
+		var result = invokeClosure(source, converted);
+		return closureConvert(result, sourceSignature.result, targetSignature.result);
+	}
+
+	function closureConvert(input:Dynamic, from:IrType, to:IrType):Dynamic {
+		if (IrVerifier.sameType(from, to)) return input;
+		return switch [from, to] {
+			case [_, Void]: null;
+			case [Void, I32]: 0;
+			case [Void, I64]: haxe.Int64.ofInt(0);
+			case [Void, Bool]: false;
+			case [Void, F32 | F64]: 0.0;
+			case [Void, _]: null;
+			case [I32, Bool]: input != 0;
+			case [_, Dyn]: input;
+			case [_, Array(element)]: checkArrayCast(input, element);
+			case [_, Function(_, _)] if (input != null): closureView(input, to);
+			case [_, I32] if (input != null && numericValue(input)): Std.int(input);
+			case [_, F32] if (input != null && numericValue(input)): haxe.io.FPHelper.i32ToFloat(haxe.io.FPHelper.floatToI32(input));
+			case [_, F64] if (input != null && numericValue(input)): (input:Float);
+			case [_, _] if (matchesArrayElement(input, to)): input;
+			default: throw 'Cannot convert closure value from ${Std.string(from)} to ${Std.string(to)}';
+		};
+	}
+
 	function checkArrayCast(input:Dynamic, element:IrType):Dynamic {
 		if (input == null) return null;
 		if (!Std.isOfType(input, InterpArray)) throw "Cannot cast to Array";
@@ -652,10 +696,12 @@ private class InterpClosure {
 	public final target:IrFunction;
 	public final receiver:Dynamic;
 	public final type:IrType;
+	public final source:Null<InterpClosure>;
 
-	public function new(target:IrFunction, receiver:Dynamic, type:IrType) {
+	public function new(target:IrFunction, receiver:Dynamic, type:IrType, ?source:InterpClosure) {
 		this.target = target;
 		this.receiver = receiver;
 		this.type = type;
+		this.source = source;
 	}
 }

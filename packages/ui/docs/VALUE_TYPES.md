@@ -360,3 +360,13 @@ One type comparison found 342,098 allocations on each side and only a 112-byte d
 The 500-cycle RSS window medians were 30.62 / 3.44 / 0.78 / 5.00 MiB before and 29.69 / 4.06 / 0.78 / 5.00 MiB
 after; paired median differences were -0.47 / +0.31 / 0 / 0 MiB. As the modules are identical, those differences
 reflect run-to-run variation rather than an effect of the Wasm32 changes.
+
+The interpreter closure-view correction was compared on outer revision `9020c754c` with nine alternating pairs.
+Both editor modules were byte-identical. Per-action allocation medians (KiB) matched at 112.6 / 80.1 / 74.5 / 93.1
+for tab switches, 0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll, 0.2 / 0.2 for idle and focused idle,
+and 16.1 / 16.2 for type and backspace; every paired median difference was zero. The 30-cycle selection census
+medians were 342,097 / 342,096 allocations with zero paired median difference; one type comparison differed by one
+byte buffer. The 500-cycle RSS window medians were 29.84 / 4.06 / 0.78 / 4.84 MiB and 30.00 / 3.59 / 0.78 / 4.84
+MiB, with paired median differences +0.46 / -0.47 / 0 / +0.15 MiB. These are same-binary variations. Nine full-scene
+and three pairs per other Wasm GC Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects; the guests
+were byte-identical.
