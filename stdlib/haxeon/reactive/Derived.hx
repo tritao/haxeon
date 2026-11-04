@@ -15,8 +15,8 @@ class Derived<T> extends ReactiveDependencySet {
 
 	public var value(get, never):T;
 	function get_value():T {
-		ensureCurrent();
 		recordRead();
+		ensureCurrent();
 		return current;
 	}
 

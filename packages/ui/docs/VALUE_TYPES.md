@@ -410,3 +410,13 @@ the remaining three-allocation difference was in byte buffers. The 500-cycle RSS
 and three pairs per other Wasm GC Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects. An observed
 write followed by an effect flush allocates zero times on HashLink for 1,024 updates and on Wasm32 and Wasm GC for
 8 and 1,024 updates, with inlining enabled and disabled.
+
+The dependency-triggered effect retry policy was compared on outer revision `1205257d4` in nine alternating
+HashLink pairs. Per-action allocation medians (KiB) matched at 112.6 / 80.1 / 74.5 / 93.1 for tab switches,
+0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll, 0.2 / 0.2 for idle and focused idle, and 16.1 / 16.2
+for type and backspace. Selection census medians were 342,092 / 342,091 allocations, with zero paired median
+difference; a separate per-type pair differed only in byte buffers. The 500-cycle RSS window medians were
+30.16 / 3.75 / 0.78 / 5.00 MiB on both sides, with paired median differences +0.31 / 0 / 0 / 0 MiB, within the
+same-binary variation recorded above. Nine full-scene and three pairs per other Wasm GC Showcase scenario matched at
+4,440 / 4,440 / 4,440 / 8,724 objects. The successful observed write-and-flush census remained at zero allocations
+on HashLink for 1,024 updates and on both Wasm targets for 8 and 1,024 updates, with inlining enabled and disabled.

@@ -33,8 +33,7 @@ class Effect extends ReactiveDependencySet {
 			finishDependencies();
 			hasRun = true;
 		} catch (error:Dynamic) {
-			markFailed();
-			ReactiveRuntime.retryFailedEffect(this);
+			failDependencies();
 			throw error;
 		}
 	}

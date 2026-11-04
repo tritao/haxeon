@@ -5,6 +5,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	static inline var Clean:Int = 0;
 	static inline var MaybeStale:Int = 1;
 	static inline var Dirty:Int = 2;
+	static inline var Failed:Int = 3;
 	static inline var MaxStamp:Int = 0x7fffffff;
 
 	public final captureOnly:Bool;
@@ -123,6 +124,21 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		status = Clean;
 	}
 
+	/** A failed run retains only the inputs it reached, without pulling them again. */
+	function failDependencies():Void {
+		var edge = readerHead;
+		while (edge != null) {
+			var next = edge.readerNext;
+			if (edge.stamp != runStamp) {
+				edge.source.unsubscribe(edge);
+				unlinkReader(edge);
+				edgesBySource.remove(edge.source.dependencyId(edge.fieldBit));
+			} else edge.seenVersion = edge.source.versionAt(edge.fieldBit);
+			edge = next;
+		}
+		status = Failed;
+	}
+
 	/** Pulls derived inputs and checks whether any source version changed. */
 	function sourcesChanged():Bool {
 		var edge = readerHead;
@@ -136,7 +152,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	public function validateIfNeeded():Bool {
 		if (status == Clean) return false;
-		if (status == Dirty) return true;
+		if (status == Dirty || status == Failed) return true;
 		if (sourcesChanged()) {
 			markDirty();
 			return true;
@@ -146,9 +162,9 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	}
 
 	public function hasMaybeStaleInputs():Bool return status == MaybeStale;
-	public function isDirtyState():Bool return status == Dirty;
+	public function isDirtyState():Bool return status == Dirty || status == Failed;
 	public function markClean():Void status = Clean;
-	public function markFailed():Void status = Dirty;
+	public function markFailed():Void status = Failed;
 
 	/** Publishes a changed computed value after its dependencies have been refreshed. */
 	public function publishVersionChange():Void {
@@ -169,6 +185,12 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 
 	/** Pushes a candidate invalidation through the graph; values are checked on demand. */
 	public function markMaybeStale():Void {
+		// A failed computation stays dirty, but a later input change must propagate again.
+		if (status == Failed) {
+			onMaybeStale();
+			invalidateReaders();
+			return;
+		}
 		if (status != Clean) return;
 		status = MaybeStale;
 		onMaybeStale();

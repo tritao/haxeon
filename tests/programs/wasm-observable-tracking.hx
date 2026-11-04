@@ -192,11 +192,10 @@ function main():Int {
 	ReactiveRuntime.flushEffects();
 	if (labelValue != null || label.dirty) return fail(30);
 
-	var threw = false, retryEffect = false;
+	var threw = false;
 	try {
-		new Effect(function() { if (!retryEffect) model.count = 9; });
+		new Effect(function() model.count = 9);
 	} catch (_:Dynamic) threw = true;
-	retryEffect = true;
 	ReactiveRuntime.flushEffects();
 	var constructed:Model = null, constructorWriteThrew = false;
 	try {

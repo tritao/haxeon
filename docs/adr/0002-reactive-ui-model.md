@@ -65,9 +65,10 @@ values changes, and updates the existing nodes. This record makes that idea the 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its
    declared equality says the result changed. Effects and retained readers therefore stop at equal derived results,
-   including through chains and diamonds, without glitches or repeated computation. Effects that throw while running or
-   validating their inputs remain queued for a later flush; the error propagates, and effects not yet visited keep their
-   place ahead of the retry. This includes a failed initial run. Disposing an effect cancels its retry, and a rejected
+   including through chains and diamonds, without glitches or repeated computation. An effect that throws retains the
+   dependencies reached by its failed run and is queued again only when one changes, including after a failed initial
+   run. A flush runs every queued effect, then rethrows the first error and reports the number of additional failures in
+   `ReactiveRuntime.lastFlushSuppressedErrors`. Disposing a failed effect removes its subscriptions, and a rejected
    off-thread subscription never queues work on the owner graph. Dependency edges are intrusive doubly linked nodes
    shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
    stamp deduplicates reads; there is no observer array on every source and no `indexOf` scan in tracking or

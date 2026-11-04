@@ -13,6 +13,10 @@ class ReactiveRuntime {
 	// The queue has one owner and cannot be flushed recursively. Keeping its cursor with
 	// the queue also lets exception recovery see it without allocating a captured cell.
 	static var flushIndex:Int = 0;
+	static var flushFirstError:Dynamic = null;
+	static var flushHasError:Bool = false;
+	/** Additional failures from the last non-empty flush, after the first error. */
+	public static var lastFlushSuppressedErrors(default, null):Int = 0;
 	public static var version(default, null):Int = 0;
 
 	/** A single pending effect needs no first-use backing-store allocation. */
@@ -162,37 +166,37 @@ class ReactiveRuntime {
 		}
 	}
 
-	/** A failed off-thread subscription must not mutate the owner's pending queue. */
-	@:allow(haxeon.reactive.Effect)
-	static function retryFailedEffect(effect:Effect):Void {
-		if (isOwnerThread()) enqueue(effect);
-	}
-
 	/** Recomputes queued effects once after the frame's writes have settled. */
 	public static function flushEffects():Void {
 		if (flushing || isTracking() || pendingEffects.length == 0)
 			return;
 		flushing = true;
 		flushIndex = 0;
-		try {
-			while (flushIndex < pendingEffects.length) {
-				var effect = pendingEffects[flushIndex++];
+		flushHasError = false;
+		flushFirstError = null;
+		lastFlushSuppressedErrors = 0;
+		while (flushIndex < pendingEffects.length) {
+			flushIndex++;
+			try {
+				var effect = pendingEffects[flushIndex - 1];
 				effect.pending = false;
 				if (!effect.disposed && effect.dirty)
 					effect.run();
+			} catch (error:Dynamic) {
+				// Validation can throw before runBody marks the effect as failed.
+				pendingEffects[flushIndex - 1].markFailed();
+				if (!flushHasError) { flushFirstError = error; flushHasError = true; }
+				else lastFlushSuppressedErrors++;
 			}
-			pendingEffects.resize(0);
-			flushIndex = 0;
-			flushing = false;
-		} catch (error:Dynamic) {
-			// Retry a failed validation or run after effects not yet visited.
-			if (flushIndex > 0) {
-				enqueue(pendingEffects[flushIndex - 1]);
-				pendingEffects.splice(0, flushIndex);
-			}
-			flushIndex = 0;
-			flushing = false;
-			throw error;
+		}
+		pendingEffects.resize(0);
+		flushIndex = 0;
+		flushing = false;
+		if (flushHasError) {
+			var first = flushFirstError;
+			flushFirstError = null;
+			flushHasError = false;
+			throw first;
 		}
 	}
 }
