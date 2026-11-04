@@ -75,8 +75,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its
    declared equality says the result changed. Effects and retained readers therefore stop at equal derived results,
-   including through chains and diamonds, without glitches or repeated computation. An effect that throws retains the
-   dependencies reached by its failed run and is queued again only when one changes, including after a failed initial
+   including through chains and diamonds, without glitches or repeated computation. A direct or indirect cycle in a
+   derived computation throws `Cyclic Derived computation`; the failed pull can be retried after the cycle is removed.
+   An effect that throws retains the dependencies reached by its failed run and is queued again only when one changes, including after a failed initial
    run. A flush runs every queued effect, then rethrows the first error and reports the number of additional failures in
    `ReactiveRuntime.lastFlushSuppressedErrors`. Disposing a failed effect removes its subscriptions, and a rejected
    off-thread subscription never queues work on the owner graph. Dependency edges are intrusive doubly linked nodes

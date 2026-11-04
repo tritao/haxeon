@@ -492,6 +492,7 @@ wasm-bytes-runtime-kinds	42
 wasm-raw-pointer-gc-leaf	42
 wasm-closure-signature-census	42
 reactive-effect-failure-recovery	42
+reactive-derived-cycle	42
 native-reference-identity	42
 reactive-effect-allocations	42
 reactive-capture-allocations	42

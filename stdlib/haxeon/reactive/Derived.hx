@@ -5,6 +5,7 @@ class Derived<T> extends ReactiveDependencySet {
 	final compute:Void->T;
 	var current:T;
 	var initialized:Bool = false;
+	var computing:Bool = false;
 
 	public function new(compute:Void->T) {
 		super();
@@ -15,12 +16,21 @@ class Derived<T> extends ReactiveDependencySet {
 
 	public var value(get, never):T;
 	function get_value():T {
+		if (computing) throw new DerivedCycleError();
+		try {
+			ensureCurrent();
+		} catch (error:Dynamic) {
+			// Other failures still subscribe the reader so it can recover when an input changes.
+			// A cycle must never add the edge that would make the dependency graph cyclic.
+			if (!Std.isOfType(error, DerivedCycleError)) recordRead();
+			throw error;
+		}
 		recordRead();
-		ensureCurrent();
 		return current;
 	}
 
 	override public function ensureCurrent():Void {
+		if (computing) throw new DerivedCycleError();
 		if (initialized && !isDirtyState() && !hasMaybeStaleInputs()) return;
 		if (initialized && !isDirtyState() && !sourcesChanged()) {
 			markClean();
@@ -28,6 +38,7 @@ class Derived<T> extends ReactiveDependencySet {
 		}
 		var hadValue = initialized;
 		beginDependencies();
+		computing = true;
 		try {
 			var next = ReactiveRuntime.withTracking(this, compute);
 			finishDependencies();
@@ -35,7 +46,9 @@ class Derived<T> extends ReactiveDependencySet {
 			current = next;
 			initialized = true;
 			if (hadValue && changed) publishVersionChange();
+			computing = false;
 		} catch (error:Dynamic) {
+			computing = false;
 			// Keep old links until a successful pull; partially discovered links are pruned on the next run.
 			markFailed();
 			throw error;
@@ -44,4 +57,10 @@ class Derived<T> extends ReactiveDependencySet {
 
 	public function dispose():Void
 		clearDependencies();
+}
+
+/** A distinct failure lets readers avoid subscribing only to cyclic pulls. */
+private class DerivedCycleError {
+ public function new() {}
+ public function toString():String return "Cyclic Derived computation";
 }
