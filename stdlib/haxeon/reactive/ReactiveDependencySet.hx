@@ -9,19 +9,13 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	static inline var MaxStamp:Int = 0x7fffffff;
 
 	public final captureOnly:Bool;
-	var edgesBySource:Map<Int, ReactiveEdge>;
 	var readerHead:ReactiveEdge;
 	var readerTail:ReactiveEdge;
 	var edgeCount:Int = 0;
 	var runStamp:Int = 0;
-	var captureStampKeys:Array<haxe.Int64>;
-	var captureStampValues:Array<Int>;
-	var captureStampCount:Int = 0;
-	var captureStampUsed:Int = 0;
-	var captureStampIds:Array<haxe.Int64>;
 	var captureSources:Array<ReactiveSource>;
 	var captureFieldBits:Array<Int>;
-	var captureStamp:Int = 1;
+	var captureSliceStart:Int = 0;
 	var status:Int = Dirty;
 
 	public var dirty(get, never):Bool;
@@ -41,62 +35,24 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	/** Records one field dependency on a shared observable object source. */
 	public function trackField(source:ReactiveSource, fieldBit:Int):Void {
 		if (source == null) throw "Reactive dependencies require a source";
-		var dependencyId = source.dependencyId(fieldBit);
+		source.checkFieldBit(fieldBit);
 		if (captureOnly) {
 			if (captureSources == null) captureSources = [];
 			if (captureFieldBits == null) captureFieldBits = [];
-			var priorStamp = getCaptureStamp(dependencyId);
-			if (priorStamp < 0) {
-				if (captureStampIds == null) captureStampIds = [];
-				captureStampIds.push(dependencyId);
-			}
-			if (priorStamp != captureStamp) {
-				setCaptureStamp(dependencyId, captureStamp);
-				captureSources.push(source);
-				captureFieldBits.push(fieldBit);
-			}
+			for (index in captureSliceStart...captureSources.length)
+				if (haxeon.Identity.same(captureSources[index], source) && captureFieldBits[index] == fieldBit) return;
+			captureSources.push(source);
+			captureFieldBits.push(fieldBit);
 			return;
 		}
-		var edge = findEdge(source, fieldBit);
+		var edge = source.findReader(this, fieldBit);
 		if (edge == null) {
 			ReactiveRuntime.claimSubscriptionOwner(source, fieldBit);
 			edge = new ReactiveEdge(source, this, fieldBit);
-			if (edgesBySource == null) edgesBySource = new Map();
-			var key = haxe.Int64.toInt(dependencyId);
-			if (edgesBySource.get(key) == null) edgesBySource.set(key, edge);
 			linkReader(edge);
 			source.subscribe(edge);
 		}
 		edge.stamp = runStamp;
-	}
-
-	function findEdge(source:ReactiveSource, fieldBit:Int):Null<ReactiveEdge> {
-		if (edgesBySource == null) return null;
-		var edge = edgesBySource.get(haxe.Int64.toInt(source.dependencyId(fieldBit)));
-		if (edge == null) return null;
-		if (edge.source == source && edge.fieldBit == fieldBit) return edge;
-		// The low 32 bits are only a map hash; distinct 64-bit IDs can collide.
-		edge = readerHead;
-		while (edge != null) {
-			if (edge.source == source && edge.fieldBit == fieldBit) return edge;
-			edge = edge.readerNext;
-		}
-		return null;
-	}
-
-	/** Retain a representative when another live edge has the same low-word key. */
-	function removeEdgeKey(edge:ReactiveEdge):Void {
-		var key = haxe.Int64.toInt(edge.source.dependencyId(edge.fieldBit));
-		if (edgesBySource.get(key) != edge) return;
-		var other = readerHead;
-		while (other != null) {
-			if (haxe.Int64.toInt(other.source.dependencyId(other.fieldBit)) == key) {
-				edgesBySource.set(key, other);
-				return;
-			}
-			other = other.readerNext;
-		}
-		edgesBySource.remove(key);
 	}
 
 	function linkReader(edge:ReactiveEdge):Void {
@@ -113,7 +69,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		var marker = pendingCount();
 		// Each retained computation needs its own slice even when a sibling read
 		// the same source earlier in this frame. Keep deduplication within a slice.
-		advanceCaptureStamp();
+		captureSliceStart = marker;
 		return marker;
 	}
 
@@ -141,7 +97,6 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			if (edge.stamp != runStamp) {
 				edge.source.unsubscribe(edge);
 				unlinkReader(edge);
-				removeEdgeKey(edge);
 			} else {
 				edge.source.ensureCurrent();
 				edge.seenVersion = edge.source.versionAt(edge.fieldBit);
@@ -159,7 +114,6 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			if (edge.stamp != runStamp) {
 				edge.source.unsubscribe(edge);
 				unlinkReader(edge);
-				removeEdgeKey(edge);
 			} else edge.seenVersion = edge.source.versionAt(edge.fieldBit);
 			edge = next;
 		}
@@ -252,161 +206,14 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		if (captureSources != null) {
 			captureSources.resize(marker < 0 ? 0 : marker > captureSources.length ? captureSources.length : marker);
 			captureFieldBits.resize(captureSources.length);
-		}
-		advanceCaptureStamp();
+			captureSliceStart = captureSources.length;
+		} else captureSliceStart = 0;
 	}
 
 	public function clearPending():Void {
-		sweepCaptureStamps();
 		if (captureSources != null) captureSources.resize(0);
 		if (captureFieldBits != null) captureFieldBits.resize(0);
-		advanceCaptureStamp();
-	}
-
-	function advanceCaptureStamp():Void {
-		if (captureStamp == MaxStamp) {
-			clearCaptureStamps();
-			captureStamp = 1;
-			if (captureSources != null) for (index in 0...captureSources.length) {
-				var source = captureSources[index], dependencyId = source.dependencyId(captureFieldBits[index]);
-				if (getCaptureStamp(dependencyId) < 0)
-					captureStampIds.push(dependencyId);
-				setCaptureStamp(dependencyId, captureStamp);
-			}
-		} else
-			captureStamp++;
-	}
-
-	function clearCaptureStamps():Void {
-		if (captureStampIds != null) {
-			for (id in captureStampIds) removeCaptureStamp(id);
-			captureStampIds.resize(0);
-		}
-	}
-
-	/** Retain entries for sources still in this capture so the next frame reuses their table slots. */
-	function sweepCaptureStamps():Void {
-		if (captureStampIds == null) return;
-		if (captureSources != null) for (index in 0...captureSources.length)
-			setCaptureStamp(captureSources[index].dependencyId(captureFieldBits[index]), 0);
-		var write = 0;
-		for (id in captureStampIds) {
-			if (getCaptureStamp(id) == 0)
-				captureStampIds[write++] = id;
-			else
-				removeCaptureStamp(id);
-		}
-		captureStampIds.resize(write);
-	}
-
-	/** Open-addressed integer stamps avoid one HashLink map node per source on every frame. */
-	function getCaptureStamp(id:haxe.Int64):Int {
-		if (captureStampKeys == null) return -1;
-		var mask = captureStampKeys.length - 1;
-		var index = captureStampHash(id) & mask;
-		for (_ in 0...captureStampKeys.length) {
-			var key = captureStampKeys[index];
-			if (key == 0) return -1;
-			if (key == id) return captureStampValues[index];
-			index = (index + 1) & mask;
-		}
-		return -1;
-	}
-
-	function setCaptureStamp(id:haxe.Int64, stamp:Int):Void {
-		if (captureStampKeys == null) resizeCaptureStamps(16);
-		var existing = captureStampIndex(id);
-		if (existing >= 0) {
-			captureStampValues[existing] = stamp;
-			return;
-		}
-		if ((captureStampCount + 1) * 3 > captureStampKeys.length * 2)
-			resizeCaptureStamps(captureStampKeys.length * 2);
-		else if ((captureStampUsed + 1) * 3 > captureStampKeys.length * 2)
-			resizeCaptureStamps(captureStampKeys.length);
-		var mask = captureStampKeys.length - 1;
-		var index = captureStampHash(id) & mask;
-		var deleted = -1;
-		for (_ in 0...captureStampKeys.length) {
-			var key = captureStampKeys[index];
-			if (key == -1 && deleted < 0)
-				deleted = index;
-			if (key == 0) {
-				var target = deleted < 0 ? index : deleted;
-				captureStampKeys[target] = id;
-				captureStampValues[target] = stamp;
-				captureStampCount++;
-				if (deleted < 0) captureStampUsed++;
-				return;
-			}
-			index = (index + 1) & mask;
-		}
-		if (deleted >= 0) {
-			captureStampKeys[deleted] = id;
-			captureStampValues[deleted] = stamp;
-			captureStampCount++;
-			return;
-		}
-		resizeCaptureStamps(captureStampKeys.length * 2);
-		setCaptureStamp(id, stamp);
-	}
-
-	function removeCaptureStamp(id:haxe.Int64):Void {
-		if (captureStampKeys == null) return;
-		var mask = captureStampKeys.length - 1;
-		var index = captureStampHash(id) & mask;
-		for (_ in 0...captureStampKeys.length) {
-			var key = captureStampKeys[index];
-			if (key == 0) return;
-			if (key == id) {
-				captureStampKeys[index] = -1;
-				captureStampValues[index] = 0;
-				captureStampCount--;
-				return;
-			}
-			index = (index + 1) & mask;
-		}
-	}
-
-	function captureStampIndex(id:haxe.Int64):Int {
-		var mask = captureStampKeys.length - 1;
-		var index = captureStampHash(id) & mask;
-		for (_ in 0...captureStampKeys.length) {
-			var key = captureStampKeys[index];
-			if (key == 0) return -1;
-			if (key == id) return index;
-			index = (index + 1) & mask;
-		}
-		return -1;
-	}
-
-	function resizeCaptureStamps(capacity:Int):Void {
-		var oldKeys = captureStampKeys;
-		var oldValues = captureStampValues;
-		captureStampKeys = [];
-		captureStampValues = [];
-		captureStampKeys.resize(capacity);
-		captureStampValues.resize(capacity);
-		for (index in 0...capacity) {
-			captureStampKeys[index] = 0;
-			captureStampValues[index] = 0;
-		}
-		captureStampCount = 0;
-		captureStampUsed = 0;
-		if (oldKeys != null) for (index in 0...oldKeys.length) {
-			var id = oldKeys[index];
-			if (id > 0) setCaptureStamp(id, oldValues[index]);
-		}
-	}
-
-	static inline function captureStampHash(id:haxe.Int64):Int {
-		var hash = haxe.Int64.toInt(id ^ (id >>> 32));
-		hash ^= hash >>> 16;
-		hash *= 0x7feb352d;
-		hash ^= hash >>> 15;
-		hash *= 0x846ca68b;
-		hash ^= hash >>> 16;
-		return hash;
+		captureSliceStart = 0;
 	}
 
 	public function appendDependenciesTo(target:ReactiveDependencySet):Void {
@@ -434,7 +241,6 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		readerHead = null;
 		readerTail = null;
 		edgeCount = 0;
-		edgesBySource = null;
 		status = Dirty;
 	}
 }

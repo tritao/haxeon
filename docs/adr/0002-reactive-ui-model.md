@@ -62,11 +62,30 @@ values changes, and updates the existing nodes. This record makes that idea the 
    one-field observable. Signal and observable-field writes always store their value; change detection uses the type's
    declared `Equatable` conformance or identity for nonconforming classes to decide whether to invalidate readers.
 
-   Dependency IDs reserve 64-bit positive integer ranges for each source, atomically on multithreaded HashLink. The
-   allocator wraps only after the 63-bit positive range is used; it does not fail after the former 32-bit limit. The
-   subscriber index uses the low word as a hash and checks source identity and field on collision. Observable sources reserve only the concrete runtime class’s field count. A generated virtual method supplies that
-   count when the source is created, including when the first read uses a base-class reference; incremental structural
-   edits invalidate dependent field layouts. [Measured reservation rates](../REACTIVE_ID_RESERVATIONS.md) show why the former limit was practical to hit.
+   Dependency edges are deduplicated by source and reader identity plus field bit. A subscribing reader finds an
+   existing edge in the source's intrusive list; a capture-only reader checks the current capture slice. This needs no
+   global IDs, native counter or subscriber index. Observable sources retain the concrete runtime class's field count
+   for field-bit validation. A generated virtual method supplies that count on the first tracked read, even through a
+   base-class reference; incremental structural edits invalidate dependent field layouts.
+
+   Against Haxeon `9c1750fb`, three selection-stress census pairs fell from 342,089–342,091 allocations to
+   340,909–340,910; interaction fell from 533,607 to 533,526. Nine alternating action pairs reported
+   hierarchy-to-sensors at 112.6 → 114.6 KiB and console-to-telemetry at 72.5 → 74.5 KiB. Exact-window allocation
+   censuses, however, matched on all 29 warm actions for both object counts and bytes: hierarchy-to-sensors had 1,661
+   objects / 115,200 bytes on 28 actions and 1,705 objects / 118,456 bytes on the remaining action. Console-to-telemetry
+   had 1,154 objects / 75,864 bytes on 28 actions and 1,210 objects / 80,376 bytes on the remaining action. Totals were
+   48,213 objects / 3,344,056 bytes and 33,522 objects / 2,204,568 bytes respectively, with identical types.
+
+   The reported 2 KiB step is refill accounting, not a growing capture scan buffer. A scratch HashLink trace with the
+   fast allocator enabled showed that `Gc.totalAllocated()` charges an entire thread-local run on refill
+   (`GC_TLAB_RUN` is 2,048 bytes). In 29 warm hierarchy-to-sensors actions, the original identity prototype shifted
+   404 to 425 refills; 32-byte array slots accounted for 65 to 89 refills while other size classes moved in both
+   directions. Triggering sites included `RenderNode.add`, `LayoutNode.add`, layout measurement, event handlers and
+   docking code. Exact per-action censuses count the program's objects and bytes with that fast path disabled; the
+   refill-based KiB results remain recorded above and the editor budgets are unchanged.
+   Three paired 500-cycle RSS runs had median windows of 30.31 / 3.75 / 0.78 / 4.84 MiB for IDs and
+   30.16 / 3.75 / 0.78 / 4.84 MiB for identity. Wasm GC Showcase counts matched in the full, static, text-heavy
+   and editing scenes (4,440 / 4,440 / 4,440 / 8,724 objects).
 
    The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
    and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those
@@ -81,8 +100,8 @@ values changes, and updates the existing nodes. This record makes that idea the 
    run. A flush runs every queued effect, then rethrows the first error and reports the number of additional failures in
    `ReactiveRuntime.lastFlushSuppressedErrors`. Disposing a failed effect removes its subscriptions, and a rejected
    off-thread subscription never queues work on the owner graph. Dependency edges are intrusive doubly linked nodes
-   shared by the source and reader, looked up by stable source ID and reused on each run. A per-run
-   stamp deduplicates reads; there is no observer array on every source and no `indexOf` scan in tracking or
+   shared by the source and reader, found by identity and field and reused on each run. A per-run
+   stamp identifies edges reached by the latest computation; there is no observer array on every source or global ID in
    subscribe/unsubscribe. Observable changes mark only the matching subscriber edges stale; those marks replace a
    separately allocated per-object field-version array. The single-owner effect queue retains its cursor and initial
    capacity, so a successful write-and-flush does not allocate after subscription. This also avoids allocating the

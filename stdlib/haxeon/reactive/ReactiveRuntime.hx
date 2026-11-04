@@ -55,7 +55,7 @@ class ReactiveRuntime {
 	@:allow(haxeon.reactive.ReactiveDependencySet)
 	static function claimSubscriptionOwner(source:ReactiveSource, fieldBit:Int):Void {
 		if (!isOwnerThread())
-			throw 'Cannot subscribe to reactive source ${source.reactiveId} field $fieldBit from a non-owner thread';
+			throw 'Cannot subscribe to reactive field $fieldBit from a non-owner thread';
 	}
 
 	static function isOwnerThread():Bool {
@@ -146,7 +146,7 @@ class ReactiveRuntime {
 	public static function assertSignalWritable(source:ReactiveSource, ?operation:String):Void {
 		if (!source.hasFieldReaders(0)) return;
 		if (!isOwnerThread())
-			throw 'Cannot write Signal.value of reactive source ${source.reactiveId} from a non-owner thread';
+			throw "Cannot write Signal.value from a non-owner thread";
 		if (isTracking())
 			throw "Cannot write " + (operation == null ? "a signal, State or Observable field" : operation) +
 				" inside a reactive tracking scope";

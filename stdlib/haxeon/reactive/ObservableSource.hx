@@ -4,7 +4,7 @@ package haxeon.reactive;
 class ObservableSource extends ReactiveSource {
 	final fieldLimit:Int;
 	public function new(fieldCount:Int) {
-		super(fieldCount);
+		super();
 		fieldLimit = fieldCount;
 	}
 
@@ -18,10 +18,8 @@ class ObservableSource extends ReactiveSource {
 		invalidateFieldReaders(fieldBit);
 	}
 
-	public override function dependencyId(fieldBit:Int):haxe.Int64 {
-		checkRange(fieldBit);
-		return reactiveId + haxe.Int64.ofInt(fieldBit);
-	}
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	override function checkFieldBit(fieldBit:Int):Void checkRange(fieldBit);
 
 	public override function versionAt(fieldBit:Int):Int {
 		checkRange(fieldBit);

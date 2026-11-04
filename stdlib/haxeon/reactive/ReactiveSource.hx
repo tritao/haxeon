@@ -2,34 +2,26 @@ package haxeon.reactive;
 
 /** A versioned source with intrusive links to the computations that read it. */
 class ReactiveSource {
-	#if wasm
-	static var nextId:haxe.Int64 = haxe.Int64.ofInt(0);
-	#end
-	public final reactiveId:haxe.Int64;
-	final reservedIds:Int;
 	public var version(default, null):Int = 0;
 	var observerHead:ReactiveEdge;
 
-	public function new(reservedIds:Int = 1) {
-		if (reservedIds < 1)
-			throw 'A reactive source must reserve at least one dependency id, got $reservedIds';
-		#if wasm
-		var count = haxe.Int64.ofInt(reservedIds);
-		var max = haxe.Int64.make(0x7fffffff, -1);
-		if (nextId > max - count) nextId = haxe.Int64.ofInt(0);
-		reactiveId = nextId + haxe.Int64.ofInt(1);
-		nextId = nextId + count;
-		#else
-		reactiveId = reserveReactiveIds(reservedIds);
-		#end
-		this.reservedIds = reservedIds;
+	public function new() {}
+
+	/** Ordinary reactive sources have one dependency; Observable sources have field bits. */
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	function checkFieldBit(fieldBit:Int):Void {
+		if (fieldBit != 0) throw 'Reactive dependency bit $fieldBit is outside the source';
 	}
 
-	/** Identity used by the reader's reusable edge table. Observable objects reserve one ID per field bit. */
-	public function dependencyId(fieldBit:Int):haxe.Int64 {
-		if (fieldBit < 0 || fieldBit >= reservedIds)
-			throw 'Reactive dependency bit $fieldBit is outside the reserved range of $reservedIds';
-		return reactiveId;
+	/** Find an existing reader without a global source ID or an allocation. */
+	@:allow(haxeon.reactive.ReactiveDependencySet)
+	function findReader(reader:ReactiveDependencySet, fieldBit:Int):Null<ReactiveEdge> {
+		var edge = observerHead;
+		while (edge != null) {
+			if (haxeon.Identity.same(edge.reader, reader) && edge.fieldBit == fieldBit) return edge;
+			edge = edge.sourceNext;
+		}
+		return null;
 	}
 
 	/** Version of the dependency represented by one edge. Ordinary sources have a single version. */
@@ -101,8 +93,3 @@ class ReactiveSource {
 		return false;
 	}
 }
-
-#if !wasm
-@:hlNative("haxeon_runtime", "__reactive_reserve_ids")
-extern function reserveReactiveIds(count:Int):haxe.Int64;
-#end

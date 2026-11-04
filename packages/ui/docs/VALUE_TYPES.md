@@ -124,8 +124,12 @@ census mode measured exact per-action bytes before and after conversion:
 | hover other | 10,400 | 10,400 |
 | type backspace | 17,104 | 17,104 |
 
-Each action dirtied all 100 frames in both runs. The census disables the allocation-buffer refill accounting that
-causes `Gc.totalAllocated` to round slightly differently; no action allocated more bytes after conversion.
+Each action dirtied all 100 frames in both runs. HashLink's per-action `Gc.totalAllocated` counter charges whole
+thread-local allocation-buffer refills (up to 2,048 bytes) to whichever action triggers them. Its KiB medians are
+therefore quantized by refill boundaries, even when the action's exact object and byte counts do not increase. The
+census disables that fast path and counts the actual allocations; no action allocated more bytes after conversion.
+Editor budgets currently use the refill-based counter and can move to exact per-action byte counts when an exact counter
+is available without changing normal allocation behavior.
 
 The HashLink selection-stress census fell from 408,765 allocations across 830 types to 403,157 across 832 types.
 `LayoutStyle` stayed at 10,165 objects and 3,496,760 bytes. `TextStyle` and `ParagraphStyle` class allocations
@@ -453,12 +457,15 @@ in byte buffers. The 500-cycle RSS window medians were 30.31 / 3.59 / 0.78 / 5.0
 Showcase scenario matched at 4,440 / 4,440 / 4,440 / 8,724 objects. Repeated captured reads and effect flushes allocate
 zero times on HashLink for 1,024 updates and on both Wasm targets for 8 and 1,024 updates, with inlining on and off.
 
-Before choosing 64-bit IDs, an identity-based prototype searched source edges and the current capture slice without a
-global ID. It reduced the selection census by about 1,180 allocations, but hierarchy-to-sensors increased by 2.0 KiB in
-two of three alternating pairs (the third was unchanged), so it did not meet the per-action no-regression rule. A first
-64-bit version using a generic 64-bit map added about 1,160 allocations to the selection census; retaining a 32-bit
-hash index with collision-checked 64-bit IDs removed that cost. The measured 32-bit reservation rates by editor action
-are recorded in [Reactive ID reservation measurements](../../../docs/REACTIVE_ID_RESERVATIONS.md).
+An identity-based follow-up replaced the 64-bit dependency IDs and subscriber index. On Haxeon `9c1750fb`, three
+selection-stress census pairs fell from 342,089–342,091 to 340,909–340,910 allocations. Nine refill-based editor
+pairs reported hierarchy-to-sensors at 112.6 → 114.6 KiB and console-to-telemetry at 72.5 → 74.5 KiB. Exact censuses
+restricted to each action found identical object and byte counts in every one of 29 warm actions on both trees:
+1,661 / 115,200 for hierarchy-to-sensors and 1,154 / 75,864 for console-to-telemetry on 28 actions, with matching
+larger actions of 1,705 / 118,456 and 1,210 / 80,376 respectively. A fast-path trace identified the KiB steps as
+shifted thread-local allocation-buffer refills;
+see [ADR 0002](../../../docs/adr/0002-reactive-ui-model.md) for the measured sites and totals. The editor budget
+implementation and ceilings were not changed.
 
 Retained updater ownership was compared on outer revision `3dcdddb4d` in nine alternating HashLink pairs, building both
 modules from that same outer revision. All per-action allocation medians (KiB) matched: 112.6 / 80.1 / 74.5 / 92.9 for

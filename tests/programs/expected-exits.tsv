@@ -497,8 +497,8 @@ reactive-derived-cycle	42
 native-reference-identity	42
 reactive-effect-allocations	42
 reactive-capture-allocations	42
-reactive-dependency-id-wide	42
-reactive-dependency-id-threads	42
+reactive-dependency-identity	42
+reactive-source-threads	42
 identity-class	42
 defer-cleanup	42
 scoped-cleanup	42
