@@ -185,13 +185,8 @@ class RpcClient {
 		if (polling)
 			throw "RPC client poll is not reentrant";
 		polling = true;
-		try
-			pollInternal(messageBudget, bytes)
-		catch (error:Dynamic) {
-			polling = false;
-			throw error;
-		}
-		polling = false;
+		defer polling = false;
+		pollInternal(messageBudget, bytes);
 	}
 
 	function pollInternal(messageBudget:Int, byteBudget:Int):Void {

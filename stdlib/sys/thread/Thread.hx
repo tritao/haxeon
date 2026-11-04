@@ -11,13 +11,8 @@ class Thread {
 
 	public static function create(call:Void->Void):Thread {
 		var previous = ThreadState.enter();
-		try {
-			call();
-		} catch (error:Dynamic) {
-			ThreadState.leave(previous);
-			throw error;
-		}
-		ThreadState.leave(previous);
+		defer ThreadState.leave(previous);
+		call();
 		return new Thread();
 	}
 }
