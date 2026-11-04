@@ -92,6 +92,11 @@ example when iterating the values of a nested map, or after `copy`/`slice` of a 
 collections the same specialized, typed storage so the values are never boxed, then delete those boundary conversions in
 the same change. Belongs with the flat structs and generic specialization work.
 
+The same change covers scalars. Generic code specializes for scalar type arguments (`Int`, `Float`, `Bool`, `Int64`)
+as it does for structs and raw pointers, so `Array<Int64>` or `Signal<Int64>` does not box each value. `Null<T>` of a
+scalar uses the inline presence-flag layout of `Null<S>` rather than a boxed primitive. `Int64` arithmetic lowers to
+native 64-bit instructions on HashLink rather than runtime calls.
+
 ### Optional flat values in native layout
 
 `Null<S>` is not Flat today, so an optional value cannot appear in an FFI record, `RawPtr`/`NativeSpan` memory or a
@@ -140,7 +145,7 @@ Check each against what Haxeon already supports before designing it.
    value equality and remain boxed, and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
-   conversions.
+   conversions; generic specialization and inline `Null<T>` for scalars, and native `Int64` operations.
 7. Scoped cleanup (`defer`, `Disposable` scoped bindings).
 8. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
