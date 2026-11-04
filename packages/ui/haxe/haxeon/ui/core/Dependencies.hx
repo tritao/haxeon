@@ -17,6 +17,10 @@ class Dependencies extends ReactiveDependencySet {
 		invalidationBuild = build;
 	}
 
+	/** A reused dependency record belongs to its most recent updater. */
+	public function ownedBy(build:SelfUpdatingBuild):Bool
+		return invalidationBuild == build;
+
 	/** Copies a frame-local slice into this retained record, reusing its subscriptions. */
 	public function replaceSlice(source:Dependencies, marker:Int):Void {
 		if (captureOnly || source == this)

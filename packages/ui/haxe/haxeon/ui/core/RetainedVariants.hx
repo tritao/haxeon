@@ -90,6 +90,7 @@ private class RetainedVariantsCache {
 		if (previous != null && previous != entry) {
 			if (previous.root != entry.root) previous.root.detach();
 			if (previous.observed != entry.observed) previous.observed.dispose();
+			previous.interactions.dispose();
 		}
 		entries.set(key, entry);
 		recent.remove(key); recent.push(key); trim();
@@ -101,7 +102,7 @@ private class RetainedVariantsCache {
 				var entry = entries.get(oldest);
 				entries.remove(oldest);
 				// The root may still be the submitted prior for this frame; only release the cache's subscriptions now.
-				if (entry != null) entry.observed.dispose();
+				if (entry != null) { entry.observed.dispose(); entry.interactions.dispose(); }
 			}
 		}
 	}
@@ -178,6 +179,7 @@ private class RetainedVariantEntry {
 
 	public function dispose():Void {
 		root.detach();
+		interactions.dispose();
 		observed.dispose();
 	}
 }

@@ -233,6 +233,9 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    maybe-stale propagation, version-checked pull recomputation and per-submit effect batching. Equal derived outputs do
    not advance their source version, so downstream effects and retained readers do not rerun. Intrusive source-reader
    edges are reused across runs and removed when a dependency disappears; frame capture uses reusable dependency logs.
+   A self-updating build owns its subscriptions while registered or held by a retained interaction snapshot. Pruning
+   an unmounted build releases the registry's ownership; the last owner disposes its subscriptions and child snapshots.
+   Cached alternatives keep their subscriptions for validation and transfer their invalidation owner when rearmed.
    `State` is a signal handle. Every signal and Observable write stores its supplied value; equality decides only whether
    readers are invalidated. Floating-point change detection treats NaN as equal to NaN and the two zero signs as equal,
    while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate

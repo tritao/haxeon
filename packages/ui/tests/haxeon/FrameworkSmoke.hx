@@ -928,6 +928,8 @@ class FrameworkSmoke {
 			return 306;
 		if (!signalsTrackOnlyReaders())
 			return 307;
+		if (ReactivePruneSmoke.run() != 42)
+			throw "Pruned reactive updater ownership failed";
 		if (!observableFieldsTrackIndependently())
 			return 310;
 		if (!reactiveValuesRecomputeWithoutGlitches())

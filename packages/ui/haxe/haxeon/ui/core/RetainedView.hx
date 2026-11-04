@@ -64,8 +64,11 @@ private class RetainedViewCache {
 
 	public function replace(keyA:Int, keyB:Int, root:RenderNode, usedStates:Null<Array<Int>>,
 			interactions:InteractionStateSnapshot, observed:Dependencies, previousStates:Null<Array<Int>>):Void {
-		if (entry != null && entry.root != root)
-			entry.root.detach();
+		var previous = entry;
+		if (previous != null) {
+			if (previous.root != root) previous.root.detach();
+			previous.interactions.dispose();
+		}
 		entry = new RetainedViewEntry(keyA, keyB, root, usedStates, interactions, observed, previousStates);
 	}
 
@@ -115,6 +118,7 @@ private class RetainedViewEntry {
 
 	public function dispose():Void {
 		root.detach();
+		interactions.dispose();
 		observed.dispose();
 	}
 }

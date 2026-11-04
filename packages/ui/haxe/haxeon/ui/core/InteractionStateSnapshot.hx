@@ -36,6 +36,7 @@ class InteractionStateSnapshot {
 			if (build != null) {
 				if (updatingBuilds.length == 0) updatingBuilds = [];
 				updatingBuilds.push(build);
+				build.retainSnapshot();
 				if (updatingBuildRevisions != null) updatingBuildRevisions.push(build.buildRevision);
 				// Callers can append independently updating views after the owner's build was captured.
 				var built = build.built;
@@ -103,6 +104,7 @@ class InteractionStateSnapshot {
 	}
 
 	public function matches(context:BuildContext, register:Bool = true, dependenciesChecked:Bool = false):Bool {
+		if (ids == null) return false;
 		if (!dependenciesChecked && statesChanged(context)) return false;
 		for (index in 0...ids.length)
 			if ((context.interactionStates.get(ids[index]) & masks[index]) != values[index])
@@ -114,6 +116,14 @@ class InteractionStateSnapshot {
 		}
 		if (register) rearmValidated(context);
 		return true;
+	}
+
+	/** Releases the cache's ownership without disturbing updaters still mounted or cached elsewhere. */
+	public function dispose():Void {
+		if (ids == null) return;
+		ids = null;
+		for (entry in updatingBuilds) entry.releaseSnapshot();
+		updatingBuilds = NoBuilds;
 	}
 
 	@:allow(haxeon.ui.core.BuildContext)

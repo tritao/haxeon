@@ -459,3 +459,14 @@ two of three alternating pairs (the third was unchanged), so it did not meet the
 64-bit version using a generic 64-bit map added about 1,160 allocations to the selection census; retaining a 32-bit
 hash index with collision-checked 64-bit IDs removed that cost. The measured 32-bit reservation rates by editor action
 are recorded in [Reactive ID reservation measurements](../../../docs/REACTIVE_ID_RESERVATIONS.md).
+
+Retained updater ownership was compared on outer revision `3dcdddb4d` in nine alternating HashLink pairs, building both
+modules from that same outer revision. All per-action allocation medians (KiB) matched: 112.6 / 80.1 / 74.5 / 92.9 for
+tab switches, 0.5 / 0.5 / 10.0 / 12.4 / 13.6 for hover, 21.2 for scroll, 0.2 / 0.2 for idle and focused idle, and
+16.1 / 16.2 for type and backspace. Selection census medians were 342,091 / 342,091, with zero paired difference; a
+per-type pair differed only in byte buffers. The 500-cycle RSS window medians were 30.00 / 3.75 / 0.94 / 5.00 MiB and
+30.16 / 3.75 / 0.78 / 4.84 MiB, with paired median differences +0.16 / +0.15 / 0 / 0 MiB, within the same-binary
+variation recorded above. Nine full-scene and three pairs per other Wasm GC Showcase scenario matched at
+4,440 / 4,440 / 4,440 / 8,724 objects. The first ownership prototype added 879 captured cells and eight bytes per updater
+in a 30-cycle selection census; moving exception handling into a helper and packing the existing flags with the ownership
+count removed those costs.

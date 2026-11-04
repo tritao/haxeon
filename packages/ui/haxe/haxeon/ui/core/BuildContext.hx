@@ -428,19 +428,33 @@ class BuildContext {
 	public function selfUpdating(id:WidgetId, build:Void->RenderNode, buildsFromHover:Bool = true):RenderNode {
 		// Old entries can still belong to hidden caches; only their immutable state snapshots are reused.
 		var previous = selfUpdatingBuilds.get(id.value);
+		if (previous != null) previous.retainSnapshot();
 		var entry = new SelfUpdatingBuild(id, build, scope, styleParent, textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy());
 		entry.buildsFromHover = buildsFromHover;
 		entry.epoch = updatingEpoch;
 		registerSelfUpdatingBuild(id.value, entry);
-		var root = buildUpdating(entry, previous == null ? null : previous.dependencies);
-		if (root.id.value != id.value)
-			throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${id.value}';
+		var root = buildRegistered(entry, previous);
 		// A retained alternative may still hold the old registration. A complete rebuild also changes its snapshot.
-		if (previous != null) previous.buildRevision++;
+		if (previous != null) { previous.buildRevision++; previous.releaseSnapshot(); }
 		entry.root = root;
 		// Taken now, before the caller touches the node: later rebuilds are applied as the difference from this.
 		entry.built = root.snapshotBuilt();
 		return root;
+	}
+
+	/** Restore the previous registration when a replacement cannot be built. */
+	function buildRegistered(entry:SelfUpdatingBuild, previous:Null<SelfUpdatingBuild>):RenderNode {
+		try return buildUpdating(entry, previous == null ? null : previous.dependencies) catch (error:Dynamic) {
+			if (previous != null) {
+				registerSelfUpdatingBuild(entry.idValue, previous);
+				previous.releaseSnapshot();
+			} else {
+				selfUpdatingBuilds.remove(entry.idValue);
+				selfUpdatingIds.remove(entry.idValue);
+				entry.detachRegistration();
+			}
+			throw error;
+		}
 	}
 
 	/**
@@ -552,6 +566,10 @@ class BuildContext {
 	function rearmValidated(id:WidgetId, entry:SelfUpdatingBuild):Void {
 		var dependencies = entry.dependencies;
 		if (dependencies != null && dependencies.children != null) dependencies.children.rearmValidated(this);
+		// A rebuilt alternative may have reused this record while the cached updater was hidden.
+		// Transfer the subscription before retiring its current registration.
+		if (dependencies != null && dependencies.observed != null)
+			dependencies.observed.setInvalidationOwner(this, entry);
 		if (selfUpdatingBuilds.get(id.value) != entry) registerSelfUpdatingBuild(id.value, entry);
 		else updatingRegistrations++;
 		retainUpdatingState(entry);
@@ -645,6 +663,8 @@ class BuildContext {
 		var previous = entry.dependencies == null ? prior : entry.dependencies;
 		try {
 			var root = trackReads(entry.build);
+			if (root.id.value != entry.idValue)
+				throw 'Self-updating root ID ${root.id.value} differs from its registered ID ${entry.idValue}';
 			entry.buildRevision++;
 			var usedStates = stateUsageMarker() == stateMark ? null : stateIdsUsedSince(stateMark, previous == null ? null : previous.stateIds);
 			var hasReads = capture.pendingCount() != dependencyMark;
@@ -661,7 +681,9 @@ class BuildContext {
 				}
 				dependencies.stateIds = usedStates;
 				dependencies.observed = reads;
+				var oldChildren = dependencies.children;
 				dependencies.children = children;
+				if (oldChildren != null && oldChildren != children) oldChildren.dispose();
 				dependencies.allStateIds = allStates;
 				entry.dependencies = dependencies;
 			}
@@ -773,8 +795,11 @@ class BuildContext {
 		patchPriors.clear();
 
 	function registerSelfUpdatingBuild(id:Int, entry:SelfUpdatingBuild):Void {
-		if (!selfUpdatingBuilds.exists(id)) selfUpdatingIds.push(id);
+		var previous = selfUpdatingBuilds.get(id);
+		if (previous == null) selfUpdatingIds.push(id);
+		else if (previous != entry) previous.detachRegistration();
 		selfUpdatingBuilds.set(id, entry);
+		entry.attachRegistration();
 		updatingRegistrations++;
 	}
 
@@ -800,6 +825,7 @@ class BuildContext {
 			entry.pending = false;
 			// The node may still be held by a retained cache, which registers the build again on reuse (rearm).
 			selfUpdatingBuilds.remove(id);
+			entry.detachRegistration();
 			selfUpdatingIds[index] = selfUpdatingIds[selfUpdatingIds.length - 1];
 			selfUpdatingIds.pop();
 			removed = true;
@@ -852,12 +878,7 @@ class BuildContext {
 		retainedEditPriors.resize(0);
 		// Builds that retained caches still hold were made by the code being released; they must not come back.
 		updatingEpoch++;
-		for (entry in selfUpdatingBuilds) {
-			if (entry.dependencies != null && entry.dependencies.observed != null)
-				entry.dependencies.observed.dispose();
-			entry.root = null;
-			entry.pending = false;
-		}
+		for (entry in selfUpdatingBuilds) entry.releaseAll();
 		selfUpdatingBuilds.clear();
 		selfUpdatingIds.resize(0);
 		pendingPatches = [];
@@ -870,9 +891,7 @@ class BuildContext {
 		clearCommandFlags();
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
-		for (entry in selfUpdatingBuilds)
-			if (entry.dependencies != null && entry.dependencies.observed != null)
-				entry.dependencies.observed.dispose();
+		for (entry in selfUpdatingBuilds) entry.releaseAll();
 		rootDependencies.dispose();
 		selfUpdatingBuilds.clear();
 		selfUpdatingIds.resize(0);
@@ -1032,15 +1051,17 @@ class SelfUpdatingBuild {
 	public final textStyleStack:Array<ResolvedTextStyle>;
 	public var dependencies:Null<UpdatingDependencies>;
 	public var root:Null<RenderNode> = null;
-	public var pending:Bool = false;
-	public var reactivePending:Bool = false;
-	public var forcePending:Bool = false;
-	public var buildsFromHover:Bool = true;
+	public var pending(get, set):Bool;
+	public var reactivePending(get, set):Bool;
+	public var forcePending(get, set):Bool;
+	public var buildsFromHover(get, set):Bool;
 	public var epoch:Int = 0;
 	/** Advances for every completed build, including quiet in-place patches. */
 	public var buildRevision:Int = 0;
 	/** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
 	public var built:Null<BuiltNode> = null;
+	// Low bits hold the four flags and registry ownership; each retained snapshot contributes 32.
+	var ownership:Int = 8;
 
 	public function new(id:WidgetId, build:Void->RenderNode, scope:KeyScope, styleParent:Null<ComputedStyle>, textStyleStack:Array<ResolvedTextStyle>) {
 		this.idValue = id.value;
@@ -1048,6 +1069,66 @@ class SelfUpdatingBuild {
 		this.scope = scope;
 		this.styleParent = styleParent;
 		this.textStyleStack = textStyleStack;
+	}
+
+	public function retainSnapshot():Void {
+		if (ownership < 0) throw "Cannot retain a released updater";
+		if (ownership > 0x7fffffdf) throw "Too many retained snapshots for one updater";
+		ownership += 32;
+	}
+
+	public function releaseSnapshot():Void {
+		if (ownership < 0) return;
+		if (ownership < 32) throw "Updater snapshot ownership is unbalanced";
+		ownership -= 32;
+		if ((ownership & ~15) == 0) releaseAll();
+	}
+
+	public function attachRegistration():Void {
+		if (ownership < 0) throw "Cannot register a released updater";
+		ownership |= 16;
+	}
+
+	public function detachRegistration():Void {
+		if (ownership < 0) return;
+		ownership &= ~16;
+		if ((ownership & ~15) == 0) releaseAll();
+	}
+
+	inline function get_pending():Bool return (ownership & 1) != 0;
+	inline function set_pending(value:Bool):Bool {
+		if (value) ownership |= 1; else ownership &= ~1;
+		return value;
+	}
+	inline function get_reactivePending():Bool return (ownership & 2) != 0;
+	inline function set_reactivePending(value:Bool):Bool {
+		if (value) ownership |= 2; else ownership &= ~2;
+		return value;
+	}
+	inline function get_forcePending():Bool return (ownership & 4) != 0;
+	inline function set_forcePending(value:Bool):Bool {
+		if (value) ownership |= 4; else ownership &= ~4;
+		return value;
+	}
+	inline function get_buildsFromHover():Bool return (ownership & 8) != 0;
+	inline function set_buildsFromHover(value:Bool):Bool {
+		if (value) ownership |= 8; else ownership &= ~8;
+		return value;
+	}
+
+	/** Retained snapshots and the registry are the only owners of an updater's subscriptions. */
+	public function releaseAll():Void {
+		if (ownership < 0) return;
+		ownership = -16;
+		var current = dependencies;
+		dependencies = null;
+		if (current != null) {
+			if (current.observed != null && current.observed.ownedBy(this)) current.observed.dispose();
+			if (current.children != null) current.children.dispose();
+		}
+		root = null;
+		built = null;
+		pending = false;
 	}
 }
 

@@ -546,7 +546,7 @@ private class DockPanelCache {
 	/** Cached callbacks and drop targets belong to this model and interaction, even if another has the same revision. */
 	public function bind(nextModel:DockWorkspaceModel, nextInteraction:DockWorkspaceInteraction):Void {
 		if (model == nextModel && interaction == nextInteraction) return;
-		for (entry in entries) entry.observed.dispose();
+		for (entry in entries) { entry.observed.dispose(); entry.interactions.dispose(); }
 		entries.clear();
 		recent.resize(0);
 		model = nextModel;
@@ -569,6 +569,7 @@ private class DockPanelCache {
 		if (previous != null) {
 			if (previous.root != root) previous.root.detach();
 			if (previous.observed != observed) previous.observed.dispose();
+			previous.interactions.dispose();
 		}
 		if (maxEntries > 0) {
 			recent.remove(panelId);
@@ -579,7 +580,7 @@ private class DockPanelCache {
 				if (evicted != null) {
 					var old = entries.get(evicted);
 					entries.remove(evicted);
-					if (old != null) old.observed.dispose();
+					if (old != null) { old.observed.dispose(); old.interactions.dispose(); }
 				}
 			}
 		}
@@ -695,6 +696,7 @@ private class DockPanelCacheEntry {
 
 	public function dispose():Void {
 		root.detach();
+		interactions.dispose();
 		observed.dispose();
 	}
 }
