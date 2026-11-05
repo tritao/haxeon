@@ -62,7 +62,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(copy);
 		builder.localGet(copy);
-		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
+		builder.i32Const(module.runtimeTypeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		copyElementType(builder, copy, source);
 		builder.localGet(copy);
@@ -113,7 +113,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.i32Const(0);
@@ -287,7 +287,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
+		builder.i32Const(module.runtimeTypeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		copyElementType(builder, result, source);
 		builder.localGet(result);
@@ -355,7 +355,7 @@ class WasmLinearArrays {
 			I32Add,
 			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
 			LocalGet(4),
-			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
+			I32Const(module.runtimeTypeId(Array(Dyn))),
 			I32Store(0),
 			LocalGet(4),
 			LocalGet(0),
@@ -1112,7 +1112,7 @@ class WasmLinearArrays {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(removed);
 		builder.localGet(removed);
-		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
+		builder.i32Const(module.runtimeTypeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		copyElementType(builder, removed, array);
 		builder.localGet(removed);
@@ -1192,10 +1192,10 @@ class WasmLinearArrays {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmModuleSupport.typeId(Array(Dyn))),
+			I32Const(module.runtimeTypeId(Array(Dyn))),
 			I32Store(0),
 			LocalGet(1),
-			I32Const(WasmModuleSupport.typeId(allocatedElementType(name))),
+			I32Const(module.runtimeTypeId(allocatedElementType(name))),
 			I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
 			LocalGet(1),
 			LocalGet(0),

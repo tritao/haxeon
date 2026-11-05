@@ -36,6 +36,7 @@ typedef WasmEnumLayout = {
 /** One authoritative linear-memory layout for all managed Haxeon values. */
 class WasmLayout {
 	public final program:IrProgram;
+	public final runtimeTypeIds:WasmTypeIdPlan;
 
 	public static inline final HEADER_SIZE = 8;
 
@@ -114,8 +115,9 @@ class WasmLayout {
 	final logicalObjects:Map<String, IrObject>;
 	final valueLayout:WasmValueLayout;
 
-	public function new(program:IrProgram, ?logicalProgram:IrProgram) {
+	public function new(program:IrProgram, ?logicalProgram:IrProgram, ?runtimeTypeIds:WasmTypeIdPlan) {
 		this.program = program;
+		this.runtimeTypeIds = runtimeTypeIds == null ? WasmTypeIdPlan.forProgram(program) : runtimeTypeIds;
 		var logical = logicalProgram == null ? program : logicalProgram;
 		logicalObjects = [for (object in logical.objects) object.name => object];
 		valueLayout = new WasmValueLayout(logical);

@@ -124,7 +124,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructNewDefault(plan.objectType(typeName)),
 				LocalSet(destination),
 				LocalGet(destination),
-				I32Const(WasmModuleSupport.typeId(Obj(typeName))),
+				I32Const(plan.runtimeTypeIds.id(Obj(typeName))),
 				StructSet(typeIndex, 0)
 			];
 		var declaration:Null<compiler.ir.Ir.IrObject> = null;
@@ -445,7 +445,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			StructNewDefault(childType),
 			LocalSet(destination),
 			LocalGet(destination),
-			I32Const(WasmModuleSupport.typeId(Obj(childName))),
+			I32Const(plan.runtimeTypeIds.id(Obj(childName))),
 			StructSet(childType, 0),
 			LocalGet(destination),
 			LocalGet(objectLocal),
@@ -961,7 +961,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			if (exact)
 				for (descendant in descendants(object.name)) {
 					body.push(LocalGet(typeLocal));
-					body.push(I32Const(WasmModuleSupport.typeId(Obj(object.name))));
+					body.push(I32Const(plan.runtimeTypeIds.id(Obj(object.name))));
 					body.push(I32Eq);
 					body.push(If(null));
 					body.push(LocalGet(valueLocal));
@@ -992,7 +992,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				switch type {
 					case Function(_, _) if (!seen.exists(Std.string(type))):
 						seen.set(Std.string(type), true);
-						body = body.concat([LocalGet(typeLocal), I32Const(WasmModuleSupport.typeId(type)), I32Eq,
+						body = body.concat([LocalGet(typeLocal), I32Const(plan.runtimeTypeIds.id(type)), I32Eq,
 							LocalGet(valueLocal), RefTest({nullable:false, heap:Type(plan.closureTypeIndex)}), I32And, If(null),
 							LocalGet(valueLocal), RefCast({nullable:false, heap:Type(plan.closureTypeIndex)}),
 							StructGet(plan.closureTypeIndex, WasmGcTypePlan.CLOSURE_SIGNATURE_FIELD), I32Const(plan.closureSignatureId(type)),
@@ -1502,7 +1502,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, haxeType:IrType, wasmType:Int):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmModuleSupport.typeId(haxeType)));
+		body.push(I32Const(plan.runtimeTypeIds.id(haxeType)));
 		body.push(I32Eq);
 		body.push(If(null));
 		body.push(LocalGet(valueLocal));
@@ -1513,7 +1513,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendArrayTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmModuleSupport.typeId(Array(Dyn))));
+		body.push(I32Const(plan.runtimeTypeIds.id(Array(Dyn))));
 		body.push(I32Eq);
 		body.push(If(null));
 		var elements = plan.arrayElementTypes();
@@ -1529,7 +1529,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function appendInterfaceTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, interfaceName:String):Void {
 		body.push(LocalGet(typeLocal));
-		body.push(I32Const(WasmModuleSupport.typeId(Virtual(interfaceName))));
+		body.push(I32Const(plan.runtimeTypeIds.id(Virtual(interfaceName))));
 		body.push(I32Eq);
 		body.push(If(null));
 		body.push(I32Const(0));
@@ -2314,7 +2314,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(8),
 				I32Add,
 				ArrayNewDefault(plan.arrayStorageType(element)),
-				I32Const(WasmModuleSupport.typeId(element)),
+				I32Const(plan.runtimeTypeIds.id(element)),
 				StructNew(plan.arrayType(element)),
 				LocalSet(outputLocal)
 			];
@@ -3293,7 +3293,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			ArrayCopy(storageType, storageType),
 			LocalGet(resultLength),
 			LocalGet(storage),
-			I32Const(WasmModuleSupport.typeId(element)),
+			I32Const(plan.runtimeTypeIds.id(element)),
 			StructNew(wrapperType),
 			LocalSet(destination)
 		]);
@@ -3362,7 +3362,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				ArrayCopy(storageType, storageType),
 				LocalGet(totalLength),
 				LocalGet(storage),
-				I32Const(WasmModuleSupport.typeId(element)),
+				I32Const(plan.runtimeTypeIds.id(element)),
 				StructNew(wrapperType),
 				LocalSet(destination)
 			];
@@ -3899,7 +3899,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			LocalSet(removedStorage),
 			LocalGet(count),
 			LocalGet(removedStorage),
-			I32Const(WasmModuleSupport.typeId(resultElement)),
+			I32Const(plan.runtimeTypeIds.id(resultElement)),
 			StructNew(resultWrapperType),
 			LocalSet(removedArray),
 			LocalGet(removedStorage),
@@ -5189,7 +5189,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(0),
 				LocalGet(capacity),
 				ArrayNewDefault(arrayStorage),
-				I32Const(WasmModuleSupport.typeId(Bytes)),
+				I32Const(plan.runtimeTypeIds.id(Bytes)),
 				StructNew(arrayType),
 				LocalSet(result),
 				I32Const(0),

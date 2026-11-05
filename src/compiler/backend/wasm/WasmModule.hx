@@ -63,6 +63,14 @@ typedef WasmCustomSection = {
 
 /** In-memory Wasm module, kept separate from Haxeon lowering and byte encoding. */
 class WasmModule {
+	/** Runtime type IDs belong to this module, not to the compiler process. */
+	public var runtimeTypeIds:Null<WasmTypeIdPlan>;
+
+	public function runtimeTypeId(type:compiler.ir.Ir.IrType):Int {
+		if (runtimeTypeIds == null) throw "Wasm module has no runtime type ID plan";
+		return runtimeTypeIds.id(type);
+	}
+
 	/** Type-section entries. Indices address the flattened subtype sequence across groups. */
 	public final types:Array<WasmTypeGroup> = [];
 

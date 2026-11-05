@@ -47,7 +47,7 @@ class GenericStructOwnerMain {
 		var checkedSignatures = Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
 		var collisionFirst:IrType = Function([Obj("Cba95abb6358835f5")], Bytes),
 			collisionSecond:IrType = Function([Obj("Cefe1ade6cf91fbfe")], Bytes);
-		if (compiler.backend.wasm.WasmModuleSupport.typeId(collisionFirst) != compiler.backend.wasm.WasmModuleSupport.typeId(collisionSecond))
+		if (compiler.ir.IrTypeIdentity.id(collisionFirst) != compiler.ir.IrTypeIdentity.id(collisionSecond))
 			throw "closure signature collision fixture no longer collides";
 		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
 			throw "the interpreter did not distinguish reference-shaped closure signatures";

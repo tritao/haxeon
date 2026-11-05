@@ -586,8 +586,10 @@ class InlineValueLayoutMain {
 			scalarBuilder.call("__value_array_write_type", [a, zero, scalarBuilder.constInt(24), scalarBuilder.constInt(32), typeHandle], Void);
 			var readType = scalarBuilder.call("__value_array_read_type", [a, zero, scalarBuilder.constInt(24), scalarBuilder.constInt(32)], TypeRef);
 			scalarBuilder.call("__value_array_write_type", [a, zero, scalarBuilder.constInt(56), scalarBuilder.constInt(32), readType], Void);
-			var typeBits = scalarBuilder.call("__value_array_read_i32", [a, zero, scalarBuilder.constInt(56), scalarBuilder.constInt(32), scalarBuilder.constBool(false)], I32);
-			scalarChecks.push(scalarBuilder.equal(typeBits, scalarBuilder.constInt(compiler.backend.wasm.WasmModuleSupport.typeId(Obj("AllocationOwner")))));
+			var originalTypeBits = scalarBuilder.call("__value_array_read_i32", [a, zero, scalarBuilder.constInt(24), scalarBuilder.constInt(32), scalarBuilder.constBool(false)], I32),
+				copiedTypeBits = scalarBuilder.call("__value_array_read_i32", [a, zero, scalarBuilder.constInt(56), scalarBuilder.constInt(32), scalarBuilder.constBool(false)], I32);
+			scalarChecks.push(scalarBuilder.equal(scalarBuilder.equal(originalTypeBits, zero), scalarBuilder.constBool(false)));
+			scalarChecks.push(scalarBuilder.equal(copiedTypeBits, originalTypeBits));
 		}
 		var scalarFailure = scalarBuilder.createBlock();
 		for (check in scalarChecks) { var next = scalarBuilder.createBlock(); scalarBuilder.branch(check, next, scalarFailure); scalarBuilder.select(next); }

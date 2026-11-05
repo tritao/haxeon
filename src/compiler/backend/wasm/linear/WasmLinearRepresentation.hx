@@ -186,7 +186,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			]);
 		body = body.concat([
 			LocalGet(destination),
-			I32Const(WasmModuleSupport.typeId(Obj(typeName))),
+			I32Const(layout.runtimeTypeIds.id(Obj(typeName))),
 			I32Store(0)
 		]);
 		return body;
@@ -335,7 +335,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		for (index in 0...virtual.targets.length) {
 			var target = virtual.targets[index], functionIndex = functions.get(target.clone);
 			if (functionIndex == null) throw 'Missing scalar virtual target "${target.clone}"';
-			body.push(LocalGet(receiverLocal)); body.push(I32Load(0)); body.push(I32Const(WasmModuleSupport.typeId(Obj(target.typeName))));
+			body.push(LocalGet(receiverLocal)); body.push(I32Load(0)); body.push(I32Const(layout.runtimeTypeIds.id(Obj(target.typeName))));
 			body.push(I32Eq); body.push(If(null)); body.push(LocalGet(receiverLocal));
 			for (local in argumentLocals) body.push(LocalGet(local));
 			body.push(Call(functionIndex));
@@ -594,7 +594,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		body.push(Call(allocator));
 		body.push(LocalSet(outputLocal));
 		for (field in [
-			{offset: 0, value: WasmModuleSupport.typeId(ManagedBytes)},
+			{offset: 0, value: layout.runtimeTypeIds.id(ManagedBytes)},
 			{offset: WasmLayout.STRING_LENGTH_OFFSET, value: fixed.size},
 			{offset: WasmLayout.ARRAY_CAPACITY_OFFSET, value: fixed.size}
 		]) {

@@ -38,7 +38,7 @@ class WasmReflectionTable {
 	 * A row for every class that has a layout of its own or inherits one, naming the per-layout functions of the nearest
 	 * layout up its base chain, so an instance of a class that is not itself reflected still reflects as its base does.
 	 */
-	static function rows(program:IrProgram):Array<ReflectionRow> {
+	static function rows(program:IrProgram, typeIds:WasmTypeIdPlan):Array<ReflectionRow> {
 		var nativeNames:Array<Null<String>> = [for (_ in OPERATIONS) null],
 			functionNames:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			objects = [for (object in program.objects) object.name => object];
@@ -64,19 +64,19 @@ class WasmReflectionTable {
 				}
 			}
 			if (found)
-				result.push({typeId: WasmModuleSupport.typeId(Obj(object.name)), functions: functions});
+				result.push({typeId: typeIds.id(Obj(object.name)), functions: functions});
 		}
 		result.sort((left, right) -> left.typeId < right.typeId ? -1 : left.typeId > right.typeId ? 1 : 0);
 		return result;
 	}
 
 	/** Bytes the table needs; the contents are filled in once function-table slots are known (finalize). */
-	public static function tableSize(program:IrProgram):Int
-		return declares(program) ? rows(program).length * ROW_SIZE : 0;
+	public static function tableSize(program:IrProgram, typeIds:WasmTypeIdPlan):Int
+		return declares(program) ? rows(program, typeIds).length * ROW_SIZE : 0;
 
 	/** Writes the rows once every function has a slot in the table; a function the program never reaches gets -1. */
-	public static function fill(bytes:haxe.io.Bytes, program:IrProgram, slots:Map<String, Int>):Void {
-		var all = rows(program);
+	public static function fill(bytes:haxe.io.Bytes, program:IrProgram, slots:Map<String, Int>, typeIds:WasmTypeIdPlan):Void {
+		var all = rows(program, typeIds);
 		for (index in 0...all.length) {
 			var offset = index * ROW_SIZE;
 			bytes.setInt32(offset, all[index].typeId);

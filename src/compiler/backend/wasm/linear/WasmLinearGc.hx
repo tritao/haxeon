@@ -381,11 +381,11 @@ class WasmLinearGc {
 		builder.localTee(backingOwner);
 		builder.i32Eqz();
 		builder.ifElse(function(_) {}, function(builder) {
-			appendGcBackingTraceCase(builder, backingOwner, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
+			appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Array(Dyn)), function(builder) {
 				appendGcArrayContents(builder, value, backingOwner, entryCount, entryIndex, mark);
 			});
 			for (mapName in mapNames)
-				appendGcBackingTraceCase(builder, backingOwner, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
+				appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Abstract(mapName)), function(builder) {
 					appendGcMapContents(builder, value, backingOwner, entryCount, entryIndex, mark, mapName);
 				});
 			appendGcConservativeTrace(builder, value, header, entryCount, entryIndex, mark);
@@ -396,9 +396,9 @@ class WasmLinearGc {
 		// known layouts are traced from declared reference fields.
 		var leafTypes:Array<IrType> = [I32, Bool, I64, F64, RawPtr, TypeRef, Abstract("native_callback")];
 		for (leaf in leafTypes)
-			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(leaf), function(_) {});
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(leaf), function(_) {});
 		for (bytesType in [Bytes, ManagedBytes])
-			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(bytesType), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(bytesType), function(builder) {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.BYTES_VIEW_MARKER_OFFSET));
 				builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
@@ -413,7 +413,7 @@ class WasmLinearGc {
 				});
 			});
 		for (object in program.objects)
-			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Obj(object.name)), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Obj(object.name)), function(builder) {
 				if (object.nativeLayout != null) {
 					// A nested flat-value view keeps its owning root object alive in header word one.
 					builder.localGet(value);
@@ -436,7 +436,7 @@ class WasmLinearGc {
 			var enumLayout = layout.enumType(enumDecl.name);
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.i32Const(context.module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -462,12 +462,12 @@ class WasmLinearGc {
 			});
 		}
 		for (mapName in mapNames)
-			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract(mapName)), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract(mapName)), function(builder) {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 				builder.call(builder.functionRef(mark));
 			});
-		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Array(Dyn)), function(builder) {
+		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Array(Dyn)), function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
 			builder.call(builder.functionRef(mark));
@@ -485,13 +485,13 @@ class WasmLinearGc {
 				}
 			});
 		});
-		appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract("realtime_iterator")), function(builder) {
+		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract("realtime_iterator")), function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
 			builder.call(builder.functionRef(mark));
 		});
 		for (streamType in ["realtime_bytes_input", "realtime_bytes_output"])
-			appendGcTraceCase(builder, value, WasmModuleSupport.typeId(Abstract(streamType)), function(builder) {
+			appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract(streamType)), function(builder) {
 				builder.localGet(value);
 				builder.emit(I32Load(WasmLayout.BYTES_STREAM_DATA_OFFSET));
 				builder.call(builder.functionRef(mark));

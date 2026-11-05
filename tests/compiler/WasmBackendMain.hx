@@ -46,6 +46,7 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		WasmTypeIdPlanMain.run();
 		var allocationProgram = Frontend.compile("class Box { public var value:Int; "
 			+ "public function new(value:Int) this.value = value; } function main():Int return new Box(42).value;"),
 			allocationDisabled = new WasmBackend().compile(allocationProgram, {target: WasmGc, debugNames: true}),
@@ -166,7 +167,9 @@ class WasmBackendMain {
 		if (fieldReads != 1 || holderChecks != 1) throw "A nested scalar field read needs one field access and one holder check";
 		var scalarPatchProgram = Frontend.compile("struct V { public var x:Int; } "
 			+ "function keep(v:V):V return v; function main():Int return keep(new V()).x;"),
-			scalarPatch = new WasmBackend().compilePatch(scalarPatchProgram, scalarPatchProgram, ["keep"],
+			scalarPatchBackend = new WasmBackend(),
+			scalarPatchBase = scalarPatchBackend.compilePatchBase(scalarPatchProgram, {target: WasmGc, debugNames: true}),
+			scalarPatch = scalarPatchBackend.compilePatch(scalarPatchBase.state, scalarPatchProgram, ["keep"],
 				{target: WasmGc, debugNames: true}),
 			scalarPatchEntries = WasmPatch.readManifest(scalarPatch.manifest);
 		if (scalarPatchEntries.length != 1 || scalarPatchEntries[0].name != "keep"
@@ -398,7 +401,8 @@ class WasmBackendMain {
 			throw "Canonical Haxeon IR did not round-trip through its versioned codec";
 		if (WasmPatch.manifest(referenceProgram).length == 0 || WasmPatch.plan(referenceProgram, canonical) != Patch)
 			throw "Wasm patch metadata must preserve a compatible semantic ABI";
-		var patchArtifact = new WasmBackend().compilePatch(referenceProgram, canonical, ["main"], {target: Wasm32, debugNames: true});
+		var patchBackend = new WasmBackend(), patchBase = patchBackend.compilePatchBase(referenceProgram, {target: Wasm32, debugNames: true});
+		var patchArtifact = patchBackend.compilePatch(patchBase.state, canonical, ["main"], {target: Wasm32, debugNames: true});
 		var patchEntries = WasmPatch.readManifest(patchArtifact.manifest);
 		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main" || patchArtifact.changed.length != 1)
 			throw "Wasm patch compilation must produce a validated replacement artifact";

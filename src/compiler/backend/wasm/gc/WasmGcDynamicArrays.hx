@@ -112,8 +112,8 @@ class WasmGcDynamicArrays {
 		for (native in operations)
 			if (native.name == "__array_check_cast")
 				for (element in plan.arrayElementTypes())
-					if (typeId(element) != typeId(Dyn))
-						shared(retypeName(element), native.arguments, helper -> {
+					if (plan.runtimeTypeIds.id(element) != plan.runtimeTypeIds.id(Dyn))
+						shared(retypeName(element, plan), native.arguments, helper -> {
 							helper.retypeTo(element, 0, 1);
 							-1;
 						}, Void);
@@ -228,8 +228,8 @@ class WasmGcDynamicArrays {
 			case UseDefault: throw "Wasm GC representation declined a dynamic array operation";
 		};
 
-	static inline function typeId(type:IrType):Int
-		return WasmModuleSupport.typeId(type);
+	inline function typeId(type:IrType):Int
+		return plan.runtimeTypeIds.id(type);
 
 	static function value(type:IrType):IrValue
 		return new IrValue(-1, "dynamic-array-operand", type);
@@ -611,11 +611,11 @@ class WasmGcDynamicArrays {
 		dispatch(target, function(element) push([
 			LocalGet(array),
 			LocalGet(target),
-			Call(WasmModuleSupport.requiredFunctionIndex(functions, retypeName(element)))
+			Call(WasmModuleSupport.requiredFunctionIndex(functions, retypeName(element, plan)))
 		]), Dyn);
 
-	static function retypeName(element:IrType):String
-		return "__haxeon_array_retype_" + typeId(element);
+	static function retypeName(element:IrType, plan:WasmGcTypePlan):String
+		return "__haxeon_array_retype_" + plan.runtimeTypeIds.id(element);
 
 	/** Retype dynamic storage `array` to `element`, whose runtime type id `target` holds. */
 	function retypeTo(element:IrType, array:Int, target:Int):Void {

@@ -124,6 +124,6 @@ class WasmLinearReflection {
 	/** Writes the rows once every function has a slot in the table. */
 	public static function finalize(context:WasmLinearContext, slots:Map<String, Int>):Void {
 		if (context.reflectionBytes != null)
-			WasmReflectionTable.fill(context.reflectionBytes, context.program, slots);
+			WasmReflectionTable.fill(context.reflectionBytes, context.program, slots, context.module.runtimeTypeIds);
 	}
 }

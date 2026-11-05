@@ -202,7 +202,7 @@ class WasmGcValueArrays {
 		body = body.concat([LocalGet(0), Return, End]);
 		// Only a dynamic backing lane may be converted here; validation precedes every mutation of the original header.
 		body = body.concat(fieldAt(base, WasmGcTypePlan.arrayElementTypeFieldIndex(), 0))
-			.concat([I32Const(WasmModuleSupport.typeId(Dyn)), I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
+			.concat([I32Const(plan.runtimeTypeIds.id(Dyn)), I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
 		// A header alone is not proof that its backing lane contains Dynamic values.
 		// Check before ref.cast so an incompatible concrete reference array raises a language exception.
 		body = body.concat(fieldAt(base, WasmGcTypePlan.arrayDataFieldIndex(), 0))

@@ -477,3 +477,67 @@ variation recorded above. Nine full-scene and three pairs per other Wasm GC Show
 4,440 / 4,440 / 4,440 / 8,724 objects. The first ownership prototype added 879 captured cells and eight bytes per updater
 in a 30-cycle selection census; moving exception handling into a helper and packing the existing flags with the ownership
 count removed those costs.
+
+The Wasm runtime type-identity fix was compared with Haxeon `9e235865` on outer
+revision `f0c2e9d32`. The editor profiling modules and the UI framework modules
+were byte-identical between control and candidate; the instrumented Wasm GC
+Showcase guests were also byte-identical. Runtime IDs still occupy one 32-bit
+word, with no change to object or array header sizes.
+
+Nine alternating HashLink pairs produced these per-action allocation medians
+(KiB). Selection stress is measured separately by the exact allocation census.
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console → telemetry | 74.5 | 74.5 |
+| hierarchy → sensors | 114.6 | 114.6 |
+| sensors → hierarchy | 80.1 | 80.1 |
+| telemetry → console | 92.9 | 92.9 |
+| hover away | 13.6 | 13.6 |
+| hover enter | 0.5 | 0.5 |
+| hover field | 12.4 | 12.4 |
+| hover inside | 0.5 | 0.5 |
+| hover other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| focused idle | 0.2 | 0.2 |
+| scroll inspector | 21.2 | 21.2 |
+| backspace | 16.2 | 16.2 |
+| type character | 16.1 | 16.1 |
+
+Three 30-cycle selection-stress census pairs counted 340,907 / 340,911 /
+340,910 allocations in control and 340,908 / 340,908 / 340,909 in candidate.
+Differences were confined to byte buffers; all other per-type object and byte
+counts matched within each pair. Total census bytes ranged from 24,009,904 to
+24,010,984 in control and 24,010,160 to 24,010,512 in candidate.
+
+All six 500-cycle headless memory gates passed. RSS growth in the four windows
+(MiB), preserving the paired order, was:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.31 / 3.44 / 0.78 / 5.00 | 30.00 / 3.75 / 0.62 / 4.84 |
+| 2 | 30.31 / 3.59 / 0.78 / 4.84 | 30.00 / 4.06 / 0.78 / 4.84 |
+| 3 | 29.69 / 4.06 / 0.78 / 4.84 | 29.69 / 4.38 / 0.78 / 5.16 |
+
+The median paired differences were −0.31 / +0.32 / 0 / 0 MiB. These runs load
+identical modules; the small window differences are within the same-binary
+variation recorded above. The allocation and memory ceilings were unchanged.
+
+For Wasm GC allocation comparisons, use the existing fixed-step core mode:
+`NATIVEKIT_WEB_BENCHMARK_MODE=core`, with 120 warmup and 120 measured frames.
+Nine full-scene pairs and three pairs per other scene matched exactly:
+
+| Scene | Control objects | Candidate objects |
+| --- | ---: | ---: |
+| full | 5,896 | 5,896 |
+| static | 5,896 | 5,896 |
+| text-heavy | 5,896 | 5,896 |
+| editing | 12,622 | 12,622 |
+
+Normal browser mode advances animation with wall-clock frame times. In the
+same comparison, full-scene counts ranged from 5,896–5,914 in control and
+5,898–5,912 in candidate, with both medians at 5,902; the static medians were
+5,898 and 5,900 despite identical guest bytes. Fixed-step mode removes this
+clock-phase variation from the allocation comparison. These counts describe
+this build and mode; earlier browser-mode scene totals are not interchangeable
+with them. Browser smoke and the editor budgets and retention gates also passed.

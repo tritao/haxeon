@@ -21,6 +21,14 @@ typedef WasmPatchArtifact = {
 	final manifest:Bytes;
 	final decision:PatchDecision;
 	final changed:Array<String>;
+	final state:WasmPatchState;
+}
+
+/** Identities of the emitted module whose live values a replacement must preserve. */
+typedef WasmPatchState = {
+	final abi:compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+	final target:compiler.backend.Backend.BackendTarget;
+	final runtimeTypeIds:WasmTypeIdPlan;
 }
 
 typedef WasmTableIdentity = {

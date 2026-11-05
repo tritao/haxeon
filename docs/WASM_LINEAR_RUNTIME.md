@@ -62,6 +62,31 @@ the rest use `hl_type *` headers, `varray`, `vdynamic`, `vobj`,
 objects have a model of their own: an integer type id in the first word, and
 their own array, map and box layouts.
 
+Runtime type IDs are assigned by a module-owned `WasmTypeIdPlan`, shared by
+allocation, type tests, array element descriptors, reflection and tracing.
+FNV-1a supplies the initial dispatch key; a hash is not proof of type identity.
+The plan reserves every initial key, resolves collisions in canonical type order
+and keeps zero and the closure marker reserved. IDs retain their existing
+32-bit carrier and object headers do not grow. Wasm GC uses the same plan for
+its object and array descriptors.
+
+Patches retain the plan of the module actually emitted, including types created
+by target lowering. A replacement that changes an existing ID or removes a
+planned type is rejected before publication. `WasmBackend.compilePatchBase`
+returns that state, and `compilePatch` consumes it and returns the next state.
+The compiler keeps no process-global runtime type-ID cache.
+
+The regression fixture uses `CaxscQFXbw` and `CVqowVrIwv`: both nominal type
+names hash to `0xc9c551d1`. Before this change, `Std.isOfType` confused the
+classes on both Wasm targets; field reflection returned the wrong result on
+Wasm32 and trapped with `illegal cast` on Wasm GC. The fixture now passes on
+HashLink and both Wasm targets, with inlining on and off, including rejection
+of an array cast between the types and retention of a reference field under
+Wasm32 GC stress. Collision resolution uses one free-ID cursor after sorting,
+so a large collision group cannot cause quadratic probing. A separate backend
+test rejects an otherwise ABI-compatible patch whose new array descriptor
+would change an existing runtime ID.
+
 Moving `wasm32` onto HashLink's object model is probably the way to go and
 should be done eventually. Objects would start with an `hl_type *` pointing at
 type descriptors Haxeon emits into static data, laid out for `wasm32`, and

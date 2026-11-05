@@ -1665,7 +1665,7 @@ class WasmFunctionLower {
 		};
 
 	/** Linear Dynamic representation of a value: primitives are boxed with their runtime type id. */
-	static function boxedValue(type:IrType, source:Int, destination:Int, allocator:Int):Array<WasmInstruction> {
+	function boxedValue(type:IrType, source:Int, destination:Int, allocator:Int):Array<WasmInstruction> {
 		var size = switch type {
 			case I32, Bool, RawPtr, TypeRef, Abstract("native_callback"): WasmLayout.DYN_I32_SIZE;
 			case F64: WasmLayout.DYN_F64_SIZE;
@@ -1812,8 +1812,8 @@ class WasmFunctionLower {
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
 		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
-	public static function typeId(type:IrType):Int
-		return WasmModuleSupport.typeId(type);
+	function typeId(type:IrType):Int
+		return context.module.runtimeTypeId(type);
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);
@@ -1947,7 +1947,7 @@ class WasmFunctionLower {
 		};
 
 	/** Converts a boxed Int, Float, Bool or Int64 at `value` to `target` (I32 or F64); null gives zero. */
-	static function dynamicNumber(target:IrType, value:Int, output:Int):Array<WasmInstruction> {
+	function dynamicNumber(target:IrType, value:Int, output:Int):Array<WasmInstruction> {
 		var sources:Array<IrType> = (switch (target) { case F64: true; default: false; }) ? [F64, I32, Bool, I64] : [I32, F64, Bool, I64],
 			instructions:Array<WasmInstruction> = [
 				LocalGet(value),

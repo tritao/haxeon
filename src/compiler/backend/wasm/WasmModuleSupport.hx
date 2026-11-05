@@ -259,10 +259,10 @@ class WasmModuleSupport {
 		return slots;
 	}
 
-	public static function stringBytes(value:String):HaxeBytes {
+	public static function stringBytes(value:String, typeIds:WasmTypeIdPlan):HaxeBytes {
 		var raw = HaxeBytes.ofString(value),
 			bytes = HaxeBytes.alloc(WasmLayout.STRING_DATA_OFFSET + raw.length + 1);
-		bytes.setInt32(0, typeId(Bytes));
+		bytes.setInt32(0, typeIds.id(Bytes));
 		bytes.setInt32(WasmLayout.STRING_LENGTH_OFFSET, raw.length);
 		bytes.setInt32(WasmLayout.ARRAY_CAPACITY_OFFSET, raw.length);
 		for (index in 0...raw.length)
@@ -409,34 +409,6 @@ class WasmModuleSupport {
 		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	// Type tests emit a class's id once per class per test site, so named types remember theirs.
-	static final namedTypeIds:Map<String, Int> = [];
-
-	public static function typeId(type:IrType):Int {
-		var key = switch type {
-			case Obj(name): "O" + name;
-			case Enum(name): "E" + name;
-			case Virtual(name): "V" + name;
-			case _: null;
-		};
-		if (key == null)
-			return computeTypeId(type);
-		var id = namedTypeIds.get(key);
-		if (id == null) {
-			id = computeTypeId(type);
-			namedTypeIds.set(key, id);
-		}
-		return id;
-	}
-
-	static function computeTypeId(type:IrType):Int {
-		var text = Std.string(type), hash:Int = -2128831035;
-		for (index in 0...text.length) {
-			hash = Std.int(hash ^ text.charCodeAt(index));
-			hash = Std.int(hash * 16777619);
-		}
-		return hash;
-	}
-
 	static function programFunction(program:IrProgram, name:String):IrFunction {
 		for (fn in program.functions)
 			if (fn.name == name)

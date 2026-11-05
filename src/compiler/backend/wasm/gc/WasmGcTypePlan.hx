@@ -39,6 +39,7 @@ typedef WasmGcMapTypePlan = {
 **/
 class WasmGcTypePlan {
 	public final program:IrProgram;
+	public final runtimeTypeIds:compiler.backend.wasm.WasmTypeIdPlan;
 	public final scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>;
 	public final scalarClosures:Map<String, Bool>;
 	public final scalarVirtuals:Map<String, WasmScalarAbi.WasmScalarVirtual>;
@@ -92,7 +93,7 @@ class WasmGcTypePlan {
 	public var mapIndexTypeIndex(default, null):Int = -1;
 
 	/**
-	 * Supertype of every class struct, whose first field is the class id (`WasmModuleSupport.typeId(Obj(name))`). Reading it
+	 * Supertype of every class struct, whose first field is the module's class ID. Reading it
 	 * from any Dynamic value is one test and one field read, which is what makes dispatch on a value's class independent of
 	 * how many classes the program has. -1 when the program has no objects.
 	 */
@@ -136,6 +137,7 @@ class WasmGcTypePlan {
 	public function new(program:IrProgram, inlineValueFields = false, ?scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>,
 			?scalarClosures:Map<String, Bool>, ?scalarVirtuals:Map<String, WasmScalarAbi.WasmScalarVirtual>) {
 		this.program = program;
+		this.runtimeTypeIds = compiler.backend.wasm.WasmTypeIdPlan.forProgram(program);
 		this.scalarSignatures = scalarSignatures == null ? [] : scalarSignatures;
 		this.scalarClosures = scalarClosures == null ? [] : scalarClosures;
 		this.scalarVirtuals = scalarVirtuals == null ? [] : scalarVirtuals;

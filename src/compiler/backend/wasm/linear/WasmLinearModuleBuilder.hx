@@ -91,9 +91,10 @@ class WasmLinearModuleBuilder {
 		this.patchChanged = patchChanged;
 		this.target = target;
 		module = new WasmModule(target.debugNames ? "haxeon" : null);
+		module.runtimeTypeIds = compiler.backend.wasm.WasmTypeIdPlan.forProgram(program);
 	}
 
-	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig):BackendResult {
+	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig):compiler.backend.wasm.WasmCompilation {
 		IrVerifier.verify(program);
 		var logical = new IrProgram(program.entryPoint);
 		logical.functions = program.functions.copy(); logical.objects = program.objects.copy(); logical.natives = program.natives.copy();
@@ -142,7 +143,7 @@ class WasmLinearModuleBuilder {
 		return builder.compileModule();
 	}
 
-	function compileModule():BackendResult {
+	function compileModule():compiler.backend.wasm.WasmCompilation {
 		prepareModule();
 		buildRuntime();
 		declareFunctions();
@@ -151,7 +152,7 @@ class WasmLinearModuleBuilder {
 		finalizeExports();
 		if (runtimeNeutral)
 			WasmFuelMetering.instrument(module, requiredFuelFunction());
-		return {target: options.target, bytes: WasmEncoder.encode(module)};
+		return {artifact: {target: options.target, bytes: WasmEncoder.encode(module)}, runtimeTypeIds: module.runtimeTypeIds};
 	}
 
 	function prepareModule():Void {
@@ -190,7 +191,7 @@ class WasmLinearModuleBuilder {
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
-		layout = new WasmLayout(program, logicalProgram);
+		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
 		for (fn in program.functions)
@@ -199,7 +200,7 @@ class WasmLinearModuleBuilder {
 					switch located.value {
 						case ConstString(_, value):
 							if (!strings.exists(value)) {
-								var bytes = WasmModuleSupport.stringBytes(value);
+								var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds);
 								var offset = nextData;
 								module.data.push({offset: offset, bytes: bytes});
 								strings.set(value, offset);
@@ -210,7 +211,7 @@ class WasmLinearModuleBuilder {
 		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program))
 			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
-				var bytes = WasmModuleSupport.stringBytes(value),
+				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
 					offset = nextData;
 				module.data.push({offset: offset, bytes: bytes});
 				strings.set(value, offset);
@@ -238,7 +239,7 @@ class WasmLinearModuleBuilder {
 		reflectionBytes = null;
 		reflectionTable = 0;
 		reflectionCount = 0;
-		var reflectionSize = WasmReflectionTable.tableSize(program);
+		var reflectionSize = WasmReflectionTable.tableSize(program, module.runtimeTypeIds);
 		if (reflectionSize > 0) {
 			reflectionTable = WasmModuleSupport.align(nextData, 8);
 			reflectionCount = Std.int(reflectionSize / WasmReflectionTable.ROW_SIZE);

@@ -38,7 +38,7 @@ class WasmLinearValueArrays {
 		if (needsReverse) swapIndex = context.module.addFunction(swapElements());
 		if (needsCopy) {
 			var a:IrType = Array(Dyn), alloc:IrNative = {name:"$linear-value-array:allocate", library:"haxeon_runtime", symbol:"__value_array_alloc", arguments:[I32,TypeRef,I32,I32,I32,Bool], result:a};
-			newLikeIndex = context.module.addFunction(newLike(context.module.addFunction(allocate(alloc, context.allocatorFunction))));
+			newLikeIndex = context.module.addFunction(newLike(context.module.addFunction(allocate(context.module, alloc, context.allocatorFunction))));
 			context.functions.set("$linear-value-array:new-like", newLikeIndex);
 		}
 		if (needsSplice) {
@@ -48,7 +48,7 @@ class WasmLinearValueArrays {
 		var retypeAllocator = -1;
 		if (needsRetype) {
 			var alloc:IrNative = {name:"$linear-value-array:retype-allocate", library:"haxeon_runtime", symbol:"__value_array_alloc", arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)};
-			retypeAllocator = context.module.addFunction(allocate(alloc, context.allocatorFunction));
+			retypeAllocator = context.module.addFunction(allocate(context.module, alloc, context.allocatorFunction));
 		}
 		if (needsInsert) {
 			var insertNative:IrNative = {name:"$linear-value-array:insert", library:"haxeon_runtime", symbol:"__value_array_insert_empty", arguments:[Array(Dyn),I32], result:I32};
@@ -60,7 +60,7 @@ class WasmLinearValueArrays {
 		}
 		for (native in context.program.natives) if (supports(native.symbol)) {
 			var fn = native.symbol == "__value_array_retype" ? retype(context.module, native, retypeAllocator) :
-				build(native, context.allocatorFunction, ensureIndex, clearIndex, moveIndex, newLikeIndex, swapIndex, resizeIndex);
+				build(context.module, native, context.allocatorFunction, ensureIndex, clearIndex, moveIndex, newLikeIndex, swapIndex, resizeIndex);
 			if (native.symbol != "__value_array_alloc" && native.symbol != "__value_array_retype") {
 				var prefix = resolveForward(0);
 				if (native.symbol == "__value_array_concat") prefix = prefix.concat(resolveForward(1));
@@ -109,7 +109,7 @@ class WasmLinearValueArrays {
 			b.emitAll([LocalGet(resolved), I32Load(pair.offset), LocalGet(pair.arg), I32Eq, I32Eqz, If(null)]); WasmLinearRuntime.runtimeFailure(b); b.emit(End);
 		}
 		b.emitAll([LocalGet(4), I32Const(32), I32Eq, LocalGet(4), I32Const(64), I32Eq, I32Or, I32Eqz, If(null)]); WasmLinearRuntime.runtimeFailure(b);
-		b.emitAll([End, LocalGet(0), Return, End, LocalGet(0), I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET), I32Const(WasmModuleSupport.typeId(Dyn)), I32Eq,
+		b.emitAll([End, LocalGet(0), Return, End, LocalGet(0), I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET), I32Const(module.runtimeTypeId(Dyn)), I32Eq,
 			LocalGet(0), I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET), LocalGet(1), I32Eq, I32Or, I32Eqz, If(null)]);
 		WasmLinearRuntime.runtimeFailure(b); b.emit(End);
 		for (arg in [6,7,8]) { b.emitAll([LocalGet(arg), I32Eqz, If(null)]); WasmLinearRuntime.runtimeFailure(b); b.emit(End); }
@@ -129,8 +129,8 @@ class WasmLinearValueArrays {
 		return b.finish();
 	}
 
-	public static function build(native:IrNative, allocator:Int = -1, ensureIndex:Int = -1, clearIndex:Int = -1, moveIndex:Int = -1, newLikeIndex:Int = -1, swapIndex:Int = -1, resizeIndex:Int = -1):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.symbol == "__value_array_alloc") return allocate(native, allocator);
+	public static function build(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative, allocator:Int = -1, ensureIndex:Int = -1, clearIndex:Int = -1, moveIndex:Int = -1, newLikeIndex:Int = -1, swapIndex:Int = -1, resizeIndex:Int = -1):compiler.backend.wasm.WasmModule.WasmFunction {
+		if (native.symbol == "__value_array_alloc") return allocate(module, native, allocator);
 		if (native.symbol == "__value_array_ensure") return ensure(native, allocator);
 		if (native.symbol == "__value_array_clear") return clearElement(native);
 		if (native.symbol == "__value_array_resize") return resize(native, ensureIndex, clearIndex);
@@ -469,7 +469,7 @@ class WasmLinearValueArrays {
 		return b.finish();
 	}
 
-	static function allocate(native:IrNative, allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
+	static function allocate(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative, allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 6 || allocator < 0) throw "Invalid Wasm32 value-array allocator";
 		var b = new WasmFunctionBuilder(native.name, {parameters:[I32,I32,I32,I32,I32,I32], results:[I32]}),
 			capacity = b.local("capacity", I32), scalarBytes = b.local("scalar-bytes", I32), refBytes = b.local("reference-bytes", I32),
@@ -488,7 +488,7 @@ class WasmLinearValueArrays {
 			LocalGet(total), I64Const(0x7ffffff0), I64LeS, I32Eqz, If(null)]);
 		WasmLinearRuntime.runtimeFailure(b); b.emitAll([End, LocalGet(total), I32WrapI64, LocalSet(refBytes),
 			I32Const(WasmLayout.VALUE_ARRAY_HEADER_SIZE), Call(allocator), LocalSet(header),
-			LocalGet(header), I32Const(WasmModuleSupport.typeId(Array(Dyn))), I32Store(0),
+			LocalGet(header), I32Const(module.runtimeTypeId(Array(Dyn))), I32Store(0),
 			LocalGet(header), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Store(WasmLayout.VALUE_ARRAY_MARKER_OFFSET),
 			LocalGet(header), LocalGet(0), I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
 			LocalGet(header), LocalGet(capacity), I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),

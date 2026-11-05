@@ -26,7 +26,7 @@ class WasmGcReflection {
 	 */
 	public static function addTable(module:WasmModule, globals:Map<String, Int>, plan:WasmGcTypePlan,
 			program:IrProgram):Null<{bytes:haxe.io.Bytes, init:Array<WasmInstruction>}> {
-		var size = WasmReflectionTable.tableSize(program);
+		var size = WasmReflectionTable.tableSize(program, plan.runtimeTypeIds);
 		if (size == 0)
 			return null;
 		if (plan.staticDataTypeIndex < 0)
@@ -62,7 +62,7 @@ class WasmGcReflection {
 			throw "Wasm GC reflection has no table global";
 		var entry = functions.get(ENTRY_FUNCTION);
 		if (entry == null) {
-			entry = addEntryLookup(module, plan, table, Std.int(WasmReflectionTable.tableSize(program) / WasmReflectionTable.ROW_SIZE));
+			entry = addEntryLookup(module, plan, table, Std.int(WasmReflectionTable.tableSize(program, plan.runtimeTypeIds) / WasmReflectionTable.ROW_SIZE));
 			functions.set(ENTRY_FUNCTION, entry);
 		}
 		var type = plan.wasmFunctionType(native.arguments, native.result), array = plan.staticDataTypeIndex, callType = module.typeIndex(type),

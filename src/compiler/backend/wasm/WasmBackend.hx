@@ -6,6 +6,7 @@ import compiler.backend.Backend.BackendResult;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrNullableErasure;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
+import compiler.backend.wasm.WasmPatch.WasmPatchState;
 import compiler.backend.wasm.WasmPatch;
 import compiler.backend.wasm.gc.WasmGcModuleBuilder;
 import compiler.backend.wasm.linear.WasmLinearModuleBuilder;
@@ -15,7 +16,16 @@ class WasmBackend implements Backend {
 	public function new() {}
 
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
-		return compileInternal(program, options, null);
+		return compileInternal(program, options, null).artifact;
+	}
+
+	/** Compile the initial live module and retain its actual target-level type identities. */
+	public function compilePatchBase(program:IrProgram, options:BackendOptions):WasmPatchArtifact {
+		var compiled = compileInternal(program, options, null);
+		return {bytes: compiled.artifact.bytes, manifest: WasmPatch.manifest(program), decision: Patch,
+			changed: [for (fn in program.functions) fn.name],
+			state: {abi: compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)), target: options.target,
+				runtimeTypeIds: compiled.runtimeTypeIds}};
 	}
 
 	/**
@@ -24,23 +34,31 @@ class WasmBackend implements Backend {
 	 * for now so its runtime dependencies are validated by the same encoder as a
 	 * full build; the filtered manifest is what the host publishes atomically.
 	 */
-	public function compilePatch(previous:Null<IrProgram>, program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
-		var decision = WasmPatch.plan(previous == null ? null : IrNullableErasure.run(previous), IrNullableErasure.run(program));
+	public function compilePatch(previous:WasmPatchState, program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
+		switch [previous.target, options.target] {
+			case [HashLink, HashLink] | [Wasm32, Wasm32] | [Wasm64, Wasm64] | [WasmGc, WasmGc]:
+			default: throw "Wasm patch cannot change the runtime target";
+		}
+		var abi = compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)),
+			decision = compiler.abi.PatchPlanner.plan(previous.abi, abi);
 		switch decision {
 			case Patch:
 			default:
 				throw 'Wasm patch rejected by semantic ABI: ${Std.string(decision)}';
 		}
 		var result = compileInternal(program, options, changed);
+		if (!result.runtimeTypeIds.compatibleWith(previous.runtimeTypeIds))
+			throw "Wasm patch rejected by runtime type identity: live type IDs changed";
 		return {
-			bytes: result.bytes,
+			bytes: result.artifact.bytes,
 			manifest: WasmPatch.manifest(program, changed),
 			decision: decision,
-			changed: changed.copy()
+			changed: changed.copy(),
+			state: {abi: abi, target: options.target, runtimeTypeIds: result.runtimeTypeIds}
 		};
 	}
 
-	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
+	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):WasmCompilation {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
 		program = WasmDynamicCalls.run(IrNullableErasure.run(compiler.ir.IrInstrumentation.strip(program)));

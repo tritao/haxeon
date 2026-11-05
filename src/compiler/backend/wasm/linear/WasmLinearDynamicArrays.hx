@@ -112,7 +112,7 @@ class WasmLinearDynamicArrays {
 
 	/** Element types that `__array_check_cast` and typed reference allocation receive as type values. */
 	static function viewedElementTypes(program:IrProgram):Array<IrType> {
-		var result:Array<IrType> = [], seen:Map<Int, Bool> = [];
+		var result:Array<IrType> = [], seen:Map<String, Bool> = [];
 		for (fn in program.functions) {
 			var typeValues:Map<Int, IrType> = [];
 			for (block in fn.blocks)
@@ -127,8 +127,8 @@ class WasmLinearDynamicArrays {
 					switch located.value {
 						case Call(_, "__array_check_cast" | "__array_alloc_typed_ref", arguments) if (arguments.length == 2):
 							var type = typeValues.get(arguments[1].id);
-							if (type != null && !seen.exists(typeId(type))) {
-								seen.set(typeId(type), true);
+							if (type != null && !seen.exists(Std.string(type))) {
+								seen.set(Std.string(type), true);
 								result.push(type);
 							}
 						default:
@@ -137,8 +137,8 @@ class WasmLinearDynamicArrays {
 		return result;
 	}
 
-	static inline function typeId(type:IrType):Int
-		return WasmModuleSupport.typeId(type);
+	inline function typeId(type:IrType):Int
+		return module.runtimeTypeId(type);
 
 	/** Haxe spelling for array diagnostics, as `realtime_array_type_name` prints it. */
 	static function staticTypeName(type:IrType):String
@@ -209,7 +209,7 @@ class WasmLinearDynamicArrays {
 	}
 
 	/** Push `local == typeId(type)` for each listed type, or-ed together. */
-	static function isOneOf(builder:WasmFunctionBuilder, local:WasmLocalRef, types:Array<IrType>):Void {
+	function isOneOf(builder:WasmFunctionBuilder, local:WasmLocalRef, types:Array<IrType>):Void {
 		for (index in 0...types.length) {
 			builder.localGet(local);
 			builder.i32Const(typeId(types[index]));
@@ -220,7 +220,7 @@ class WasmLinearDynamicArrays {
 	}
 
 	/** Dispatch on the storage element type: i32-slot primitives, f64, i64, then references. */
-	static function byStorage(builder:WasmFunctionBuilder, elementType:WasmLocalRef, i32:WasmFunctionBuilder->Void, f64:WasmFunctionBuilder->Void,
+	function byStorage(builder:WasmFunctionBuilder, elementType:WasmLocalRef, i32:WasmFunctionBuilder->Void, f64:WasmFunctionBuilder->Void,
 			i64:WasmFunctionBuilder->Void, reference:WasmFunctionBuilder->Void, ?result:WasmValueType):Void {
 		isOneOf(builder, elementType, [I32, Bool]);
 		builder.ifElse(i32, function(builder) {

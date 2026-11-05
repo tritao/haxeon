@@ -470,7 +470,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+			I32Const(module.runtimeTypeId(ManagedBytes)),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
@@ -516,7 +516,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -568,7 +568,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+			I32Const(module.runtimeTypeId(ManagedBytes)),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
@@ -749,7 +749,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(snapshot);
 		builder.localGet(snapshot);
-		builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+		builder.i32Const(module.runtimeTypeId(ManagedBytes));
 		builder.emit(I32Store(0));
 		builder.localGet(snapshot);
 		builder.localGet(length);
@@ -765,7 +765,7 @@ class WasmLinearRuntime {
 		builder.localGet(length);
 		builder.emit(MemoryCopy);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_bytes_input")));
+		builder.i32Const(module.runtimeTypeId(Abstract("realtime_bytes_input")));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -922,7 +922,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(stringResult ? Bytes : ManagedBytes));
+		builder.i32Const(module.runtimeTypeId(stringResult ? Bytes : ManagedBytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -952,7 +952,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_bytes_output")));
+		builder.i32Const(module.runtimeTypeId(Abstract("realtime_bytes_output")));
 		builder.emit(I32Store(0));
 		for (field in [
 			WasmLayout.BYTES_STREAM_LENGTH_OFFSET,
@@ -1144,7 +1144,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+		builder.i32Const(module.runtimeTypeId(ManagedBytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -1213,7 +1213,7 @@ class WasmLinearRuntime {
 			builder.call(builder.functionRef(allocator));
 			builder.localSet(newData);
 			builder.localGet(newData);
-			builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+			builder.i32Const(module.runtimeTypeId(ManagedBytes));
 			builder.emit(I32Store(0));
 			builder.localGet(newData);
 			builder.localGet(length);
@@ -1405,7 +1405,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(bytes);
@@ -1498,7 +1498,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(stringResult ? Bytes : ManagedBytes));
+		builder.i32Const(module.runtimeTypeId(stringResult ? Bytes : ManagedBytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -1556,7 +1556,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+		builder.i32Const(module.runtimeTypeId(ManagedBytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.i32Const(WasmLayout.BYTES_VIEW_MAGIC);
@@ -1615,7 +1615,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -1669,7 +1669,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(3),
 			LocalGet(3),
-			I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+			I32Const(module.runtimeTypeId(ManagedBytes)),
 			I32Store(0),
 			LocalGet(3),
 			I32Const(WasmLayout.BYTES_VIEW_MAGIC),
@@ -1715,7 +1715,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(3),
 			LocalGet(3),
-			I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+			I32Const(module.runtimeTypeId(ManagedBytes)),
 			I32Store(0),
 			LocalGet(3),
 			LocalGet(2),
@@ -1757,7 +1757,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(2),
 			LocalGet(2),
-			I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+			I32Const(module.runtimeTypeId(ManagedBytes)),
 			I32Store(0),
 			LocalGet(2),
 			LocalGet(1),
@@ -1855,7 +1855,7 @@ class WasmLinearRuntime {
 			builder.call(builder.functionRef(allocator));
 			builder.localSet(copy);
 			builder.localGet(copy);
-			builder.i32Const(WasmModuleSupport.typeId(ManagedBytes));
+			builder.i32Const(module.runtimeTypeId(ManagedBytes));
 			builder.emit(I32Store(0));
 			builder.localGet(copy);
 			builder.localGet(length);
@@ -1945,7 +1945,7 @@ class WasmLinearRuntime {
 			builder.call(builder.functionRef(allocator));
 			builder.localSet(result);
 			builder.localGet(result);
-			builder.i32Const(WasmModuleSupport.typeId(Bytes));
+			builder.i32Const(module.runtimeTypeId(Bytes));
 			builder.emit(I32Store(0));
 			builder.localGet(result);
 			builder.localGet(index);
@@ -1986,7 +1986,7 @@ class WasmLinearRuntime {
 				Call(allocator),
 				LocalSet(6),
 				LocalGet(6),
-				I32Const(WasmModuleSupport.typeId(ManagedBytes)),
+				I32Const(module.runtimeTypeId(ManagedBytes)),
 				I32Store(0),
 				LocalGet(6),
 				LocalGet(5),
@@ -2082,7 +2082,7 @@ class WasmLinearRuntime {
 			I32Const(WasmLayout.MAP_HEADER_SIZE),
 			Call(allocator),
 			LocalTee(0),
-			I32Const(WasmModuleSupport.typeId(Abstract(mapName))),
+			I32Const(module.runtimeTypeId(Abstract(mapName))),
 			I32Store(0),
 			LocalGet(0),
 			I32Const(0),
@@ -2342,7 +2342,7 @@ class WasmLinearRuntime {
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
 				builder.localGet(result);
-				builder.i32Const(WasmModuleSupport.typeId(valueType));
+				builder.i32Const(module.runtimeTypeId(valueType));
 				builder.emit(I32Store(0));
 				builder.localGet(result);
 				builder.localGet(entries);
@@ -2357,7 +2357,7 @@ class WasmLinearRuntime {
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
 				builder.localGet(result);
-				builder.i32Const(WasmModuleSupport.typeId(F64));
+				builder.i32Const(module.runtimeTypeId(F64));
 				builder.emit(I32Store(0));
 				builder.localGet(result);
 				builder.localGet(entries);
@@ -2372,7 +2372,7 @@ class WasmLinearRuntime {
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
 				builder.localGet(result);
-				builder.i32Const(WasmModuleSupport.typeId(I64));
+				builder.i32Const(module.runtimeTypeId(I64));
 				builder.emit(I32Store(0));
 				builder.localGet(result);
 				builder.localGet(entries);
@@ -2411,7 +2411,7 @@ class WasmLinearRuntime {
 		builder.localSet(array);
 		// Allocators are shared by stride; record the projected element type itself.
 		builder.localGet(array);
-		builder.i32Const(WasmModuleSupport.typeId(WasmLinearArrays.storageElementType(elementType)));
+		builder.i32Const(module.runtimeTypeId(WasmLinearArrays.storageElementType(elementType)));
 		builder.emit(I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
 		builder.localGet(map);
 		builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
@@ -2524,7 +2524,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(1),
 			LocalGet(1),
-			I32Const(WasmModuleSupport.typeId(Abstract(mapName))),
+			I32Const(module.runtimeTypeId(Abstract(mapName))),
 			I32Store(0),
 			LocalGet(1),
 			LocalGet(0),
@@ -2580,7 +2580,7 @@ class WasmLinearRuntime {
 		for (type in dynamicTypes) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmModuleSupport.typeId(type));
+			builder.i32Const(module.runtimeTypeId(type));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -2590,7 +2590,7 @@ class WasmLinearRuntime {
 		}
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmModuleSupport.typeId(F64));
+		builder.i32Const(module.runtimeTypeId(F64));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -2600,7 +2600,7 @@ class WasmLinearRuntime {
 		});
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmModuleSupport.typeId(I64));
+		builder.i32Const(module.runtimeTypeId(I64));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -2617,7 +2617,7 @@ class WasmLinearRuntime {
 			value = builder.parameter("value", 0);
 		for (object in program.objects) {
 			builder.localGet(value);
-			builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
+			builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.i32Const(1);
@@ -2626,7 +2626,7 @@ class WasmLinearRuntime {
 		}
 		for (enumDecl in program.enums) {
 			builder.localGet(value);
-			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.i32Const(1);
@@ -2648,15 +2648,15 @@ class WasmLinearRuntime {
 		});
 		for (typeId in [
 			WasmLayout.CLOSURE_TYPE_ID,
-			WasmModuleSupport.typeId(I32),
-			WasmModuleSupport.typeId(Bool),
-			WasmModuleSupport.typeId(I64),
-			WasmModuleSupport.typeId(F64),
-			WasmModuleSupport.typeId(RawPtr),
-			WasmModuleSupport.typeId(TypeRef),
-			WasmModuleSupport.typeId(Abstract("native_callback")),
-			WasmModuleSupport.typeId(Bytes),
-			WasmModuleSupport.typeId(ManagedBytes)
+			module.runtimeTypeId(I32),
+			module.runtimeTypeId(Bool),
+			module.runtimeTypeId(I64),
+			module.runtimeTypeId(F64),
+			module.runtimeTypeId(RawPtr),
+			module.runtimeTypeId(TypeRef),
+			module.runtimeTypeId(Abstract("native_callback")),
+			module.runtimeTypeId(Bytes),
+			module.runtimeTypeId(ManagedBytes)
 		]) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
@@ -2696,9 +2696,9 @@ class WasmLinearRuntime {
 				case TypeValue(_, type): switch type {
 					case Iterator(_) if (!iteratorTypes.exists(Std.string(type))):
 						iteratorTypes.set(Std.string(type), true);
-						builder.localGet(typeId); builder.i32Const(WasmModuleSupport.typeId(type)); builder.emit(I32Eq);
+						builder.localGet(typeId); builder.i32Const(module.runtimeTypeId(type)); builder.emit(I32Eq);
 						builder.if_(function(builder) {
-							builder.localGet(value); builder.emit(I32Load(0)); builder.i32Const(WasmModuleSupport.typeId(Abstract("realtime_iterator")));
+							builder.localGet(value); builder.emit(I32Load(0)); builder.i32Const(module.runtimeTypeId(Abstract("realtime_iterator")));
 							builder.emit(I32Eq);
 							builder.localGet(value); builder.emit(I32Load(WasmLayout.ITERATOR_TYPE_OFFSET)); builder.localGet(typeId);
 							builder.emit(I32Eq); builder.emit(I32And); builder.localSet(result);
@@ -2709,11 +2709,11 @@ class WasmLinearRuntime {
 			}
 			if (name != "__std_is_exact_type")
 				for (object in program.objects) {
-					var accepted = [WasmModuleSupport.typeId(Obj(object.name))];
+					var accepted = [module.runtimeTypeId(Obj(object.name))];
 					var interfaceNames:Array<String> = object.interfaces.copy();
 					var base = object.base;
 					while (base != null) {
-						accepted.push(WasmModuleSupport.typeId(Obj(base)));
+						accepted.push(module.runtimeTypeId(Obj(base)));
 						var next:Null<String> = null;
 						for (candidate in program.objects)
 							if (candidate.name == base) {
@@ -2731,7 +2731,7 @@ class WasmLinearRuntime {
 						if (interfaceName == null || visited.exists(interfaceName))
 							continue;
 						visited.set(interfaceName, true);
-						accepted.push(WasmModuleSupport.typeId(Virtual(interfaceName)));
+						accepted.push(module.runtimeTypeId(Virtual(interfaceName)));
 						for (declaration in program.interfaces)
 							if (declaration.name == interfaceName)
 								for (parent in declaration.bases)
@@ -2739,7 +2739,7 @@ class WasmLinearRuntime {
 					}
 					builder.localGet(value);
 					builder.emit(I32Load(0));
-					builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
+					builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 					builder.emit(I32Eq);
 					builder.if_(function(builder) {
 						for (index in 0...accepted.length) {
@@ -2810,7 +2810,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(2),
 			LocalGet(2),
-			I32Const(WasmModuleSupport.typeId(Bytes)),
+			I32Const(module.runtimeTypeId(Bytes)),
 			I32Store(0),
 			LocalGet(2),
 			LocalGet(1),
@@ -2858,7 +2858,7 @@ class WasmLinearRuntime {
 			Call(allocator),
 			LocalSet(4),
 			LocalGet(4),
-			I32Const(WasmModuleSupport.typeId(Bytes)),
+			I32Const(module.runtimeTypeId(Bytes)),
 			I32Store(0),
 			LocalGet(4),
 			I32Const(WasmLayout.STRING_DATA_OFFSET),
@@ -2910,7 +2910,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -3034,7 +3034,7 @@ class WasmLinearRuntime {
 				I32Store8(0)
 			], size -> [
 				LocalGet(result),
-				I32Const(WasmModuleSupport.typeId(Bytes)),
+				I32Const(module.runtimeTypeId(Bytes)),
 				I32Store(0),
 				LocalGet(result),
 				LocalGet(size),
@@ -3093,7 +3093,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(end);
@@ -3152,10 +3152,10 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Array(Dyn)));
+		builder.i32Const(module.runtimeTypeId(Array(Dyn)));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET));
 		builder.localGet(result);
 		builder.i32Const(0);
@@ -3379,7 +3379,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.i32Const(1);
@@ -3438,7 +3438,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(digitCount);
@@ -3796,7 +3796,7 @@ class WasmLinearRuntime {
 		builder.call(builder.functionRef(allocator));
 		builder.localSet(result);
 		builder.localGet(result);
-		builder.i32Const(WasmModuleSupport.typeId(Bytes));
+		builder.i32Const(module.runtimeTypeId(Bytes));
 		builder.emit(I32Store(0));
 		builder.localGet(result);
 		builder.localGet(length);
@@ -3875,7 +3875,7 @@ class WasmLinearRuntime {
 		for (type in dynamicTypes) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmModuleSupport.typeId(type));
+			builder.i32Const(module.runtimeTypeId(type));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(value);
@@ -3905,7 +3905,7 @@ class WasmLinearRuntime {
 				methodIndex = method == null || functions == null ? null : functions.get(method);
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmModuleSupport.typeId(Obj(object.name)));
+			builder.i32Const(module.runtimeTypeId(Obj(object.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				if (methodIndex != null) {
@@ -3918,7 +3918,7 @@ class WasmLinearRuntime {
 		}
 		builder.localGet(value);
 		builder.emit(I32Load(0));
-		builder.i32Const(WasmModuleSupport.typeId(Bool));
+		builder.i32Const(module.runtimeTypeId(Bool));
 		builder.emit(I32Eq);
 		builder.if_(function(builder) {
 			builder.localGet(value);
@@ -3934,7 +3934,7 @@ class WasmLinearRuntime {
 		for (enumDecl in program.enums) {
 			builder.localGet(value);
 			builder.emit(I32Load(0));
-			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				for (index in 0...enumDecl.cases.length)
@@ -4198,7 +4198,7 @@ class WasmLinearRuntime {
 			}, function(builder) {
 				builder.localGet(left);
 				builder.emit(I32Load(0));
-				builder.i32Const(WasmModuleSupport.typeId(F64));
+				builder.i32Const(module.runtimeTypeId(F64));
 				builder.emit(I32Eq);
 				builder.ifElse(function(builder) {
 					builder.localGet(left);
@@ -4230,7 +4230,7 @@ class WasmLinearRuntime {
 					builder.emit(I32Eq);
 					builder.ifElse(function(builder) {
 						builder.localGet(leftType);
-						builder.i32Const(WasmModuleSupport.typeId(Bytes));
+						builder.i32Const(module.runtimeTypeId(Bytes));
 						builder.emit(I32Eq);
 						builder.ifElse(function(builder) {
 							builder.localGet(left);
@@ -4239,18 +4239,18 @@ class WasmLinearRuntime {
 							builder.localSet(result);
 						}, function(builder) {
 							builder.localGet(leftType);
-							builder.i32Const(WasmModuleSupport.typeId(I32));
+							builder.i32Const(module.runtimeTypeId(I32));
 							builder.emit(I32Eq);
 							builder.localGet(leftType);
-							builder.i32Const(WasmModuleSupport.typeId(RawPtr));
-							builder.emit(I32Eq);
-							builder.emit(I32Or);
-							builder.localGet(leftType);
-							builder.i32Const(WasmModuleSupport.typeId(TypeRef));
+							builder.i32Const(module.runtimeTypeId(RawPtr));
 							builder.emit(I32Eq);
 							builder.emit(I32Or);
 							builder.localGet(leftType);
-							builder.i32Const(WasmModuleSupport.typeId(Abstract("native_callback")));
+							builder.i32Const(module.runtimeTypeId(TypeRef));
+							builder.emit(I32Eq);
+							builder.emit(I32Or);
+							builder.localGet(leftType);
+							builder.i32Const(module.runtimeTypeId(Abstract("native_callback")));
 							builder.emit(I32Eq);
 							builder.emit(I32Or);
 							builder.ifElse(function(builder) {
@@ -4262,7 +4262,7 @@ class WasmLinearRuntime {
 								builder.localSet(result);
 							}, function(builder) {
 								builder.localGet(leftType);
-								builder.i32Const(WasmModuleSupport.typeId(Bool));
+								builder.i32Const(module.runtimeTypeId(Bool));
 								builder.emit(I32Eq);
 								builder.ifElse(function(builder) {
 									builder.localGet(left);
@@ -4273,7 +4273,7 @@ class WasmLinearRuntime {
 									builder.localSet(result);
 								}, function(builder) {
 									builder.localGet(leftType);
-									builder.i32Const(WasmModuleSupport.typeId(F64));
+									builder.i32Const(module.runtimeTypeId(F64));
 									builder.emit(I32Eq);
 									builder.ifElse(function(builder) {
 										builder.localGet(left);
@@ -4284,7 +4284,7 @@ class WasmLinearRuntime {
 										builder.localSet(result);
 									}, function(builder) {
 										builder.localGet(leftType);
-										builder.i32Const(WasmModuleSupport.typeId(I64));
+										builder.i32Const(module.runtimeTypeId(I64));
 										builder.emit(I32Eq);
 										builder.ifElse(function(builder) {
 											builder.localGet(left);
@@ -4294,7 +4294,7 @@ class WasmLinearRuntime {
 											builder.emit(I64Eq);
 											builder.localSet(result);
 										}, function(builder) {
-											appendNullaryEnumEqual(builder, program, left, right, leftType, result);
+											appendNullaryEnumEqual(module, builder, program, left, right, leftType, result);
 										});
 									});
 								});
@@ -4302,7 +4302,7 @@ class WasmLinearRuntime {
 						});
 					}, function(builder) {
 						// A boxed Int equals a boxed Float of the same value, as Dynamic comparison does in Haxe.
-						appendMixedNumberEqual(builder, left, right, leftType, rightType, result);
+						appendMixedNumberEqual(module, builder, left, right, leftType, rightType, result);
 					});
 				});
 			});
@@ -4313,7 +4313,7 @@ class WasmLinearRuntime {
 	}
 
 	/** Two values of the same enum are equal when they are the same constructor and it takes no arguments. */
-	static function appendNullaryEnumEqual(builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
+	static function appendNullaryEnumEqual(module:WasmModule, builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
 			result:WasmLocalRef):Void {
 		for (enumDecl in program.enums) {
 			var nullary = [
@@ -4323,7 +4323,7 @@ class WasmLinearRuntime {
 			if (nullary.length == 0)
 				continue;
 			builder.localGet(leftType);
-			builder.i32Const(WasmModuleSupport.typeId(Enum(enumDecl.name)));
+			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
 				builder.localGet(left);
@@ -4346,14 +4346,14 @@ class WasmLinearRuntime {
 		}
 	}
 
-	static function appendMixedNumberEqual(builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef, rightType:WasmLocalRef,
+	static function appendMixedNumberEqual(module:WasmModule, builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef, rightType:WasmLocalRef,
 			result:WasmLocalRef):Void {
 		for (intOnLeft in [true, false]) {
 			builder.localGet(leftType);
-			builder.i32Const(WasmModuleSupport.typeId(intOnLeft ? I32 : F64));
+			builder.i32Const(module.runtimeTypeId(intOnLeft ? I32 : F64));
 			builder.emit(I32Eq);
 			builder.localGet(rightType);
-			builder.i32Const(WasmModuleSupport.typeId(intOnLeft ? F64 : I32));
+			builder.i32Const(module.runtimeTypeId(intOnLeft ? F64 : I32));
 			builder.emit(I32Eq);
 			builder.emit(I32And);
 			builder.if_(function(builder) {

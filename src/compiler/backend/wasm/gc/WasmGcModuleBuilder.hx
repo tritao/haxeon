@@ -42,7 +42,7 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 /** Owns construction and lowering of a complete Wasm GC module. */
 class WasmGcModuleBuilder {
-	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):BackendResult {
+	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):compiler.backend.wasm.WasmCompilation {
 		var importMemory = options.importMemory == true,
 			contract = options.memoryContract,
 			memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
@@ -126,6 +126,7 @@ class WasmGcModuleBuilder {
 			methods:Map<String, String> = [],
 			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
 			gcRepresentation = new WasmGcRepresentation(gcContext);
+		module.runtimeTypeIds = plan.runtimeTypeIds;
 		plan.addTo(module);
 		module.importMemory = importMemory;
 		module.sharedMemory = options.sharedMemory == true;
@@ -258,7 +259,7 @@ class WasmGcModuleBuilder {
 			for (id in markers.keys()) if (uses.get(id) != 1) throw 'Closure adapter marker is not used exactly once in ${fn.name}';
 		}
 		if (reflectionTable != null)
-			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots);
+			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots, plan.runtimeTypeIds);
 		closureAdapters.define(functions, gcRepresentation, tableSlots);
 
 		var scalarLayout = new WasmValueLayout(program), scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => {
@@ -306,7 +307,7 @@ class WasmGcModuleBuilder {
 			WasmExceptionLowering.lower(module);
 		if (options.wasmGcAllocationCount == true)
 			instrumentGcAllocations(module);
-		return {target: options.target, bytes: WasmEncoder.encode(module)};
+		return {artifact: {target: options.target, bytes: WasmEncoder.encode(module)}, runtimeTypeIds: plan.runtimeTypeIds};
 	}
 
 	static function instrumentGcAllocations(module:WasmModule):Void {

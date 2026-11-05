@@ -762,7 +762,7 @@ class WasmGcMaps {
 			I32Const(8),
 			I32Add,
 			ArrayNewDefault(storage),
-			I32Const(WasmModuleSupport.typeId(element)),
+			I32Const(plan.runtimeTypeIds.id(element)),
 			StructNew(array),
 			LocalSet(1)
 			];
@@ -940,7 +940,7 @@ class WasmGcMaps {
 		body.push(I32Const(8));
 		body.push(I32Add);
 		body.push(ArrayNewDefault(plan.arrayStorageType(element)));
-		body.push(I32Const(WasmModuleSupport.typeId(element)));
+		body.push(I32Const(plan.runtimeTypeIds.id(element)));
 		body.push(StructNew(plan.arrayType(element)));
 	}
 

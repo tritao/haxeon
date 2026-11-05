@@ -41,7 +41,7 @@ class WasmLinearValueArrayAccessMain {
 			{name:"clear", library:"haxeon_runtime", symbol:"__value_array_clear", arguments:[array,I32], result:Void}
 		];
 		var module = new WasmModule("linear-value-array-access"); module.memoryMin = 1; module.exportMemory = true;
-		for (native in natives) module.exports.push({name:native.name, functionIndex:module.addFunction(WasmLinearValueArrays.build(native))});
+		for (native in natives) module.exports.push({name:native.name, functionIndex:module.addFunction(WasmLinearValueArrays.build(module, native))});
 		var bytes = WasmEncoder.encode(module), directory = Sys.getEnv("TMPDIR");
 		if (directory == null || directory.length == 0) directory = ".";
 		var path = directory + "/haxeon-linear-lanes-" + Std.random(0x7fffffff) + ".wasm";
