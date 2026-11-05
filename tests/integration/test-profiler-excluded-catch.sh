@@ -52,7 +52,7 @@ timeout 60s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --pr
     cat "$scratch/run.log" >&2
     exit 1
   }
-"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
 python3 - "$scratch/trace.json" <<'PY'
 import json
 import sys

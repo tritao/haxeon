@@ -3,10 +3,10 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$root_dir/.tools/hashlink/hl"
+hl="$("$root_dir/scripts/hashlink-path.sh")/hl"
 test_cli_hl=""
 
-if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
+if [[ ! -x "$haxe" ]]; then
 	echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
@@ -85,6 +85,8 @@ if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
 fi
 
 run_timed native-build build_native_quietly
+run_timed checkout-hashlink bash "$root_dir/tests/integration/test-checkout-hashlink.sh"
+run_timed hashlink-launchers bash "$root_dir/tests/integration/test-hashlink-launchers.sh"
 export HAXEON_NATIVE_READY=1
 run_timed gc-root-index "$root_dir/tests/integration/test-gc-root-index.sh"
 mkdir -p "$root_dir/out"
@@ -111,17 +113,14 @@ build_prebuilt_compilers() {
 	return "$status"
 }
 run_timed prebuilt-compilers build_prebuilt_compilers
+run_timed runtime-build-isolation bash "$root_dir/tests/integration/test-driver-runtime-isolation.sh"
 run_timed hxi-value-records bash "$root_dir/scripts/test-hxi-value-records.sh"
 run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.sh"
 run_timed run-output bash "$root_dir/tests/integration/test-run-output.sh"
 run_timed wire-incremental-helpers bash "$root_dir/tests/integration/test-wire-incremental-helpers.sh"
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
-run_haxeon_build() {
-	(cd "$root_dir" && LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$hl" "$prebuilt_build_tool" "$@")
-}
-run_timed compiler-runtime-tests run_haxeon_build test "${TEST_JOBS:-16}"
+run_timed compiler-runtime-tests env HAXEON_BUILD_HL="$prebuilt_build_tool" "$root_dir/scripts/test-driver.sh" "${TEST_JOBS:-16}"
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes.
 # They run alongside the integration stages below, which never touch Wasm artifacts. (Not alongside
 # compiler-runtime-tests: its WasmBackendMain case rewrites the out/wasm-backend-* files they read.)

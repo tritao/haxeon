@@ -7,7 +7,7 @@ import hashlib, json, os, pathlib, socket, struct, subprocess, sys, tempfile, ti
 repo = pathlib.Path(sys.argv[1])
 env = os.environ.copy()
 env.pop('HAXEON_COMPILER_SERVER', None)
-env['LD_LIBRARY_PATH'] = str(repo / 'out') + ':' + str(repo / '.tools/hashlink') + ':' + env.get('LD_LIBRARY_PATH', '')
+env['LD_LIBRARY_PATH'] = str(repo / 'out') + ':' + str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip())) + ':' + env.get('LD_LIBRARY_PATH', '')
 
 def stop(state):
     try:
@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
                 assert binary.with_name(binary.name + '.build-id').read_text() == hashlib.sha256(binary.read_bytes()).hexdigest()
         return p.stdout
     def run(expected, output='host/main.hl'):
-        p = subprocess.run([str(repo / '.tools/hashlink/hl'), str(root / 'build' / output)], env=env, timeout=20)
+        p = subprocess.run([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(root / 'build' / output)], env=env, timeout=20)
         assert p.returncode == expected, (output, p.returncode, expected)
     try:
         source('7')
@@ -50,9 +50,9 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         current = next(states.glob('*.json')).stem
         obsolete_state = states / ('0' * 64 + current[64:] + '.json')
         unrelated_state = states / ('1' * 64 + '-' + 'f' * 16 + '.json')
-        obsolete = subprocess.Popen([str(repo / '.tools/hashlink/hl'), str(next(states.glob('*.hl'))), str(obsolete_state)], env=env,
+        obsolete = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(obsolete_state)], env=env,
                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        unrelated = subprocess.Popen([str(repo / '.tools/hashlink/hl'), str(next(states.glob('*.hl'))), str(unrelated_state)], env=env,
+        unrelated = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(unrelated_state)], env=env,
                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(100):
             if obsolete_state.exists() and unrelated_state.exists():
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         assert not dead_state.exists(), 'dead worker state was not removed'
         # Beyond the memory budget, other workers are retired even under the count limit.
         heavy_state = states / ('3' * 64 + '-' + 'd' * 16 + '.json')
-        heavy = subprocess.Popen([str(repo / '.tools/hashlink/hl'), str(next(states.glob('*.hl'))), str(heavy_state)], env=env,
+        heavy = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(heavy_state)], env=env,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(100):
             if heavy_state.exists():

@@ -9,6 +9,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
 
 
 def main():
@@ -49,8 +50,8 @@ class Main {
                        check=True, capture_output=True, text=True)
         environment = os.environ.copy()
         environment["LD_LIBRARY_PATH"] = os.pathsep.join(
-            [str(ROOT / "out"), str(ROOT / ".tools/hashlink"), environment.get("LD_LIBRARY_PATH", "")])
-        subprocess.run([str(ROOT / ".tools/hashlink/hl"), str(bytecode)],
+            [str(ROOT / "out"), str(HASHLINK_DIR), environment.get("LD_LIBRARY_PATH", "")])
+        subprocess.run([str(HASHLINK_DIR / "hl"), str(bytecode)],
                        check=True, timeout=5, env=environment, capture_output=True, text=True)
     print("HashLink condition waits passed")
 

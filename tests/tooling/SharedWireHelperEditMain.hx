@@ -30,7 +30,7 @@ class SharedWireHelperEditMain {
 		var paths = [for (name in files.keys()) root + "/" + name];
 		function build(session:CompilerSession, expected:Int):Void {
 			CompilerDriver.compile(CompilerArguments.parse(args.concat(paths)), _ -> {}, session);
-			var actual = Sys.command(".tools/hashlink/hl", [root + "/main.hl"]);
+			var actual = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [root + "/main.hl"]);
 			if (actual != expected)
 				throw 'Shared wire helper: expected $expected, got $actual';
 		}

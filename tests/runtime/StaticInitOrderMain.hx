@@ -151,7 +151,7 @@ class StaticInitOrderMain {
 
 	static function runBytecode(path:String, bytes:haxe.io.Bytes):{status:Int, output:String} {
 		File.saveBytes(path, bytes);
-		var child = new sys.io.Process(".tools/hashlink/hl", [path]);
+		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 			status = child.exitCode();
 		child.close();

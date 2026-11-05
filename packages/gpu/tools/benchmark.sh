@@ -36,7 +36,7 @@ cmake --build "$build_dir" --target nativekit_gpu_benchmark
 set +e
 (cd "$haxeon_dir/out" && \
     LD_LIBRARY_PATH="$build_dir/modules/gpu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$haxeon_dir/vendor/hashlink/hl" "$build_dir/nativekit-gpu-benchmark.hl")
+    "$("$haxeon_dir/scripts/hashlink-path.sh")/hl" "$build_dir/nativekit-gpu-benchmark.hl")
 status=$?
 set -e
 if [[ $status -ne 42 ]]; then

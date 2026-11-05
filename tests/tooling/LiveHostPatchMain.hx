@@ -39,7 +39,7 @@ class LiveHostPatchMain {
 			for (name in FileSystem.readDirectory("src/runtime"))
 				if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name
 		]), false);
-		var hl = FileSystem.fullPath(".tools/hashlink/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+		var hl = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
 		var process = new Process(hl, [host, output, "Main", "[]"]);
 		Sys.sleep(1.5);
 		write(2);

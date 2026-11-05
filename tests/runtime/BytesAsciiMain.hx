@@ -14,7 +14,7 @@ class BytesAsciiMain {
 			"-fPIC",
 			"-Ivendor/hashlink/src",
 			"tests/native/bytes_decode_guards.c",
-			"-L.tools/hashlink",
+			"-L" + Sys.getEnv("HAXEON_HASHLINK_DIR"),
 			"-lhl",
 			"-o",
 			nativePath
@@ -64,7 +64,7 @@ function main():Int {
 }');
 		var path = "out/bytes-ascii-edge.hl";
 		File.saveBytes(path, HlWriter.encode(compiler.compile("Main").module));
-		var status = Sys.command(".tools/hashlink/hl", [path]);
+		var status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile(nativePath);
 		if (status != 42)

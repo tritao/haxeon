@@ -27,8 +27,8 @@ if(UNIX AND NOT APPLE)
   target_compile_features(haxeon-jit-support-lifetime PRIVATE c_std_11)
   set_target_properties(haxeon-jit-support-lifetime PROPERTIES
     ENABLE_EXPORTS ON
-    BUILD_RPATH "${CMAKE_SOURCE_DIR}/.tools/hashlink"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/.tools/hashlink"
+    BUILD_RPATH "${HAXEON_HASHLINK_OUTPUT_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
   )
   foreach(_property IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_OPTIONS)
     get_target_property(_value hl ${_property})

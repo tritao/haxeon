@@ -9,7 +9,7 @@ fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-incremental.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -std=gnu11 -Wall -Wextra -Werror "$root/tests/native/gc_apple_tracking_probe.c" -lpthread -o "$work/apple-backend"
 "$work/apple-backend"
 "${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" -L"$library" -lhl -lpthread -o "$work/guards"
@@ -85,12 +85,12 @@ mkdir -p "$work/stdlib/hl"
 cp "$root/stdlib/hl/Gc.hx" "$work/stdlib/hl/Gc.hx"
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$root/packages/ui/haxe" -cp "$work/stdlib" -hl "$work/frame.hl" -main FrameGcSchedulerProbe
 if [[ $kernel_available == 1 ]]; then
- LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/frame.hl"
+ LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/frame.hl"
 fi
 
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$work/stdlib" -hl "$work/barrier.hl" -main GcWriteBarrierProbe
 if [[ $kernel_available == 1 ]]; then
- HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=1 LD_PRELOAD="$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/barrier.hl"
+ HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=1 LD_PRELOAD="$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/barrier.hl"
 fi
 
 # The test-only backend must never touch kernel tracking, even for probing/rearm.
@@ -101,8 +101,8 @@ for threads in 1 4; do
   [[ $failure == none ]] || args+=("$failure")
   HL_GC_TEST_UNSET_VALIDATION=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" "${args[@]}"
  done
- HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/barrier.hl"
- HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/frame.hl"
+ HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/barrier.hl"
+ HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/frame.hl"
 done
 status=0
 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=0 LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" >"$work/required.log" 2>&1 || status=$?
@@ -151,7 +151,7 @@ echo 'PASS: native runtime mutation negative control'
 
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -cp "$work/stdlib" -hl "$work/runtime-probe.hl" -main GcRuntimeWriteProbe
 for threads in 1 4; do
- HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/runtime-probe.hl"
+ HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/runtime-probe.hl"
 done
 
 # Exercise FFI and module lifetimes with independently validated software tracking.

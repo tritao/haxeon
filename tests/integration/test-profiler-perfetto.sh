@@ -8,7 +8,7 @@ if [[ $# -gt 1 ]]; then
 fi
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
-profiler_tool="${HLPROF_LIVE:-$root/.tools/hashlink/hlprof-live}"
+profiler_tool="${HLPROF_LIVE:-$("$root/scripts/hashlink-path.sh")/hlprof-live}"
 scratch=$(mktemp -d /tmp/haxeon-perfetto-XXXXXX)
 output_file="$scratch/trace.json"
 trap 'rm -rf "$scratch"' EXIT

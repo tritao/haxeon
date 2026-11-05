@@ -41,7 +41,7 @@ class FunctionValueLanesMain {
 				program.natives.push({name:"exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void}); program.entryPoint="run";
 				var path="out/function-value-lanes.hl";
 				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)));
-				var process=new sys.io.Process(".tools/hashlink/hl",[path]), error=process.stderr.readAll().toString(), status=process.exitCode(); process.close();
+				var process=new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl",[path]), error=process.stderr.readAll().toString(), status=process.exitCode(); process.close();
 				if(status!=42) throw 'HashLink callback lane returned $status: $error';
 			} else {
 				var backend:BackendTarget=target==Wasm32 ? Wasm32 : WasmGc, path='out/function-value-lanes-$target.wasm';

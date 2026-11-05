@@ -10,6 +10,7 @@ import tempfile
 import select
 
 ROOT = Path(__file__).resolve().parents[2]
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
 
 
 def main():
@@ -28,9 +29,9 @@ def main():
                         "-o", str(project / "crash_test.hdll")], check=True)
         environment = os.environ.copy()
         environment["LD_LIBRARY_PATH"] = os.pathsep.join([
-            str(project), str(ROOT / "out"), str(ROOT / ".tools/hashlink"),
+            str(project), str(ROOT / "out"), str(HASHLINK_DIR),
             environment.get("LD_LIBRARY_PATH", "")])
-        command = [str(ROOT / ".tools/hashlink/hl"), str(bytecode)]
+        command = [str(HASHLINK_DIR / "hl"), str(bytecode)]
         for mode in ["main", "worker", "overflow"]:
             result = subprocess.run(command + [mode], env=environment,
                                     capture_output=True, text=True, timeout=10)

@@ -27,11 +27,11 @@ class CompilerSessionMain {
 			var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 				separator = Sys.systemName() == "Windows" ? ";" : ":",
 				previousPath = Sys.getEnv(variable),
-				runtime = FileSystem.fullPath(".tools/hashlink/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+				runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
 			Sys.putEnv(variable,
 				FileSystem.fullPath("out")
 				+ separator
-				+ FileSystem.fullPath(".tools/hashlink")
+				+ FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR"))
 				+ (previousPath == null ? "" : separator + previousPath));
 			expect(Sys.command(runtime, [output]) == expected, "incremental bytecode must execute the edited program");
 			expect(Sys.command(runtime, [fresh]) == expected, "fresh bytecode must execute the same program");
@@ -176,12 +176,12 @@ class CompilerSessionMain {
 			"--output=" + root + "/shape.hl"
 		], shapeSession = new CompilerSession(), shapeMessages:Array<String> = [];
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
-		var runtime = FileSystem.fullPath(".tools/hashlink/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+		var runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
 		var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 		var previousPath = Sys.getEnv(variable);
 		Sys.putEnv(variable, FileSystem.fullPath("out")
 			+ ":"
-			+ FileSystem.fullPath(".tools/hashlink")
+			+ FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR"))
 			+ (previousPath == null ? "" : ":" + previousPath));
 		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "initial typedef program must execute");
 		shapeMessages = [];

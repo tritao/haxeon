@@ -132,7 +132,7 @@ if [[ -z "$slept" || "$slept" -lt 990 ]]; then
 	echo "FAIL: Sys.sleep(1.0) under sampling returned after ${slept:-?} ms" >&2
 	exit 1
 fi
-"$repo_dir/.tools/hashlink/hlprof-live" export --format folded "$scratch/capture/profile.hlpc" > "$scratch/folded.txt"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format folded "$scratch/capture/profile.hlpc" > "$scratch/folded.txt"
 python3 - "$scratch/folded.txt" <<'PY'
 import re
 import sys
@@ -178,7 +178,7 @@ assert native >= in_native * 0.9, report
 print(report)
 PY
 # The sampler flags samples taken in a system call: the sleeping thread's are waiting, the spinning ones are not.
-"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
 python3 - "$scratch/trace.json" <<'PY'
 import json, sys
 events = json.load(open(sys.argv[1]))
@@ -199,7 +199,7 @@ assert spinning_waiting <= len(spinning) * 0.1, counts
 print(counts)
 PY
 # The report ranks the native leaf where the time went, and counts what was waiting apart.
-"$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.txt"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.txt"
 grep -Eq '^samples=[0-9]+ on_cpu=[1-9][0-9]* waiting=[1-9]' "$scratch/report.txt"
 grep -q '\[native\] mixed_spin_leaf' "$scratch/report.txt"
 echo "PASS: samples hold the native frames between Haxe frames, in order, and tell running from waiting"

@@ -61,7 +61,7 @@ record() {
 		cat "$scratch/$name.log" >&2
 		exit 1
 	}
-	"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/$trace" "$scratch/$name/profile.hlpc"
+	"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/$trace" "$scratch/$name/profile.hlpc"
 }
 
 record hooked trace.json

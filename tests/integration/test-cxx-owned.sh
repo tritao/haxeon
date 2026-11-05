@@ -54,8 +54,8 @@ grep -q 'return OwnedWidget.adopt' "$repo_dir/out/cxx_owned_projection/CxxOwnedF
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" cxx-owned-test.hl
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" cxx-owned-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then

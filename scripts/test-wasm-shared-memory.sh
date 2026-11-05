@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 build_dir=$(mktemp -d)
 trap 'rm -rf -- "$build_dir"' EXIT
 "$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmSharedMemoryMain "$build_dir/shared.wasm" "$build_dir/unshared.wasm"
@@ -23,14 +24,14 @@ JSON
 for target in wasm32 wasm-gc; do
   (
     cd "$root_dir"
-    export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     export HAXEON_WASM_LEGACY_EXCEPTIONS=1
     for fixture in wasm-host-shared-memory wasm-utf8-field; do
       source_dir=tests/programs
       [[ $fixture == wasm-utf8-field ]] && source_dir=tests/ffi
       exports=("--export=$fixture.callback")
       [[ $fixture == wasm-utf8-field ]] && exports=("--export=$fixture.copy" "--export=$fixture.verify")
-      "$root_dir/.tools/hashlink/hl" "$build_dir/compiler.hl" \
+      "$hashlink_dir/hl" "$build_dir/compiler.hl" \
         --target="$target" --entry="$fixture" --output="$build_dir/$fixture-$target.wasm" \
         --wasm-import-memory --wasm-shared-memory --wasm-memory-contract="$build_dir/contract.json" \
         --root="$source_dir" "${exports[@]}" "$source_dir/$fixture.hx"

@@ -20,10 +20,7 @@ else
 	exit 2
 fi
 
-hashlink_runtime="$haxeon_dir/.tools/hashlink/hl"
-if [[ ! -x "$hashlink_runtime" ]]; then
-	hashlink_runtime="$haxeon_dir/vendor/hashlink/hl"
-fi
+hashlink_runtime="$("$haxeon_dir/scripts/hashlink-path.sh")/hl"
 if [[ ! -x "$hashlink_runtime" ]]; then
 	echo "virtual-list benchmark: missing HashLink runtime" >&2
 	exit 2
@@ -63,7 +60,7 @@ fi
 	"$module_dir/bindings/haxe/haxeon/ui/"*.hx)
 
 font_path=${NKUI_TEST_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
-runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:$haxeon_dir/vendor/hashlink"
+runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")"
 if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
 	runtime_library_path="$runtime_library_path:$LD_LIBRARY_PATH"
 fi

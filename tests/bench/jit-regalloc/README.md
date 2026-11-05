@@ -8,7 +8,7 @@ nested loops using an outer value, and a two-way loop-carried update.
 Build the stock-Haxe seed compiler, then run paired measurements:
 
 ```sh
-export LD_LIBRARY_PATH=$PWD/out:$PWD/.tools/hashlink
+export LD_LIBRARY_PATH=$PWD/out:$(scripts/hashlink-path.sh)
 mkdir -p out/regalloc
 .tools/haxe/haxe --cwd . -cp src -hl out/regalloc/compiler.hl -main compiler.tools.HaxeonCompiler
 python3 tests/bench/jit-regalloc/run.py --modes 0,4
@@ -28,7 +28,7 @@ gdb -batch \
   -ex 'break __jit_debug_register_code' \
   -ex 'run out/regalloc/micro-results/micro.hl cold 1000' \
   -ex 'finish' -ex "disassemble 'RegallocBench.cold'" \
-  .tools/hashlink/hl
+  $(scripts/hashlink-path.sh)/hl
 ```
 
 For A/B disassembly add `-ex 'set environment HL_JIT_REGOPT 4'`. Stopping at

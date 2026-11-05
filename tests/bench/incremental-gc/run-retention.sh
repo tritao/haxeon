@@ -3,7 +3,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 output=${1:-$root/out/bench/gc-retention}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 for fixture in gc_retention; do
  "${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/$fixture.c" -L"$library" -lhl -lpthread -o "$output/$fixture"
 done

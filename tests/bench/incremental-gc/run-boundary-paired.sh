@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../../.." && pwd)
 before=$(cd "${1:?usage: run-boundary-paired.sh BEFORE_LIBRARY OUTPUT}" && pwd)
 output=${2:-$root/out/bench/gc-boundary-paired}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
-after=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+after=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$after" -lhl -lpthread -o "$output/boundary"
 export HL_GC_THREADS=1 HL_GC_SCAN_PROFILE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_MIN_TRIGGER=67108864 HL_GC_INCREMENTAL=1
 frames=${GC_BOUNDARY_FRAMES:-600}; nodes=${GC_BOUNDARY_NODES:-500000}; repeats=${GC_BOUNDARY_REPEATS:-2}

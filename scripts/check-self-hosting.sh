@@ -8,18 +8,20 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$root_dir/.tools/hashlink/hl"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+hl="$hashlink_dir/hl"
 work="$root_dir/out/self-hosting"
 
-if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
+if [[ ! -x "$haxe" ]]; then
 	echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
-if [[ ! -e "$root_dir/out/haxeon_runtime.hdll" ]]; then
-	"$root_dir/scripts/build-native.sh" >/dev/null
+if [[ ! -x "$hl" || ! -e "$root_dir/out/haxeon_runtime.hdll" ]]; then
+	echo "missing checkout-built HashLink or runtime; run scripts/build-native.sh first" >&2
+	exit 1
 fi
 
-library_path="$root_dir/out:$root_dir/.tools/hashlink"
+library_path="$root_dir/out:$hashlink_dir"
 case "$(uname -s)" in
 Darwin) export DYLD_LIBRARY_PATH="$library_path${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" ;;
 *) export LD_LIBRARY_PATH="$library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;

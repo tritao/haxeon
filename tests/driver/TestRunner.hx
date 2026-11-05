@@ -58,7 +58,7 @@ class TestRunner {
 		this.root = root;
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
-		hl = Path.join([root, ".tools", "hashlink", "hl" + suffix]);
+		hl = Path.join([Sys.getEnv("HAXEON_HASHLINK_DIR"), "hl" + suffix]);
 		var main = Sys.getEnv("HAXEON_MAIN_HL");
 		prebuiltMain = main != null && main != "" && FileSystem.exists(main) ? main : null;
 		configureRuntimeLibraryPath();
@@ -307,7 +307,7 @@ class TestRunner {
 	}
 
 	function configureRuntimeLibraryPath():Void {
-		var paths = [Path.join([root, "out"]), Path.join([root, ".tools", "hashlink"])];
+		var paths = [Path.join([root, "out"]), Sys.getEnv("HAXEON_HASHLINK_DIR")];
 		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")

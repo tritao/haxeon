@@ -13,7 +13,7 @@ class GeneratedProgramRunner {
 		File.saveBytes(path, HlWriter.encode(compiled.module));
 		var status:Int;
 		try {
-			status = Sys.command(Sys.getCwd() + "/.tools/hashlink/hl", [path]);
+			status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		} catch (error:Dynamic) {
 			FileSystem.deleteFile(path);
 			throw error;

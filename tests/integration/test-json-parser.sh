@@ -4,14 +4,14 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_dir"
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-json.XXXXXX")
 trap 'rm -rf -- "${temporary_dir:?}"' EXIT
-export LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 .tools/haxe/haxe -cp src -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
 for program in json-utf8-parser json-decoded-object-array json-typed-object-array; do
   for target in hl wasm32 wasm-gc; do
-    .tools/hashlink/hl "$temporary_dir/compiler.hl" --target="$target" --output="$temporary_dir/$program.$target" --entry="$program" --root=tests/programs "tests/programs/$program.hx" > "$temporary_dir/build.log" 2>&1 || { cat "$temporary_dir/build.log"; exit 1; }
+    "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/compiler.hl" --target="$target" --output="$temporary_dir/$program.$target" --entry="$program" --root=tests/programs "tests/programs/$program.hx" > "$temporary_dir/build.log" 2>&1 || { cat "$temporary_dir/build.log"; exit 1; }
   done
   set +e
-  .tools/hashlink/hl "$temporary_dir/$program.hl"
+  "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/$program.hl"
   result=$?
   set -e
   [[ "$result" == 42 ]] || { echo "native $program failed: $result"; exit 1; }

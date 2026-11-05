@@ -2,7 +2,7 @@
 //   .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler --output=OUT.hl --entry=KeyHashTests \
 //     --root=packages/ui/tests/key-hash --root=packages/ui/haxe packages/ui/tests/key-hash/KeyHashTests.hx \
 //     packages/ui/haxe/haxeon/ui/core/KeyHash.hx
-//   LD_LIBRARY_PATH=out:.tools/hashlink .tools/hashlink/hl OUT.hl
+//   LD_LIBRARY_PATH=out:$(scripts/hashlink-path.sh) $(scripts/hashlink-path.sh)/hl OUT.hl
 import haxeon.ui.core.KeyHash;
 
 class KeyHashTests {

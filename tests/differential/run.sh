@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$root_dir/.tools/hashlink/hl"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+hl="$hashlink_dir/hl"
 out_dir="$root_dir/out/differential"
 runtime_library_variable=LD_LIBRARY_PATH
 if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -31,7 +32,7 @@ mkdir -p "$out_dir"
 # Compile with haxeon: the HashLink build scripts/test.sh provides, else `haxe --run Main`.
 realtime_compile() {
 	if [[ -n ${HAXEON_MAIN_HL:-} && -f $HAXEON_MAIN_HL ]]; then
-		(cd "$root_dir" && run_hl "$root_dir/out:$root_dir/.tools/hashlink" "$HAXEON_MAIN_HL" "$1" "$2")
+		(cd "$root_dir" && run_hl "$root_dir/out:$hashlink_dir" "$HAXEON_MAIN_HL" "$1" "$2")
 	else
 		"$haxe" --cwd "$root_dir" -cp src --run Main "$1" "$2"
 	fi
@@ -60,10 +61,10 @@ run_case() {
 	if [[ "$reference_target" == interp ]]; then
 		"$haxe" -cp "$official_dir" -main Main --interp >"$official_log" 2>&1
 	else
-		run_hl "$root_dir/.tools/hashlink" "$official_output" >"$official_log" 2>&1
+		run_hl "$hashlink_dir" "$official_output" >"$official_log" 2>&1
 	fi
 	local official_status=$?
-	run_hl "$root_dir/out:$root_dir/.tools/hashlink" "$realtime_output" >"$realtime_log" 2>&1
+	run_hl "$root_dir/out:$hashlink_dir" "$realtime_output" >"$realtime_log" 2>&1
 	local realtime_status=$?
 	set -e
 

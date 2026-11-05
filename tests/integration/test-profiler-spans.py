@@ -11,8 +11,9 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-HL = ROOT / ".tools/hashlink/hl"
-PROFILER = ROOT / ".tools/hashlink/hlprof-live"
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
+HL = HASHLINK_DIR / "hl"
+PROFILER = HASHLINK_DIR / "hlprof-live"
 
 
 def run(*command, **kwargs):

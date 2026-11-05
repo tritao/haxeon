@@ -255,7 +255,7 @@ class BuildSystemMain {
 			var info = new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null, null, clang);
 			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug, linux, info, instrument), home);
 		}
-		var home = Path.join([root, "home"]),
+		var home = Sys.getCwd(),
 			clang = toolchain(true, scope, home),
 			gcc = toolchain(false, scope, home),
 			plain = toolchain(true, null, home),
@@ -274,7 +274,7 @@ class BuildSystemMain {
 			"sources outside the native scope, or excluded from it, are left alone");
 		expect(clang.compileArguments("native/a.c", "a.o", []).indexOf("-finstrument-functions-after-inlining") < 0,
 			"a source without an instrument root is left alone");
-		var hooks = Path.join([home, ".tools", "hashlink", "libhlprof_hooks.a"]),
+		var hooks = Path.join([build.HashLinkPath.directory(home), "libhlprof_hooks.a"]),
 			link = clang.sharedArguments("a.so", ["a.o"], ["-lm"]);
 		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o") && link.indexOf(hooks) > link.indexOf("-lm"),
 			"an instrumented module links the hooks after its objects and libraries");

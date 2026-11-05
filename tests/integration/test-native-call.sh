@@ -9,5 +9,5 @@ fixture_path=$(bash "$repo_dir/tests/integration/build-native-call-fixture.sh")
 "$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/native-call-test.hxml"
 (
 	cd "$repo_dir/out"
-	"$repo_dir/.tools/hashlink/hl" native-call-test.hl "$fixture_path"
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" native-call-test.hl "$fixture_path"
 )

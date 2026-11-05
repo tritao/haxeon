@@ -8,7 +8,7 @@ compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
 if [[ ! -f "$compiler" ]]; then
   .tools/haxe/haxe -cp src -hl "$compiler" -main compiler.tools.HaxeonCompiler
 fi
-export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 roots=(--root=stdlib --root=packages/ui/haxe --root=packages/ui/bindings/haxe --root=packages/platform/src --root=packages/editor/src --root=packages/ui/tests/haxeon)
 for fixture in state pointer; do
   if [[ "$fixture" == state ]]; then entry=StructStateAllocations; census=StateAllocationCensus; else entry=PointerLocationAllocations; census=PointerAllocationCensus; fi
@@ -25,9 +25,9 @@ for inline in 0 1; do
     elif [[ "$target" == wasm-gc ]]; then
       ext=wasm; flags=(--wasm-import-memory --wasm-gc-allocation-count --export="$census.prepare" --export="$census.perform")
     fi
-    HAXEON_INLINE="$inline" .tools/hashlink/hl "$compiler" --target="$target" --output="$tmp/test.$ext" --entry="$entry" "${roots[@]}" "${ffi[@]}" "${flags[@]}" "$source_file" > "$tmp/compile.log" 2>&1 || { cat "$tmp/compile.log" >&2; exit 1; }
+    HAXEON_INLINE="$inline" "$("$root/scripts/hashlink-path.sh")/hl" "$compiler" --target="$target" --output="$tmp/test.$ext" --entry="$entry" "${roots[@]}" "${ffi[@]}" "${flags[@]}" "$source_file" > "$tmp/compile.log" 2>&1 || { cat "$tmp/compile.log" >&2; exit 1; }
     if [[ "$target" == hl ]]; then
-      set +e; .tools/hashlink/hl "$tmp/test.hl"; status=$?; set -e
+      set +e; "$("$root/scripts/hashlink-path.sh")/hl" "$tmp/test.hl"; status=$?; set -e
       [[ "$status" == 42 ]] || { echo "HashLink inline=$inline exited $status" >&2; exit 1; }
     else
       node - "$tmp/test.wasm" "$target" "$inline" "$fixture" "$census" <<'JS'
@@ -53,12 +53,12 @@ done
 done
 
 # Root replacement snapshots IDs, then skips pointers cancelled by an earlier callback.
-HAXEON_INLINE=0 .tools/hashlink/hl "$compiler" --target=hl --output="$tmp/pointer-behavior.hl" \
+HAXEON_INLINE=0 "$("$root/scripts/hashlink-path.sh")/hl" "$compiler" --target=hl --output="$tmp/pointer-behavior.hl" \
   --entry=PointerLocationBehavior "${roots[@]}" \
   --ffi-interface=packages/platform/bindings/nativekit.hxi --ffi-projection=packages/platform/bindings/nativekit.hxmap \
   --ffi-interface=packages/platform/bindings/nativekit-net.hxi --ffi-projection=packages/platform/bindings/nativekit-net.hxmap \
   --ffi-interface=packages/ui/bindings/nativekit-ui.hxi --ffi-projection=packages/ui/bindings/nativekit-ui.hxmap \
   packages/ui/tests/haxeon/PointerLocationBehavior.hx > "$tmp/compile.log" 2>&1 || { cat "$tmp/compile.log" >&2; exit 1; }
-set +e; .tools/hashlink/hl "$tmp/pointer-behavior.hl"; status=$?; set -e
+set +e; "$("$root/scripts/hashlink-path.sh")/hl" "$tmp/pointer-behavior.hl"; status=$?; set -e
 [[ "$status" == 42 ]] || { echo "Pointer behavior exited $status" >&2; exit 1; }
 echo "PASS: pointer locations honor cancellation during root replacement"

@@ -11,7 +11,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 (
 	cd "$repo_dir/out"
 	set +e
-	HAXEON_HXI_TRACE=1 "$repo_dir/.tools/hashlink/hl" hxi-call-test.hl
+	HAXEON_HXI_TRACE=1 "$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -25,7 +25,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 (
 	cd "$repo_dir/out"
 	set +e
-	"$repo_dir/.tools/hashlink/hl" hxi-value-handle-test.hl
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-value-handle-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -39,7 +39,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 (
 	cd "$repo_dir/out"
 	set +e
-	"$repo_dir/.tools/hashlink/hl" hxi-span-test.hl
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-span-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -53,7 +53,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 (
 	cd "$repo_dir/out"
 	set +e
-	"$repo_dir/.tools/hashlink/hl" hxi-outputs-test.hl
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-outputs-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -67,7 +67,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 (
 	cd "$repo_dir/out"
 	set +e
-	"$repo_dir/.tools/hashlink/hl" hxi-retained-test.hl
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-retained-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then
@@ -80,7 +80,7 @@ invalid_output="$repo_dir/out/hxi-invalid-null.txt"
 set +e
 (
 	cd "$repo_dir/out"
-	"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-null
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.invalid-null
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
@@ -93,8 +93,8 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-length
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.invalid-length
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
@@ -107,8 +107,8 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-utf8
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.invalid-utf8
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
@@ -121,8 +121,8 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.invalid-index
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.invalid-index
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
@@ -135,8 +135,8 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.typed-array-overflow
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.typed-array-overflow
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e
@@ -149,8 +149,8 @@ fi
 set +e
 (
 	cd "$repo_dir/out"
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" hxi-call-test.hl.closed-callback
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" hxi-call-test.hl.closed-callback
 ) >"$invalid_output" 2>&1
 invalid_status=$?
 set -e

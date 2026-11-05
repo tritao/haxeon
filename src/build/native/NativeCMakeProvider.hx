@@ -222,7 +222,7 @@ class NativeCMakeProvider {
 			return [];
 		var home = context.compilerHome;
 		return [
-			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([home, ".tools", "hashlink", msvcX64 ? "hlprof_penter.lib" : "libhlprof_hooks.a"]),
+			"-DHAXEON_INSTRUMENT_HOOKS=" + Path.join([build.HashLinkPath.directory(home), msvcX64 ? "hlprof_penter.lib" : "libhlprof_hooks.a"]),
 			"-DHAXEON_INSTRUMENT_INCLUDE=" + instrument.nativeInclude.join(";"),
 			"-DHAXEON_INSTRUMENT_EXCLUDE=" + instrument.nativeExclude.join(";")
 		];

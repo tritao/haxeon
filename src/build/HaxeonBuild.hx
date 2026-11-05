@@ -93,6 +93,21 @@ class HaxeonBuild {
 	}
 
 	static function test(arguments:Array<String>):Int {
+		#if hl
+		for (outputDirectory in [path("out"), HashLinkPath.directory(root())]) {
+			var loaded:Null<String>;
+			try
+				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
+			catch (failure:Dynamic) {
+				Sys.stderr().writeString('Cannot verify loaded libraries before building in $outputDirectory: $failure\n');
+				return 1;
+			}
+			if (loaded != null) {
+				Sys.stderr().writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Run scripts/test-driver.sh to use isolated libraries.\n');
+				return 1;
+			}
+		}
+		#end
 		var jobs = arguments.length == 0 ? "4" : arguments[0];
 		var nativeStatus = native([]);
 		if (nativeStatus != 0)
@@ -163,7 +178,8 @@ class HaxeonBuild {
 		return FileSystem.exists(left) && FileSystem.exists(right) && File.getBytes(left).compare(File.getBytes(right)) == 0;
 
 	static function configureRuntimeLibraryPath():Void {
-		var directories = [path("out"), path(".tools", "hashlink")];
+		var directories = [path("out"), HashLinkPath.directory(root())];
+		Sys.putEnv("HAXEON_HASHLINK_DIR", HashLinkPath.directory(root()));
 		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
@@ -175,7 +191,7 @@ class HaxeonBuild {
 		return path(".tools", "haxe", "haxe" + executableSuffix());
 
 	static function hashlink():String
-		return path(".tools", "hashlink", "hl" + executableSuffix());
+		return HashLinkPath.executable(root());
 
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";

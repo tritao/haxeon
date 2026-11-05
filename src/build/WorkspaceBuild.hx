@@ -113,7 +113,7 @@ class WorkspaceBuild {
 			throw "Workspace tests currently run on Linux and macOS only";
 		var actions = workspace.plan.actions.copy(),
 			context = new LoweringContext(workspace.environment, null, null, null, home, [], false, true),
-			hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
+			hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
 			variable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 			existing = Sys.getEnv(variable),
 			runtime = runtimeFiles(home);
@@ -124,7 +124,7 @@ class WorkspaceBuild {
 					compile = id;
 			if (compile == null)
 				throw 'Workspace project "${member.name}" has no compile action to test';
-			var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
+			var directories = [Path.join([home, "out"]), build.HashLinkPath.directory(home)], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
 			// the native libraries it loads, and the files beside its project. The project directory
 			// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
 				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
@@ -162,7 +162,7 @@ class WorkspaceBuild {
 	/** HashLink and Haxeon runtime libraries a module loads, without the many compiled programs beside them. */
 	static function runtimeFiles(home:String):Array<String> {
 		var files:Array<String> = [];
-		for (directory in [Path.join([home, ".tools", "hashlink"]), Path.join([home, "out"])])
+		for (directory in [build.HashLinkPath.directory(home), Path.join([home, "out"])])
 			if (sys.FileSystem.exists(directory) && sys.FileSystem.isDirectory(directory))
 				for (entry in sys.FileSystem.readDirectory(directory)) {
 					var path = Path.join([directory, entry]);
