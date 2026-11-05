@@ -1798,6 +1798,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			];
 		}
 		if (name == "__std_is_of_type" || name == "__std_is_exact_type" || name == "__exception_matches") {
+			// A constant leaf struct has no subtypes. Test its actual Wasm heap
+			// type directly, including when two runtime type IDs collide.
+			if (name == "__std_is_exact_type" && arguments.length == 2 && argumentLocals.length == 2) {
+				var known = functionState().functionTypeConstants.get(arguments[1].id);
+				switch known {
+					case Obj(objectName):
+						if (plan.isLeafValueObject(objectName))
+							return [LocalGet(argumentLocals[0]), RefTest({nullable:false, heap:Type(plan.objectType(objectName))}), LocalSet(outputLocal)];
+					default:
+				}
+			}
 			// These test a value against every type in the program, so call sites share one function each.
 			if (gc.functions.exists(name))
 				return UseDefault;
@@ -1876,6 +1887,18 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC reference identity signature";
 			return [LocalGet(argumentLocals[0]), RefCast({nullable: true, heap: Eq}),
 				LocalGet(argumentLocals[1]), RefCast({nullable: true, heap: Eq}), RefEq, LocalSet(outputLocal)];
+		}
+		if (name == "__dynamic_object_type_id") {
+			if (arguments.length != 1 || argumentLocals.length != 1) throw "Invalid dynamic object type ID signature";
+			var root = plan.objectRootTypeIndex;
+			if (root < 0) return [I32Const(0), LocalSet(outputLocal)];
+			var body:Array<WasmInstruction> = [I32Const(0), LocalSet(outputLocal), LocalGet(argumentLocals[0]), RefTest({nullable:false, heap:Type(root)}), If(null),
+				LocalGet(argumentLocals[0]), RefCast({nullable:false, heap:Type(root)}), StructGet(root, 0), LocalSet(outputLocal)];
+			var remapped = plan.runtimeTypeIds.remapped();
+			for (pair in remapped) body = body.concat([LocalGet(outputLocal), I32Const(pair.id), I32Eq, If(null), I32Const(pair.hash), LocalSet(outputLocal), Else]);
+			for (_ in remapped) body.push(End);
+			body.push(End);
+			return body;
 		}
 		if (name == "__dynamic_equal") {
 			if ((switch (output.type) { case Bool: false; default: true; }) || arguments.length != 2 || argumentLocals.length != 2 || (switch (arguments[0].type) { case Dyn: false; default: true; }) || (switch (arguments[1].type) { case Dyn: false; default: true; }))

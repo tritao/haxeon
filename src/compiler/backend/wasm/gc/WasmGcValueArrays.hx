@@ -45,7 +45,7 @@ class WasmGcValueArrays {
 				case "__array_splice_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
 				case "__array_pop_any": resizeUsed = true; dynamicOperations.set("resize", true);
 				case "__array_remove_at_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("remove_at", true);
-				case "__array_shift_any", "__array_remove_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
+				case "__array_shift_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
 				case "__array_concat_any": rangeUsed = true; dynamicOperations.set("concat", true);
 				default:
 			}

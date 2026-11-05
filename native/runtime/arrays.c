@@ -60,6 +60,18 @@ HL_PRIM bool HL_NAME(__std_is_exact_type)(vdynamic *value, hl_type *type) {
 	return value->t == type;
 }
 
+/* Match IrTypeIdentity.id(Obj(name)); arithmetic is deliberately modulo 2^32. */
+HL_PRIM int HL_NAME(__dynamic_object_type_id)(vdynamic *value) {
+	if( value != NULL && value->t->kind == HVIRTUAL ) value = ((vvirtual*)value)->value;
+	if( value == NULL || (value->t->kind != HOBJ && value->t->kind != HSTRUCT) ) return 0;
+	uint32_t hash = 2166136261u;
+	const uchar prefix[] = {'O', 'b', 'j', '(', 0};
+	for( const uchar *p = prefix; *p; p++ ) hash = (hash ^ *p) * 16777619u;
+	for( const uchar *p = value->t->obj->name; *p; p++ ) hash = (hash ^ *p) * 16777619u;
+	hash = (hash ^ ')') * 16777619u;
+	return (int32_t)hash;
+}
+
 static vbyte **array_int_storage(vobj *object) {
 	hl_runtime_obj *runtime = hl_get_obj_rt(object->t);
 	return (vbyte **)((char *)object + runtime->fields_indexes[0]);
@@ -446,7 +458,6 @@ DEFINE_ARRAY_MUTATION(ref, vdynamic *, REALTIME_ARRAY_DYNAMIC)
 /* Array<Dynamic>, including arrays seen through an erased type parameter, may alias storage
    of any element type. These operations read and write through the array's own element type:
    values are boxed on read and checked or unboxed on write. */
-HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right);
 HL_PRIM void HL_NAME(__array_insert_any)( varray *array, int position, vdynamic *value );
 
 static void *realtime_any_slot(varray *array, int index) {
@@ -467,12 +478,6 @@ static vdynamic *realtime_any_read(varray *array, int index) {
 		return boxed;
 	}
 	return hl_make_dyn(realtime_any_slot(array, index), array->at);
-}
-
-/* Dynamic equality preserves each value type's declared semantics. */
-static bool realtime_any_equal(varray *array, int index, vdynamic *value) {
-	vdynamic *element = realtime_any_read(array, index);
-	return HL_NAME(__dynamic_equal)(element, value);
 }
 
 /* Converts a value to the array's element representation before any structural change,
@@ -587,12 +592,6 @@ HL_PRIM vdynamic *HL_NAME(__array_shift_any)( varray *array ) {
 	return value;
 }
 
-HL_PRIM int HL_NAME(__array_index_of_any)( varray *array, vdynamic *value ) {
-	for (int i = 0; i < array->size; i++)
-		if (realtime_any_equal(array, i, value)) return i;
-	return -1;
-}
-
 /* Remove a known index without boxing or losing uninitialized value-array slots. */
 HL_PRIM void HL_NAME(__array_remove_at_any)(varray *array, int index) {
 	if (index < 0 || index >= array->size) hl_error("Array index out of bounds");
@@ -605,21 +604,6 @@ HL_PRIM void HL_NAME(__array_remove_at_any)(varray *array, int index) {
 	hl_gc_move_values(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride, array->at);
 	array->size--;
 	hl_gc_clear_values(values + array->size * stride, stride, array->at);
-}
-
-HL_PRIM bool HL_NAME(__array_remove_any)( varray *array, vdynamic *value ) {
-	int index = HL_NAME(__array_index_of_any)(array, value);
-	if (index < 0) return false;
-	if (HL_NAME(__value_array_is)(array)) {
-		HL_NAME(__value_array_splice)(array, index, 1);
-		return true;
-	}
-	int stride = hl_type_size(array->at);
-	vbyte *values = hl_aptr(array, vbyte);
-	hl_gc_move_values(values + index * stride, values + (index + 1) * stride, (size_t)(array->size - index - 1) * stride,array->at);
-	array->size--;
-	hl_gc_clear_values(values + array->size * stride, stride,array->at);
-	return true;
 }
 
 /* Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */

@@ -257,6 +257,8 @@ class IrInterpreter {
 
 		return switch name {
 			case "__exit": null;
+			case "__dynamic_object_type_id":
+				Std.isOfType(arguments[0], InterpObject) ? IrTypeIdentity.id(Obj(cast(arguments[0], InterpObject).type)) : 0;
 			case "__std_is_exact_type":
 				var reference:InterpTypeRef = cast arguments[1], input:Dynamic = arguments[0];
 				switch reference.type {

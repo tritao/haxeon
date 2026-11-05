@@ -7,6 +7,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrValueInterfaceBoxes {
 	public static inline final BOX_PREFIX = "$value-interface-box:";
 	public static inline final UNBOX_PREFIX = "$value-interface-unbox:";
+	static inline final TYPE_ID = "$value-interface-object-type-id";
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>, ?existingFunctions:Array<IrFunction>):Array<IrFunction> {
 		var objectMap:Map<String, IrObject> = [for (object in objects) object.name => object],
@@ -132,7 +133,7 @@ class IrValueInterfaceBoxes {
 			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks));
 			return name;
 		}
-		var rewritten:Array<IrFunction> = [];
+		var rewritten:Array<IrFunction> = [], needsTypeId = false;
 		for (fn in functions) {
 			var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [], types:Map<Int, IrType> = [];
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -142,6 +143,9 @@ class IrValueInterfaceBoxes {
 			for (block in fn.blocks) {
 				var target = new IrBlock(block.id);
 				for (located in block.instructions) switch located.value {
+					case Call(out, "__dynamic_object_type_id", arguments) if (fn.name != TYPE_ID):
+						target.instructions.push(new Located(Call(out, TYPE_ID, arguments), located.provenance));
+						needsTypeId = true; changed = true;
 					case Call(out, intrinsic, arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
 						&& arguments.length == 2 && types.exists(arguments[1].id)):
 						var object = switch types.get(arguments[1].id) { case Obj(name): objectMap.get(name); default: null; };
@@ -187,6 +191,33 @@ class IrValueInterfaceBoxes {
 				blocks.push(target);
 			}
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+		}
+		if (needsTypeId && !functionMap.exists(TYPE_ID)) {
+			// The physical class of an interface box is an implementation detail.
+			// Equality classifies it as the enclosed struct, just as casts and type
+			// tests above do, without unboxing or allocating a temporary value.
+			var values = [for (object in objects) if (object.isValue && object.interfaces.length > 0) object.name];
+			for (value in values) boxFor(value);
+			var byId:Map<Int, Array<String>> = [];
+			for (value in boxes.keys()) {
+				var hash = IrTypeIdentity.id(Obj(boxes.get(value))), group = byId.get(hash);
+				if (group == null) byId.set(hash, group = []);
+				group.push(value);
+			}
+			for (group in byId) group.sort(Reflect.compare);
+			var builder = new IrBuilder(), input = builder.argument("value", Dyn),
+				physical = builder.call("__dynamic_object_type_id", [input], I32), missing = builder.createBlock();
+			IrTypeHashDispatch.emit(builder, physical, [for (id in byId.keys()) id], function(id) {
+				for (value in byId.get(id)) {
+					var matched = builder.createBlock(), next = builder.createBlock();
+					builder.branch(builder.call("__std_is_exact_type", [input, builder.typeValue(Obj(boxes.get(value)))], Bool), matched, next);
+					builder.select(matched); builder.returnValue(builder.constInt(IrTypeIdentity.id(Obj(value))));
+					builder.select(next);
+				}
+				builder.jump(missing);
+			}, missing);
+			builder.select(missing); builder.returnValue(physical);
+			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks));
 		}
 		return rewritten.concat(generated);
 	}

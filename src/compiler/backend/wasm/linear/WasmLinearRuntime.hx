@@ -169,6 +169,14 @@ class WasmLinearRuntime {
 							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, program));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
+						case "__dynamic_object_type_id":
+							var body:Array<WasmInstruction> = [LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End,
+								LocalGet(0), I32Const(1), I32And, If(null), I32Const(0), Return, End];
+							for (pair in module.runtimeTypeIds.remapped())
+								body = body.concat([LocalGet(0), I32Load(0), I32Const(pair.id), I32Eq, If(null), I32Const(pair.hash), Return, End]);
+							body = body.concat([LocalGet(0), I32Load(0), Return]);
+							functions.set(native.name, module.addFunction(WasmFunctionBuilder.fromRaw(native.name,
+								{parameters: [I32], results: [I32]}, [], body)));
 						case "__std_is_of_type", "__std_is_exact_type", "__exception_matches":
 							functions.set(native.name, addTypeTest(module, native.name, program));
 						case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":

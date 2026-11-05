@@ -33,8 +33,6 @@ class WasmGcDynamicArrays {
 		"__array_insert_any",
 		"__array_pop_any",
 		"__array_shift_any",
-		"__array_index_of_any",
-		"__array_remove_any",
 		"__array_remove_at_any",
 		"__array_concat_any",
 		"__array_copy_any",
@@ -85,16 +83,10 @@ class WasmGcDynamicArrays {
 		}
 		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
 		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
-		// Dynamic equality tests every enum's nullary constructors, so it too is shared, not expanded per element type.
-		shared(DYNAMIC_EQUAL, [Dyn, Dyn], helper -> {
-			var equal = helper.allocateLocal(I32);
-			helper.push(handled(helper.representation.dynamicEqual(equal, 0, 1)));
-			equal;
-		}, Bool);
 		if (plan.valueArrayWrapperTypeIndex >= 0) {
 			var needsRead = false;
 			for (native in operations) if (native.name == "__array_pop_any" || native.name == "__array_shift_any"
-					|| native.name == "__array_index_of_any" || native.name == "__array_remove_any" || native.name == "__array_concat_any") needsRead = true;
+					|| native.name == "__array_concat_any") needsRead = true;
 			if (needsRead) shared("$value-array:runtime:get", [Array(Dyn), I32], helper -> {
 				var result = helper.allocateLocal(plan.valueType(Dyn));
 				helper.get(0, 1, result);
@@ -189,10 +181,6 @@ class WasmGcDynamicArrays {
 				take("pop", "Array.pop on an empty array", 0, result);
 			case "__array_shift_any":
 				take("shift", "Array.shift on an empty array", 0, result);
-			case "__array_index_of_any":
-				indexOf(0, 1, result);
-			case "__array_remove_any":
-				remove(0, 1, result);
 			case "__array_remove_at_any":
 				removeAt(0, 1);
 			case "__array_concat_any":
@@ -357,7 +345,6 @@ class WasmGcDynamicArrays {
 		};
 
 	static inline var TYPE_NAME = "__haxeon_array_type_name";
-	static inline var DYNAMIC_EQUAL = "__haxeon_array_dynamic_equal";
 	static inline var CAST_MESSAGE = "__haxeon_array_cast_message";
 
 	/** Name of the element type a runtime type id denotes, from the module's shared function. */
@@ -770,68 +757,6 @@ class WasmGcDynamicArrays {
 			push([LocalGet(box(element, taken)), LocalSet(result)]);
 		});
 	}
-
-	/** Dynamic equality: identity first, then value equality for boxed numbers and strings. */
-	function findIndex(array:Int, searched:Int, result:Int):Void {
-		var length = allocateLocal(I32),
-			index = allocateLocal(I32),
-			equal = allocateLocal(I32),
-			current = elementType(array);
-		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(length), I32Const(-1), LocalSet(result)]));
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
-			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null), Block(null)]);
-			forEach(index, length, function() {
-				push([LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:get")),
-					LocalGet(searched), Call(WasmModuleSupport.requiredFunctionIndex(functions, DYNAMIC_EQUAL)), LocalSet(equal),
-					LocalGet(equal), If(null), LocalGet(index), LocalSet(result), Br(3), End]);
-			});
-			push([End, Else]);
-		}
-		dispatch(current, function(element) {
-			push([Block(null)]);
-			forEach(index, length, function() {
-				var boxed = read(element, array, index);
-				push([
-					LocalGet(boxed),
-					LocalGet(searched),
-					Call(WasmModuleSupport.requiredFunctionIndex(functions, DYNAMIC_EQUAL)),
-					LocalSet(equal)
-				]);
-				push([LocalGet(equal), If(null), LocalGet(index), LocalSet(result), Br(3), End]);
-			});
-			body.push(End);
-		});
-		if (plan.valueArrayWrapperTypeIndex >= 0) push([End]);
-	}
-
-	function indexOf(array:Int, searched:Int, result:Int):Void
-		findIndex(array, searched, result);
-
-	function remove(array:Int, searched:Int, result:Int):Void {
-		var index = allocateLocal(I32), one = allocateLocal(I32);
-		findIndex(array, searched, index);
-		push([
-			I32Const(0),
-			LocalSet(result),
-			LocalGet(index),
-			I32Const(0),
-			I32LtS,
-			I32Eqz,
-			If(null),
-			I32Const(1),
-			LocalSet(one)
-		]);
-		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
-			LocalGet(array), LocalGet(index), I32Const(1), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:splice")), Drop, Else]);
-		var current = elementType(array);
-		dispatch(current, function(element) {
-			var removed = allocateLocal(plan.valueType(Array(element)));
-			lower(concrete("splice", element), value(Array(element)), [value(Array(element)), value(I32), value(I32)], removed, [array, index, one]);
-		});
-		if (plan.valueArrayWrapperTypeIndex >= 0) push([End]);
-		push([I32Const(1), LocalSet(result), End]);
-	}
-
 
 	function removeAt(array:Int, index:Int):Void {
 		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),

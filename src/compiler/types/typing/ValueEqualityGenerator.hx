@@ -122,8 +122,11 @@ class ValueEqualityGenerator {
 				}
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "equals");
 				if (custom != null) {
-					var receiver = new TypedExpression(TCast(left), custom.type, span),
-						argument = new TypedExpression(TCast(right), custom.type, span);
+					// Dynamic dispatch can borrow an existing box. A handwritten struct
+					// method may mutate either value argument, so own both copies here.
+					// Read-only calls elide them; scalar replacement keeps mutable copies inline.
+					var receiver = ValueCopy.bind(session, new TypedExpression(TCast(left), custom.type, span), custom.type),
+						argument = ValueCopy.bind(session, new TypedExpression(TCast(right), custom.type, span), custom.type);
 					statements.push(TReturn(new TypedExpression(TMethodCall(receiver, custom.declaration.name + ".equals", [argument]), TBool, span), span));
 				} else {
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {

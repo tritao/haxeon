@@ -451,6 +451,7 @@ reactive-thread-isolation	42
 reactive-owner-thread	42
 struct-array-nested-nullable	42
 struct-array-equality	42
+struct-array-dynamic-equality	42
 wasm-type-id-collision	42
 nullable-scalar-ieee-equality	42
 enum-inline-constant-pattern	42

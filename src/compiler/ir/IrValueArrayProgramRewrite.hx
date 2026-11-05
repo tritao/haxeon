@@ -90,8 +90,6 @@ class IrValueArrayProgramRewrite {
 			{name:"__array_concat_any", library:"haxeon_runtime", symbol:"__array_concat_any", arguments:[Array(Dyn),Array(Dyn)], result:Array(Dyn)},
 			{name:"__array_pop_any", library:"haxeon_runtime", symbol:"__array_pop_any", arguments:[Array(Dyn)], result:Dyn},
 			{name:"__array_shift_any", library:"haxeon_runtime", symbol:"__array_shift_any", arguments:[Array(Dyn)], result:Dyn},
-			{name:"__array_index_of_any", library:"haxeon_runtime", symbol:"__array_index_of_any", arguments:[Array(Dyn),Dyn], result:I32},
-			{name:"__array_remove_any", library:"haxeon_runtime", symbol:"__array_remove_any", arguments:[Array(Dyn),Dyn], result:Bool},
 			{name:"__array_remove_at_any", library:"haxeon_runtime", symbol:"__array_remove_at_any", arguments:[Array(Dyn),I32], result:Void}
 		];
 		for (native in dynamicNatives) if (!nativeNames.exists(native.name)) { nativeNames.set(native.name, true); program.natives.push(native); }

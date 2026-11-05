@@ -293,8 +293,8 @@ class IrScalarArguments {
 		return freshReceiver(fn, receiver, objects, safe, methods);
 	}
 
-	/** A scoped disposal is the last use of its value place on every exit, so its receiver mutations need not be
-	 * copied back. Every call on this fresh place must carry that compiler-generated guarantee. */
+	/** A terminal call has no surviving value place to receive its receiver mutations. Scoped disposal and a
+	 * temporary value copy carry this guarantee; every call on the fresh place must agree. */
 	static function freshForTerminal(fn:IrFunction, receiver:IrValue, objects:Map<String, IrObject>, name:String,
 			methods:Map<String, Null<String>>):Bool {
 		if (!isValue(receiver.type, objects)) return false;

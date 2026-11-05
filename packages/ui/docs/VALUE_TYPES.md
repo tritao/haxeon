@@ -619,3 +619,110 @@ Median paired differences were −0.16 / +0.47 / 0 / 0 MiB. The first window
 ranged from 29.38 to 30.78 MiB across these identical-module runs, illustrating
 RSS variability separately from program allocation. No run was discarded or
 repeated to obtain a passing result, and no ceiling was raised.
+
+### Struct equality through Dynamic array views
+
+The initial review-5 array-view reproduction exited 1 with control `72a5ac4b`
+on HashLink, Wasm32 and Wasm GC: an `Array<Dynamic>` alias missed a value
+accepted by the struct's custom `equals`. The extended fixture exits 26 with
+control `efd3a87d` on all three targets, first exposing that a mutating
+handwritten `equals` can change the caller's struct values. Owned value copies
+fix that boundary; dispatching boxed structs to their declared equality fixes
+the array view. The candidate exits 42. Reflection-exposed structs use the same dispatch;
+nonconforming structs do not acquire box identity. A shape-erased generic owner
+can recover an array without any explicit struct-to-Dynamic conversion: the
+conformance belongs to the registered concrete type. Nullable fields, colliding
+nominal hashes and equality that shrinks or replaces array elements are covered.
+The duplicate native Dynamic-array search/remove implementations have been
+removed; the portable IR search owns equality and revalidates the removal index.
+
+The fixture compares existing Dynamic boxes, mutable value snapshots and
+interface views in both directions, and searches typed lane elements, at
+8 and 1,024 iterations with inlining enabled and disabled. Managed reference
+leaves are preserved in each case. HashLink reports
+zero allocated bytes during both loops; Wasm32 and Wasm GC allocation counters
+report zero objects. The interpreter also checks boxed equality and an
+incremental layout edits, conformance removal and conformance restoration. The compiler suite passes
+752 tests with zero failures, self-hosting reaches a fixed point, and the
+parity suite checks 490 fixtures across all three targets (14 existing skips).
+
+The Wasm GC Showcase comparison uses the same host for alternating control and
+candidate guests, with `NKUI_HAXEON_MEMORY_STATS=OFF`, allocation counting enabled
+and fixed-step core mode (120 warmup and 120 measured frames). All nine full-scene
+pairs and three pairs per other scene matched exactly:
+
+| Scene | Control objects | Candidate objects |
+| --- | ---: | ---: |
+| full | 4,440 | 4,440 |
+| static | 4,440 | 4,440 |
+| text-heavy | 4,440 | 4,440 |
+| editing | 8,724 | 8,724 |
+
+These totals describe this host/build configuration; compare the paired guests
+within it rather than substituting totals from a different host configuration.
+The Wasm32 Showcase also builds and passes browser smoke with WebGL2.
+
+The paired HashLink editor images use outer `55902fe53`, control compiler
+`efd3a87d` and this equality candidate. Each image runs with its matching native
+runtime: the control still imports the deleted native search declarations.
+The profile module SHA-256 hashes are
+`008e0f09041ef487695f60087481dd3bf90eae94b20b29bb2bba9f5c2d4ab6b9`
+(control) and `70cb273159447921d8409fda43fb546533846e4d6df628836d62f60151dc3d42`
+(candidate). Nine alternating pairs gave these per-action median allocations
+(KiB):
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console → telemetry | 74.5 | 74.5 |
+| hierarchy → sensors | 114.6 | 114.6 |
+| sensors → hierarchy | 80.1 | 80.1 |
+| telemetry → console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+One candidate hierarchy → sensors capture reported 112.6 instead of 114.6 KiB;
+all other per-action values matched their controls. The 2 KiB step is the
+buffer-refill counter granularity described above.
+Two of the 18 captures flagged selection timing: control pair 3 reported
+`frameMs 6.08 is over the budget 6.0`, and candidate pair 8 reported
+`frameMs 6.24 is over the budget 6.0`. These captures ran alongside compiler
+and background work. Both findings are retained; no capture was discarded or
+repeated. The separately planned final editor budget run passed, including
+retention. Neither timing outlier increased its allocation counters.
+
+Three 30-cycle selection-stress census pairs were:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,944 | 340,911 / 24,010,928 |
+| 2 | 340,909 / 24,010,416 | 340,909 / 24,010,472 |
+| 3 | 340,910 / 24,010,656 | 340,912 / 24,011,144 |
+
+Only byte buffers differed; every other per-type object and byte count matched
+within each pair. A full-site census of both images attributed all ten differing
+sites to benchmark JSON/timing serialization and timeline output (`submit`,
+`runSelectionStressScenario` and `run`); application allocation sites matched.
+The full-site captures counted 340,907 / 340,909 objects. Stack sample weights
+in that capture represent bytes, not object counts.
+
+All six 500-cycle headless memory gates passed. RSS growth in the four windows
+(MiB), preserving paired order, was:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.00 / 3.91 / 0.94 / 5.78 | 28.91 / 4.22 / 0.62 / 5.47 |
+| 2 | 29.38 / 4.22 / 0.62 / 4.69 | 29.69 / 4.06 / 0.78 / 5.00 |
+| 3 | 30.00 / 4.22 / 0.62 / 4.84 | 30.31 / 3.75 / 0.78 / 4.84 |
+
+Median paired differences were +0.31 / −0.16 / +0.16 / 0 MiB, within the
+same-binary variability documented in the preceding comparison. All ten UI
+scripts, the app suite and all nine retention scenarios passed. No allocation,
+memory or timing ceiling changed.

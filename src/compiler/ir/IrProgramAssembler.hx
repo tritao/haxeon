@@ -527,6 +527,8 @@ class IrProgramAssembler {
 		if (objects != null)
 			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
 		if (objects != null)
+			allFunctions = IrValueDynamicDispatch.rewrite(allFunctions, objects);
+		if (objects != null)
 			GenericOwnerErasure.generate(allFunctions, objects);
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
@@ -583,6 +585,7 @@ class IrProgramAssembler {
 			needsClosureTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
 			needsDynamicEquality = false,
+			needsDynamicObjectTypeId = false,
 			needsDynamicObjectRuntime = false,
 			needsInt64ToInt = false,
 			mapRuntimeNames:Map<String, Bool> = [];
@@ -601,6 +604,8 @@ class IrProgramAssembler {
 								needsClosureTypeTestRuntime = true;
 							if (name == "__dynamic_equal")
 								needsDynamicEquality = true;
+							if (name == "__dynamic_object_type_id")
+								needsDynamicObjectTypeId = true;
 							if (name == "__std_is_exact_type")
 								needsExactTypeTestRuntime = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
@@ -658,6 +663,8 @@ class IrProgramAssembler {
 		});
 		if (needsDynamicEquality && !hasNative(natives, "__dynamic_equal"))
 			program.natives.push({name: "__dynamic_equal", library: "haxeon_runtime", symbol: "__dynamic_equal", arguments: [Dyn, Dyn], result: Bool});
+		if (needsDynamicObjectTypeId && !hasNative(natives, "__dynamic_object_type_id"))
+			program.natives.push({name: "__dynamic_object_type_id", library: "haxeon_runtime", symbol: "__dynamic_object_type_id", arguments: [Dyn], result: I32});
 		if (needsInt64ToInt && !hasNative(natives, "haxe.Int64.toInt"))
 			program.natives.push({
 				name: "haxe.Int64.toInt",
@@ -1045,7 +1052,7 @@ class IrProgramAssembler {
 				arguments: [arrayType, I32, I32],
 				result: arrayType
 			});
-			program.natives.push({
+			if (entry.name != "any") program.natives.push({
 				name: '__array_index_of_${entry.name}',
 				library: "haxeon_runtime",
 				symbol: '__array_index_of_${entry.name}',
@@ -1094,7 +1101,7 @@ class IrProgramAssembler {
 				arguments: [arrayType, I32],
 				result: Void
 			});
-			program.natives.push({
+			if (entry.name != "any") program.natives.push({
 				name: '__array_remove_${entry.name}',
 				library: "haxeon_runtime",
 				symbol: '__array_remove_${entry.name}',

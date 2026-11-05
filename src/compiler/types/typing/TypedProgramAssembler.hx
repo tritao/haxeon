@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
@@ -32,10 +33,22 @@ class TypedProgramAssembler {
 				register(argument.type, fn.name);
 			register(fn.result, fn.name);
 		}
-		for (classDecl in classes)
+		for (classDecl in classes) {
+			// A struct can reach Dynamic through reflection or a shape-erased generic
+			// owner, without any source-level conversion naming its concrete type.
+			// Register its declared conformance with its runtime type, independently
+			// of which escape the source happened to use. Unused helpers are pruned.
+			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : functions.length > 0 ? functions[0].name : null;
+			if (classDecl.isValue && !classDecl.isNativeValue && origin != null) {
+				var type = TInstance(NominalKind.Class, classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin,
+					classDecl.specializationArguments == null ? [] : classDecl.specializationArguments);
+				if (!session.representation.containsTypeParameter(type, []) && DeclaredConformance.has(session, type, "Equatable"))
+					ValueEqualityGenerator.request(session, type, origin, classDecl.span);
+			}
 			for (field in classDecl.fields)
 				register(field.type, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX +
 					(classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
+		}
 		for (interfaceDecl in interfaces)
 			for (method in interfaceDecl.methods) {
 				for (argument in method.arguments)

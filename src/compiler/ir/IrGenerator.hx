@@ -2877,7 +2877,8 @@ class IrGenerator {
 						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
 					else {
 						var typedInterface = typedInterfaceForCall(object.type, method, lowerType(expression.type), [for (argument in callArgs) argument.type]);
-						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type), loweringScopedDisposal);
+						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type),
+							loweringScopedDisposal || temporaryValueCopy(object));
 						else builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
 							lowerType(expression.type)), [receiver].concat(callArgs), lowerType(expression.type));
 					}
@@ -3481,6 +3482,13 @@ class IrGenerator {
 			default: {key: TVoid, value: TVoid};
 		};
 
+	/** A copy used directly as a receiver has no surviving place to receive its writes. */
+	static function temporaryValueCopy(value:TypedExpression):Bool return switch value.expression {
+		case TCopy(_, _): true;
+		case TCast(inner), TAbiCast(inner): temporaryValueCopy(inner);
+		default: false;
+	};
+
 	static function iteratorArraySource(source:TypedExpression):TypedExpression {
 		var unwrapped = switch source.expression {
 			case TToDynamic(value), TCast(value), TAbiCast(value), TNullableWrap(value): iteratorArraySource(value);
@@ -3983,12 +3991,16 @@ class IrGenerator {
 			arguments:Array<CfgValue>):CfgValue {
 		var array = arguments[0], id = arrayValuePlaceSerial++, arrayName = '$' + 'value-remove-array:$id',
 			foundName = '$' + 'value-remove-position:$id', resultName = '$' + 'value-remove-result:$id',
-			found = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
+			found = builder.createBlock(), inBounds = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
 		localTypes.set(arrayName, array.type); localTypes.set(foundName, I32); localTypes.set(resultName, Bool);
 		builder.store(arrayName, array);
 		builder.store(foundName, lowerValueArrayIndexOf(builder, localTypes, element, arguments));
 		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), found, missing);
 		builder.select(found);
+		// User equality can change the array. Never pass a stale index to a lane
+		// operation after the matching comparison returns.
+		builder.branch(builder.less(builder.load(foundName, I32), builder.arraySize(builder.load(arrayName, array.type))), inBounds, missing);
+		builder.select(inBounds);
 		if (isSemanticDynamic(element)) {
 			// Keep the storage representation and uninitialized value-array slots intact.
 			builder.call("__array_remove_at_any", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);

@@ -55,6 +55,7 @@ class WasmGcTypePlan {
 	public final iteratorTypeIndices:Map<String, Int> = [];
 	public final functionTypeIndices:Map<String, Int> = [];
 	public final boxedPrimitiveTypeIndices:Map<String, Int> = [];
+	final leafValueObjects:Map<String, Bool> = [];
 
 	final implementorCache:Map<String, Array<Int>> = [];
 	final closureSignatureIds:Map<String, Int> = [];
@@ -142,6 +143,8 @@ class WasmGcTypePlan {
 		this.scalarClosures = scalarClosures == null ? [] : scalarClosures;
 		this.scalarVirtuals = scalarVirtuals == null ? [] : scalarVirtuals;
 		this.inlineValueFields = inlineValueFields;
+		for (object in program.objects) if (object.isValue) leafValueObjects.set(object.name, true);
+		for (object in program.objects) if (object.base != null) leafValueObjects.remove(object.base);
 		values = new WasmValueLayout(program);
 		indexDeclarations();
 		planBytePayloads();
@@ -175,6 +178,8 @@ class WasmGcTypePlan {
 
 	public function objectType(name:String):Int
 		return requireIndex(objectTypeIndices, name, 'Unknown Wasm GC object type "$name"');
+
+	public function isLeafValueObject(name:String):Bool return leafValueObjects.exists(name);
 
 	public function usesBytePayload(name:String):Bool
 		return bytePayloadObjects.exists(name);

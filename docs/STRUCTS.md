@@ -505,6 +505,20 @@ handwritten `equals`. They examine inline elements as values and `remove` shifts
 arrays compare absence with absence and use the declared equality for present elements. Requiring the conformance keeps
 array lookup consistent with `==` instead of inventing an identity for copied values.
 
+A boxed struct and an `Array<Dynamic>` view retain the concrete struct's declared equality, including when reflection
+exposes the value. Each concrete struct registers its declared conformance with its runtime type, so recovering an
+array through an erased generic owner does not require a source-level struct-to-Dynamic conversion.
+Equality between different concrete struct types is false; comparing two values of the same
+nonconforming struct through Dynamic throws rather than assigning identity to their boxes. Array lookup uses the
+same portable equality loop for typed and Dynamic views.
+Handwritten `equals` receives value copies of both structs, so assigning their fields cannot change the caller's
+values. Mutations of shared referenced objects and external state follow ordinary reference semantics.
+
+Equality can execute user code, including code that changes the array being searched. Lookup examines the current
+array on each iteration. When `remove` finds a match, it removes the element currently at the matching index; if the
+comparison shortened the array so that index no longer exists, it returns `false`. Mutations made by `equals` remain.
+The same rule applies through a Dynamic view of the array.
+
 These three compiler-known interfaces are erased from HashLink's per-instance virtual-cache slots: their operations are
 statically selected, so retaining an interface cache would enlarge every conforming class and every inline value field.
 Ordinary runtime interfaces keep their cache slots and dispatch behavior.

@@ -2,6 +2,7 @@ package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 
 /** State whose lifetime is limited to one native Wasm GC function lowering. */
@@ -16,6 +17,7 @@ class WasmGcFunctionContext {
 	public var requiredArrayLengthLocal:Null<Int>;
 	public var arrayCapacityLocal:Null<Int>;
 	public final functionStringConstants:Map<Int, String> = [];
+	public final functionTypeConstants:Map<Int, IrType> = [];
 	public final scalarResults:Map<Int, Array<Int>> = [];
 	public final scalarLocals:compiler.backend.wasm.WasmScalarLocals;
 
@@ -32,6 +34,8 @@ class WasmGcFunctionContext {
 					switch located.value {
 						case ConstString(output, value):
 							functionStringConstants.set(output.id, value);
+						case TypeValue(output, type):
+							functionTypeConstants.set(output.id, type);
 						case _:
 					}
 	}

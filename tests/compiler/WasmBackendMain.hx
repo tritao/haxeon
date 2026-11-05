@@ -47,6 +47,7 @@ import sys.io.File;
 class WasmBackendMain {
 	static function main():Void {
 		WasmTypeIdPlanMain.run();
+		ValueDynamicEqualityInterpreterMain.run();
 		var allocationProgram = Frontend.compile("class Box { public var value:Int; "
 			+ "public function new(value:Int) this.value = value; } function main():Int return new Box(42).value;"),
 			allocationDisabled = new WasmBackend().compile(allocationProgram, {target: WasmGc, debugNames: true}),

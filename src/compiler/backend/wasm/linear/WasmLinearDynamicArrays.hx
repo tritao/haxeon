@@ -29,8 +29,6 @@ class WasmLinearDynamicArrays {
 		"__array_insert_any",
 		"__array_pop_any",
 		"__array_shift_any",
-		"__array_index_of_any",
-		"__array_remove_any",
 		"__array_remove_at_any",
 		"__array_concat_any",
 		"__array_copy_any",
@@ -189,8 +187,6 @@ class WasmLinearDynamicArrays {
 			case "__array_insert_any": addValueOperation(name, "insert", true);
 			case "__array_pop_any": addTake(name, "pop", false);
 			case "__array_shift_any": addTake(name, "shift", true);
-			case "__array_index_of_any": indexOf();
-			case "__array_remove_any": addRemove(name);
 			case "__array_remove_at_any": addRemoveAt(name);
 			case "__array_concat_any": addConcat(name);
 			case "__array_copy_any": addStorageOperation(name, "copy", [I32], [I32]);
@@ -285,18 +281,6 @@ class WasmLinearDynamicArrays {
 		var existing = context.functions.get("__string_concat");
 		return existing != null ? existing : helper("__haxeon_array_string_concat",
 			name -> WasmLinearRuntime.addStringConcat(module, name, context.allocatorFunction, string("null")));
-	}
-
-	function dynamicEqual():Int {
-		var existing = context.functions.get("__dynamic_equal");
-		if (existing != null)
-			return existing;
-		return helper("__haxeon_array_dynamic_equal", function(name) {
-			var stringEqual = context.functions.get("__string_equal");
-			if (stringEqual == null)
-				stringEqual = helper("__haxeon_array_string_equal", equalName -> WasmLinearRuntime.addStringEqual(module, equalName));
-			return WasmLinearRuntime.addDynamicEqual(module, name, stringEqual, context.program);
-		});
 	}
 
 	function typeTest():Int
@@ -1092,111 +1076,6 @@ class WasmLinearDynamicArrays {
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}
-
-	/** Dynamic equality: identity first, then value equality for boxed numbers and strings. */
-	function indexOf():Int {
-		var existing = context.functions.get("__array_index_of_any");
-		if (existing != null)
-			return existing;
-		var index = helper("__array_index_of_any", function(name) {
-			var builder = new WasmFunctionBuilder(name,
-				{parameters: [I32, I32], results: [I32]}), array = builder.parameter("array",
-					0), searched = builder.parameter("searched",
-					1), index = builder.local("index", I32), element = builder.local("element", I32), read = box(), equal = dynamicEqual();
-			builder.i32Const(0);
-			builder.localSet(index);
-			builder.block(function(builder) {
-				builder.loop(function(builder) {
-					builder.localGet(index);
-					builder.localGet(array);
-					builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
-					builder.emit(I32LtS);
-					builder.i32Eqz();
-					builder.emit(BrIf(1));
-					builder.localGet(array);
-					builder.localGet(index);
-					builder.call(builder.functionRef(read));
-					builder.localTee(element);
-					builder.localGet(searched);
-					builder.emit(I32Eq);
-					builder.localGet(element);
-					builder.localGet(searched);
-					builder.call(builder.functionRef(equal));
-					builder.emit(I32Or);
-					builder.if_(function(builder) {
-						builder.localGet(index);
-						builder.return_();
-					});
-					builder.localGet(index);
-					builder.i32Const(1);
-					builder.i32Add();
-					builder.localSet(index);
-					builder.emit(Br(0));
-				});
-			});
-			builder.i32Const(-1);
-			builder.return_();
-			return module.addFunction(builder.finish());
-		});
-		context.functions.set("__array_index_of_any", index);
-		return index;
-	}
-
-	function addRemove(name:String):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
-			array = builder.parameter("array", 0),
-			searched = builder.parameter("searched", 1),
-			index = builder.local("index", I32),
-			length = builder.local("length", I32),
-			strideLocal = builder.local("stride", I32);
-		if (context.functions.exists("$linear-value-array:initialized")) builder.emitAll(WasmLinearValueArrays.resolveForward(array));
-		builder.localGet(array);
-		builder.localGet(searched);
-		builder.call(builder.functionRef(indexOf()));
-		builder.localTee(index);
-		builder.i32Const(0);
-		builder.emit(I32LtS);
-		builder.if_(function(builder) {
-			builder.i32Const(0);
-			builder.return_();
-		});
-		if (context.functions.exists("$linear-value-array:operation:splice")) builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET),
-			I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null), LocalGet(array), LocalGet(index), I32Const(1),
-			Call(concrete("$linear-value-array:operation:splice")), Drop, I32Const(1), Return, End]);
-		builder.localGet(array);
-		builder.call(builder.functionRef(stride()));
-		builder.localSet(strideLocal);
-		builder.localGet(array);
-		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
-		builder.i32Const(1);
-		builder.i32Sub();
-		builder.localSet(length);
-		slotAddress(builder, array, index, strideLocal);
-		builder.localGet(index);
-		builder.i32Const(1);
-		builder.i32Add();
-		builder.localSet(index);
-		slotAddress(builder, array, index, strideLocal);
-		builder.localGet(length);
-		builder.localGet(index);
-		builder.i32Sub();
-		builder.i32Const(1);
-		builder.i32Add();
-		builder.localGet(strideLocal);
-		builder.emit(I32Mul);
-		builder.emit(MemoryCopy);
-		builder.localGet(array);
-		builder.localGet(length);
-		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
-		slotAddress(builder, array, length, strideLocal);
-		builder.i32Const(0);
-		builder.localGet(strideLocal);
-		builder.emit(MemoryFill);
-		builder.i32Const(1);
-		builder.return_();
-		return module.addFunction(builder.finish());
-	}
-
 
 	function addRemoveAt(name:String):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
