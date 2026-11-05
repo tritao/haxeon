@@ -67,13 +67,11 @@ add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 if(HAXEON_GC_APPLE_SOFTWARE_TEST)
   target_compile_definitions(libhl PRIVATE HL_GC_APPLE_SOFTWARE_TEST=1)
 endif()
+# Keep all built VM binaries in this checkout, away from the shared toolchain.
+set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  # Keep development binaries from replacing the optimized VM used by tools
-  # and performance captures. Each preset has its own CMake build directory.
-  set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
   set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/runtime")
 else()
-  set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/.tools/hashlink")
   set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/out")
 endif()
 set_target_properties(hlprof-live PROPERTIES

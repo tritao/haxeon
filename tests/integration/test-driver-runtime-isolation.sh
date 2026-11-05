@@ -36,11 +36,11 @@ fi
 # A separately loaded runtime is still unsafe if the running VM uses libhl
 # from the other directory that the release native build writes to.
 set +e
-(cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$work/loaded:$root_dir/.tools/hashlink" \
-  "$root_dir/.tools/hashlink/hl" "$work/driver.hl" test 1) > "$work/toolchain-refusal.log" 2>&1
+(cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$work/loaded:$root_dir/out/cmake/release/hashlink-runtime" \
+  "$root_dir/out/cmake/release/hashlink-runtime/hl" "$work/driver.hl" test 1) > "$work/toolchain-refusal.log" 2>&1
 status=$?
 set -e
-if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/.tools/hashlink:" "$work/toolchain-refusal.log" \
+if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/out/cmake/release/hashlink-runtime:" "$work/toolchain-refusal.log" \
     || ! grep -Fq 'libhl.so' "$work/toolchain-refusal.log" \
     || grep -Fq 'native build marker' "$work/toolchain-refusal.log"; then
   cat "$work/toolchain-refusal.log" >&2

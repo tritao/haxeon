@@ -118,19 +118,7 @@ run_timed run-output bash "$root_dir/tests/integration/test-run-output.sh"
 run_timed wire-incremental-helpers bash "$root_dir/tests/integration/test-wire-incremental-helpers.sh"
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
-mkdir -p "$prebuilt_compilers/runtime"
-cp "$root_dir/out/haxeon_runtime.hdll" "$prebuilt_compilers/runtime/haxeon_runtime.hdll"
-cp "$hl" "$prebuilt_compilers/runtime/hl"
-for library in "$root_dir/.tools/hashlink"/libhl.so* "$root_dir/.tools/hashlink"/libhl*.dylib "$root_dir/.tools/hashlink"/libhl*.dll; do
-	if [[ -f "$library" ]]; then
-		cp -L "$library" "$prebuilt_compilers/runtime/"
-	fi
-done
-run_haxeon_build() {
-	(cd "$root_dir" && LD_LIBRARY_PATH="$prebuilt_compilers/runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		DYLD_LIBRARY_PATH="$prebuilt_compilers/runtime${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$prebuilt_compilers/runtime/hl" "$prebuilt_build_tool" "$@")
-}
-run_timed compiler-runtime-tests run_haxeon_build test "${TEST_JOBS:-16}"
+run_timed compiler-runtime-tests env HAXEON_BUILD_HL="$prebuilt_build_tool" "$root_dir/scripts/test-driver.sh" "${TEST_JOBS:-16}"
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes.
 # They run alongside the integration stages below, which never touch Wasm artifacts. (Not alongside
 # compiler-runtime-tests: its WasmBackendMain case rewrites the out/wasm-backend-* files they read.)

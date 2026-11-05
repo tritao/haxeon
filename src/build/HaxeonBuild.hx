@@ -94,7 +94,7 @@ class HaxeonBuild {
 
 	static function test(arguments:Array<String>):Int {
 		#if hl
-		for (outputDirectory in [path("out"), path(".tools", "hashlink")]) {
+		for (outputDirectory in [path("out"), path("out", "cmake", Sys.systemName() == "Windows" ? "windows-msvc" : "release", "hashlink-runtime")]) {
 			var loaded:Null<String>;
 			try
 				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
@@ -103,7 +103,7 @@ class HaxeonBuild {
 				return 1;
 			}
 			if (loaded != null) {
-				Sys.stderr().writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Start the driver with libraries from a separate directory.\n');
+				Sys.stderr().writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Run scripts/test-driver.sh to use isolated libraries.\n');
 				return 1;
 			}
 		}
