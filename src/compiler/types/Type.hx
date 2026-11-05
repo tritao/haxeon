@@ -41,6 +41,8 @@ enum CompilerType {
 	TArray(element:CompilerType);
 	TIterator(element:CompilerType);
 	TMap(key:CompilerType, value:CompilerType);
+	/** Invariant stored-field reference; writable paths can be viewed as readable paths. */
+	TKeyPath(root:CompilerType, value:CompilerType, writable:Bool);
 	TFunction(arguments:Array<CompilerType>, result:CompilerType);
 
 	/**

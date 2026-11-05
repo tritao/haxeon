@@ -24,10 +24,11 @@ class LexicalStorageAnalysis extends BindingWalker {
 		return BindingWalker.key(name, span);
 
 	public static function analyze(statements:Array<AstStatement>, arguments:Array<AstArgument>,
-			?mayHoldValue:(Null<AstType>, Null<AstExpression>)->Bool):LexicalStorageRequirements {
-		var first = new LexicalStorageAnalysis(null, mayHoldValue);
+			?mayHoldValue:(Null<AstType>, Null<AstExpression>)->Bool,
+			?mayBeKeyPath:(Null<AstType>, Null<AstExpression>)->Bool):LexicalStorageRequirements {
+		var first = new LexicalStorageAnalysis(null, mayHoldValue, mayBeKeyPath);
 		first.walkFunction(arguments, statements);
-		var storage = new LexicalStorageAnalysis(first.writtenDeclarations, mayHoldValue);
+		var storage = new LexicalStorageAnalysis(first.writtenDeclarations, mayHoldValue, mayBeKeyPath);
 		storage.walkFunction(arguments, statements);
 		return {mutableCaptures: storage.captures, exceptionCells: storage.exceptions, closureWrites: storage.closureWrites};
 	}
@@ -44,14 +45,17 @@ class LexicalStorageAnalysis extends BindingWalker {
 	final valueBindings:Map<String, Bool> = [];
 	final bindingSyntax:Map<String, {type:Null<AstType>, initializer:Null<AstExpression>}> = [];
 	final mayHoldValue:Null<(Null<AstType>, Null<AstExpression>)->Bool>;
+	final mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>)->Bool>;
 
 	/** Local functions whose own body the walk is inside. */
 	final enclosingFunctions:Array<String> = [];
 
-	function new(knownWrites:Null<Map<String, Bool>>, mayHoldValue:Null<(Null<AstType>, Null<AstExpression>)->Bool>) {
+	function new(knownWrites:Null<Map<String, Bool>>, mayHoldValue:Null<(Null<AstType>, Null<AstExpression>)->Bool>,
+			mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>)->Bool>) {
 		super();
 		this.knownWrites = knownWrites;
 		this.mayHoldValue = mayHoldValue;
+		this.mayBeKeyPath = mayBeKeyPath;
 	}
 
 	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
@@ -78,11 +82,29 @@ class LexicalStorageAnalysis extends BindingWalker {
 
 	override function expression(value:AstExpression):Void {
 		switch value {
+			case MethodCall(target, "set", arguments, span) if (arguments.length == 2 && pathReceiver(target)):
+				writePlaceRoot(arguments[0], span);
+			case Call(name, arguments, span) if (StringTools.endsWith(name, ".set") && arguments.length == 2
+				&& pathReceiver(Variable(name.substr(0, name.length - 4), span))):
+				writePlaceRoot(arguments[0], span);
+			default:
+		}
+		switch value {
 			case PostfixIncrement(target, _, span): writePlaceRoot(target, span);
 			case MethodCall(target, _, _, span): writePlaceRoot(target, span);
 			default:
 		}
 		super.expression(value);
+	}
+
+	function pathReceiver(target:AstExpression):Bool {
+		if (mayBeKeyPath == null) return false;
+		return switch target {
+			case Variable(name, _) if (name.indexOf(".") < 0):
+				var declaration = resolve(name), syntax = declaration == null ? null : bindingSyntax.get(declaration);
+				syntax == null || mayBeKeyPath(syntax.type, syntax.initializer);
+			default: mayBeKeyPath(null, target);
+		};
 	}
 
 	/** A value receiver's field or method may write the captured binding itself. Reference receivers are safe to

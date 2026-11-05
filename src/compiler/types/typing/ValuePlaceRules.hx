@@ -33,10 +33,10 @@ class ValuePlaceRules {
 
 	static function checkPlace(session:TypingSession, receiver:TypedExpression, span:SourceSpan):Void {
 		switch receiver.expression {
-			case TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TStaticField(_, _), TIndex(_, _):
+			case TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TIndex(_, _):
+			case TStaticField(owner, name): FinalFieldRules.rejectStaticMutation(session, owner, name, span);
 			case TField(parent, name):
-				if (session.relations.isValueClass(parent.type))
-					FinalFieldRules.rejectInstanceMutation(session, parent, name, span);
+				FinalFieldRules.rejectInstanceMutation(session, parent, name, span);
 				requireWritable(session, parent, span);
 			case TCast(value), TAbiCast(value):
 				if (session.relations.isValueClass(value.type) || session.relations.isNullableValueClass(value.type))
@@ -50,7 +50,7 @@ class ValuePlaceRules {
 	}
 
 	/** Match the same stored, non-@:unobservable fields that receive reactive instrumentation. */
-	static function isObservableField(session:TypingSession, type:CompilerType, name:String):Bool {
+	public static function isObservableField(session:TypingSession, type:CompilerType, name:String):Bool {
 		if (!DeclaredConformance.has(session, type, "Observable")) return false;
 		function find(current:CompilerType):Bool {
 			return switch current {

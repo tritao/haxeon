@@ -3567,6 +3567,7 @@ class IrGenerator {
 			case TMap(key, value) if (isSpecializedMap(key, value)):
 				Obj(specializedMapOwner(key, value));
 			case TMap(key, value): Abstract(RuntimeType.requireMapName(key, value));
+			case TKeyPath(root, value, _): Obj(compiler.types.KeyPathType.descriptorName(root, value));
 			case TNull: Void;
 			// Preserve the payload type in IR so stored optionals can acquire a flag and inline layout. The
 			// existing backends still use the boxed dynamic representation until that lowering is implemented.

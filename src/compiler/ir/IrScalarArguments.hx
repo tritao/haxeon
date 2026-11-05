@@ -11,6 +11,16 @@ class IrScalarArguments {
 	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var methods:Map<String, Null<String>> = [];
+		// Typed closure signatures are an ABI decision, including forwarding closures.
+		// Keep their scalar entry points available before IrScalarClosures rewrites
+		// indirect calls; judging those calls against the boxed ABI here creates a
+		// cycle that prevents allocation-free forwarding of value arguments/results.
+		var closureTargets:Map<String, Bool> = [];
+		if (!argumentsOnly) for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions)
+			switch located.value {
+				case StaticClosure(_, name), InstanceClosure(_, name, _): closureTargets.set(name, true);
+				default:
+			}
 		var candidates:Map<String, IrFunction> = [], pinnedCandidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [], terminalOnly:Map<String, Bool> = [];
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
@@ -21,6 +31,7 @@ class IrScalarArguments {
 				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
 				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
+				&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, pinnedEligible = !argumentsOnly, pinnedHasValue = hasValue,
@@ -85,7 +96,7 @@ class IrScalarArguments {
 						if (isValue(fn.result, objects) && isValue(out.type, objects)) retained = true;
 					default:
 				}
-				if (retained) { candidates.remove(fn.name); changed = true; } else clones.set(fn.name, specialized);
+				if (retained && !closureTargets.exists(fn.name)) { candidates.remove(fn.name); changed = true; } else clones.set(fn.name, specialized);
 			}
 			for (fn in program.functions) if (pinnedCandidates.exists(fn.name)) {
 				var retained = false;

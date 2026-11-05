@@ -213,6 +213,9 @@ class CallResolver {
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
+		var pathCall = KeyPathOperations.call(session, receiver, name, arguments, span, scope, typeExpression, coerce, typeCallMemberWithFlow);
+		if (pathCall != null)
+			return pathCall;
 		if (isRawPointerType(receiver.type)) {
 			var rawPointerCall = typeRawPointerMethod(receiver, name, arguments, span, scope, expectedType);
 			if (rawPointerCall != null)
@@ -1275,7 +1278,8 @@ class CallResolver {
 		}
 		if (DiffIntrinsics.handles(name))
 			return typeExpression(DiffIntrinsics.expand(session, name, arguments, span,
-				function(argument) return typeExpressionValue(argument, scope).type), scope, expectedType, false);
+				function(argument) return typeExpressionValue(argument, scope).type,
+				function(argument) return typeExpressionValue(argument, scope)), scope, expectedType, false);
 		if (name == "Type.enumIndex") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);

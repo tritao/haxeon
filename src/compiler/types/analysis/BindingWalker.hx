@@ -111,7 +111,7 @@ class BindingWalker {
 	/** Walks a function: its parameters are declared first, and the body shares their scope. */
 	function walkFunction(arguments:Array<AstArgument>, body:Array<AstStatement>):Void {
 		for (argument in arguments)
-			declare(argument.name, argument.span, Parameter);
+			declare(argument.name, argument.span, Parameter, argument.type);
 		for (argument in arguments)
 			if (argument.defaultValue != null)
 				expression(argument.defaultValue);

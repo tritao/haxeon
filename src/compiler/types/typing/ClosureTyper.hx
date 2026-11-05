@@ -111,7 +111,7 @@ class ClosureTyper {
 					if (method != null && !method.isStatic || receiverType != null && findFieldType(receiverType, name) != null)
 						freeVariables.set("this", true);
 				}
-		var captures:Array<TypedCapture> = [],
+		var pathConstants:Map<String, String> = [], captures:Array<TypedCapture> = [],
 			captureCells:Map<String, String> = [],
 			captureTypes:Map<String, CompilerType> = [];
 		// Map iteration order differs between hosts; sort so closure layouts are deterministic.
@@ -120,6 +120,11 @@ class ClosureTyper {
 		for (name in freeNames) {
 			var capturedType = scope.resolve(name);
 			if (capturedType != null) {
+				var constant = scope.keyPathConstant(name);
+				if (constant != null) {
+					pathConstants.set(name, constant);
+					continue;
+				}
 				// A closure that only reads a local sees whatever it holds when the closure is created, so it must be assigned by then.
 				if (!free.assigned.exists(name) && !scope.isAssigned(name))
 					fail("E1023", 'Local "$name" may be used before assignment', span);
@@ -159,7 +164,8 @@ class ClosureTyper {
 		}
 		// A switch arm with several patterns is typed once per pattern, so one lambda position can capture different bindings:
 		// each distinct set of captures is its own lambda, and the first keeps the name the position gives it.
-		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",");
+		var constantIdentity = [for (name in freeNames) if (pathConstants.exists(name)) name + "=" + pathConstants.get(name)].join(",");
+		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",") + "|" + constantIdentity;
 		if (session.lambdaCache.exists(variantKey))
 			return session.lambdaCache.get(variantKey);
 		var variant:Int = session.lambdaVariants.exists(lambdaKey) ? session.lambdaVariants.get(lambdaKey) : 0;
@@ -175,6 +181,10 @@ class ClosureTyper {
 		for (capture in captures)
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
+		for (name in freeNames) if (pathConstants.exists(name)) {
+			typedBodyScope.define(name, scope.resolve(name), span);
+			typedBodyScope.setKeyPathConstant(name, pathConstants.get(name));
+		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
 		// function with a new environment type: closures made before the edit keep the code that reads their environment.
 		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures) capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
@@ -189,7 +199,7 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
 			context.assignedDeclarations.set(declaration, true);
-		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments, session.mayHoldValue);
+		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments, session.mayHoldValue, session.mayBeKeyPath);
 		for (binding in lambdaStorage.closureWrites.keys())
 			context.storage.closureWrites.set(binding, true);
 		for (capture in captures) {

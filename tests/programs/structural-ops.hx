@@ -43,7 +43,7 @@ function main():Int {
 	b.width = 4;
 	b.mode = Bold;
 	var mask = Diff.mask(a, b);
-	if (mask != (Diff.bit(Style, "width") | Diff.bit(Style, "mode"))) return 5;
+	if (mask != (Diff.bit(\Style.width) | Diff.bit(\Style.mode))) return 5;
 	if (Equality.equals(a, b)) return 6;
 	// A field changed outside the delta is left alone.
 	var target = Diff.copy(a);
@@ -61,6 +61,6 @@ function main():Int {
 	if (!Equality.equals(a, c)) return 10;
 	var nulled = Diff.copy(a);
 	nulled.name = null;
-	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(Style, "name")) return 11;
+	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(\Style.name)) return 11;
 	return 42;
 }

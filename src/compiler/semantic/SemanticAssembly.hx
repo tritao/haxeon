@@ -415,6 +415,7 @@ class SemanticAssembly {
 						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
 					canonicalFields.push({
 						name: field.name,
+						isPublic: field.isPublic,
 						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals, classAliases),
 						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
 							enumDeclarations, enumAbstractDeclarations),

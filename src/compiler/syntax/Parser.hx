@@ -812,6 +812,7 @@ class Parser {
 					var end = initializer == null ? consume(TokenKind.Semicolon).span : expressionEnd(initializer);
 					fields.push({
 						name: fieldName,
+						isPublic: isPublic,
 						metadata: memberMetadata,
 						type: fieldType,
 						initializer: initializer,
@@ -1572,6 +1573,8 @@ class Parser {
 	}
 
 	function parsePrimary():AstExpression {
+		if (match(TokenKind.Backslash))
+			return parseKeyPathLiteral(previous().span);
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
 			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected expression", span));
@@ -2738,6 +2741,19 @@ class Parser {
 	static inline function normalizeNumericLiteral(value:String):String
 		return StringTools.replace(value, "_", "");
 
+	function parseKeyPathLiteral(start:SourceSpan):AstExpression {
+		var name = parseQualifiedName(), root:AstType = NamedType(name), fields:Array<String> = [];
+		if (match(TokenKind.Less)) {
+			var arguments:Array<AstType> = [];
+			do arguments.push(parseType()) while (match(TokenKind.Comma));
+			consume(TokenKind.Greater);
+			root = AppliedType(name, arguments);
+			while (match(TokenKind.Dot))
+				fields.push(consume(TokenKind.Identifier).text);
+		}
+		return KeyPathLiteral(root, fields, start.merge(previous().span));
+	}
+
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span), NullLiteral(span), Unreachable(span),
@@ -2745,7 +2761,7 @@ class Parser {
 				Div(_, _, span), Mod(_, _, span), BitAnd(_, _, span), BitXor(_, _, span), BitOr(_, _, span), ShiftLeft(_, _, span), ShiftRight(_, _, span),
 				UnsignedShiftRight(_, _, span), Negate(_, span), Less(_, _, span), LessEqual(_, _, span), Greater(_, _, span), GreaterEqual(_, _, span),
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
-				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
+				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), KeyPathLiteral(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), Lambda(_, _, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, _, span),

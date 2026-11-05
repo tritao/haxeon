@@ -66,6 +66,7 @@ class SemanticSignature {
 			case TArray(element): 'Array<${type(element)}>';
 			case TIterator(element): 'Iterator<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
+			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + type(root) + "," + type(value) + ">";
 			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
 			case TAnonymous(name, _): name;
 		};
@@ -94,6 +95,7 @@ class SemanticSignature {
 			case TArray(element): 'Array<${display(element)}>';
 			case TIterator(element): 'Iterator<${display(element)}>';
 			case TMap(key, value): 'Map<${display(key)},${display(value)}>';
+			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
 			case TFunction(arguments, result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
 			case TAnonymous(name, _): name;
 		};

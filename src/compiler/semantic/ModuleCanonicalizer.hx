@@ -530,6 +530,23 @@ class ModuleCanonicalizer {
 				], resolved == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
 					s.referenceName == null ? name : s.referenceName));
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
+			case KeyPathLiteral(root, fields, s):
+				var pathRoot = root, pathFields = fields;
+				switch root {
+					case NamedType(name):
+						var candidate = name;
+						while (candidate.length > 0) {
+							if (aliases != null && aliases.exists(candidate) && !aliases.exists(EXPRESSION_ONLY_PREFIX + candidate)) {
+								pathRoot = NamedType(resolveTypeName(candidate, aliases));
+								var suffix = name.substr(candidate.length);
+								pathFields = (suffix.length == 0 ? [] : suffix.substr(1).split(".")).concat(fields);
+								break;
+							}
+							candidate = compiler.QualifiedName.parentOrEmpty(candidate);
+						}
+					default: pathRoot = canonicalType(root, aliases);
+				}
+				KeyPathLiteral(pathRoot, pathFields, s);
 			case ClosureCall(callee, args, s):
 				ClosureCall(canonicalExpression(callee, module, entry, locals, aliases),
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);

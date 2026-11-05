@@ -587,7 +587,7 @@ private class PurityWalker {
 	function expression(value:AstExpression):Bool {
 		return switch value {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
-				NativeLayoutQuery(_, _, _, _), NewMap(_, _, _):
+				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _):
 				true;
 			case Lambda(_, _, _, _): freshReceiver == null;
 			case New(typeName, arguments, _):

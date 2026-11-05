@@ -812,3 +812,71 @@ Control/candidate guest SHA-256 hashes are
 `b4edcd901070a2cbed5f8289cb63f6c28a1d8e3ddd7fc1727160b09cbe2b51a7` /
 `03b20c16d31e8e394427b1b3248097af31c95c9e893d38c465308ac24234cadd`.
 All captures were deleted after recording their numbers.
+
+
+### Key-path merge and field-mask port (2026-11-05)
+
+Control is `2af90631`, including its original string-based `Diff.bit` UI;
+candidate merges `10bd69dc` and ports both RenderNode and StyleResolver to typed
+key paths. Both use outer `031bc40f4`, the same native runtime and machine.
+No budget or HashLink pin changed. Compiler tests: 759 passed, zero failed;
+self-hosting fixed point passed. Wasm parity: 495 fixtures, 14 existing skips,
+plus the UI value snapshot on all three targets with inlining off/on. All ten
+UI suites, app tests, retention, final performance budgets, all six headless
+memory runs and the Wasm32 WebGL2 smoke passed.
+
+Nine alternating action pairs gave these median KiB (control / candidate):
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console→telemetry | 74.5 | 74.5 |
+| hierarchy→sensors | 114.6 | 114.6 |
+| sensors→hierarchy | 80.1 | 80.1 |
+| telemetry→console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+The ninth candidate telemetry→console sample was 93.1 KiB. Preserve this
+counter variation rather than retrying it. Two timing findings occurred in the
+predeclared pairs: control selection frame 8.84 ms against 6 ms, and candidate
+hierarchy→sensors 4.07 ms against 4 ms. The separately planned final budget gate
+passed; neither failed capture was retried or discarded.
+
+Selection-stress census pairs (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,904 | 340,911 / 24,010,912 |
+| 2 | 340,908 / 24,010,128 | 340,910 / 24,010,536 |
+| 3 | 340,910 / 24,010,712 | 340,910 / 24,010,688 |
+
+A separate allocation-site census pair found 340,910 / 340,905 objects.
+All ten differing sites were byte buffers in benchmark JSON serialization,
+timeline construction or capture-file output; UI allocation sites matched.
+The four RSS growth windows in MiB were:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 29.84 / 4.06 / 0.94 / 4.84 | 30.00 / 4.06 / 0.78 / 5.00 |
+| 2 | 30.31 / 3.75 / 0.78 / 5.00 | 29.84 / 3.91 / 0.94 / 5.00 |
+| 3 | 30.00 / 4.38 / 0.78 / 4.84 | 30.31 / 3.75 / 0.78 / 4.84 |
+
+These remain within the preceding paired-run variation. Profile SHA-256:
+control `1aaa9d1f692f3a39a3a2b44094ed33891b85c21137768f5838046aa1640acb57`,
+candidate `b70186e7b9cb35211f162fec85a03df4e83962448e0311b3a08df7c736dc303b`.
+
+Wasm GC fixed-step core, 120 warmup / 120 measured frames: nine full-scene
+pairs and three pairs each of static, text-heavy and editing all matched.
+Full/static/text-heavy were 4,440 / 4,440 objects; editing 8,724 / 8,724.
+Guest SHA-256: control
+`03b20c16d31e8e394427b1b3248097af31c95c9e893d38c465308ac24234cadd`, candidate
+`6a20abc1629823155f89b76dab9b67a533b8cdd30db94cd537406ba91892a3b7`.
+Captures were deleted immediately after their summaries were recorded.

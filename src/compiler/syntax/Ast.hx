@@ -49,6 +49,8 @@ enum AstFieldAccess {
 /** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
+	/** Source visibility retained for checked field references such as key paths. */
+	final ?isPublic:Bool;
 	final metadata:Array<AstMetadata>;
 	final type:Null<AstType>;
 	final initializer:Null<AstExpression>;
@@ -208,6 +210,8 @@ enum AstExpression {
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	NativeLayoutQuery(kind:NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan);
+	/** An uninstantiated root may still contain the field suffix until name resolution. */
+	KeyPathLiteral(root:AstType, fields:Array<String>, span:SourceSpan);
 	ClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan);
 	MethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan);
 	New(typeName:String, arguments:Array<AstExpression>, span:SourceSpan);

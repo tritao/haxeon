@@ -28,7 +28,7 @@ native escapes keep their required boxing and runtime handling.
 - `Diff.mask(before, after)` returns the bits for fields whose declared equality reports a change.
 - `Diff.apply(target, before, after)` copies changed fields into `target` and returns those bits. Every destination field
   must be writable; the diagnostic names an immutable field.
-- `Diff.bit(Type, "field")` and `Diff.all(Type)` are compile-time constants. At most 32 stored fields are supported.
+- `Diff.bit(\Type.field)` and `Diff.all(Type)` are compile-time constants. At most 32 stored fields are supported.
 - `Diff.copy(value)` is only for mutable `Diffable` classes. Struct values already copy on binding.
 
 Field numbering is an explicit contract for each type. [Key paths](KEY_PATHS.md) describe a future typed field-reference

@@ -251,7 +251,7 @@ class ModuleChangeAnalyzer {
 					}
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)
-					field.name + "=" + fieldMetadataFingerprint(state, field.metadata)
+					field.name + "=" + (field.isPublic == true ? "public:" : "private:") + fieldMetadataFingerprint(state, field.metadata)
 			].join(";");
 			wireFieldFingerprint += ":field-defaults:" + [
 				for (field in classDecl.fields)

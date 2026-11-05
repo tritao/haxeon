@@ -92,6 +92,10 @@ class TypingSession {
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
+	/** Resolved field sequences used by path operations and descriptor generation. */
+	public final keyPathDefinitions:Map<String, KeyPathTyping.KeyPathDefinition> = [];
+	public final keyPathParameters:Map<String, Map<String, String>> = [];
+	public final keyPathCompositions:Map<String, Bool> = [];
 
 	/**
 	 * Function adapters already made in each body, so an adapter's name depends on its position in its own function. A
@@ -180,6 +184,22 @@ class TypingSession {
 			case TDynamic, TTypeParameter(_, _), TInstance(NominalKind.NativeValue, _, _): true;
 			default: false;
 		};
+
+	/** Storage analysis runs before expression typing; unknown receivers conservatively retain place writes. */
+	public function mayBeKeyPath(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
+		if (type != null && (switch type { case InferredType: false; default: true; })) {
+			try {
+				return switch declarations.resolve(type, null, currentContext.typeSubstitutions) {
+					case TKeyPath(_, _, _), TDynamic, TTypeParameter(_, _): true;
+					default: false;
+				};
+			} catch (_:compiler.Diagnostic.CompileError) return true;
+		}
+		return switch initializer {
+			case New(_, _, _), ArrayLiteral(_, _), ObjectLiteral(_, _), Lambda(_, _, _, _): false;
+			default: true;
+		};
+	}
 
 	/** Only closure-written declarations can change during a call; respect local shadowing. */
 	public function closureWritableNames(scope:Scope):Array<String> {

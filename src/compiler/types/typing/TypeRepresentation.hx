@@ -242,6 +242,7 @@ class TypeRepresentation {
 				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(representation, depth + 1, active, remaining);
 			case TNullable(inner), TArray(inner), TIterator(inner): exceedsOwnerComplexity(inner, depth + 1, active, remaining);
 			case TMap(key, value): exceedsOwnerComplexity(key, depth + 1, active, remaining) || exceedsOwnerComplexity(value, depth + 1, active, remaining);
+			case TKeyPath(root, value, _): exceedsOwnerComplexity(root, depth + 1, active, remaining) || exceedsOwnerComplexity(value, depth + 1, active, remaining);
 			case TFunction(arguments, result):
 				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(result, depth + 1, active, remaining);
 			case TAnonymous(_, fields):
@@ -303,6 +304,7 @@ class TypeRepresentation {
 					specializedMapOwner(key, value);
 				}
 				discoverOwners(key, explored, origin); discoverOwners(value, explored, origin);
+			case TKeyPath(root, value, _): discoverOwners(root, explored, origin); discoverOwners(value, explored, origin);
 			case TFunction(arguments, result):
 				for (argument in arguments) discoverOwners(argument, explored, origin);
 				discoverOwners(result, explored, origin);
@@ -322,6 +324,7 @@ class TypeRepresentation {
 			case TAbstract(_, arguments, representation): anyTypeParameter(arguments, explored) || containsTypeParameter(representation, explored);
 			case TNullable(inner), TArray(inner), TIterator(inner): containsTypeParameter(inner, explored);
 			case TMap(key, value): containsTypeParameter(key, explored) || containsTypeParameter(value, explored);
+			case TKeyPath(root, value, _): containsTypeParameter(root, explored) || containsTypeParameter(value, explored);
 			case TFunction(arguments, result): anyTypeParameter(arguments, explored) || containsTypeParameter(result, explored);
 			case TAnonymous(_, fields):
 				var found = false;
@@ -430,6 +433,7 @@ class TypeRepresentation {
 			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
 				containsExactValueLayout(representation, explored);
 			case TMap(key, value): containsExactValueLayout(key, explored) || containsExactValueLayout(value, explored);
+			case TKeyPath(_, _, _): true;
 			case TFunction(arguments, result):
 				var found = containsExactValueLayout(result, explored);
 				for (argument in arguments)

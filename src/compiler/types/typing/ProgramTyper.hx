@@ -247,7 +247,11 @@ class ProgramTyper {
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0;
+		var keyPaths = new KeyPathRuntime(session, typedClasses);
 		while (true) {
+			var pathHelpers = keyPaths.drain();
+			for (helper in pathHelpers) typedFunctions.push(helper);
+			if (pathHelpers.length > 0) assembler.registerProgramTypes(pathHelpers, [], [], [], []);
 			while (generatedIndex < session.closureConversion.generatedFunctionCount()) {
 				var fn = session.closureConversion.generatedFunction(generatedIndex++);
 				typedFunctions.push(fn);
@@ -261,6 +265,7 @@ class ProgramTyper {
 			for (method in specialized.methods) typedFunctions.push(method);
 			assembler.registerProgramTypes(specialized.methods, [specialized], [], [], []);
 		}
+		for (cache in keyPaths.newClasses) typedClasses.push(cache);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
 			typedFunctions.push(codec);

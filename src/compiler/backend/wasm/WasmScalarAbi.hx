@@ -78,6 +78,7 @@ class WasmScalarAbi {
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)
+					&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
 					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }

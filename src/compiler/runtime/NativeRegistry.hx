@@ -137,6 +137,7 @@ class NativeRegistry {
 					default: throw 'Unknown nominal kind $kind';
 				}
 			case TMap(_, _): Abstract("map_string_i32");
+			case TKeyPath(root, value, _): Obj(compiler.types.KeyPathType.descriptorName(root, value));
 			case TNull: Void;
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));

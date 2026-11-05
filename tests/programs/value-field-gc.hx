@@ -12,7 +12,7 @@ class Lines {
 }
 
 class Node {
-	public final lines:Lines;
+	public var lines:Lines;
 	public var tag:Int;
 
 	public function new() {

@@ -50,6 +50,15 @@ for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=KeyPathCensus.prepare --export=KeyPathCensus.known --export=KeyPathCensus.knownComposition --export=KeyPathCensus.escapedClass \
+			--export=KeyPathCensus.escapedStruct --export=KeyPathCensus.escapedStructValue --export=KeyPathCensus.escapedStaticStruct --export=KeyPathCensus.escapedComposition \
+			--output="$parity_output_dir/wasm-parity-$target-key-path-census-inline-$inline.wasm" \
+			--entry=key-paths --root=tests/programs tests/programs/key-paths.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" \
+			--export=SpecPointers.foreign --export=SpecNullReads.prepare --export=SpecNullReads.direct --export=SpecNullReads.known --export=SpecNullReads.escaped \
+			--output="$parity_output_dir/wasm-parity-$target-key-path-semantics-inline-$inline.wasm" \
+			--entry=key-path-semantics --root=tests/programs tests/programs/key-path-semantics.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=DeferCensus.perform --output="$parity_output_dir/wasm-parity-$target-defer-census-inline-$inline.wasm" \
 			--entry=defer-cleanup --root=tests/programs tests/programs/defer-cleanup.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
@@ -253,6 +262,24 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
+	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+		--output="$parity_output_dir/key-path-semantics-inline-$inline.hl" --entry=key-path-semantics --root=tests/programs tests/programs/key-path-semantics.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/key-path-semantics-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Key path HashLink semantics (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
+	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+		--output="$parity_output_dir/key-paths-inline-$inline.hl" --entry=key-paths --root=tests/programs tests/programs/key-paths.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/key-paths-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Key path HashLink census (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
 	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
 		--output="$parity_output_dir/defer-allocation-hl-inline-$inline.hl" \
 		--entry=defer-allocation-hl --root=tests/fixtures/scoped-cleanup tests/fixtures/scoped-cleanup/defer-allocation-hl.hx
@@ -788,6 +815,38 @@ async function run(name, target) {
 	    if (result !== n * (n - 1) / 2 || allocations !== 0)
 	      failures.push(`struct signal census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: struct signal census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const pathBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-key-path-census-inline-${inline}.wasm`));
+	  const paths = (await WebAssembly.instantiate(pathBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	  paths["KeyPathCensus.prepare"]();
+	  const pathCount = target === "wasm32" ? paths["haxeon.memory.allocation_count"] : paths.__allocation_count;
+	  for (const mode of ["known", "knownComposition", "escapedClass", "escapedStruct", "escapedStructValue", "escapedStaticStruct", "escapedComposition"]) for (const n of [8, 1024]) {
+	    const before = pathCount(), result = paths[`KeyPathCensus.${mode}`](n), allocations = pathCount() - before;
+	    const expected = mode === "known" ? n * (n - 1) : n * (n - 1) / 2;
+	    if (result !== expected || allocations !== 0)
+	      failures.push(`key path ${mode} census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: key path ${mode} census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const semanticsBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-key-path-semantics-inline-${inline}.wasm`));
+	  const semantics = (await WebAssembly.instantiate(semanticsBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	  const semanticsResult = semantics.main();
+	  if (semanticsResult !== 42) failures.push(`key path semantics (${target}, inline=${inline}): result=${semanticsResult}`);
+	  else console.log(`PASS: key path semantics on ${target}, inline=${inline}`);
+	  const pointerAddress = semantics.memory.buffer.byteLength;
+	  semantics.memory.grow(1);
+	  const pointerResult = semantics["SpecPointers.foreign"](pointerAddress);
+	  if (pointerResult !== 42) failures.push(`key path native place (${target}, inline=${inline}): result=${pointerResult}`);
+	  else console.log(`PASS: key path native place on ${target}, inline=${inline}`);
+	  semantics["SpecNullReads.prepare"]();
+	  const outcome = operation => {
+	    try { return JSON.stringify({value: operation()}); }
+	    catch (error) { return JSON.stringify({error: error.constructor.name, message: error.message}); }
+	  };
+	  const directNullRead = outcome(semantics["SpecNullReads.direct"]);
+	  for (const mode of ["known", "escaped"]) {
+	    const actual = outcome(semantics[`SpecNullReads.${mode}`]);
+	    if (actual !== directNullRead) failures.push(`key path ${mode} null read (${target}, inline=${inline}): ${actual} != ${directNullRead}`);
+	    else console.log(`PASS: key path ${mode} null read matches direct access on ${target}, inline=${inline}`);
 	  }
 	  const placeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-observable-place-census-inline-${inline}.wasm`));
 	  const place = (await WebAssembly.instantiate(placeBytes, {haxeon_runtime: runtime, std})).instance;

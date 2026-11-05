@@ -166,6 +166,7 @@ class ExpressionTyper {
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
 			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span, scope);
+			case KeyPathLiteral(root, fields, span): KeyPathTyping.literal(session, root, fields, span);
 			case NewGeneric(typeName, typeArguments, arguments, span):
 				var constructed = callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
 				if (!session.isPureCall(compiler.types.analysis.PurityInference.constructorFact(typeName)))
@@ -2111,6 +2112,14 @@ class ExpressionTyper {
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		if (operation == 2 && sameType(left.type, TBool) && sameType(right.type, TBool))
 			return new TypedExpression(TEqual(left, right), TBool, span);
+		if (operation == 2) switch [left.type, right.type] {
+			case [TKeyPath(root, value, _), TKeyPath(otherRoot, otherValue, _)]
+				if (TypeRelations.equals(root, otherRoot) && TypeRelations.equals(value, otherValue)):
+				new AnonymousTypeRegistry(session).register(left.type);
+				return new TypedExpression(TEqual(new TypedExpression(TField(left, "$key"), TString, span),
+					new TypedExpression(TField(right, "$key"), TString, span)), TBool, span);
+			default:
+		}
 		if (operation == 2 && TypeRelations.equals(left.type, right.type)
 			&& DeclaredConformance.usesEquality(session, left.type)) {
 			ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);

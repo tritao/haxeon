@@ -19,6 +19,12 @@ class AnonymousTypeRegistry {
 					register(field.type);
 			case TNullable(element), TArray(element), TIterator(element):
 				register(element);
+			case TKeyPath(root, value, _):
+				var name = compiler.types.KeyPathType.descriptorName(root, value);
+				if (!session.anonymousTypes.exists(name))
+					session.anonymousTypes.set(name, compiler.types.KeyPathType.fields(root, value));
+				register(root);
+				register(value);
 			case TMap(key, value):
 				register(key);
 				register(value);
