@@ -43,7 +43,7 @@ class DiffIntrinsics {
 						fail("E1025", 'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable', field.span);
 					var fieldValue = Member(Variable(value, span), field.name, span),
 						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
-						mixed = Call("haxeon.Hashing.mix", [Variable(hash, span), fieldHash], span);
+						mixed = Add(Mul(Variable(hash, span), IntegerLiteral(31, span), span), fieldHash, span);
 					statements.push(Assignment(hash, mixed, span));
 				}
 				return BlockExpression(statements, Variable(hash, span), span);

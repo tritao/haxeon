@@ -67,6 +67,7 @@ class TestCatalog {
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",
 		"DeclaredEqualityInliningMain",
+		"DiffFingerprintDependencyMain",
 		"FloatEqualityIrMain",
 		"FloatHashIrMain",
 		"ScalarMapIncrementalMain",
