@@ -78,6 +78,7 @@ class BackendAssembly {
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
 			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+		if (!context.isWasmTarget()) compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
 		for (reason in assembly.objectReasons)

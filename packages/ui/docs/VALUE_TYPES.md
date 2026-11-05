@@ -1615,3 +1615,75 @@ with an external temporary directory. A copied browser wrapper initially lacked 
 `Permission denied`; correcting the wrapper made both browser smoke tests pass. The earlier framework run
 confirmed the missed style-cache content comparison before its fix. None was an allocation/memory retry. Raw captures
 were deleted once their numbers were recorded.
+
+### IR bytecode optimization merge (2026-11-05)
+
+The reviewed `bytecode-opt` branch was merged after the value/object equality change. It adds dead pure-value
+elimination, receiver-check elision, linear jump threading, shared SSA non-null facts for HashLink/Wasm lowering,
+and field-load forwarding across clean control flow. The equality intrinsic remains pure and no old identity API
+was restored. The HashLink pin, VM library and native runtime are unchanged.
+
+This is the first wall-clock comparison of the combined passes on the current buildable editor: equality-model
+control `238c54eb`, detached outer `51947204d`, with no MachineKit source correction copied in. Both images use
+the same app sources and VM `d1eb6136`. The previous corrected-snapshot opcode counts in
+[BYTECODE_OPPORTUNITIES.md](../../../docs/BYTECODE_OPPORTUNITIES.md) remain historical; they are not the timing baseline.
+The current HashLink modules measure 112,538,876 bytes before and 103,141,814 after (9,397,062 bytes / 8.35% smaller).
+
+Nine alternating control/candidate action pairs use the same fixed affinity on four physical performance cores
+(CPUs 0, 2, 4, 6), matching the passing equality-model budget comparison. The CPU set was fixed before any capture;
+there were no selection changes or retries. Frame-time medians are milliseconds and allocation medians KiB.
+The selection action has no frame allocation counter; its exact census is below.
+
+| Scenario/action | Control ms | Candidate ms | Control KiB | Candidate KiB |
+| --- | ---: | ---: | ---: | ---: |
+| tab-matrix: console->telemetry | 1.11 | 1.09 | 74.5 | 74.5 |
+| tab-matrix: hierarchy->sensors | 1.58 | 1.57 | 114.6 | 114.6 |
+| tab-matrix: sensors->hierarchy | 1.22 | 1.21 | 80.1 | 80.1 |
+| tab-matrix: telemetry->console | 1.16 | 1.15 | 92.9 | 92.9 |
+| interaction: hover-away | 0.42 | 0.42 | 13.6 | 13.6 |
+| interaction: hover-enter | 0.00 | 0.00 | 0.5 | 0.5 |
+| interaction: hover-field | 0.43 | 0.43 | 12.4 | 12.4 |
+| interaction: hover-inside | 0.00 | 0.00 | 0.5 | 0.5 |
+| interaction: hover-other | 0.42 | 0.41 | 10.0 | 10.0 |
+| interaction: idle | 0.01 | 0.01 | 0.2 | 0.2 |
+| interaction: idle-focused | 0.01 | 0.01 | 0.2 | 0.2 |
+| interaction: scroll-inspector | 0.71 | 0.71 | 21.2 | 21.2 |
+| interaction: type-backspace | 0.42 | 0.41 | 16.2 | 16.2 |
+| interaction: type-char | 0.42 | 0.41 | 16.1 | 16.1 |
+| selection-stress: selection | 3.02 | 2.92 | — | — |
+
+Selection improves by 0.10 ms (3.3%); tab transitions improve by 0.01–0.02 ms, with the remaining changes at
+0.00–0.01 ms. These are small runtime improvements despite the larger static bytecode reduction. Every action
+allocation median is unchanged, so no allocation ceiling was lowered or raised. Every one of the 18 action captures
+passed, as did the single planned final budget run and all nine retention scenarios.
+
+Three unrestricted selection-stress censuses (30 cycles) match every named type at 305,725 objects / 21,593,528
+bytes. Only the raw runtime `bytes` bucket varies. Full raw totals are:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | --- | --- |
+| 1 | 340,911 / 24,011,016 | 340,908 / 24,010,344 |
+| 2 | 340,909 / 24,010,496 | 340,910 / 24,010,912 |
+| 3 | 340,911 / 24,010,968 | 340,912 / 24,011,320 |
+
+Three unrestricted paired headless runs use the previous memory protocol. RSS window growth in MiB:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.47 / 4.06 / 0.78 / 5.00 | 30.31 / 3.59 / 0.78 / 4.84 |
+| 2 | 30.00 / 3.91 / 0.78 / 5.00 | 30.31 / 3.28 / 0.78 / 4.84 |
+| 3 | 30.31 / 3.75 / 0.78 / 5.00 | 30.16 / 3.91 / 0.78 / 4.84 |
+
+Median paired deltas are -0.15 / -0.47 / 0.00 / -0.16 MiB. All six headless memory runs pass; every median window
+ties or improves against control. No allocation median increased. No budget, verification behavior or memory
+threshold changed.
+
+Wasm GC uses the committed guest-selection/hash check: control starts `4f892cc3b546`, candidate `e81a925cba8f`.
+All 18 alternating scene pairs completed with 120 warmup and 120 measured frames: nine full, three each static,
+text-heavy and editing. Both images count 4,440 objects for every full/static/text-heavy sample and 8,724 for editing.
+The runner verifies the actual browser-loaded guest hash before and after every capture.
+
+All full gates passed: 772 compiler tests, self-hosting fixed point, ten UI scripts, 502 parity fixtures (14 existing
+skips), all six UI value snapshots, the app suite, all nine retention scenarios, performance budgets and paired
+headless memory, and Wasm32/Wasm GC WebGL2 browser smoke tests. The comparison uses frozen bytecode/libraries; raw
+captures were deleted once their numbers were extracted. No measurement was retried to obtain a pass.

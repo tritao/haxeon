@@ -152,6 +152,7 @@ class WasmLinearModuleBuilder {
 		finalizeExports();
 		if (runtimeNeutral)
 			WasmFuelMetering.instrument(module, requiredFuelFunction());
+		compiler.ir.IrOpportunityCensus.reportWasm(module, "wasm32");
 		return {artifact: {target: options.target, bytes: WasmEncoder.encode(module)}, runtimeTypeIds: module.runtimeTypeIds};
 	}
 

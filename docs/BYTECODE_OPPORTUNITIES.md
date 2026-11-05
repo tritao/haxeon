@@ -1,0 +1,117 @@
+# UI and editor bytecode opportunities
+
+This is an **in-progress census**, not yet a ranking suitable for choosing optimizations. The editor build and a profile of the same editor revision are still needed before the hotness-weighted comparison can be completed.
+
+## Preliminary Showcase baseline
+
+Both captures use local `main` `c47a067c`, the checkout's compiler and the UI Showcase sources, with default inlining and the imported-memory contract used by the UI tests. The generated modules are measured on disk; modeled instruction counts come from the final Wasm instruction lists. Wasm32 includes 1,299 bytes of linked runtime bodies that the census cannot decode, so its modeled count excludes those bodies. Wasm GC has no opaque bodies in this capture. IR totals cover the post-inline program, including functions later removed or expanded by backend lowering; they are not emitted instruction counts.
+
+| Target | Functions | Modeled instructions | Module bytes |
+|---|---:|---:|---:|
+| Wasm32 | 23,810 | 6,022,270 | 30,226,487 |
+| Wasm GC | 4,204 | 1,285,395 | 5,544,525 |
+
+Both captures report 95 repeated block-local loads, 302 object or instance-closure sites in loops, 48 branches on literal booleans and 714 jumps to empty jump blocks. They report 26,020 unused IR results for Wasm32 and 26,021 for Wasm GC. These categories are diagnostic upper or lower bounds, not safe rewrite counts: for example, an unused call result does not make its call dead. `Showcase.encodeFrame` accounts for 41 of the repeated loads and 314 unused results. `UiContext.render` has 14 jump-to-empty-jump sites. A repeat Wasm32 capture with the added control-flow counters produced byte-identical output.
+
+## Dead pure values: measured optimization
+
+A post-inlining pass removes unused literal, phi and non-trapping arithmetic chains while retaining values needed by debug bindings. On Wasm GC Showcase, modeled instructions fell from 1,285,395 to 1,281,806 and module size from 5,544,525 to 5,530,444 bytes. The IR allocation-site count stayed at 7,703 and loop object/closure sites at 302. The count of unused IR results fell from 26,021 to 14,639; jump-to-empty-jump sites rose from 714 to 790 as blocks became empty. Static sites are not runtime allocation counts.
+
+On Wasm32 Showcase, modeled instructions fell from 6,022,270 to 6,018,681 and module size from 30,226,487 to 30,212,126 bytes; the 1,299 opaque runtime bytes were unchanged. Direct and indirect call counts remained 82,442 and 40,197. The IR allocation-site and loop allocation-site counts remained 7,703 and 302. The unchanged-editor comparison and its runtime allocation census remain outstanding.
+
+Examples in the Wasm GC output include 166 fewer modeled instructions in `haxeon.ui.style.StyleInspectionEntry.describe`, 84 in `haxeon.ui.widgets.text.TextDecoration.rectangles`, and 42 in `haxeon.ui.widgets.controls.BinaryControl.buildControl`. These are static reductions; the historical profile does not provide reliable current sample weights for them.
+
+The Wasm GC allocation-related opcode counts are unchanged: `ArrayNewData` 10,901, `ArrayNewDefault` 4,825, `StructNew` 15,173, and `StructNewDefault` 3,388. Direct and indirect call counts remain 17,802 and 852 respectively. These static counts do not replace the requested runtime allocation measurements. The UI struct-allocation gate passes for both state and pointer fixtures on HashLink, Wasm32 and Wasm GC with inlining both off and on; its measured `perform` loops allocate zero objects on the instrumented Wasm targets, and the HashLink fixtures enforce their allocation checks. This covers those fixtures, not the full editor or Showcase workloads.
+
+Placing dead-value elimination inside the inliner's memoized callee transformation instead changed inlining choices and increased allocation sites from 7,703 to 7,733. That placement was rejected; the experiment applies the pass after those decisions. The six combinations of HashLink, Wasm32 and Wasm GC with inlining on and off pass the semantic fixture, and the IR unit covers live phis, debug bindings, calls and potentially trapping division. Full gates have not passed yet.
+
+After this pass, the expanded GC census identifies 357 receiver checks directly on fresh objects or closures and no same-type safe casts. The largest groups are in `IconData.build` (41) and `IconData.hierarchy` (25). These counts do not include repeated checks requiring dominance analysis and do not establish how hot those functions are.
+
+## Receiver checks: measured optimization
+
+A post-inlining pass removes a check when its SSA receiver is fresh or a successful check dominates it on all normal paths. It does not propagate facts across blocks in functions containing exception regions, and it preserves a check whose result is used or needed by the debugger. In the Wasm GC Showcase comparison after dead-value elimination, modeled instructions fell from 1,281,806 to 1,274,330 and module size from 5,530,444 to 5,517,903 bytes. The fresh-receiver count fell from 357 to zero, and the unused-result count fell by 1,293; `RefIsNull` instructions fell from 25,502 to 24,256. Reported IR allocation sites and all four modeled Wasm GC allocation opcode counts were unchanged. The block-local repeated-load diagnostic rose from 95 to 100 because removed checks no longer clear its conservative memory barrier.
+
+The IR unit tests cover a fresh receiver, repeated and dominating checks, loops and zero-iteration exits, a merge with an unchecked predecessor, debug uses and handler conservatism. The new semantic fixture and the existing null-method-inlining fixture each pass on all three targets with inlining off and on. Editor comparisons, runtime allocation measurements and full gates remain outstanding.
+
+The loop-aware Wasm32 comparison reduced modeled instructions from 6,018,681 to 5,975,330 and module size from 30,212,126 to 30,078,392 bytes; direct and indirect call counts remained 82,442 and 40,197, while IR allocation and loop-allocation sites remained 7,703 and 302. The unused-result count fell from 14,638 to 13,345. Runtime allocation and editor measurements remain outstanding.
+
+The three-pass parity run before the jump-pass analysis refactor passed: 500 manifest fixtures were checked across HashLink, Wasm32 and Wasm GC, with 14 skips, and its UI value-snapshot subtest passed in all six target/inlining combinations. The refactored pass needs a fresh parity run.
+
+## Editor capture status
+
+The current editor dependency graph was resolved in a task-local manifest overlay, with Haxeon dependencies pointed at this worktree. Its compiler-only build fails in the external MachineKit source with `machinekit/gantry/Gantry.hx:1050:11: E1009: Type mismatch for argument 2 to "machinekit.gantry.GantryMotorSupport.new"`: the call supplies a numeric width where the current constructor declares `name:String`. The external source was not changed.
+
+For investigation only, a task-local copy of the MachineKit source adds the missing `drawing(id)` argument to that one call, matching the other three calls to the constructor. This corrected snapshot compiles 3,318 sources. With all three experimental passes, its HashLink module has 32,384 functions, 3,129,520 emitted instructions and 111,096,299 bytes; encoded function bodies total 15,426,653 bytes. The three passes together reduce the corrected snapshot from 3,161,355 instructions, about 1.0%; this is a small static win. Its opcode histogram includes 466,737 `NullCheck`, 417,828 `Label`, 306,793 `Jump`, 180,810 `FieldGet` and 176,306 `Move` instructions. Its IR census reports 51,526 allocation sites, 6,516 loop object/closure sites and 6,904 jumps to empty jump blocks. This is not a build of the unchanged editor and cannot close the required current-editor gate.
+
+For this corrected snapshot, source and FFI files were hashed before and after each build; the comparison input digest is `e8919a0276927036b740f2816e3cce102ef222748097cb76dbc4cc833801b754`. The unoptimized baseline has 3,161,355 HashLink instructions, 16,001,628 encoded function bytes and a 112,378,028-byte module. With dead pure-value elimination alone, those counts are 3,141,305, 15,482,158 and 111,410,033 respectively; the IR allocation-site count remains 51,526 and emitted `New` count remains 35,906. Comparisons for the other two passes are in progress. Two repeated baseline interaction allocation censuses counted 284,556 and 284,557 allocations; the single-allocation difference was a byte buffer, so a whole-run difference of that magnitude cannot establish an allocation regression or improvement.
+
+Adding receiver-check elimination to the dead-value build reduces the corrected snapshot from 3,141,305 to 3,134,132 HashLink instructions and from 111,410,033 to 111,204,360 module bytes. `NullCheck` falls from 473,915 to 466,737; IR allocation sites remain 51,526 and emitted `New` sites fall from 35,906 to 35,905. The reported local-allocation count rises from 2,933 to 3,057 because the removed checks no longer obscure locality; this diagnostic is not a runtime allocation count.
+
+The receiver-check build's corrected-snapshot interaction census counted 284,557 allocations, equal to the dead-value build; the ten per-action median allocation-byte values also matched. Whole-run byte totals varied slightly, so those totals are not used to infer an improvement or regression.
+
+The pre-refactor linear jump pass reduces the corrected snapshot from 3,134,132 to 3,129,520 HashLink instructions and from 111,204,360 to 111,096,299 module bytes. `Jump` and `Label` each fall by 2,306, while IR allocation sites remain 51,526 and emitted `New` sites remain 35,905. Its 20-cycle interaction census also counted 284,557 allocations, and all ten per-action median allocation-byte values matched the receiver-check build. The refactored analysis produces a byte-identical corrected-snapshot module, so these counts and the allocation capture also apply to it.
+
+The profiled corrected-snapshot module is byte-identical to the refactored three-pass comparison module (SHA-256 `6c4bbe6e1ef97df16acd6dda732b5f103a7bed36a346db5b1662e7982d4146d3`). In that one 769-sample capture, functions whose emitted instruction counts changed accounted for 93 self samples for dead-value elimination, 13 for receiver-check elimination and 13 for linear jump threading. Multiplying each affected function's sample count by its own static instruction reduction gives 139, 32 and 30 sample-instructions respectively. For example, `RenderNode.layoutInputDiffFlags` had five self samples and two fewer instructions after receiver-check elimination. These numbers describe a small sampled profile, not a timing claim, and remain specific to the corrected snapshot.
+
+In the same 20-cycle corrected-snapshot interaction allocation census, the dead-value build counted 284,557 allocations. The ten per-action median allocation-byte values exactly matched the repeated baseline. This is limited evidence for the corrected snapshot; it is not an allocation result for the unchanged current editor.
+
+An interaction capture of this corrected snapshot, using the checkout VM and existing editor native libraries, recorded 769 on-CPU samples at 500 Hz with no dropped records. A name join matched 174 self samples across 78 emitted functions. For each matched function, multiplying its static opcode count by its self samples gives 8,771 `NullCheck`, 6,918 `Jump`, 6,554 `FieldGet`, 2,138 `Move`, 671 `SafeCast` and 368 `ToDyn` sample-sites. These are hotness-weighted static opportunities, not executed-instruction counts; inlined functions are attributed to their callers, and unmatched/native samples are excluded. The generated value equality function contributed 1,944 weighted null checks and field reads, while `UiContext.submitInternal` contributed 1,386 weighted null checks. Equality and inline enums are assigned to the other session. Removing repeated implicit field null checks requires proven non-null facts that HashLink lowering can honor; that general analysis and its Wasm counterparts are now in scope for follow-up work.
+
+After the three passes, the corrected snapshot has 7,595 small-direct-call heuristic sites and one overwritten-store candidate. In the sampled name join, only three small-call sites in `UiContext.submitInternal` received self samples, for nine sample-sites; the overwritten store received none. These observations do not prove the calls eligible for inlining or the store safe to remove.
+
+A pre-existing editor module dated November 2 runs with a task-local historical runtime from `fd2a332c`; an interaction capture with 20 cycles produced 194 on-CPU samples. Its highest individual Haxe self sample share was 1.03% (`cadkit.parametric.ParameterExpression.primary`); the largest sampled self category was native `libffi.so.8` at 14.95%. This old module cannot establish hotness weights for the current source or provide a current baseline. It is retained only as preliminary evidence until a matching editor build is available.
+
+A second historical interaction capture with 200 cycles yielded 480 on-CPU samples. Only 91 self samples matched function names in the current Showcase IR; multiplying each matched function's sample count by its current static site count yields 674 unused-result, 208 unused-pure-result, 76 empty-jump, 3 repeated-load and 3 loop-allocation sample-sites. For example, `LayoutTransaction.appendNode` had seven samples and six empty-jump sites. This is an exploratory cross-version name join, not a measurement of the current editor: function bodies, reachability and target lowering may have changed, and the sample is small. It cannot be used to claim a current hotness-weighted win.
+
+## General non-null facts: rebased comparison
+
+After rebasing the first three passes onto local `main` `fbf40422`, a shared forward must-analysis tracks fresh SSA values, successful checks, non-null branch edges and phi inputs. It intersects incoming facts and does not propagate checks across blocks in functions with exception regions, where the graph does not model the precise throwing instruction. Fresh SSA allocations remain non-null there. Object types alone are not evidence of non-nullness: the IR does not retain a general non-null contract for object parameters or fields. HashLink uses the facts to omit a repeated dereference check; Wasm32 and Wasm GC use facts from explicit checks, fresh values and branch edges to omit redundant method/receiver checks. Wasm GC field operations have an implicit reference trap; Wasm32 field operations use linear memory, so this analysis does not assume that a completed field access checked for null on either Wasm target.
+
+The rebased corrected-editor comparison uses the same task-local MachineKit source correction described above and unchanged source/FFI digest `e8919a0276927036b740f2816e3cce102ef222748097cb76dbc4cc833801b754`. HashLink instructions fall from 3,129,520 to 2,802,962 (10.4%); module bytes fall from 111,096,299 to 103,138,290; `NullCheck` falls from 466,737 to 140,179. `New` remains 35,905, IR allocation sites remain 51,526, and the fresh-receiver-check diagnostic remains zero. Generated value-equality functions benefit without changing their generator: `$value$equality:79de4eeaa426f81216274ee571d21d70` falls from 108 to 10 emitted null checks.
+
+| Showcase target | Modeled instructions before → after | Module bytes before → after | Check opcode before → after |
+|---|---:|---:|---:|
+| Wasm32 | 5,975,437 → 5,950,629 | 30,078,646 → 30,017,594 | `I32Eqz`: 38,284 → 35,696 |
+| Wasm GC | 1,277,276 → 1,261,766 | 5,530,567 → 5,504,272 | `RefIsNull`: 24,328 → 21,743 |
+
+A separate exploratory fixture that dereferences a real null field in a Haxe `try` exposes an existing target difference on both the rebased baseline and this build: HashLink enters the catch, Wasm32 returns from the try, and Wasm GC raises a WebAssembly `RuntimeError: dereferencing a null pointer` outside that catch. The non-null semantic fixture instead checks a real null method call, which is caught on all three targets with inlining on and off. The field-access discrepancy predates this pass and remains unresolved; in particular it is why the Wasm analyses do not treat field access as proof that a catchable null check occurred.
+
+Wasm GC allocation opcodes remain `ArrayNewData` 10,901, `ArrayNewDefault` 4,825, `StructNew` 15,173 and `StructNewDefault` 3,388. In a 20-cycle corrected-editor interaction allocation census, both builds recorded 284,557 allocations and all ten per-action median allocation-byte values matched. The earlier repeated baseline differed by one allocation, so these counts should not be read as a finer-grained guarantee.
+
+A new 500 Hz profile of the optimized corrected snapshot recorded 587 on-CPU samples, with 184 self samples name-matched to functions in both emitted censuses. Functions with changed null-check counts account for approximately 171 of 587 self samples; sample counts are reconstructed from the report's rounded percentages. Weighting each matched function's static null-check count by these samples gives approximately 7,968 before and 2,126 after. The hot equality function received seven self samples and contributes 756 before versus 70 after. This is one small profile and a static weighting, not a runtime speed or execution-count measurement.
+
+## Cross-block field forwarding
+
+`IrLoadStoreForwarding` now intersects available field-load facts across normal predecessors and reaches a fixed point through loops. It forwards only the same SSA receiver and field when every incoming path retains the same loaded value. Stores to that field, calls, unknown writes and exception regions invalidate the cross-block fact; inline value fields remain excluded. Array forwarding remains block-local. This conservative rule avoids introducing a cross-block store-to-load optimization.
+
+On the same corrected editor snapshot and compiler base as the non-null comparison, HashLink instructions fall from 2,802,962 to 2,797,380 and module bytes from 103,138,290 to 102,976,951. Emitted `FieldGet` falls from 180,810 to 176,732 across 1,616 functions, and `NullCheck` from 140,179 to 138,692. For example, `haxeon.ui.core.RenderNode.reconcile` falls from 481 to 431 field reads. The existing repeated-load IR counter is block-local, so it remains 171 and does not count this cross-block improvement. IR allocation sites remain 51,526 and emitted `New` remains 35,905.
+
+| Showcase target | Modeled instructions before → after | Module bytes before → after | Load opcode before → after |
+|---|---:|---:|---:|
+| Wasm32 | 5,950,629 → 5,947,807 | 30,017,594 → 30,009,572 | `I32Load`: 341,422 → 340,642 |
+| Wasm GC | 1,261,766 → 1,259,117 | 5,504,272 → 5,493,296 | `StructGet`: 66,467 → 65,586 |
+
+Wasm GC's four allocation opcode counts are unchanged. The 20-cycle corrected-editor interaction census recorded 284,557 allocations both before and after, with all ten per-action median allocation-byte values identical. Reusing the 587-sample non-null baseline profile above, approximately 63 self samples match functions whose emitted field-load counts changed; sample-weighted static `FieldGet` sites fall from 5,152 to 4,926. Sample counts are reconstructed from rounded report percentages and are not executed-instruction counts or a timing result.
+
+## Previously rejected approaches
+
+Counted-loop bounds-check elimination and GC locality experiments failed their earlier microbenchmark gates; fused writes had no material candidate in those benchmarks. See [the prior results](OPTIMIZATION_NEXT_RESULTS.md). They will not be revived without different evidence from the real-code census.
+
+Broadly threading empty jump blocks was also tested after the receiver-check pass. It reduced the GC Showcase's IR jump-to-empty-jump count from 790 to 76, but both Wasm targets gained 1,521 modeled instructions: Wasm GC grew from 5,517,903 to 5,521,984 bytes and Wasm32 from 30,078,392 to 30,082,466 bytes. A single-predecessor variant reduced the GC instruction count by 70 but increased its code section by 283 bytes. These results illustrate that an IR jump count alone does not predict the size of the restructured Wasm. A strictly linear-chain variant leaves both Wasm targets' modeled instruction counts and module sizes unchanged, and reduces the Wasm32 IR jump-to-empty-jump count from 790 to 568. On HashLink Showcase it reduces emitted instructions from 356,604 to 356,270, the sum of encoded function bytes from 1,545,603 to 1,545,101, and module size from 13,567,662 to 13,559,886 bytes. IR allocation sites remain 5,411 on HashLink and 7,703 on Wasm32. Showcase HashLink is a useful proxy but does not replace the requested unchanged-editor measurement.
+
+The expanded Wasm32 scan finds only two consecutive overwritten-field-store candidates, in `UiExplorer.render` and `UiContext.render`, so a store-elimination pass is not justified by this static count. It finds 1,153 calls to small, straight-line functions; 618 occur in `Reflect.reflectObjectCopy` and 178 in `Theme.refreshStyles`. That is a loose heuristic, not a count of calls the current inliner can safely or profitably expand; recursion, ABI compatibility and caller budgets still need examination.
+
+The retained linear-chain pass has focused IR tests for phi-edge remapping, conflicting branch edges, unreachable predecessors and handler regions. Its semantic fixture passes on all three targets with inlining on and off. With all three passes enabled, the UI state and pointer allocation fixtures pass on all three targets in both inlining modes, including their zero-allocation measured loops. The exact unchanged-editor comparison remains unavailable for the reason described above.
+
+The refactored three-pass source tree passed `scripts/test-driver.sh 8` (768 passed, 0 failed), reached a byte-for-byte self-hosting fixed point and passed the Wasm parity run above. The driver uses a task-local `TMPDIR`: placing the LSP fixture under the checkout caused it to discover the checkout's unrelated parent build configuration. More than ten UI scripts have passed. The unchanged editor remains outstanding.
+
+## Main integration runtime measurements
+
+The final integration follows the value-only equality model and uses a clean detached outer `51947204d` snapshot,
+without the task-local MachineKit source correction above. All current-editor gates pass. The old corrected-snapshot
+opcode counts remain historical evidence; the current HashLink module shrinks from 112,538,876 to 103,141,814 bytes.
+Nine alternating pairs on the same four performance cores measure selection at 3.02 -> 2.92 ms and tab transitions
+0.01–0.02 ms faster. All action allocation medians and every named selection-census type are unchanged. All paired
+headless memory gates and all 18 hash-checked Wasm GC scene pairs pass with no allocation increase. The complete
+per-action timing/allocation table, census totals and RSS windows are in
+[VALUE_TYPES.md](../packages/ui/docs/VALUE_TYPES.md#ir-bytecode-optimization-merge-2026-11-05).

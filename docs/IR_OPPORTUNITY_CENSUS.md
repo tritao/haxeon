@@ -61,6 +61,18 @@ Ranks sum the weighted categories, which overlap. Standard-library support funct
 
 Enable with `HAXEON_IR_CENSUS=1`. Lines prefixed `IR_CENSUS` contain JSON arrays in the label order carried by the TOTAL line. The diagnostic runs after the final functions are published, including cache hits and `HAXEON_INLINE=0`; it does not affect fingerprints or mutate IR.
 
+Each function row also has a sorted `histogram` of IR instruction constructors. `unusedResults` counts definitions with no IR uses, including results of calls or other operations with side effects; it is not a count of safely removable instructions. Phi edges and terminators count as uses. `loopObjectOrClosureAllocations` counts `NewObject` and `InstanceClosure` sites in natural loops, not all possible allocating operations. These are IR diagnostics, not emitted HashLink or Wasm instruction counts.
+
+`unusedPureResults` narrows unused results to a conservative set of pure arithmetic, literal and phi operations; it excludes division, memory access, allocation and calls. `constantBranches` counts branches directly driven by literal booleans. `jumpsToEmptyJumps` counts jumps whose target has no instructions and ends in another jump; neither control-flow category asserts that phi edges or exception regions permit rewriting it.
+
+`receiverChecksOnFreshValues` recognizes checks directly on a newly created object or closure; it does not trace aliases or dominating checks. `sameTypeSafeCasts` identifies casts whose source and destination IR types print identically. Both are candidate counts, not a proof that a particular instruction can be removed.
+
+`overwrittenFieldStores` counts repeated writes to the same SSA receiver and field when only a conservative set of pure instructions separates them; it does not prove the write is unobservable in every exception or debugging context. `smallDirectCalls` counts calls to non-self-recursive, single-block program functions within the inliner's instruction budget. It is an upper-bound heuristic, not the inliner's eligibility decision: type compatibility, indirect recursion, inlining depth, call-site budget and special exclusions are not proven.
+
+The same switch emits `EMITTED_CENSUS` rows after HashLink register allocation and after the final Wasm module transforms. HashLink rows include symbolic opcode counts and the encoded function size without debug information. Wasm rows count the final instruction model; pre-encoded linked runtime bodies have `opaqueBytes` instead of a decoded histogram. Module size includes headers, data and metadata, and is therefore measured separately from function bodies.
+
+JSON field order is written explicitly rather than relying on HashLink's anonymous-object enumeration order. The focused census unit exercises valid, repeatable JSON; independent compiler processes also produced identical census rows and byte-identical HashLink, Wasm32 and Wasm GC artifacts for the counted-loop fixture.
+
 ## Allocation explanations
 
 Each per-function JSON row now carries an `allocations` array: output value ID, type, whether locality is proven,
