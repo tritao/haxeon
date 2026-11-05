@@ -64,6 +64,47 @@ class LoadStoreMain {
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.add(first, last)))) == expected, name);
 	}
 
+	static function crossBlockCases():Void {
+		for (kind in 0...4) {
+			var b = new IrBuilder(), object = b.argument("object", Obj("Box")), alias = b.argument("alias", Obj("Box")),
+				condition = b.argument("condition", Bool), first = b.fieldGet(object, "n", I32),
+				yes = b.createBlock(), no = b.createBlock(), join = b.createBlock();
+			b.branch(condition, yes, no);
+			b.select(yes);
+			if (kind == 1) b.call("mutate", [object], Void);
+			if (kind == 2) b.fieldSet(alias, "n", b.constInt(0));
+			if (kind == 3) b.fieldSet(alias, "other", b.constInt(0));
+			b.jump(join); b.select(no); b.jump(join); b.select(join);
+			var second = b.fieldGet(object, "n", I32), result = IrLoadStoreForwarding.run(finish(b, b.add(first, second)));
+			expect(loads(result) == (kind == 1 || kind == 2 ? 2 : 1), 'join clobber case $kind');
+		}
+		for (clobber in [false, true]) for (before in [false, true]) {
+			var b = new IrBuilder(), object = b.argument("object", Obj("Box")), condition = b.argument("condition", Bool),
+				header = b.createBlock(), body = b.createBlock(), exit = b.createBlock();
+			if (before) b.fieldGet(object, "n", I32);
+			b.jump(header); b.select(header); var value = b.fieldGet(object, "n", I32); b.branch(condition, body, exit);
+			b.select(body); if (clobber) b.fieldSet(object, "n", b.constInt(2)); b.jump(header);
+			b.select(exit); var result = IrLoadStoreForwarding.run(finish(b, value));
+			expect(loads(result) == (before && clobber ? 2 : 1), 'loop before=$before clobber=$clobber');
+		}
+		var b = new IrBuilder(), object = b.argument("object", Obj("Box")), condition = b.argument("condition", Bool),
+			yes = b.createBlock(), no = b.createBlock(), join = b.createBlock();
+		b.branch(condition, yes, no);
+		b.select(yes); b.fieldGet(object, "n", I32); b.jump(join);
+		b.select(no); b.jump(join); b.select(join);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
+			"a load on one branch does not dominate the join");
+		b = new IrBuilder(); object = b.argument("object", Obj("Box")); var storeNext = b.createBlock();
+		b.fieldSet(object, "n", b.constInt(7)); b.jump(storeNext); b.select(storeNext);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 1,
+			"a store does not create a cross-block load fact");
+		b = new IrBuilder(); object = b.argument("object", Obj("Box")); var next = b.createBlock();
+		b.fieldGet(object, "n", I32); b.blocks[0].instructions.push(located(EndTry(0, false))); b.jump(next);
+		b.select(next);
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
+			"exception regions do not propagate field facts across blocks");
+	}
+
 	static function main():Void {
 		var b = new IrBuilder(),
 			o = b.argument("o", Obj("Box")),
@@ -166,7 +207,7 @@ class LoadStoreMain {
 		b.fieldSet(o, "v", value);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects))) == 2,
 			"inline copies kill interior facts");
-		// Facts stop at blocks, but eliminated values are substituted in successor phis.
+		// Available field facts cross clean edges, and eliminated values are substituted in successor phis.
 		b = new IrBuilder();
 		o = b.argument("o", Obj("Box"));
 		stored = b.constInt(42);
@@ -178,7 +219,7 @@ class LoadStoreMain {
 		var phi = b.phi(I32, [{block: 0, value: reload}]);
 		var later = b.fieldGet(o, "n", I32);
 		result = IrLoadStoreForwarding.run(finish(b, b.add(phi, later)));
-		expect(loads(result) == 1, "no cross-block facts");
+		expect(loads(result) == 0, "a field store dominates the reload across the edge");
 		switch result.blocks[1].instructions[0].value {
 			case Phi(_, inputs):
 				expect(inputs[0].value == stored, "phi substitution");
@@ -202,6 +243,7 @@ class LoadStoreMain {
 		expect(program.functions[0] == fn, "disabled pass identity");
 		IrInliner.enabled = oldInline;
 		IrLoadStoreForwarding.enabled = oldForward;
+		crossBlockCases();
 		Sys.println("PASS: load/store forwarding");
 	}
 }

@@ -5,9 +5,10 @@ import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 
 private typedef KnownField = {final object:Int; final field:String; final value:IrValue;}
+private typedef AvailableField = {final object:Int; final field:String; final value:Null<IrValue>;}
 private typedef KnownElement = {final array:IrValue; final index:String; final value:IrValue;}
 
-/** Block-local reload elimination. Stores and the input function are never changed.
+/** Cross-block field and block-local array reload elimination. Stores and the input function are never changed.
  * Runtime array-cast checks enforce concrete storage types; differently typed arrays cannot alias
  * the same elements. Erased dynamic array accesses use calls, which invalidate all known loads. */
 class IrLoadStoreForwarding {
@@ -28,9 +29,9 @@ class IrLoadStoreForwarding {
 				value = substitutions.get(value.id);
 			return value;
 		};
-		var blocks:Array<IrBlock> = [];
+		var incoming = incomingFields(fn, objects), blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
-			var fields:Array<KnownField> = [],
+			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id).copy() : [],
 				elements:Array<KnownElement> = [];
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {
@@ -141,6 +142,85 @@ class IrLoadStoreForwarding {
 				}
 		];
 		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+	}
+
+	/** Fields available on every normal path into each block. A null value is the analysis top. */
+	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>):Map<Int, Array<KnownField>> {
+		var result:Map<Int, Array<KnownField>> = [], keys:Array<AvailableField> = [], seen:Map<String, Bool> = [], repeated = false;
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case BeginTry(_, _, _), EndTry(_, _), Catch(_): return result;
+			case FieldGet(_, object, field), FieldSet(object, field, _) if (plainObject(object.type)):
+				var key = object.id + ":" + field;
+				if (seen.exists(key)) repeated = true;
+				else { seen.set(key, true); keys.push({object: object.id, field: field, value: null}); }
+			default:
+		}
+		if (!repeated || fn.blocks.length < 2) return result;
+		var graph = new IrGraph(fn), outgoing:Map<Int, Array<AvailableField>> = [];
+		for (id in graph.order) outgoing.set(id, keys.copy());
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (id in graph.order) {
+				var before:Array<AvailableField> = [], predecessors = graph.predecessors.get(id);
+				if (id != fn.blocks[0].id && predecessors != null && predecessors.length > 0) {
+					before = outgoing.get(predecessors[0]).copy();
+					for (i in 1...predecessors.length) before = intersectFields(before, outgoing.get(predecessors[i]));
+				}
+				result.set(id, [for (entry in before) if (entry.value != null)
+					{object: entry.object, field: entry.field, value: entry.value}]);
+				var after = before.copy();
+				for (located in graph.block(id).instructions) switch located.value {
+					case FieldSet(object, field, value):
+						if (excludedField(value.type, objects) || !plainObject(object.type)) after = [];
+						else after = [for (entry in after) if (entry.field != field) entry];
+					case FieldGet(out, object, field):
+						if (!plainObject(object.type)) after = [];
+						else if (!excludedField(out.type, objects) && findField(after, object.id, field) == null)
+							after.push({object: object.id, field: field, value: out});
+					case ArraySet(array, _, value):
+						if (!plainArray(array.type) || excludedField(value.type, objects)) after = [];
+					case ArrayGet(_, array, _): if (!plainArray(array.type)) after = [];
+					// Across blocks, even a non-writing call is an explicit barrier.
+					case Call(_, _, _): after = [];
+					default: if (mayWriteMemory(located.value)) after = [];
+				}
+				if (!sameFields(outgoing.get(id), after)) { outgoing.set(id, after); changed = true; }
+			}
+		}
+		return result;
+	}
+
+	static function findField(fields:Array<AvailableField>, object:Int, name:String):Null<AvailableField> {
+		for (entry in fields) if (entry.object == object && entry.field == name) return entry;
+		return null;
+	}
+
+	static function intersectFields(left:Array<AvailableField>, right:Array<AvailableField>):Array<AvailableField> {
+		var common:Array<AvailableField> = [];
+		for (a in left) {
+			var b = findField(right, a.object, a.field);
+			if (b == null) continue;
+			var leftValue = a.value, rightValue = b.value;
+			if (leftValue == null) common.push(b);
+			else if (rightValue == null || leftValue.id == rightValue.id && sameType(leftValue.type, rightValue.type)) common.push(a);
+		}
+		return common;
+	}
+
+	static function sameFields(left:Array<AvailableField>, right:Array<AvailableField>):Bool {
+		if (left.length != right.length) return false;
+		for (a in left) {
+			var b = findField(right, a.object, a.field);
+			if (b == null) return false;
+			var leftValue = a.value, rightValue = b.value;
+			if (leftValue == null) {
+				if (rightValue != null) return false;
+			} else {
+				if (rightValue == null || leftValue.id != rightValue.id || !sameType(leftValue.type, rightValue.type)) return false;
+			}
+		}
+		return true;
 	}
 
 	static function sameType(a:IrType, b:IrType):Bool

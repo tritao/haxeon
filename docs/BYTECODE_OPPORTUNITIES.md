@@ -80,6 +80,19 @@ Wasm GC allocation opcodes remain `ArrayNewData` 10,901, `ArrayNewDefault` 4,825
 
 A new 500 Hz profile of the optimized corrected snapshot recorded 587 on-CPU samples, with 184 self samples name-matched to functions in both emitted censuses. Functions with changed null-check counts account for approximately 171 of 587 self samples; sample counts are reconstructed from the report's rounded percentages. Weighting each matched function's static null-check count by these samples gives approximately 7,968 before and 2,126 after. The hot equality function received seven self samples and contributes 756 before versus 70 after. This is one small profile and a static weighting, not a runtime speed or execution-count measurement.
 
+## Cross-block field forwarding
+
+`IrLoadStoreForwarding` now intersects available field-load facts across normal predecessors and reaches a fixed point through loops. It forwards only the same SSA receiver and field when every incoming path retains the same loaded value. Stores to that field, calls, unknown writes and exception regions invalidate the cross-block fact; inline value fields remain excluded. Array forwarding remains block-local. This conservative rule avoids introducing a cross-block store-to-load optimization.
+
+On the same corrected editor snapshot and compiler base as the non-null comparison, HashLink instructions fall from 2,802,962 to 2,797,380 and module bytes from 103,138,290 to 102,976,951. Emitted `FieldGet` falls from 180,810 to 176,732 across 1,616 functions, and `NullCheck` from 140,179 to 138,692. For example, `haxeon.ui.core.RenderNode.reconcile` falls from 481 to 431 field reads. The existing repeated-load IR counter is block-local, so it remains 171 and does not count this cross-block improvement. IR allocation sites remain 51,526 and emitted `New` remains 35,905.
+
+| Showcase target | Modeled instructions before → after | Module bytes before → after | Load opcode before → after |
+|---|---:|---:|---:|
+| Wasm32 | 5,950,629 → 5,947,807 | 30,017,594 → 30,009,572 | `I32Load`: 341,422 → 340,642 |
+| Wasm GC | 1,261,766 → 1,259,117 | 5,504,272 → 5,493,296 | `StructGet`: 66,467 → 65,586 |
+
+Wasm GC's four allocation opcode counts are unchanged. The 20-cycle corrected-editor interaction census recorded 284,557 allocations both before and after, with all ten per-action median allocation-byte values identical. Reusing the 587-sample non-null baseline profile above, approximately 63 self samples match functions whose emitted field-load counts changed; sample-weighted static `FieldGet` sites fall from 5,152 to 4,926. Sample counts are reconstructed from rounded report percentages and are not executed-instruction counts or a timing result.
+
 ## Previously rejected approaches
 
 Counted-loop bounds-check elimination and GC locality experiments failed their earlier microbenchmark gates; fused writes had no material candidate in those benchmarks. See [the prior results](OPTIMIZATION_NEXT_RESULTS.md). They will not be revived without different evidence from the real-code census.

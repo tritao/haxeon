@@ -20,6 +20,7 @@ inline_cases=(
 	dead-pure-values
 	receiver-check-elision
 	non-null-facts
+	field-forwarding-blocks
 	jump-threading
 	identity-class
 	enum-interface-conformance
