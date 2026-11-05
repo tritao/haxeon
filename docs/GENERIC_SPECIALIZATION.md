@@ -86,6 +86,20 @@ specializations used by unchanged callers and retire unused layouts. HashLink, W
 typed closure calls; conversion to or from Dynamic uses a boundary adapter. The generic map described below replaces
 the earlier compiler-generated hashable-map object.
 
+Wasm closure boundary lowering closes the dependency graph of generated bodies before planning signatures and table
+slots. Escape and restoration helpers can introduce further function casts, including a class callback parameter
+of a struct-taking function. Those casts receive the same checks and varargs adapters as source casts. Generated
+helpers are memoized and processed once; Wasm32 and Wasm GC reuse one varargs adapter per semantic target signature.
+The `scalar-closure-nested-callback` fixture covers this combination and a variadic factory returning a callback.
+
+The UI snapshot regression was introduced by `ac5c2f79`; its parent `9e4819ae` compiles the fixture, while
+`ac5c2f79`, pre-cleanup `aed2c2db`, the cleanup merge `ba9a332e` and `efd3a87d` report
+`Unknown Wasm function "__haxeon_varargs_adapter_Function([Obj(haxeon.ui.Canvas)],Void)"` on Wasm GC.
+Reverting only Canvas's cleanup port also reproduces it. The generated scalar escape wrapper added that callback
+cast after the initial varargs scan. `scripts/test-wasm-gc-parity.sh` now runs
+`packages/ui/tools/test-value-snapshot-parity.sh` on all three targets with inlining enabled and disabled. The ten
+other UI scripts exercise HashLink; the Showcase uses a different reachable graph and did not cover this fixture.
+
 Wasm exports that accept or return a scalar struct closure adapt it at the host boundary. The internal closure keeps
 its scalar calling convention even when the same signature is exported: a 1,024-call typed loop allocates no objects
 on Wasm32 or Wasm GC, and exported closure arguments and results round-trip through the host. Without the boundary

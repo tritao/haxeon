@@ -149,6 +149,23 @@ class WasmDynamicCalls {
 		return result;
 	}
 
+	/** Dependencies introduced by generated closure bodies belong to the same adapter plan. */
+	public static function missingVarargsAdapters(functions:Array<IrFunction>):Array<IrFunction> {
+		if (!Lambda.exists(functions, fn -> fn.name == VARARGS_TARGET)) return [];
+		var names = [for (fn in functions) fn.name => true], targets:Map<String, IrType> = [];
+		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case SafeCast(out, _): switch out.type {
+				case Function(_, _):
+					var name = varargsAdapterName(out.type);
+					if (!names.exists(name)) targets.set(name, out.type);
+				default:
+			}
+			default:
+		}
+		var ordered = [for (name in targets.keys()) name]; ordered.sort(Reflect.compare);
+		return [for (name in ordered) varargsAdapter(name, targets.get(name))];
+	}
+
 	public static function varargsAdapterName(type:IrType):String
 		return "__haxeon_varargs_adapter_" + Std.string(type);
 

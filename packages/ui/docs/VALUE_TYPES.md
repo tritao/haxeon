@@ -726,3 +726,89 @@ Median paired differences were +0.31 / −0.16 / +0.16 / 0 MiB, within the
 same-binary variability documented in the preceding comparison. All ten UI
 scripts, the app suite and all nine retention scenarios passed. No allocation,
 memory or timing ceiling changed.
+
+### Generated callback dependencies and the UI snapshot gate (2026-11-05)
+
+The UI snapshot fixture exposed a missing Wasm GC varargs adapter for
+`Canvas -> Void`. Historical source checks identify `ac5c2f79` as the first
+bad commit; its parent `9e4819ae` passes. The defect predates the scoped-cleanup
+ports, the type-ID collision fix and the interface-unbox ABI change. Generated
+scalar escape bodies introduced callback casts after the original adapter scan.
+The lowering now processes generated bodies and their adapter dependencies to
+completion before reserving signatures and table slots. Wasm32 reuses the same
+varargs helper instead of generating a duplicate.
+
+The ten existing UI scripts exercise HashLink, and the Showcase builds a
+different reachable graph. The omitted `test-value-snapshot-parity.sh` is now
+part of `scripts/test-wasm-gc-parity.sh`. The full parity gate passed 491 fixtures
+(14 existing skips), followed by all six UI snapshot combinations: HashLink,
+Wasm32 and Wasm GC, with inlining on and off. The reduced callback regression
+also passes all six combinations. It crosses genuine Dynamic/variadic escapes;
+existing typed closure allocation censuses remain at zero. The compiler suite
+passed 753 tests and self-hosting reached a fixed point. All ten UI scripts,
+the app suite, all nine retention scenarios, browser smoke, performance budgets
+and six headless memory runs passed.
+
+Paired measurements use outer `556304e1a`, control compiler `a7894caf` and
+this candidate. The two HashLink profile guests are byte-identical (SHA-256
+`361b2cd2d52a213c82e8f9dbd197126a9745a145adfd737f7ce1510421becebf`).
+Nine alternating pairs gave these per-action median allocations (KiB):
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console → telemetry | 74.5 | 74.5 |
+| hierarchy → sensors | 114.6 | 114.6 |
+| sensors → hierarchy | 80.1 | 80.1 |
+| telemetry → console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+One control backspace capture reported 16.1 rather than 16.2 KiB; the other
+17 captures reported 16.2. These identical-image runs retain the counter and
+capture-format variation rather than retrying it away. Every action capture
+passed its budgets; no ceiling changed.
+
+Three 30-cycle selection-stress census pairs were:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,928 | 340,909 / 24,010,392 |
+| 2 | 340,909 / 24,010,408 | 340,911 / 24,010,960 |
+| 3 | 340,910 / 24,010,736 | 340,906 / 24,009,688 |
+
+Only byte buffers varied; all other per-type object and byte counts matched
+within each pair. The four RSS growth windows (MiB), preserving pair order, were:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 29.69 / 3.75 / 0.78 / 5.00 | 30.16 / 3.75 / 0.78 / 5.00 |
+| 2 | 30.16 / 4.06 / 0.94 / 4.84 | 29.84 / 4.06 / 0.78 / 5.16 |
+| 3 | 29.53 / 3.91 / 0.94 / 5.00 | 30.31 / 3.59 / 0.78 / 5.00 |
+
+Median paired differences were +0.47 / 0 / −0.16 / 0 MiB. The first-window range
+across these identical guests was 29.53–30.31 MiB, inside the preceding recorded
+same-binary range. Every memory run passed without changing a ceiling.
+
+The Wasm GC Showcase uses fixed-step core mode, 120 warmup and 120 measured
+frames, allocation counting on and linear-memory statistics off. Nine full-scene
+pairs and three pairs per other scene matched:
+
+| Scene | Control objects | Candidate objects |
+| --- | ---: | ---: |
+| full | 4,440 | 4,440 |
+| static | 4,440 | 4,440 |
+| text-heavy | 4,440 | 4,440 |
+| editing | 8,724 | 8,724 |
+
+Control/candidate guest SHA-256 hashes are
+`b4edcd901070a2cbed5f8289cb63f6c28a1d8e3ddd7fc1727160b09cbe2b51a7` /
+`03b20c16d31e8e394427b1b3248097af31c95c9e893d38c465308ac24234cadd`.
+All captures were deleted after recording their numbers.

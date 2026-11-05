@@ -106,9 +106,8 @@ class WasmLinearClosureAdapters {
 		adapters.rewriteSignatureChecks();
 		for (pair in pairs) {
 			var targetType = targetTypes.get(pair.target);
-			for (source in pair.sources)
-				program.functions.push(source == "varargs" ? WasmDynamicCalls.varargsAdapter(adapterName(source, pair.target), targetType)
-					: adapter(sourceTypes.get(source), source, targetType, pair.target));
+			for (source in pair.sources) if (source != "varargs")
+				program.functions.push(adapter(sourceTypes.get(source), source, targetType, pair.target));
 			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
 		}
 		return adapters;
@@ -184,7 +183,8 @@ class WasmLinearClosureAdapters {
 		when(signatureId(targetType), () -> builder.returnValue(closure));
 		for (source in sources)
 			when(source.key == "varargs" ? -1 : signatureId(source.type),
-				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(adapterName(source.key, closureKey(targetType)), closure, targetType))));
+				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs" ? WasmDynamicCalls.varargsAdapterName(targetType) :
+					adapterName(source.key, closureKey(targetType)), closure, targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
 		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, null, false, Keep);
 	}

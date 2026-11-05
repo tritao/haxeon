@@ -28,14 +28,32 @@ class WasmScalarClosureEscapes {
 					rewritten.inlineHint, Reachable);
 			rewritten;
 		}];
-		result.objects = program.objects.concat(pass.generatedObjects);
-		var generated = IrValueInterfaceBoxes.rewrite(pass.generatedFunctions, result.objects, program.interfaces, result.functions);
-		generated = IrCheckedDynamicCasts.rewrite(generated, result.objects, true, result.functions);
-		for (fn in generated) result.functions.push(fn);
+		result.objects = program.objects.copy();
+		var generatedCount = 0, objectCount = 0, hadGenerated = false;
+		// An escape/restoration body can itself cross a function boundary. Process
+		// those bodies and their varargs dependencies before either backend plans
+		// signatures and table slots; each memoized helper is emitted only once.
+		while (true) {
+			var batch:Array<IrFunction> = [];
+			while (generatedCount < pass.generatedFunctions.length)
+				batch.push(pass.rewriteFunction(pass.generatedFunctions[generatedCount++]));
+			while (objectCount < pass.generatedObjects.length)
+				result.objects.push(pass.generatedObjects[objectCount++]);
+			if (batch.length > 0) {
+				hadGenerated = true;
+				batch = IrValueInterfaceBoxes.rewrite(batch, result.objects, program.interfaces, result.functions);
+				batch = IrCheckedDynamicCasts.rewrite(batch, result.objects, true, result.functions);
+				for (fn in batch) result.functions.push(pass.rewriteFunction(fn));
+			}
+			if (generatedCount < pass.generatedFunctions.length) continue;
+			var missing = WasmDynamicCalls.missingVarargsAdapters(result.functions);
+			if (missing.length == 0) break;
+			for (fn in missing) pass.generatedFunctions.push(fn);
+		}
 		result.natives = program.natives.concat(pass.generatedNatives); result.cNatives = program.cNatives;
 		var hasTypeTest = false;
 		for (native in result.natives) if (native.name == "__std_is_of_type") hasTypeTest = true;
-		if (!hasTypeTest && generated.length > 0) result.natives.push({name: "__std_is_of_type", library: "haxeon_runtime",
+		if (!hasTypeTest && hadGenerated) result.natives.push({name: "__std_is_of_type", library: "haxeon_runtime",
 			symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		result.interfaces = program.interfaces; result.enums = program.enums; result.staticFields = program.staticFields;
 		result.positionalFingerprints = program.positionalFingerprints; result.parameterDefaults = program.parameterDefaults;
