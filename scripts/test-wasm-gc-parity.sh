@@ -19,6 +19,7 @@ cases=(objects arrays enums closures dynamic exceptions strings)
 inline_cases=(
 	dead-pure-values
 	receiver-check-elision
+	jump-threading
 	identity-class
 	enum-interface-conformance
 	scoped-cleanup

@@ -300,7 +300,7 @@ class IrInliner {
 			var clean = cache.cleaned.get(fn.name);
 			if (clean == null || clean.source != result) {
 				var source = result;
-				result = IrReceiverCheckElision.run(IrDeadPureValues.run(result));
+				result = IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(result)));
 				clean = {source: source, result: result};
 			} else result = clean.result;
 			cleaned.set(fn.name, clean);
