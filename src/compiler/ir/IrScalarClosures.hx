@@ -138,6 +138,13 @@ class IrScalarClosures {
 			symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 	}
 
+	/** An ordinary function can still need a boundary bridge for scalar callback arguments/results. */
+	function needsBoundaryAdapter(type:IrType):Bool return switch type {
+		case Function(arguments, result):
+			candidates.exists(key(type)) || Lambda.exists(arguments, needsBoundaryAdapter) || needsBoundaryAdapter(result);
+		default: false;
+	};
+
 	function mapType(type:IrType):IrType
 		return switch type {
 			case Abstract(_) if (IrHlScalarRef.element(type) != null): IrHlScalarRef.type(mapType(IrHlScalarRef.element(type)));
@@ -174,13 +181,13 @@ class IrScalarClosures {
 			var rewritten = new IrBlock(block.id);
 			for (located in block.instructions) switch located.value {
 				case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && typeValues.exists(arguments[1].id)
-						&& candidates.exists(key(typeValues.get(arguments[1].id)))):
+						&& needsBoundaryAdapter(typeValues.get(arguments[1].id))):
 					rewritten.instructions.push(new Located(Call(map(out), ensureSignatureCheck(typeValues.get(arguments[1].id)), [map(arguments[0])]), located.provenance));
-				case ToDyn(out, input) if (candidates.exists(key(input.type))):
+				case ToDyn(out, input) if (needsBoundaryAdapter(input.type)):
 					var erasure = ensureErasure(input.type), boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
 					rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]), located.provenance));
 					rewritten.instructions.push(new Located(ToDyn(map(out), boxed), located.provenance));
-				case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; }) && candidates.exists(key(out.type))):
+				case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; }) && needsBoundaryAdapter(out.type)):
 					rewritten.instructions.push(new Located(Call(map(out), ensureRestoration(out.type), [map(input)]), located.provenance));
 				case StaticClosure(out, name) if (candidates.exists(key(out.type))):
 					rewritten.instructions.push(new Located(StaticClosure(map(out), IrScalarArguments.PREFIX + name), located.provenance));
@@ -328,6 +335,7 @@ class IrScalarClosures {
 		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32), environment = "$scalar-closure:restored-environment:" + suffix,
 			wrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
 			maker = "$scalar-closure:restore:" + suffix,
+			scalarOwn = candidates.exists(signatureKey),
 			logical = switch type { case Function(arguments, result): {arguments: arguments, result: result};
 				default: throw "Scalar closure restoration requires a function"; };
 		restorations.set(signatureKey, maker);
@@ -336,7 +344,7 @@ class IrScalarClosures {
 		var call = new IrBuilder(), receiver = call.argument("receiver", Obj(environment)), arguments:Array<IrValue> = [];
 		for (index in 0...logical.arguments.length) {
 			var argument = logical.arguments[index];
-			if (!isValue(argument)) { arguments.push(call.argument('argument$index', mapType(argument))); continue; }
+			if (!scalarOwn || !isValue(argument)) { arguments.push(call.argument('argument$index', mapType(argument))); continue; }
 			var name = switch argument { case Obj(value): value; default: throw "Invalid scalar closure argument"; }, record = call.newObject(name);
 			for (slot in slots(argument)) {
 				var scalar = call.argument('argument$index.' + slot.path.join("."), mapType(slot.type)), current = record, currentType = argument;
@@ -348,11 +356,18 @@ class IrScalarClosures {
 			}
 			arguments.push(record);
 		}
-		var resultSlots = isValue(logical.result) ? slots(logical.result) : [], references:Array<IrValue> = [];
+		var resultSlots = scalarOwn && isValue(logical.result) ? slots(logical.result) : [], references:Array<IrValue> = [];
 		for (slot in resultSlots) references.push(call.argument("result." + slot.path.join("."), IrHlScalarRef.type(mapType(slot.type))));
-		var closure = call.fieldGet(receiver, "closure", erasedType(type)), erasedArguments = [for (argument in arguments) (switch (argument.type) { case Dyn: true; default: false; }) ? argument : call.toDyn(argument)],
+		var closure = call.fieldGet(receiver, "closure", erasedType(type)), erasedArguments = [for (index in 0...arguments.length) {
+			var argument = arguments[index], logicalType = logical.arguments[index];
+			if (needsBoundaryAdapter(logicalType)) {
+				var erased = call.call(ensureErasure(logicalType).maker, [argument], erasedType(logicalType));
+				call.toDyn(erased);
+			} else (switch (argument.type) { case Dyn: true; default: false; }) ? argument : call.toDyn(argument);
+		}],
 			erasedResult = call.callClosure(closure, erasedArguments, Dyn),
-			result = (switch (logical.result) { case Void: true; default: false; }) ? call.constVoid() : (switch (logical.result) { case Dyn: true; default: false; }) ? erasedResult : call.safeCast(erasedResult, logical.result);
+			result = (switch (logical.result) { case Void: true; default: false; }) ? call.constVoid() : (switch (logical.result) { case Dyn: true; default: false; }) ? erasedResult : needsBoundaryAdapter(logical.result) ?
+				call.call(ensureRestoration(logical.result), [erasedResult], mapType(logical.result)) : call.safeCast(erasedResult, logical.result);
 		if (resultSlots.length == 0) call.returnValue(result); else {
 			for (index in 0...resultSlots.length) {
 				var slot = resultSlots[index], current = result, currentType = logical.result;

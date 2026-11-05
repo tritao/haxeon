@@ -880,3 +880,79 @@ Guest SHA-256: control
 `03b20c16d31e8e394427b1b3248097af31c95c9e893d38c465308ac24234cadd`, candidate
 `6a20abc1629823155f89b76dab9b67a533b8cdd30db94cd537406ba91892a3b7`.
 Captures were deleted immediately after their summaries were recorded.
+
+
+### Nested scalar callbacks at HashLink Dynamic boundaries (2026-11-05)
+
+Control `ae3c0dd7` and candidate use outer `9e953ecf2` on the same machine.
+The expanded `scalar-closure-nested-callback` fixture reproduces a HashLink cast
+failure for a boxed outer function receiving a scalar struct callback. The fix
+bridges nested function arguments/results independently of the outer scalar ABI.
+Both inline settings pass on all three targets. Existing managed-reference,
+signal and closure-identity fixtures retain their zero-allocation assertions.
+All 759 compiler tests, fixed-point self-hosting, 495 parity fixtures (14 existing
+skips), six UI value snapshots, ten UI suites, app tests, retention, final editor
+budgets, six headless memory runs and Wasm32 WebGL2 smoke passed.
+
+The HashLink editor profiles are byte-identical (SHA-256
+`b70186e7b9cb35211f162fec85a03df4e83962448e0311b3a08df7c736dc303b`).
+Nine alternating pairs gave the following median action KiB:
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 | 74.5 |
+| hierarchy->sensors | 114.6 | 114.6 |
+| sensors->hierarchy | 80.1 | 80.1 |
+| telemetry->console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+Timing findings retained from the planned pairs: control hierarchy→sensors
+4.28, 4.20 and 4.14 ms against 4 ms; control selection 6.16 and 6.71 ms against
+6 ms; candidate selection 6.30 ms against 6 ms. These are identical-bytecode
+captures. No sample was retried; the separately planned final budget gate passed.
+
+Selection census (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,908 / 24,010,208 | 340,912 / 24,011,184 |
+| 2 | 340,911 / 24,010,896 | 340,911 / 24,010,960 |
+| 3 | 340,910 / 24,010,680 | 340,911 / 24,010,904 |
+
+Only the bytes type differed within each pair. These capture buffers also vary
+between the identical-image controls recorded above. Four RSS growth windows
+(MiB), in pair order:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.62 / 3.44 / 0.94 / 4.84 | 30.47 / 3.75 / 0.78 / 4.84 |
+| 2 | 29.69 / 3.91 / 0.94 / 4.84 | 30.16 / 3.75 / 0.78 / 5.00 |
+| 3 | 29.53 / 4.06 / 0.78 / 4.84 | 30.31 / 4.06 / 0.78 / 4.84 |
+
+All windows passed without changing a ceiling; variation remains within the
+preceding same-image paired runs. Wasm GC guests are also byte-identical, SHA-256
+`6a20abc1629823155f89b76dab9b67a533b8cdd30db94cd537406ba91892a3b7`.
+Nine full-scene pairs and three each of static/text-heavy/editing matched:
+4,440 / 4,440 objects for full/static/text-heavy and 8,724 / 8,724 for editing,
+with 120 warmup / 120 measured fixed-step core frames.
+
+Setup/resource failures are recorded rather than counted as passes. A reused
+CMake cache required recreating the detached gate checkout; the first Wasm build
+selected the CLI instead of the compiler; a copied browser wrapper lacked its
+executable bit and caused DevTools startup failure; and the fresh app checkout
+needed its top-level build directory for MissionJobsTests. Each setup error was
+corrected before the successful gate. Two candidate profile builds were killed
+with status 1073741839. Signal tracing identified host PID 2181160,
+`/usr/bin/earlyoom -m 10,5 -s 100,100 -r 3600`, sending SIGTERM under memory
+pressure. Reducing concurrent large builds resolved it; the traced build then
+completed normally. Neither killed build produced measurement samples. Captures
+were deleted after recording summaries.

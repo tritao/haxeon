@@ -92,6 +92,17 @@ of a struct-taking function. Those casts receive the same checks and varargs ada
 helpers are memoized and processed once; Wasm32 and Wasm GC reuse one varargs adapter per semantic target signature.
 The `scalar-closure-nested-callback` fixture covers this combination and a variadic factory returning a callback.
 
+HashLink also bridges ordinary functions whose nested callback arguments or results
+use scalar struct carriers. Whether the outer function itself can use scalar
+arguments is independent of whether its callback needs a Dynamic boundary adapter.
+Restoration preserves that outer ABI, erases nested callbacks before crossing the
+Dynamic boundary, and restores function results to their physical signature.
+The same fixture covers a boxed outer struct call with a struct-taking callback
+and a variadic factory returning that callback, with inlining off/on. Previously
+the former threw `Can't cast (dynamic (dynamic)) to (void (i32,Anchor,ref<i32>,ref<Anchor>))`
+on HashLink. Ordinary typed calls retain their allocation-free carrier ABI.
+
+
 The UI snapshot regression was introduced by `ac5c2f79`; its parent `9e4819ae` compiles the fixture, while
 `ac5c2f79`, pre-cleanup `aed2c2db`, the cleanup merge `ba9a332e` and `efd3a87d` report
 `Unknown Wasm function "__haxeon_varargs_adapter_Function([Obj(haxeon.ui.Canvas)],Void)"` on Wasm GC.
