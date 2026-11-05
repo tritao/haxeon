@@ -107,6 +107,15 @@ as it does for structs and raw pointers, so `Array<Int64>` or `Signal<Int64>` do
 scalar uses the inline presence-flag layout of `Null<S>` rather than a boxed primitive. `Int64` arithmetic lowers to
 native 64-bit instructions on HashLink rather than runtime calls.
 
+### Borrowed native views of struct arrays
+
+An `Array<S>` of Flat structs already stores its elements in C layout. A scoped borrow (`scoped var span =
+rects.borrowSpan();`) lends that storage to native code as a `NativeSpan<S>` for the scope: without a copy on HashLink
+and Wasm32, and through one copy into linear memory (and back, for a writable borrow) on Wasm GC, whose arrays native
+code cannot address. Operations that can reallocate or reorder the array are rejected while it is borrowed. Only Flat
+element types qualify. Data that mostly lives on the native side is allocated in native memory from the start instead.
+Implement with native memory and the node-store prototype (ADR 0002 stage 2).
+
 ### Optional flat values in native layout
 
 `Null<S>` is not Flat today, so an optional value cannot appear in an FFI record, `RawPtr`/`NativeSpan` memory or a
