@@ -113,8 +113,9 @@ An `Array<S>` of Flat structs already stores its elements in C layout. A scoped 
 rects.borrowSpan();`) lends that storage to native code as a `NativeSpan<S>` for the scope: without a copy on HashLink
 and Wasm32, and through one copy into linear memory (and back, for a writable borrow) on Wasm GC, whose arrays native
 code cannot address. Operations that can reallocate or reorder the array are rejected while it is borrowed. Only Flat
-element types qualify. Data that mostly lives on the native side is allocated in native memory from the start instead.
-Implement with native memory and the node-store prototype (ADR 0002 stage 2).
+element types qualify. Data that native code or the GPU reads every frame, or large data, is allocated in native memory
+from the start instead; that is the default for frame data. The borrow is implemented with the node-store prototype
+(ADR 0002 stage 2) only when a concrete caller needs it.
 
 ### Optional flat values in native layout
 
