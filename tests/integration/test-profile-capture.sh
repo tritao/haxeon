@@ -54,7 +54,7 @@ assert b"Startup" in trace and b"Load bytecode" in trace and b"Compile and link 
 # A thread named where it starts keeps that name, though it exits before the session's next thread list.
 assert b"capture.worker" in trace
 PY
-"$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.log"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" report "$scratch/capture/profile.hlpc" > "$scratch/report.log"
 
 # A directory holds one capture: recording the same capture again replaces it,
 # and recording a different one into the same directory is refused.
@@ -96,6 +96,6 @@ pathlib.Path(sys.argv[1]).write_bytes(
     + struct.pack("<QQ", 0, 0)
 )
 PY
-"$repo_dir/.tools/hashlink/hlprof-live" report "$scratch/empty.hlpc" > "$scratch/empty-report.log"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" report "$scratch/empty.hlpc" > "$scratch/empty-report.log"
 rg -q 'samples=0' "$scratch/empty-report.log"
 echo "PASS: profiled run exports a trace with counters and instrumented calls, keeps one capture per directory, and empty capture reports cleanly"

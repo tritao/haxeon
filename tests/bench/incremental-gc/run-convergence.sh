@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../../.." && pwd)
 output=${1:-$root/out/bench/gc-convergence}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -O2 -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lpthread -o "$output/convergence"
 frames=${GC_STRESS_FRAMES:-600}
 nodes=${GC_STRESS_NODES:-500000}

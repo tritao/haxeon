@@ -11,7 +11,7 @@ if ! command -v code >/dev/null 2>&1; then
 	exit 1
 fi
 
-if [[ ! -x "$root_dir/.tools/haxe/haxe" || ! -x "$root_dir/.tools/hashlink/hl" ]]; then
+if [[ ! -x "$root_dir/.tools/haxe/haxe" || ! -x "$("$root_dir/scripts/hashlink-path.sh")/hl" ]]; then
 	"$root_dir/scripts/bootstrap-tools.sh"
 fi
 

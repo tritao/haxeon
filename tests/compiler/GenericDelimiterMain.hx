@@ -91,7 +91,7 @@ class GenericDelimiterMain {
 	static function execute(bytes:haxe.io.Bytes):Int {
 		var path = "out/generic-delimiter-main.hl";
 		File.saveBytes(path, bytes);
-		var child = new sys.io.Process(".tools/hashlink/hl", [path]);
+		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 			code = child.exitCode();
 		child.close();

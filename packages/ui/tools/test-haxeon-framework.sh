@@ -20,12 +20,9 @@ else
 	exit 2
 fi
 
-hashlink_runtime="$haxeon_dir/.tools/hashlink/hl"
+hashlink_runtime="$("$haxeon_dir/scripts/hashlink-path.sh")/hl"
 if [[ ! -x "$hashlink_runtime" ]]; then
-	hashlink_runtime="$haxeon_dir/vendor/hashlink/hl"
-fi
-if [[ ! -x "$hashlink_runtime" ]]; then
-	echo "test-haxeon-framework: missing HashLink runtime in .tools/hashlink or vendor/hashlink" >&2
+	echo "test-haxeon-framework: missing checkout-built HashLink; run scripts/build-native.sh first" >&2
 	exit 2
 fi
 
@@ -35,7 +32,7 @@ if [[ -n ${HAXEON_COMPILER_HL:-} && -f ${HAXEON_COMPILER_HL} ]]; then
 fi
 
 (cd "$haxeon_dir" && \
-	LD_LIBRARY_PATH="$haxeon_dir/out:$haxeon_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 	"${compiler_command[@]}" \
 	--output="$artifact" \
 	--entry=FrameworkSmoke \
@@ -75,7 +72,7 @@ fi
 	"$module_dir/haxe/haxeon/ui/host/"*.hx \
 	"$module_dir/bindings/haxe/haxeon/ui/"*.hx)
 
-runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:$haxeon_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if command -v xvfb-run >/dev/null; then
 	(cd "$haxeon_dir/out" && \
 		NKUI_TEST_FONT_PATH="${NKUI_TEST_FONT_PATH:-$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf}" \

@@ -4,8 +4,8 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 port=${1:-24020}
-runtime="$root/.tools/hashlink/hl"
-client="$root/.tools/hashlink/hlprof-live"
+runtime="$("$root/scripts/hashlink-path.sh")/hl"
+client="$("$root/scripts/hashlink-path.sh")/hlprof-live"
 target="$root/out/profiler-wait-target.hl"
 log=$(mktemp /tmp/haxeon-profiler-wait-XXXXXX.log)
 capture=$(mktemp /tmp/haxeon-profiler-wait-XXXXXX.hlpc)
@@ -19,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-wait-target.hxml"
 
 "$runtime" --diagnostics "$port" --diagnostics-wait "$target" >"$log" 2>&1 &

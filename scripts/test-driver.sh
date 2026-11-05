@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+if [[ ! -x "$hashlink_dir/hl" ]]; then
+	echo "Missing checkout-built HashLink: $hashlink_dir/hl; run scripts/build-native.sh first" >&2
+	exit 1
+fi
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-test-driver.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
-cp "$root_dir/.tools/hashlink/hl" "$work/hl"
+cp "$hashlink_dir/hl" "$work/hl"
 cp "$root_dir/out/haxeon_runtime.hdll" "$work/haxeon_runtime.hdll"
-for library in "$root_dir/.tools/hashlink"/libhl.so* "$root_dir/.tools/hashlink"/libhl*.dylib "$root_dir/.tools/hashlink"/libhl*.dll; do
+for library in "$hashlink_dir"/libhl.so* "$hashlink_dir"/libhl*.dylib "$hashlink_dir"/libhl*.dll; do
 	if [[ -f "$library" ]]; then cp -L "$library" "$work/"; fi
 done
 build_hl=${HAXEON_BUILD_HL:-$work/haxeon-build.hl}

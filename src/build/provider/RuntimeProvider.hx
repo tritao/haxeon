@@ -17,7 +17,7 @@ class RuntimeProvider {
 				Path.join([root, "CMakePresets.json"]),
 				Path.join([root, "cmake"]),
 				Path.join([root, "vendor", "hashlink", "CMakeLists.txt"])
-			], runtime = Path.join([root, "out", "haxeon_runtime.hdll"]), hashlinkRoot = Path.join([root, ".tools", "hashlink"]),
+			], runtime = Path.join([root, "out", "haxeon_runtime.hdll"]), hashlinkRoot = Path.join([buildDirectory, "hashlink-runtime"]),
 			programSuffix = environment.target.os == TargetOs.Windows ? ".exe" : "", sharedSuffix = switch environment.target.os {
 				case Windows: ".dll";
 				case MacOS: ".dylib";

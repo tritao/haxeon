@@ -64,7 +64,7 @@ class CompilerClient {
 			connection = connect(statePath);
 			if (connection == null) {
 				var workerArtifact = Path.join([directory, version + ".hl"]),
-					hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
+					hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
 					logPath = Path.join([directory, key + ".log"]);
 				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
 				if (Sys.systemName() == "Windows") {
@@ -74,7 +74,7 @@ class CompilerClient {
 					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 						libraryPath = [
 							Path.join([home, "out"]),
-							Path.join([home, ".tools", "hashlink"]),
+							build.HashLinkPath.directory(home),
 							ProcessRunner.environmentValue(libraryVariable)
 						].filter(value -> value != null && value.length > 0).join(":"),
 						launchArguments = [hashlink];
@@ -265,7 +265,7 @@ class CompilerClient {
 			environment:Map<String, String>, fallback:Void->Int):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
 			return fallback();
-		var hashlink = Path.join([home, ".tools", "hashlink", "hl"]),
+		var hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
 			artifact:String;
 		try {
 			if (!FileSystem.exists(hashlink))
@@ -293,7 +293,7 @@ class CompilerClient {
 		var quote = (value:String) -> '"' + value + '"';
 		var path = [
 			Path.join([home, "out"]),
-			Path.join([home, ".tools", "hashlink"]),
+			build.HashLinkPath.directory(home),
 			ProcessRunner.environmentValue("PATH")
 		].filter(value -> value != null && value.length > 0).join(";");
 		var launch = [quote(hashlink + ".exe")];

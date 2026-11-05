@@ -25,8 +25,8 @@ for fixture in AudioSmoke; do
         --ffi-projection="$package_dir/bindings/nativekit-audio.hxmap" \
         "$package_dir/tests/$fixture.hx" "$haxeon_dir/packages/platform/tests/NativeKitEventDecoderTests.hx" "${sources[@]}")
     status=0
-    LD_LIBRARY_PATH="$build_dir:$haxeon_dir/out:$haxeon_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-        "$haxeon_dir/.tools/hashlink/hl" "$build_dir/$fixture.hl" || status=$?
+    LD_LIBRARY_PATH="$build_dir:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "$("$haxeon_dir/scripts/hashlink-path.sh")/hl" "$build_dir/$fixture.hl" || status=$?
     if [[ $status == 77 ]]; then echo "SKIP: $fixture has no audio device";
     elif [[ $status != 0 ]]; then exit "$status"; fi
 done

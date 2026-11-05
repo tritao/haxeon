@@ -106,12 +106,13 @@ fi
 
 font_path=${NKUI_TEST_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 emoji_path=${NKUI_COLOR_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
-runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/vendor/hashlink"
-hashlink_runtime="$haxeon_dir/vendor/hashlink/hl"
-if [[ -x "$haxeon_dir/.tools/hashlink/hl" ]]; then
-    hashlink_runtime="$haxeon_dir/.tools/hashlink/hl"
-    runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/.tools/hashlink"
+hashlink_dir=$("$haxeon_dir/scripts/hashlink-path.sh")
+hashlink_runtime="$hashlink_dir/hl"
+if [[ ! -x "$hashlink_runtime" ]]; then
+    echo "Missing checkout-built HashLink: $hashlink_runtime; run scripts/build-native.sh first" >&2
+    exit 1
 fi
+runtime_library_path="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$hashlink_dir"
 if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
     runtime_library_path="$runtime_library_path:$LD_LIBRARY_PATH"
 fi

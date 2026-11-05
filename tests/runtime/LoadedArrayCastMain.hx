@@ -18,7 +18,7 @@ class LoadedArrayCastMain {
 			var expected = incremental ? 43 : 42;
 			var path = "out/loaded-array-cast-" + (incremental ? "incremental" : "clean") + ".hl";
 			File.saveBytes(path, bytes);
-			var child = new sys.io.Process(".tools/hashlink/hl", [path]);
+			var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 			var code = child.exitCode();
 			child.close();

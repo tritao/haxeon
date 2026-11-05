@@ -457,7 +457,7 @@ class HotReloadMain {
 		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.module));
 		File.saveBytes(prefix + "-survivor.hli", survivorResult.runtimeIdentity);
 		File.saveContent(prefix + "-survivor.id", Std.string(survivorResult.functionIds.get("main")));
-		var test = Sys.getCwd() + "/../.tools/hashlink/haxeon-jit-support-lifetime";
+		var test = Sys.getEnv("HAXEON_HASHLINK_DIR") + "/haxeon-jit-support-lifetime";
 		#if windows
 		test += ".exe";
 		#end

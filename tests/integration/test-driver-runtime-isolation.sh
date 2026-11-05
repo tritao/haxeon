@@ -5,6 +5,7 @@ if [[ $(uname -s) != Linux ]]; then
   echo 'SKIP: mapped-library integration requires Linux /proc'
   exit 0
 fi
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-runtime-isolation.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/out" "$work/loaded" "$work/bin"
@@ -22,8 +23,8 @@ exit 97
 CMOCK
 chmod +x "$work/bin/cmake"
 set +e
-(cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink" \
-  "$root_dir/.tools/hashlink/hl" "$work/driver.hl" test 1) > "$work/refusal.log" 2>&1
+(cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir" \
+  "$hashlink_dir/hl" "$work/driver.hl" test 1) > "$work/refusal.log" 2>&1
 status=$?
 set -e
 if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/out:" "$work/refusal.log" \
@@ -48,8 +49,8 @@ if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/
   exit 1
 fi
 # With both the runtime and VM library isolated, the guard lets the build run.
-cp "$root_dir/.tools/hashlink/hl" "$work/loaded/hl"
-cp -L "$root_dir/.tools/hashlink/libhl.so.1" "$work/loaded/libhl.so.1"
+cp "$hashlink_dir/hl" "$work/loaded/hl"
+cp -L "$hashlink_dir/libhl.so.1" "$work/loaded/libhl.so.1"
 set +e
 (cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$work/loaded" \
   "$work/loaded/hl" "$work/driver.hl" test 1) > "$work/allowed.log" 2>&1
@@ -60,12 +61,12 @@ if [[ $status != 97 ]] || ! grep -Fq 'native build marker' "$work/allowed.log"; 
   echo "FAIL: isolated driver did not reach the native build (exit $status)" >&2
   exit 1
 fi
-LD_LIBRARY_PATH="$work/out:$root_dir/.tools/hashlink" "$root_dir/.tools/hashlink/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
 ln -s "$work/out" "$work/output-link"
-LD_LIBRARY_PATH="$work/out:$root_dir/.tools/hashlink" "$root_dir/.tools/hashlink/hl" "$work/probe.hl" "$work/output-link" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/output-link" conflict "$work/runtime.c"
 mkdir -p "$work/hard link"
 ln "$work/out/haxeon_runtime.hdll" "$work/hard link/haxeon_runtime.hdll"
-LD_LIBRARY_PATH="$work/hard link:$root_dir/.tools/hashlink" "$root_dir/.tools/hashlink/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/hard link:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
 df -h /
-LD_LIBRARY_PATH="$work/loaded:$root_dir/.tools/hashlink" "$root_dir/.tools/hashlink/hl" "$work/probe.hl" "$work/out" safe "$work/runtime.c"
+LD_LIBRARY_PATH="$work/loaded:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" safe "$work/runtime.c"
 echo 'PASS: driver rejects a mapped build output and permits a separate native rebuild'

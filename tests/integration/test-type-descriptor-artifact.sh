@@ -12,8 +12,8 @@ haxeon_compile --target=hl --output="$output_dir/native-type-info-nonflat.hl" --
 	 tests/programs/native-type-info-nonflat.hx
 
 set +e
-LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-	"$repo_dir/.tools/hashlink/hl" "$output_dir/native-type-info-nonflat.hl"
+LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" "$output_dir/native-type-info-nonflat.hl"
 status=$?
 set -e
 if [[ $status -ne 42 ]]; then
@@ -106,8 +106,8 @@ NODE
 schema_status=0
 HAXEON_SCHEMA_VALIDATION_ARTIFACT="$schema_output.descriptors.json" \
 HAXEON_SCHEMA_LEGACY_ARTIFACT="$repo_dir/tests/fixtures/native-type-descriptor-v4-legacy.json" \
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-	"$repo_dir/.tools/hashlink/hl" "$schema_output" || schema_status=$?
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	"$("$repo_dir/scripts/hashlink-path.sh")/hl" "$schema_output" || schema_status=$?
 if [[ $schema_status -ne 42 ]]; then
 	echo "MessagePackSchema validation fixture returned $schema_status, expected 42" >&2
 	exit 1
@@ -121,7 +121,7 @@ repo = pathlib.Path(sys.argv[1])
 outputs = pathlib.Path(sys.argv[2])
 env = os.environ.copy()
 env.pop('HAXEON_COMPILER_SERVER', None)
-env['LD_LIBRARY_PATH'] = str(repo / 'out') + ':' + str(repo / '.tools/hashlink') + ':' + env.get('LD_LIBRARY_PATH', '')
+env['LD_LIBRARY_PATH'] = str(repo / 'out') + ':' + str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip())) + ':' + env.get('LD_LIBRARY_PATH', '')
 
 def stop(state):
     try:

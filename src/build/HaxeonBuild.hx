@@ -94,7 +94,7 @@ class HaxeonBuild {
 
 	static function test(arguments:Array<String>):Int {
 		#if hl
-		for (outputDirectory in [path("out"), path("out", "cmake", Sys.systemName() == "Windows" ? "windows-msvc" : "release", "hashlink-runtime")]) {
+		for (outputDirectory in [path("out"), HashLinkPath.directory(root())]) {
 			var loaded:Null<String>;
 			try
 				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
@@ -178,7 +178,8 @@ class HaxeonBuild {
 		return FileSystem.exists(left) && FileSystem.exists(right) && File.getBytes(left).compare(File.getBytes(right)) == 0;
 
 	static function configureRuntimeLibraryPath():Void {
-		var directories = [path("out"), path(".tools", "hashlink")];
+		var directories = [path("out"), HashLinkPath.directory(root())];
+		Sys.putEnv("HAXEON_HASHLINK_DIR", HashLinkPath.directory(root()));
 		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
@@ -190,7 +191,7 @@ class HaxeonBuild {
 		return path(".tools", "haxe", "haxe" + executableSuffix());
 
 	static function hashlink():String
-		return path(".tools", "hashlink", "hl" + executableSuffix());
+		return HashLinkPath.executable(root());
 
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";

@@ -55,7 +55,7 @@ class HeapInspector {
 		if (home == null || home == "")
 			throw "HAXEON_HOME is missing";
 		var haxe = Path.join([home, ".tools", "haxe", "haxe"]),
-			hl = Path.join([home, ".tools", "hashlink", "hl"]),
+			hl = Path.join([build.HashLinkPath.directory(home), "hl"]),
 			hlmem = Path.join([home, "vendor", "hashlink", "other", "haxelib"]),
 			format = Path.join([home, "vendor", "format"]);
 		for (file in [

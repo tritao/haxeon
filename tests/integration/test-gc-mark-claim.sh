@@ -36,6 +36,6 @@ PYCODE
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main GcMarkClaimProbe
 for threads in 1 4; do
  for mode in 0 1; do
-  HL_GC_THREADS=$threads HL_GC_MARK_SERIAL=$mode LD_LIBRARY_PATH="$work:$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}" "$work/probe.hl"
+  HL_GC_THREADS=$threads HL_GC_MARK_SERIAL=$mode LD_LIBRARY_PATH="$work:$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl"
  done
 done

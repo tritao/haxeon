@@ -41,7 +41,7 @@ if [[ $wasm_target == wasm-gc && $exception_mode != legacy && $exception_mode !=
 fi
 
 if [[ ${NATIVEKIT_HAXEON_SELF_HOSTED:-0} == 1 ]]; then
-	if [[ ! -x "$haxeon_dir/.tools/hashlink/hl" || ! -f "$compiler_module" ]]; then
+	if [[ ! -x "$("$haxeon_dir/scripts/hashlink-path.sh")/hl" || ! -f "$compiler_module" ]]; then
 		echo "showcase-wasm: self-hosted Haxeon compiler not found at $haxeon_dir" >&2
 		exit 1
 	fi
@@ -95,7 +95,7 @@ fi
 
 compiler=("$haxe_bin" -cp src --run compiler.tools.HaxeonCompiler)
 if [[ ${NATIVEKIT_HAXEON_SELF_HOSTED:-0} == 1 ]]; then
-	compiler=("$haxeon_dir/.tools/hashlink/hl")
+	compiler=("$("$haxeon_dir/scripts/hashlink-path.sh")/hl")
 	if [[ -n ${NATIVEKIT_HAXEON_DIAGNOSTICS_PORT:-} ]]; then
 		compiler+=(--diagnostics "$NATIVEKIT_HAXEON_DIAGNOSTICS_PORT" --diagnostics-wait)
 	fi

@@ -5,7 +5,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-owner.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 build() {
 	if command -v "${CC:-cc}" >/dev/null 2>&1; then
 		"${CC:-cc}" -O2 -I"$root/vendor/hashlink/src" "$root/tests/native/$1.c" -L"$library" -lhl -lpthread -o "$work/$1"

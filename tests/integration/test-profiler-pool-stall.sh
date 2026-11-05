@@ -5,8 +5,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
-runtime="$repo_dir/.tools/hashlink/hl"
-client="$repo_dir/.tools/hashlink/hlprof-live"
+runtime="$("$repo_dir/scripts/hashlink-path.sh")/hl"
+client="$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live"
 port=${1:-24030}
 runs=${PROFILER_POOL_STALL_RUNS:-5}
 scratch=$(mktemp -d /tmp/haxeon-profiler-pool-stall-XXXXXX)
@@ -72,7 +72,7 @@ timeout 300s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --p
 bytecode="$scratch/build-instrument/host/main.hl"
 test -s "$bytecode"
 
-export LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 for run in $(seq 1 "$runs"); do
 	"$runtime" --diagnostics "$port" --diagnostics-wait "$bytecode" 2 > "$scratch/run.log" 2>&1 &
 	pid=$!

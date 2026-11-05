@@ -53,7 +53,7 @@ grep -q "recording test [0-9]* true true true true" "$scratch/run.log" || {
 	cat "$scratch/run.log" >&2
 	exit 1
 }
-"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
 python3 - "$scratch/trace.json" <<'PY'
 import collections
 import json

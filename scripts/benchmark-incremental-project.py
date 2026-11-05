@@ -71,7 +71,7 @@ def main() -> None:
             profile_path.parent.mkdir(parents=True, exist_ok=True)
             profile_path.unlink(missing_ok=True)
             profiler = subprocess.Popen([
-                str(repo / ".tools/hashlink/hlprof-live"), "--connect-timeout", "10", "--rate", "250",
+                str(pathlib.Path(subprocess.check_output([str(repo / "scripts/hashlink-path.sh")], text=True).strip()) / "hlprof-live"), "--connect-timeout", "10", "--rate", "250",
                 "--alloc-interval", "262144", "--interval", "500", "--output", str(profile_path),
                 str(profile_port),
             ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -127,7 +127,7 @@ def main() -> None:
             raise SystemExit(profiler_error)
 
     if profile_path:
-        report = subprocess.run([str(repo / ".tools/hashlink/hlprof-live"), "report", "--top", "20", str(profile_path)],
+        report = subprocess.run([str(pathlib.Path(subprocess.check_output([str(repo / "scripts/hashlink-path.sh")], text=True).strip()) / "hlprof-live"), "report", "--top", "20", str(profile_path)],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         if report.returncode != 0 or not re.search(r"samples=([1-9][0-9]*)", report.stdout):
             raise SystemExit("Profile capture has no readable samples:\n" + report.stdout)

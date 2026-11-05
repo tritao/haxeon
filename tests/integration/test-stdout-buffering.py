@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
 
 
 def main():
@@ -17,7 +18,7 @@ def main():
     environment = os.environ.copy()
     environment.pop("HL_STDOUT_FLUSH", None)
     environment["LD_LIBRARY_PATH"] = os.pathsep.join([
-        str(ROOT / "out"), str(ROOT / ".tools/hashlink"),
+        str(ROOT / "out"), str(HASHLINK_DIR),
         environment.get("LD_LIBRARY_PATH", "")])
     with tempfile.TemporaryDirectory(prefix="haxeon-stdout-") as directory:
         project = Path(directory)
@@ -28,7 +29,7 @@ def main():
             bytecode = project / "main.hl"
             subprocess.run([str(ROOT / ".tools/haxe/haxe"), "-cp", str(project / "src"),
                 "-main", "Main", "-hl", str(bytecode)], check=True, capture_output=True, text=True)
-            return [str(ROOT / ".tools/hashlink/hl"), str(bytecode)]
+            return [str(HASHLINK_DIR / "hl"), str(bytecode)]
 
         # A language null access throws and retains the pending stdout tail.
         compile_body('Sys.println("before-crash"); var box:Box = null; Sys.println(box.value);',
@@ -38,7 +39,7 @@ def main():
             "entry": "Main", "sourceRoots": ["src"], "target": "host", "outputDir": "build"}))
         subprocess.run([str(ROOT / "scripts/haxeon"), "build", "--compiler-only",
             "--project", str(config), "--output", str(project / "main.hl")], check=True, capture_output=True)
-        command = [str(ROOT / ".tools/hashlink/hl"), str(project / "main.hl")]
+        command = [str(HASHLINK_DIR / "hl"), str(project / "main.hl")]
         result = subprocess.run(command, env=environment, capture_output=True, timeout=5)
         assert result.returncode == 1, result
         assert result.stdout == b"before-crash\n", result
@@ -49,8 +50,8 @@ def main():
             'int main(void) { hl_global_init(); hl_register_thread(NULL); '
             'fputs("before-fatal", stdout); hl_fatal("stdout-test"); return 0; }\n')
         subprocess.run([os.environ.get("CC", "cc"), str(native),
-            "-I", str(ROOT / "vendor/hashlink/src"), "-L", str(ROOT / ".tools/hashlink"),
-            "-Wl,-rpath," + str(ROOT / ".tools/hashlink"), "-lhl", "-o", str(project / "fatal")],
+            "-I", str(ROOT / "vendor/hashlink/src"), "-L", str(HASHLINK_DIR),
+            "-Wl,-rpath," + str(HASHLINK_DIR), "-lhl", "-o", str(project / "fatal")],
             check=True, capture_output=True)
         result = subprocess.run([str(project / "fatal")], env=environment,
             capture_output=True, timeout=5)

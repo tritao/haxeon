@@ -123,7 +123,7 @@ timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json"
 if [[ $windows == 1 ]]; then
 	test -s "$scratch/app/build-instrument/host/native/plain/plain.pdb"
 fi
-"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture/profile.hlpc"
 python3 - "$scratch/trace.json" <<'PY'
 import collections
 import json

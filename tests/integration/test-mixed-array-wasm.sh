@@ -3,7 +3,7 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root_dir"
 wasmtime=${WASMTIME:-$root_dir/.tools/wasmtime-47.0.0/wasmtime}
-export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$root_dir/.tools/haxe/haxe" -cp src -cp tests/compiler --run MixedArrayLiteralMain
 node <<'JS'
 const fs = require('fs');

@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hashlink="$root_dir/.tools/hashlink/hl"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+hashlink="$hashlink_dir/hl"
 server="$root_dir/out/haxeon-lsp.hl"
 
 if [[ ! -x "$haxe" || ! -x "$hashlink" ]]; then

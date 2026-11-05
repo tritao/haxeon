@@ -17,5 +17,5 @@ if [[ ! -f "$state_path" ]]; then
     exit 1
 fi
 
-export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$haxe_bin" --cwd "$root_dir" -cp src --run tools.AndroidPatch "$source_path" "$state_path" "$patch_path"

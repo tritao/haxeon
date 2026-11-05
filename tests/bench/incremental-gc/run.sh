@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../../.." && pwd)
 output=${1:-$root/out/bench/gc-latency}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -O2 -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/latency.c" -L"$library" -lhl -lpthread -o "$output/latency"
 # Timed runs exclude validation and phase logging. Run correctness guards first.
 export HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL=0 HL_GC_SCAN_PROFILE=0

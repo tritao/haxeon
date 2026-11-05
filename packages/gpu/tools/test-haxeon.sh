@@ -21,12 +21,9 @@ else
 	exit 2
 fi
 
-hashlink_runtime="$haxeon_dir/.tools/hashlink/hl"
+hashlink_runtime="$("$haxeon_dir/scripts/hashlink-path.sh")/hl"
 if [[ ! -x "$hashlink_runtime" ]]; then
-	hashlink_runtime="$haxeon_dir/vendor/hashlink/hl"
-fi
-if [[ ! -x "$hashlink_runtime" ]]; then
-	echo "test-haxeon: missing HashLink runtime in .tools/hashlink or vendor/hashlink" >&2
+	echo "test-haxeon: missing checkout-built HashLink; run scripts/build-native.sh first" >&2
 	exit 2
 fi
 
@@ -85,7 +82,7 @@ fi
 
 set +e
 (cd "$haxeon_dir/out" && \
-	LD_LIBRARY_PATH="$build_dir/modules/gpu:$build_dir:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:$haxeon_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	LD_LIBRARY_PATH="$build_dir/modules/gpu:$build_dir:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 	xvfb-run -a "$hashlink_runtime" "$build_dir/haxeon-triangle.hl")
 status=$?
 set -e

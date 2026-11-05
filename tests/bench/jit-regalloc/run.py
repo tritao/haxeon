@@ -35,12 +35,13 @@ def main():
         parser.error('provide two masks and at least one pair')
     work = (ROOT / args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, LD_LIBRARY_PATH=f'{ROOT}/out:{ROOT}/.tools/hashlink',
+    vm_dir = subprocess.check_output([str(ROOT / 'scripts/hashlink-path.sh')], text=True).strip()
+    env = dict(os.environ, LD_LIBRARY_PATH=f'{ROOT}/out:{vm_dir}',
                HAXE_STD_PATH=str(ROOT / '.tools/haxe/std'))
     env.pop('HL_JIT_REGSTATS', None)
     env.pop('HL_JIT_REGPROBE', None)
     env['HAXEON_INLINE'] = '0'
-    hl = str(ROOT / '.tools/hashlink/hl')
+    hl = str(Path(vm_dir) / 'hl')
     haxe = str(ROOT / '.tools/haxe/haxe')
     bytecode = work / 'micro.hl'
     build = run([hl, args.compiler, '--target=hl', f'--output={bytecode}',

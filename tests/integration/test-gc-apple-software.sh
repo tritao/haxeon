@@ -7,8 +7,8 @@ fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-apple.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
-vm=${HL_JIT_TEST_VM:-$root/.tools/hashlink/hl}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+vm=${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}
 export DYLD_LIBRARY_PATH="$library:$root/out${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 export HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536
 "${CC:-cc}" -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" -L"$library" -lhl -lpthread -o "$work/guards"

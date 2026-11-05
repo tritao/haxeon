@@ -5,10 +5,10 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
 port=${1:-24019}
 token=reconnect-test-token
-runtime="$root/.tools/hashlink/hl"
+runtime="$("$root/scripts/hashlink-path.sh")/hl"
 target="$root/out/profiler-restart-target.hl"
 client="$root/out/profiler-reconnect-test.hl"
-export LD_LIBRARY_PATH="$root/out:$root/vendor/hashlink:$root/.tools/hashlink"
+export LD_LIBRARY_PATH="$root/out:$root/vendor/hashlink:$("$root/scripts/hashlink-path.sh")"
 
 "$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-restart-target.hxml"
 "$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-reconnect-test.hxml"

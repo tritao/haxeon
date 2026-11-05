@@ -51,8 +51,8 @@ grep -q 'haxe.Int64.ofInt(__cxx_value_bytes_0.length)' "$repo_dir/out/cxx_string
 (
 	cd "$repo_dir/out"
 	set +e
-	LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		"$repo_dir/.tools/hashlink/hl" cxx-string-view-test.hl
+	LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$("$repo_dir/scripts/hashlink-path.sh")/hl" cxx-string-view-test.hl
 	status=$?
 	set -e
 	if [[ $status -ne 42 ]]; then

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
-hashlink_dir="$repo_dir/.tools/hashlink"
+hashlink_dir="$("$repo_dir/scripts/hashlink-path.sh")"
 gdb_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch.XXXXXX")"
 gdb_output="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-output.XXXXXX")"
 symbol_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-symbols.XXXXXX")"

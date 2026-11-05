@@ -11,7 +11,9 @@ either `out` or the checkout-local HashLink build directory contains or aliases 
 library it has loaded. Linux checks actual process mappings; other platforms
 conservatively check native library search paths. Start the driver with separate
 copies of the VM, `libhl`, and runtime by running `scripts/test-driver.sh 8`.
-The build and running process then use different files, and exit statuses are preserved.
+The launcher copies the checkout-built VM and libraries; run
+`scripts/build-native.sh` first. The build and running process then use
+different files, and exit statuses are preserved.
 
 Content-addressed native outputs are future work. `ArtifactCache` is keyed by
 build actions, restores into mutable paths, and excludes delegated CMake

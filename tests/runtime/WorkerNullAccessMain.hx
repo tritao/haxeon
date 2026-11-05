@@ -17,7 +17,7 @@ class WorkerNullAccessMain {
 				var result = compiler.compile("WorkerNullAccess");
 				var path = "out/worker-null-access.hl";
 				File.saveBytes(path, HlWriter.encode(result.module));
-				var child = new sys.io.Process(".tools/hashlink/hl", [path]);
+				var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 				var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 				var status = child.exitCode();
 				child.close();

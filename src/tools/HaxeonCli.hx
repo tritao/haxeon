@@ -1,5 +1,7 @@
 package tools;
 
+import build.HashLinkPath;
+
 import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
 import haxe.Json;
@@ -404,7 +406,7 @@ class HaxeonCli {
 			throw 'Unexpected doctor argument "${arguments[0]}"';
 		var home = haxeonHome(), suffix = executableSuffix();
 		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
-		var hashlinkPath = Path.join([home, ".tools", "hashlink", "hl" + suffix]);
+		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
 		var nativeRuntimePath = Path.join([home, "out", "haxeon_runtime.hdll"]);
 		var compilerPath = Path.join([home, "bootstrap", "compiler.hl"]);
 		var androidSdk = Path.join([home, ".tools", "android-sdk"]);
@@ -653,9 +655,9 @@ class HaxeonCli {
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
 			if (options.live && session != null)
 				session.warmLiveCompiler();
-			var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
+			var hashlink = Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
 			if (!FileSystem.exists(hashlink))
-				throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
+				throw 'HashLink is missing: $hashlink (run scripts/build-native.sh)';
 			var nativeDirectories = [
 				for (resolvedPackage in project.packages.packages)
 					if (resolvedPackage.nativeSources.length > 0
@@ -759,7 +761,7 @@ class HaxeonCli {
 		ensureDirectory(Path.directory(output));
 		var compiler = Path.join([home, ".tools", "haxe", "haxe" + executableSuffix()]);
 		if (!FileSystem.exists(compiler))
-			throw 'Pinned Haxe is missing: $compiler (run scripts/bootstrap-tools.sh)';
+			throw 'Pinned Haxe is missing: $compiler (run scripts/build-native.sh)';
 
 		var compilerArguments = [
 			"-cp",
@@ -795,9 +797,9 @@ class HaxeonCli {
 			return 0;
 		}
 
-		var hashlink = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]);
+		var hashlink = Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
 		if (!FileSystem.exists(hashlink))
-			throw 'HashLink is missing: $hashlink (run scripts/bootstrap-tools.sh)';
+			throw 'HashLink is missing: $hashlink (run scripts/build-native.sh)';
 		configureRuntimeLibraryPath(home);
 		Sys.println('Launching $output');
 		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
@@ -847,7 +849,7 @@ class HaxeonCli {
 
 	/** hlprof-live, which records and exports profiler captures. */
 	static function profilerTool(home:String):String {
-		var profiler = Path.join([home, ".tools", "hashlink", "hlprof-live" + executableSuffix()]);
+		var profiler = Path.join([HashLinkPath.directory(home), "hlprof-live" + executableSuffix()]);
 		if (!FileSystem.exists(profiler))
 			throw 'hlprof-live is missing: $profiler (rebuild the native runtime)';
 		return profiler;
@@ -855,10 +857,10 @@ class HaxeonCli {
 
 	static function runProfiled(home:String, output:String, runtimeArguments:Array<String>, projectDirectory:String, capture:String, processName:String,
 			sources:Array<String>):Int {
-		var runtime = Path.join([home, ".tools", "hashlink", "hl" + executableSuffix()]),
+		var runtime = Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]),
 			profiler = profilerTool(home);
 		if (!FileSystem.exists(runtime))
-			throw 'HashLink is missing: $runtime (run scripts/bootstrap-tools.sh)';
+			throw 'HashLink is missing: $runtime (run scripts/build-native.sh)';
 		var profile = new ProfileCapture(profiler, capture, processName, sources), done = new sys.thread.Lock(), readers = 0;
 		profile.keepBytecode(output);
 		var app = new sys.io.Process(runtime, profile.runtimeArguments().concat([output]).concat(runtimeArguments));
@@ -1424,7 +1426,7 @@ class HaxeonCli {
 	}
 
 	static function configureRuntimeLibraryPath(home:String, ?extraDirectories:Array<String>):Void {
-		var directories = [Path.join([home, "out"]), Path.join([home, ".tools", "hashlink"])];
+		var directories = [Path.join([home, "out"]), HashLinkPath.directory(home)];
 		if (extraDirectories != null)
 			directories = directories.concat(extraDirectories);
 		var variable = switch Sys.systemName() {

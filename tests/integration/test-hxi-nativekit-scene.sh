@@ -6,7 +6,7 @@ nativekit_root=${NATIVEKIT_ROOT:?Set NATIVEKIT_ROOT to the NativeKit scene workt
 nativekit_build=${NATIVEKIT_BUILD:?Set NATIVEKIT_BUILD to a shared NativeKit build directory}
 target=${NATIVEKIT_HAXE_TARGET:-x86_64-linux-gnu}
 haxe_bin=${HAXEON_HAXE_BIN:-"$repo_dir/.tools/haxe/haxe"}
-hashlink_bin=${HAXEON_HASHLINK_BIN:-"$repo_dir/.tools/hashlink/hl"}
+hashlink_bin=${HAXEON_HASHLINK_BIN:-"$("$repo_dir/scripts/hashlink-path.sh")/hl"}
 haxeon_runtime_dir=${HAXEON_RUNTIME_DIR:-"$repo_dir/out"}
 generated_dir="$repo_dir/out/nativekit-scene-hxi"
 mkdir -p "$generated_dir"
@@ -77,7 +77,7 @@ output="$generated_dir/nativekit-scene.hx.hl"
 	"$nativekit_root" "$generated_dir/nativekit.hxi" "$generated_dir/nativekit-gpu.hxi"
 
 set +e
-LD_LIBRARY_PATH="$haxeon_runtime_dir:$repo_dir/.tools/hashlink:$nativekit_build/modules/scene_render:$nativekit_build/modules/scene:$nativekit_build/modules/gpu:$nativekit_build:${LD_LIBRARY_PATH:-}" \
+LD_LIBRARY_PATH="$haxeon_runtime_dir:$("$repo_dir/scripts/hashlink-path.sh"):$nativekit_build/modules/scene_render:$nativekit_build/modules/scene:$nativekit_build/modules/gpu:$nativekit_build:${LD_LIBRARY_PATH:-}" \
 	xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 "$hashlink_bin" "$output"
 status=$?
 set -e

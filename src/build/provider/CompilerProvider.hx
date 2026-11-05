@@ -74,7 +74,7 @@ class CompilerProvider {
 			environment:Map<String, String>;
 		if (context.selfHosted) {
 			var artifact = haxe.io.Path.join([context.compilerHome, "bootstrap", "compiler.hl"]);
-			command = haxe.io.Path.join([context.compilerHome, ".tools", "hashlink", "hl" + suffix]);
+			command = haxe.io.Path.join([build.HashLinkPath.directory(context.compilerHome), "hl" + suffix]);
 			argumentsWithLauncher = [artifact].concat(arguments);
 			inputs.push(command);
 			inputs.push(artifact);
@@ -138,7 +138,7 @@ class CompilerProvider {
 		};
 		var directories = [
 			haxe.io.Path.join([compilerHome, "out"]),
-			haxe.io.Path.join([compilerHome, ".tools", "hashlink"])
+			build.HashLinkPath.directory(compilerHome)
 		], existing = Sys.getEnv(variable);
 		if (existing != null && existing.length > 0)
 			directories.push(existing);

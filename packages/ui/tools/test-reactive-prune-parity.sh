@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 ui="$root/packages/ui"
-hl="$root/.tools/hashlink/hl"
+hl="$("$root/scripts/hashlink-path.sh")/hl"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ui-reactive-prune.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
@@ -13,7 +13,7 @@ fi
 cat > "$tmp/memory.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":134217728,"guest_base":134217728,"guest_limit":268435456,"memory_size":268435456}
 JSON
-export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 for inline in 0 1; do
     for target in hl wasm32 wasm-gc; do
         options=()

@@ -43,7 +43,7 @@ done
 
 module_dir="$repo_dir"
 showcase_script="$module_dir/tools/showcase-wasm.sh"
-profiler="$haxeon_dir/.tools/hashlink/hlprof-live"
+profiler="$("$haxeon_dir/scripts/hashlink-path.sh")/hlprof-live"
 contract=${NATIVEKIT_HAXEON_MEMORY_CONTRACT:-}
 if [[ -z "$contract" ]]; then
 	for candidate in \
@@ -69,7 +69,7 @@ if [[ ! -f "$contract" ]]; then
 	exit 1
 fi
 (cd "$haxeon_dir" && ./scripts/build-native.sh >/dev/null)
-if [[ ! -x "$profiler" || ! -x "$haxeon_dir/.tools/hashlink/hl" ]]; then
+if [[ ! -x "$profiler" || ! -x "$("$haxeon_dir/scripts/hashlink-path.sh")/hl" ]]; then
 	echo "Haxeon native runtime or hlprof-live did not build" >&2
 	exit 1
 fi
@@ -87,7 +87,7 @@ if [[ ! -f "$compiler_module" ]]; then
 	echo "Haxeon compiler module is missing: $compiler_module" >&2
 	exit 1
 fi
-export LD_LIBRARY_PATH="$haxeon_dir/out:$haxeon_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 for index in $(seq 1 "$runs"); do
 	run_dir="$result_dir/run-$index"

@@ -64,12 +64,9 @@ else
     exit 2
 fi
 
-hashlink_runtime="$haxeon_dir/.tools/hashlink/hl"
+hashlink_runtime="$("$haxeon_dir/scripts/hashlink-path.sh")/hl"
 if [[ ! -x "$hashlink_runtime" ]]; then
-    hashlink_runtime="$haxeon_dir/vendor/hashlink/hl"
-fi
-if [[ ! -x "$hashlink_runtime" ]]; then
-    echo "test-haxeon: missing HashLink runtime in .tools/hashlink or vendor/hashlink" >&2
+    echo "test-haxeon: missing checkout-built HashLink; run scripts/build-native.sh first" >&2
     exit 2
 fi
 
@@ -117,7 +114,7 @@ fi
 )
 
 set +e
-runtime_library_path="$native_build_dir:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:$haxeon_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+runtime_library_path="$native_build_dir:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 if command -v xvfb-run >/dev/null; then
     xvfb-run -a env NATIVEKIT_HTTP_FIXTURE_PORT="$http_fixture_port" LD_LIBRARY_PATH="$runtime_library_path" \
         "$hashlink_runtime" "$test_root/nativekit-smoke.hl"

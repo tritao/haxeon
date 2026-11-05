@@ -95,12 +95,12 @@ cmake --build "$scratch/nativekit" > "$scratch/nativekit-build.log" 2>&1 || {
 cat > "$scratch/session.sh" <<SESSION
 #!/usr/bin/env bash
 set -u
-export LD_LIBRARY_PATH="$scratch/nativekit:$repo_dir/out:$repo_dir/.tools/hashlink"
+export LD_LIBRARY_PATH="$scratch/nativekit:$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")"
 port=\$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
-"$repo_dir/.tools/hashlink/hl" --diagnostics "\$port" --diagnostics-wait "$scratch/probe.hl" > "$scratch/app.log" 2>&1 &
+"$("$repo_dir/scripts/hashlink-path.sh")/hl" --diagnostics "\$port" --diagnostics-wait "$scratch/probe.hl" > "$scratch/app.log" 2>&1 &
 app=\$!
 sleep 0.5
-"$repo_dir/.tools/hashlink/hlprof-live" --sources sampling --connect-timeout 10 --output "$scratch/capture.hlpc" "\$port" > "$scratch/profiler.log" 2>&1 &
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" --sources sampling --connect-timeout 10 --output "$scratch/capture.hlpc" "\$port" > "$scratch/profiler.log" 2>&1 &
 profiler=\$!
 sleep 1.2
 for i in \$(seq 1 40); do xdotool mousemove \$((50 + i * 5)) \$((60 + i * 3)); sleep 0.02; done
@@ -121,7 +121,7 @@ if [[ $status -ne 42 ]]; then
 	exit 1
 fi
 
-"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture.hlpc"
+"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/trace.json" "$scratch/capture.hlpc"
 frames=$(sed -n 's/^frames=//p' "$scratch/app.log")
 python3 - "$scratch/trace.json" "$frames" <<'PY'
 import collections

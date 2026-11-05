@@ -19,14 +19,14 @@ trap 'rm -f "$capture"' EXIT
 export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 export NKUI_COLOR_FONT_PATH=${NKUI_COLOR_FONT_PATH:-"$module_dir/vendor/skribidi/example/data/NotoColorEmoji-Regular.ttf"}
 export NKUI_SHOWCASE_IMAGE_PATH=${NKUI_SHOWCASE_IMAGE_PATH:-"$nativekit_dir/vendor/sokol/assets/logo_s_large.png"}
-export LD_LIBRARY_PATH="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$haxeon_dir/.tools/hashlink:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="$build_dir:$build_dir/nativekit/modules/gpu:$build_dir/nativekit:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh"):${LD_LIBRARY_PATH:-}"
 export INSPECTOR_CAPTURE="$capture"
 export INSPECTOR_ARTIFACT="$build_dir/nativekit_ui_showcase.hl"
 export INSPECTOR_HAXEON_DIR="$haxeon_dir"
 
 xvfb-run -a bash -c '
     cd "$INSPECTOR_HAXEON_DIR/out"
-    "$INSPECTOR_HAXEON_DIR/.tools/hashlink/hl" "$INSPECTOR_ARTIFACT" \
+    "$("$INSPECTOR_HAXEON_DIR/scripts/hashlink-path.sh")/hl" "$INSPECTOR_ARTIFACT" \
         --ui-visual-case=34 --ui-visual-frames=1000 >/dev/null 2>&1 &
     app_pid=$!
     trap '\''kill "$app_pid" 2>/dev/null || true; wait "$app_pid" 2>/dev/null || true'\'' EXIT

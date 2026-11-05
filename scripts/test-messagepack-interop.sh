@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$root_dir/.tools/hashlink/hl"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+hl="$hashlink_dir/hl"
 vectors="$root_dir/tests/fixtures/messagepack-vectors.tsv"
 frames="$root_dir/tests/fixtures/messagepack-frame-vectors.tsv"
 output="$root_dir/out/messagepack-interop.hl"
@@ -19,9 +20,9 @@ mkdir -p "$root_dir/out"
 "$haxe" --cwd "$root_dir" -cp src --run Main tests/programs/messagepack-interop.hx "$output" >/dev/null
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-	export DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+	export DYLD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 else
-	export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+	export LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
 run_haxe_fixture() {

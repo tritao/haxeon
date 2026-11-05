@@ -4,13 +4,13 @@ repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$repo_dir"
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-sha256.XXXXXX")
 trap 'rm -rf -- "${temporary_dir:?}"' EXIT
-export LD_LIBRARY_PATH="$repo_dir/out:$repo_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 .tools/haxe/haxe -cp src -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
 for target in hl wasm32 wasm-gc; do
-  .tools/hashlink/hl "$temporary_dir/compiler.hl" --target="$target" --output="$temporary_dir/sha256.$target" --entry=sha256 --root=tests/programs tests/programs/sha256.hx > "$temporary_dir/$target.log" 2>&1 || { cat "$temporary_dir/$target.log"; exit 1; }
+  "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/compiler.hl" --target="$target" --output="$temporary_dir/sha256.$target" --entry=sha256 --root=tests/programs tests/programs/sha256.hx > "$temporary_dir/$target.log" 2>&1 || { cat "$temporary_dir/$target.log"; exit 1; }
 done
 set +e
-.tools/hashlink/hl "$temporary_dir/sha256.hl"
+"$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/sha256.hl"
 result=$?
 set -e
 [[ "$result" == 42 ]] || { echo "native SHA-256 failed: $result"; exit 1; }

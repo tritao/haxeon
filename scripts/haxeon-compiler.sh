@@ -5,7 +5,12 @@
 # each fixture compiles in a fraction of a second. Nested scripts inherit the build through
 # HAXEON_COMPILER_HL; concurrent runs build into their own temporary directory.
 
-haxeon_hl="$root_dir/.tools/hashlink/hl"
+hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+haxeon_hl="$hashlink_dir/hl"
+if [[ ! -x "$haxeon_hl" ]]; then
+	echo "Missing checkout-built HashLink: $haxeon_hl; run scripts/build-native.sh first" >&2
+	return 1
+fi
 haxeon_jobs=0
 haxeon_failed=0
 haxeon_max_jobs=${TEST_JOBS:-$(nproc 2>/dev/null || echo 4)}
@@ -22,8 +27,8 @@ fi
 haxeon_compile() {
 	(
 		cd "$root_dir"
-		LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-			DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+		LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+			DYLD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
 			"$haxeon_hl" "$HAXEON_COMPILER_HL" "$@"
 	)
 }

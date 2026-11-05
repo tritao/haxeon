@@ -1699,7 +1699,7 @@ class ValueArrayAccessMain {
 
 	static function run(program:IrProgram, path:String):{status:Int, error:String} {
 		HlWriter.writeFile(HlLower.lower(program), path);
-		var process = new sys.io.Process(Sys.getCwd() + "/.tools/hashlink/hl", [path]);
+		var process = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var error = process.stderr.readAll().toString();
 		var status = process.exitCode();
 		process.close();

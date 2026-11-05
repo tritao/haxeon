@@ -3,8 +3,8 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root"
-runtime="$root/.tools/hashlink/hl"
-client="$root/.tools/hashlink/hlprof-live"
+runtime="$("$root/scripts/hashlink-path.sh")/hl"
+client="$("$root/scripts/hashlink-path.sh")/hlprof-live"
 target="$root/out/profiler-disconnect-target.hl"
 temp_dir=$(mktemp -d /tmp/haxeon-profiler-disconnect-XXXXXX)
 runtime_pid=
@@ -29,9 +29,9 @@ trap cleanup EXIT
 
 port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
 if [[ "$(uname -s)" == "Darwin" ]]; then
-	export DYLD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+	export DYLD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 else
-	export LD_LIBRARY_PATH="$root/out:$root/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+	export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 "$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-disconnect-target.hxml"
 

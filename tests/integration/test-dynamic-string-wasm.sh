@@ -3,9 +3,9 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root_dir"
 wasmtime=${WASMTIME:-$root_dir/.tools/wasmtime-47.0.0/wasmtime}
-export LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$root_dir/.tools/haxe/haxe" tests/hxml/wasm-dynamic-string-test.hxml
-"$root_dir/.tools/hashlink/hl" out/wasm-dynamic-string-test.hl
+"$("$root_dir/scripts/hashlink-path.sh")/hl" out/wasm-dynamic-string-test.hl
 node <<'JS'
 const fs = require('fs');
 for (const build of ['clean', 'incremental']) {

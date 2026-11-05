@@ -52,7 +52,7 @@ capture() {
 		cat "$scratch/$name.log" >&2
 		exit 1
 	}
-	"$repo_dir/.tools/hashlink/hlprof-live" export --format perfetto --output "$scratch/$name.json" "$scratch/$name/profile.hlpc" > /dev/null
+	"$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live" export --format perfetto --output "$scratch/$name.json" "$scratch/$name/profile.hlpc" > /dev/null
 }
 
 capture all --profile-min-call=0

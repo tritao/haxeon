@@ -3,7 +3,7 @@ set -euo pipefail
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 output=${1:-$root/out/bench/gc-frame-budget}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
-library=${HL_GC_TEST_LIBRARY_DIR:-$root/.tools/hashlink}
+library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lpthread -o "$output/convergence"
 export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HL_GC_INCREMENTAL=1 HL_GC_THREADS=1 HL_GC_MIN_TRIGGER=67108864 HL_GC_LATENCY_TRACE=0
