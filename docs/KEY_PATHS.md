@@ -1,6 +1,6 @@
 # Key paths
 
-Status: specification (2026-11-04); implementation pending. Key paths are
+Status: specification (2026-11-05); implementation pending. Key paths are
 compiler-checked references to stored fields, independent of UI concepts.
 
 ## Types and formation
@@ -53,10 +53,14 @@ Calling `set` on a `KeyPath<R, V>` is a compile-time error even if the actual
 descriptor happens to designate a writable field. The first argument of `set`
 is a compiler-checked writable root place, not a by-value parameter: it is evaluated once, as is the
 value, and struct changes propagate back to that place. Evaluation follows
-assignment order: evaluate the path, capture the root place and the intermediate
-receivers of the destination chain, evaluate the supplied value, then store.
-If evaluating the value replaces an intermediate reference, the write still
-targets the receiver captured before that evaluation. If value evaluation
+direct-assignment order for a statically known path: evaluate the path, capture
+the root place and intermediate receivers, evaluate the supplied value, then
+store. For an escaped, non-constant path, evaluate the path, root place and
+value first, then traverse the field chain and store. Thus replacing an
+intermediate reference while evaluating the value changes the destination of
+an escaped write; a known path still targets the receiver captured before that
+evaluation. This difference is intentional and does not depend on enabling
+the function inliner. If value evaluation
 throws, the destination remains unwritten. Exceptions from the field write
 preserve the stores and effects of the ordinary write, including a store that
 preceded a throwing equality check; no additional copyback is attempted on
@@ -93,8 +97,11 @@ path continuing into that struct, a write must perform a tracked whole-field
 replacement, preserving single evaluation, guard and exception behavior; it
 must not silently mutate the stored struct without invalidation. The current
 compiler rejects the equivalent direct nested mutation (see STRUCTS.md). This
-case requires compiler place-lowering work to preserve that contract, and must
-not be enabled until it does so. No change to the reactive runtime is intended.
+case requires compiler place-lowering work to preserve that contract. Until
+tracked whole-field replacement exists, writes that would mutate a struct
+inside a tracked Observable field are compile-time errors (`E1027`), including
+when the root place itself is such a field. A path cannot bypass that existing
+restriction. No change to the reactive runtime is intended.
 
 ## Representation and lowering
 
@@ -110,16 +117,17 @@ canonical descriptor per root type, declaration sequence and granted capability
 contains the identity, component metadata needed for display, and typed read/write dispatch
 for that sequence; descriptors are shared, not allocated per use. A composed
 path whose components are not known statically may allocate a compact
-immutable concatenation descriptor, with equality and hashing based on the
-flattened declaration sequence. Target-specific access code handles references,
-struct copies and tracking; no runtime name lookup or portable byte offsets are
-used. Escaped writes use two phases: prepare the destination from the root,
-then pass the evaluated value to that prepared writer. Preparation can retain
-the captured receivers in a short-lived writer; that cost belongs to escaped
-dynamic use. A known path lowers both phases to ordinary locals and field
-operations without allocating a descriptor or writer.
+immutable concatenation descriptor once at composition, with equality and
+hashing based on the flattened declaration sequence. All dispatch functions
+and their environments are created with the descriptor. Neither `get` nor
+`set` allocates a descriptor, closure, prepared writer, box or other temporary
+object on any target, including when the path escapes and inlining is disabled.
+Target-specific typed access functions handle references, struct copies and
+tracking; no runtime name lookup or portable byte offsets are used.
 
-The prepared writer returns the updated root value; the compiler writes it
+The descriptor's typed write function follows the references and stores for a
+class root, with no root writeback. For a struct root it returns the updated
+root value; the compiler writes it
 back to the caller's captured struct place when the assignment reaches that
 storage, including when the supplied value compares equal to the previous one.
 The descriptor records whether struct writeback reaches the root: following a
@@ -132,6 +140,12 @@ descriptors for the same sequence still compare equal and hash alike. Upcasting
 a writable descriptor to `KeyPath` keeps the descriptor and grants no setter
 through that readable type. Descriptors and hashes are process-local and are
 not stable serialized identifiers.
+
+Allocation censuses must cover escaped `get` and `set` on class roots and on
+struct roots in writable places: 1,024 calls allocate zero objects on HashLink,
+Wasm32 and Wasm GC, with inlining enabled and disabled. Descriptor construction
+and unknown-path composition happen before the measured call loop; the loop
+must retain runtime path selection so these tests exercise escaped dispatch.
 
 ## Diff integration
 
