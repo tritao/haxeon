@@ -3,10 +3,62 @@ package compiler.ir;
 import compiler.ir.Ir;
 
 private typedef CensusAllocation = {final value:Int; final type:String; final local:Bool; final reason:String;}
-private typedef CensusRow = {final name:String; final counts:Array<Int>; final weighted:Array<Float>; final allocations:Array<CensusAllocation>;}
+private typedef CensusOpcode = {final opcode:String; final count:Int;}
+private typedef CensusRow = {final name:String; final counts:Array<Int>; final weighted:Array<Float>; final allocations:Array<CensusAllocation>; final histogram:Array<CensusOpcode>;}
 
 /** Read-only post-pass census. Weights are static 8^natural-loop-depth, not measured execution counts. */
 class IrOpportunityCensus {
+	/** Report the actual lowered HashLink operations, after register allocation. */
+	public static function reportHashLink(code:compiler.hl.HlCode, indices:Map<String, Int>):Void {
+		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		var names:Map<Int, String> = [];
+		for (name => index in indices) names.set(index, name);
+		var functions = code.functions.copy();
+		functions.sort((a, b) -> a.functionIndex - b.functionIndex);
+		for (fn in functions) {
+			var histogram:Map<String, Int> = [];
+			for (op in fn.opcodes) addOpcode(histogram, constructorName(Std.string(op)));
+			var name = names.get(fn.functionIndex);
+			Sys.stderr().writeString("EMITTED_CENSUS {\"target\":\"hl\",\"name\":"
+				+ haxe.Json.stringify(name == null ? "#" + fn.functionIndex : name) + ",\"index\":" + fn.functionIndex
+				+ ",\"instructions\":" + fn.opcodes.length + ",\"bytes\":" + compiler.hl.HlWriter.encodeFunction(fn).length
+				+ ",\"histogram\":" + encodeHistogram(sortedHistogram(histogram)) + "}\n");
+		}
+	}
+
+	/** Report the final Wasm instruction model; linked pre-encoded functions are explicitly marked opaque. */
+	public static function reportWasm(module:compiler.backend.wasm.WasmModule, target:String):Void {
+		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		for (fn in module.functions) {
+			var histogram:Map<String, Int> = [];
+			for (op in fn.body) addOpcode(histogram, constructorName(Std.string(op)));
+			Sys.stderr().writeString("EMITTED_CENSUS {\"target\":" + haxe.Json.stringify(target) + ",\"name\":"
+				+ haxe.Json.stringify(fn.name) + ",\"instructions\":" + fn.body.length + ",\"opaqueBytes\":"
+				+ (fn.encodedBody == null ? 0 : fn.encodedBody.length) + ",\"histogram\":" + encodeHistogram(sortedHistogram(histogram)) + "}\n");
+		}
+	}
+
+	static function addOpcode(histogram:Map<String, Int>, opcode:String):Void
+		histogram.set(opcode, (histogram.exists(opcode) ? histogram.get(opcode) : 0) + 1);
+
+	static function sortedHistogram(histogram:Map<String, Int>):Array<CensusOpcode> {
+		var names = [for (name in histogram.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) {opcode: name, count: histogram.get(name)}];
+	}
+
+	// Anonymous object fields can be enumerated in different orders on HashLink. Construct JSON in a fixed order so
+	// diagnostic output is reproducible, including the per-opcode and allocation records.
+	static function encodeHistogram(histogram:Array<CensusOpcode>):String
+		return "[" + [for (entry in histogram) "{\"opcode\":" + haxe.Json.stringify(entry.opcode) + ",\"count\":" + entry.count + "}"].join(",") + "]";
+
+	static function encodeRow(row:CensusRow):String {
+		var allocations = [for (entry in row.allocations) "{\"value\":" + entry.value + ",\"type\":" + haxe.Json.stringify(entry.type)
+			+ ",\"local\":" + (entry.local ? "true" : "false") + ",\"reason\":" + haxe.Json.stringify(entry.reason) + "}"];
+		return "{\"name\":" + haxe.Json.stringify(row.name) + ",\"counts\":" + haxe.Json.stringify(row.counts)
+			+ ",\"weighted\":" + haxe.Json.stringify(row.weighted) + ",\"allocations\":[" + allocations.join(",")
+			+ "],\"histogram\":" + encodeHistogram(row.histogram) + "}";
+	}
 	static final labels:Array<String> = [
 		"arrayReads",
 		"arrayWrites",
@@ -16,7 +68,16 @@ class IrOpportunityCensus {
 		"allocations",
 		"localAllocations",
 		"loopInvariantComputations",
-		"constantDivMod"
+		"constantDivMod",
+		"unusedResults",
+		"loopObjectOrClosureAllocations",
+		"constantBranches",
+		"jumpsToEmptyJumps",
+		"unusedPureResults",
+		"receiverChecksOnFreshValues",
+		"sameTypeSafeCasts",
+		"overwrittenFieldStores",
+		"smallDirectCalls"
 	];
 
 	public static function report(program:IrProgram, ?allowInline:Bool):Void {
@@ -30,8 +91,22 @@ class IrOpportunityCensus {
 		for (object in program.objects)
 			objects.set(object.name, object);
 		var inlineMode = allowInline == null ? IrInliner.enabled : allowInline;
+		var smallFunctions:Map<String, Bool> = [];
 		for (fn in program.functions) {
-			var row = inspect(fn, pureCalls, objects, inlineMode);
+			var budget = fn.inlineHint ? IrInliner.HintBudget : IrInliner.SmallBudget;
+			if (fn.blocks.length == 1 && fn.blocks[0].instructions.length <= budget && fn.name != program.entryPoint
+				&& !StringTools.startsWith(fn.name, "__")) {
+				var recursive = false;
+				for (located in fn.blocks[0].instructions) switch located.value {
+					case Call(_, name, _) if (name == fn.name): recursive = true;
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_): recursive = true;
+					default:
+				}
+				if (!recursive) smallFunctions.set(fn.name, true);
+			}
+		}
+		for (fn in program.functions) {
+			var row = inspect(fn, pureCalls, objects, inlineMode, smallFunctions);
 			rows.push(row);
 			for (i in 0...labels.length) {
 				totals[i] += row.counts[i];
@@ -40,30 +115,74 @@ class IrOpportunityCensus {
 		}
 		rows.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		for (row in rows)
-			Sys.stderr().writeString("IR_CENSUS " + haxe.Json.stringify(row) + "\n");
-		Sys.stderr().writeString("IR_CENSUS " + haxe.Json.stringify({
-			name: "TOTAL",
-			labels: labels,
-			counts: totals,
-			weighted: weights
-		}) + "\n");
+			Sys.stderr().writeString("IR_CENSUS " + encodeRow(row) + "\n");
+		Sys.stderr().writeString("IR_CENSUS {\"name\":\"TOTAL\",\"labels\":" + haxe.Json.stringify(labels)
+			+ ",\"counts\":" + haxe.Json.stringify(totals) + ",\"weighted\":" + haxe.Json.stringify(weights) + "}\n");
 	}
 
-	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool):CensusRow {
+	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool,
+			?smallFunctions:Map<String, Bool>):CensusRow {
 		var bounds = new IrLoopBounds(fn, pureCalls),
 			allocations:Array<CensusAllocation> = [];
 		var counts:Array<Int> = [for (_ in labels) 0],
-			weighted:Array<Float> = [for (_ in labels) 0.0];
+			weighted:Array<Float> = [for (_ in labels) 0.0],
+			opcodes:Map<String, Int> = [], used:Map<Int, Bool> = [];
+		var blocks:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block];
+		for (block in fn.blocks) {
+			for (located in block.instructions) {
+				for (input in IrOperands.inputs(located.value)) used.set(input.id, true);
+				switch located.value {
+					case Phi(_, inputs): for (input in inputs) used.set(input.value.id, true);
+					default:
+				}
+			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Return(v), Throw(v), Rethrow(v), Branch(v, _, _): used.set(v.id, true);
+				default:
+			}
+		}
 		for (block in fn.blocks) {
 			var depth = bounds.depth(block.id),
 				weight = Math.pow(8, depth),
-				seen:Map<String, Bool> = [];
+				seen:Map<String, Bool> = [],
+				lastStore:Null<String> = null;
 			var count = function(category:Int):Void {
 				counts[category]++;
 				weighted[category] += weight;
 			};
 			for (located in block.instructions) {
 				var instruction = located.value;
+				switch instruction {
+					case FieldSet(object, field, _):
+						var key = object.id + ":" + field;
+						if (key == lastStore) count(16);
+						lastStore = key;
+					case Call(_, name, _) if (smallFunctions != null && name != fn.name && smallFunctions.exists(name)):
+						count(17); lastStore = null;
+					default:
+						if (!pureUnusedResult(instruction)) lastStore = null;
+				}
+				var opcode = constructorName(Std.string(instruction));
+				addOpcode(opcodes, opcode);
+				var output = IrOperands.output(instruction);
+				if (output != null && !used.exists(output.id)) {
+					count(9);
+					if (pureUnusedResult(instruction)) count(13);
+				}
+				if (depth > 0) switch instruction {
+					case NewObject(_, _), InstanceClosure(_, _, _): count(10);
+					default:
+				}
+				switch instruction {
+					case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
+						switch bounds.definition(arguments[0].id) {
+							case NewObject(_, _), StaticClosure(_, _), InstanceClosure(_, _, _): count(14);
+							default:
+						}
+					case SafeCast(out, source) if (Std.string(out.type) == Std.string(source.type)):
+						count(15);
+					default:
+				}
 				switch instruction {
 					case ArrayGet(_, array, index), ArraySet(array, index, _):
 						count(switch instruction {
@@ -119,12 +238,28 @@ class IrOpportunityCensus {
 					default:
 				}
 			}
+			if (block.terminator != null) switch block.terminator.value {
+				case Branch(condition, _, _):
+					switch bounds.definition(condition.id) {
+						case ConstBool(_, _): count(11);
+						default:
+					}
+				case Jump(target):
+					var next = blocks.get(target);
+					if (next != null && next.id != block.id && next.instructions.length == 0 && next.terminator != null)
+						switch next.terminator.value {
+							case Jump(_): count(12);
+							default:
+						}
+				default:
+			}
 		}
 		return {
 			name: fn.name,
 			counts: counts,
 			weighted: weighted,
-			allocations: allocations
+			allocations: allocations,
+			histogram: sortedHistogram(opcodes)
 		};
 	}
 
@@ -135,6 +270,14 @@ class IrOpportunityCensus {
 			default: false;
 		};
 	}
+
+	/** Conservative diagnostic subset: no memory, allocation, calls, comparisons or division. */
+	static function pureUnusedResult(instruction:IrInstruction):Bool return switch instruction {
+		case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_),
+			Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _),
+			ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
+		default: false;
+	};
 
 	/** Finite normal and subnormal powers, regardless of reciprocal eligibility. */
 	static function isPowerOfTwo(value:Float):Bool {

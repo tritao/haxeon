@@ -312,6 +312,7 @@ class WasmGcModuleBuilder {
 			WasmExceptionLowering.lower(module);
 		if (options.wasmGcAllocationCount == true)
 			instrumentGcAllocations(module);
+		compiler.ir.IrOpportunityCensus.reportWasm(module, "wasm-gc");
 		return {artifact: {target: options.target, bytes: WasmEncoder.encode(module)}, runtimeTypeIds: plan.runtimeTypeIds};
 	}
 
