@@ -627,15 +627,23 @@ class WasmLinearArrays {
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
 		builder.localSet(length);
 		builder.localGet(requestedIndex);
+		builder.localSet(index);
+		builder.localGet(index);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.ifElse(function(builder) {
+			builder.localGet(index);
+			builder.localGet(length);
+			builder.i32Add();
+			builder.localSet(index);
+		}, function(_) {});
+		builder.localGet(index);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
 		builder.ifElse(function(builder) {
 			builder.i32Const(0);
 			builder.localSet(index);
-		}, function(builder) {
-			builder.localGet(requestedIndex);
-			builder.localSet(index);
-		});
+		}, function(_) {});
 		builder.localGet(index);
 		builder.localGet(length);
 		builder.emit(I32LtS);

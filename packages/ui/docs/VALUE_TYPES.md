@@ -956,3 +956,99 @@ with status 1073741839. Signal tracing identified host PID 2181160,
 pressure. Reducing concurrent large builds resolved it; the traced build then
 completed normally. Neither killed build produced measurement samples. Captures
 were deleted after recording summaries.
+
+
+### Negative array insertion indices on Wasm (2026-11-05)
+
+The shared-lane mixed-operation test exposed an existing mismatch in ordinary
+arrays: both Wasm targets clamped every negative insertion index to zero, while
+HashLink and struct arrays first counted from the end. For `[10,20,30]`, inserting
+42 at −1 must produce `[10,20,42,30]`. Both Wasm concrete insertion helpers now
+add the length before clamping to the valid range. This changes no scalar generic
+specialization policy. The reduced regression covers Int, Float, Bool, String,
+class references, Int64 and an Array<Dynamic> view, including empty arrays,
+extreme indices and both inline settings. Control returned 42 on HashLink and 1
+on both Wasm targets; candidate returned 42 on all six target/inline combinations.
+The broader mixed lane test also passes on both Wasm targets with this fix alone.
+
+Control is `0bb683b2` (code identical to `eafc907f`; the intervening commits plan
+native placement and borrowing). Both builds use outer `21700a1eb` on this machine.
+Compiler tests: 760 passed, zero failed; self-hosting fixed point passed. Parity:
+496 fixtures, 14 existing skips, plus six UI value snapshots. All ten UI suites,
+app tests, retention, Wasm32 WebGL2 smoke, final editor budgets and all six paired
+headless memory runs passed. The inline parity harness now shares one fixture
+list between compilation and execution, including previously compiled inline
+cases missing from the execution list.
+
+Both HashLink editor profiles are byte-identical, SHA-256
+`6e98ac0e96126ea6f4fa0a37e4516357d65a750a0afa416d3b06f07dfd197eec`.
+Nine alternating action pairs yielded these median KiB:
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 | 74.5 |
+| hierarchy->sensors | 114.6 | 114.6 |
+| sensors->hierarchy | 80.1 | 80.1 |
+| telemetry->console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+The planned pairs retained these timing findings (ms):
+
+| Capture | Action | Measured | Budget |
+| --- | --- | ---: | ---: |
+| control, pair 1 | selection | 8.06 | 6.00 |
+| candidate, pair 2 | selection | 6.90 | 6.00 |
+| control, pair 2 | selection | 6.72 | 6.00 |
+| control, pair 3 | hierarchy→sensors | 4.33 | 4.00 |
+| control, pair 3 | selection | 7.48 | 6.00 |
+| candidate, pair 3 | hierarchy→sensors | 4.61 | 4.00 |
+| candidate, pair 3 | selection | 7.20 | 6.00 |
+| control, pair 4 | selection | 6.36 | 6.00 |
+| control, pair 8 | selection | 7.42 | 6.00 |
+
+No failed capture was retried or discarded. These are identical-image captures;
+the separately planned final budget gate passed without changing a ceiling.
+Selection census pairs (objects / bytes) were:
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,928 | 340,908 / 24,010,232 |
+| 2 | 340,910 / 24,010,688 | 340,910 / 24,010,744 |
+| 3 | 340,910 / 24,010,640 | 340,909 / 24,010,416 |
+
+Only the bytes type differed in each pair, as in prior same-image capture-buffer
+measurements. Four RSS growth windows (MiB) were:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.00 / 4.06 / 0.78 / 4.84 | 29.84 / 3.91 / 0.94 / 4.84 |
+| 2 | 30.16 / 3.44 / 0.78 / 5.00 | 30.16 / 3.91 / 0.78 / 5.16 |
+| 3 | 29.06 / 4.22 / 0.78 / 4.84 | 30.00 / 3.91 / 0.94 / 4.84 |
+
+All windows passed. The paired median differences were 0 / −0.15 / +0.16 / 0 MiB;
+the 0.78/0.94 MiB third-window variation also occurs in preceding identical-image
+runs. Wasm GC fixed-step core (120 warmup / 120 measured frames), nine full-scene
+pairs and three pairs each for static/text-heavy/editing, matched in every pair:
+4,440 / 4,440 objects for full/static/text-heavy, 8,724 / 8,724 for editing.
+Guest SHA-256: control
+`6a20abc1629823155f89b76dab9b67a533b8cdd30db94cd537406ba91892a3b7`, candidate
+`6221ae673935fd1d280f7b371c1dcffb0c172a070e8e6162b82c131ffe00bf06`.
+
+Setup failures remain findings: the first private gate lacked the bootstrap
+`haxeon_runtime.hdll`; it was supplied from the saved runtime before rebuilding.
+Initial parity reported missing inline artifacts for the new test because its
+compilation and execution lists differed. Unifying the lists fixed the harness;
+the corrected gate compiled and ran every listed inline fixture. A pre-correction
+relaunch was stopped without using its results. After app retention completed,
+its private compiler worker retained 7.7 GiB; normal authenticated worker shutdown
+released it before captures. Profile builds ran one at a time. No unrelated
+process was touched. All captures were deleted after recording their summaries.

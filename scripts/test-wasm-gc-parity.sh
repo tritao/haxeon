@@ -15,6 +15,66 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 # The broader GC Bytes fixture includes GC-specific bounds behavior. The shared
 # bytes-view fixture checks portable aliasing and copy semantics on both targets.
 cases=(objects arrays enums closures dynamic exceptions strings)
+# One list drives compilation and execution for every target and inline setting.
+inline_cases=(
+	identity-class
+	enum-interface-conformance
+	scoped-cleanup
+	defer-cleanup
+	defer-exception-stack
+	native-reference-identity
+	reactive-effect-failure-recovery
+	reactive-derived-cycle
+	reactive-dependency-identity
+	reactive-dependency-scale
+	generic-interface-value-carriers
+	generic-erased-raw-pointer
+	generic-managed-reference-closure
+	generic-erased-bytes-reference-shapes
+	wasm-bytes-runtime-kinds
+	generic-erased-runtime-kinds
+	generic-erased-function-reference-shapes
+	generic-erased-array-function-checks
+	generic-erased-reference-checks
+	generic-erased-numeric-checks
+	struct-closure-dynamic-array
+	scalar-closure-nested-callback
+	scalar-closure-identity
+	specialized-map-scalar-keys
+	NativeU32RuntimeValues
+	hash-float-dependency
+	hash-float-extremes
+	struct-array-iterator-escape
+	struct-array-reflection-escape
+	struct-array-string-escape
+	member-module-shadow
+	checked-dynamic-object-cast
+	generic-struct-functions
+	generic-struct-class
+	generic-struct-reflection
+	struct-reflection
+	generic-struct-signal-allocations
+	generic-nullable-substitution
+	generic-struct-array-ranges
+	null-method-inlining
+	wasm-null-method-dispatch
+	generic-constrained-owner-hash
+	generic-constrained-owner-lookup-allocations
+	generic-struct-owner-allocations
+	specialized-struct-map
+	struct-constructor-flow
+	struct-nested-constructors
+	struct-linear-place-alias
+	array-insert-negative-index
+	struct-array-places
+	struct-array-nullable-places
+	struct-array-nested-nullable
+	struct-array-equality
+	struct-array-dynamic-equality
+	struct-managed-narrow
+	struct-managed-nullable-narrow
+	nullable-scalar-ieee-equality
+)
 for case_name in "${cases[@]}"; do
 	source="tests/programs/wasm-gc-$case_name.hx"
 	for target in wasm32 wasm-gc; do
@@ -134,7 +194,7 @@ for inline in 0 1; do
 			--export=IdentityClassCensus.prepare --export=IdentityClassCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-identity-class-census-inline-$inline.wasm" \
 			--entry=identity-class --root=stdlib --root=tests/programs tests/programs/identity-class.hx
-		for value_case in identity-class enum-interface-conformance scoped-cleanup defer-cleanup defer-exception-stack native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle reactive-dependency-identity reactive-dependency-scale generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-nested-callback scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-array-dynamic-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+		for value_case in "${inline_cases[@]}"; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -290,7 +350,7 @@ for inline in 0 1; do
 		echo "defer HashLink allocation census (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
-	for value_case in identity-class enum-interface-conformance scoped-cleanup defer-cleanup defer-exception-stack native-reference-identity reactive-effect-failure-recovery reactive-derived-cycle reactive-dependency-identity reactive-dependency-scale generic-interface-value-carriers generic-erased-raw-pointer generic-managed-reference-closure generic-erased-bytes-reference-shapes wasm-bytes-runtime-kinds generic-erased-runtime-kinds generic-erased-function-reference-shapes generic-erased-array-function-checks generic-erased-reference-checks generic-erased-numeric-checks struct-closure-dynamic-array scalar-closure-nested-callback scalar-closure-identity specialized-map-scalar-keys NativeU32RuntimeValues hash-float-dependency hash-float-extremes struct-array-iterator-escape struct-array-reflection-escape struct-array-string-escape member-module-shadow checked-dynamic-object-cast generic-struct-functions generic-struct-class generic-struct-reflection struct-reflection generic-struct-signal-allocations generic-nullable-substitution generic-struct-array-ranges null-method-inlining wasm-null-method-dispatch generic-constrained-owner-hash generic-constrained-owner-lookup-allocations generic-struct-owner-allocations specialized-struct-map struct-constructor-flow struct-nested-constructors struct-linear-place-alias struct-array-places struct-array-nullable-places struct-array-nested-nullable struct-array-equality struct-array-dynamic-equality struct-managed-narrow struct-managed-nullable-narrow nullable-scalar-ieee-equality; do
+	for value_case in "${inline_cases[@]}"; do
 		HAXEON_INLINE="$inline" haxeon_compile \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -384,12 +444,16 @@ haxeon_compile_async \
 cases+=(bytes-compare)
 haxeon_compile_wait
 
-node - "$root_dir" "$parity_output_dir" "${cases[@]}" <<'JS'
+node - "$root_dir" "$parity_output_dir" "${cases[@]}" --inline-cases "${inline_cases[@]}" <<'JS'
 const fs = require("fs");
 const path = require("path");
 const root = process.argv[2];
 const outputDir = process.argv[3];
-const gcCases = process.argv.slice(4);
+const argumentsAfterOutput = process.argv.slice(4);
+const inlineBoundary = argumentsAfterOutput.indexOf("--inline-cases");
+if (inlineBoundary < 0) throw new Error("Missing inline parity fixture list");
+const gcCases = argumentsAfterOutput.slice(0, inlineBoundary);
+const inlineCases = argumentsAfterOutput.slice(inlineBoundary + 1);
 
 function table(file) {
   return fs.readFileSync(path.join(root, "tests", "programs", file), "utf8").split("\n")
@@ -498,7 +562,7 @@ async function run(name, target) {
         failures.push(`${name} (${target}): ${results[target].failure}`);
   }
   for (const inline of [0, 1]) {
-    for (const name of ["identity-class", "enum-interface-conformance", "scoped-cleanup", "defer-cleanup", "defer-exception-stack", "native-reference-identity", "reactive-effect-failure-recovery", "reactive-derived-cycle", "reactive-dependency-identity", "reactive-dependency-scale", "generic-interface-value-carriers", "generic-erased-raw-pointer", "generic-managed-reference-closure", "generic-erased-bytes-reference-shapes", "wasm-bytes-runtime-kinds", "generic-erased-runtime-kinds", "generic-erased-function-reference-shapes", "generic-erased-array-function-checks", "generic-erased-reference-checks", "generic-erased-numeric-checks", "struct-closure-dynamic-array", "scalar-closure-nested-callback", "scalar-closure-identity", "specialized-map-scalar-keys", "NativeU32RuntimeValues", "hash-float-dependency", "hash-float-extremes", "struct-array-iterator-escape", "struct-array-reflection-escape", "struct-array-string-escape", "member-module-shadow", "checked-dynamic-object-cast", "generic-struct-functions", "generic-struct-class", "generic-struct-reflection", "struct-reflection", "generic-struct-signal-allocations", "generic-nullable-substitution", "generic-struct-array-ranges", "null-method-inlining", "wasm-null-method-dispatch", "generic-constrained-owner-hash", "generic-constrained-owner-lookup-allocations", "generic-struct-owner-allocations", "specialized-struct-map", "struct-constructor-flow", "struct-nested-constructors", "struct-linear-place-alias", "struct-array-places", "struct-array-dynamic-equality", "struct-managed-narrow", "struct-managed-nullable-narrow"])
+    for (const name of inlineCases)
       for (const target of ["wasm32", "wasm-gc"]) {
         const result = await run(`${name}-inline-${inline}`, target);
         if (result.failure === undefined && result.exit !== 42)
