@@ -50,6 +50,11 @@ for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=KeyPathCensus.prepare --export=KeyPathCensus.known --export=KeyPathCensus.escapedClass \
+			--export=KeyPathCensus.escapedStruct --export=KeyPathCensus.escapedStaticStruct --export=KeyPathCensus.escapedComposition \
+			--output="$parity_output_dir/wasm-parity-$target-key-path-census-inline-$inline.wasm" \
+			--entry=key-paths --root=tests/programs tests/programs/key-paths.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=DeferCensus.perform --output="$parity_output_dir/wasm-parity-$target-defer-census-inline-$inline.wasm" \
 			--entry=defer-cleanup --root=tests/programs tests/programs/defer-cleanup.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
@@ -253,6 +258,15 @@ done
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
+	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+		--output="$parity_output_dir/key-paths-inline-$inline.hl" --entry=key-paths --root=tests/programs tests/programs/key-paths.hx
+	status=0
+	LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		"$root_dir/.tools/hashlink/hl" "$parity_output_dir/key-paths-inline-$inline.hl" || status=$?
+	if [[ $status -ne 42 ]]; then
+		echo "Key path HashLink census (inline=$inline) expected exit 42, got $status" >&2
+		exit 1
+	fi
 	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
 		--output="$parity_output_dir/defer-allocation-hl-inline-$inline.hl" \
 		--entry=defer-allocation-hl --root=tests/fixtures/scoped-cleanup tests/fixtures/scoped-cleanup/defer-allocation-hl.hx
@@ -788,6 +802,17 @@ async function run(name, target) {
 	    if (result !== n * (n - 1) / 2 || allocations !== 0)
 	      failures.push(`struct signal census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: struct signal census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const pathBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-key-path-census-inline-${inline}.wasm`));
+	  const paths = (await WebAssembly.instantiate(pathBytes, {haxeon_runtime: runtime, std})).instance.exports;
+	  paths["KeyPathCensus.prepare"]();
+	  const pathCount = target === "wasm32" ? paths["haxeon.memory.allocation_count"] : paths.__allocation_count;
+	  for (const mode of ["known", "escapedClass", "escapedStruct", "escapedStaticStruct", "escapedComposition"]) for (const n of [8, 1024]) {
+	    const before = pathCount(), result = paths[`KeyPathCensus.${mode}`](n), allocations = pathCount() - before;
+	    const expected = mode === "known" ? n * (n - 1) : n * (n - 1) / 2;
+	    if (result !== expected || allocations !== 0)
+	      failures.push(`key path ${mode} census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: key path ${mode} census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const placeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-observable-place-census-inline-${inline}.wasm`));
 	  const place = (await WebAssembly.instantiate(placeBytes, {haxeon_runtime: runtime, std})).instance;

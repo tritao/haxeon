@@ -1198,7 +1198,7 @@ class TestMain {
 			'Method "Base.equals" must have signature equals(other:Base):Bool');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base implements Equatable { public final x:Int; public function new(x:Int) this.x = x; public function equals(other:Base):Bool return x % 10 == other.x % 10; } class Derived extends Base implements Hashable { public function new(x:Int) super(x); } function main():Int return 42;',
 			'Cannot synthesize Hashable for "Derived" with a handwritten equals; provide hash():Int');
-		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(Named, "b");',
+		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(\\Named.b);',
 			'Type "Named" has no stored field "b"');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Diff.copy(new Fixed()).a;',
 			'haxeon.Diff.copy cannot copy immutable field "a" of "Fixed"');

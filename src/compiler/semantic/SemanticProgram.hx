@@ -160,6 +160,7 @@ class SemanticProgram {
 				var replacement = field.isStatic ? null : currentByName.get(field.name);
 				replacement == null ? field : {
 					name: field.name,
+					isPublic: field.isPublic,
 					metadata: field.metadata,
 					type: field.type,
 					initializer: replacement.initializer,

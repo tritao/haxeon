@@ -33,6 +33,7 @@ private typedef ScopeValue = {
 	final receiver:Bool;
 	final localFunction:Null<LocalFunction>;
 	var scoped:Bool;
+	var keyPathConstant:Null<String>;
 }
 
 /**
@@ -67,7 +68,8 @@ class Scope {
 			id: bindingId == null ? '$' + 'l${allocateLocalId()}:$name' : bindingId,
 			receiver: receiver,
 			localFunction: localFunction,
-			scoped: false
+			scoped: false,
+			keyPathConstant: null
 		};
 		values.set(name, value);
 		assigned.set(value.id, initialized);
@@ -75,6 +77,17 @@ class Scope {
 
 	public function defineReceiver(type:CompilerType, span:SourceSpan):Void
 		define("this", type, span, true, null, true);
+
+	/** Only bindings proven never reassigned receive a declaration-sequence constant. */
+	public function setKeyPathConstant(name:String, descriptor:String):Void {
+		var value = resolveLocal(name);
+		if (value != null) value.keyPathConstant = descriptor;
+	}
+
+	public function keyPathConstant(name:String):Null<String> {
+		var value = resolveLocal(name);
+		return value == null ? null : value.keyPathConstant;
+	}
 
 	public function isAssigned(name:String):Bool {
 		var value = resolveLocal(name);

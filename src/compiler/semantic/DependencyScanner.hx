@@ -185,6 +185,18 @@ class DependencyScanner {
 				scanExpression(length, dependencies, typeParameters);
 			case NativeLayoutQuery(_, type, _, _):
 				scanType(type, dependencies, typeParameters);
+			case KeyPathLiteral(root, _, _):
+				// The parser cannot yet distinguish a qualified root from its field suffix.
+				// Load existing source prefixes; the typer diagnoses an unresolved root.
+				switch root {
+					case NamedType(name):
+						var candidate = name;
+						while (candidate.length > 0) {
+							dependencies.set(OPTIONAL_PREFIX + candidate, true);
+							candidate = compiler.QualifiedName.parentOrEmpty(candidate);
+						}
+					default: scanType(root, dependencies, typeParameters);
+				}
 			case NewMap(_, _, _):
 			case Lambda(arguments, statements, _, _):
 				// Local functions and anonymous functions are lambdas; modules
@@ -220,7 +232,7 @@ class DependencyScanner {
 				if (typeParameters == null || typeParameters.indexOf(name) < 0)
 					dependencies.set(name, true);
 			case AppliedType(name, arguments):
-				if (typeParameters == null || typeParameters.indexOf(name) < 0)
+				if (name != "KeyPath" && name != "WritableKeyPath" && (typeParameters == null || typeParameters.indexOf(name) < 0))
 					dependencies.set(name, true);
 				for (argument in arguments)
 					scanType(argument, dependencies, typeParameters);

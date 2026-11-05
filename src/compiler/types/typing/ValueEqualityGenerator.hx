@@ -88,6 +88,7 @@ class ValueEqualityGenerator {
 
 	static function needsHelper(session:TypingSession, type:CompilerType):Bool
 		return switch type {
+			case TKeyPath(_, _, _): true;
 			case TNullable(element): DeclaredConformance.has(session, element, "Equatable");
 			case TInstance(NominalKind.Class, _, _): DeclaredConformance.has(session, type, "Equatable");
 			default: false;
@@ -100,6 +101,10 @@ class ValueEqualityGenerator {
 			right = new TypedExpression(TLocal("right"), type, span),
 			statements:Array<TypedStatement> = [];
 		switch type {
+			case TKeyPath(_, _, _):
+				new AnonymousTypeRegistry(session).register(type);
+				statements.push(TReturn(compare(new TypedExpression(TField(left, "$key"), TString, span),
+					new TypedExpression(TField(right, "$key"), TString, span), span), span));
 			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")):
 				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
 					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),

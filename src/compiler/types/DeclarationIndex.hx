@@ -303,7 +303,12 @@ class DeclarationIndex {
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
-				if (name == "List") {
+				if (name == "KeyPath" || name == "WritableKeyPath") {
+					if (arguments.length != 2)
+						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
+					TKeyPath(resolveInner(arguments[0], span, resolving, substitutions),
+						resolveInner(arguments[1], span, resolving, substitutions), name == "WritableKeyPath");
+				} else if (name == "List") {
 					if (arguments.length != 1)
 						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
 					TArray(resolveInner(arguments[0], span, resolving, substitutions));
@@ -736,6 +741,7 @@ class DeclarationIndex {
 			case TArray(element): 'Array<${typeKey(element)}>';
 			case TIterator(element): 'Iterator<${typeKey(element)}>';
 			case TMap(key, value): 'Map<${typeKey(key)},${typeKey(value)}>';
+			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + typeKey(root) + "," + typeKey(value) + ">";
 			case TFunction(arguments, result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 			case TAnonymous(name, _): name;
 		};

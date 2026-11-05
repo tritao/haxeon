@@ -162,7 +162,7 @@ function main():Int {
 		&& haxeon.Equality.equals(new Modulo(1), new Modulo(11)) && first == second
 		&& haxeon.Hashing.hash(new Hashed(11)) == haxeon.Hashing.hash(new Hashed(1))
 		&& haxeon.Hashing.hash(pair) == haxeon.Hashing.hash(new Pair(3))
-		&& mask == haxeon.Diff.bit(Editable, "y") && applied == mask && target.y == 3
+		&& mask == haxeon.Diff.bit(\Editable.y) && applied == mask && target.y == 3
 		&& fingerprintBefore == expectedFingerprint && fingerprintBefore != fingerprintAfter
 		&& valueMask == 2 && valueApplied == valueMask && valueTarget.y == 3
 		&& haxeon.Diff.fingerprint(pair) == haxeon.Hashing.hash(pair)

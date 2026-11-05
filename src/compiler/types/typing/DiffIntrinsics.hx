@@ -25,7 +25,7 @@ class DiffIntrinsics {
 		};
 
 	public static function expand(session:TypingSession, name:String, arguments:Array<AstExpression>, span:SourceSpan,
-			typeOf:AstExpression->CompilerType):AstExpression {
+			typeOf:AstExpression->CompilerType, pathOf:AstExpression->compiler.types.TypedAst.TypedExpression):AstExpression {
 		var operation = name.substr(name.lastIndexOf(".") + 1);
 		switch operation {
 			case "fingerprint":
@@ -48,21 +48,16 @@ class DiffIntrinsics {
 				}
 				return BlockExpression(statements, Variable(hash, span), span);
 			case "bit":
-				expectArguments(name, arguments, 2, span);
-				var declaration = classNamed(session, typeName(arguments[0], name, span), span),
-					field = switch arguments[1] {
-						case StringLiteral(value, _): value;
-						default:
-							fail("E1009", '$name expects the field name as a string literal', span);
-							"";
-					};
+				expectArguments(name, arguments, 1, span);
+				var path = KeyPathTyping.known(session, pathOf(arguments[0]));
+				if (path == null || path.fields.length != 1)
+					fail("E1009", '$name requires a known direct-field key path', span);
+				var declaration = classOf(session, path.root, name, span), field = path.fields[0].field.name;
 				requireDiffable(session, declaration, name, span);
 				var fields = maskedFields(session, declaration, name, span);
 				for (index in 0...fields.length)
-					if (fields[index].name == field)
-						return IntegerLiteral(1 << index, span);
-				fail("E1009", 'Type "${declaration.name}" has no stored field "$field"', span);
-				return null;
+					if (fields[index].name == field) return IntegerLiteral(1 << index, span);
+				throw "Resolved key path field is absent from Diffable layout";
 			case "all":
 				expectArguments(name, arguments, 1, span);
 				var declaration = classNamed(session, typeName(arguments[0], name, span), span);

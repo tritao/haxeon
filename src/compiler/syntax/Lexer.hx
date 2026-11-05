@@ -204,6 +204,7 @@ class Lexer {
 						TokenKind.NullCoalesce;
 					} else TokenKind.Question;
 				case "@": TokenKind.At;
+				case "\\": TokenKind.Backslash;
 				case "$": TokenKind.Dollar;
 				case "+":
 					if (position < source.length && source.get(position) == "=".code) {

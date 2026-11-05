@@ -508,3 +508,6 @@ scoped-cleanup	42
 enum-interface-conformance	42
 array-sort-merge	42
 struct-interface-unbox-census	42
+key-paths	42
+key-path-observable	42
+key-path-nullable	42

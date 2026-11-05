@@ -263,6 +263,11 @@ class StatementTyper {
 					localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
 				if (!predeclared)
 					scope.define(name, value.type, span, true, null, false, localFunction);
+				var pathConstant = KeyPathTyping.known(session, value);
+				if (pathConstant != null && !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span))) {
+					scope.setKeyPathConstant(name, pathConstant.name);
+					return [];
+				}
 				scope.setMapKeySource(name, value.mapKeySource);
 				bindCell(name, span, scope, value.type);
 				if (declaredAbstract != null)

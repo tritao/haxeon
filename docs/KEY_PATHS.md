@@ -1,6 +1,8 @@
 # Key paths
 
-Status: specification (2026-11-05); implementation pending. Key paths are
+Status: specification with a partial implementation (2026-11-05). The nullable
+escaped-value allocation requirement below remains blocked on callable ABI work.
+Key paths are
 compiler-checked references to stored fields, independent of UI concepts.
 
 ## Types and formation
@@ -103,6 +105,15 @@ inside a tracked Observable field are compile-time errors (`E1027`), including
 when the root place itself is such a field. A path cannot bypass that existing
 restriction. No change to the reactive runtime is intended.
 
+For non-constant composition whose second path may write back a struct, the
+compiler must also prove that the first path cannot project tracked struct
+storage. A known first path is checked by its declaration sequence; for an
+unknown first path the check conservatively examines its root's reachable
+stored-field types. A potentially tracked projection is rejected with `E1027`.
+Compose a readable `KeyPath` operand for read-only traversal in that case.
+This restriction prevents composition from granting a deferred write operation
+after the declaration sequence has escaped.
+
 ## Representation and lowering
 
 A known path applied to a concrete root lowers to the same direct field
@@ -155,4 +166,31 @@ The path must be statically known; an unknown runtime path is rejected with a
 diagnostic requiring a known direct-field path. Inherited fields precede
 fields declared in the derived class. A nested path is rejected because the
 mask represents the outer field as a unit. The bit is not a byte offset.
-The previous `Diff.bit(T, "field")` form is removed when this is implemented.
+The previous field-name form has been removed and its callers ported.
+
+## Implementation checkpoint and backend dependency
+
+Formation, capabilities, direct reads/writes, escaped typed dispatch, composition,
+identity equality/hash, display and `Diff.bit` are implemented. Constant path
+arguments remain constants in generic specializations independently of inlining.
+The scalar-value allocation censuses exercise known/generic paths and escaped
+class, local struct, static struct and composed nested-struct dispatch on all
+three targets with inlining on and off, at 1,024 calls with zero allocations.
+Nested mutation of tracked Observable structs remains an explicit `E1027` error.
+
+**The full allocation contract is not yet implemented.** Escaped paths with
+`Null<S>` as their final value type use the existing boxed callable ABI. In
+`tests/programs/key-path-nullable.hx`, after `NullableKeyPath.prepare()`, calling
+`NullableKeyPath.perform(1024)` on Wasm32 with inlining disabled and allocation
+counting enabled returns 1024 but allocates 2048 objects. Final nullable fields
+remain functionally supported; nullable intermediates remain rejected.
+
+The shared HashLink scalar-closure planner and Wasm scalar callable planner
+explicitly exclude layouts containing presence lanes (`IrScalarClosures.scalarizable`
+and `WasmScalarAbi.scalarizable`). Meeting the specification requires those ABIs
+to carry nullable presence and payload lanes across typed indirect calls,
+including forwarding/composed accessors and nullable struct arguments/results.
+This is a backend dependency, not a reason to weaken the allocation contract or
+introduce a per-call writer. Implementation stops at this checkpoint under the
+parallel-work boundary; that ABI work and its allocation regressions must land
+before key paths can be marked complete.

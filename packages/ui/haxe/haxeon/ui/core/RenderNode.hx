@@ -900,22 +900,22 @@ class RenderNode {
 	}
 
 	/** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */
-	static final StyleLayoutFields:Int = haxeon.Diff.bit(LayoutStyle, "width") | haxeon.Diff.bit(LayoutStyle, "height")
-		| haxeon.Diff.bit(LayoutStyle, "aspectRatio") | haxeon.Diff.bit(LayoutStyle, "direction")
-		| haxeon.Diff.bit(LayoutStyle, "childAlignX") | haxeon.Diff.bit(LayoutStyle, "childAlignY")
-		| haxeon.Diff.bit(LayoutStyle, "childDistribution") | haxeon.Diff.bit(LayoutStyle, "positioning")
-		| haxeon.Diff.bit(LayoutStyle, "wrapMode") | haxeon.Diff.bit(LayoutStyle, "rowGap")
-		| haxeon.Diff.bit(LayoutStyle, "columnGap") | haxeon.Diff.bit(LayoutStyle, "alignSelf")
-		| haxeon.Diff.bit(LayoutStyle, "positionX") | haxeon.Diff.bit(LayoutStyle, "positionY")
-		| haxeon.Diff.bit(LayoutStyle, "padding") | haxeon.Diff.bit(LayoutStyle, "childGap");
-	static final StyleHitFields:Int = haxeon.Diff.bit(LayoutStyle, "zIndex") | haxeon.Diff.bit(LayoutStyle, "clipToParent")
-		| haxeon.Diff.bit(LayoutStyle, "overlay") | haxeon.Diff.bit(LayoutStyle, "clipHorizontal")
-		| haxeon.Diff.bit(LayoutStyle, "clipVertical") | haxeon.Diff.bit(LayoutStyle, "visible");
-	static final StylePaintFields:Int = StyleHitFields | haxeon.Diff.bit(LayoutStyle, "background")
-		| haxeon.Diff.bit(LayoutStyle, "radiusTopLeft") | haxeon.Diff.bit(LayoutStyle, "radiusTopRight")
-		| haxeon.Diff.bit(LayoutStyle, "radiusBottomRight") | haxeon.Diff.bit(LayoutStyle, "radiusBottomLeft");
-	static final StyleTransformFields:Int = haxeon.Diff.bit(LayoutStyle, "transform")
-		| haxeon.Diff.bit(LayoutStyle, "transformOriginX") | haxeon.Diff.bit(LayoutStyle, "transformOriginY");
+	static final StyleLayoutFields:Int = haxeon.Diff.bit(\LayoutStyle.width) | haxeon.Diff.bit(\LayoutStyle.height)
+		| haxeon.Diff.bit(\LayoutStyle.aspectRatio) | haxeon.Diff.bit(\LayoutStyle.direction)
+		| haxeon.Diff.bit(\LayoutStyle.childAlignX) | haxeon.Diff.bit(\LayoutStyle.childAlignY)
+		| haxeon.Diff.bit(\LayoutStyle.childDistribution) | haxeon.Diff.bit(\LayoutStyle.positioning)
+		| haxeon.Diff.bit(\LayoutStyle.wrapMode) | haxeon.Diff.bit(\LayoutStyle.rowGap)
+		| haxeon.Diff.bit(\LayoutStyle.columnGap) | haxeon.Diff.bit(\LayoutStyle.alignSelf)
+		| haxeon.Diff.bit(\LayoutStyle.positionX) | haxeon.Diff.bit(\LayoutStyle.positionY)
+		| haxeon.Diff.bit(\LayoutStyle.padding) | haxeon.Diff.bit(\LayoutStyle.childGap);
+	static final StyleHitFields:Int = haxeon.Diff.bit(\LayoutStyle.zIndex) | haxeon.Diff.bit(\LayoutStyle.clipToParent)
+		| haxeon.Diff.bit(\LayoutStyle.overlay) | haxeon.Diff.bit(\LayoutStyle.clipHorizontal)
+		| haxeon.Diff.bit(\LayoutStyle.clipVertical) | haxeon.Diff.bit(\LayoutStyle.visible);
+	static final StylePaintFields:Int = StyleHitFields | haxeon.Diff.bit(\LayoutStyle.background)
+		| haxeon.Diff.bit(\LayoutStyle.radiusTopLeft) | haxeon.Diff.bit(\LayoutStyle.radiusTopRight)
+		| haxeon.Diff.bit(\LayoutStyle.radiusBottomRight) | haxeon.Diff.bit(\LayoutStyle.radiusBottomLeft);
+	static final StyleTransformFields:Int = haxeon.Diff.bit(\LayoutStyle.transform)
+		| haxeon.Diff.bit(\LayoutStyle.transformOriginX) | haxeon.Diff.bit(\LayoutStyle.transformOriginY);
 
 	/** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
 	public static function styleFieldsClassified():Bool

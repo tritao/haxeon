@@ -98,6 +98,11 @@ class TypeRelations {
 			return true;
 		if (equals(actual, expected))
 			return true;
+		switch [actual, expected] {
+			case [TKeyPath(root, value, true), TKeyPath(otherRoot, otherValue, false)]:
+				return equals(root, otherRoot) && equals(value, otherValue);
+			default:
+		}
 		if ((switch (actual) { case TDynamic: true; default: false; }))
 			return switch expected {
 				case TNull, TVoid, TNever: false;
@@ -181,7 +186,7 @@ class TypeRelations {
 		};
 		if (valueCapability)
 			switch actual {
-				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_): return true;
+				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_), TKeyPath(_, _, _): return true;
 				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
 					return satisfiesConstraint(representation, expected);
 				case TNullable(element): return satisfiesConstraint(element, expected);
@@ -307,6 +312,11 @@ class TypeRelations {
 					default: false;
 				}
 			case TFunction(arguments, result): sameFunction(right, arguments, result, visiting);
+			case TKeyPath(root, value, writable): switch right {
+				case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable && equalsWithin(root, otherRoot, visiting)
+					&& equalsWithin(value, otherValue, visiting);
+				default: false;
+			};
 			case TAnonymous(_, fields):
 				switch right {
 					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields, visiting);
@@ -398,7 +408,7 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _), TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			default: false;
 		};

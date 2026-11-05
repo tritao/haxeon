@@ -84,7 +84,8 @@ class SemanticDependencyCollector {
 			case NamedType(name):
 				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
 			case AppliedType(name, arguments):
-				addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
+				if (name != "KeyPath" && name != "WritableKeyPath")
+					addDependency(result, owner, kind, ModuleCanonicalizer.resolveTypeName(name, aliases));
 				for (argument in arguments)
 					addTypeDependency(result, owner, kind, argument, aliases);
 			case ArrayType(element), NullableType(element):
@@ -201,6 +202,8 @@ class SemanticDependencyCollector {
 			aliases:AliasTable):Void {
 		switch expression {
 			case NativeLayoutQuery(_, type, _, _):
+				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
+			case KeyPathLiteral(type, _, _):
 				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
 			case Member(object, _, _) | Not(object, _) | Negate(object, _) | ThrowExpression(object, _) | PostfixIncrement(object, _, _):
 				scanNativeLayoutQueryExpression(result, owner, object, aliases);

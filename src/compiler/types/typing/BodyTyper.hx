@@ -273,7 +273,7 @@ class BodyTyper {
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
 			specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
-		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue);
+		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue, session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.closureWrites.set(binding, true);
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
@@ -300,6 +300,11 @@ class BodyTyper {
 		for (argument in fn.arguments) {
 			var type = argumentType(argument, substitutions);
 			scope.define(argument.name, type, argument.span);
+			var constants = session.keyPathParameters.get(functionName);
+			if (constants != null && constants.exists(argument.name)) {
+				scope.setKeyPathConstant(argument.name, constants.get(argument.name));
+				continue;
+			}
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
 			var declaredAbstract = EnumAbstractHints.named(session, argument.type);
@@ -1572,6 +1577,9 @@ class BodyTyper {
 					span);
 			if (!scope.isAssigned(name))
 				fail("E1023", 'Local "$name" may be used before assignment', span);
+			var pathConstant = scope.keyPathConstant(name);
+			if (pathConstant != null)
+				return new TypedExpression(TCall(pathConstant, []), type, span);
 			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.
 			if ((switch (type) { case TNull: true; default: false; })) {
 				var declared = scope.resolveDeclared(name);

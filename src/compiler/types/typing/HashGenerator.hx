@@ -74,6 +74,9 @@ class HashGenerator {
 				statements = floatHashStatements(value, span);
 			case TString:
 				statements = stringHashStatements(value, span);
+			case TKeyPath(_, _, _):
+				new AnonymousTypeRegistry(session).register(type);
+				statements = stringHashStatements(new TypedExpression(TField(value, "$key"), TString, span), span);
 			case TAbstract(_, _, representation):
 				var castExpression = new TypedExpression(TCast(value), representation, span);
 				request(session, representation, req.origin, span);

@@ -145,15 +145,26 @@ class GenericInstantiation {
 				statements: fn.statements,
 				span: fn.span
 			};
+		var constants:Map<String, String> = [], constantIndices:Map<Int, Bool> = [], constantPolicies:Array<String> = [],
+			assigned = compiler.types.analysis.AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
+		for (index in 0...semanticArguments.length) {
+			var definition = KeyPathTyping.known(session, semanticArguments[index]), parameter = fn.arguments[index];
+			if (definition != null && !assigned.exists(compiler.types.analysis.BindingWalker.key(parameter.name, parameter.span))) {
+				constants.set(parameter.name, definition.name);
+				constantIndices.set(index, true);
+				constantPolicies.push("keypath:" + index + "=" + definition.name);
+			}
+		}
 		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
-			specializationPolicies = genericRepresentation.policies,
+			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
 			representationResult = genericCall.result.physical,
 			representationArguments = genericCall.typeArguments.concat(concrete),
 			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
 			result = genericCall.result.semantic,
-			typed = genericCall.arguments;
+			typed = [for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index)) genericCall.arguments[index]];
+		session.keyPathParameters.set(specialization.name, constants);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
@@ -217,6 +228,9 @@ class GenericInstantiation {
 				if (projected != null)
 					actual = projected;
 				switch actual {
+					case TKeyPath(root, value, _) if ((name == "KeyPath" || name == "WritableKeyPath") && patternArguments.length == 2):
+						inferTypeParameters(patternArguments[0], root, parameters, substitutions, span);
+						inferTypeParameters(patternArguments[1], value, parameters, substitutions, span);
 					case TIterator(actualElement) if (name == "Iterator" && patternArguments.length == 1):
 						inferTypeParameters(patternArguments[0], actualElement, parameters, substitutions, span);
 					case TInstance(_, actualName, actualArguments) if (actualName == name
