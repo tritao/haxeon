@@ -11,14 +11,15 @@ import haxeon.ui.Paint.SolidPaint;
 import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationHandle;
 import haxeon.ui.animation.AnimationScheduler;
-import haxeon.ui.animation.LoopAnimation;
+import haxeon.ui.animation.DelayedAnimation;
+import haxeon.ui.animation.RetainedAnimation;
 
 /** Owns the reusable resources and command encoding for a procedural spinner. */
 class SpinnerPainter {
 	static inline var TwoPi:Float = 6.283185307179586;
 
 	public var kind(default, null):SpinnerKind;
-	final animation:LoopAnimation;
+	final animation:SpinnerClock;
 	final circle:Path;
 	final arc:Path;
 	final bar:Path;
@@ -40,7 +41,7 @@ class SpinnerPainter {
 		this.scheduler = scheduler;
 		this.color = color;
 		this.kind = kind;
-		animation = new LoopAnimation(speed);
+		animation = new SpinnerClock(speed);
 		animationToken = animation;
 		registration = null;
 
@@ -217,4 +218,51 @@ class SpinnerPainter {
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;
+}
+
+/**
+ * Spinner phase advanced in fixed steps. Between steps nothing on screen changes, so the host sleeps until the next step
+ * instead of drawing every display refresh, and a step only repaints the spinner's own custom paint (it has no paint cache
+ * key), so its frames rebuild nothing. An editor waiting on a long background job therefore idles near zero CPU.
+ */
+@:noCompletion
+class SpinnerClock implements DelayedAnimation implements RetainedAnimation {
+	/** Visible steps per second; smooth enough for an indeterminate indicator. */
+	public static inline var StepsPerSecond:Float = 15.0;
+	/** A wake this close to a step boundary takes the step, so timer jitter does not cost an extra wake. */
+	static inline var Tolerance:Float = 0.002;
+
+	public var phase(default, null):Float = 0.0;
+	public var speed:Float;
+	/** Steps taken; each one is a visible change. */
+	public var steps(default, null):Int = 0;
+	/** Seconds since the last step; slightly negative when a step was taken a little early. */
+	var pending:Float = 0.0;
+
+	public function new(speed:Float) {
+		if (!(speed == speed && speed - speed == 0.0) || speed <= 0.0)
+			throw "Spinner speed must be finite and positive";
+		this.speed = speed;
+	}
+
+	public function advance(deltaSeconds:Float):Bool {
+		if (!(deltaSeconds == deltaSeconds && deltaSeconds - deltaSeconds == 0.0) || deltaSeconds < 0.0)
+			throw "Spinner time must be finite and non-negative";
+		pending += deltaSeconds;
+		var step = 1.0 / StepsPerSecond;
+		if (pending + Tolerance < step)
+			return true;
+		var count = Std.int((pending + Tolerance) / step);
+		pending -= count * step;
+		phase += count * step * speed;
+		phase -= Std.int(phase);
+		steps += count;
+		return true;
+	}
+
+	public function delaySeconds():Float {
+		var remaining = 1.0 / StepsPerSecond - pending;
+		// Never report zero: that would ask the host for frames every refresh instead of a wake.
+		return remaining > 0.001 ? remaining : 0.001;
+	}
 }

@@ -170,6 +170,7 @@ import haxeon.ui.widgets.layout.Stack;
 import haxeon.ui.widgets.layout.StackChild;
 import haxeon.ui.widgets.controls.Spinner;
 import haxeon.ui.widgets.controls.SpinnerPainter;
+import haxeon.ui.widgets.controls.SpinnerPainter.SpinnerClock;
 import haxeon.ui.widgets.controls.SpinnerKind;
 import haxeon.ui.widgets.layout.SplitOrientation;
 import haxeon.ui.widgets.layout.SplitSide;
@@ -4300,13 +4301,36 @@ class FrameworkSmoke {
 			spinnerSemantics.role != AccessibilityRole.ProgressBar ||
 			spinnerSemantics.label != "Loading" ||
 			(spinnerSemantics.states & AccessibilityState.Busy) == 0 ||
-			context.animations.activeCount != 1 || animationRequests == 0 ||
-			!context.needsAnimationFrame || !context.isDirty())
+			context.animations.activeCount != 1 || animationRequests == 0)
+			return 109;
+		// A running spinner steps at a fixed rate: the host waits for the next step instead of drawing every refresh, and its
+		// frames rebuild nothing (the spinner's paint has no cache key, so it repaints in a reused frame).
+		var spinnerWait = context.animationWaitSeconds();
+		if (context.needsAnimationFrame || context.isDirty() || spinnerWait <= 0.0 ||
+			spinnerWait > 1.0 / SpinnerClock.StepsPerSecond + 0.0001)
 			return 109;
 		spinnerFrame.deltaSeconds = 0.25;
-		var requestsBeforeFrame = animationRequests;
 		context.submit(spinner, spinnerFrame);
-		if (context.animations.activeCount != 1 || animationRequests <= requestsBeforeFrame)
+		if (context.animations.activeCount != 1 || context.needsAnimationFrame || context.isDirty() ||
+			context.animationWaitSeconds() <= 0.0)
+			return 110;
+		var cachedSpinner = function() return spinner;
+		context.submitCached(cachedSpinner, spinnerFrame, "spinner-smoke");
+		spinnerFrame.deltaSeconds = 1.0 / SpinnerClock.StepsPerSecond;
+		context.submitCached(cachedSpinner, spinnerFrame, "spinner-smoke");
+		var spinnerMetrics:Null<UiFrameMetrics> = context.frameMetrics;
+		if (spinnerMetrics == null || !spinnerMetrics.reusedSubmission)
+			return 110;
+		var clock = new SpinnerClock(1.0);
+		clock.advance(0.5 / SpinnerClock.StepsPerSecond);
+		if (clock.steps != 0 || clock.phase != 0.0 || Math.abs(clock.delaySeconds() - 0.5 / SpinnerClock.StepsPerSecond) > 1e-9)
+			return 110;
+		// A wake within timer jitter of the boundary takes the step rather than scheduling another wake.
+		clock.advance(0.5 / SpinnerClock.StepsPerSecond - 0.001);
+		if (clock.steps != 1 || clock.delaySeconds() <= 1.0 / SpinnerClock.StepsPerSecond)
+			return 110;
+		clock.advance(3.0 / SpinnerClock.StepsPerSecond);
+		if (clock.steps != 4 || Math.abs(clock.phase - 4.0 / SpinnerClock.StepsPerSecond) > 1e-9)
 			return 110;
 		spinner.running = false;
 		spinnerFrame.deltaSeconds = 0.0;
