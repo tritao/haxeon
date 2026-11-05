@@ -94,9 +94,11 @@ private class StructuredEmission {
 
 class WasmFunctionLower {
 	final context:WasmFunctionLowerContext;
+	final nonNull:compiler.ir.IrNonNullFacts;
 
 	function new(context:WasmFunctionLowerContext) {
 		this.context = context;
+		this.nonNull = new compiler.ir.IrNonNullFacts(context.irFunction);
 	}
 
 	static function requiredLocal(locals:Map<Int, Int>, valueId:Int):Int {
@@ -326,7 +328,7 @@ class WasmFunctionLower {
 			switch located.value {
 				case Phi(_, _):
 				default:
-					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
+					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes, nonNull.has(block.id, index));
 			}
 		}
 	}
@@ -494,7 +496,7 @@ class WasmFunctionLower {
 				case Phi(_, _):
 				default:
 					var start = body.length;
-					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes);
+					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes, nonNull.has(block.id, index));
 					if (context.runtimeNeutral && context.exceptionState != null && containsCall(body.slice(start)))
 						emitPendingCallBranch(body, dispatchIndex);
 			}
@@ -591,7 +593,8 @@ class WasmFunctionLower {
 		emit(body, [I32Const(sourceBlock), LocalSet(predecessor)]);
 
 	function lowerInstruction(body:Array<WasmInstruction>, instruction:IrInstruction, values:Map<Int, Int>, functions:Map<String, Int>, layout:WasmLayout,
-			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>):Void {
+			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
+			?knownNonNull:Bool = false):Void {
 		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
 			var gc:WasmGcRepresentation = cast context.representation.values, scalar = gc.scalarLocal(instruction, values);
 			if (scalar != null) { emit(body, scalar); return; }
@@ -855,7 +858,7 @@ class WasmFunctionLower {
 				// Dispatch must fail as a Haxe exception before reading the receiver's type or calling its method.
 				var receiverCheck:Array<WasmInstruction> = [LocalGet(requiredLocal(values, object.id)),
 					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz, If(null)];
-				emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
+				if (!knownNonNull) emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
 				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
 				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
@@ -1344,7 +1347,7 @@ class WasmFunctionLower {
 				if (name == compiler.ir.IrReceiverCheck.NAME) {
 					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, arguments[0].id)),
 						gcRepresentation == null ? I32Eqz : RefIsNull, If(null)];
-					emit(body, check.concat(trapOrThrow(1)).concat([End]));
+					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
 				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {

@@ -551,6 +551,7 @@ class HlLower {
 	}
 
 	function lowerFunction(fn:IrFunction):HlFunction {
+		var nonNull = new compiler.ir.IrNonNullFacts(fn, true);
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
@@ -657,7 +658,8 @@ class HlLower {
 			provenInRange.clear();
 			elementOffsets.clear();
 			validatedArrayAccesses.clear();
-			for (instruction in block.instructions) {
+			for (instructionIndex in 0...block.instructions.length) {
+				var instruction = block.instructions[instructionIndex];
 				var instructionStart = instructions.length;
 				if (!keepsArrayBounds(instruction.value))
 					provenInRange.clear();
@@ -670,7 +672,7 @@ class HlLower {
 						EnumIndex(_, value), EnumField(_, value, _, _): value;
 					case _: null;
 				};
-				if (receiver != null && scalarOptionals.get(receiver) == null)
+				if (receiver != null && scalarOptionals.get(receiver) == null && !nonNull.has(block.id, instructionIndex))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				switch instruction.value {
 					case Phi(_, _):
@@ -798,7 +800,9 @@ class HlLower {
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
 					case Call(output, functionName, arguments):
-						if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers, registerTypes)) {
+						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
+							// A previous successful dereference or check already proved this SSA receiver non-null.
+						} else if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers, registerTypes)) {
 							var destination = defineRegister(output, registers, registerTypes);
 							var functionIndex = requireFunction(functionName);
 							var args = [for (argument in arguments) requireRegister(argument, registers)];

@@ -50,6 +50,7 @@ class TestCatalog {
 		"StrengthReductionMain",
 		"DeadPureValuesMain",
 		"ReceiverCheckElisionMain",
+		"NonNullFactsMain",
 		"JumpThreadingMain",
 		"InlineConfigurationMain",
 		"LoopBoundsMain",
