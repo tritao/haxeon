@@ -95,7 +95,7 @@ fi
 
 compiler=("$haxe_bin" -cp src --run compiler.tools.HaxeonCompiler)
 if [[ ${NATIVEKIT_HAXEON_SELF_HOSTED:-0} == 1 ]]; then
-	compiler=("$("$haxeon_dir/scripts/hashlink-path.sh")/hl")
+	compiler=("$haxeon_dir/scripts/hl")
 	if [[ -n ${NATIVEKIT_HAXEON_DIAGNOSTICS_PORT:-} ]]; then
 		compiler+=(--diagnostics "$NATIVEKIT_HAXEON_DIAGNOSTICS_PORT" --diagnostics-wait)
 	fi

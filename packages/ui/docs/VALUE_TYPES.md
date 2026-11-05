@@ -1267,3 +1267,96 @@ The separately planned final factor-1.5 budget run and all nine retention scenar
 The implementation was then parked and only its own source changes were removed;
 the committed runtime policy is retained. No new full-suite pass is claimed for
 the factor-1.5 trial, and no implementation or submodule pin was published.
+
+### Checkout VM launcher integration
+
+After merging `hl-exit-crash`, the VM and profiler come from the checkout CMake
+build through `scripts/hl` and `scripts/hlprof-live`; the compiler suite uses
+`scripts/test-driver.sh 16` with private copies of its loaded VM and runtime.
+The HashLink fork pin stays `d1eb6136`, and the rejected growth policy stays
+parked. This is a VM/library launch comparison against the same `e80c1a60`
+control and outer `8b6506f34` source used for the growth trial, on the same machine.
+The outer ports also replace joined VM paths in project generation and UI
+extensions; project fingerprints stamp the actual checkout VM, rather than the
+launcher script. The profile program hashes are `69dc45510e74` (control) and
+`6cbf9e02c12e` (candidate).
+
+Nine alternating action pairs gave these allocation medians in KiB:
+
+| Action | Control | Checkout launchers |
+| --- | ---: | ---: |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+| console->telemetry | 74.5 | 74.5 |
+| hierarchy->sensors | 114.6 | 114.6 |
+| sensors->hierarchy | 80.1 | 80.1 |
+| telemetry->console | 92.9 | 92.9 |
+
+Every action capture passed its budget verdict.
+
+Selection-stress census pairs (objects / bytes):
+
+| Pair | Control | Checkout launchers |
+| --- | ---: | ---: |
+| 1 | 340,909 / 24,010,456 | 340,908 / 24,010,232 |
+| 2 | 340,910 / 24,010,712 | 340,910 / 24,010,680 |
+| 3 | 340,911 / 24,010,944 | 340,912 / 24,011,200 |
+
+Only `bytes` differed: −1 / 0 / +1 objects and −224 / −32 / +256 bytes.
+All other types matched exactly: 305,725 objects / 21,593,528 bytes in every run.
+No application object type increased. The small byte-buffer variations also
+occur in the preceding control captures.
+
+Four headless RSS growth windows (MiB):
+
+| Pair | Control | Checkout launchers |
+| --- | --- | --- |
+| 1 | 29.38 / 4.06 / 0.78 / 4.84 | 30.78 / 3.44 / 0.78 / 5.00 |
+| 2 | 30.31 / 3.91 / 0.62 / 5.00 | 30.16 / 3.75 / 0.78 / 5.00 |
+| 3 | 30.16 / 3.44 / 0.94 / 5.00 | 30.47 / 3.59 / 0.62 / 5.00 |
+
+All six memory runs passed. The first pair's +1.40 MiB first-window difference
+is retained. Median paired window differences were +0.31 / −0.16 / 0.00 /
+0.00 MiB, and the median paired sum difference was +0.14 MiB. These are within
+the previously recorded same-image median window differences of up to 0.31 MiB; the numbers
+do not establish exact RSS equality. The checkout VM location and its rebuilt
+libraries are part of this baseline change; no memory ceiling was raised.
+
+The newly built Wasm GC Showcase guest was byte-for-byte identical to control
+(SHA-256 `edd093e31f00ed8bd9123b79441a24a4c7281139c51b19d363ac88c60f335b3d`).
+All 18 scene pairs completed: nine full-scene pairs and three each for static,
+text-heavy and editing. Every full/static/text-heavy sample counted 4,440 objects;
+every editing sample counted 8,724. No timeout remained open. Wasm32's browser
+smoke passed with WebGL2 enabled.
+
+The functional gates passed: 762 compiler tests with zero failures, self-hosting
+fixed point, all ten UI suites, 497 Wasm parity fixtures with 14 existing skips,
+all six UI value snapshots, app tests and all nine retention scenarios. The
+checkout-selection, VM/profiler launcher and loaded-runtime isolation regressions
+passed. Changed outer Python and shell files parsed, and the existing hobber
+budget-resume regression passed using the new launcher path.
+
+The self-hosted Showcase build exposed a missing library search path when it
+invoked the checkout VM directly. It now invokes `scripts/hl`; a fresh Wasm GC
+build without an inherited runtime library path and the Wasm32 smoke cover the
+fix. The first detached app run failed `Mission jobs failed: Could not open
+output file`: the fresh gate snapshot lacked its top-level `build/` directory.
+Creating that directory fixed the harness; the fresh app rerun also includes the
+additional joined-path ports. Neither failure was discarded as a measurement.
+
+Outer `machinekit/examples/flexspline-hobber/PLAN.md` was skipped because it had
+another session's uncommitted changes. The ignored generated
+`app/build/performance/launch-existing.sh` was updated locally; generated build
+output was not added to source control. All other launcher ports are committed
+by their explicit paths. Captures are deleted as soon as their numbers are
+recorded, and no budget ceiling changed.
+
+The separately planned final editor budget run and its nine retention scenarios also passed.
