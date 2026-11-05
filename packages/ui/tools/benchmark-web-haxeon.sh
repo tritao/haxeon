@@ -38,6 +38,19 @@ if [[ ! -f "$artifact_dir/nativekit_ui_haxeon.html" ]]; then
     echo "Haxeon web artifact is missing. Run tools/build-web.sh first." >&2
     exit 1
 fi
+# The shell loads this copy, not the compiler's showcase output. Record the
+# loaded bytes so paired runs cannot silently measure the same guest twice.
+guest_artifact="$artifact_dir/nativekit_ui_haxeon_guest.wasm"
+guest_hash=$(python3 - "$guest_artifact" "${NATIVEKIT_WEB_BENCHMARK_GUEST:-}" <<'PY'
+import hashlib, pathlib, shutil, sys
+guest = pathlib.Path(sys.argv[1])
+if sys.argv[2]:
+    source = pathlib.Path(sys.argv[2])
+    if source.resolve() != guest.resolve():
+        shutil.copyfile(source, guest)
+print(hashlib.sha256(guest.read_bytes()).hexdigest())
+PY
+)
 if [[ -z "$browser" ]]; then
     for candidate in google-chrome chromium chromium-browser; do
         if command -v "$candidate" >/dev/null 2>&1; then
@@ -114,3 +127,14 @@ done
 nativekit_tools="$nativekit_dir/tools"
 PYTHONPATH="$nativekit_tools${PYTHONPATH:+:$PYTHONPATH}" python3 -B "$repo_dir/tools/web_benchmark.py" --debug-port "$debug_port" \
     --page-url "$page_url" --output "$output" --timeout "$benchmark_timeout"
+python3 - "$output" "$guest_artifact" "$guest_hash" <<'PY'
+import hashlib, json, pathlib, sys
+output, guest = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+expected = sys.argv[3]
+if hashlib.sha256(guest.read_bytes()).hexdigest() != expected:
+    raise SystemExit("benchmark guest changed during capture")
+result = json.loads(output.read_text())
+result["guest_sha256"] = expected
+result["guest_file"] = guest.name
+output.write_text(json.dumps(result, indent=2) + "\n")
+PY
