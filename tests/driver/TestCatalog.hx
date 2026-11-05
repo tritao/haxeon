@@ -48,6 +48,7 @@ class TestCatalog {
 		"StaticNullCheckReuseMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",
+		"DeadPureValuesMain",
 		"InlineConfigurationMain",
 		"LoopBoundsMain",
 		"OpportunityCensusMain",

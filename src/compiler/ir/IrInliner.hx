@@ -43,6 +43,8 @@ class InlineMemo {
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
+	/** Final cleanup depends only on the inliner's result and must not affect inlining decisions. */
+	public var cleaned:Map<String, {source:IrFunction, result:IrFunction}> = [];
 
 	/**
 	 * The encoding of a published function, kept with the function it belongs to (null when it cannot be encoded). Comparing a
@@ -130,6 +132,8 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
+		for (name => entry in cleaned)
+			result.cleaned.set(name, entry);
 		for (name => entry in publishedBytes)
 			result.publishedBytes.set(name, entry);
 		for (name => entry in instrumented)
@@ -286,10 +290,20 @@ class IrInliner {
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
+			cleaned:Map<String, {source:IrFunction, result:IrFunction}> = [],
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		for (fn in program.functions) {
 			var result = inliner.inlinedVersion(fn.name);
+			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
+			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
+			var clean = cache.cleaned.get(fn.name);
+			if (clean == null || clean.source != result) {
+				var source = result;
+				result = IrDeadPureValues.run(result);
+				clean = {source: source, result: result};
+			} else result = clean.result;
+			cleaned.set(fn.name, clean);
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
 			if (instrument != null) {
@@ -332,6 +346,7 @@ class IrInliner {
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		IrAllocationReport.report(program);
 		cache.memo = inliner.nextMemo;
+		cache.cleaned = cleaned;
 		cache.published = published;
 		// Only functions that were compared have bytes; an entry for a function that is gone or unchanged-but-uncompared stays out.
 		for (name => entry in cache.publishedBytes)
