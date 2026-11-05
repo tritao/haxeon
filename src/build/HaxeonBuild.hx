@@ -93,6 +93,21 @@ class HaxeonBuild {
 	}
 
 	static function test(arguments:Array<String>):Int {
+		#if hl
+		for (outputDirectory in [path("out"), path(".tools", "hashlink")]) {
+			var loaded:Null<String>;
+			try
+				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
+			catch (failure:Dynamic) {
+				Sys.stderr().writeString('Cannot verify loaded libraries before building in $outputDirectory: $failure\n');
+				return 1;
+			}
+			if (loaded != null) {
+				Sys.stderr().writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Start the driver with libraries from a separate directory.\n');
+				return 1;
+			}
+		}
+		#end
 		var jobs = arguments.length == 0 ? "4" : arguments[0];
 		var nativeStatus = native([]);
 		if (nativeStatus != 0)

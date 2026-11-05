@@ -111,15 +111,24 @@ build_prebuilt_compilers() {
 	return "$status"
 }
 run_timed prebuilt-compilers build_prebuilt_compilers
+run_timed runtime-build-isolation bash "$root_dir/tests/integration/test-driver-runtime-isolation.sh"
 run_timed hxi-value-records bash "$root_dir/scripts/test-hxi-value-records.sh"
 run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.sh"
 run_timed run-output bash "$root_dir/tests/integration/test-run-output.sh"
 run_timed wire-incremental-helpers bash "$root_dir/tests/integration/test-wire-incremental-helpers.sh"
 
 run_timed differential-tests "$root_dir/tests/differential/run.sh"
+mkdir -p "$prebuilt_compilers/runtime"
+cp "$root_dir/out/haxeon_runtime.hdll" "$prebuilt_compilers/runtime/haxeon_runtime.hdll"
+cp "$hl" "$prebuilt_compilers/runtime/hl"
+for library in "$root_dir/.tools/hashlink"/libhl.so* "$root_dir/.tools/hashlink"/libhl*.dylib "$root_dir/.tools/hashlink"/libhl*.dll; do
+	if [[ -f "$library" ]]; then
+		cp -L "$library" "$prebuilt_compilers/runtime/"
+	fi
+done
 run_haxeon_build() {
-	(cd "$root_dir" && LD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-		DYLD_LIBRARY_PATH="$root_dir/out:$root_dir/.tools/hashlink${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$hl" "$prebuilt_build_tool" "$@")
+	(cd "$root_dir" && LD_LIBRARY_PATH="$prebuilt_compilers/runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+		DYLD_LIBRARY_PATH="$prebuilt_compilers/runtime${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$prebuilt_compilers/runtime/hl" "$prebuilt_build_tool" "$@")
 }
 run_timed compiler-runtime-tests run_haxeon_build test "${TEST_JOBS:-16}"
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes.
