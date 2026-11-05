@@ -67,6 +67,7 @@ inline_cases=(
 	struct-linear-place-alias
 	array-insert-negative-index
 	struct-array-lane-policy
+	struct-array-word-access
 	struct-array-places
 	struct-array-nullable-places
 	struct-array-nested-nullable
@@ -127,6 +128,10 @@ for inline in 0 1; do
 			--export=ScopedCensus.performMutableValue --export=ScopedCensus.performNullableMutableValue --export=ScopedCensus.prepareComposite --export=ScopedCensus.performComposite \
 			--output="$parity_output_dir/wasm-parity-$target-scoped-census-inline-$inline.wasm" \
 			--entry=scoped-cleanup --root=tests/programs tests/programs/scoped-cleanup.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ArrayWordBench.prepare --export=ArrayWordBench.perform \
+			--output="$parity_output_dir/wasm-parity-$target-word-access-census-inline-$inline.wasm" \
+			--entry=struct-array-word-access --root=tests/programs tests/programs/struct-array-word-access.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=LanePolicyCensus.prepare --export=LanePolicyCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-lane-policy-census-inline-$inline.wasm" \
@@ -1026,6 +1031,16 @@ async function run(name, target) {
 	    if (result !== n || allocations !== 0)
 	      failures.push(`lane policy census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: lane policy census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const wordBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-word-access-census-inline-${inline}.wasm`));
+	  const word = (await WebAssembly.instantiate(wordBytes, {haxeon_runtime: runtime, std})).instance;
+	  const wordCount = target === "wasm32" ? word.exports["haxeon.memory.allocation_count"] : word.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    word.exports["ArrayWordBench.prepare"](n);
+	    const before = wordCount(), result = word.exports["ArrayWordBench.perform"](), allocations = wordCount() - before;
+	    if (result !== 42 || allocations !== 0)
+	      failures.push(`word access census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: word access census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const rangesBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-generic-ranges-census-inline-${inline}.wasm`));
 	  const ranges = (await WebAssembly.instantiate(rangesBytes, {haxeon_runtime: runtime, std})).instance;

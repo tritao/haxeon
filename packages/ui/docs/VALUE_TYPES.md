@@ -1360,3 +1360,84 @@ by their explicit paths. Captures are deleted as soon as their numbers are
 recorded, and no budget ceiling changed.
 
 The separately planned final editor budget run and its nine retention scenarios also passed.
+
+### Wasm GC scalar words and range operations
+
+Control is Haxeon `c47a067c`; the capacity policy is unchanged. Typed scalar accesses are specialized before nullable erasure, while their element and field layouts are still available. Accessors retain only array/index/value parameters; stride, field offset, width, signedness and bitmap presence are compile-time facts. Aligned full fields use direct word loads/stores; packed fields use masked word spans. A shared span kernel handles a crossing field and unaligned range words without a staging allocation.
+
+The backend caches each lane cast. Unknown native layouts use bounded word fragments, preserving native validation and exception behavior. Physical ranges use overlap-safe `array.copy`, `array.fill` for complete clears, and byte helpers only at unaligned ends. The common reverse policy tests bitmap presence outside its loop. Native builds use the committed generated C header; the compiler unit verifies drift and deterministic generation. A native build with the Haxe tool directory hidden passed. Dynamic concat consults the shared compatibility primitive and the shared concat guard.
+
+The new `struct-array-word-access.hx` fixture passes on HashLink, Wasm32 and Wasm GC with both inlining settings. Reads, writes and reversal allocate zero guest objects for 8 and 1,024 prepared elements. Existing low-level tests retain 32/64-bit words, unaligned spans, forwarding, lazy references, bitmap boundaries and exception checks. Synthetic native arrays with deliberately arbitrary layouts are untyped; the typed layout checks still enforce the exact element representation.
+
+The paired microbenchmark uses Node v22.21.1 on an Intel i5-13600K, 4,096 elements, eight rounds, three warmup calls and nine alternating pairs. Each of the 216 observations allocated zero objects and matched the control result. Times are medians in milliseconds:
+
+| Inline | Operation | Control | Candidate | Speedup |
+| --- | --- | ---: | ---: | ---: |
+| 0 | readRects | 4.998 | 0.405 | 12.35× |
+| 0 | writeRects | 5.557 | 1.374 | 4.05× |
+| 0 | reverseRects | 8.822 | 0.568 | 15.53× |
+| 0 | readTiny | 1.059 | 0.332 | 3.19× |
+| 0 | writeTiny | 1.399 | 1.011 | 1.38× |
+| 0 | reverseTiny | 1.280 | 0.694 | 1.84× |
+| 1 | readRects | 4.980 | 0.434 | 11.47× |
+| 1 | writeRects | 5.559 | 1.359 | 4.09× |
+| 1 | reverseRects | 8.831 | 0.555 | 15.90× |
+| 1 | readTiny | 1.059 | 0.413 | 2.56× |
+| 1 | writeTiny | 1.398 | 1.007 | 1.39× |
+| 1 | reverseTiny | 1.285 | 0.702 | 1.83× |
+
+The source null guards found by self-hosting were corrected before acceptance. Both microbenchmark guests and the complete Showcase guest were rebuilt with the corrected compiler and were byte-identical to the measured versions; no timing capture was repeated.
+
+The HashLink editor program was byte-identical between control and candidate (SHA-256 `6cbf9e02c12e`). Nine alternating pairs gave the following per-action medians in KiB:
+
+| Action | Control | Word accessors |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 | 74.5 |
+| hierarchy->sensors | 114.6 | 114.6 |
+| sensors->hierarchy | 80.1 | 80.1 |
+| telemetry->console | 92.9 | 92.9 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+Selection-stress, 30 cycles, three alternating census pairs. Each program type matched exactly at 305,725 objects / 21,593,528 bytes; the only varying type was runtime `bytes`. Raw census totals, including those buffers:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,976 | 340,911 / 24,010,880 |
+| 2 | 340,911 / 24,010,984 | 340,912 / 24,011,296 |
+| 3 | 340,910 / 24,010,680 | 340,910 / 24,010,776 |
+
+Paired headless RSS window growth in MiB (four successive windows per run); every run passed:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.94 / 3.44 / 0.78 / 5.00 | 30.31 / 3.75 / 0.94 / 5.00 |
+| 2 | 30.16 / 4.06 / 0.94 / 4.84 | 29.84 / 3.44 / 0.94 / 4.69 |
+| 3 | 29.84 / 3.91 / 0.62 / 5.16 | 31.09 / 3.44 / 0.78 / 4.69 |
+
+The paired median differences were -0.32 / -0.47 / +0.16 / -0.15 MiB, within the earlier same-image calibration. No action allocation median increased, and no budget ceiling changed.
+
+The final-source Wasm GC Showcase comparison completed all 18 alternating pairs: nine full-scene pairs and three
+each for static, text-heavy and editing. Fixed-step core mode used 120 warmup and 120 measured frames. Every
+full/static/text-heavy sample counted 4,440 objects; every editing sample counted 8,724, equal between control and
+candidate. There was no browser timeout. Control guest SHA-256 starts `edd093e31f00`; candidate starts `960b1eee5ee3`.
+
+All gates passed: 763 compiler tests, self-hosting fixed point, ten UI suites, 498 parity fixtures (14 existing skips),
+six UI value snapshots, app suite, nine retention scenarios, editor budgets and paired headless memory gates. Wasm32's
+WebGL2 browser smoke passed. The native build also passed with the pinned Haxe tool directory hidden, proving it
+consumes the checked-in header without requiring the generator.
+
+The detached app harness needed both `build/` and `app/build/` directories: the first app run reported
+`CAD plate workflow tests failed: Could not open output file` because `app/build/` was missing. A subsequent compiler
+process received SIGTERM (status 1073741839); its sender was not established. After compiler artifacts were frozen,
+the traced run completed the app suite and retention without an unexpected compiler signal. These failed setup runs
+preceded all performance captures. No measurement was rerun to obtain a pass. Raw captures were deleted immediately
+after their numbers were extracted.

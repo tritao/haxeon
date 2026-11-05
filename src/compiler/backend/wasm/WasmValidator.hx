@@ -216,7 +216,7 @@ class WasmValidator {
 						default:
 					}
 				case ArrayNew(typeIndex), ArrayNewDefault(typeIndex), ArrayNewData(typeIndex, _), ArrayGet(typeIndex), ArrayGetSigned(typeIndex),
-					ArrayGetUnsigned(typeIndex), ArraySet(typeIndex):
+					ArrayGetUnsigned(typeIndex), ArraySet(typeIndex), ArrayFill(typeIndex):
 					arrayType(module, typeIndex);
 				case ArrayCopy(destinationTypeIndex, sourceTypeIndex):
 					arrayType(module, destinationTypeIndex);
@@ -682,6 +682,16 @@ class WasmValidator {
 						if (!isArrayReference(reference, module))
 							throw 'Wasm function ${fn.name} uses array.len with a non-array reference';
 						stack.push(I32);
+					}
+				case ArrayFill(typeIndex):
+					var field = arrayType(module, typeIndex);
+					if (!field.mutable)
+						throw 'Wasm function ${fn.name} fills an immutable array element';
+					if (reachable) {
+						pop(stack, I32, fn);
+						pop(stack, storageValue(field.type), fn, module);
+						pop(stack, I32, fn);
+						popTypedReference(stack, typeIndex, fn, module);
 					}
 				case ArrayCopy(destinationTypeIndex, sourceTypeIndex):
 					var destination = arrayType(module, destinationTypeIndex),

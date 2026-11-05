@@ -576,12 +576,10 @@ parameters and returns also use a presence flag and flattened leaves. Shared IR 
 escaping and unsupported boundaries use their boxed representation. Methods called on a field place use a specialized
 receiver so their writes remain visible through aliases.
 
-Arrays of structs, including `Null<S>` elements, keep their existing boxed element representation in stage 1a. Inline
-struct arrays are later work: HashLink's packed-array allocator and packed move are possible building blocks, but an
-interior element pointer must not escape into a heap field, because the incremental collector accepts interior roots but
-matches heap-field references exactly. A place must retain its owner and array growth must not leave a pending write
-addressing an old backing store. A nullable by-value cycle such as `struct Node { var next:Null<Node>; }` has no finite
-inline layout and is rejected.
+Arrays of structs, including `Null<S>` elements, use inline scalar and reference lanes. Nullable elements carry their
+presence flag in the scalar lane, with no box per element. An element place retains its array and index rather than an
+interior pointer, so growth cannot leave a pending write addressing an old backing store. A nullable by-value cycle
+such as `struct Node { var next:Null<Node>; }` has no finite inline layout and is rejected.
 
 ### Allocation-free optional value flow
 
@@ -714,13 +712,24 @@ word. Reads and writes therefore handle fields crossing word boundaries; padding
 a managed struct retains its C alignment and padding inside that struct's scalar portion. Native-memory copies use the
 same bytes.
 
+Wasm GC specializes typed scalar accessors while the nullable element and field layouts are still available. Word
+width, stride, field offset and width are compile-time facts; only the array, index and optional written value remain
+runtime arguments. The accessor casts the scalar lane once. Aligned full-word fields load or store directly; partial
+or crossing fields use shifts and masks over at most two words. Truly untyped native accesses retain checked runtime
+metadata and operate in word fragments rather than byte loops. Scalar range operations copy whole words with
+`array.copy`, clear complete words with `array.fill`, and use byte helpers only for unaligned ends. Unaligned middle
+words reuse the same span kernel. Overlapping copies preserve their direction, reference slots remain traced, and
+non-null initialization checks retain their normal exception behavior. Bitmap presence is tested outside clear and
+reverse loops. These operations need no staging arrays.
+
 Before inline enum storage, range and structural policy is defined once in
 portable SSA (`IrValueLaneRuntime`). Wasm consumes that IR; HashLink's native runtime uses C generated from the same
 verified functions, with a checked generated artifact for the direct C build entry points. Bounds normalization,
 growth selection, overlap direction, validity propagation and size publication belong to this common definition.
 Backend primitives handle physical lane allocation/copy/clear, header access, barriers and exception-safe storage
 replacement. A storage replacement retains the old lanes until both new allocations and their copies succeed.
-Generated C is a build product, not an independently maintained implementation. Allocation geometry is a compile-time
+The checked-in generated C header is consumed directly by native builds, which require no Haxe toolchain. The compiler
+test verifies deterministic generation and rejects header drift; it is not an independently maintained implementation. Allocation geometry is a compile-time
 policy constant: HashLink retains geometric rounding for sparse requests; Wasm jumps directly to the request after
 one growth step. The same reserve algorithm handles both, preserving existing lane sizes and allocation counts.
 Linked lane validation uses the normal Haxe exception channel, including modules whose source has no explicit throw;

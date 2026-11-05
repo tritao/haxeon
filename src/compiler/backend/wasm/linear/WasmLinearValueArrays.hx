@@ -167,8 +167,6 @@ class WasmLinearValueArrays {
 		builder.return_(); return builder.finish();
 	}
 
-	/** Move one element between compatible arrays; callers choose the direction for overlap. */
-
 	public static function newLike(allocator:Int, name:String):compiler.backend.wasm.WasmModule.WasmFunction {
 		var b = new WasmFunctionBuilder(name, {parameters:[I32,I32], results:[I32]}), result = b.local("result", I32);
 		b.emitAll([LocalGet(1), LocalGet(0), I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET), LocalGet(0), I32Load(WasmLayout.VALUE_ARRAY_SCALAR_STRIDE_OFFSET),

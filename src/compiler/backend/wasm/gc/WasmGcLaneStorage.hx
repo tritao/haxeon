@@ -15,7 +15,7 @@ class WasmGcLaneStorage {
 		var primitives = [for (n in program.natives) if (StringTools.startsWith(n.name, IrValueLaneRuntime.PRIMITIVE)) n];
 		if (primitives.length == 0) return;
 		var throws = WasmModuleSupport.hasExceptions(program),
-			read = module.addFunction(byteAccess(plan, false)), write = module.addFunction(byteAccess(plan, true)),
+			read = WasmGcScalarRange.byteHelpers(module, plan, false), write = WasmGcScalarRange.byteHelpers(module, plan, true),
 			alloc:IrNative = {name:"$lane-storage-internal:allocate", library:"haxeon_runtime", symbol:"__value_array_alloc",
 				arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)},
 			allocator = module.addFunction(WasmGcValueArrays.allocate(plan, alloc, throws));
@@ -44,32 +44,8 @@ class WasmGcLaneStorage {
 		b.emitAll([LocalGet(0), RefCast({nullable:false,heap:Type(plan.valueArrayWrapperTypeIndex)}), LocalGet(value), StructSet(plan.valueArrayWrapperTypeIndex,index)]);
 	}
 
-	/** The physical scalar lane is byte-addressable even when a packed element crosses a word. */
-	static function byteAccess(plan:WasmGcTypePlan, write:Bool):WasmFunction {
-		var args:Array<IrType> = write ? [Array(Dyn),I64,I32] : [Array(Dyn),I64],
-			b = new WasmFunctionBuilder("$lane-storage-internal:" + (write ? "write-byte" : "read-byte"), plan.wasmFunctionType(args, write ? Void : I32)),
-			bits = b.local("word-bits", I64), index = b.local("word-index", I32), shift = b.local("shift", I64);
-		field(b, plan, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD); b.emitAll([I64ExtendI32U, LocalSet(bits),
-			LocalGet(1), I64Const(8), I64Mul, LocalGet(bits), I64DivS, I32WrapI64, LocalSet(index),
-			LocalGet(1), I64Const(8), I64Mul, LocalGet(bits), I64RemS, LocalSet(shift),
-			LocalGet(bits), I64Const(32), I64Eq, If(write ? null : I64)]);
-		for (lane in [plan.valueArrayI32LaneTypeIndex,plan.valueArrayI64LaneTypeIndex]) {
-			var small = lane == plan.valueArrayI32LaneTypeIndex;
-			if (write) { field(b, plan, WasmGcTypePlan.arrayDataFieldIndex()); b.emitAll([RefCast({nullable:false,heap:Type(lane)}), LocalGet(index)]); }
-			field(b, plan, WasmGcTypePlan.arrayDataFieldIndex()); b.emitAll([RefCast({nullable:false,heap:Type(lane)}), LocalGet(index), ArrayGet(lane)]);
-			if (small) b.emit(I64ExtendI32U);
-			if (write) {
-				b.emitAll([I64Const(255), LocalGet(shift), I64Shl, I64Const(-1), I64Xor, I64And,
-					LocalGet(2), I64ExtendI32U, LocalGet(shift), I64Shl, I64Or]);
-				if (small) b.emit(I32WrapI64);
-				b.emit(ArraySet(lane));
-			} else b.emitAll([LocalGet(shift), I64ShrU, I64Const(255), I64And]);
-			if (small) b.emit(Else);
-		}
-		b.emit(End); if (!write) b.emit(I32WrapI64); b.emit(Return); return b.finish();
-	}
 
-	static function build(plan:WasmGcTypePlan, native:IrNative, operation:String, throws:Bool, read:Int, write:Int):WasmFunction {
+	static function build(plan:WasmGcTypePlan, native:IrNative, operation:String, throws:Bool, read:Array<Int>, write:Array<Int>):WasmFunction {
 		var b = new WasmFunctionBuilder(native.name, plan.wasmFunctionType(native.arguments,native.result));
 		switch operation {
 			case "length", "capacity", "has-validity":
@@ -85,7 +61,7 @@ class WasmGcLaneStorage {
 				}
 			case "read-validity": b.emitAll(WasmGcValueArrays.initialized(plan));
 			case "write-validity": bitmapWrite(b,plan);
-			case "clear-scalars", "copy-scalars", "swap-scalars": scalarRange(b,plan,operation,read,write);
+			case "clear-scalars", "copy-scalars", "swap-scalars": WasmGcScalarRange.emit(b,plan,operation,read,write);
 			case "clear-references", "copy-references", "swap-references": referenceRange(b,plan,operation);
 			default: throw 'Unknown GC lane storage operation $operation';
 		}
@@ -111,43 +87,6 @@ class WasmGcLaneStorage {
 		b.emitAll([End,End]);
 	}
 
-	static function scalarRange(b:WasmFunctionBuilder, plan:WasmGcTypePlan, operation:String, read:Int, write:Int):Void {
-		var copy = operation == "copy-scalars", swap = operation == "swap-scalars", stride = b.local("stride-bytes",I64),
-			start = b.local("target-byte",I64), source = b.local("source-byte",I64), count = b.local("bytes",I64),
-			cursor = b.local("cursor",I64), index = b.local("byte-offset",I64), byte = b.local("byte",I32), backwards = b.local("backwards",I32);
-		field(b,plan,WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD);
-		b.emitAll([I32Eqz,If(null),Return,End]);
-		field(b,plan,WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD); b.emitAll([I64ExtendI32U,I64Const(8),I64DivS,LocalSet(stride),
-			LocalGet(1),I64ExtendI32U,LocalGet(stride),I64Mul,LocalSet(start),
-			swap ? I64Const(1) : LocalGet(copy ? 4 : 2)]);
-		if (!swap) b.emit(I64ExtendI32U);
-		b.emitAll([LocalGet(stride),I64Mul,LocalSet(count)]);
-		if (copy || swap) b.emitAll([LocalGet(copy ? 3 : 2),I64ExtendI32U,LocalGet(stride),I64Mul,LocalSet(source)]);
-		if (copy) {
-			// Whole-word ranges use one overlap-safe array.copy, without per-element helpers.
-			field(b,plan,WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD); field(b,plan,WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD);
-			b.emitAll([I32RemS,I32Eqz,If(null)]);
-			field(b,plan,WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD); b.emitAll([I32Const(32),I32Eq,If(null)]);
-			for (lane in [plan.valueArrayI32LaneTypeIndex,plan.valueArrayI64LaneTypeIndex]) {
-				var bytes = lane == plan.valueArrayI32LaneTypeIndex ? 4 : 8;
-				field(b,plan,WasmGcTypePlan.arrayDataFieldIndex()); b.emitAll([RefCast({nullable:false,heap:Type(lane)}),LocalGet(start),I64Const(bytes),I64DivS,I32WrapI64]);
-				field(b,plan,WasmGcTypePlan.arrayDataFieldIndex(),2); b.emitAll([RefCast({nullable:false,heap:Type(lane)}),LocalGet(source),I64Const(bytes),I64DivS,I32WrapI64,
-					LocalGet(count),I64Const(bytes),I64DivS,I32WrapI64,ArrayCopy(lane,lane)]);
-				if (bytes == 4) b.emit(Else);
-			}
-			b.emitAll([End,Return,End,LocalGet(0),LocalGet(2),RefEq,LocalGet(source),LocalGet(start),I64LtS,I32And,LocalSet(backwards)]);
-		}
-		b.emitAll([Block(null),Loop(null),LocalGet(cursor),LocalGet(count),I64Eq,BrIf(1)]);
-		if (copy) b.emitAll([LocalGet(backwards),If(I64),LocalGet(count),I64Const(1),I64Sub,LocalGet(cursor),I64Sub,Else,LocalGet(cursor),End,LocalSet(index)]);
-		else b.emitAll([LocalGet(cursor),LocalSet(index)]);
-		if (swap) b.emitAll([LocalGet(0),LocalGet(start),LocalGet(index),I64Add,Call(read),LocalSet(byte)]);
-		b.emitAll([LocalGet(0),LocalGet(start),LocalGet(index),I64Add]);
-		if (copy || swap) b.emitAll([LocalGet(copy ? 2 : 0),LocalGet(source),LocalGet(index),I64Add,Call(read)]);
-		else b.emit(I32Const(0));
-		b.emit(Call(write));
-		if (swap) b.emitAll([LocalGet(0),LocalGet(source),LocalGet(index),I64Add,LocalGet(byte),Call(write)]);
-		b.emitAll([LocalGet(cursor),I64Const(1),I64Add,LocalSet(cursor),Br(0),End,End]);
-	}
 
 	/** Select the eager sole reference lane or the lazy mixed lane without allocating. */
 	static function references(b:WasmFunctionBuilder, plan:WasmGcTypePlan, array:Int, output:Int):Void {

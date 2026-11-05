@@ -42,7 +42,8 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 /** Owns construction and lowering of a complete Wasm GC module. */
 class WasmGcModuleBuilder {
-	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):compiler.backend.wasm.WasmCompilation {
+	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>,
+			scalarAccessors:Map<String, WasmGcValueArrayAccessors.WasmGcValueArrayScalarAccess>):compiler.backend.wasm.WasmCompilation {
 		var importMemory = options.importMemory == true,
 			contract = options.memoryContract,
 			memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
@@ -170,7 +171,7 @@ class WasmGcModuleBuilder {
 				addGcTypeTest(module, functions, plan, gcRepresentation, name);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
 		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> plan.wasmFunctionType([for (a in fn.arguments) a.type], fn.result));
-		WasmGcValueArrays.register(module, functions, plan, program, usedNatives);
+		WasmGcValueArrays.register(module, functions, plan, program, usedNatives, scalarAccessors);
 		WasmGcDynamicArrays.register(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
 		var scratchAllocator = -1;

@@ -1045,6 +1045,23 @@ class WasmBackendMain {
 				I32Const(42),
 				I32Eq,
 				I32And,
+				LocalGet(3),
+				I32Const(1),
+				I32Const(9),
+				I32Const(1),
+				ArrayFill(intArrayType),
+				LocalGet(3),
+				I32Const(0),
+				ArrayGet(intArrayType),
+				I32Const(42),
+				I32Eq,
+				I32And,
+				LocalGet(3),
+				I32Const(1),
+				ArrayGet(intArrayType),
+				I32Const(9),
+				I32Eq,
+				I32And,
 				I32Const(255),
 				I32Const(1),
 				ArrayNew(byteArrayType),
@@ -1129,6 +1146,16 @@ class WasmBackendMain {
 		});
 		immutableField.addFunction(new WasmFunction("writeImmutable", voidSignature, [], [StructNewDefault(0), I32Const(7), StructSet(0, 0)]));
 		assertGcModuleRejected(immutableField, "The Wasm validator accepted a write to an immutable GC field");
+		var immutableArray = new WasmModule();
+		immutableArray.addType({finalType:true, supertypes:[], composite:Array({type:Value(I32), mutable:false})});
+		immutableArray.addFunction(new WasmFunction("fillImmutable", voidSignature, [],
+			[I32Const(2), ArrayNewDefault(0), I32Const(0), I32Const(7), I32Const(2), ArrayFill(0)]));
+		assertGcModuleRejected(immutableArray, "The Wasm validator accepted array.fill on immutable storage");
+		var wrongFillValue = new WasmModule();
+		wrongFillValue.addType({finalType:true, supertypes:[], composite:Array({type:Value(I32), mutable:true})});
+		wrongFillValue.addFunction(new WasmFunction("fillWrongType", voidSignature, [],
+			[I32Const(2), ArrayNewDefault(0), I32Const(0), F64Const(7), I32Const(2), ArrayFill(0)]));
+		assertGcModuleRejected(wrongFillValue, "The Wasm validator accepted a value with the wrong array.fill type");
 	}
 
 	static function assertGcModuleRejected(module:WasmModule, message:String):Void {

@@ -649,40 +649,72 @@ static void realtime_lane_reverse(varray * v0) {
 	int32_t v1;
 	int32_t v2;
 	int32_t v3;
-	int32_t v4;
+	bool v4;
 	int32_t v5;
-	int32_t p5;
-	bool v6;
-	int32_t v7;
+	int32_t v19;
+	int32_t v6;
+	int32_t p6;
+	bool v7;
 	int32_t v8;
 	int32_t v9;
-	bool v10;
+	int32_t v10;
 	bool v11;
-	int32_t v16;
+	bool v12;
 	int32_t v17;
+	int32_t v18;
+	int32_t v20;
+	int32_t p20;
+	bool v21;
+	int32_t v22;
+	int32_t v23;
+	int32_t v24;
+	int32_t v27;
+	int32_t v28;
 	goto block_0;
 block_0:
 	v1 = realtime_lane_storage_length(v0);
-	v2 = 0;
-	v3 = 2;
-	v4 = v1 / v3;
-	p5 = v2; v5 = p5; goto block_1;
+	v2 = 2;
+	v3 = v1 / v2;
+	v4 = realtime_lane_storage_has_validity(v0);
+	if (v4) { goto block_1; } else { goto block_2; }
 block_1:
-	v6 = v5 < v4;
-	if (v6) { goto block_2; } else { goto block_3; }
+	v5 = 0;
+	p6 = v5; v6 = p6; goto block_4;
 block_2:
-	v7 = 1;
-	v8 = (int32_t)((uint32_t)v1 - (uint32_t)v7);
-	v9 = (int32_t)((uint32_t)v8 - (uint32_t)v5);
-	v10 = realtime_lane_storage_read_validity(v0, v5);
-	v11 = realtime_lane_storage_read_validity(v0, v9);
-	realtime_lane_storage_swap_scalars(v0, v5, v9);
-	realtime_lane_storage_swap_references(v0, v5, v9);
-	realtime_lane_storage_write_validity(v0, v5, v11);
-	realtime_lane_storage_write_validity(v0, v9, v10);
-	v16 = 1;
-	v17 = (int32_t)((uint32_t)v5 + (uint32_t)v16);
-	p5 = v17; v5 = p5; goto block_1;
+	v19 = 0;
+	p20 = v19; v20 = p20; goto block_7;
 block_3:
 	return;
+block_4:
+	v7 = v6 < v3;
+	if (v7) { goto block_5; } else { goto block_6; }
+block_5:
+	v8 = 1;
+	v9 = (int32_t)((uint32_t)v1 - (uint32_t)v8);
+	v10 = (int32_t)((uint32_t)v9 - (uint32_t)v6);
+	v11 = realtime_lane_storage_read_validity(v0, v6);
+	v12 = realtime_lane_storage_read_validity(v0, v10);
+	realtime_lane_storage_swap_scalars(v0, v6, v10);
+	realtime_lane_storage_swap_references(v0, v6, v10);
+	realtime_lane_storage_write_validity(v0, v6, v12);
+	realtime_lane_storage_write_validity(v0, v10, v11);
+	v17 = 1;
+	v18 = (int32_t)((uint32_t)v6 + (uint32_t)v17);
+	p6 = v18; v6 = p6; goto block_4;
+block_6:
+	goto block_3;
+block_7:
+	v21 = v20 < v3;
+	if (v21) { goto block_8; } else { goto block_9; }
+block_8:
+	v22 = 1;
+	v23 = (int32_t)((uint32_t)v1 - (uint32_t)v22);
+	v24 = (int32_t)((uint32_t)v23 - (uint32_t)v20);
+	realtime_lane_storage_swap_scalars(v0, v20, v24);
+	realtime_lane_storage_swap_references(v0, v20, v24);
+	v27 = 1;
+	v28 = (int32_t)((uint32_t)v20 + (uint32_t)v27);
+	p20 = v28; v20 = p20; goto block_7;
+block_9:
+	goto block_3;
 }

@@ -237,16 +237,22 @@ class IrValueLaneRuntime {
 	}
 
 	static function reverse():IrFunction {
-		var b = new IrBuilder(), a = b.argument("array", array), size = length(b, a);
-		loop(b, b.constInt(0), b.div(size, b.constInt(2)), left -> {
-			var right = b.sub(b.sub(size, b.constInt(1)), left), l = primitive(b, "read-validity", [a, left], Bool),
-				r = primitive(b, "read-validity", [a, right], Bool);
+		var b = new IrBuilder(), a = b.argument("array", array), size = length(b, a), end = b.div(size, b.constInt(2)),
+			withBitmap = b.createBlock(), withoutBitmap = b.createBlock(), done = b.createBlock();
+		b.branch(primitive(b, "has-validity", [a], Bool), withBitmap, withoutBitmap);
+		function swaps(validity:Bool):Void loop(b, b.constInt(0), end, left -> {
+			var right = b.sub(b.sub(size, b.constInt(1)), left), l:Null<IrValue> = null, r:Null<IrValue> = null;
+			if (validity) { l = primitive(b, "read-validity", [a, left], Bool); r = primitive(b, "read-validity", [a, right], Bool); }
 			primitive(b, "swap-scalars", [a, left, right], Void);
 			primitive(b, "swap-references", [a, left, right], Void);
-			primitive(b, "write-validity", [a, left, r], Void);
-			primitive(b, "write-validity", [a, right, l], Void);
+			if (validity) {
+				primitive(b, "write-validity", [a, left, r], Void);
+				primitive(b, "write-validity", [a, right, l], Void);
+			}
 		});
-		b.returnValue(b.constVoid());
+		b.select(withBitmap); swaps(true); b.jump(done);
+		b.select(withoutBitmap); swaps(false); b.jump(done);
+		b.select(done); b.returnValue(b.constVoid());
 		return finish(b, "reverse", Void);
 	}
 }

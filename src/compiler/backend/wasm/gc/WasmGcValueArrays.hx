@@ -24,7 +24,9 @@ class WasmGcValueArrays {
 		default: false;
 	};
 
-	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram, used:Map<String, Bool>):Void {
+	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram, used:Map<String, Bool>,
+			?accessors:Map<String, WasmGcValueArrayAccessors.WasmGcValueArrayScalarAccess>):Void {
+		if (accessors == null) accessors = [];
 		var throws = WasmModuleSupport.hasExceptions(program), dynamicStore = false, dynamicInsert = false;
 		WasmGcLaneStorage.register(module, functions, plan, program);
 		for (native in program.natives) if (used.exists(native.name) && plan.valueArrayWrapperTypeIndex >= 0) {
@@ -60,7 +62,7 @@ class WasmGcValueArrays {
 					"__value_array_write_i32", "__value_array_write_i64", "__value_array_write_bool", "__value_array_write_f32", "__value_array_write_f64",
 					"__value_array_read_ptr", "__value_array_write_ptr", "__value_array_read_type", "__value_array_write_type",
 					"__value_array_read_callback", "__value_array_write_callback",
-					"__value_array_clear_scalar": scalarSlot(plan, native, throws);
+					"__value_array_clear_scalar": WasmGcScalarArrayAccess.build(plan, native, throws, accessors.get(native.name));
 				default: throw 'Unknown Wasm GC value-array native ${native.symbol}';
 			};
 			if (native.symbol != "__value_array_alloc" && native.symbol != "__value_array_retype") {
@@ -176,10 +178,6 @@ class WasmGcValueArrays {
 		body = body.concat([LocalGet(result), Return]);
 		return new WasmFunction(name, plan.wasmFunctionType([Array(Dyn),I32], Array(Dyn)), [{type:plan.valueType(Array(Dyn))}], body);
 	}
-
-	/** Move one already-bounded element between compatible arrays, preserving uninitialized elements. */
-
-	/** Swap in place without a boxed temporary or an allocated staging array. */
 
 	/** Grow both lanes before publishing either one so allocation failure leaves aliases unchanged. */
 	public static function replaceCapacity(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
@@ -298,8 +296,6 @@ class WasmGcValueArrays {
 		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [], body);
 	}
 
-	/** Clear payload and references without touching neighboring packed elements. */
-
 	public static function allocate(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
 		if (native.arguments.length != 6) throw "Invalid Wasm GC value-array allocator";
 		var error = failure(throws), data = 9, references = 10,
@@ -348,90 +344,6 @@ class WasmGcValueArrays {
 		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [], body);
 	}
 
-	/** Copy bytes through the packed word lane; bytes may cross either kind of word boundary. */
-	static function scalarSlot(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		var name = native.symbol, clear = name == "__value_array_clear_scalar", write = clear || StringTools.startsWith(name, "__value_array_write_");
-		var suffix = clear ? "clear" : name.substr(write ? "__value_array_write_".length : "__value_array_read_".length);
-		var integer = suffix == "i32" || suffix == "i64";
-		var variableWidth = integer || suffix == "ptr" || suffix == "type" || clear;
-		var expected = 3 + (variableWidth ? 1 : 0) + (write && !clear ? 1 : 0) + (!write && integer ? 1 : 0);
-		if (native.arguments.length != expected) throw 'Invalid Wasm GC value-array scalar access: $name';
-		var first = native.arguments.length, width = first, wordBits = first + 1, byteIndex = first + 2,
-			wordIndex = first + 3, shift = first + 4, address = first + 5, bits = first + 6, word = first + 7,
-			wrapper = plan.valueArrayWrapperTypeIndex, lane32 = plan.valueArrayI32LaneTypeIndex, lane64 = plan.valueArrayI64LaneTypeIndex;
-		var locals:Array<WasmLocal> = [{type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I64}, {type:I64}, {type:I64}];
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]);
-		body.push(variableWidth ? LocalGet(3) : I32Const(suffix == "bool" ? 8 : suffix == "f32" || suffix == "callback" ? 32 : 64));
-		body.push(LocalSet(width));
-		// Check the same byte alignment, width, and logical bounds as the native implementation.
-		body = body.concat([LocalGet(1), I32Const(0), I32LtS, LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-			StructGet(wrapper, WasmGcTypePlan.arrayLengthFieldIndex()), LocalGet(1), I32LeS, I32Or,
-			LocalGet(2), I32Const(0), I32LtS, I32Or, LocalGet(2), I32Const(7), I32And, I32Or,
-			LocalGet(width), I32Const(8), I32Eq, LocalGet(width), I32Const(16), I32Eq, I32Or,
-			LocalGet(width), I32Const(32), I32Eq, I32Or, LocalGet(width), I32Const(64), I32Eq, I32Or, I32Eqz, I32Or,
-			LocalGet(2), I64ExtendI32S, LocalGet(width), I64ExtendI32S, I64Add,
-			LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD),
-			I64ExtendI32U, I64LeS, I32Eqz, I32Or]);
-		if (suffix == "i32") body = body.concat([LocalGet(width), I32Const(32), I32LeS, I32Eqz, I32Or]);
-		if (suffix == "ptr" || suffix == "type") body = body.concat([LocalGet(width), I32Const(32), I32Eq, I32Eqz, I32Or]);
-		body.push(If(null)); body = body.concat(failure(throws)).concat([End]);
-		if (!write) body = body.concat(initialized(plan)).concat([I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
-		body = body.concat([LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-			StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD), LocalSet(wordBits),
-			LocalGet(1), I64ExtendI32U, LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-			StructGet(wrapper, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD), I64ExtendI32U, I64Mul,
-			LocalGet(2), I64ExtendI32U, I64Add, LocalSet(address)]);
-		if (write && !clear) {
-			body.push(LocalGet(variableWidth ? 4 : 3));
-			body = body.concat(switch suffix {
-				case "i32", "bool", "ptr", "type", "callback": [I64ExtendI32U];
-				case "i64": [];
-				case "f32": [F32DemoteF64, I32ReinterpretF32, I64ExtendI32U];
-				case "f64": [I64ReinterpretF64];
-				default: throw 'Unsupported Wasm GC scalar lane $suffix';
-			});
-			body.push(LocalSet(bits));
-		}
-		body = body.concat([Block(null), Loop(null), LocalGet(byteIndex), LocalGet(width), I32Const(8), I32DivS, I32Eq, BrIf(1)]);
-		// Address and shift refer to this byte within the selected scalar word.
-		body = body.concat([LocalGet(address), LocalGet(byteIndex), I64ExtendI32U, I64Const(8), I64Mul, I64Add,
-			LocalGet(wordBits), I64ExtendI32U, I64DivS, I32WrapI64, LocalSet(wordIndex),
-			LocalGet(address), LocalGet(byteIndex), I64ExtendI32U, I64Const(8), I64Mul, I64Add,
-			LocalGet(wordBits), I64ExtendI32U, I64RemS, I32WrapI64, LocalSet(shift),
-			LocalGet(wordBits), I32Const(32), I32Eq, If(I64), LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-			StructGet(wrapper, WasmGcTypePlan.arrayDataFieldIndex()), RefCast({nullable:false, heap:Type(lane32)}), LocalGet(wordIndex),
-			ArrayGet(lane32), I64ExtendI32U, Else, LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-			StructGet(wrapper, WasmGcTypePlan.arrayDataFieldIndex()), RefCast({nullable:false, heap:Type(lane64)}), LocalGet(wordIndex), ArrayGet(lane64), End,
-			LocalSet(word)]);
-		if (write) {
-			body = body.concat([LocalGet(word), I64Const(255), LocalGet(shift), I64ExtendI32U, I64Shl, I64Const(-1), I64Xor, I64And,
-				LocalGet(bits), LocalGet(byteIndex), I64ExtendI32U, I64Const(8), I64Mul, I64ShrU, I64Const(255), I64And,
-				LocalGet(shift), I64ExtendI32U, I64Shl, I64Or, LocalSet(word),
-				LocalGet(wordBits), I32Const(32), I32Eq, If(null), LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-				StructGet(wrapper, WasmGcTypePlan.arrayDataFieldIndex()), RefCast({nullable:false, heap:Type(lane32)}), LocalGet(wordIndex),
-				LocalGet(word), I32WrapI64, ArraySet(lane32), Else, LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}),
-				StructGet(wrapper, WasmGcTypePlan.arrayDataFieldIndex()), RefCast({nullable:false, heap:Type(lane64)}), LocalGet(wordIndex),
-				LocalGet(word), ArraySet(lane64), End]);
-		} else body = body.concat([LocalGet(bits), LocalGet(word), LocalGet(shift), I64ExtendI32U, I64ShrU, I64Const(255), I64And,
-			LocalGet(byteIndex), I64ExtendI32U, I64Const(8), I64Mul, I64Shl, I64Or, LocalSet(bits)]);
-		body = body.concat([LocalGet(byteIndex), I32Const(1), I32Add, LocalSet(byteIndex), Br(0), End, End]);
-		if (!write) {
-			if (integer) body = body.concat([LocalGet(4), If(null), LocalGet(bits), I64Const(64), LocalGet(width), I64ExtendI32U,
-				I64Sub, I64Shl, I64Const(64), LocalGet(width), I64ExtendI32U, I64Sub, I64ShrS, LocalSet(bits), End]);
-			body.push(LocalGet(bits));
-			body = body.concat(switch suffix {
-				case "i32", "ptr", "type", "callback": [I32WrapI64];
-				case "bool": [I64Eqz, I32Eqz];
-				case "i64": [];
-				case "f32": [I32WrapI64, F32ReinterpretI32, F64PromoteF32];
-				case "f64": [F64ReinterpretI64];
-				default: throw 'Unsupported Wasm GC scalar lane $suffix';
-			});
-		}
-		body.push(Return);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), locals, body);
-	}
 
 	static function referenceSlot(plan:WasmGcTypePlan, native:IrNative, throws:Bool, write:Bool, clear:Bool):WasmFunction {
 		if (native.arguments.length != (write && !clear ? 4 : 3)) throw "Invalid Wasm GC value-array reference access";

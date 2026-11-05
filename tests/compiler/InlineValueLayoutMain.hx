@@ -141,6 +141,32 @@ class InlineValueLayoutMain {
 		accessProgram.natives = access.natives();
 		IrVerifier.verify(accessProgram);
 		compiler.ir.hl.HlLower.lower(accessProgram);
+		var specialized = new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(accessProgram), scalarAccessCount = 0;
+		IrVerifier.verify(specialized.program);
+		specialized.program.natives.push({name:"$value-array:scalar-test-plan", library:"haxeon_runtime", symbol:"__value_array_alloc",
+			arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)});
+		for (name => spec in specialized.accesses) {
+			scalarAccessCount++;
+			if (spec.strideBits != mixed.scalarStrideBits || spec.wordBits != mixed.scalarWordBits || spec.offsetBits != 8
+					|| spec.widthBits != 16 || !spec.hasValidity) throw "typed array access lost its layout";
+			var native = [for (n in specialized.program.natives) if (n.name == name) n][0];
+			if (native.arguments.length != (native.result == Void ? 3 : 2)) throw "constant slot metadata must not be passed at runtime";
+			var module = new compiler.backend.wasm.WasmModule.WasmModule("typed-scalar-access"),
+				plan = new compiler.backend.wasm.gc.WasmGcTypePlan(specialized.program);
+			plan.addTo(module);
+			var accessor = compiler.backend.wasm.gc.WasmGcScalarArrayAccess.build(plan, native, false, spec), laneCasts = 0;
+			for (instruction in accessor.body) switch instruction {
+				case Loop(_), I64DivS, I64RemS: throw "a typed scalar place must access words without byte loops or runtime division";
+				case RefCast(reference): switch reference.heap {
+					case Type(index) if (index == plan.valueArrayI64LaneTypeIndex): laneCasts++;
+					default:
+				}
+				default:
+			}
+			if (laneCasts != 1) throw "a typed scalar place must cast its lane once";
+		}
+		if (scalarAccessCount != 2) throw "expected one typed read and write accessor";
+		if (accessProgram.natives.length == specialized.program.natives.length) throw "scalar specialization must preserve its input program";
 		objects.set("Pointers", {
 			name: "Pointers", isValue: true, base: null, interfaces: [], methods: [],
 			fields: [{name: "address", type: RawPtr}, {name: "owner", type: Bytes}]
@@ -314,7 +340,9 @@ class InlineValueLayoutMain {
 		bridgeProgram.functions = [new IrFunction("main", [], I32, bridgeMain.blocks), new IrFunction(bridgeClosureName, [], I32, bridgeBody.blocks)];
 		var bridgeBytes = new compiler.backend.wasm.WasmBackend().compile(bridgeProgram,
 			{target: WasmGc, debugNames: true, wasmGcAllocationCount: true}).bytes;
-		var allocationType:IrType = Array(Obj("Mixed")), readClosureType:IrType = Function([allocationType, I32], Dyn),
+		// These synthetic native descriptors deliberately exercise layouts unrelated to Mixed.
+		// Keep their array view untyped; typed places carry an exact compiler-known lane layout.
+		var allocationType:IrType = Array(Dyn), readClosureType:IrType = Function([allocationType, I32], Dyn),
 			writeClosureType:IrType = Function([allocationType, I32, Dyn], Void), acceptsClosureType:IrType = Function([Dyn], Bool),
 			allocationBuilder = new IrBuilder(), arrays:Array<compiler.ir.Ir.IrValue> = [];
 		var readName = "$value-array:bridge:allocation-read", writeName = "$value-array:bridge:allocation-write",

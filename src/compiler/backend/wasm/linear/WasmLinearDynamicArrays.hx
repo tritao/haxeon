@@ -1108,11 +1108,7 @@ class WasmLinearDynamicArrays {
 				LocalGet(right), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, I32Or, LocalSet(hasInline),
 				LocalGet(left), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq,
 				LocalGet(right), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, I32And, If(null)]);
-			for (offset in [WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET, WasmLayout.VALUE_ARRAY_SCALAR_STRIDE_OFFSET,
-					WasmLayout.VALUE_ARRAY_REFERENCE_STRIDE_OFFSET, WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET]) {
-				builder.emitAll([LocalGet(left), I32Load(offset), LocalGet(right), I32Load(offset), I32Eq]);
-				if (offset != WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET) builder.emit(I32And);
-			}
+			builder.emitAll([LocalGet(left), LocalGet(right), Call(concrete(compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))]);
 			builder.emitAll([If(null), LocalGet(left), LocalGet(right), Call(concrete("$lane-runtime:concat")), Return, End, End]);
 		}
 		loadElementType(builder, left);

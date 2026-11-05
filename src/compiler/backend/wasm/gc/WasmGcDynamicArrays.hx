@@ -774,12 +774,7 @@ class WasmGcDynamicArrays {
 				index = allocateLocal(I32), length = allocateLocal(I32), boxed = allocateLocal(plan.valueType(Dyn));
 			push([LocalGet(left), RefTest({nullable:false, heap:Type(wrapper)}), LocalGet(right), RefTest({nullable:false, heap:Type(wrapper)}), I32Or, If(null),
 				LocalGet(left), RefTest({nullable:false, heap:Type(wrapper)}), LocalGet(right), RefTest({nullable:false, heap:Type(wrapper)}), I32And, If(null)]);
-			for (field in [WasmGcTypePlan.arrayElementTypeFieldIndex(), WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD,
-					WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD]) {
-				push([LocalGet(left), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, field),
-					LocalGet(right), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, field), I32Eq]);
-				if (field != WasmGcTypePlan.arrayElementTypeFieldIndex()) push([I32And]);
-			}
+			push([LocalGet(left), LocalGet(right), Call(WasmModuleSupport.requiredFunctionIndex(functions, compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))]);
 			push([If(null), LocalGet(left), LocalGet(right), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:concat")), Return, End, End]);
 			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U]));
 			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U, I64Add, I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)]));

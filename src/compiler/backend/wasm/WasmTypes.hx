@@ -202,5 +202,6 @@ enum WasmInstruction {
 	ArrayGetUnsigned(typeIndex:Int);
 	ArraySet(typeIndex:Int);
 	ArrayLen;
+	ArrayFill(typeIndex:Int);
 	ArrayCopy(destinationTypeIndex:Int, sourceTypeIndex:Int);
 }

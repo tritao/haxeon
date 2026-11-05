@@ -675,6 +675,8 @@ class WasmEncoder {
 					writeU32(output, 17);
 					writeU32(output, destinationTypeIndex);
 					writeU32(output, sourceTypeIndex);
+				case ArrayFill(typeIndex):
+					writeGcOpcode(output, 16, typeIndex);
 			}
 	}
 

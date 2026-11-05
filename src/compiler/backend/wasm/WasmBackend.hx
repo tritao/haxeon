@@ -61,10 +61,14 @@ class WasmBackend implements Backend {
 	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):WasmCompilation {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
-		program = WasmDynamicCalls.run(IrNullableErasure.run(compiler.ir.IrInstrumentation.strip(program)));
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
-		if (target.referenceModel == Gc)
-			return WasmGcModuleBuilder.compile(program, options, patchChanged);
+		program = compiler.ir.IrInstrumentation.strip(program);
+		// Capture lane shapes while nullable element/field types still retain their logical layout.
+		var scalarAccessors = target.referenceModel == Gc ? new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(program) : null;
+		if (scalarAccessors != null) program = scalarAccessors.program;
+		program = WasmDynamicCalls.run(IrNullableErasure.run(program));
+		if (scalarAccessors != null)
+			return WasmGcModuleBuilder.compile(program, options, patchChanged, scalarAccessors.accesses);
 		if (target.referenceModel == Linear32)
 			return WasmLinearModuleBuilder.compile(program, options, patchChanged, target);
 		throw "Wasm backend target " + Std.string(options.target) + " is not implemented yet";
