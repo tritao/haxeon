@@ -1441,3 +1441,81 @@ process received SIGTERM (status 1073741839); its sender was not established. Af
 the traced run completed the app suite and retention without an unexpected compiler signal. These failed setup runs
 preceded all performance captures. No measurement was rerun to obtain a pass. Raw captures were deleted immediately
 after their numbers were extracted.
+
+### Minimum-first-capacity growth trial (not accepted)
+
+The single follow-up trial used `max(required, capacity + capacity / 2, minFirst)`, with
+`minFirst = max(4, floor(32 / max(1, elementBytes)))`, on ordinary and struct-lane arrays on all three targets.
+Explicit construction and resize allocations were exact; resize retained capacity when the new length fitted.
+Empty HashLink storage was shared only where no metadata owner needed pinning. Wasm GC empty backings were
+shared lazily by storage type, so unused storage types allocated nothing. `ComputedStyle` indexed stores used
+implicit growth instead of repeated explicit resize. No other growth variant was measured.
+
+Control was `e44e8637` with the committed capacity policy, after the separately gated launcher and word-access work;
+its per-action allocation medians and program-type selection census match the earlier growth control. Both runs
+used outer `55c362a7c` source on the same machine. Profile SHA-256 starts `6cbf9e02c12e` (control), `edc30349fb38`
+(candidate). Nine alternating pairs produced these medians in KiB:
+
+| Action | Control | Minimum first |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 | 72.0 |
+| hierarchy->sensors | 114.6 | 110.4 |
+| sensors->hierarchy | 80.1 | 77.6 |
+| telemetry->console | 92.9 | 90.4 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.3 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 7.9 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 19.2 |
+| type-backspace | 16.2 | 16.1 |
+| type-char | 16.1 | 16.1 |
+
+All action captures passed the absolute budgets. Three selection-stress census pairs, 30 cycles each (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,910 / 24,010,584 | 336,255 / 23,358,488 |
+| 2 | 340,908 / 24,010,184 | 336,254 / 23,358,304 |
+| 3 | 340,910 / 24,010,744 | 336,252 / 23,357,776 |
+
+Arrays fell from 96,333 / 5,971,976 bytes to 91,677 / 5,319,568 bytes: 4,656 fewer arrays and 652,408 fewer bytes. Every other program type matched; raw `bytes` buffers account for the small total-census variation.
+
+Paired headless RSS window growth in MiB:
+
+| Pair | Control | Candidate | Sum delta |
+| --- | --- | --- | ---: |
+| 1 | 30.31 / 3.59 / 0.62 / 5.00 | 28.12 / 7.66 / 0.47 / 5.94 | +2.67 |
+| 2 | 31.09 / 3.44 / 0.62 / 4.69 | 28.12 / 7.19 / 0.31 / 5.94 | +1.72 |
+| 3 | 30.16 / 3.44 / 0.94 / 4.84 | 28.75 / 7.34 / 0.47 / 5.94 | +3.12 |
+
+Every run passed the absolute memory gate, but the second and final windows consistently increased, and total growth
+increased in every pair. This exceeds the earlier same-image variation. Lower object counts and allocated bytes do
+not establish no regression in retained RSS. The trial is rejected; the committed target-specific policy remains.
+No ceiling or memory threshold changed, and no failing memory sample was retried. The final budget run and all nine
+retention scenarios passed and do not override this baseline comparison.
+
+The final lazy-empty Wasm GC Showcase guest completed 18 pairs (nine full, three each static/text-heavy/editing),
+120 warmup and 120 measured frames. Full/static/text-heavy each counted 4,440 objects, editing 8,724, equal to control.
+An earlier eager-empty implementation also measured equal scene counts; a compiler unit exposed its unnecessary
+startup allocations. Those backings were made lazy before the final scene comparison. The capacity formula did not
+change. All original compiler-unit allocation assertions then passed unchanged.
+
+A compiler checkpoint passed 764 tests and self-hosted to a fixed point. An audit then found the HashLink struct-array
+constructor still used implicit reserve for known lengths; the final correction uses exact capacity. Its existing
+native probe directly checks known lengths 0..17, exact resize, retained shrink capacity and subsequent geometric
+growth for ordinary and lane arrays. It passed, as did all six target/inlining fixture runs and the array-place unit.
+On both Wasm targets, with both inlining settings, the first push after exact two-element construction allocated one
+ordinary backing or two mixed scalar/reference backings, without an element box. Small HashLink allocations cannot
+be proved by a positive `totalAllocated()` delta because that counter is quantized by buffer refills; the native probe
+checks capacities directly instead. No final full UI/parity gate pass is claimed for this rejected implementation.
+
+One attempted editor capture exited before recording any actions because the fresh detached gate lacked its native
+libraries (`Could not open ordinary C library: libnativekit_ui.so`). The normal app build published them before the
+planned pairs began; no performance sample was replaced. The compiler fixture was also registered in
+`expected-exits.tsv` after the first driver stopped on the missing registration. Implementation patches and source
+are preserved under `materia-cache/claude-scratch/haxeon-min-first-growth-rejected-2026-11-05/`. Completed builds,
+logs and raw captures are removed after recording these numbers. The next item is the equality model, not another
+growth experiment.

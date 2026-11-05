@@ -732,6 +732,13 @@ The checked-in generated C header is consumed directly by native builds, which r
 test verifies deterministic generation and rejects header drift; it is not an independently maintained implementation. Allocation geometry is a compile-time
 policy constant: HashLink retains geometric rounding for sparse requests; Wasm jumps directly to the request after
 one growth step. The same reserve algorithm handles both, preserving existing lane sizes and allocation counts.
+The uniform-growth experiments (factor two, factor 1.5, and factor 1.5 with a byte-sized minimum first capacity)
+were rejected because paired editor RSS growth increased; the measurements are in
+[VALUE_TYPES.md](../packages/ui/docs/VALUE_TYPES.md#minimum-first-capacity-growth-trial-not-accepted).
+The decided contract for a future uniform allocator remains: `resize(n)` allocates exactly `n` when it needs new
+storage, keeps existing capacity when `n` fits, and does not trim on shrink. Known-length constructors size exactly;
+implicit growth may reserve spare capacity. Explicit trimming, if needed, belongs in a separate method such as
+`shrinkToFit`. These experiments have not changed the committed allocators.
 Linked lane validation uses the normal Haxe exception channel, including modules whose source has no explicit throw;
 the exported Wasm exception tag identifies those failures. Raw storage-only primitive tests retain trap checks.
 The three handwritten structural implementations have been removed together; only physical storage primitives
