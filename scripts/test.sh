@@ -86,6 +86,7 @@ fi
 
 run_timed native-build build_native_quietly
 run_timed checkout-hashlink bash "$root_dir/tests/integration/test-checkout-hashlink.sh"
+run_timed hashlink-launchers bash "$root_dir/tests/integration/test-hashlink-launchers.sh"
 export HAXEON_NATIVE_READY=1
 run_timed gc-root-index "$root_dir/tests/integration/test-gc-root-index.sh"
 mkdir -p "$root_dir/out"

@@ -19,3 +19,6 @@ Content-addressed native outputs are future work. `ArtifactCache` is keyed by
 build actions, restores into mutable paths, and excludes delegated CMake
 builds; immutable library identities would also require loader, launcher, and
 retention changes.
+
+Run compiled programs with `scripts/hl` and the profiler with
+`scripts/hlprof-live`; both require `scripts/build-native.sh` first.
