@@ -18,6 +18,7 @@ cases=(objects arrays enums closures dynamic exceptions strings)
 # One list drives compilation and execution for every target and inline setting.
 inline_cases=(
 	dead-pure-values
+	receiver-check-elision
 	identity-class
 	enum-interface-conformance
 	scoped-cleanup
