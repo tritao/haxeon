@@ -746,8 +746,8 @@ class WasmGcDynamicArrays {
 			if (operation == "pop") push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(1), I32Sub, LocalSet(position)]));
 			else push([I32Const(0), LocalSet(position)]);
 			push([LocalGet(array), LocalGet(position), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:get")), LocalSet(saved), LocalGet(array)]);
-			if (operation == "pop") push([LocalGet(position), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:resize"))]);
-			else push([I32Const(0), I32Const(1), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:splice")), Drop]);
+			if (operation == "pop") push([LocalGet(position), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:resize"))]);
+			else push([I32Const(0), I32Const(1), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:splice")), Drop]);
 			push([LocalGet(saved), Return, End]);
 		}
 		var current = elementType(array);
@@ -760,7 +760,7 @@ class WasmGcDynamicArrays {
 
 	function removeAt(array:Int, index:Int):Void {
 		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
-			LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:remove_at")), Return, End]);
+			LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:remove-at")), Return, End]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			lower(concrete("remove_at", element), value(Void), [value(Array(element)), value(I32)], -1, [array, index]);
@@ -780,7 +780,7 @@ class WasmGcDynamicArrays {
 					LocalGet(right), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, field), I32Eq]);
 				if (field != WasmGcTypePlan.arrayElementTypeFieldIndex()) push([I32And]);
 			}
-			push([If(null), LocalGet(left), LocalGet(right), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:concat")), Return, End, End]);
+			push([If(null), LocalGet(left), LocalGet(right), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:concat")), Return, End, End]);
 			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U]));
 			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U, I64Add, I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)]));
 			raiseText("Array is too large");
@@ -845,7 +845,7 @@ class WasmGcDynamicArrays {
 		if (plan.valueArrayWrapperTypeIndex >= 0) {
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null), LocalGet(array)]);
 			for (argument in extra) push([LocalGet(argument)]);
-			push([Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:" + operation)), Return, End]);
+			push([Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:" + operation)), Return, End]);
 		}
 		var current = elementType(array);
 		dispatch(current, function(element) {
@@ -859,7 +859,7 @@ class WasmGcDynamicArrays {
 		raiseText("Array.resize length must be non-negative");
 		body.push(End);
 		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
-			LocalGet(array), LocalGet(length), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$value-array:runtime:resize")), Return, End]);
+			LocalGet(array), LocalGet(length), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:resize")), Return, End]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			lower(concrete("resize", element), value(Void), [value(Array(element)), value(I32)], -1, [array, length]);

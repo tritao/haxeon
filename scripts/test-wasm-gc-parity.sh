@@ -66,6 +66,7 @@ inline_cases=(
 	struct-nested-constructors
 	struct-linear-place-alias
 	array-insert-negative-index
+	struct-array-lane-policy
 	struct-array-places
 	struct-array-nullable-places
 	struct-array-nested-nullable
@@ -126,6 +127,10 @@ for inline in 0 1; do
 			--export=ScopedCensus.performMutableValue --export=ScopedCensus.performNullableMutableValue --export=ScopedCensus.prepareComposite --export=ScopedCensus.performComposite \
 			--output="$parity_output_dir/wasm-parity-$target-scoped-census-inline-$inline.wasm" \
 			--entry=scoped-cleanup --root=tests/programs tests/programs/scoped-cleanup.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=LanePolicyCensus.prepare --export=LanePolicyCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-lane-policy-census-inline-$inline.wasm" \
+			--entry=struct-array-lane-policy --root=tests/programs tests/programs/struct-array-lane-policy.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=CarrierCensus.prepare --export=CarrierCensus.pointers --export=CarrierCensus.pointerGetter --export=CarrierCensus.ints \
 			--export=CarrierCensus.floats --export=CarrierCensus.values --export=CarrierCensus.genericPointers \
@@ -1011,6 +1016,16 @@ async function run(name, target) {
 	    if (result !== n || allocations !== 0)
 	      failures.push(`class identity census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: class identity census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const laneBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-lane-policy-census-inline-${inline}.wasm`));
+	  const lane = (await WebAssembly.instantiate(laneBytes, {haxeon_runtime: runtime, std})).instance;
+	  const laneCount = target === "wasm32" ? lane.exports["haxeon.memory.allocation_count"] : lane.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    lane.exports["LanePolicyCensus.prepare"](n);
+	    const before = laneCount(), result = lane.exports["LanePolicyCensus.perform"](), allocations = laneCount() - before;
+	    if (result !== n || allocations !== 0)
+	      failures.push(`lane policy census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: lane policy census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const rangesBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-generic-ranges-census-inline-${inline}.wasm`));
 	  const ranges = (await WebAssembly.instantiate(rangesBytes, {haxeon_runtime: runtime, std})).instance;

@@ -514,3 +514,4 @@ key-path-observable	42
 key-path-nullable	42
 key-path-semantics	42
 array-insert-negative-index	42
+struct-array-lane-policy	42

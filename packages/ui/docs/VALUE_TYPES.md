@@ -1052,3 +1052,109 @@ relaunch was stopped without using its results. After app retention completed,
 its private compiler worker retained 7.7 GiB; normal authenticated worker shutdown
 released it before captures. Profile builds ran one at a time. No unrelated
 process was touched. All captures were deleted after recording their summaries.
+
+
+### One structural runtime for lane arrays (2026-11-05)
+
+The common `IrValueLaneRuntime` defines 13 verified SSA functions over 16 storage
+primitives. Both Wasm backends link those functions; HashLink uses generated C
+from the same definition. The three handwritten structural policies are deleted
+together. The primitives own storage, barriers and exception-safe lane replacement;
+the common code owns bounds, growth selection, validity, overlap direction and
+length publication. A CMake freshness check and a compiler unit check prevent the
+checked-in C artifact from drifting from its source. This commit preserves the
+existing capacity geometry; the decided uniform capacity policy follows in its
+own measured commit.
+
+The mixed-operation fixture covers packed 3-byte scalar structs, reference fields,
+optional nested fields, nullable elements, holes, sparse growth, iteration, copies,
+aliasing, reverse, slice, concat and splice against an ordinary-array model. It
+runs on all three targets with inline 0 and 1. Warm typed reads and reversals
+allocate zero bytes on HashLink and zero objects on both Wasm targets for both
+8 and 1,024 iterations. The production-linked Wasm32 storage test additionally
+checks both cleared reference slots, scalar bytes and validity under GC stress.
+
+Wasm GC fixed-step core measurements (120 warmup / 120 measured frames), nine
+alternating full-scene pairs and three pairs for each other scene, matched in
+every pair:
+
+| Scene | Control objects | Candidate objects |
+| --- | ---: | ---: |
+| full | 4,440 | 4,440 |
+| static | 4,440 | 4,440 |
+| text-heavy | 4,440 | 4,440 |
+| editing | 8,724 | 8,724 |
+
+Guest SHA-256: control
+`6221ae673935fd1d280f7b371c1dcffb0c172a070e8e6162b82c131ffe00bf06`, candidate
+`edd093e31f00ed8bd9123b79441a24a4c7281139c51b19d363ac88c60f335b3d`.
+Control is `d630357d`; both use the outer `21700a1eb` app sources (the detached
+gate checkout is `fde067ce3`, which only adds the submodule bumps).
+
+The initial compiler gate reported 760 passed and two failed: a storage-only
+unit still requested the deleted Wasm-specific clear implementation, and another
+expected a raw Wasm trap from linked validation. Clear coverage now runs through
+the production policy and checks every affected lane. Linked validation is checked
+against the exported Haxe exception tag and exact null payload; raw primitive
+tests retain their trap checks. The subsequent 762-test gate passed. Self-hosting
+then exposed an ambiguous lambda/object-literal parse; an explicit return makes
+the new declaration parse identically in both compilers. These failures are
+recorded rather than counted as passes.
+
+Both HashLink editor profiles are byte-identical, SHA-256
+`6e98ac0e96126ea6f4fa0a37e4516357d65a750a0afa416d3b06f07dfd197eec`.
+The native libraries differ and each capture preloads its matching library. Nine
+alternating pairs yielded these median allocation KiB:
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 | 74.5 |
+| hierarchy->sensors | 114.6 | 114.6 |
+| hover-away | 13.6 | 13.6 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.4 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| sensors->hierarchy | 80.1 | 80.1 |
+| telemetry->console | 92.9 | 92.9 |
+| type-backspace | 16.2 | 16.2 |
+| type-char | 16.1 | 16.1 |
+
+Candidate pair 1 retained two timing findings: hierarchy→sensors 4.12 ms
+against 4.00 ms and selection 7.41 ms against 6.00 ms. No capture was retried
+or discarded. Individual allocation readings included hover-field 12.4–12.9 KiB
+and sensors→hierarchy 78.1–80.1 KiB; their medians matched.
+
+Selection census pairs (objects / bytes) were:
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,910 / 24,010,552 | 340,911 / 24,010,880 |
+| 2 | 340,908 / 24,009,952 | 340,911 / 24,010,960 |
+| 3 | 340,910 / 24,010,536 | 340,911 / 24,010,912 |
+
+Only the `bytes` type differed: +1 / +3 / +1 allocations and +328 / +1,008 /
++376 bytes for candidate. All other types matched exactly in every capture:
+305,725 objects / 21,593,528 bytes. These small byte-buffer variations also occur
+in the preceding identical-profile baselines; no application object type grew.
+Four headless RSS growth windows (MiB) were:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.16 / 4.22 / 0.62 / 5.00 | 29.84 / 4.06 / 0.78 / 4.84 |
+| 2 | 30.62 / 3.59 / 0.78 / 4.84 | 30.00 / 4.06 / 0.78 / 5.16 |
+| 3 | 29.84 / 3.75 / 0.62 / 5.00 | 29.53 / 4.06 / 0.78 / 4.69 |
+
+All six memory runs passed. The 0.62/0.78 MiB third-window variation has
+the same 0.16 MiB step seen in the preceding identical-image paired runs.
+
+Final gates: 762 compiler tests, zero failed; self-hosting fixed point; 497 Wasm
+parity fixtures with 14 existing skips and all six UI value snapshots; all ten UI
+suites; app tests; every retention scenario; Wasm32 WebGL2 smoke; editor budgets
+and all six paired headless memory runs passed. The separately planned final
+budget gate passed without changing any ceiling. Captures were deleted after
+recording their summaries. The app gate’s private idle compiler worker was shut
+down normally before captures; no unrelated process was touched.

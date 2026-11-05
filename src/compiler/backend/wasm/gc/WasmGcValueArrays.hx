@@ -25,98 +25,28 @@ class WasmGcValueArrays {
 	};
 
 	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, program:IrProgram, used:Map<String, Bool>):Void {
-		var throws = WasmModuleSupport.hasExceptions(program);
-		var resizeUsed = false, insertUsed = false, reverseUsed = false, rangeUsed = false, spliceUsed = false, dynamicInsert = false, dynamicStore = false;
-		var dynamicOperations:Map<String, Bool> = [];
-		for (native in program.natives) if (used.exists(native.name)) {
-			if (native.symbol == "__value_array_resize") resizeUsed = true;
-			if (native.symbol == "__value_array_insert_empty") insertUsed = true;
-			if (native.symbol == "__value_array_reverse") reverseUsed = true;
-			if (native.symbol == "__value_array_copy" || native.symbol == "__value_array_slice" || native.symbol == "__value_array_concat") rangeUsed = true;
-			if (native.symbol == "__value_array_splice") { rangeUsed = true; spliceUsed = true; }
-			if (native.symbol == "__value_array_remove_at") { rangeUsed = true; spliceUsed = true; }
-			if (plan.valueArrayWrapperTypeIndex >= 0 && (native.name == "__array_insert_any" || native.name == "__array_unshift_any")) { insertUsed = true; dynamicInsert = true; }
-			if (plan.valueArrayWrapperTypeIndex >= 0 && (native.name == "__array_set_any" || native.name == "__array_push_any")) dynamicStore = true;
-			if (plan.valueArrayWrapperTypeIndex >= 0) switch native.name {
-				case "__array_resize_any": resizeUsed = true; dynamicOperations.set("resize", true);
-				case "__array_reverse_any": reverseUsed = true; dynamicOperations.set("reverse", true);
-				case "__array_copy_any": rangeUsed = true; dynamicOperations.set("copy", true);
-				case "__array_slice_any": rangeUsed = true; dynamicOperations.set("slice", true);
-				case "__array_splice_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
-				case "__array_pop_any": resizeUsed = true; dynamicOperations.set("resize", true);
-				case "__array_remove_at_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("remove_at", true);
-				case "__array_shift_any": rangeUsed = true; spliceUsed = true; dynamicOperations.set("splice", true);
-				case "__array_concat_any": rangeUsed = true; dynamicOperations.set("concat", true);
-				default:
-			}
-		}
-		if (dynamicStore || dynamicInsert) rangeUsed = true;
-		var ensureIndex = -1, clearIndex = -1, moveIndex = -1, swapIndex = -1, newLikeIndex = -1, resizeIndex = -1;
-		if (resizeUsed || insertUsed || reverseUsed || rangeUsed) {
-			var ensureNative:IrNative = {name:"$value-array:internal:ensure", library:"haxeon_runtime", symbol:"__value_array_ensure", arguments:[Array(Dyn), I32], result:Void};
-			var clearNative:IrNative = {name:"$value-array:internal:clear", library:"haxeon_runtime", symbol:"__value_array_clear", arguments:[Array(Dyn), I32], result:Void};
-			ensureIndex = module.addFunction(ensure(plan, ensureNative, throws));
-			clearIndex = module.addFunction(clearElement(plan, clearNative, throws));
-		}
-		if (insertUsed || reverseUsed || rangeUsed) {
-			var read:IrNative = {name:"$value-array:internal:read-byte", library:"haxeon_runtime", symbol:"__value_array_read_i32", arguments:[Array(Dyn),I32,I32,I32,Bool], result:I32};
-			var write:IrNative = {name:"$value-array:internal:write-byte", library:"haxeon_runtime", symbol:"__value_array_write_i32", arguments:[Array(Dyn),I32,I32,I32,I32], result:Void};
-			var readRef:IrNative = {name:"$value-array:internal:read-ref", library:"haxeon_runtime", symbol:"__value_array_read_ref", arguments:[Array(Dyn),I32,I32], result:IrValueLaneReference.type()};
-			var writeRef:IrNative = {name:"$value-array:internal:write-ref", library:"haxeon_runtime", symbol:"__value_array_write_ref", arguments:[Array(Dyn),I32,I32,IrValueLaneReference.type()], result:Void};
-			var valid:IrNative = {name:"$value-array:internal:valid", library:"haxeon_runtime", symbol:"__value_array_is_initialized", arguments:[Array(Dyn),I32], result:Bool};
-			var mark:IrNative = {name:"$value-array:internal:mark", library:"haxeon_runtime", symbol:"__value_array_mark", arguments:[Array(Dyn),I32], result:Void};
-			var readIndex = module.addFunction(scalarSlot(plan, read, throws)), writeIndex = module.addFunction(scalarSlot(plan, write, throws)),
-				readRefIndex = module.addFunction(referenceSlot(plan, readRef, throws, false, false)), writeRefIndex = module.addFunction(referenceSlot(plan, writeRef, throws, true, false)),
-				validIndex = module.addFunction(validityOperation(plan, valid, throws)), markIndex = module.addFunction(validityOperation(plan, mark, throws));
-			if (insertUsed || rangeUsed) moveIndex = module.addFunction(moveElement(plan, readIndex, writeIndex, readRefIndex, writeRefIndex, validIndex, markIndex, clearIndex));
-			if (reverseUsed) swapIndex = module.addFunction(swapElements(plan, readIndex, writeIndex, readRefIndex, writeRefIndex, validIndex, markIndex, clearIndex));
-		}
-		if (rangeUsed) {
-			var allocator:IrNative = {name:"$value-array:internal:allocate", library:"haxeon_runtime", symbol:"__value_array_alloc", arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)};
-			newLikeIndex = module.addFunction(newLike(plan, module.addFunction(allocate(plan, allocator, throws))));
-		}
-		if (spliceUsed) {
-			var resizeNative:IrNative = {name:"$value-array:internal:resize", library:"haxeon_runtime", symbol:"__value_array_resize", arguments:[Array(Dyn),I32], result:Void};
-			resizeIndex = module.addFunction(resize(plan, resizeNative, throws, ensureIndex, clearIndex));
-		}
-		var dynamicInsertIndex = -1;
-		if (dynamicInsert && plan.valueArrayWrapperTypeIndex >= 0) {
-			var insertNative:IrNative = {name:"$value-array:runtime:insert", library:"haxeon_runtime", symbol:"__value_array_insert_empty", arguments:[Array(Dyn),I32], result:I32};
-			dynamicInsertIndex = module.addFunction(insertEmpty(plan, insertNative, throws, ensureIndex, clearIndex, moveIndex));
-			functions.set(insertNative.name, dynamicInsertIndex);
+		var throws = WasmModuleSupport.hasExceptions(program), dynamicStore = false, dynamicInsert = false;
+		WasmGcLaneStorage.register(module, functions, plan, program);
+		for (native in program.natives) if (used.exists(native.name) && plan.valueArrayWrapperTypeIndex >= 0) {
+			if (native.name == "__array_set_any" || native.name == "__array_push_any") dynamicStore = true;
+			if (native.name == "__array_insert_any" || native.name == "__array_unshift_any") dynamicInsert = true;
 		}
 		if (dynamicStore || dynamicInsert) {
-			var writeSignature = module.typeIndex(plan.wasmFunctionType([Array(Dyn),I32,Dyn], Void));
+			var writeSignature = module.typeIndex(plan.wasmFunctionType([Array(Dyn),I32,Dyn], Void)),
+				newLikeIndex = WasmModuleSupport.requiredFunctionIndex(functions,"$lane-storage:new-like"),
+				moveIndex = WasmModuleSupport.requiredFunctionIndex(functions,"$lane-runtime:move"),
+				ensureIndex = WasmModuleSupport.requiredFunctionIndex(functions,"$lane-runtime:ensure"),
+				insertIndex = WasmModuleSupport.requiredFunctionIndex(functions,"$lane-runtime:insert");
 			if (dynamicStore) functions.set("$value-array:runtime:store-value", module.addFunction(dynamicWrite(plan, throws, newLikeIndex, moveIndex, ensureIndex, -1, writeSignature)));
-			if (dynamicInsert) functions.set("$value-array:runtime:insert-value", module.addFunction(dynamicWrite(plan, throws, newLikeIndex, moveIndex, ensureIndex, dynamicInsertIndex, writeSignature)));
+			if (dynamicInsert) functions.set("$value-array:runtime:insert-value", module.addFunction(dynamicWrite(plan, throws, newLikeIndex, moveIndex, ensureIndex, insertIndex, writeSignature)));
 		}
 		var retypeAllocator = -1;
 		for (native in program.natives) if (used.exists(native.name) && native.symbol == "__value_array_retype") {
 			var allocator:IrNative = {name:"$value-array:internal:retype-allocate", library:"haxeon_runtime", symbol:"__value_array_alloc", arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)};
-			retypeAllocator = module.addFunction(allocate(plan, allocator, throws));
-			break;
-		}
-		for (operation in ["resize", "reverse", "copy", "slice", "splice", "concat", "remove_at"]) if (dynamicOperations.exists(operation)) {
-			var arguments:Array<IrType> = switch operation {
-				case "resize", "remove_at": [Array(Dyn), I32];
-				case "slice", "splice": [Array(Dyn), I32, I32];
-				case "concat": [Array(Dyn), Array(Dyn)];
-				default: [Array(Dyn)];
-			};
-			var result:IrType = operation == "resize" || operation == "reverse" || operation == "remove_at" ? Void : Array(Dyn);
-			var internal:IrNative = {name:"$value-array:runtime:" + operation, library:"haxeon_runtime", symbol:"__value_array_" + operation, arguments:arguments, result:result};
-			var fn = switch operation {
-				case "resize": resize(plan, internal, throws, ensureIndex, clearIndex);
-				case "reverse": reverse(plan, internal, throws, swapIndex);
-				case "copy", "slice": rangeCopy(plan, internal, throws, newLikeIndex, moveIndex);
-				case "splice": splice(plan, internal, throws, newLikeIndex, moveIndex, resizeIndex);
-				case "remove_at": removeAt(plan, internal, throws, moveIndex, resizeIndex);
-				case "concat": concat(plan, internal, throws, newLikeIndex, moveIndex);
-				default: throw "Invalid dynamic inline array operation";
-			};
-			functions.set(internal.name, module.addFunction(fn));
+			retypeAllocator = module.addFunction(allocate(plan, allocator, throws)); break;
 		}
 		for (native in program.natives) if (used.exists(native.name) && supports(native.symbol)) {
+			if (compiler.backend.wasm.WasmValueLaneRuntime.bind(functions, native)) continue;
 			if (plan.valueArrayWrapperTypeIndex < 0) throw "Missing Wasm GC value-array type plan";
 			var fn = switch native.symbol {
 				case "__value_array_alloc": allocate(plan, native, throws);
@@ -125,15 +55,6 @@ class WasmGcValueArrays {
 				case "__value_array_read_ref": referenceSlot(plan, native, throws, false, false);
 				case "__value_array_write_ref": referenceSlot(plan, native, throws, true, false);
 				case "__value_array_clear_ref": referenceSlot(plan, native, throws, true, true);
-				case "__value_array_clear": clearElement(plan, native, throws);
-				case "__value_array_ensure": ensure(plan, native, throws);
-				case "__value_array_resize": resize(plan, native, throws, ensureIndex, clearIndex);
-				case "__value_array_insert_empty": insertEmpty(plan, native, throws, ensureIndex, clearIndex, moveIndex);
-				case "__value_array_reverse": reverse(plan, native, throws, swapIndex);
-				case "__value_array_copy", "__value_array_slice": rangeCopy(plan, native, throws, newLikeIndex, moveIndex);
-				case "__value_array_concat": concat(plan, native, throws, newLikeIndex, moveIndex);
-				case "__value_array_splice": splice(plan, native, throws, newLikeIndex, moveIndex, resizeIndex);
-				case "__value_array_remove_at": removeAt(plan, native, throws, moveIndex, resizeIndex);
 				case "__value_array_is_initialized", "__value_array_validate", "__value_array_mark": validityOperation(plan, native, throws);
 				case "__value_array_read_i32", "__value_array_read_i64", "__value_array_read_bool", "__value_array_read_f32", "__value_array_read_f64",
 					"__value_array_write_i32", "__value_array_write_i64", "__value_array_write_bool", "__value_array_write_f32", "__value_array_write_f64",
@@ -151,24 +72,12 @@ class WasmGcValueArrays {
 		}
 	}
 
-	static function failure(throws:Bool):Array<WasmInstruction> return throws ? [RefNull(Any), Throw(0)] : [Unreachable];
+	public static function failure(throws:Bool):Array<WasmInstruction> return throws ? [RefNull(Any), Throw(0)] : [Unreachable];
 
 	static function field(wrapper:Int, index:Int):Array<WasmInstruction>
 		return [LocalGet(0), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, index)];
 	static function fieldAt(wrapper:Int, index:Int, array:Int):Array<WasmInstruction>
 		return [LocalGet(array), RefCast({nullable:false, heap:Type(wrapper)}), StructGet(wrapper, index)];
-
-	static function removeAt(plan:WasmGcTypePlan, native:IrNative, throws:Bool, move:Int, resize:Int):WasmFunction {
-		if (native.arguments.length != 2 || move < 0 || resize < 0) throw "Invalid Wasm GC value-array removal";
-		var w = plan.valueArrayWrapperTypeIndex, size = 2, cursor = 3, body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]).concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalSet(size),
-			LocalGet(1), I32Const(0), I32LtS, LocalGet(size), LocalGet(1), I32LeS, I32Or, If(null)]).concat(failure(throws)).concat([End,
-			LocalGet(1), LocalSet(cursor), Block(null), Loop(null), LocalGet(cursor), LocalGet(size), I32Const(1), I32Sub, I32Eq, BrIf(1),
-			LocalGet(0), LocalGet(cursor), LocalGet(0), LocalGet(cursor), I32Const(1), I32Add, Call(move),
-			LocalGet(cursor), I32Const(1), I32Add, LocalSet(cursor), Br(0), End, End,
-			LocalGet(0), LocalGet(size), I32Const(1), I32Sub, Call(resize), Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [{type:I32}, {type:I32}], body);
-	}
 
 	/** Resolve only forwarding headers; ordinary arrays and direct inline wrappers are left unchanged. */
 	public static function resolveForward(plan:WasmGcTypePlan, array:Int):Array<WasmInstruction> {
@@ -180,7 +89,7 @@ class WasmGcValueArrays {
 	}
 
 	/** Length is the only mutable wrapper field read without going through the value-array runtime. */
-	static function syncForwardLength(plan:WasmGcTypePlan):Array<WasmInstruction> {
+	public static function syncForwardLength(plan:WasmGcTypePlan):Array<WasmInstruction> {
 		var w = plan.valueArrayWrapperTypeIndex, base = plan.arrayType(plan.arrayElementTypes()[0]);
 		return field(w, WasmGcTypePlan.VALUE_ARRAY_FORWARD_HEADER_FIELD).concat([RefIsNull, I32Eqz, If(null)])
 			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_FORWARD_HEADER_FIELD)).concat([RefCast({nullable:false, heap:Type(base)})])
@@ -248,57 +157,14 @@ class WasmGcValueArrays {
 				LocalGet(0), LocalGet(1)]);
 		if (insert >= 0) body = body.concat([Call(insert), LocalSet(position)]);
 		else body = body.concat([Call(ensure), LocalGet(1), LocalSet(position)]);
-		body = body.concat([LocalGet(0), LocalGet(position), LocalGet(staged), I32Const(0), Call(move), Return]);
+		body = body.concat([LocalGet(0), LocalGet(position), LocalGet(staged), I32Const(0), I32Const(1), Call(move), Return]);
 		var name = insert >= 0 ? "$value-array:runtime:insert-value" : "$value-array:runtime:store-value";
 		return new WasmFunction(name, plan.wasmFunctionType([Array(Dyn),I32,Dyn], Void),
 			[{type:plan.valueType(Array(Dyn))}, {type:Ref({nullable:true, heap:Type(plan.closureTypeIndex)})}, {type:I32}], body);
 	}
 
-	static function splice(plan:WasmGcTypePlan, native:IrNative, throws:Bool, newLike:Int, move:Int, resize:Int):WasmFunction {
-		if (native.arguments.length != 3 || newLike < 0 || move < 0 || resize < 0) throw "Invalid Wasm GC value-array splice";
-		var w = plan.valueArrayWrapperTypeIndex, size = 3, cursor = 4, result = 5;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]).concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalSet(size),
-			LocalGet(2), I32Const(0), I32LtS, LocalGet(size), LocalGet(1), I32LtS, I32Or, If(null), LocalGet(0), I32Const(0), Call(newLike), Return, End,
-			LocalGet(1), I32Const(0), I32LtS, If(null), LocalGet(1), LocalGet(size), I32Add, LocalSet(1),
-				LocalGet(1), I32Const(0), I32LtS, If(null), I32Const(0), LocalSet(1), End, End,
-			LocalGet(size), LocalGet(1), I32Sub, LocalGet(2), I32LtS, If(null), LocalGet(size), LocalGet(1), I32Sub, LocalSet(2), End,
-			LocalGet(0), LocalGet(2), Call(newLike), LocalSet(result), Block(null), Loop(null), LocalGet(cursor), LocalGet(2), I32Eq, BrIf(1),
-			LocalGet(result), LocalGet(cursor), LocalGet(0), LocalGet(1), LocalGet(cursor), I32Add, Call(move),
-			LocalGet(cursor), I32Const(1), I32Add, LocalSet(cursor), Br(0), End, End,
-			I32Const(0), LocalSet(cursor), Block(null), Loop(null), LocalGet(cursor), LocalGet(size), LocalGet(1), I32Sub, LocalGet(2), I32Sub, I32Eq, BrIf(1),
-			LocalGet(0), LocalGet(1), LocalGet(cursor), I32Add, LocalGet(0), LocalGet(1), LocalGet(2), I32Add, LocalGet(cursor), I32Add, Call(move),
-			LocalGet(cursor), I32Const(1), I32Add, LocalSet(cursor), Br(0), End, End,
-			LocalGet(0), LocalGet(size), LocalGet(2), I32Sub, Call(resize), LocalGet(result), Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result),
-			[{type:I32}, {type:I32}, {type:plan.valueType(Array(Dyn))}], body);
-	}
-
-	static function concat(plan:WasmGcTypePlan, native:IrNative, throws:Bool, newLike:Int, move:Int):WasmFunction {
-		if (native.arguments.length != 2 || newLike < 0 || move < 0) throw "Invalid Wasm GC value-array concat";
-		var w = plan.valueArrayWrapperTypeIndex, leftSize = 2, rightSize = 3, cursor = 4, result = 5;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, LocalGet(1), RefIsNull, I32Or, If(null)];
-		body = body.concat(failure(throws)).concat([End]);
-		for (index in [WasmGcTypePlan.arrayElementTypeFieldIndex(), WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD,
-				WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD])
-			body = body.concat(fieldAt(w, index, 0)).concat(fieldAt(w, index, 1)).concat([I32Eq, I32Eqz, If(null)]).concat(failure(throws)).concat([End]);
-		body = body.concat(fieldAt(w, WasmGcTypePlan.arrayLengthFieldIndex(), 0)).concat([LocalSet(leftSize)])
-			.concat(fieldAt(w, WasmGcTypePlan.arrayLengthFieldIndex(), 1)).concat([LocalSet(rightSize),
-				LocalGet(leftSize), I64ExtendI32U, LocalGet(rightSize), I64ExtendI32U, I64Add, I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)])
-			.concat(failure(throws)).concat([End, LocalGet(0), LocalGet(leftSize), LocalGet(rightSize), I32Add, Call(newLike), LocalSet(result)]);
-		for (side in [{array:0, length:leftSize, offset:false}, {array:1, length:rightSize, offset:true}]) {
-			body = body.concat([I32Const(0), LocalSet(cursor), Block(null), Loop(null), LocalGet(cursor), LocalGet(side.length), I32Eq, BrIf(1),
-				LocalGet(result), LocalGet(cursor)]);
-			if (side.offset) body = body.concat([LocalGet(leftSize), I32Add]);
-			body = body.concat([LocalGet(side.array), LocalGet(cursor), Call(move), LocalGet(cursor), I32Const(1), I32Add, LocalSet(cursor), Br(0), End, End]);
-		}
-		body = body.concat([LocalGet(result), Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result),
-			[{type:I32}, {type:I32}, {type:I32}, {type:plan.valueType(Array(Dyn))}], body);
-	}
-
 	/** Allocate the same lane layout and retain the shared dynamic bridge closures. */
-	static function newLike(plan:WasmGcTypePlan, allocator:Int):WasmFunction {
+	public static function newLike(plan:WasmGcTypePlan, allocator:Int, name:String):WasmFunction {
 		var w = plan.valueArrayWrapperTypeIndex, result = 2;
 		var body:Array<WasmInstruction> = [LocalGet(1)];
 		for (index in [WasmGcTypePlan.arrayElementTypeFieldIndex(), WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD,
@@ -308,118 +174,15 @@ class WasmGcValueArrays {
 		for (index in [WasmGcTypePlan.VALUE_ARRAY_READ_BRIDGE_FIELD, WasmGcTypePlan.VALUE_ARRAY_WRITE_BRIDGE_FIELD, WasmGcTypePlan.VALUE_ARRAY_ACCEPTS_BRIDGE_FIELD])
 			body = body.concat([LocalGet(result), RefCast({nullable:false, heap:Type(w)})]).concat(field(w, index)).concat([StructSet(w, index)]);
 		body = body.concat([LocalGet(result), Return]);
-		return new WasmFunction("$value-array:internal:new-like", plan.wasmFunctionType([Array(Dyn),I32], Array(Dyn)), [{type:plan.valueType(Array(Dyn))}], body);
-	}
-
-	static function rangeCopy(plan:WasmGcTypePlan, native:IrNative, throws:Bool, newLike:Int, move:Int):WasmFunction {
-		var slice = native.symbol == "__value_array_slice";
-		if (native.arguments.length != (slice ? 3 : 1) || newLike < 0 || move < 0) throw "Invalid Wasm GC value-array range copy";
-		var w = plan.valueArrayWrapperTypeIndex, first = native.arguments.length, start = first, end = first + 1, size = first + 2,
-			cursor = first + 3, result = first + 4;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]).concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalSet(size)]);
-		if (slice) {
-			for (pair in [{arg:1, dest:start}, {arg:2, dest:end}]) body = body.concat([LocalGet(pair.arg), LocalSet(pair.dest),
-				LocalGet(pair.dest), I32Const(0), I32LtS, If(null), LocalGet(pair.dest), LocalGet(size), I32Add, LocalSet(pair.dest), End,
-				LocalGet(pair.dest), I32Const(0), I32LtS, If(null), I32Const(0), LocalSet(pair.dest), End,
-				LocalGet(size), LocalGet(pair.dest), I32LtS, If(null), LocalGet(size), LocalSet(pair.dest), End]);
-			body = body.concat([LocalGet(end), LocalGet(start), I32LtS, If(null), LocalGet(start), LocalSet(end), End]);
-		} else body = body.concat([I32Const(0), LocalSet(start), LocalGet(size), LocalSet(end)]);
-		body = body.concat([LocalGet(0), LocalGet(end), LocalGet(start), I32Sub, Call(newLike), LocalSet(result),
-			Block(null), Loop(null), LocalGet(cursor), LocalGet(end), LocalGet(start), I32Sub, I32Eq, BrIf(1),
-			LocalGet(result), LocalGet(cursor), LocalGet(0), LocalGet(start), LocalGet(cursor), I32Add, Call(move),
-			LocalGet(cursor), I32Const(1), I32Add, LocalSet(cursor), Br(0), End, End, LocalGet(result), Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result),
-			[{type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:plan.valueType(Array(Dyn))}], body);
+		return new WasmFunction(name, plan.wasmFunctionType([Array(Dyn),I32], Array(Dyn)), [{type:plan.valueType(Array(Dyn))}], body);
 	}
 
 	/** Move one already-bounded element between compatible arrays, preserving uninitialized elements. */
-	static function moveElement(plan:WasmGcTypePlan, read:Int, write:Int, readRef:Int, writeRef:Int, valid:Int, mark:Int, clear:Int):WasmFunction {
-		var w = plan.valueArrayWrapperTypeIndex, offset = 4;
-		var body:Array<WasmInstruction> = [LocalGet(2), LocalGet(3), Call(valid), I32Eqz, If(null), LocalGet(0), LocalGet(1), Call(clear), Return, End,
-			Block(null), Loop(null), LocalGet(offset)];
-		body = body.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD)).concat([I32Eq, BrIf(1),
-			LocalGet(0), LocalGet(1), LocalGet(offset), I32Const(8), LocalGet(2), LocalGet(3), LocalGet(offset), I32Const(8), I32Const(0), Call(read), Call(write),
-			LocalGet(offset), I32Const(8), I32Add, LocalSet(offset), Br(0), End, End,
-			I32Const(0), LocalSet(offset), Block(null), Loop(null), LocalGet(offset)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Eq, BrIf(1),
-				LocalGet(0), LocalGet(1), LocalGet(offset), LocalGet(2), LocalGet(3), LocalGet(offset), Call(readRef), Call(writeRef),
-				LocalGet(offset), I32Const(1), I32Add, LocalSet(offset), Br(0), End, End, LocalGet(0), LocalGet(1), Call(mark), Return]);
-		return new WasmFunction("$value-array:internal:move-element", plan.wasmFunctionType([Array(Dyn),I32,Array(Dyn),I32], Void), [{type:I32}], body);
-	}
 
 	/** Swap in place without a boxed temporary or an allocated staging array. */
-	static function swapElements(plan:WasmGcTypePlan, read:Int, write:Int, readRef:Int, writeRef:Int, valid:Int, mark:Int, clear:Int):WasmFunction {
-		var w = plan.valueArrayWrapperTypeIndex, offset = 3, leftValid = 4, rightValid = 5, leftByte = 6, rightByte = 7, leftRef = 8, rightRef = 9;
-		var refType:WasmValueType = Ref({nullable:true, heap:Any});
-		var locals:Array<WasmLocal> = [{type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:refType}, {type:refType}];
-		var body:Array<WasmInstruction> = [LocalGet(0), LocalGet(1), Call(valid), LocalSet(leftValid), LocalGet(0), LocalGet(2), Call(valid), LocalSet(rightValid),
-			Block(null), Loop(null), LocalGet(offset)];
-		body = body.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD)).concat([I32Eq, BrIf(1)]);
-		for (side in [{valid:leftValid, index:1, dest:leftByte}, {valid:rightValid, index:2, dest:rightByte}])
-			body = body.concat([LocalGet(side.valid), If(I32), LocalGet(0), LocalGet(side.index), LocalGet(offset), I32Const(8), I32Const(0), Call(read),
-				Else, I32Const(0), End, LocalSet(side.dest)]);
-		body = body.concat([LocalGet(0), LocalGet(1), LocalGet(offset), I32Const(8), LocalGet(rightByte), Call(write),
-			LocalGet(0), LocalGet(2), LocalGet(offset), I32Const(8), LocalGet(leftByte), Call(write),
-			LocalGet(offset), I32Const(8), I32Add, LocalSet(offset), Br(0), End, End,
-			I32Const(0), LocalSet(offset), Block(null), Loop(null), LocalGet(offset)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Eq, BrIf(1)]);
-		for (side in [{valid:leftValid, index:1, dest:leftRef}, {valid:rightValid, index:2, dest:rightRef}])
-			body = body.concat([LocalGet(side.valid), If(refType), LocalGet(0), LocalGet(side.index), LocalGet(offset), Call(readRef),
-				Else, RefNull(Any), End, LocalSet(side.dest)]);
-		body = body.concat([LocalGet(0), LocalGet(1), LocalGet(offset), LocalGet(rightRef), Call(writeRef),
-			LocalGet(0), LocalGet(2), LocalGet(offset), LocalGet(leftRef), Call(writeRef),
-			LocalGet(offset), I32Const(1), I32Add, LocalSet(offset), Br(0), End, End]);
-		for (side in [{valid:rightValid, index:1}, {valid:leftValid, index:2}])
-			body = body.concat([LocalGet(side.valid), If(null), LocalGet(0), LocalGet(side.index), Call(mark), Else,
-				LocalGet(0), LocalGet(side.index), Call(clear), End]);
-		body.push(Return);
-		return new WasmFunction("$value-array:internal:swap-elements", plan.wasmFunctionType([Array(Dyn),I32,I32], Void), locals, body);
-	}
-
-	static function reverse(plan:WasmGcTypePlan, native:IrNative, throws:Bool, swap:Int):WasmFunction {
-		if (native.arguments.length != 1 || swap < 0) throw "Invalid Wasm GC value-array reverse";
-		var w = plan.valueArrayWrapperTypeIndex, left = 1, right = 2;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]).concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex()))
-			.concat([I32Const(1), I32Sub, LocalSet(right), Block(null), Loop(null), LocalGet(left), LocalGet(right), I32LtS, I32Eqz, BrIf(1),
-				LocalGet(0), LocalGet(left), LocalGet(right), Call(swap), LocalGet(left), I32Const(1), I32Add, LocalSet(left),
-				LocalGet(right), I32Const(1), I32Sub, LocalSet(right), Br(0), End, End, Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [{type:I32}, {type:I32}], body);
-	}
-
-	static function insertEmpty(plan:WasmGcTypePlan, native:IrNative, throws:Bool, ensure:Int, clear:Int, move:Int):WasmFunction {
-		if (native.arguments.length != 2 || ensure < 0 || clear < 0 || move < 0) throw "Invalid Wasm GC value-array insertion";
-		var w = plan.valueArrayWrapperTypeIndex, size = 2, cursor = 3;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End]).concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex()))
-			.concat([LocalTee(size), I32Const(0x7fffffff), I32Eq, If(null)]).concat(failure(throws)).concat([End,
-				LocalGet(1), I32Const(0), I32LtS, If(null), LocalGet(1), LocalGet(size), I32Add, LocalSet(1), End,
-				LocalGet(1), I32Const(0), I32LtS, If(null), I32Const(0), LocalSet(1), End,
-				LocalGet(size), LocalGet(1), I32LtS, If(null), LocalGet(size), LocalSet(1), End,
-				LocalGet(0), LocalGet(size), Call(ensure), LocalGet(size), LocalSet(cursor), Block(null), Loop(null),
-				LocalGet(cursor), LocalGet(1), I32LeS, BrIf(1), LocalGet(0), LocalGet(cursor), LocalGet(0), LocalGet(cursor), I32Const(1), I32Sub, Call(move),
-				LocalGet(cursor), I32Const(1), I32Sub, LocalSet(cursor), Br(0), End, End,
-				LocalGet(0), LocalGet(1), Call(clear), LocalGet(1), Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [{type:I32}, {type:I32}], body);
-	}
-
-	static function resize(plan:WasmGcTypePlan, native:IrNative, throws:Bool, ensureIndex:Int, clearIndex:Int):WasmFunction {
-		if (native.arguments.length != 2 || ensureIndex < 0 || clearIndex < 0) throw "Invalid Wasm GC value-array resize";
-		var w = plan.valueArrayWrapperTypeIndex, cursor = 2;
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, LocalGet(1), I32Const(0), I32LtS, I32Or, If(null)];
-		body = body.concat(failure(throws)).concat([End]);
-		body = body.concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalSet(cursor), LocalGet(1), LocalGet(cursor), I32LeS,
-			I32Eqz, If(null), LocalGet(0), LocalGet(1), I32Const(1), I32Sub, Call(ensureIndex), Return, End,
-			Block(null), Loop(null), LocalGet(cursor), LocalGet(1), I32LeS, BrIf(1), LocalGet(cursor), I32Const(1), I32Sub, LocalSet(cursor),
-			LocalGet(0), LocalGet(cursor), Call(clearIndex), Br(0), End, End,
-			LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(1), StructSet(w, WasmGcTypePlan.arrayLengthFieldIndex())])
-			.concat(syncForwardLength(plan)).concat([Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), [{type:I32}], body);
-	}
 
 	/** Grow both lanes before publishing either one so allocation failure leaves aliases unchanged. */
-	static function ensure(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
+	public static function replaceCapacity(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
 		if (native.arguments.length != 2) throw "Invalid Wasm GC value-array ensure";
 		var w = plan.valueArrayWrapperTypeIndex, l32 = plan.valueArrayI32LaneTypeIndex, l64 = plan.valueArrayI64LaneTypeIndex,
 			refs = plan.valueArrayReferenceLaneTypeIndex, oldCap = 2, newCap = 3, oldPayload = 4, newPayload = 5,
@@ -427,19 +190,8 @@ class WasmGcValueArrays {
 		var arrayType:WasmValueType = Ref({nullable:true, heap:Array});
 		var locals:Array<WasmLocal> = [{type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I32}, {type:I64},
 			{type:arrayType}, {type:arrayType}, {type:arrayType}, {type:arrayType}];
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End, LocalGet(1), I32Const(0), I32LtS, LocalGet(1), I32Const(0x7fffffff), I32Eq, I32Or, If(null)])
-			.concat(failure(throws)).concat([End]);
-		body = body.concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalGet(1), I32LeS, I32Eqz, If(null), Return, End])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_CAPACITY_FIELD)).concat([LocalSet(oldCap), LocalGet(1), LocalGet(oldCap), I32LeS,
-				LocalGet(1), LocalGet(oldCap), I32Eq, I32Eqz, I32And, If(null)])
-			.concat([LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(1), I32Const(1), I32Add,
-				StructSet(w, WasmGcTypePlan.arrayLengthFieldIndex())]).concat(syncForwardLength(plan)).concat([Return, End]);
-		// Grow by at least half, or directly to the requested index for sparse writes.
-		body = body.concat([LocalGet(oldCap), I64ExtendI32U, LocalGet(oldCap), I32Const(2), I32DivS, I64ExtendI32U, I64Add, LocalSet(total),
-			LocalGet(total), I64Const(0x7fffffff), I64LeS, I32Eqz, If(null), LocalGet(1), I32Const(1), I32Add, LocalSet(newCap), Else,
-			LocalGet(total), I32WrapI64, LocalGet(1), I32Const(1), I32Add, I32LeS, If(null), LocalGet(1), I32Const(1), I32Add,
-			LocalSet(newCap), Else, LocalGet(total), I32WrapI64, LocalSet(newCap), End, End]);
+		var body:Array<WasmInstruction> = field(w, WasmGcTypePlan.VALUE_ARRAY_CAPACITY_FIELD)
+			.concat([LocalSet(oldCap),LocalGet(1),LocalSet(newCap)]);
 		// Compute rounded payload words and validate both new lane sizes before allocating.
 		for (pair in [{cap:oldCap, out:oldPayload}, {cap:newCap, out:newPayload}]) {
 			body = body.concat([LocalGet(pair.cap), I64ExtendI32U]).concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD))
@@ -487,13 +239,12 @@ class WasmGcValueArrays {
 		body = body.concat([LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(newData), RefCast({nullable:false, heap:Array}),
 			StructSet(w, WasmGcTypePlan.arrayDataFieldIndex()), LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(newRef),
 			StructSet(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD), LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(newCap),
-			StructSet(w, WasmGcTypePlan.VALUE_ARRAY_CAPACITY_FIELD), LocalGet(0), RefCast({nullable:false, heap:Type(w)}), LocalGet(1), I32Const(1),
-			I32Add, StructSet(w, WasmGcTypePlan.arrayLengthFieldIndex())]).concat(syncForwardLength(plan)).concat([Return]);
+			StructSet(w, WasmGcTypePlan.VALUE_ARRAY_CAPACITY_FIELD),Return]);
 		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), locals, body);
 	}
 
 	/** Index of the element's bitmap word, following the capacity-sized payload. */
-	static function bitmapWordIndex(wrapper:Int):Array<WasmInstruction> {
+	public static function bitmapWordIndex(wrapper:Int):Array<WasmInstruction> {
 		var bits = field(wrapper, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD);
 		return field(wrapper, WasmGcTypePlan.VALUE_ARRAY_CAPACITY_FIELD).concat([I64ExtendI32U])
 			.concat(field(wrapper, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD)).concat([I64ExtendI32U, I64Mul])
@@ -502,7 +253,7 @@ class WasmGcValueArrays {
 			.concat(bits).concat([I64ExtendI32U, I64DivS, I64Add, I32WrapI64]);
 	}
 
-	static function bitmapBit(wrapper:Int):Array<WasmInstruction>
+	public static function bitmapBit(wrapper:Int):Array<WasmInstruction>
 		return [LocalGet(1)].concat(field(wrapper, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I32RemS, I64ExtendI32U]);
 
 	/** Leaves a boolean on the stack; arrays without a validity bitmap are always initialized. */
@@ -548,63 +299,8 @@ class WasmGcValueArrays {
 	}
 
 	/** Clear payload and references without touching neighboring packed elements. */
-	static function clearElement(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		if (native.arguments.length != 2) throw "Invalid Wasm GC value-array clear";
-		var w = plan.valueArrayWrapperTypeIndex, l32 = plan.valueArrayI32LaneTypeIndex, l64 = plan.valueArrayI64LaneTypeIndex,
-			refs = plan.valueArrayReferenceLaneTypeIndex, position = 2, wordIndex = 3, shift = 4, address = 5, refLane = 6;
-		var locals:Array<WasmLocal> = [{type:I32}, {type:I32}, {type:I32}, {type:I64}, {type:Ref({nullable:true, heap:Type(refs)})}];
-		var body:Array<WasmInstruction> = [LocalGet(0), RefIsNull, If(null)];
-		body = body.concat(failure(throws)).concat([End, LocalGet(1), I32Const(0), I32LtS]);
-		body = body.concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([LocalGet(1), I32LeS, I32Or, If(null)]);
-		body = body.concat(failure(throws)).concat([End]);
-		// Each scalar stride is byte-aligned; clear one byte at a time to retain adjacent elements.
-		body = body.concat([LocalGet(1), I64ExtendI32U]).concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD))
-			.concat([I64ExtendI32U, I64Mul, LocalSet(address), Block(null), Loop(null), LocalGet(position)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD)).concat([I32Const(8), I32DivS, I32Eq, BrIf(1),
-				LocalGet(address), LocalGet(position), I64ExtendI32U, I64Const(8), I64Mul, I64Add])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I64ExtendI32U, I64DivS, I32WrapI64, LocalSet(wordIndex),
-				LocalGet(address), LocalGet(position), I64ExtendI32U, I64Const(8), I64Mul, I64Add])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I64ExtendI32U, I64RemS, I32WrapI64, LocalSet(shift)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I32Const(32), I32Eq, If(null)]);
-		for (lane in [l32, l64]) {
-			body = body.concat(field(w, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({nullable:false, heap:Type(lane)}), LocalGet(wordIndex)])
-				.concat(field(w, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({nullable:false, heap:Type(lane)}), LocalGet(wordIndex), ArrayGet(lane)]);
-			if (lane == l32) body.push(I64ExtendI32U);
-			body = body.concat([I64Const(255), LocalGet(shift), I64ExtendI32U, I64Shl, I64Const(-1), I64Xor, I64And]);
-			if (lane == l32) body.push(I32WrapI64);
-			body.push(ArraySet(lane));
-			if (lane == l32) body.push(Else);
-		}
-		body = body.concat([End, LocalGet(position), I32Const(1), I32Add, LocalSet(position), Br(0), End, End]);
-		// Select the sole reference lane or the optional mixed lane; absent mixed lanes need no allocation.
-		body = body.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([If(null)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD)).concat([I32Eqz])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD)).concat([I32Eqz, I32And, If(null)])
-			.concat(field(w, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({nullable:false, heap:Type(refs)}), LocalSet(refLane), Else])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD)).concat([RefCast({nullable:true, heap:Type(refs)}), LocalSet(refLane), End,
-				LocalGet(refLane), RefIsNull, I32Eqz, If(null), I32Const(0), LocalSet(position), Block(null), Loop(null), LocalGet(position)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Eq, BrIf(1), LocalGet(refLane),
-				RefCast({nullable:false, heap:Type(refs)}), LocalGet(1)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Mul, LocalGet(position), I32Add, RefNull(Any), ArraySet(refs),
-				LocalGet(position), I32Const(1), I32Add, LocalSet(position), Br(0), End, End, End, End]);
-		// Clear the validity bit after the payload and references.
-		body = body.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD)).concat([If(null)])
-			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I32Const(32), I32Eq, If(null)]);
-		for (lane in [l32, l64]) {
-			body = body.concat(field(w, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({nullable:false, heap:Type(lane)})])
-				.concat(bitmapWordIndex(w)).concat(field(w, WasmGcTypePlan.arrayDataFieldIndex()))
-				.concat([RefCast({nullable:false, heap:Type(lane)})]).concat(bitmapWordIndex(w)).concat([ArrayGet(lane)]);
-			if (lane == l32) body.push(I64ExtendI32U);
-			body = body.concat([I64Const(1)]).concat(bitmapBit(w)).concat([I64Shl, I64Const(-1), I64Xor, I64And]);
-			if (lane == l32) body.push(I32WrapI64);
-			body.push(ArraySet(lane));
-			if (lane == l32) body.push(Else);
-		}
-		body = body.concat([End, End, Return]);
-		return new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), locals, body);
-	}
 
-	static function allocate(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
+	public static function allocate(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
 		if (native.arguments.length != 6) throw "Invalid Wasm GC value-array allocator";
 		var error = failure(throws), data = 9, references = 10,
 			arrayReference:WasmValueType = Ref({nullable: true, heap: Array}),

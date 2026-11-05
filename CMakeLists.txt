@@ -85,7 +85,26 @@ set_target_properties(hlprof-live PROPERTIES
 # also produces the import information required by Windows executable exports.
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
+# The committed C policy supports direct native/runtime.c builds, while this check prevents
+# a native build from silently using policy different from the portable SSA used by Wasm.
+if(CMAKE_HOST_WIN32)
+  set(HAXEON_LANE_HAXE "${CMAKE_CURRENT_SOURCE_DIR}/.tools/haxe/haxe.exe")
+else()
+  set(HAXEON_LANE_HAXE "${CMAKE_CURRENT_SOURCE_DIR}/.tools/haxe/haxe")
+endif()
+file(GLOB_RECURSE HAXEON_LANE_GENERATOR_INPUTS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/compiler/*.hx")
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/value-lane-policy.checked"
+  COMMAND "${HAXEON_LANE_HAXE}" -cp "${CMAKE_CURRENT_SOURCE_DIR}/src" --run compiler.tools.GenerateValueLaneRuntime
+    --check "${CMAKE_CURRENT_SOURCE_DIR}/native/runtime/value_lane_policy.h"
+  COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/value-lane-policy.checked"
+  DEPENDS ${HAXEON_LANE_GENERATOR_INPUTS} "${CMAKE_CURRENT_SOURCE_DIR}/native/runtime/value_lane_policy.h"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Check native lane policy against portable SSA"
+  VERBATIM)
+add_custom_target(haxeon_lane_policy_check DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/value-lane-policy.checked")
+
 add_library(haxeon_runtime SHARED native/runtime.c)
+add_dependencies(haxeon_runtime haxeon_lane_policy_check)
 target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src vendor/nativekit/include)
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")

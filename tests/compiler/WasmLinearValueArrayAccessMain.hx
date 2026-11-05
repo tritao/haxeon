@@ -37,8 +37,7 @@ class WasmLinearValueArrayAccessMain {
 			{name:"clearScalar", library:"haxeon_runtime", symbol:"__value_array_clear_scalar", arguments:[array,I32,I32,I32], result:Void},
 			{name:"initialized", library:"haxeon_runtime", symbol:"__value_array_is_initialized", arguments:[array,I32], result:Bool},
 			{name:"validate", library:"haxeon_runtime", symbol:"__value_array_validate", arguments:[array,I32], result:Void},
-			{name:"mark", library:"haxeon_runtime", symbol:"__value_array_mark", arguments:[array,I32], result:Void},
-			{name:"clear", library:"haxeon_runtime", symbol:"__value_array_clear", arguments:[array,I32], result:Void}
+			{name:"mark", library:"haxeon_runtime", symbol:"__value_array_mark", arguments:[array,I32], result:Void}
 		];
 		var module = new WasmModule("linear-value-array-access"); module.memoryMin = 1; module.exportMemory = true;
 		for (native in natives) module.exports.push({name:native.name, functionIndex:module.addFunction(WasmLinearValueArrays.build(module, native))});
@@ -65,8 +64,6 @@ class WasmLinearValueArrayAccessMain {
 				+ 'd.setUint8(560,1); if(e.initialized(a,0)!==1 || e.initialized(a,1)!==0) throw Error("validity state"); '
 				+ 'let trapped=false; try{e.validate(a,1)}catch(x){trapped=x instanceof WebAssembly.RuntimeError} if(!trapped) throw Error("validity"); '
 				+ 'e.mark(a,1); e.validate(a,1); if(e.initialized(a,1)!==1 || d.getUint8(560)!==3) throw Error("mark"); '
-				+ 'e.writeRef(a,0,0,6789); e.clear(a,0); if(e.initialized(a,0)!==0 || e.readCallback(a,1,24)!==333) throw Error("clear element"); '
-				+ 'e.mark(a,0); if(e.read32(a,0,0,8,0)!==0 || e.readRef(a,0,0)!==0) throw Error("cleared payload"); '
 				+ 'd.setInt32(a+36,0,true); if(e.initialized(a,1)!==1) throw Error("implicit validity");';
 			var process = new sys.io.Process("node", ["-e", js, path]), error = process.stderr.readAll().toString(), status = process.exitCode();
 			process.close();
@@ -79,10 +76,11 @@ class WasmLinearValueArrayAccessMain {
 		init.fieldSet(owner, "value", init.constInt(42));
 		var ownerCarrier = init.call(IrValueLaneReference.PACK, [owner], carrier);
 		init.call("__value_array_write_ref", [initArray, init.constInt(0), init.constInt(0), ownerCarrier], Void);
+		init.call("__value_array_write_ref", [initArray, init.constInt(0), init.constInt(1), ownerCarrier], Void);
 		init.call("__value_array_mark", [initArray, init.constInt(0)], Void);
 		init.returnValue(init.constVoid());
 		var main = new IrBuilder(), lane = main.call("$test:linear-allocate", [main.constInt(1), main.typeValue(ownerType),
-			main.constInt(32), main.constInt(1), main.constInt(32), main.constBool(true)], array);
+			main.constInt(32), main.constInt(2), main.constInt(32), main.constBool(true)], array);
 		main.call("init", [lane], Void);
 		main.call("__value_array_write_i32", [lane, main.constInt(0), main.constInt(0), main.constInt(32), main.constInt(73)], Void);
 		main.call("__value_array_ensure", [lane, main.constInt(9)], Void);
@@ -92,15 +90,28 @@ class WasmLinearValueArrayAccessMain {
 		main.call("__value_array_reverse", [snapshot], Void);
 		var joined = main.call("__value_array_concat", [snapshot, slice], array), removed = main.call("__value_array_splice", [joined, main.constInt(1), main.constInt(1)], array);
 		main.call("__value_array_clear", [lane, main.constInt(1)], Void);
+		var clearInitialized = main.call("__value_array_is_initialized", [lane, main.constInt(1)], Bool);
+		main.call("__value_array_mark", [lane, main.constInt(1)], Void);
+		var clearScalar = main.call("__value_array_read_i32", [lane, main.constInt(1), main.constInt(0), main.constInt(32), main.constBool(true)], I32),
+			clearCarrier = main.call("__value_array_read_ref", [lane, main.constInt(1), main.constInt(0)], carrier),
+			clearOwner = main.call(IrValueLaneReference.UNPACK, [clearCarrier], ownerType),
+			clearSecondCarrier = main.call("__value_array_read_ref", [lane, main.constInt(1), main.constInt(1)], carrier),
+			clearSecondOwner = main.call(IrValueLaneReference.UNPACK, [clearSecondCarrier], ownerType);
+
 		for (_ in 0...12) main.call("__array_alloc_ref", [main.constInt(8)], array);
 		var loadedCarrier = main.call("__value_array_read_ref", [joined, main.constInt(1), main.constInt(0)], carrier),
 			loaded = main.call(IrValueLaneReference.UNPACK, [loadedCarrier], ownerType),
 			scalar = main.call("__value_array_read_i32", [slice, main.constInt(0), main.constInt(0), main.constInt(32), main.constBool(true)], I32),
 			newInitialized = main.call("__value_array_is_initialized", [removed, main.constInt(0)], Bool), checkScalar = main.createBlock(),
-			checkNew = main.createBlock(), success = main.createBlock(), failure = main.createBlock();
+			checkNew = main.createBlock(), checkClear = main.createBlock(), checkZero = main.createBlock(), checkNull = main.createBlock(), checkSecondNull = main.createBlock(),
+			success = main.createBlock(), failure = main.createBlock();
 		main.branch(main.equal(main.fieldGet(loaded, "value", I32), main.constInt(42)), checkScalar, failure);
 		main.select(checkScalar); main.branch(main.equal(scalar, main.constInt(73)), checkNew, failure);
-		main.select(checkNew); main.branch(newInitialized, failure, success);
+		main.select(checkNew); main.branch(newInitialized, failure, checkClear);
+		main.select(checkClear); main.branch(clearInitialized, failure, checkZero);
+		main.select(checkZero); main.branch(main.equal(clearScalar, main.constInt(0)), checkNull, failure);
+		main.select(checkNull); main.branch(main.equal(clearOwner, main.constNull(ownerType)), checkSecondNull, failure);
+		main.select(checkSecondNull); main.branch(main.equal(clearSecondOwner, main.constNull(ownerType)), success, failure);
 		main.select(success); main.returnValue(main.constInt(42));
 		main.select(failure); main.returnValue(main.constInt(0));
 		var program = new IrProgram("main");

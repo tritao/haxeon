@@ -119,6 +119,8 @@ class WasmGcModuleBuilder {
 							default:
 						}
 
+		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
+
 		var plan = new WasmGcTypePlan(program, inlineValueFields, scalarAbi.signatures, scalarAbi.scalarClosures, scalarAbi.scalarVirtuals),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
@@ -167,6 +169,7 @@ class WasmGcModuleBuilder {
 			if (usedNatives.exists(name))
 				addGcTypeTest(module, functions, plan, gcRepresentation, name);
 		addGcMapRuntimeFunctions(module, functions, plan, program, usedNatives);
+		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> plan.wasmFunctionType([for (a in fn.arguments) a.type], fn.result));
 		WasmGcValueArrays.register(module, functions, plan, program, usedNatives);
 		WasmGcDynamicArrays.register(module, functions, plan, gcRepresentation, program, usedNatives);
 		addGcMapProjectionFunctions(module, functions, plan, program, reachable);
@@ -202,6 +205,7 @@ class WasmGcModuleBuilder {
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName);
 		for (fn in program.functions) {
+			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name)) continue;
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
 			var scalarSignature = scalarAbi.signatures.get(fn.name),

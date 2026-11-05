@@ -634,7 +634,10 @@ class InlineValueLayoutMain {
 			if (forwardStatus != 0) throw 'Wasm GC forwarding array failed ($forwardStatus): $forwardError';
 			sys.io.File.saveBytes(path, invalidBytes);
 			var invalidJs = 'const fs=require("fs"); const m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
-				+ 'const i=new WebAssembly.Instance(m); try { i.exports.main(); process.exit(1); } catch(e) { if(!(e instanceof WebAssembly.RuntimeError)) throw e; }';
+				+ 'const i=new WebAssembly.Instance(m), tag=i.exports.__haxeon_exception; '
+				+ 'if(!(tag instanceof WebAssembly.Tag)) throw Error("missing Haxe exception tag"); '
+				+ 'try { i.exports.main(); process.exit(1); } catch(e) { '
+				+ 'if(!(e instanceof WebAssembly.Exception) || !e.is(tag) || e.getArg(tag,0)!==null) throw e; }';
 			var invalidProcess = new sys.io.Process("node", ["-e", invalidJs, path]),
 				invalidError = invalidProcess.stderr.readAll().toString(), invalidStatus = invalidProcess.exitCode();
 			invalidProcess.close();

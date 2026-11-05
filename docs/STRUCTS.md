@@ -714,6 +714,20 @@ word. Reads and writes therefore handle fields crossing word boundaries; padding
 a managed struct retains its C alignment and padding inside that struct's scalar portion. Native-memory copies use the
 same bytes.
 
+Before inline enum storage, range and structural policy is defined once in
+portable SSA (`IrValueLaneRuntime`). Wasm consumes that IR; HashLink's native runtime uses C generated from the same
+verified functions, with a checked generated artifact for the direct C build entry points. Bounds normalization,
+growth selection, overlap direction, validity propagation and size publication belong to this common definition.
+Backend primitives handle physical lane allocation/copy/clear, header access, barriers and exception-safe storage
+replacement. A storage replacement retains the old lanes until both new allocations and their copies succeed.
+Generated C is a build product, not an independently maintained implementation. Allocation geometry is a compile-time
+policy constant: HashLink retains geometric rounding for sparse requests; Wasm jumps directly to the request after
+one growth step. The same reserve algorithm handles both, preserving existing lane sizes and allocation counts.
+Linked lane validation uses the normal Haxe exception channel, including modules whose source has no explicit throw;
+the exported Wasm exception tag identifies those failures. Raw storage-only primitive tests retain trap checks.
+The three handwritten structural implementations have been removed together; only physical storage primitives
+remain target-specific.
+
 Lane classification follows each target's actual representation: for example, a native callback is a traced managed
 handle on HashLink but a scalar function-table index on Wasm. Both use the same two-lane scheme without treating a
 HashLink-managed pointer as untraced data or boxing the Wasm index.
@@ -917,6 +931,16 @@ The stage 1b checkpoint passed: the driver reported 622 passed and 0 failed, sel
 395 fixtures agreed across HashLink, Wasm32 and Wasm GC with 14 existing skips, both with and without inlining. The
 standalone Wasm backend and native-memory integration tests passed. The Wasm runtime freshness check was skipped because
 a wasm32-capable clang was not configured.
+
+## Array capacity policy (decided follow-up)
+
+The next measured commit after shared-runtime consolidation uses one capacity policy for ordinary and struct-lane
+arrays on every target. Implicit growth (`push`, `insert`, and writes past the end) chooses
+`max(required, capacity * 2)`. Explicit sizing (`resize(n)` and construction with a known length) uses capacity
+exactly `n`. There is no target-specific growth setting in that final model. The consolidation commit temporarily
+preserves existing capacities so its measurements isolate the shared implementation; the follow-up removes that
+compile-time setting. Measure factor 2 first, record and justify any action that allocates more, and reconsider
+factor 1.5 only if factor 2 regresses.
 
 ## Fixed arrays
 

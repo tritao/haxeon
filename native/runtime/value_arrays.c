@@ -95,14 +95,27 @@ static void realtime_value_array_check_read(realtime_value_array *array, int ind
 
 /* A growth allocates both lanes before changing the live header. Pending slots root the new blocks, and the trap
  * clears them if an allocation throws, so the old array and its aliases retain their prior contents. */
-static void realtime_value_array_reserve(realtime_value_array *array, int capacity) {
-	if( capacity <= array->array.capacity ) return;
-	int next = array->array.capacity < 4 ? 4 : array->array.capacity;
-	while( next < capacity ) {
-		int64_t grown = (int64_t)next + next / 2;
-		if( grown > INT_MAX || grown <= next ) { next = capacity; break; }
-		next = (int)grown;
-	}
+static int32_t realtime_lane_storage_length(varray *value);
+static int32_t realtime_lane_storage_capacity(varray *value);
+static bool realtime_lane_storage_has_validity(varray *value);
+static void realtime_lane_storage_publish_length(varray *value, int32_t length);
+static void realtime_lane_storage_replace_capacity(varray *value, int32_t capacity);
+static varray *realtime_lane_storage_new_like(varray *value, int32_t length);
+static bool realtime_lane_storage_compatible(varray *left, varray *right);
+static void realtime_lane_storage_fail(int32_t error);
+static void realtime_lane_storage_clear_scalars(varray *value, int32_t first, int32_t count);
+static void realtime_lane_storage_clear_references(varray *value, int32_t first, int32_t count);
+static void realtime_lane_storage_copy_scalars(varray *target, int32_t target_index, varray *source, int32_t source_index, int32_t count);
+static void realtime_lane_storage_copy_references(varray *target, int32_t target_index, varray *source, int32_t source_index, int32_t count);
+static void realtime_lane_storage_swap_scalars(varray *value, int32_t left, int32_t right);
+static void realtime_lane_storage_swap_references(varray *value, int32_t left, int32_t right);
+static bool realtime_lane_storage_read_validity(varray *value, int32_t index);
+static void realtime_lane_storage_write_validity(varray *value, int32_t index, bool valid);
+#include "value_lane_policy.h"
+
+/* Allocate/copy/publish the physical lanes as one exception-safe storage transaction. */
+static void realtime_lane_storage_replace_capacity(varray *value, int32_t next) {
+	realtime_value_array *array = realtime_value_array_require(value);
 	int scalar_bytes = realtime_value_array_scalar_bytes(array, next);
 	int reference_bytes = realtime_value_array_reference_bytes(array, next);
 	int old_capacity = array->array.capacity, size = array->array.size;
@@ -159,7 +172,7 @@ HL_PRIM varray *HL_NAME(__value_array_alloc)(int length, hl_type *element, int s
 	array->has_validity = has_validity;
 	/* Empty arrays keep no backing lanes until their first write. Non-empty allocations
 	 * reserve with size zero so new slots and the validity bitmap start clear. */
-	realtime_value_array_reserve(array, length);
+	realtime_lane_reserve(&array->array, length);
 	array->array.size = length;
 	return &array->array;
 }
@@ -254,13 +267,7 @@ HL_PRIM varray *HL_NAME(__value_array_retype)(varray *value, hl_type *element, i
 }
 
 HL_PRIM void HL_NAME(__value_array_ensure)(varray *value, int index) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	if( index < 0 || index == INT_MAX ) hl_error("Array index out of bounds");
-	if( index >= array->array.size ) {
-		realtime_value_array_reserve(array, index + 1);
-		array->array.size = index + 1;
-		realtime_value_array_sync(array);
-	}
+	realtime_lane_ensure(value, index);
 }
 
 HL_PRIM void HL_NAME(__value_array_validate)(varray *value, int index) {
@@ -281,15 +288,7 @@ HL_PRIM void HL_NAME(__value_array_mark)(varray *value, int index) {
 
 /* Clearing a nullable element must release its references as well as its presence and payload bits. */
 HL_PRIM void HL_NAME(__value_array_clear)(varray *value, int index) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	realtime_value_array_check_index(array, index);
-	size_t scalar_stride = array->scalar_stride_bits / 8;
-	if( scalar_stride != 0 )
-		memset(array->array.data + HL_WSIZE + (size_t)index * scalar_stride, 0, scalar_stride);
-	if( array->reference_stride != 0 )
-		hl_gc_clear_values(array->references + HL_WSIZE + (size_t)index * array->reference_stride * sizeof(void*),
-			(size_t)array->reference_stride * sizeof(void*), &hlt_dyn);
-	realtime_value_array_set_valid(array, index, false);
+	realtime_lane_clear_element(value, index);
 }
 
 static vbyte *realtime_value_array_scalar_slot(realtime_value_array *array, int index, int offset, int width, bool reading) {
@@ -412,49 +411,12 @@ HL_PRIM void HL_NAME(__value_array_clear_ref)(varray *value, int index, int fiel
 }
 
 HL_PRIM void HL_NAME(__value_array_resize)(varray *value, int length) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	if( length < 0 ) hl_error("Array.resize length must be non-negative");
-	int old_length = array->array.size;
-	if( length > old_length ) realtime_value_array_reserve(array, length);
-	if( length < old_length ) {
-		int removed = old_length - length;
-		size_t stride = array->scalar_stride_bits / 8;
-		if( stride != 0 ) memset(array->array.data + HL_WSIZE + (size_t)length * stride, 0, (size_t)removed * stride);
-		if( array->reference_stride != 0 )
-			hl_gc_clear_values(array->references + HL_WSIZE + (size_t)length * array->reference_stride * sizeof(void*),
-				(size_t)removed * array->reference_stride * sizeof(void*), &hlt_dyn);
-		for( int i = length; i < old_length; i++ ) realtime_value_array_set_valid(array, i, false);
-	}
-	array->array.size = length;
-	realtime_value_array_sync(array);
-}
-
-/* Preserve both lanes and validity with memmove semantics, including overlapping moves within one array. */
-static void realtime_value_array_move(realtime_value_array *target, int target_index, realtime_value_array *source, int source_index, int count) {
-	if( count == 0 ) return;
-	size_t stride = source->scalar_stride_bits / 8;
-	if( stride != 0 )
-		memmove(target->array.data + HL_WSIZE + (size_t)target_index * stride,
-			source->array.data + HL_WSIZE + (size_t)source_index * stride, (size_t)count * stride);
-	if( source->reference_stride != 0 )
-		hl_gc_move_values(target->references + HL_WSIZE + (size_t)target_index * source->reference_stride * sizeof(void*),
-			source->references + HL_WSIZE + (size_t)source_index * source->reference_stride * sizeof(void*),
-			(size_t)count * source->reference_stride * sizeof(void*), &hlt_dyn);
-	if( source->has_validity ) {
-		if( target == source && target_index > source_index ) {
-			for( int i = count; i-- > 0; ) realtime_value_array_set_valid(target, target_index + i, realtime_value_array_valid_at(source, source_index + i));
-		} else {
-			for( int i = 0; i < count; i++ ) realtime_value_array_set_valid(target, target_index + i, realtime_value_array_valid_at(source, source_index + i));
-		}
-	}
+	realtime_lane_resize(value, length);
 }
 
 /* Remove an element in place without allocating the array that splice returns. */
 HL_PRIM void HL_NAME(__value_array_remove_at)(varray *value, int index) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	realtime_value_array_check_index(array, index);
-	realtime_value_array_move(array, index, array, index + 1, array->array.size - index - 1);
-	HL_NAME(__value_array_resize)(value, array->array.size - 1);
+	realtime_lane_remove_at(value, index);
 }
 
 static realtime_value_array *realtime_value_array_new_like(realtime_value_array *array, int length) {
@@ -473,55 +435,24 @@ HL_PRIM void HL_NAME(__value_array_dynamic_store)(varray *value, int index, vdyn
 	realtime_value_array *temporary = realtime_value_array_new_like(array, 1);
 	HL_NAME(__value_array_dynamic_write)(&temporary->array, 0, input);
 	HL_NAME(__value_array_ensure)(value, index);
-	realtime_value_array_move(array, index, temporary, 0, 1);
+	realtime_lane_move(&array->array, index, &temporary->array, 0, 1);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_copy)(varray *value) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	int length = array->array.size;
-	realtime_value_array *copy = realtime_value_array_new_like(array, length);
-	realtime_value_array_move(copy, 0, array, 0, length);
-	return &copy->array;
+	return realtime_lane_copy(value);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_slice)(varray *value, int start, int end) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	realtime_array_slice_bounds(value, &start, &end);
-	realtime_value_array *result = realtime_value_array_new_like(array, end - start);
-	realtime_value_array_move(result, 0, array, start, end - start);
-	return &result->array;
+	return realtime_lane_slice(value, start, end);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_concat)(varray *left, varray *right) {
-	realtime_value_array *a = realtime_value_array_require(left), *b = realtime_value_array_require(right);
-	if( !HL_NAME(__value_array_compatible)(left, right) )
-		hl_error("Incompatible inline value arrays");
-	if( b->array.size > INT_MAX - a->array.size ) hl_error("Value array is too large");
-	realtime_value_array *result = realtime_value_array_new_like(a, a->array.size + b->array.size);
-	realtime_value_array_move(result, 0, a, 0, a->array.size);
-	realtime_value_array_move(result, a->array.size, b, 0, b->array.size);
-	return &result->array;
+	return realtime_lane_concat(left, right);
 }
 
 /** Insert an unwritten slot after evaluating the value to be inserted. */
 HL_PRIM int HL_NAME(__value_array_insert_empty)(varray *value, int position) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	int size = array->array.size;
-	if( size == INT_MAX ) hl_error("Value array is too large");
-	if( position < 0 ) position += size;
-	if( position < 0 ) position = 0;
-	if( position > size ) position = size;
-	realtime_value_array_reserve(array, size + 1);
-	array->array.size = size + 1;
-	realtime_value_array_sync(array);
-	realtime_value_array_move(array, position + 1, array, position, size - position);
-	size_t stride = array->scalar_stride_bits / 8;
-	if( stride != 0 ) memset(array->array.data + HL_WSIZE + (size_t)position * stride, 0, stride);
-	if( array->reference_stride != 0 )
-		hl_gc_clear_values(array->references + HL_WSIZE + (size_t)position * array->reference_stride * sizeof(void*),
-			(size_t)array->reference_stride * sizeof(void*), &hlt_dyn);
-	realtime_value_array_set_valid(array, position, false);
-	return position;
+	return realtime_lane_insert(value, position);
 }
 
 /* Convert before moving the original elements, so an exception leaves every existing alias unchanged. */
@@ -530,39 +461,83 @@ HL_PRIM void HL_NAME(__value_array_dynamic_insert)(varray *value, int position, 
 	realtime_value_array *temporary = realtime_value_array_new_like(array, 1);
 	HL_NAME(__value_array_dynamic_write)(&temporary->array, 0, input);
 	int inserted = HL_NAME(__value_array_insert_empty)(value, position);
-	realtime_value_array_move(array, inserted, temporary, 0, 1);
+	realtime_lane_move(&array->array, inserted, &temporary->array, 0, 1);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_splice)(varray *value, int position, int length) {
-	realtime_value_array *array = realtime_value_array_require(value);
-	if( length < 0 || position > array->array.size ) return &realtime_value_array_new_like(array, 0)->array;
-	if( position < 0 ) {
-		position += array->array.size;
-		if( position < 0 ) position = 0;
-	}
-	if( length > array->array.size - position ) length = array->array.size - position;
-	realtime_value_array *removed = realtime_value_array_new_like(array, length);
-	realtime_value_array_move(removed, 0, array, position, length);
-	realtime_value_array_move(array, position, array, position + length, array->array.size - position - length);
-	HL_NAME(__value_array_resize)(value, array->array.size - length);
-	return &removed->array;
+	return realtime_lane_splice(value, position, length);
 }
 
 HL_PRIM void HL_NAME(__value_array_reverse)(varray *value) {
+	realtime_lane_reverse(value);
+}
+
+/* Physical storage primitives. All structural policy is in the shared generated functions above. */
+static int32_t realtime_lane_storage_length(varray *value) { return realtime_value_array_require(value)->array.size; }
+static int32_t realtime_lane_storage_capacity(varray *value) { return realtime_value_array_require(value)->array.capacity; }
+static bool realtime_lane_storage_has_validity(varray *value) { return realtime_value_array_require(value)->has_validity; }
+static void realtime_lane_storage_publish_length(varray *value, int32_t length) {
+	realtime_value_array *array = realtime_value_array_require(value);
+	array->array.size = length;
+	realtime_value_array_sync(array);
+}
+static varray *realtime_lane_storage_new_like(varray *value, int32_t length) {
+	return &realtime_value_array_new_like(realtime_value_array_require(value), length)->array;
+}
+static bool realtime_lane_storage_compatible(varray *left, varray *right) {
+	return HL_NAME(__value_array_compatible)(left, right);
+}
+static void realtime_lane_storage_fail(int32_t error) {
+	switch( error ) {
+	case 0: hl_error("Array index out of bounds"); break;
+	case 1: hl_error("Array.resize length must be non-negative"); break;
+	case 2: hl_error("Value array is too large"); break;
+	case 3: hl_error("Incompatible inline value arrays"); break;
+	default: hl_error("Invalid lane runtime failure");
+	}
+}
+static void realtime_lane_storage_clear_scalars(varray *value, int32_t first, int32_t count) {
 	realtime_value_array *array = realtime_value_array_require(value);
 	size_t stride = array->scalar_stride_bits / 8;
-	for( int left = 0, right = array->array.size - 1; left < right; left++, right-- ) {
-		vbyte *a = array->array.data + HL_WSIZE + (size_t)left * stride;
-		vbyte *b = array->array.data + HL_WSIZE + (size_t)right * stride;
-		for( size_t i = 0; i < stride; i++ ) { vbyte byte = a[i]; a[i] = b[i]; b[i] = byte; }
-		if( array->reference_stride != 0 )
-			hl_gc_swap_values(array->references + HL_WSIZE + (size_t)left * array->reference_stride * sizeof(void*),
-				array->references + HL_WSIZE + (size_t)right * array->reference_stride * sizeof(void*),
-				(size_t)array->reference_stride * sizeof(void*), &hlt_dyn);
-		if( array->has_validity ) {
-			bool left_valid = realtime_value_array_valid_at(array, left), right_valid = realtime_value_array_valid_at(array, right);
-			realtime_value_array_set_valid(array, left, right_valid);
-			realtime_value_array_set_valid(array, right, left_valid);
-		}
-	}
+	if( count != 0 && stride != 0 ) memset(array->array.data + HL_WSIZE + (size_t)first * stride, 0, (size_t)count * stride);
+}
+static void realtime_lane_storage_clear_references(varray *value, int32_t first, int32_t count) {
+	realtime_value_array *array = realtime_value_array_require(value);
+	if( count != 0 && array->reference_stride != 0 )
+		hl_gc_clear_values(array->references + HL_WSIZE + (size_t)first * array->reference_stride * sizeof(void*),
+			(size_t)count * array->reference_stride * sizeof(void*), &hlt_dyn);
+}
+static void realtime_lane_storage_copy_scalars(varray *target, int32_t target_index, varray *source, int32_t source_index, int32_t count) {
+	realtime_value_array *a = realtime_value_array_require(target), *b = realtime_value_array_require(source);
+	size_t stride = b->scalar_stride_bits / 8;
+	if( count != 0 && stride != 0 )
+		memmove(a->array.data + HL_WSIZE + (size_t)target_index * stride,
+			b->array.data + HL_WSIZE + (size_t)source_index * stride, (size_t)count * stride);
+}
+static void realtime_lane_storage_copy_references(varray *target, int32_t target_index, varray *source, int32_t source_index, int32_t count) {
+	realtime_value_array *a = realtime_value_array_require(target), *b = realtime_value_array_require(source);
+	if( count != 0 && b->reference_stride != 0 )
+		hl_gc_move_values(a->references + HL_WSIZE + (size_t)target_index * b->reference_stride * sizeof(void*),
+			b->references + HL_WSIZE + (size_t)source_index * b->reference_stride * sizeof(void*),
+			(size_t)count * b->reference_stride * sizeof(void*), &hlt_dyn);
+}
+static void realtime_lane_storage_swap_scalars(varray *value, int32_t left, int32_t right) {
+	realtime_value_array *array = realtime_value_array_require(value);
+	size_t stride = array->scalar_stride_bits / 8;
+	vbyte *a = array->array.data + HL_WSIZE + (size_t)left * stride;
+	vbyte *b = array->array.data + HL_WSIZE + (size_t)right * stride;
+	for( size_t i = 0; i < stride; i++ ) { vbyte byte = a[i]; a[i] = b[i]; b[i] = byte; }
+}
+static void realtime_lane_storage_swap_references(varray *value, int32_t left, int32_t right) {
+	realtime_value_array *array = realtime_value_array_require(value);
+	if( array->reference_stride != 0 )
+		hl_gc_swap_values(array->references + HL_WSIZE + (size_t)left * array->reference_stride * sizeof(void*),
+			array->references + HL_WSIZE + (size_t)right * array->reference_stride * sizeof(void*),
+			(size_t)array->reference_stride * sizeof(void*), &hlt_dyn);
+}
+static bool realtime_lane_storage_read_validity(varray *value, int32_t index) {
+	return realtime_value_array_valid_at(realtime_value_array_require(value), index);
+}
+static void realtime_lane_storage_write_validity(varray *value, int32_t index, bool valid) {
+	realtime_value_array_set_valid(realtime_value_array_require(value), index, valid);
 }

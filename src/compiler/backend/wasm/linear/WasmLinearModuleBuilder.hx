@@ -191,6 +191,7 @@ class WasmLinearModuleBuilder {
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
+		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
@@ -323,6 +324,7 @@ class WasmLinearModuleBuilder {
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
+		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> { return {parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)], results: WasmModuleSupport.resultTypes(fn.result)}; });
 		WasmLinearValueArrays.register(linear);
 		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
 		WasmLinearArrays.registerNativeAllocators(linear);
@@ -385,6 +387,7 @@ class WasmLinearModuleBuilder {
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName);
 		for (fn in program.functions) {
+			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name)) continue;
 			if (!reachable.exists(fn.name))
 				continue;
 			if (fn.name == "__entry" && preferredEntry != "__entry")
