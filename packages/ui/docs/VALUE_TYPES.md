@@ -1158,3 +1158,112 @@ and all six paired headless memory runs passed. The separately planned final
 budget gate passed without changing any ceiling. Captures were deleted after
 recording their summaries. The app gate’s private idle compiler worker was shut
 down normally before captures; no unrelated process was touched.
+
+### Uniform array growth: factor-2 trial (not accepted)
+
+On the same machine and outer source at `8b6506f34`, implicit growth was changed
+from the old target-specific policies to `max(required, capacity * 2)`; explicit
+resize allocations used exactly the requested length and retained capacity when
+shrinking. The first trial passed the gates but increased selection-stress array
+allocations from 96,333 / 5,971,976 bytes to 131,705 / 5,162,328 bytes. Its paired
+RSS windows were:
+
+| Pair | Control MiB | Factor 2 MiB |
+| --- | --- | --- |
+| 1 | 28.91 / 4.38 / 0.94 / 5.00 | 28.44 / 6.41 / 0.62 / 5.31 |
+| 2 | 31.09 / 3.44 / 0.78 / 4.84 | 27.97 / 6.56 / 0.62 / 5.47 |
+| 3 | 30.00 / 4.22 / 0.78 / 5.00 | 28.28 / 6.09 / 0.62 / 5.31 |
+
+Sharing immutable empty backing storage for arrays without a metadata owner
+removed exactly 25,926 eight-byte allocations from the selection census. Owned
+empty storage still pins its metadata. A subsequent allocation-site census found
+that `ComputedStyle.setDeclaration` explicitly resized for every new property;
+those allocations increased from 113,696 to 395,808 bytes in the four-cycle
+capture. Its indexed writes now use implicit growth directly. With both fixes,
+selection-stress arrays were 103,803 / 4,640,584 bytes: 7,470 more objects and
+1,331,392 fewer bytes than control. Total paired census results were:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,906 / 24,009,648 | 348,380 / 22,679,376 |
+| 2 | 340,911 / 24,010,912 | 348,382 / 22,679,808 |
+| 3 | 340,912 / 24,011,136 | 348,378 / 22,678,824 |
+
+The next memory pair measured control windows 30.00 / 4.06 / 0.78 / 5.00 MiB
+and candidate 27.66 / 8.12 / 0.31 / 5.62 MiB. The candidate failed with
+`RSS grew more than 8 MiB per 100 cycles in consecutive windows`. This result
+was retained, not retried for acceptance. A uniform factor-1.5 trial follows;
+no budget ceiling or memory threshold was raised.
+
+The permitted factor-1.5 alternative used `max(required, capacity + capacity / 2)`
+on all three targets, with the same exact explicit sizing and the two fixes above.
+Its three paired headless runs passed the absolute memory gate, but retained a
+consistent second-window regression and increased total growth in every pair:
+
+| Pair | Control MiB | Factor 1.5 MiB | Sum delta MiB |
+| --- | --- | --- | ---: |
+| 1 | 30.94 / 3.59 / 0.78 / 4.69 | 28.75 / 7.34 / 0.31 / 5.47 | +1.87 |
+| 2 | 29.06 / 4.38 / 0.62 / 5.00 | 28.28 / 7.66 / 0.31 / 5.62 | +2.81 |
+| 3 | 30.16 / 4.06 / 0.94 / 4.84 | 28.12 / 7.50 / 0.31 / 6.09 | +2.02 |
+
+These passing gate verdicts do not establish no regression against control.
+Neither tested growth factor is accepted on this evidence. The implementation
+is preserved on disk pending a solution to the small-array allocation/memory
+cost. The alternative is to keep the committed policy until that cost is resolved;
+adding a minimum starting capacity would violate the decided uniform formula,
+and changing a gate threshold would not fix the allocation pattern.
+
+Factor-1.5 selection-stress census (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,904 | 356,980 / 23,405,752 |
+| 2 | 340,911 / 24,010,912 | 356,983 / 23,406,552 |
+| 3 | 340,909 / 24,010,336 | 356,981 / 23,406,040 |
+
+Nine alternating per-action HashLink allocation pairs gave these medians (KiB):
+
+| Action | Control | Factor 1.5 |
+| --- | ---: | ---: |
+| hover-away | 13.6 | 11.8 |
+| hover-enter | 0.5 | 0.5 |
+| hover-field | 12.4 | 12.3 |
+| hover-inside | 0.5 | 0.5 |
+| hover-other | 10.0 | 9.9 |
+| idle | 0.2 | 0.2 |
+| idle-focused | 0.2 | 0.2 |
+| scroll-inspector | 21.2 | 21.2 |
+| type-backspace | 16.2 | 16.1 |
+| type-char | 16.1 | 16.1 |
+| console->telemetry | 74.5 | 72.0 |
+| hierarchy->sensors | 114.6 | 110.1 |
+| sensors->hierarchy | 80.1 | 75.7 |
+| telemetry->console | 92.9 | 90.4 |
+
+All eighteen action captures passed their budget verdicts.
+
+The earlier factor-2 compiler checkpoint passed 763 tests with zero failures,
+self-hosting, 498 Wasm parity fixtures (14 existing skips), all six UI value
+snapshots, all ten UI suites, app tests, retention and the Wasm32 WebGL2 smoke.
+Its full-scene Wasm GC allocation pairs were equal: 4,440 objects for full,
+static and text-heavy scenes; 8,724 for editing. Those results precede the
+ComputedStyle change and the factor-1.5 experiment; they are not a claim that
+the rejected final candidate passed all targets. Factor 1.5 was measured first
+on HashLink and was not advanced to a new Wasm guest after its memory regression.
+The new capacity fixture passed on all three targets with inlining both enabled
+and disabled under factor 2, including sparse jumps and shrink/regrow reuse.
+A native ASan/UBSan probe passed 20,000 deterministic mixed lane operations.
+
+One factor-1.5 harness invocation encountered a leftover failed factor-2 capture
+directory (`File exists: .../capture-rss-0-candidate`) before starting that guest.
+The recorded directory was deleted, the already completed control sample was
+retained, and the missing candidate and remaining pairs were run once. No failed
+memory sample was replaced. All measurements and implementation patches are
+preserved under `materia-cache/claude-scratch/haxeon-growth-policy-blocked-2026-11-05/`.
+The requested `hl-exit-crash` merge remains queued after the growth-policy commit;
+no merge was started during these measurements.
+
+The separately planned final factor-1.5 budget run and all nine retention scenarios passed.
+The implementation was then parked and only its own source changes were removed;
+the committed runtime policy is retained. No new full-suite pass is claimed for
+the factor-1.5 trial, and no implementation or submodule pin was published.

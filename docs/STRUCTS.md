@@ -934,13 +934,28 @@ a wasm32-capable clang was not configured.
 
 ## Array capacity policy (decided follow-up)
 
-The next measured commit after shared-runtime consolidation uses one capacity policy for ordinary and struct-lane
-arrays on every target. Implicit growth (`push`, `insert`, and writes past the end) chooses
-`max(required, capacity * 2)`. Explicit sizing (`resize(n)` and construction with a known length) uses capacity
-exactly `n`. There is no target-specific growth setting in that final model. The consolidation commit temporarily
-preserves existing capacities so its measurements isolate the shared implementation; the follow-up removes that
-compile-time setting. Measure factor 2 first, record and justify any action that allocates more, and reconsider
-factor 1.5 only if factor 2 regresses.
+The decided follow-up uses one growth policy for ordinary and struct-lane arrays on every target. When implicit growth (`push`, `insert`,
+or a write past the end) needs storage, the new capacity is `max(required, capacity * 2)`. Explicit growth via
+`resize(n)` allocates exactly `n`; constructors, copies, slices, concatenations and splice results whose lengths
+are known also allocate exactly those lengths. There is no target-specific minimum or growth setting.
+
+`resize(n)` retains an existing capacity that already fits `n`. Shrinking clears the discarded elements and their
+managed references, and regrowth exposes zero/null or uninitialized elements according to their element type.
+This is the decided meaning of explicit sizing: "exactly n" applies to a new allocation. Reactive tracking and UI
+frame queues retain their reusable buffers during clearing. Explicit capacity trimming would be a separate method,
+not part of `resize` or this growth-policy change. `pop`, `shift`, removal and splice
+also retain the original array's capacity. An unrepresentable doubled capacity fails before replacing storage.
+
+Measure factor 2 first, record and justify any action that allocates more, and reconsider factor 1.5 only if factor 2
+regresses. The preceding consolidation preserved old capacity geometry so its measurements isolate the shared
+implementation. The follow-up removes that interim compile-time setting.
+
+The measured factor-2 and permitted factor-1.5 candidates have not met the HashLink memory no-regression rule.
+The committed runtime therefore retains its existing policy; the proposed implementation is parked on disk.
+See [UI value types](../packages/ui/docs/VALUE_TYPES.md#uniform-array-growth-factor-2-trial-not-accepted)
+for the paired allocation censuses, per-action KiB and RSS windows. Exact explicit sizing and capacity retention on
+shrink remain the decision, rather than an open syntax or semantics question. The next implementation must resolve
+the small-array allocation and memory cost without raising a ceiling or introducing target-specific growth settings.
 
 ## Fixed arrays
 
