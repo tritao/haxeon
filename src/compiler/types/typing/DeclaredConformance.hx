@@ -14,7 +14,7 @@ class DeclaredConformance {
 		return switch type {
 			case TKeyPath(_, _, _): true;
 			case TNullable(element): usesEquality(session, element);
-			case TInstance(NominalKind.Class, _, _): has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
 			default: false;
 		};
 
@@ -24,7 +24,8 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
-			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
+			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
 		};
 
@@ -33,7 +34,8 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
-			case TInstance(NominalKind.Class, _, _), TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Hashable");
+			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
 			default: false;
 		};
 

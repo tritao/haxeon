@@ -57,7 +57,7 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 				identityIndex.put(source, fieldBit, null);
 			} else {
 				for (index in captureSliceStart...sources.length)
-					if (haxeon.Identity.same(sources[index], source) && captureFieldBits[index] == fieldBit) return;
+					if ((sources[index] == source) && captureFieldBits[index] == fieldBit) return;
 				if (sources.length - captureSliceStart >= IndexThreshold) {
 					identityIndex = new ReactiveIdentityIndex(true);
 					setIdentityIndex(identityIndex);
@@ -72,17 +72,17 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		}
 		var edge:ReactiveEdge = null, identityIndex = getIdentityIndex(), tail:ReactiveEdge = cast readerTail;
 		if (identityIndex != null) edge = identityIndex.get(source, fieldBit);
-		else if (tail != null && haxeon.Identity.same(tail.source, source) && tail.fieldBit == fieldBit)
+		else if (tail != null && (tail.source == source) && tail.fieldBit == fieldBit)
 			edge = tail;
 		else {
 			var first = source.firstReader();
-			if (first != null && haxeon.Identity.same(first.reader, this) && first.fieldBit == fieldBit)
+			if (first != null && (first.reader == this) && first.fieldBit == fieldBit)
 				edge = first;
 			else if (first != null && first.sourceNext != null) {
 				var candidate = readerHead;
 				while (candidate != null) {
 					if (captureSliceStart < IndexThreshold) captureSliceStart++;
-					if (haxeon.Identity.same(candidate.source, source) && candidate.fieldBit == fieldBit) { edge = candidate; break; }
+					if ((candidate.source == source) && candidate.fieldBit == fieldBit) { edge = candidate; break; }
 					candidate = candidate.readerNext;
 				}
 				if (edgeCount > IndexThreshold && captureSliceStart >= IndexThreshold) {

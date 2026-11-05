@@ -1433,6 +1433,25 @@ class HlLower {
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
 			return true;
 		}
+		if (name == compiler.ir.IrReferenceIdentity.NAME) {
+			var pointers:Array<Int> = [];
+			for (arg in arguments) {
+				var source = requireRegister(arg,registers);
+				switch arg.type {
+					case Virtual(_):
+						var concrete = temporaryRegister(IrType.Dyn,registerTypes);
+						instructions.push(HlInstruction.ToDyn(concrete,source)); source = concrete;
+					default:
+				}
+				var pointer = temporaryRegister(IrType.RawPtr,registerTypes);
+				instructions.push(HlInstruction.UnsafeCast(pointer,source)); pointers.push(pointer);
+			}
+			var result = defineRegister(output,registers,registerTypes), yes = '__reference_true_${output.id}', done = '__reference_done_${output.id}';
+			instructions.push(HlInstruction.JumpEqual(pointers[0],pointers[1],yes));
+			instructions.push(HlInstruction.LoadBool(result,false)); instructions.push(HlInstruction.Jump(done));
+			instructions.push(HlInstruction.Label(yes)); instructions.push(HlInstruction.LoadBool(result,true)); instructions.push(HlInstruction.Label(done));
+			return true;
+		}
 		if (name == compiler.ir.IrReceiverCheck.NAME) {
 			instructions.push(HlInstruction.NullCheck(requireRegister(arguments[0], registers)));
 			return true;

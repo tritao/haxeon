@@ -189,6 +189,8 @@ class TypeRelations {
 		};
 		if (valueCapability)
 			switch actual {
+				case TInstance(NominalKind.Class, _, _) if (!isStruct(actual)): return false;
+				case TInstance(NominalKind.Interface, _, _): return false;
 				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_), TKeyPath(_, _, _): return true;
 				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
 					return satisfiesConstraint(representation, expected);

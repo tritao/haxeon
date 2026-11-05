@@ -2154,6 +2154,8 @@ class IrGenerator {
 					right = builder.enumIndex(right);
 				} // A test against a literal null is a pointer test, not a call into the runtime's equality: it lowers to one
 				// OJNull whatever the other side's reference type (a boxed Null<Int>, a Dynamic, a String).
+				if (!isNullExpression(a) && !isNullExpression(b) && isIdentityReference(a.type) && isIdentityReference(b.type))
+					return builder.call(IrReferenceIdentity.NAME, [left,right], Bool);
 				isNullExpression(a) || isNullExpression(b) ? builder.equal(left,
 					right) : (switch (lowerType(a.type)) { case Bytes: true; default: false; }) ? builder.call("__string_equal", [left, right],
 					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
@@ -3531,6 +3533,13 @@ class IrGenerator {
 			if (!IrVerifier.sameType(lowerType(contract.arguments[index]), arguments[index])) return name;
 		return null;
 	}
+
+	static function isIdentityReference(type:CompilerType):Bool return switch type {
+		case TNullable(inner): isIdentityReference(inner);
+		case TInstance(NominalKind.Class,name,_): !valueClasses.exists(name);
+		case TInstance(NominalKind.Interface,_,_): true;
+		default: false;
+	};
 
 	public static function lowerType(type:CompilerType):IrType
 		return switch type {

@@ -336,9 +336,6 @@ class WasmLinearRuntime {
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
 			outputReserve:Int):Null<Int> {
 		return switch native.symbol {
-			case "__reference_identity": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
-					LocalGet(0), LocalGet(1), I32Eq, Return
-				]));
 			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
 					LocalGet(0),
 					I32Eqz,

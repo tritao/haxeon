@@ -2,7 +2,7 @@ class InheritedBase<T> {
   public final base:T;
   public function new(base:T) this.base = base;
 }
-class InheritedKey extends InheritedBase<Int> implements Hashable {
+class InheritedSnapshot extends InheritedBase<Int> implements Diffable {
   public final child:Int;
   public function new(base:Int, child:Int) { super(base); this.child = child; }
 }
@@ -22,7 +22,7 @@ class InheritedCopy extends InheritedCopyBase implements Diffable {
   public var child:Int = 0;
   public function new() super();
 }
-class InheritedCustomBase implements Hashable {
+class InheritedCustomBase {
   public final value:Int;
   public function new(value:Int) this.value = value;
   public function equals(other:InheritedCustomBase):Bool return value % 10 == other.value % 10;
@@ -33,9 +33,9 @@ class InheritedCustom extends InheritedCustomBase {
   public function new(value:Int, extra:Int) { super(value); this.extra = extra; }
 }
 function main():Int {
-  var a = new InheritedKey(1, 4), b = new InheritedKey(2, 4), c = new InheritedKey(1, 4);
-  if (haxeon.Equality.equals(a, b) || !haxeon.Equality.equals(a, c)) return 1;
-  if (haxeon.Hashing.hash(a) == haxeon.Hashing.hash(b) || haxeon.Hashing.hash(a) != haxeon.Hashing.hash(c)) return 2;
+  var a = new InheritedSnapshot(1, 4), b = new InheritedSnapshot(2, 4), c = new InheritedSnapshot(1, 4);
+  if (haxeon.Diff.mask(a, b) != 1 || haxeon.Diff.mask(a, c) != 0 || a == c) return 1;
+  if (haxeon.Diff.fingerprint(a) == haxeon.Diff.fingerprint(b) || haxeon.Diff.fingerprint(a) != haxeon.Diff.fingerprint(c)) return 2;
   var before = new InheritedEditable(1, 4), after = new InheritedEditable(2, 5), target = new InheritedEditable(1, 4);
   if (haxeon.Diff.mask(before, after) != 3 || haxeon.Diff.bit(\InheritedEditable.base) != 1
       || haxeon.Diff.bit(\InheritedEditable.child) != 2 || haxeon.Diff.all(InheritedEditable) != 3) return 3;
@@ -45,6 +45,6 @@ function main():Int {
   var copy = haxeon.Diff.copy(original);
   if (copy.base != 3 || copy.child != 8 || copy == original) return 7;
   var x = new InheritedCustom(1, 3), y = new InheritedCustom(11, 9);
-  if (!haxeon.Equality.equals(x, y) || haxeon.Hashing.hash(x) != haxeon.Hashing.hash(y)) return 6;
+  if (x == y || !x.equals(y) || x.hash() != y.hash()) return 6;
   return 42;
 }

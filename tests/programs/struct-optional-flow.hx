@@ -31,7 +31,7 @@ struct FlatPoint implements Hashable {
   public final y:Float;
   public function new(x:Float, y:Float) { this.x = x; this.y = y; }
 }
-class PointHolder implements Hashable {
+struct PointHolder implements Hashable {
   public final point:FlatPoint;
   public function new(point:FlatPoint) this.point = point;
 }

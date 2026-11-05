@@ -108,7 +108,7 @@ class NullableStructIncrementalMain {
 			+ "var d:Dynamic = Generic.box(p); var empty:Null<Point> = null; var absent:Null<Point> = Generic.keep(empty); "
 			+ "return (p == null ? 0 : p.x) + h.invoke() + (absent == null ? 1 : 0); }");
 		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "initial generic optional value failed";
-		transition.update("Point.hx", "class" + StringTools.replace(pointBody, " Point {", " Point implements Equatable {"));
+		transition.update("Point.hx", "class" + pointBody);
 		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "struct-to-class retained an obsolete specialization";
 		transition.update("Point.hx", "struct" + StringTools.replace(pointBody, " Point {", " Point implements Equatable {"));
 		if (new IrInterpreter(transition.compile("Main").ir).run("main") != 15) throw "class-to-struct retained an obsolete specialization";

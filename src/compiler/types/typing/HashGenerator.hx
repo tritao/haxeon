@@ -118,15 +118,10 @@ class HashGenerator {
 				}
 				statements.push(TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span));
 				}
-			case TInstance(NominalKind.Class, name, arguments):
+			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
 					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable', span);
-				if (!session.relations.isValueClass(type)) {
-					var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
-						absent = new TypedExpression(TEqual(value, nil), TBool, span);
-					statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span));
-				}
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "hash");
 				if (custom != null) {
 					var receiver = new TypedExpression(TCast(value), custom.type, span);

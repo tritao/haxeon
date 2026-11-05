@@ -1,7 +1,7 @@
 import haxeon.Equality;
 import haxeon.Diff;
 
-class Point implements Equatable {
+class Point {
 	public var x:Float;
 	public var y:Float;
 
@@ -16,7 +16,7 @@ enum abstract Mode(Int) {
 	var Bold = 2;
 }
 
-class Style implements Equatable implements Diffable {
+class Style implements Diffable {
 	public var width:Int = 0;
 	public var visible:Bool = true;
 	public var mode:Mode = Plain;
@@ -36,15 +36,15 @@ function main():Int {
 	a.origin.x = 2.5;
 	a.name = "n";
 	var b = Diff.copy(a);
-	if (b != a) return 1;
-	if (!Equality.equals(a, b)) return 2;
+	if (b == a) return 1;
+	if (Diff.mask(a, b) != 0) return 2;
 	// Shallow: the nested instance is shared.
 	if (b.origin != a.origin) return 3;
 	b.width = 4;
 	b.mode = Bold;
 	var mask = Diff.mask(a, b);
 	if (mask != (Diff.bit(\Style.width) | Diff.bit(\Style.mode))) return 5;
-	if (Equality.equals(a, b)) return 6;
+	if (Diff.mask(a, b) == 0) return 6;
 	// A field changed outside the delta is left alone.
 	var target = Diff.copy(a);
 	target.visible = false;
@@ -54,13 +54,13 @@ function main():Int {
 	var p = new Point(), q = new Point();
 	q.y = 1.0;
 	if (Equality.equals(p, q)) return 9;
-	// Nested conforming fields compare by value.
+	// Replacing a reference field changes identity even when its fields match.
 	var c = Diff.copy(a);
 	c.origin = new Point();
 	c.origin.x = 2.5;
-	if (!Equality.equals(a, c)) return 10;
+	if (Diff.mask(a, c) != Diff.bit(\Style.origin)) return 10;
 	var nulled = Diff.copy(a);
 	nulled.name = null;
-	if (Equality.equals(a, nulled) || Diff.mask(a, nulled) != Diff.bit(\Style.name)) return 11;
+	if (Diff.mask(a, nulled) == 0 || Diff.mask(a, nulled) != Diff.bit(\Style.name)) return 11;
 	return 42;
 }

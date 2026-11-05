@@ -1564,8 +1564,14 @@ class RestyleInPlaceTests {
     style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
     var copied = style.copy();
     var styleFingerprint = haxeon.Diff.fingerprint(style);
-    check(haxeon.Equality.equals(copied, style) && styleFingerprint == haxeon.Diff.fingerprint(copied),
+    check(copied != style && haxeon.Diff.mask(copied, style) == 0 && styleFingerprint == haxeon.Diff.fingerprint(copied),
       "LayoutStyle.copy is not an equal copy");
+    var resolver = new haxeon.ui.style.StyleResolver();
+    var target = new haxeon.ui.style.StyleTarget("box", "snapshot-content");
+    resolver.resolve(target, null, null, null, style);
+    resolver.resolve(target, null, null, null, copied);
+    check(resolver.cacheMisses == 1 && resolver.cacheHits == 1,
+      "Equal LayoutStyle snapshots must share the style cache despite different identities");
     copied.childGap = 17.0;
     check(style.childGap == 0.0, "LayoutStyle.copy shares mutable fields with its source");
     check(styleFingerprint != haxeon.Diff.fingerprint(copied),

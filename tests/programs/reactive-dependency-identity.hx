@@ -3,14 +3,14 @@ import haxeon.reactive.ObservableSource;
 import haxeon.reactive.ReactiveDependencySet;
 import haxeon.reactive.ReactiveRuntime;
 
-class EqualObservable extends ObservableSource implements Equatable {
+class EqualObservable extends ObservableSource {
  public function new(count:Int) super(count);
  public function equals(other:EqualObservable):Bool return true;
 }
 
 function main():Int {
  var source=new EqualObservable(1000000), other=new EqualObservable(1);
- if (!(source == other)) return 7;
+ if (source == other || !source.equals(other)) return 7;
  var capture=new ReactiveDependencySet(true), nested=new ReactiveDependencySet(true);
  capture.trackField(source,0); capture.trackField(source,1); capture.trackField(source,0);
  if (capture.pendingCount()!=2) return 1;

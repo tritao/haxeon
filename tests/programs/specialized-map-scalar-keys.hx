@@ -6,10 +6,10 @@ struct ScalarMapValue {
 	public function new(number:Int) this.number = number;
 }
 
-class ScalarMapReferenceKey implements Hashable {
+struct ScalarMapRecordKey implements Hashable {
 	public final number:Int;
 	public function new(number:Int) this.number = number;
-	public function equals(other:ScalarMapReferenceKey):Bool return number % 10 == other.number % 10;
+	public function equals(other:ScalarMapRecordKey):Bool return number % 10 == other.number % 10;
 	public function hash():Int return number % 10;
 }
 
@@ -83,10 +83,10 @@ function main():Int {
 	var optionalFloats:Map<Null<Float>, Int> = new Map();
 	optionalFloats.set(null, 14); optionalFloats.set(nan, 15); optionalFloats.set(otherNaN, 16);
 	if (optionalFloats.size() != 2 || optionalFloats.get(null) != 14 || optionalFloats.get(nan) != 16) return 9;
-	var references:Map<ScalarMapReferenceKey, Int> = new Map();
-	references.set(new ScalarMapReferenceKey(11), 17);
-	references.set(new ScalarMapReferenceKey(21), 18);
-	if (references.size() != 1 || references.get(new ScalarMapReferenceKey(31)) != 18) return 10;
+	var records:Map<ScalarMapRecordKey, Int> = new Map();
+	records.set(new ScalarMapRecordKey(11), 17);
+	records.set(new ScalarMapRecordKey(21), 18);
+	if (records.size() != 1 || records.get(new ScalarMapRecordKey(31)) != 18) return 10;
 	if (!Hashing.keyEquals(ScalarMapEffects.next(), ScalarMapEffects.next()) || ScalarMapEffects.calls != 2) return 13;
 	ScalarMapCensus.prepare();
 	#if !wasm

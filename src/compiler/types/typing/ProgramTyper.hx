@@ -412,6 +412,15 @@ class ProgramTyper {
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
 			isValue = requestedValue && !isNativeValue;
 		validateStructPropertyMetadata(classDecl, isValue, isNativeValue);
+		// Reject value capabilities on reference declarations before typing their fields or initializers.
+		if (!isStruct && (classDecl.interfaces.length > 0 || classDecl.base != null)) {
+			var actual = TInstance(NominalKind.Class,classDecl.name,
+				[for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name,parameter)]);
+			for (capability in ["Hashable","Equatable"])
+				if (session.relations.isAssignable(actual,TInstance(NominalKind.Interface,capability,[])))
+					BodyTyper.fail("E1025", 'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality', classDecl.span);
+		}
+
 		if (isStruct && isNativeValue)
 			BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields', classDecl.span);
 		if (isStruct && classDecl.typeParameters.length > 0)
@@ -576,6 +585,7 @@ class ProgramTyper {
 
 	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType,
 			classSemanticSubstitutions:Map<String, CompilerType>):Void {
+		if (!session.relations.isStruct(declaredType)) return;
 		if (DeclaredConformance.has(session, declaredType, "Equatable")) {
 			var hasEquals = false, hasHash = false;
 			for (method in classDecl.methods)
@@ -591,24 +601,6 @@ class ProgramTyper {
 						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TInt))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int', method.span);
 				}
-			var inheritedEquals = DiffIntrinsics.conformanceMethod(session, declaredType, "equals"),
-				inheritedHash = DiffIntrinsics.conformanceMethod(session, declaredType, "hash");
-			hasEquals = inheritedEquals != null;
-			hasHash = inheritedHash != null;
-			if (inheritedEquals != null && inheritedEquals.declaration.name != classDecl.name) {
-				var method = inheritedEquals.method, substitutions = session.representation.nominalSubstitutions(inheritedEquals.type);
-				if (method.isStatic || method.arguments.length != 1
-						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), inheritedEquals.type)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
-					BodyTyper.fail("E1003", 'Method "${inheritedEquals.declaration.name}.equals" must have signature equals(other:${compiler.semantic.SemanticSignature.display(inheritedEquals.type)}):Bool', method.span);
-			}
-			if (DeclaredConformance.has(session, declaredType, "Hashable") && inheritedHash != null
-					&& inheritedHash.declaration.name != classDecl.name) {
-				var method = inheritedHash.method, substitutions = session.representation.nominalSubstitutions(inheritedHash.type);
-				if (method.isStatic || method.arguments.length != 0
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
-					BodyTyper.fail("E1003", 'Method "${inheritedHash.declaration.name}.hash" must have signature hash():Int', method.span);
-			}
 			if (!hasEquals)
 				for (entry in DiffIntrinsics.conformanceFields(session, declaredType)) {
 					var field = entry.field, fieldType = entry.type;
@@ -624,14 +616,8 @@ class ProgramTyper {
 					if (!DeclaredConformance.supportsHash(session, fieldType))
 						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable', field.span);
 				}
-				if (classDecl.isStruct != true)
-					for (entry in hashFields) {
-						var field = entry.field;
-						if (DiffIntrinsics.isWritable(field))
-							BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": mutable field "${field.name}" must be final on a class', field.span);
-					}
 			}
-	}
+		}
 	}
 
 	function validateEnumInterface(declaration:compiler.syntax.Ast.AstEnum, interfaceType:CompilerType, enumSubstitutions:Map<String, CompilerType>,

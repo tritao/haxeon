@@ -198,7 +198,7 @@ class IrLoadStoreForwarding {
 	/** Unknown operations kill all facts. Dynamic arithmetic/comparisons can dispatch user code. */
 	public static function mayWriteMemory(instruction:IrInstruction):Bool
 		return switch instruction {
-			case Call(_, name, _) if (name == IrReceiverCheck.NAME): false;
+			case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME): false;
 			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
 				StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), NewObject(_, _), IntToFloat(_, _), IntToInt64(_, _),
 				FloatToInt(_, _), FloatToFloat(_, _), ArraySize(_, _), EnumIndex(_, _), EnumField(_, _, _, _): false;

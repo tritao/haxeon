@@ -139,7 +139,10 @@ retain and invalidate them with their declaring module and the value layouts the
 A generic owner with a constrained parameter is specialized for each concrete constrained argument even when it is a
 reference or scalar. Its instance bodies are templates checked with the selected substitutions, so operations such as
 `Hashing.hash(key)` and declared equality resolve to the static conformance instead of attempting to hash `Dynamic`.
-This also lets the same ordinary generic map handle value and reference keys without a compiler-generated map object.
+`Equatable` and `Hashable` are value-only bounds: structs, enums and built-in values can satisfy them, while classes
+and interface-typed views cannot. Ordinary custom interface bounds still admit conforming classes. The ordinary generic
+`HashMap<K:Hashable, V>` handles declared value keys without a compiler-generated map object; class identity keys use
+`haxe.ds.ObjectMap`. A class cannot select value-key behavior by declaring either value capability.
 Boxed generic enums require the full semantic type arguments in their canonical runtime type descriptor, even when
 multiple specializations share one physical payload layout. An `Array<E<T>>` can be viewed through `Array<Dynamic>`
 after it has been populated, and an enum case may contain no `T` payload from which to infer the type. Generic bodies

@@ -293,7 +293,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    A self-updating build owns its subscriptions while registered or held by a retained interaction snapshot. Pruning
    an unmounted build releases the registry's ownership; the last owner disposes its subscriptions and child snapshots.
    Cached alternatives keep their subscriptions for validation and transfer their invalidation owner when rearmed.
-   `haxeon.Identity.same` compares class instances by identity without invoking declared value equality.
+   Class and interface `==` compares instance identity. Only value types can declare `Equatable` or `Hashable`;
+   reactive edge and source comparisons use ordinary `==` without an identity API or boxing.
    `State` is a signal handle. Every signal and Observable write stores its supplied value; equality decides only whether
    readers are invalidated. Floating-point change detection treats NaN as equal to NaN and the two zero signs as equal,
    while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate

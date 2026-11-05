@@ -377,6 +377,8 @@ HL_PRIM int HL_NAME(__reflect_compare)( vdynamic *left, vdynamic *right ) {
    never fall back to comparing their allocation addresses. Entirely nullary
    enums have tag equality even without a generated conformance helper. */
 HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
+	while( left != NULL && left->t->kind == HVIRTUAL && ((vvirtual*)left)->value != NULL ) left = ((vvirtual*)left)->value;
+	while( right != NULL && right->t->kind == HVIRTUAL && ((vvirtual*)right)->value != NULL ) right = ((vvirtual*)right)->value;
 	/* Abstract handles are boxed when erased. Compare callback handles, not the
 	   addresses of the independently allocated Dynamic wrappers. */
 	if( left != NULL && right != NULL && left->t->kind == HABSTRACT && right->t->kind == HABSTRACT
@@ -392,6 +394,9 @@ HL_PRIM bool HL_NAME(__dynamic_equal)(vdynamic *left, vdynamic *right) {
 				hl_error("Enum equality requires a concrete declared conformance");
 		return ((venum *)left)->index == ((venum *)right)->index;
 	}
+	/* Classes have identity even when foreign/native metadata provides a comparison hook. Strings remain values. */
+	if( !realtime_is_string(left) || !realtime_is_string(right) )
+		if( (left != NULL && left->t->kind == HOBJ) || (right != NULL && right->t->kind == HOBJ) ) return left == right;
 	return HL_NAME(__reflect_compare)(left, right) == 0;
 }
 

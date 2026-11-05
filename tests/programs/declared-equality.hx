@@ -1,4 +1,4 @@
-class Record implements Equatable {
+struct Record implements Equatable {
 	public final x:Int;
 	public function new(x:Int) this.x = x;
 }
@@ -8,20 +8,20 @@ struct Pair implements Hashable implements Diffable {
 	public function new(x:Int) this.x = x;
 }
 
-class Modulo implements Equatable {
+struct Modulo implements Equatable {
 	public final x:Int;
 	public function new(x:Int) this.x = x;
 	public function equals(other:Modulo):Bool return x % 10 == other.x % 10;
 }
 
-class Hashed implements Hashable {
+struct Hashed implements Hashable {
 	public final x:Int;
 	public function new(x:Int) this.x = x;
 	public function equals(other:Hashed):Bool return x % 10 == other.x % 10;
 	public function hash():Int return x % 10;
 }
 
-class RecordKey implements Hashable {
+struct RecordKey implements Hashable {
 	public final id:Int;
 	public function new(id:Int) this.id = id;
 }
@@ -149,14 +149,14 @@ function main():Int {
 	for (key in pairMap.keys()) pairKeyTotal += key.x;
 	var pairValueTotal = 0;
 	for (value in pairMap.values()) pairValueTotal += value.length;
-	var classMap = new Map<Hashed, Int>();
-	classMap.set(new Hashed(2), 20);
-	classMap.set(new Hashed(12), 30);
-	var classMapMatches = classMap.size() == 1 && classMap.get(new Hashed(22)) == 30 && classMap.exists(new Hashed(32));
-	var classMapRemoved = classMap.remove(new Hashed(42));
-	classMap.clear();
-	var synthesizedClassMap = new Map<RecordKey, String>();
-	synthesizedClassMap.set(new RecordKey(7), "seven");
+	var customValueMap = new Map<Hashed, Int>();
+	customValueMap.set(new Hashed(2), 20);
+	customValueMap.set(new Hashed(12), 30);
+	var customValueMapMatches = customValueMap.size() == 1 && customValueMap.get(new Hashed(22)) == 30 && customValueMap.exists(new Hashed(32));
+	var customValueMapRemoved = customValueMap.remove(new Hashed(42));
+	customValueMap.clear();
+	var synthesizedValueMap = new Map<RecordKey, String>();
+	synthesizedValueMap.set(new RecordKey(7), "seven");
 	return a == b && a != c && pair == new Pair(3) && pair != new Pair(4)
 		&& new Modulo(1) == new Modulo(11)
 		&& haxeon.Equality.equals(new Modulo(1), new Modulo(11)) && first == second
@@ -183,7 +183,7 @@ function main():Int {
 		&& haxeon.Hashing.hash(new ModValue(1)) == haxeon.Hashing.hash(new ModValue(11))
 		&& haxeon.Diff.mask(refBefore, refSame) == 0 && haxeon.Diff.mask(refBefore, refChanged) == 1
 		&& pairMap.size() == 1 && pairMap.get(new Pair(4)) == "last" && pairMapCopy.get(new Pair(4)) == "last"
-		&& pairKeyTotal == 4 && pairValueTotal == 4 && classMapMatches && classMapRemoved && classMap.size() == 0
-		&& synthesizedClassMap.get(new RecordKey(7)) == "seven"
+		&& pairKeyTotal == 4 && pairValueTotal == 4 && customValueMapMatches && customValueMapRemoved && customValueMap.size() == 0
+		&& synthesizedValueMap.get(new RecordKey(7)) == "seven"
 		&& keepEquatable(7) == 7 && keepHashable("value") == "value" ? 42 : 0;
 }

@@ -292,7 +292,7 @@ class IrLoopBounds {
 
 	function mayResize(instruction:IrInstruction):Bool {
 		return switch instruction {
-			case Call(_, name, _) if (name == IrReceiverCheck.NAME): false;
+			case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME): false;
 			case Call(_, name, _) if (pureCalls.exists(name)): false;
 			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), MemoryStore(_, _, _), ArraySet(_, _, _),
 				IteratorNew(_, _), IteratorNext(_, _), IteratorHasNext(_, _), SafeCast(_, _), ToVirtual(_, _): true;

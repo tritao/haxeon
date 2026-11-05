@@ -18,11 +18,12 @@ Receiver-effect analysis follows statically dispatched methods on the same struc
 primitive field arguments as values rather than aliases. Property getters remain effectful unless their dependencies are
 proven pure; a method or getter that can write the receiver still requires a writable place.
 
-Declared `Equatable`, `Hashable` and `Diffable` conformance selects one equality and hash implementation per type.
+Value types declare `Equatable` and `Hashable` to select one equality and hash implementation per type; `Diffable` is
+independent and is available to structs and classes.
 `Hashable` implies `Equatable`; generated implementations recurse through fields that support the same conformance, and
 diagnostics name unsupported fields. A handwritten `equals(other:T):Bool` supplies equality; a handwritten hash is
-required with it for `Hashable`. Struct comparisons without `Equatable` are rejected, while nonconforming classes keep
-identity comparison. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
+required with it for `Hashable`. Struct comparisons without `Equatable` are rejected. Classes and interface instances always compare by
+identity; classes cannot conform to `Equatable` or `Hashable`. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
 on `Diffable` declarations. `Diff.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
 it to a value.
 Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
@@ -472,7 +473,7 @@ Decided and implemented 2026-11-01. Value equality is declared by interface conf
 
 ```haxe
 struct Color implements Hashable { /* fields */ }
-class Record implements Hashable { /* fields */ }
+struct Record implements Hashable { /* fields */ }
 ```
 
 `Equatable` supplies `==`; `Hashable` implies `Equatable`, so a type that is also a key ordinarily declares only
@@ -484,21 +485,29 @@ forming a separate declaration mechanism. A type has one equality used by `==`, 
 A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
 infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
 to equal values. The author is responsible for keeping the two methods consistent. A handwritten hash may accompany
-synthesized equality. A class with a synthesized hash must have immutable stored fields; otherwise changing a field while
-the object is a map key could change its hash. The compiler diagnoses writable fields. A handwritten hash is an
-explicit author contract and may read mutable state only when that state cannot change the key's hash while it is stored.
-For classes, synthesis visits stored base fields before fields declared by the derived class, resolving generic base
-arguments at each step. A handwritten method is inherited like an ordinary method, including its equality and hash
-contract.
+synthesized equality. Classes cannot declare either value capability: the diagnostic says to use a struct for value
+equality. An ordinary class method named `equals` or `hash` remains an explicit method and cannot change `==`, `!=` or
+satisfy a value-capability bound. Class inheritance does not introduce a value comparison path.
 
 A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
-conformance. Classes keep identity equality unless they conform. `haxeon.Identity.same(a, b)` compares class instances
-by reference even when their class implements `Equatable`; it accepts class instances rather than struct, enum or scalar
-values and does not box its arguments. Primitives and integer enum abstracts retain their
-value semantics; floats retain IEEE equality. Float hashing folds the IEEE bits after canonicalizing both zero signs
-and all NaNs, so equal values hash alike and infinities or large finite values do not require a numeric conversion. With
-specialized interface bounds, `Map<K:Hashable, V>` and `Equality.equals<T:Equatable>` are checked at compile time and struct-bound calls
-are statically dispatched without boxing.
+conformance. Every class and interface reference uses identity, including an interface view of a boxed value. Two
+separate boxes are distinct through that interface; aliases are the same reference. There is no separate identity
+comparison API or operator. A genuine conversion to `Dynamic` still uses the runtime equality of the contained value,
+including declared equality for a boxed struct or enum.
+
+Generic `T:Equatable` and `T:Hashable` bounds admit value types only; classes and interface-typed views do not satisfy
+them. Primitives, integer enum abstracts and key paths retain their value semantics. Floats retain IEEE equality.
+Float hashing folds the IEEE bits after canonicalizing both zero signs and all NaNs, so equal values hash alike and
+infinities or large finite values do not require a numeric conversion. Value bounds on generic classes and functions, including `Map<K:Hashable, V>`,
+are checked at compile time and struct-bound calls dispatch without boxing. `haxeon.Equality.equals` follows the same
+static rules as `==`, including identity for class references.
+Class instances used as keys in `haxe.ds.ObjectMap` use identity; declaring value conformance on a class is not a way
+to select map equality.
+
+Synthesis retains the existing field-conformance rule. A class-valued field cannot supply value conformance; a struct
+that needs such a field in its equality supplies an explicit `equals`, using `==` for the reference comparison. A
+handwritten hash must remain consistent with that equality. `Diffable` class snapshots compare their contents
+explicitly with `Diff.mask(a, b) == 0`; `a == b` continues to ask whether they are the same object.
 
 `Array<S>.indexOf`, `contains` and `remove` require `S` to implement `Equatable` and use that same declared equality, including a
 handwritten `equals`. They examine inline elements as values and `remove` shifts the lanes in place. Nullable struct
@@ -556,8 +565,8 @@ The data-record aliasing audit converted `TextStyle`, `ParagraphStyle`, `DockTex
 `EffectParameter`, `InkOverflow`, `CustomEffectDefinition`, and the app's `CncPresentation` and `HobbingTelemetry`
 records to structs with the needed conformances. These values carry configuration, keys or snapshots; callers rely on
 their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
-`LayoutStyle` stays a mutable `Equatable, Diffable` class: its struct prototype boxes at layout-node call sites and
-regresses transition allocations. It is not `Hashable`, because its fields change in place; render and style caches use
+`LayoutStyle` stays a mutable `Diffable` class with identity equality: its struct prototype boxes at layout-node call sites and
+regresses transition allocations. Its content comparisons use `Diff.mask`; render and style caches use
 the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fields without making it a map key. The census
 and per-action measurements are recorded in [UI value types](../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
 the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](STRUCTURAL_EQUALITY.md).
@@ -1108,7 +1117,7 @@ headers in, and a build check reports headers that are out of date.
 ## Migration
 
 - `@:value class` becomes `struct`. Flatness is worked out as usual.
-- `@:value @:repr("C") class` becomes `struct ... : Flat`. These records
+- `@:value @:repr("C") class` becomes a flat `struct` with inferred C layout. These records
   gain by-value use, which only adds capability.
 - HXI-imported records become flat structs. This also completes the
   unification of HXI record projections that

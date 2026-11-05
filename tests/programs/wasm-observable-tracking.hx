@@ -13,7 +13,7 @@ class BaseModel implements Observable {
 	public function new(value:Int) this.baseValue = value;
 }
 
-class EqualValue implements Equatable {
+struct EqualValue implements Equatable {
 	public final value:Int;
 	public function new(value:Int) this.value = value;
 	public function equals(other:EqualValue):Bool return value == other.value;
@@ -80,7 +80,7 @@ function fail(code:Int):Int {
 function main():Int {
 	var model = new Model();
 	var baseValue = 0, countValue = 0, otherValue = 0;
-	var itemValue:EqualValue = null;
+	var itemValue:EqualValue = new EqualValue(0);
 	var valueRecordValue:ValueRecord = new ValueRecord(0);
 	var optionalRecordValue:Null<ValueRecord> = null;
 	var ratioValue = 0.0;

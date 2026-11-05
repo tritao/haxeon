@@ -1837,7 +1837,7 @@ class FrameworkSmoke {
 		var layeredSemantics:Semantics = cast layeredRoot.semantics;
 		if (layeredSemantics == null || layeredSemantics.role != AccessibilityRole.Image ||
 			layeredSemantics.label != "Layered picture")
-			return 237;
+			throw "Layered image semantics (check 237)";
 		var nineSliceRoot = context.submit(new NineSliceView("nine-slice-smoke", image,
 			1.0, 1.0, 1.0, 1.0, "Scalable frame"), new LayoutFrame(256.0, 192.0));
 		var nineSliceSemantics:Semantics = cast nineSliceRoot.semantics;
@@ -3228,7 +3228,7 @@ class FrameworkSmoke {
 		var localAxisFirstValue = localAxisFirst.getAxis(StyleProperty.Width);
 		if (localAxisResolver.cacheMisses != 1 || !localAxisFirst.has(StyleProperty.Width) ||
 			localAxisFirstValue.min != 100.0 || localAxisFirstValue.max != 500.0)
-			return 237;
+			throw "Local axis style resolution (check 237)";
 		localAxis.width = LayoutAxis.grow(100.0, 500.0, 3.0);
 		var localAxisSecond = localAxisResolver.resolve(localAxisTarget, null, null, null, localAxis);
 		var localAxisSecondValue = localAxisSecond.getAxis(StyleProperty.Width);
@@ -3775,7 +3775,7 @@ class FrameworkSmoke {
 		splitRoot = context.submit(split, new LayoutFrame(320.0, 192.0));
 		context.pointerMove(splitPointerX + 20.0, splitPointerY);
 		if (context.events.cursorShape() != UiCursorShape.HorizontalResize)
-			return 237;
+			throw "Split drag cursor after rebuild (check 237)";
 		context.pointerUp(splitPointerX + 20.0, splitPointerY, 0);
 		if (resizedExtent != 76.0 || split.extent != 76.0)
 			return 231;
@@ -4003,7 +4003,7 @@ class FrameworkSmoke {
 			throw "Focused primary buttons must retain their fill and show a contrasting border";
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, true))
-			return 237;
+			throw "Repeated themed frame cache hits (check 237)";
 		if (!frameInvalidationValid(context, false, false))
 			return 238;
 		var themedLabelGeometry:ResolvedLayoutItem = cast themedRoot.children[0].resolved;

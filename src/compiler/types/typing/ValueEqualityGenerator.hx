@@ -70,7 +70,7 @@ class ValueEqualityGenerator {
 			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")):
 				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
 				collect(session, element, root, requests, seen);
-			case TInstance(NominalKind.Class, className, arguments) if (DeclaredConformance.has(session, type, "Equatable")):
+			case TInstance(NominalKind.Class, className, arguments) if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(className);
 				if (declaration == null)
 					throw 'Missing value type declaration "$className"';
@@ -90,7 +90,7 @@ class ValueEqualityGenerator {
 		return switch type {
 			case TKeyPath(_, _, _): true;
 			case TNullable(element): DeclaredConformance.has(session, element, "Equatable");
-			case TInstance(NominalKind.Class, _, _): DeclaredConformance.has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable");
 			default: false;
 		};
 
@@ -114,17 +114,10 @@ class ValueEqualityGenerator {
 				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
 				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 				statements.push(TReturn(compare(leftValue, rightValue, span), span));
-			case TInstance(NominalKind.Class, name, arguments) if (DeclaredConformance.has(session, type, "Equatable")):
+			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
 					throw 'Missing value type declaration "$name"';
-				if (!session.relations.isValueClass(type)) {
-					var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
-						leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),
-						rightAbsent = new TypedExpression(TEqual(right, nil), TBool, span);
-					statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
-					statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
-				}
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "equals");
 				if (custom != null) {
 					// Dynamic dispatch can borrow an existing box. A handwritten struct

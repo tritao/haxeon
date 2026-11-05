@@ -2,7 +2,7 @@ import haxeon.reactive.Signal;
 import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
 
-class EqualWritePart implements Equatable {
+struct EqualWritePart implements Equatable {
 	public final value:Int;
 	public function new(value:Int) this.value = value;
 	public function equals(other:EqualWritePart):Bool return value % 10 == other.value % 10;

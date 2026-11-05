@@ -5,7 +5,7 @@ Value equality is a capability declared through conformance. There is one equali
 
 ```haxe
 struct Color implements Hashable { /* stored fields */ }
-class Record implements Hashable { /* stored fields */ }
+struct Record implements Hashable { /* stored fields */ }
 ```
 
 `Equatable` supplies equality. `Hashable` extends `Equatable`. The compiler synthesizes the implementation when every
@@ -14,8 +14,9 @@ stored field supports the requested conformance; diagnostics identify the field 
 `hash():Int`, because a synthesized field hash might distinguish values that its equality considers equal. A custom
 hash may also accompany synthesized equality.
 
-Structs that do not conform to `Equatable` cannot be compared with `==` or `!=`. Classes that do not conform retain
-identity equality. Nullable conforming values compare absent values with absence and otherwise use their element's
+Structs that do not conform to `Equatable` cannot be compared with `==` or `!=`. Classes cannot conform to `Equatable` or `Hashable`; use a struct for value equality. Class and interface references
+always compare by identity, including interface views of boxed values. Explicit class methods named `equals` or `hash`
+do not change these rules. Generic value-capability bounds reject class and interface type arguments. Nullable conforming values compare absent values with absence and otherwise use their element's
 declared equality. Float equality follows IEEE rules (`NaN != NaN`, `0.0 == -0.0`); float hashes treat the two zero
 representations alike.
 
@@ -31,5 +32,7 @@ native escapes keep their required boxing and runtime handling.
 - `Diff.bit(\Type.field)` and `Diff.all(Type)` are compile-time constants. At most 32 stored fields are supported.
 - `Diff.copy(value)` is only for mutable `Diffable` classes. Struct values already copy on binding.
 
-Field numbering is an explicit contract for each type. [Key paths](KEY_PATHS.md) describe a future typed field-reference
-syntax; this stage keeps string literals for `Diff.bit` and does not introduce a second mask implementation.
+Field numbering is an explicit contract for each type. [Key paths](KEY_PATHS.md) supply the typed field references used
+by `Diff.bit`; the former string field-name form is removed. Use `Diff.mask(a, b) == 0` for content equality of
+`Diffable` class snapshots. Synthesis still requires value conformance on each field; class references in a value
+therefore need explicit equality that compares those references with `==`.

@@ -197,6 +197,8 @@ class IrInterpreter {
 				var reference:InterpScalarRef = cast value(values, arguments[0]);
 				reference.values.set(reference.id, value(values, arguments[1]));
 				null;
+			case Call(_, name, arguments) if (name == IrReferenceIdentity.NAME):
+				value(values,arguments[0]) == value(values,arguments[1]);
 			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME):
 				if (value(values, arguments[0]) == null) throw "Null access";
 				null;
@@ -339,11 +341,6 @@ class IrInterpreter {
 					reactiveHashes.set(source, hash);
 					hash;
 				}
-			case "haxeon.IdentityNative.same":
-				if (arguments[0] != null && !Std.isOfType(arguments[0], InterpObject)
-					|| arguments[1] != null && !Std.isOfType(arguments[1], InterpObject))
-					throw "IR interpreter reference identity requires object references";
-				arguments[0] == arguments[1];
 			case "__reflect_is_object":
 				arguments[0] != null
 				&& !Std.isOfType(arguments[0], Bool)

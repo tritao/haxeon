@@ -9,12 +9,12 @@ class ValueDynamicEqualityInterpreterMain {
 			+ 'public function equals(other:Item):Bool return value % 10 == other.value % 10; } '
 			+ 'struct MaybeItem implements Equatable { public var item:Null<Item>; '
 			+ 'public function new(item:Null<Item>) this.item=item; } '
-			+ 'class RefItem implements Equatable { public var value:Int; public function new(value:Int) this.value=value; } '
+			+ 'class RefItem { public var value:Int; public function new(value:Int) this.value=value; } '
 			+ 'function main():Int { var a:Dynamic=new Item(2); var b:Dynamic=new Item(12); '
 			+ 'var ma:Dynamic=new MaybeItem(new Item(3)); var mb:Dynamic=new MaybeItem(new Item(13)); '
 			+ 'var view:Equatable=new Item(3); var erased:Dynamic=view; var concrete:Dynamic=new Item(13); '
 			+ 'return a == b && ma == mb && erased == concrete && concrete == erased '
-			+ '&& new RefItem(1) == new RefItem(1) ? 42 : 1; }';
+			+ '&& new RefItem(1) != new RefItem(1) ? 42 : 1; }';
 		var result = new IrInterpreter(Frontend.compile(source)).run("main");
 		if (result != 42) throw 'interpreter Dynamic value equality returned $result';
 		var ownedSource = 'interface Equatable {} struct OwnedItem implements Equatable { public var value:Int; public var label:String; '

@@ -21,11 +21,6 @@ HL_PRIM int HL_NAME(__reactive_hash)( vdynamic *source ) {
 	return (int)(hash ^ (hash >> 16));
 }
 
-/* Dynamic operands here are genuine object references; never invoke value comparison. */
-HL_PRIM bool HL_NAME(__reference_identity)( vdynamic *left, vdynamic *right ) {
-	return left == right;
-}
-
 HL_PRIM bool HL_NAME(__reactive_claim_owner)( void ) {
 	uintptr_t current = (uintptr_t)&realtime_reactive_collector, expected = 0;
 	return atomic_compare_exchange_strong(&realtime_reactive_owner, &expected, current) || expected == current;

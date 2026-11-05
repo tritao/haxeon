@@ -254,7 +254,7 @@ class StyleResolver {
 		return seed * 31 + value;
 
 	static inline function sameLayoutStyle(left:LayoutStyle, right:LayoutStyle):Bool
-		return haxeon.Equality.equals(left, right);
+		return haxeon.Diff.mask(left, right) == 0;
 
 	static function sourceKey(source:Null<StyleSource>):String
 		return source == null ? "none" : stringKey(source.stylesheet) + "|" + stringKey(source.selector) +

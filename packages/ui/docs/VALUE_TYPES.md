@@ -9,6 +9,12 @@ candidate guest on both sides, so their claimed paired comparisons were invalid.
 censuses were unaffected. Identical guest hashes remain valid evidence of identical generated code. The boundary and
 literal-cache comparisons below were rerun by swapping the browser-loaded guest itself.
 
+A 2026-11-05 audit found the same filename error in the word-access and rejected minimum-first growth helpers.
+Their originally reported paired scene counts are invalid; the HashLink measurements, standalone Wasm allocation
+tests and word-access microbenchmarks are unaffected. The growth trial remains rejected on its measured HashLink RSS
+regression. The word-access scene comparison below has been replaced with runs that swap the browser-loaded guest and record
+SHA-256 checks before and after every capture.
+
 `Rect`, `Insets`, `Color`, `LayoutAxis` and `Transform2D` are immutable structs declared with `implements Hashable`. Their fields are final;
 replace the whole value to change one. Their `==` and `!=` comparisons use the declared conformance. Optional values use `Null<T>`,
 including inline optional fields; absent and present remain distinct. `LayoutStyle` owns these values inline in one
@@ -42,8 +48,10 @@ The other measured action allocations did not increase. Nine alternating 500-cyc
 The app's mutable `CncPresentation` and `HobbingTelemetry` snapshots are `Diffable` structs. Their values are owned by
 their containing models, and no caller depends on a stable object identity.
 
-`LayoutStyle` remains a mutable `Equatable, Diffable` class. It is not `Hashable`: its fields change in place, while
-render and style caches use `Diff.fingerprint` snapshot values. The measured struct version boxed 25,625 values
+`LayoutStyle` remains a mutable `Diffable` class with identity equality. Classes cannot declare `Equatable` or
+`Hashable`; neither an explicit `equals` method nor a native comparison hook changes class/interface `==`. Content
+comparisons use `Diff.mask`, while render and style caches use `Diff.fingerprint` snapshot values. The local-style
+cache compares snapshots with `Diff.mask(a, b) == 0`, so distinct equal copies still share a cache entry. The measured struct version boxed 25,625 values
 (8,474,960 bytes) as `@haxeon.ui.LayoutStyle`, plus 2,823 optional boxes (948,528 bytes), during selection stress.
 The class version kept its 10,165 objects (3,496,760 bytes) and lowered tab-transition allocations. In the class
 version, `LayoutNode` uses 120 bytes per node (5,906 nodes, 708,720 bytes); the inline text-style prototype enlarged
@@ -1425,10 +1433,13 @@ Paired headless RSS window growth in MiB (four successive windows per run); ever
 
 The paired median differences were -0.32 / -0.47 / +0.16 / -0.15 MiB, within the earlier same-image calibration. No action allocation median increased, and no budget ceiling changed.
 
-The final-source Wasm GC Showcase comparison completed all 18 alternating pairs: nine full-scene pairs and three
-each for static, text-heavy and editing. Fixed-step core mode used 120 warmup and 120 measured frames. Every
+The corrected 2026-11-05 Wasm GC Showcase comparison completed all 18 alternating pairs: nine full-scene pairs and
+three each for static, text-heavy and editing. Fixed-step core mode used 120 warmup and 120 measured frames. Every
 full/static/text-heavy sample counted 4,440 objects; every editing sample counted 8,724, equal between control and
-candidate. There was no browser timeout. Control guest SHA-256 starts `edd093e31f00`; candidate starts `960b1eee5ee3`.
+candidate. There was no browser timeout. Each result records the SHA-256 of `nativekit_ui_haxeon_guest.wasm`, checked
+before and after capture: control starts `edd093e31f00`, candidate `960b1eee5ee3`. The rebuilt control exactly matches
+the original pre-word-access artifact. These results replace the original invalid source-file swaps; their identical
+counts alone were not evidence of a valid pair.
 
 All gates passed: 763 compiler tests, self-hosting fixed point, ten UI suites, 498 parity fixtures (14 existing skips),
 six UI value snapshots, app suite, nine retention scenarios, editor budgets and paired headless memory gates. Wasm32's
@@ -1497,11 +1508,11 @@ not establish no regression in retained RSS. The trial is rejected; the committe
 No ceiling or memory threshold changed, and no failing memory sample was retried. The final budget run and all nine
 retention scenarios passed and do not override this baseline comparison.
 
-The final lazy-empty Wasm GC Showcase guest completed 18 pairs (nine full, three each static/text-heavy/editing),
-120 warmup and 120 measured frames. Full/static/text-heavy each counted 4,440 objects, editing 8,724, equal to control.
-An earlier eager-empty implementation also measured equal scene counts; a compiler unit exposed its unnecessary
-startup allocations. Those backings were made lazy before the final scene comparison. The capacity formula did not
-change. All original compiler-unit allocation assertions then passed unchanged.
+The Wasm GC scene runs did not replace the browser-loaded guest, so their original claim of equal control/candidate
+counts is withdrawn. No Wasm scene comparison is claimed for this rejected trial. A compiler unit independently
+exposed unnecessary eager-empty startup allocations; making those backings lazy preserved the capacity formula and
+passed the original allocation assertions unchanged. The valid HashLink RSS regression above already rejects the trial;
+it was not repeated after the harness correction.
 
 A compiler checkpoint passed 764 tests and self-hosted to a fixed point. An audit then found the HashLink struct-array
 constructor still used implicit reserve for known lengths; the final correction uses exact capacity. Its existing
@@ -1519,3 +1530,88 @@ planned pairs began; no performance sample was replaced. The compiler fixture wa
 are preserved under `materia-cache/claude-scratch/haxeon-min-first-growth-rejected-2026-11-05/`. Completed builds,
 logs and raw captures are removed after recording these numbers. The next item is the equality model, not another
 growth experiment.
+
+### Values have equality; objects have identity (2026-11-05)
+
+Classes now reject `Equatable` and `Hashable` with “use a struct for value equality”. Class and interface `==`
+compares instance identity, including interface views of boxed values; converting a boxed value to `Dynamic` still
+uses its concrete value conformance. Explicit class `equals` methods remain ordinary methods. Generic value-capability
+bounds reject class and interface arguments. The public `haxeon.Identity` API and its native glue were deleted;
+the compiler lowers typed reference equality directly and prevents a foreign `__compare` hook from changing it.
+
+`LayoutStyle` remains a mutable `Diffable` class, preserving its aliasing and measured object layout. Its style-cache
+snapshots compare through `Diff.mask(a, b) == 0`, with a regression check that distinct equal copies share one cache
+entry. Synthesis still requires field conformance: a struct containing class references can explicitly choose identity
+in its `equals` implementation. No new class conformance, identity hash, or cache ownership mechanism was added.
+
+Comparison: the same outer `0d3ca41a8` editor snapshot, checkout-built HashLink VM `d1eb6136`, frozen compiler and
+profile artifacts, nine alternating control/candidate action pairs, three selection censuses and three RSS pairs.
+HashLink action allocation medians (KiB) and frame medians (ms) are below. The selection action has no frame allocation
+metric; its exact census follows. Timings include the concurrent external workload described below.
+
+| Scenario/action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+| --- | ---: | ---: | ---: | ---: |
+| tab-matrix: console->telemetry | 74.5 | 74.5 | 1.20 | 1.15 |
+| tab-matrix: hierarchy->sensors | 114.6 | 114.6 | 1.74 | 1.65 |
+| tab-matrix: sensors->hierarchy | 80.1 | 80.1 | 1.33 | 1.27 |
+| tab-matrix: telemetry->console | 92.9 | 92.9 | 1.30 | 1.18 |
+| interaction: hover-away | 13.6 | 13.6 | 0.46 | 0.61 |
+| interaction: hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| interaction: hover-field | 12.4 | 12.4 | 0.46 | 0.62 |
+| interaction: hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| interaction: hover-other | 10.0 | 10.0 | 0.45 | 0.60 |
+| interaction: idle | 0.2 | 0.2 | 0.01 | 0.01 |
+| interaction: idle-focused | 0.2 | 0.2 | 0.01 | 0.01 |
+| interaction: scroll-inspector | 21.2 | 21.2 | 0.75 | 1.04 |
+| interaction: type-backspace | 16.2 | 16.2 | 0.45 | 0.60 |
+| interaction: type-char | 16.1 | 16.1 | 0.45 | 0.60 |
+| selection-stress: selection | — | — | 4.40 | 4.22 |
+
+No action allocation median increased; no ceiling changed. Every named census type matched exactly in every pair:
+305,725 objects / 21,593,528 bytes. The only differences were in the runtime `bytes` bucket (16, 88 and 424 bytes;
+the last pair also differed by one raw buffer). Raw totals, including that bucket:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | --- | --- |
+| 1 | 340,910 / 24,010,728 | 340,910 / 24,010,744 |
+| 2 | 340,909 / 24,010,352 | 340,909 / 24,010,440 |
+| 3 | 340,910 / 24,010,624 | 340,911 / 24,011,048 |
+
+Headless RSS window growth, MiB (four consecutive windows):
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.47 / 3.59 / 0.78 / 5.00 | 30.16 / 3.91 / 0.78 / 4.84 |
+| 2 | 29.69 / 3.75 / 0.62 / 5.00 | 30.16 / 3.91 / 0.62 / 4.84 |
+| 3 | 30.00 / 3.59 / 0.62 / 5.00 | 30.00 / 3.59 / 0.94 / 4.84 |
+
+Paired median deltas were 0.00 / +0.16 / 0.00 / -0.16 MiB, within the earlier same-image calibration; all six
+headless memory runs passed. These small mixed window changes do not show the consistent retained-growth increase
+that rejected the growth trials.
+
+The unrestricted timing captures retained every sample: selection exceeded 6 ms on candidate pairs 5–7
+(11.20, 9.62, 6.61 ms) and control pair 6 (8.01 ms), coinciding with concurrent external ngspice work. The single
+planned final budget run also failed: `selection-stress selection: frameMs 8.67 is over the budget 6.0`. No samples
+were discarded and no budget was raised. One additional control/candidate comparison used the same fixed affinity
+on four distinct performance cores (CPUs 0, 2, 4, 6), selected once before either run. Both passed every unchanged
+budget on their first run, with selection at 4.62 / 4.52 ms. There were no further attempts. Retention had already
+passed independently on all nine scenarios; the affinity comparison did not change verify mode or the executable.
+
+The Wasm GC comparison swapped the actual browser-loaded guest and checked its SHA-256 before and after every
+capture. Control starts `960b1eee5ee3`, candidate `4f892cc3b546`. All 18 pairs completed (nine full, three each
+static/text-heavy/editing), with 120 warmup and 120 measured frames. Both images allocated 4,440 objects in each
+full/static/text-heavy sample and 8,724 in each editing sample.
+
+All functional gates passed: 763 compiler tests, self-hosting fixed point, ten UI suites, 497 parity fixtures
+(14 existing skips) and all six UI value snapshots, the app suite, all nine retention scenarios, and Wasm32/Wasm GC
+WebGL2 browser smoke tests. The identity fixture passes on all three targets with inlining on and off, including
+interface views, nulls, Dynamic escapes and an ignored class comparison hook; prepared 8/1,024-call Wasm censuses
+allocate zero. Compiler tests cover rejected direct/transitive class conformance and value bounds, and the interpreter
+uses the same identity rule. No performance increase is attributed to this change from the loaded timing samples.
+
+Two setup failures preceded these captures: a compiler-suite invocation omitted `TMPDIR`, so its LSP temporary
+workspace inherited the compiler checkout and indexed it; that test was terminated and the complete suite passed
+with an external temporary directory. A copied browser wrapper initially lacked its execute bit, producing
+`Permission denied`; correcting the wrapper made both browser smoke tests pass. The earlier framework run
+confirmed the missed style-cache content comparison before its fix. None was an allocation/memory retry. Raw captures
+were deleted once their numbers were recorded.

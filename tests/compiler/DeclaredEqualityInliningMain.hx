@@ -4,14 +4,14 @@ import compiler.ir.IrInterpreter;
 /** Declared conformance helpers keep their semantics when the optimizer is toggled. */
 class DeclaredEqualityInliningMain {
 	static function main():Void {
-		var source = 'class Record implements Equatable { public final value:Int; public function new(value:Int) this.value = value; } '
-			+ 'class Modulo implements Equatable { public final value:Int; public function new(value:Int) this.value = value; '
+		var source = 'struct Record implements Equatable { public final value:Int; public function new(value:Int) this.value = value; } '
+			+ 'struct Modulo implements Equatable { public final value:Int; public function new(value:Int) this.value = value; '
 			+ 'public function equals(other:Modulo):Bool return value % 10 == other.value % 10; } '
 			+ 'struct Scalar implements Hashable { public final value:Int; public function new(value:Int) this.value = value; } '
 			+ 'class Snapshot implements Diffable { public var value:Int; public function new(value:Int) this.value = value; } '
 			+ 'class Parent { public final base:Int; public function new(base:Int) this.base = base; } '
-			+ 'class Child extends Parent implements Hashable { public final child:Int; public function new(base:Int, child:Int) { super(base); this.child = child; } } '
-			+ 'class CustomBase implements Equatable { public final value:Int; public function new(value:Int) this.value = value; public function equals(other:CustomBase):Bool return value % 10 == other.value % 10; } '
+			+ 'class Child extends Parent implements Diffable { public final child:Int; public function new(base:Int, child:Int) { super(base); this.child = child; } } '
+			+ 'class CustomBase { public final value:Int; public function new(value:Int) this.value = value; public function equals(other:CustomBase):Bool return value % 10 == other.value % 10; } '
 			+ 'class CustomChild extends CustomBase { public function new(value:Int) super(value); } '
 			+ 'function hashOptional(value:Null<Scalar>):Int return haxeon.Hashing.hash(value); '
 			+ 'inline function snapshotFingerprint(value:Snapshot):Int return haxeon.Diff.fingerprint(value); '
@@ -22,8 +22,8 @@ class DeclaredEqualityInliningMain {
 			+ 'return same(a, b) && !same(a, c) && hashOptional(optional) == haxeon.Hashing.hash(new Scalar(5)) '
 			+ '&& snapshotFingerprint(snapshot) == snapshotFingerprint(sameSnapshot) '
 			+ '&& snapshotFingerprint(snapshot) != snapshotFingerprint(changedSnapshot) '
-			+ '&& new Modulo(1) == new Modulo(11) && new CustomChild(1) == new CustomChild(11) '
-			+ '&& new Child(1, 7) != new Child(2, 7) && haxeon.Hashing.hash(new Child(1, 7)) != haxeon.Hashing.hash(new Child(2, 7)) ? 42 : 0; }';
+			+ '&& new Modulo(1) == new Modulo(11) && new CustomChild(1) != new CustomChild(11) && new CustomChild(1).equals(new CustomChild(11)) '
+			+ '&& new Child(1, 7) != new Child(2, 7) && haxeon.Diff.fingerprint(new Child(1, 7)) != haxeon.Diff.fingerprint(new Child(2, 7)) ? 42 : 0; }';
 		for (inlineEnabled in [false, true]) {
 			var compiler = new Compiler();
 			compiler.update("Equatable.hx", "interface Equatable {}\n");

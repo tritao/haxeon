@@ -49,7 +49,7 @@ class CompilerIntrinsics {
 	 * code (`__std_string` and `__dynamic_equal` may run `toString` or comparisons) are excluded.
 	 */
 	public static function isPure(name:String):Bool
-		return PURE.indexOf(name) >= 0;
+		return name == compiler.ir.IrReferenceIdentity.NAME || PURE.indexOf(name) >= 0;
 
 	/** Immutable native definitions shared by compiler snapshots and services. */
 	public static function configuration():Array<NativeFunction> {

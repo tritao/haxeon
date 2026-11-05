@@ -26,7 +26,7 @@ class ReactiveIdentityIndex {
 	function slot(source:ReactiveSource, bit:Int):Int {
 		var mask = sources.length - 1;
 		var index = (source.identityHash ^ (bit * 0x9e3779b9)) & mask;
-		while (sources[index] != null && (!haxeon.Identity.same(sources[index], source) || bits[index] != bit))
+		while (sources[index] != null && (!(sources[index] == source) || bits[index] != bit))
 			index = (index + 1) & mask;
 		return index;
 	}

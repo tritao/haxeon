@@ -22,7 +22,6 @@ inline_cases=(
 	scoped-cleanup
 	defer-cleanup
 	defer-exception-stack
-	native-reference-identity
 	reactive-effect-failure-recovery
 	reactive-derived-cycle
 	reactive-dependency-identity
@@ -196,10 +195,6 @@ for inline in 0 1; do
 			--export=ReactiveScaleCensus.prepare --export=ReactiveScaleCensus.perform --export=ReactiveScaleCensus.performEffect \
 			--output="$parity_output_dir/wasm-parity-$target-reactive-scale-census-inline-$inline.wasm" \
 			--entry=reactive-dependency-scale --root=stdlib --root=tests/programs tests/programs/reactive-dependency-scale.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
-			--export=ReferenceIdentityCensus.prepare --export=ReferenceIdentityCensus.perform \
-			--output="$parity_output_dir/wasm-parity-$target-reference-identity-census-inline-$inline.wasm" \
-			--entry=native-reference-identity --root=stdlib --root=tests/programs tests/programs/native-reference-identity.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=IdentityClassCensus.prepare --export=IdentityClassCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-identity-class-census-inline-$inline.wasm" \
@@ -1001,16 +996,6 @@ async function run(name, target) {
 	    if (effectResult !== n || effectAllocations !== 0)
 	      failures.push(`reactive scale effect census (${target}, inline=${inline}, n=${n}): result=${effectResult}, allocations=${effectAllocations}`);
 	    else console.log(`PASS: reactive scale effect census on ${target}, inline=${inline}, n=${n}`);
-	  }
-	  const referenceIdentityBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-reference-identity-census-inline-${inline}.wasm`));
-	  const referenceIdentity = (await WebAssembly.instantiate(referenceIdentityBytes, {haxeon_runtime: runtime, std})).instance;
-	  referenceIdentity.exports["ReferenceIdentityCensus.prepare"]();
-	  const referenceIdentityCount = target === "wasm32" ? referenceIdentity.exports["haxeon.memory.allocation_count"] : referenceIdentity.exports.__allocation_count;
-	  for (const n of [8, 1024]) {
-	    const before = referenceIdentityCount(), result = referenceIdentity.exports["ReferenceIdentityCensus.perform"](n), allocations = referenceIdentityCount() - before;
-	    if (result !== n || allocations !== 0)
-	      failures.push(`reference identity census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
-	    else console.log(`PASS: reference identity census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const identityClassBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-identity-class-census-inline-${inline}.wasm`));
 	  const identityClass = (await WebAssembly.instantiate(identityClassBytes, {haxeon_runtime: runtime, std})).instance;

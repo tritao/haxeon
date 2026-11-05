@@ -1191,13 +1191,13 @@ class TestMain {
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
 			'Type "Thing" does not conform to Hashable');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class MutableKey implements Hashable { public var value:Int; public function new() value = 1; } function main():Int return 42;',
-			'Cannot synthesize Hashable for "MutableKey": mutable field "value" must be final on a class');
+			'Class "MutableKey" cannot conform to Hashable; use a struct for value equality');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base { public var value:Int; public function new() value = 1; } class Derived extends Base implements Hashable { public function new() super(); } function main():Int return 42;',
-			'Cannot synthesize Hashable for "Derived": mutable field "value" must be final on a class');
+			'Class "Derived" cannot conform to Hashable; use a struct for value equality');
 		expectCompileError('interface Equatable {} class Base { public function new() {} public function equals():Int return 0; } class Derived extends Base implements Equatable { public function new() super(); } function main():Int return 42;',
-			'Method "Base.equals" must have signature equals(other:Base):Bool');
+			'Class "Derived" cannot conform to Equatable; use a struct for value equality');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base implements Equatable { public final x:Int; public function new(x:Int) this.x = x; public function equals(other:Base):Bool return x % 10 == other.x % 10; } class Derived extends Base implements Hashable { public function new(x:Int) super(x); } function main():Int return 42;',
-			'Cannot synthesize Hashable for "Derived" with a handwritten equals; provide hash():Int');
+			'Class "Base" cannot conform to Equatable; use a struct for value equality');
 		expectCompileError('interface Diffable {} class Named implements Diffable { public var a:Int = 0; public function new() {} } function main():Int return haxeon.Diff.bit(\\Named.b);',
 			'Type "Named" has no stored field "b"');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { public final a:Int = 1; public function new() {} } function main():Int return haxeon.Diff.copy(new Fixed()).a;',
@@ -1208,15 +1208,15 @@ class TestMain {
 			'haxeon.Diff.mask requires Diffable conformance for "Box<Int>"');
 		expectCompileError('interface Diffable {} class Box<T> implements Diffable { public var value:T; public function new() {} } function main():Int return haxeon.Diff.copy(new Box<Int>()).value;',
 			'haxeon.Diff.copy does not support generic class "Box<Int>"');
-		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Opaque implements Equatable { public function new() {} public function equals(other:Opaque):Bool return true; } class Holder implements Hashable { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Hashing.hash(new Holder());',
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} struct Opaque implements Equatable { public function new() {} public function equals(other:Opaque):Bool return true; } struct Holder implements Hashable { public var value:Opaque; public function new() { value = new Opaque(); } } function main():Int return haxeon.Hashing.hash(new Holder());',
 			'Cannot synthesize Hashable for "Holder": field "value" does not conform to Hashable');
 		expectCompileError('interface Diffable {} class Fixed implements Diffable { @:isVar public var value(get, never):Int; public function new() {} function get_value():Int return 1; } function main():Int { var a = new Fixed(); var b = new Fixed(); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "value" of "Fixed"');
 		expectCompileError('interface Equatable {} class Opaque {} struct Bad implements Equatable { public var item:Opaque; } function main():Int return 42;',
 			'Cannot synthesize Equatable for "Bad": field "item" does not conform to Equatable');
-		expectCompileError('interface Equatable {} class Bad implements Equatable { public function equals(other:Int):Bool return true; } function main():Int return 42;',
+		expectCompileError('interface Equatable {} struct Bad implements Equatable { public function equals(other:Int):Bool return true; } function main():Int return 42;',
 			'Method "Bad.equals" must have signature equals(other:Bad):Bool');
-		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Bad implements Hashable { public function equals(other:Bad):Bool return true; } function main():Int return 42;',
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} struct Bad implements Hashable { public function equals(other:Bad):Bool return true; } function main():Int return 42;',
 			'Cannot synthesize Hashable for "Bad" with a handwritten equals; provide hash():Int');
 		expectCompileError('interface Diffable {} struct Fixed implements Diffable { public final x:Int; public function new(x:Int) this.x = x; } function main():Int { var a = new Fixed(1); var b = new Fixed(2); return haxeon.Diff.apply(a, a, b); }',
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');

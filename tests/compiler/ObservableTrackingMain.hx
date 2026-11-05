@@ -62,7 +62,7 @@ class ObservableTrackingMain {
 
 	static function programSource():String
 		return 'import haxeon.reactive.ReactiveRuntime; import haxeon.reactive.ObservableProbe; '
-			+ 'class Part implements Equatable { public var value:Int; public function new(value:Int) this.value = value; '
+			+ 'struct Part implements Equatable { public var value:Int; public function new(value:Int) this.value = value; '
 			+ 'public function equals(other:Part):Bool return value % 10 == other.value % 10; } '
 			+ 'class BaseModel implements Observable { public var baseValue:Int; public function new(value:Int) baseValue = value; } '
 			+ 'class FreshModel implements Observable { public var value:Int; public function new() initialize(); '

@@ -183,7 +183,7 @@ class WasmBackendMain {
 			throw "The target-neutral backend seam must preserve the HashLink backend";
 		var capabilityCode = HlLower.lower(Frontend.compile("interface Equatable {} interface Hashable extends Equatable {} interface Diffable {} "
 			+ "interface Reader { function read():Int; } struct Point implements Hashable implements Diffable { public var x:Int; } "
-			+ "class Record implements Hashable implements Diffable { public final x:Int; public function new() x = 0; } "
+			+ "class Record implements Diffable { public final x:Int; public function new() x = 0; } "
 			+ "class ReaderImpl implements Reader { public function new() {} public function read():Int return 42; } "
 			+ "function consume(reader:Reader):Int return reader.read(); function main():Int { var p = new Point(); var r = new Record(); "
 			+ "return p.x + r.x + consume(new ReaderImpl()); }"));

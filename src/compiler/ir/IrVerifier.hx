@@ -443,6 +443,21 @@ class IrVerifier {
 						throw 'Invalid lane reference cast';
 					return;
 				}
+				if (name == IrReferenceIdentity.NAME) {
+					switch instruction { case CNativeCall(_,_,_): throw "Reference identity is not a C native"; default: }
+					if (args.length != 2 || (switch out.type { case Bool:false; default:true; })) throw "Invalid reference identity signature";
+					for (arg in args) {
+						require(values,arg);
+						var valid = switch arg.type {
+							case Obj(name): var object = objects.get(name); object != null && !object.isValue;
+							// Erased class/interface owners already carry a reference; the operation never creates a box.
+							case Virtual(_), Dyn: true;
+							default: false;
+						};
+						if (!valid) throw 'Reference identity requires class or interface references, got ${Std.string(arg.type)}';
+					}
+					return;
+				}
 				if (name == IrReceiverCheck.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
 					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || !isReference(args[0].type)) throw "Invalid receiver check";
