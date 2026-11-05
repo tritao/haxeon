@@ -18,6 +18,7 @@ class IrScalarArguments {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
 				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
 				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
+				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
 				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)

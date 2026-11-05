@@ -74,6 +74,7 @@ class WasmScalarAbi {
 			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
+					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)

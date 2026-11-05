@@ -145,6 +145,12 @@ for inline in 0 1; do
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-value-interface-reflection-inline-$inline.wasm" \
 			--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
 			tests/programs/wasm-value-interface-reflection.hx
+		unbox_flags=(--wasm-gc-allocation-count)
+		if [[ "$target" == wasm32 ]]; then unbox_flags=(--wasm-memory-stats --wasm-gc-stress); fi
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${unbox_flags[@]}" \
+			--export=InterfaceUnboxCensus.prepare --export=InterfaceUnboxCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-interface-unbox-census-inline-$inline.wasm" \
+			--entry=struct-interface-unbox-census --root=tests/programs tests/programs/struct-interface-unbox-census.hx
 		if [[ "$target" == wasm32 ]]; then
 			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress --wasm-memory-stats \
 				--export=PointerGcLeafCensus.make --export=PointerGcLeafCensus.hold --export=PointerGcLeafCensus.collect \
@@ -521,6 +527,19 @@ async function run(name, target) {
 	    failures.push(`value-interface-reflection (inline=${inline}, ${target}): ${reflectedValue.failure}`);
 	  else
 	    console.log(`PASS: value-interface-reflection on ${target}, inline=${inline}`);
+      const unboxBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-interface-unbox-census-inline-${inline}.wasm`));
+      const unbox = (await WebAssembly.instantiate(unboxBytes, {haxeon_runtime: runtime, std})).instance.exports;
+      unbox["InterfaceUnboxCensus.prepare"]();
+      unbox["InterfaceUnboxCensus.perform"](1);
+      const unboxCount = target === "wasm32" ? unbox["haxeon.memory.allocation_count"] : unbox.__allocation_count;
+      for (const count of [8, 1024]) {
+        const before = unboxCount();
+        const result = unbox["InterfaceUnboxCensus.perform"](count);
+        const allocations = unboxCount() - before;
+        if (result !== 42 * count || allocations !== 0)
+          failures.push(`interface unbox (inline=${inline}, ${target}, n=${count}): result=${result}, allocations=${allocations}`);
+        else console.log(`PASS: interface unbox on ${target}, inline=${inline}, n=${count}, allocations=0`);
+      }
 	  const flatBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-flat-object-layout-inline-${inline}.wasm`));
 	  const flat = (await WebAssembly.instantiate(flatBytes, {haxeon_runtime: runtime, std})).instance.exports;
 	  if (flat.main() !== 42) failures.push(`flat object semantics (inline=${inline}, ${target})`);

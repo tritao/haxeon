@@ -541,3 +541,81 @@ same comparison, full-scene counts ranged from 5,896–5,914 in control and
 clock-phase variation from the allocation comparison. These counts describe
 this build and mode; earlier browser-mode scene totals are not interchangeable
 with them. Browser smoke and the editor budgets and retention gates also passed.
+
+### Interface-view unbox result ABI (2026-11-05)
+
+The compiler now gives generated interface-unbox helpers the existing scalar
+and reference result ABI. The interface conversion still creates its required
+escape box; reading an existing interface view as its concrete struct creates
+no further box. Inlining on and off gives the same allocation census:
+
+| Target | Casts | Control objects | Candidate objects |
+| --- | ---: | ---: | ---: |
+| HashLink | 8 / 1,024 | 0 / 0 | 0 / 0 |
+| Wasm32 | 8 / 1,024 | 8 / 1,024 | 0 / 0 |
+| Wasm GC | 8 / 1,024 | 8 / 1,024 | 0 / 0 |
+
+The fixture carries both scalar and managed-reference leaves across collection.
+The full compiler suite passed 751 tests, self-hosting reached a fixed point,
+and parity checked 489 fixtures across the three backends (14 existing skips).
+Wasm32 browser smoke passed.
+
+The control and candidate Wasm GC Showcase guests are byte-identical
+(SHA-256 `07f1dca2f16bc8a6b0765a77aac4ce4ab3c2cde0b63a55f70c37905ab835ddc0`).
+Nine alternating full-scene pairs and three pairs for each other scene, in
+fixed-step core mode with 120 warmup and 120 measured frames, completed without
+a timeout:
+
+| Scene | Control objects | Candidate objects |
+| --- | ---: | ---: |
+| full | 4,440 | 4,440 |
+| static | 4,440 | 4,440 |
+| text-heavy | 4,440 | 4,440 |
+| editing | 8,724 | 8,724 |
+
+These counts belong to this host configuration and source cohort; compare the
+paired control and candidate rather than totals from earlier configurations.
+
+The HashLink editor profile guests are also byte-identical (SHA-256
+`429ced0f773a09bd949deb13083fcc9c8d12550236fb9c7ce62b788b352cedd4`).
+All 18 captures in nine alternating pairs reported these per-action allocation
+counts (KiB); no budget ceiling changed:
+
+| Action | Control | Candidate |
+| --- | ---: | ---: |
+| console → telemetry | 74.5 | 74.5 |
+| hierarchy → sensors | 114.6 | 114.6 |
+| sensors → hierarchy | 80.1 | 80.1 |
+| telemetry → console | 92.9 | 92.9 |
+| hover away | 13.6 | 13.6 |
+| hover enter | 0.5 | 0.5 |
+| hover field | 12.4 | 12.4 |
+| hover inside | 0.5 | 0.5 |
+| hover other | 10.0 | 10.0 |
+| idle | 0.2 | 0.2 |
+| focused idle | 0.2 | 0.2 |
+| scroll inspector | 21.2 | 21.2 |
+| backspace | 16.2 | 16.2 |
+| type character | 16.1 | 16.1 |
+
+Three 30-cycle selection census pairs counted 340,912 / 340,909 / 340,912
+objects in control and 340,910 / 340,912 / 340,910 in candidate. Total bytes
+were 24,011,168 / 24,010,440 / 24,011,096 and
+24,010,664 / 24,011,208 / 24,010,696 respectively. Only byte-buffer counts
+varied; every other per-type object and byte count matched within each pair.
+These are same-binary measurements, including capture formatting variation.
+The app suite, all ten UI scripts and all nine retention scenarios passed.
+
+All six 500-cycle headless memory gates passed. The four RSS growth windows
+(MiB), preserving pair order, were:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.47 / 3.44 / 0.78 / 5.00 | 29.38 / 3.91 / 0.62 / 5.00 |
+| 2 | 29.38 / 4.22 / 0.78 / 5.00 | 30.78 / 3.28 / 0.78 / 4.84 |
+| 3 | 30.47 / 3.59 / 0.78 / 4.84 | 30.31 / 4.06 / 0.78 / 4.84 |
+
+Median paired differences were −0.16 / +0.47 / 0 / 0 MiB. The first window
+ranged from 29.38 to 30.78 MiB across these identical-module runs, illustrating
+RSS variability separately from program allocation. No run was discarded or
+repeated to obtain a passing result, and no ceiling was raised.

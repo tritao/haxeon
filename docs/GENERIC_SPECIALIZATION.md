@@ -227,6 +227,13 @@ carriers where an inherited interface requires them. A struct converted to an in
 calls through it retain the boxed receiver as a mutable place. Erased interface views and reflection continue to use
 checked Dynamic conversions.
 
+Casting an existing interface view back to its concrete struct copies scalar and reference leaves through the same
+result ABI. The generated interface-unbox helper participates in scalar argument/result lowering; inspecting its
+result does not create another value box. The interface's original box remains the genuine escape allocation.
+`struct-interface-unbox-census` keeps a managed reference live across collection and checks both leaves. With
+inlining enabled and disabled, 8 / 1,024 casts allocate 0 / 0 objects on HashLink (unchanged), and 0 / 0 on Wasm32
+and Wasm GC (previously 8 / 1,024 on each). The Wasm parity gate checks those allocation counters directly.
+
 With inlining enabled and disabled, the cross-target census performs 8 and 1,024 calls with zero allocations for
 `hl.Bytes`, `Int`, `Float`, and a struct containing an `Int` and a managed reference, through both concrete and generic
 implementations. This includes a `PointerSource<hl.Bytes>.get()` result, struct interface receivers, and captured
