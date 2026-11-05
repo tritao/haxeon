@@ -32,6 +32,7 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"KeyPathTypingMain",
+		"KeyPathSpecMain",
 		"InheritedMethodContractMain",
 		"CompilerGapsMain",
 		"RuntimeFastPathsMain",

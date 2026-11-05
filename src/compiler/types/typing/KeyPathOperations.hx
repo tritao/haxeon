@@ -104,6 +104,8 @@ class KeyPathOperations {
 	/** Capture reference receivers and indices once, without copying an enclosing struct place. */
 	static function capturePlace(session:TypingSession, place:TypedExpression, span:SourceSpan, statements:Array<TypedStatement>):TypedExpression
 		return switch place.expression {
+			case TCall("$rawptr.ref.flat", [pointer]):
+				new TypedExpression(TCall("$rawptr.ref.flat", [hold(session, pointer, "pointer", span, statements)]), place.type, place.span);
 			case TField(parent, name):
 				var receiver = session.relations.isValueClass(parent.type) || session.relations.isNullableValueClass(parent.type)
 					? capturePlace(session, parent, span, statements) : hold(session, parent, "owner", span, statements);
@@ -118,6 +120,7 @@ class KeyPathOperations {
 
 	static function storePlace(session:TypingSession, place:TypedExpression, value:TypedExpression, span:SourceSpan):Array<TypedStatement>
 		return switch place.expression {
+			case TCall("$rawptr.ref.flat", [_]): copyFields(session, place, value, span);
 			case TLocal(_) if (session.relations.isValueClass(place.type)): copyFields(session, place, value, span);
 			case TLocal(name): [TAssign(name, value, span)];
 			case TCellLocal(name, cell): [TCellAssign(name, cell, value, span)];

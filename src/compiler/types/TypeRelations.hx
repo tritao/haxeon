@@ -64,6 +64,9 @@ class TypeRelations {
 		}
 		return switch expected {
 			case TDynamic: ToDynamic;
+			// Dropping a path's write grant changes its semantic type while keeping
+			// the same descriptor reference, just like a class reference upcast.
+			case TKeyPath(_, _, _): ReferenceCast;
 			case TInstance(kind, name, _):
 				switch kind {
 					case NominalKind.Interface:

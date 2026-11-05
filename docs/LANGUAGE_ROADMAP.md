@@ -22,13 +22,13 @@ The rules for every entry:
 | Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Declared value equality, synthesized when every field supports it; `==` on a struct that does not conform is a compile error. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
 | `Diffable` | Explicit conformance for field masks (`Diff.mask/apply/bit/all`); writes only to writable fields. | [STRUCTS.md](STRUCTS.md) |
-| Key paths (partial) | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](KEY_PATHS.md) |
+| Key paths | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](KEY_PATHS.md) |
 | Signals core | `Signal<T>`, `Derived<T>` and `Effect`, with push invalidation, pull recomputation and per-frame batching. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | Result builders | A library-declared builder lowers `if`, `switch` and `for` in a body; attached to an interface method and inherited by implementers. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | `Lazy<T>` parameters receive the caller's expression unevaluated. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 
-### Key paths (partial implementation)
+### Key paths (implemented)
 
 `\Node.width` and chained paths resolve stored fields at the expression site.
 `WritableKeyPath<R,V>` grants checked writes through root places; `KeyPath<R,V>`
@@ -38,9 +38,11 @@ form is removed. Known paths and generic constant path arguments lower to field
 operations independently of inlining. Escaped scalar-valued paths pass zero-object
 censuses on HashLink, Wasm32 and Wasm GC, including composed nested-struct roots.
 
-The feature remains incomplete: escaped `Null<Struct>` values still box across
-typed callable boundaries. Nullable presence/payload lanes need backend ABI work
-before all escaped get/set operations meet the zero-allocation contract.
+Escaped `Null<Struct>` values still box across typed callable boundaries. This
+general closure/generic-call ABI gap is assigned to queue item **a2: inline
+`Null<T>` through the callable ABI**.
+The recorded failing allocation expectation stays in KEY_PATHS.md until a2
+passes it.
 Nested tracked-struct writes remain explicit `E1027` errors. Bindings, optional
 traversal, reflection by name and general `inout` are excluded.
 See [KEY_PATHS.md](KEY_PATHS.md) for the specification and measured blocker.
@@ -152,11 +154,13 @@ Check each against what Haxeon already supports before designing it.
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
    value equality and remain boxed, and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
-6. Complete key paths before UI bindings: the scalar-valued implementation is present; escaped nullable struct values
-   need nullable scalar callable ABI support on all targets.
-7. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
+6. Key paths are implemented before UI bindings: typed stored-field references, checked writes, composition,
+   equality/hash and the `Diff.bit` port.
+7. Inline `Null<T>` through the callable ABI (queue **a2**): carry presence and payload through closures and generic
+   calls, including escaped key paths, and make their recorded nullable-struct census zero.
+8. Typed storage for the standard reference maps and nullable-element arrays, deleting their boxed boundary
    conversions; generic specialization and inline `Null<T>` for scalars, and native `Int64` operations.
-8. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented.
-9. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
+9. Scoped cleanup (`defer`, `Disposable` scoped bindings) is implemented.
+10. `inout` with the node store prototype; move-only types for native memory only if scoped cleanup and owner scopes
    leave real bugs.
-10. Smaller conveniences when a concrete use appears.
+11. Smaller conveniences when a concrete use appears.

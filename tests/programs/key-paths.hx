@@ -22,6 +22,8 @@ class KeyPathCensus {
 	static var node:PathNode;
 	static var point:PathPoint;
 	static var classPaths:Array<WritableKeyPath<PathNode, Int>>;
+	static var holder:PathHolder;
+	static var valuePaths:Array<WritableKeyPath<PathHolder,PathPoint>>;
 	static var rect:PathRect;
 	static var composedPaths:Array<WritableKeyPath<PathRect, Int>>;
 	static var structPaths:Array<WritableKeyPath<PathPoint, Int>>;
@@ -31,6 +33,8 @@ class KeyPathCensus {
 		point = new PathPoint(0);
 		classPaths = [\PathNode.width, \PathNode.height];
 		structPaths = [\PathPoint.x, \PathPoint.y];
+		holder=new PathHolder();
+		valuePaths=[\PathHolder.point,\PathHolder.other];
 		rect=new PathRect(0);
 		composedPaths=[composeStruct(\PathRect.point, structPaths[0]), composeStruct(\PathRect.point, structPaths[1])];
 	}
@@ -44,6 +48,12 @@ class KeyPathCensus {
 			path.set(current, i);
 			sum += (\PathNode.width).get(node) + genericRead(path,current);
 		}
+		return sum;
+	}
+
+	public static function knownComposition(n:Int):Int {
+		var path=(\PathRect.point).then(\PathPoint.x), sum=0;
+		for(i in 0...n) { path.set(rect,i); sum+=path.get(rect); }
 		return sum;
 	}
 
@@ -64,6 +74,17 @@ class KeyPathCensus {
 			var path = structPaths[i & 1];
 			path.set(current, i);
 			sum += path.get(current);
+		}
+		return sum;
+	}
+
+	public static function escapedStructValue(n:Int):Int {
+		var sum=0;
+		for(i in 0...n) {
+			var path=valuePaths[i&1];
+			path.set(holder,new PathPoint(i));
+			var value=path.get(holder);
+			sum+=value.x;
 		}
 		return sum;
 	}
@@ -106,9 +127,10 @@ struct PathRect {
 }
 class PathHolder {
 	public var point:PathPoint;
+	public var other:PathPoint;
 	public var node:PathNode;
 	public final reference:PathNode;
-	public function new() { point=new PathPoint(0); node=new PathNode(0); reference=new PathNode(0); }
+	public function new() { point=new PathPoint(0); other=new PathPoint(0); node=new PathNode(0); reference=new PathNode(0); }
 }
 function genericRead<R,V>(path:KeyPath<R,V>, root:R):V return path.get(root);
 function composeClass(p:WritableKeyPath<PathHolder,PathNode>, q:WritableKeyPath<PathNode,Int>):WritableKeyPath<PathHolder,Int> return p.then(q);
@@ -141,7 +163,7 @@ function extraChecks():Int {
 function allocationChecks():Bool {
 	KeyPathCensus.prepare();
 	var operations=[KeyPathCensus.known,KeyPathCensus.escapedClass,KeyPathCensus.escapedStruct,
-		KeyPathCensus.escapedStaticStruct,KeyPathCensus.escapedComposition];
+		KeyPathCensus.escapedStaticStruct,KeyPathCensus.escapedComposition,KeyPathCensus.knownComposition,KeyPathCensus.escapedStructValue];
 	var dump=Sys.getCwd()+"/out/key-paths-census.json";
 	var index=0;
 	for(operation in operations) {

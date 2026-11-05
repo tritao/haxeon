@@ -511,3 +511,4 @@ struct-interface-unbox-census	42
 key-paths	42
 key-path-observable	42
 key-path-nullable	42
+key-path-semantics	42
