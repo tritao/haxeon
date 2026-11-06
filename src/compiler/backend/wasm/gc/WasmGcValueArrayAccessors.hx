@@ -23,10 +23,12 @@ class WasmGcValueArrayAccessors {
 	public final program:IrProgram;
 	final natives:Map<String, IrNative>;
 	final objects:IrObjectTable;
+	final enums:Array<IrEnum>;
 	final layouts:Map<String, IrValueArrayLayout> = [];
 	final added:Array<IrNative> = [];
 
 	public function new(source:IrProgram) {
+		enums = source.enums;
 		natives = [for (native in source.natives) if (isScalar(native.symbol)) native.name => native];
 		objects = IrObjectTable.of([for (object in source.objects) object.name => object]);
 		program = new IrProgram(source.entryPoint);
@@ -100,10 +102,16 @@ class WasmGcValueArrayAccessors {
 		var element = switch arguments[0].type {
 			case Array(element): element;
 			default: return null;
-		}, name = switch element { case Obj(name), Nullable(Obj(name)): name; default: return null; }, object = objects.get(name);
-		if (object == null || !object.isValue) return null;
+		};
+		switch element {
+			case Obj(name), Nullable(Obj(name)):
+				var object = objects.get(name); if (object == null || !object.isValue) return null;
+			case Enum(name), Nullable(Enum(name)):
+				if (compiler.ir.IrInlineEnumStorage.resolve(enums, objects, name) == null) return null;
+			default: return null;
+		}
 		var key = haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), layout = layouts.get(key);
-		if (layout == null) { layout = new IrValueArrayLayout(objects, element, 32, WasmGc); layouts.set(key, layout); }
+		if (layout == null) { layout = new IrValueArrayLayout(objects, element, 32, WasmGc, enums); layouts.set(key, layout); }
 		var symbol = native.symbol, clear = symbol == "__value_array_clear_scalar", write = clear || StringTools.startsWith(symbol, "__value_array_write_"),
 			suffix = clear ? "clear" : symbol.substr(write ? "__value_array_write_".length : "__value_array_read_".length),
 			integer = suffix == "i32" || suffix == "i64", variableWidth = integer || suffix == "ptr" || suffix == "type" || clear;

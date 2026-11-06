@@ -126,7 +126,7 @@ class IrScalarClosures {
 		program.interfaces = [for (interfaceDecl in program.interfaces) {name: interfaceDecl.name, bases: interfaceDecl.bases,
 			methods: [for (method in interfaceDecl.methods) {name: method.name,
 				arguments: [for (argument in method.arguments) mapType(argument)], result: mapType(method.result)}]}];
-		program.enums = [for (entry in program.enums) {name: entry.name,
+		program.enums = [for (entry in program.enums) {name: entry.name, isRecursive: entry.isRecursive, inlineStorage: entry.inlineStorage,
 			cases: [for (item in entry.cases) {name: item.name, params: [for (type in item.params) mapType(type)]}]}];
 		program.staticFields = [for (field in program.staticFields) {name: field.name, type: mapType(field.type)}];
 		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects, program.interfaces, rewritten);

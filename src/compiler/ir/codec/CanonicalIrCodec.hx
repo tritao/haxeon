@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 14;
+	public static inline final VERSION:Int = 15;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -49,12 +49,12 @@ class CanonicalIrCodec {
 			if (input.readString(3) != MAGIC)
 				throw "Invalid canonical Haxeon IR";
 			var version = input.readByte();
-			if (version < 1 || version > VERSION)
+			if (version != VERSION)
 				throw "Unsupported canonical Haxeon IR version";
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
-			program.natives = readNatives(input, bytes.length, version);
-			program.cNatives = version >= 2 ? readCNatives(input, bytes.length, version) : [];
-			program.objects = readObjects(input, bytes.length, version);
+			program.natives = readNatives(input, bytes.length);
+			program.cNatives = readCNatives(input, bytes.length);
+			program.objects = readObjects(input, bytes.length);
 			program.interfaces = readInterfaces(input, bytes.length);
 			program.enums = readEnums(input, bytes.length);
 			program.staticFields = readStaticFields(input, bytes.length);
@@ -84,7 +84,7 @@ class CanonicalIrCodec {
 		}
 	}
 
-	static function readNatives(input:BytesInput, limit:Int, version:Int):Array<IrNative> {
+	static function readNatives(input:BytesInput, limit:Int):Array<IrNative> {
 		var result:Array<IrNative> = [];
 		for (_ in 0...readCount(input)) {
 			var name = IrTypeCodec.readString(input, limit),
@@ -93,9 +93,8 @@ class CanonicalIrCodec {
 				arguments = readTypes(input, limit),
 				resultType = IrTypeCodec.readType(input, limit, 0),
 				generatedFunctionDependencies:Array<String> = [];
-			if (version >= 10)
-				for (_ in 0...readCount(input))
-					generatedFunctionDependencies.push(IrTypeCodec.readString(input, limit));
+			for (_ in 0...readCount(input))
+				generatedFunctionDependencies.push(IrTypeCodec.readString(input, limit));
 			result.push({
 				name: name,
 				library: library,
@@ -170,7 +169,7 @@ class CanonicalIrCodec {
 		}
 	}
 
-	static function readCNatives(input:BytesInput, limit:Int, version:Int):Array<IrCNative> {
+	static function readCNatives(input:BytesInput, limit:Int):Array<IrCNative> {
 		var result:Array<IrCNative> = [];
 		for (_ in 0...readCount(input)) {
 			var name = IrTypeCodec.readString(input, limit),
@@ -181,35 +180,30 @@ class CanonicalIrCodec {
 				pointerRelease = readNullableString(input, limit),
 				pointerLength = readNullableString(input, limit),
 				pointerNullable = input.readByte(),
-				pointerSize = version >= 8 ? readCount(input) : 0,
-				fixedResult = version >= 9 ? readFixedLayout(input) : null,
+				pointerSize = readCount(input),
+				fixedResult = readFixedLayout(input),
 				arguments = readTypes(input, limit),
 				argumentModes:Array<IrCNativeArgumentMode> = [];
 			if (pointerNullable != 0 && pointerNullable != 1)
 				throw "Invalid canonical IR native nullability";
-			if (version >= 5) {
-				var modeCount = readCount(input);
-				if (modeCount != arguments.length)
-					throw "Canonical IR C native argument mode count does not match its signature";
-				for (_ in 0...modeCount)
-					argumentModes.push(switch input.readByte() {
-						case 0: Value;
-						case 1: BytesInput(readCount(input));
-						case 2: BytesOutput(readCount(input));
-						case 3: Output;
-						case 4: InputOutput;
-						case 5: BytesInputOutput(readCount(input));
-						case 6 if (version >= 6): BytesSize;
-						case 7 if (version >= 7): FixedOutput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 8 if (version >= 7): FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 9 if (version >= 9): FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
-						case 10 if (version >= 9): FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
-						case _: throw "Invalid canonical IR C native argument mode";
-					});
-			} else {
-				for (_ in 0...arguments.length)
-					argumentModes.push(Value);
-			}
+			var modeCount = readCount(input);
+			if (modeCount != arguments.length)
+				throw "Canonical IR C native argument mode count does not match its signature";
+			for (_ in 0...modeCount)
+				argumentModes.push(switch input.readByte() {
+					case 0: Value;
+					case 1: BytesInput(readCount(input));
+					case 2: BytesOutput(readCount(input));
+					case 3: Output;
+					case 4: InputOutput;
+					case 5: BytesInputOutput(readCount(input));
+					case 6: BytesSize;
+					case 7: FixedOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+					case 8: FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
+					case 9: FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
+					case 10: FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
+					case _: throw "Invalid canonical IR C native argument mode";
+				});
 			result.push({
 				name: name,
 				library: library,
@@ -277,7 +271,7 @@ class CanonicalIrCodec {
 		}
 	}
 
-	static function readObjects(input:BytesInput, limit:Int, version:Int):Array<IrObject> {
+	static function readObjects(input:BytesInput, limit:Int):Array<IrObject> {
 		var result:Array<IrObject> = [];
 		for (_ in 0...readCount(input)) {
 			var name = IrTypeCodec.readString(input, limit),
@@ -285,7 +279,7 @@ class CanonicalIrCodec {
 				base = readNullableString(input, limit),
 				interfaces = readStrings(input, limit),
 				nativeLayout:Null<compiler.ir.Ir.IrObjectNativeLayout> = null;
-			if (version >= 11 && readByteBool(input))
+			if (readByteBool(input))
 				nativeLayout = {
 					target: IrTypeCodec.readString(input, limit),
 					size: input.readInt32(),
@@ -297,7 +291,7 @@ class CanonicalIrCodec {
 				var fieldName = IrTypeCodec.readString(input, limit),
 					fieldType = IrTypeCodec.readType(input, limit, 0),
 					fieldLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout> = null;
-				if (version >= 11 && readByteBool(input))
+				if (readByteBool(input))
 					fieldLayout = {
 						offset: input.readInt32(),
 						size: input.readInt32(),
@@ -306,10 +300,10 @@ class CanonicalIrCodec {
 						inlineRecord: readByteBool(input)
 					};
 				var scalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
-				if (version >= 12 && readByteBool(input))
+				if (readByteBool(input))
 					scalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
 				var nullableScalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
-				if (version >= 13 && readByteBool(input))
+				if (readByteBool(input))
 					nullableScalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
 				fields.push({name: fieldName, type: fieldType, nativeLayout: fieldLayout, scalarStorage: scalarStorage,
 					nullableScalarStorage: nullableScalarStorage});
@@ -361,6 +355,8 @@ class CanonicalIrCodec {
 		for (enumDecl in enums) {
 			IrTypeCodec.writeString(output, enumDecl.name);
 			output.writeByte(enumDecl.isRecursive == true ? 1 : 0);
+			output.writeByte(enumDecl.inlineStorage == null ? 0 : 1);
+			if (enumDecl.inlineStorage != null) IrTypeCodec.writeString(output, enumDecl.inlineStorage);
 			writeCount(output, enumDecl.cases.length);
 			for (constructor in enumDecl.cases) {
 				IrTypeCodec.writeString(output, constructor.name);
@@ -375,9 +371,12 @@ class CanonicalIrCodec {
 			var cases:Array<IrEnumCase> = [],
 				name = IrTypeCodec.readString(input, limit), recursive = input.readByte();
 			if (recursive > 1) throw "Invalid enum recursion flag";
+			var hasStorage = input.readByte();
+			if (hasStorage > 1) throw "Invalid inline enum storage flag";
+			var storage = hasStorage == 0 ? null : IrTypeCodec.readString(input, limit);
 			for (_ in 0...readCount(input))
 				cases.push({name: IrTypeCodec.readString(input, limit), params: readTypes(input, limit)});
-			result.push({name: name, cases: cases, isRecursive: recursive == 1});
+			result.push({name: name, cases: cases, isRecursive: recursive == 1, inlineStorage: storage});
 		}
 		return result;
 	}

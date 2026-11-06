@@ -159,7 +159,7 @@ failed:
 
 HL_PRIM varray *HL_NAME(__value_array_alloc)(int length, hl_type *element, int scalar_stride_bits, int reference_stride,
 	int word_bits, bool has_validity) {
-	if( length < 0 || element == NULL || element->kind != HSTRUCT || scalar_stride_bits < 0 || (scalar_stride_bits & 7)
+	if( length < 0 || element == NULL || (element->kind != HSTRUCT && element->kind != HENUM) || scalar_stride_bits < 0 || (scalar_stride_bits & 7)
 		|| reference_stride < 0 || (word_bits != 32 && word_bits != 64) )
 		hl_error("Invalid inline value array layout");
 	realtime_value_array *array = (realtime_value_array*)hl_gc_alloc_gen_owner(&realtime_value_array_type,
@@ -221,7 +221,7 @@ HL_PRIM void HL_NAME(__value_array_dynamic_write)(varray *value, int index, vdyn
 }
 
 static vdynamic *realtime_value_array_escape_element(varray *source, vdynamic **values, int index, hl_type *element) {
-	if( source->at->kind == HDYN || values[index] == NULL ) return values[index];
+	if( hl_is_dynamic(source->at) || values[index] == NULL ) return values[index];
 	/* A native Array<S> contains raw HSTRUCT pointers, which have no Dynamic header of their own. */
 	vdynamic *boxed = hl_alloc_dynamic(element);
 	hl_gc_store_ref(&boxed->v.ptr, values[index], element);

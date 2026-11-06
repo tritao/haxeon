@@ -5,13 +5,15 @@ import compiler.ir.codec.IrTypeCodec;
 
 /** Dynamic escapes materialize a value; ordinary typed lane access never calls these helpers. */
 class IrValueArrayBridge {
+	public final storage:IrType;
 	final element:IrType;
 	final objects:IrObjectTable;
 	final helpers:IrValueArraySlotHelpers;
 	final name:String;
 
-	public function new(element:IrType, objects:IrObjectTable, helpers:IrValueArraySlotHelpers) {
+	public function new(element:IrType, storage:IrType, objects:IrObjectTable, helpers:IrValueArraySlotHelpers) {
 		this.element = element;
+		this.storage = storage;
 		this.objects = objects;
 		this.helpers = helpers;
 		this.name = "$value-array:bridge:" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
@@ -24,16 +26,24 @@ class IrValueArrayBridge {
 	public function functions():Array<IrFunction> {
 		var arrayType:IrType = Array(element), read = new IrBuilder(), readArray = read.argument("array", arrayType),
 			readIndex = read.argument("index", I32);
-		read.returnValue(read.toDyn(readValue(read, readArray, readIndex, element, [])));
+		var loaded = readValue(read, readArray, readIndex, storage, []);
+		read.returnValue(switch valueType(element) {
+			case Enum(name): read.call(IrInlineEnumEscapes.boxName(name), [loaded], Dyn);
+			default: read.toDyn(loaded);
+		});
 		var write = new IrBuilder(), writeArray = write.argument("array", arrayType), writeIndex = write.argument("index", I32),
 			input = write.argument("value", Dyn);
 		write.call("__value_array_ensure", [writeArray, writeIndex], Void);
-		writeValue(write, writeArray, writeIndex, write.safeCast(input, element), element, []);
+		var converted = switch valueType(element) {
+			case Enum(name): write.call(IrInlineEnumEscapes.unboxName(name), [input], storage);
+			default: write.safeCast(input, element);
+		};
+		writeValue(write, writeArray, writeIndex, converted, storage, []);
 		write.call("__value_array_mark", [writeArray, writeIndex], Void);
 		write.returnValue(write.constVoid());
 		var accepts = new IrBuilder(), value = accepts.argument("value", Dyn), type = accepts.typeValue(valueType(element));
 		var matches = accepts.call("__std_is_exact_type", [value, type], Bool);
-		if (isOptional(element)) {
+		if (isOptional(element) || switch element { case Enum(_): true; default: false; }) {
 			var nil = accepts.equal(value, accepts.constNull(Dyn)), absent = accepts.createBlock(), present = accepts.createBlock();
 			accepts.branch(nil, absent, present);
 			accepts.select(absent); accepts.returnValue(accepts.constBool(true));

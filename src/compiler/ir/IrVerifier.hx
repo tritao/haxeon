@@ -10,11 +10,13 @@ class IrVerifier {
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	public static function verifyValueArraysLowered(program:IrProgram):Void {
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
+			valueEnums:Map<String, Bool> = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => true],
 			ordinaryRefNatives:Map<String, Bool> = [];
 		function ordinaryRef(name:String):Bool return StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_ref");
 		for (native in program.natives) if (ordinaryRef(native.symbol)) ordinaryRefNatives.set(native.name, true);
 		function laneArray(type:IrType):Bool return switch type {
 			case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
+			case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name);
 			default: false;
 		};
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) {
@@ -80,9 +82,11 @@ class IrVerifier {
 				throw 'Duplicate IR interface "${interfaceDecl.name}"';
 			interfaces.set(interfaceDecl.name, interfaceDecl);
 		}
+		var objectTable = IrObjectTable.of(objects);
 		for (enumDecl in program.enums) {
 			if (enums.exists(enumDecl.name))
 				throw 'Duplicate IR enum "${enumDecl.name}"';
+			IrInlineEnumStorage.validate(enumDecl, objectTable);
 			enums.set(enumDecl.name, enumDecl);
 		}
 		var globals:Map<String, IrType> = [];
@@ -93,12 +97,19 @@ class IrVerifier {
 		}
 		// Carrier results are permitted only for an actual reference leaf in a lane array.
 		var carrierSlots:Map<String, Bool> = [];
-		var laneValues = new IrInlineValueLayout(IrObjectTable.of(objects));
+		var laneValues = new IrInlineValueLayout(objectTable);
 		for (fn in program.functions) {
 			var access = IrValueArraySlotHelpers.carrierAccess(fn.name);
 			if (access == null) continue;
 			var fieldFound = false;
-			for (slot in laneValues.slots(access.element))
+			var stored = switch access.element {
+				case Enum(name), Nullable(Enum(name)):
+					var resolved = IrInlineEnumStorage.resolve(program.enums, objectTable, name);
+					if (resolved == null) throw "Lane carrier accessor requires inline enum storage";
+					resolved;
+				default: access.element;
+			};
+			for (slot in laneValues.slots(stored))
 				if (!slot.isPresence && IrValueLaneReference.isCarrier(slot.type) && sameCarrierPath(slot.path, access.path)) fieldFound = true;
 			if (!fieldFound || fn.arguments.length != (access.write ? 3 : 2)
 				|| !sameType(fn.arguments[0].type, Array(access.element)) || !sameType(fn.arguments[1].type, I32)

@@ -2685,3 +2685,153 @@ Full-scene startup medians, ms:
 The text-heavy frame median is 0.20 ms higher; that observation is retained with the others, without attributing a
 causal cost to this classification change. Raw captures were deleted immediately after extraction. The finished gate
 checkout and obsolete builds are removed at the commit boundary; only the next control artifacts and records remain.
+
+### Logical enum arrays and escape adapters (candidate)
+
+This checkpoint adds the logical-array ABI helpers; source inline enums remain inactive. `Array<E>` and
+`Iterator<E>` retain their public enum descriptors while typed access transports private tag/scalar/reference
+records. Genuine Dynamic reads box the nominal enum and checked writes unpack it. Native ordinary enum arrays
+migrate through validated forwarding headers, preserving aliases. Nullable erasure and closure ABI rewriting
+retain the storage association and recursion classification. Source `Null<E>` already has the canonical
+null-capable `Enum(E)` IR type. Canonical IR version 15 stores the association explicitly and rejects older
+formats; obsolete decoder branches were removed.
+
+The control is Haxeon `61e70087`, on the same machine and frozen outer `595e13687`. Work ran in
+`materia-worktrees/haxeon-flat-structs` after the requested checkout move. Both sides use the same app/native
+inputs. The rebuilt VM has the same HashLink pin (`d1eb6136`) and compiler/feature settings; initial pairs
+retain each side's saved VM/runtime, and the RSS diagnostics also hold the VM image constant. NativeKit remains
+pinned at `2654fd08`.
+
+All 790 compiler tests, the self-hosting fixed point, ten UI scripts, 506 parity fixtures (14 existing skips),
+six UI value snapshots, app suite, nine retention scenarios, performance budgets, and both Web smoke tests
+passed. All eighteen scheduled action captures and all valid RSS captures were within their gates. No ceiling
+changed.
+
+The actual three-target array fixtures cover typed copy isolation, array-only reference roots across collection,
+null and payload Dynamic round trips, native-array migration/alias writes, and size-scaled
+construction/iteration. Reading/writing 8 or 1,024 times allocates zero objects. Constructing and iterating
+either 8 or 1,024 elements allocates **four objects** on each target, with inlining disabled and enabled: the
+array header, two backing lanes and iterator. There is no per-element enum box. An unrelated optional field
+forces Wasm nullable erasure in the fixture. Negative tests reject ordinary array operations on enum lanes,
+malformed storage associations and obsolete canonical IR. These are ABI infrastructure tests, not proof that
+source enum lowering is complete.
+
+| Artifact | Control bytes | Candidate bytes |
+| --- | ---: | ---: |
+| Editor, development | 99,871,693 | 99,871,693 |
+| Showcase Wasm32 | 11,876,090 | 11,876,090 |
+| Showcase Wasm GC | 5,810,183 | 5,810,217 |
+
+The editor modules are byte-identical, SHA-256
+`18cbaa8c748b8a6847be502af77eefd1e598721f8a539f3ea10f1555026f462a`; Wasm32 modules are also byte-identical. Wasm
+GC adds 34 bytes for the checked retype path.
+
+| Action | KiB control → candidate | ms control → candidate |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 72.5 → 74.5 | 1.40 → 1.19 |
+| tab-matrix/hierarchy->sensors | 112.8 → 112.8 | 1.98 → 1.71 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.55 → 1.31 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.48 → 1.24 |
+| interaction/hover-away | 13.6 → 13.6 | 0.56 → 0.56 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-field | 12.4 → 12.4 | 0.57 → 0.58 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-other | 10.0 → 10.0 | 0.55 → 0.56 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.95 → 0.96 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.44 → 0.48 |
+| interaction/type-char | 16.1 → 16.1 | 0.44 → 0.48 |
+| selection-stress/selection | — | 3.58 → 3.54 |
+
+These are medians of nine alternating pairs; timing movements are observations, not a speedup claim for this
+infrastructure change. Selection allocation is reported by the separate thirty-cycle census below, rather than
+inventing a missing per-action KiB field.
+
+Console→telemetry moves +2.0 KiB in the ordinary counter. Three additional alternating pairs of 100 tab cycles
+recorded the following exact steady-frame byte medians in **every** run (99 measured frames per action).
+
+| Action | Exact bytes, control | Exact bytes, candidate |
+| --- | ---: | ---: |
+| hierarchy->sensors | 115,136 | 115,136 |
+| sensors->hierarchy | 81,384 | 81,384 |
+| console->telemetry | 75,800 | 75,800 |
+| telemetry->console | 94,520 | 94,520 |
+
+With the allocation census enabled, HashLink's shared `GC_TLAB_POLICY` disables buffered allocation in both
+native and JIT paths. The ordinary allocator then charges `gc_stats.total_allocated` per allocation, so these
+census-mode action windows use exact rounded bytes. Without the census, the same counter charges whole buffer
+refills. The +2 KiB movement is counter granularity, not additional program allocation. Census-mode timing is
+not compared with ordinary timing.
+
+| Selection census pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,908 / 24,011,632 | 340,909 / 24,011,920 |
+| 2 | 340,909 / 24,011,936 | 340,911 / 24,012,400 |
+| 3 | 340,910 / 24,012,168 | 340,908 / 24,011,656 |
+
+Every selection run has exactly 305,725 non-byte-buffer allocations and 21,594,968 corresponding bytes. All
+total-count differences above are raw byte buffers; they are retained rather than attributed to a particular
+site without evidence.
+
+RSS window growth is MiB for cycles 100→200, 200→300, 300→400 and 400→500. The initial paired median differences
+are +0.47 / +0.31 / 0.00 / +0.16. Diagnostics hold the rebuilt VM constant, then compare an identical candidate
+image under both labels. A final fixed-path set also uses identical capture/preload path strings; these are
+distinct diagnostic controls, not replacements for the original results.
+
+| RSS set / pair | Control windows | Candidate windows |
+| --- | --- | --- |
+| Initial / 1 | 29.84 / 3.75 / 0.78 / 4.84 | 30.31 / 4.06 / 0.78 / 5.00 |
+| Initial / 2 | 29.69 / 3.91 / 0.78 / 4.84 | 30.47 / 3.44 / 0.78 / 5.00 |
+| Initial / 3 | 30.00 / 3.75 / 0.94 / 5.31 | 29.53 / 4.06 / 0.78 / 5.00 |
+| candidate-aa / 1 | 30.47 / 3.75 / 0.78 / 5.00 | 30.00 / 4.06 / 0.78 / 4.69 |
+| candidate-aa / 2 | 30.62 / 3.44 / 0.62 / 5.00 | 30.31 / 3.59 / 0.78 / 4.84 |
+| candidate-aa / 3 | 30.78 / 3.44 / 0.94 / 4.84 | 29.84 / 4.06 / 0.78 / 5.00 |
+| common-vm / 1 | 29.69 / 4.22 / 0.78 / 5.00 | 30.62 / 3.28 / 0.78 / 5.00 |
+| common-vm / 2 | 29.38 / 4.22 / 0.78 / 5.16 | 30.47 / 3.28 / 0.62 / 4.84 |
+| common-vm / 3 | 29.84 / 3.59 / 0.94 / 4.84 | 29.84 / 4.22 / 0.31 / 5.31 |
+| candidate-aa-same-path / 1 | 29.53 / 4.22 / 0.62 / 5.00 | 30.94 / 3.44 / 0.78 / 4.69 |
+| candidate-aa-same-path / 2 | 30.31 / 3.59 / 0.78 / 5.00 | 29.22 / 4.06 / 0.78 / 4.84 |
+| candidate-aa-same-path / 3 | 30.47 / 3.44 / 0.78 / 5.00 | 30.16 / 3.44 / 0.78 / 5.00 |
+| common-vm-same-path / 1 | 30.00 / 4.22 / 0.47 / 4.84 | 30.62 / 3.59 / 0.94 / 4.84 |
+| common-vm-same-path / 2 | 29.53 / 4.22 / 0.94 / 5.00 | 30.62 / 3.44 / 0.94 / 4.84 |
+| common-vm-same-path / 3 | 30.62 / 3.59 / 0.94 / 4.53 | 30.47 / 3.59 / 0.94 / 4.84 |
+
+The fixed-path comparison shifts +0.62 MiB into the first window and −0.63 MiB out of the next; the paired
+median cumulative change through those two windows is −0.01 MiB. Its final two window differences are zero. The
+identical-image fixed-path calibration has paired medians −0.31 / 0.00 / 0.00 / −0.16 and a first-window pair
+ranging as far as +1.41 MiB despite identical code and inputs. Window movements overlap observed identical-image
+variability; these measurements do not establish an added retained heap or a per-window improvement. Every valid
+retained-count and RSS gate passed, and all sets remain reported.
+
+One final A/A attempt is invalid: a diagnostic `objcopy --dump-section` invocation without an output ELF rewrote
+the mapped VM snapshot and caused SIGBUS (PID 3035615). An unloaded-copy `strace` reproduction confirmed
+`O_WRONLY|O_TRUNC` on the input. Both snapshots were restored and their original hashes verified; artifact
+publication was made atomic and only the remaining planned A/A slots were completed. This was a diagnostic
+error, not an accepted benchmark sample. No product VM/library source or shared toolchain was changed by that
+diagnostic.
+
+| Web scene | GC objects control → candidate | Frame median ms | Frame p95 ms |
+| --- | ---: | ---: | ---: |
+| wasm-gc/editing | 8,724 → 8,724 | 2.4 → 2.3 | 4.4 → 4.0 |
+| wasm-gc/full | 4,440 → 4,440 | 2.3 → 2.2 | 4.3 → 3.9 |
+| wasm-gc/static | 4,440 → 4,440 | 2.0 → 1.9 | 4.0 → 3.5 |
+| wasm-gc/text-heavy | 4,440 → 4,440 | 2.0 → 2.2 | 3.5 → 3.8 |
+| wasm32/full | not a GC-object metric | 2.1 → 2.1 | 3.8 → 3.9 |
+
+All 36 GC scene captures tie in object count: full/static/text-heavy 4,440; editing 8,724. The full scene uses
+nine alternating pairs and the others three; Wasm32 load comparison uses three pairs. No timeout occurred in
+this final-source comparison.
+
+| Web scene | Fetch ms | Compile ms | Instantiate ms | Init ms | First frame ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| wasm-gc/editing | 9.2 → 9.1 | 5.5 → 6.1 | 6.7 → 6.5 | 14.3 → 14.9 | 146.0 → 145.9 |
+| wasm-gc/full | 9.9 → 8.9 | 5.4 → 5.3 | 6.8 → 6.5 | 15.5 → 16.1 | 160.9 → 158.3 |
+| wasm-gc/static | 9.0 → 9.9 | 5.2 → 5.1 | 6.8 → 7.1 | 15.8 → 15.6 | 160.9 → 149.0 |
+| wasm-gc/text-heavy | 10.9 → 8.2 | 5.1 → 5.1 | 6.6 → 6.5 | 16.1 → 15.9 | 152.9 → 139.6 |
+| wasm32/full | 15.8 → 17.5 | 5.1 → 5.7 | 2.5 → 2.6 | 12.7 → 11.6 | 156.6 → 138.8 |
+
+Source enum activation, public closure/field/reflection adapters and the UI enum conversions remain next. A
+separate reproduced live-patch ABI gap must be fixed before activation: enum storage association changes
+currently leave the enum ABI key unchanged; an external prototype including the association correctly changes
+`Patch` to `ReloadDomain([EnumChanged(E)])`.

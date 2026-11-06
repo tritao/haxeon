@@ -181,7 +181,16 @@ invalidated with the enum declaration. The existing boxed generic transport has 
 relation: it must bound families such as `E<T> -> Array<E<Array<T>>>` even though they have finite inline size. That
 transport still erases cyclic generic payload schemas at this checkpoint; it never marks a reference cycle recursive by
 value or rejects its inline layout. Transporting concrete value leaves belongs to the remaining source enum-storage
-lowering; this metadata step does not complete that ABI or activate source inline enums.
+lowering; these metadata and logical-array helper steps do not activate source inline enums.
+
+The IR keeps a registered enum's logical identity separate from its private lane record. Array and iterator
+accessors transport record leaves while their public descriptors retain the enum type; Dynamic/native adapters
+materialize or unpack the nominal enum. Canonical IR, nullable erasure and closure ABI rewriting preserve that
+association. Source `Null<E>` already lowers to the same null-capable enum IR type. The all-target helper tests
+allocate zero objects for typed copies and four objects for either 8 or 1,024 elements plus iteration. Public
+source closure/field/reflection adapters remain part of the pending source lowering; the storage association
+must also participate in live-patch ABI checks before activation. See STRUCTS.md and VALUE_TYPES.md for the
+representation contract and paired measurements.
 
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.

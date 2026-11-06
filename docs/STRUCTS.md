@@ -407,6 +407,25 @@ also preserve a source whose only live root is its payload reference slot. These
 enum activation: concrete generic enum metadata, logical container/closure ABIs and genuine escape adapters remain
 required before typed source enum storage changes.
 
+Logical enum arrays now have an explicit IR storage association: `Array<E>` retains `E` in its public descriptor,
+while its typed element accessors transport the private tag/scalar/reference record. Null uses tag zero without an
+additional optional wrapper. Dynamic array reads materialize the nominal boxed enum; checked writes unpack it back
+into the lanes. Source `Null<E>` already lowers to the same null-capable `Enum(E)` IR type; the array factory rejects
+a redundant `Nullable(Enum(E))` wrapper instead of treating it as a second array representation. Native-created ordinary enum arrays migrate through the same validated forwarding-header protocol
+as struct arrays, preserving aliases. Wasm GC validates both the logical enum type and its actual backing array type
+before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
+reference-array operations on enum lane arrays as well as struct lane arrays.
+
+These are tested logical-array ABI helpers, not source-level inline enum activation. The fixtures exercise typed
+copy isolation, array-only reference roots across collection, null and payload Dynamic round trips, native-array
+migration and alias writes. Typed read/write copies allocate zero objects at 8 and 1,024 calls on all three targets;
+constructing and iterating arrays of 8 versus 1,024 elements allocates four objects in either case: the header,
+two backing lanes and iterator. Storage does not add an element box. Both inlining modes are covered. Canonical IR version 15 retains the logical/storage association
+with an explicit presence flag and rejects obsolete serialized versions. Closure ABI rewriting preserves the enum's
+storage association and recursion classification, including when an unrelated nullable field triggers Wasm nullable
+erasure. Source lowering, logical enum closure adapters and complete
+source-field reflection adapters still need to be connected before enabling the representation for source programs.
+
 This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline

@@ -164,7 +164,7 @@ class ValueArrayAccessMain {
 		var optionalPairType:IrType = Nullable(pairType), optionalPairArrayType:IrType = Array(optionalPairType);
 		var optionalPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(optionalPairType);
 		var optionalPairHelpers = new IrValueArraySlotHelpers(optionalPairType, optionalPairShape);
-		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
+		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
 		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects), optionalPairType, optionalPairHelpers);
 		var optionalPairBridgeFunctions = optionalPairBridge.functions().concat(optionalPairComponents.functions()),
 			optionalPairHelperFunctions = optionalPairHelpers.functions();
@@ -182,12 +182,12 @@ class ValueArrayAccessMain {
 		var nestedPairType:IrType = Obj("LaneNestedPair"), nestedPairArrayType:IrType = Array(nestedPairType);
 		var nestedPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(nestedPairType);
 		var nestedPairHelpers = new IrValueArraySlotHelpers(nestedPairType, nestedPairShape);
-		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
+		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
 		var nestedPairBridgeFunctions = nestedPairBridge.functions(), nestedPairHelperFunctions = nestedPairHelpers.functions();
 		var outerType:IrType = Obj("LaneOuter"), outerArrayType:IrType = Array(outerType);
 		var outerShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(outerType);
 		var outerHelpers = new IrValueArraySlotHelpers(outerType, outerShape);
-		var outerBridge = new IrValueArrayBridge(outerType, IrObjectTable.of(objects), outerHelpers);
+		var outerBridge = new IrValueArrayBridge(outerType, outerType, IrObjectTable.of(objects), outerHelpers);
 		var outerBridgeFunctions = outerBridge.functions(), outerHelperFunctions = outerHelpers.functions();
 		var bridgeArray = builder.call(pairFactory.allocateName(), [builder.constInt(1)], pairArrayType);
 		var bridgeSource = builder.newObject("LanePair");

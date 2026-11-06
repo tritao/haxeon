@@ -235,7 +235,13 @@ typedef IrInterface = {final name:String; final bases:Array<String>; final metho
 typedef IrEnumCase = {final name:String; final params:Array<IrType>;}
 
 /** Enum layout required by backend lowering. */
-typedef IrEnum = {final name:String; final cases:Array<IrEnumCase>; final ?isRecursive:Bool;}
+typedef IrEnum = {
+	final name:String;
+	final cases:Array<IrEnumCase>;
+	final ?isRecursive:Bool;
+	/** Private value record used by typed storage; the public enum descriptor remains nominal. */
+	final ?inlineStorage:String;
+}
 
 /** Module-level storage slot required by an IR program. */
 typedef IrStaticField = {final name:String; final type:IrType;}
