@@ -2037,3 +2037,86 @@ The HashLink exact census and both Wasm allocation counters report zero allocati
 775 compiler tests, self-hosting fixed point, all ten UI suites, 502 parity fixtures (14 existing skips), all six UI
 snapshots, the app suite, nine retention scenarios, budgets, memory, and both Web build/smoke checks pass.
 Raw captures are deleted after extracting their results; this checkpoint's idle gate checkout is removed.
+
+## Tracking writes after viewport frame preparation
+
+Outer `97a56618c` adopts the viewport frame annotations, explicit owner preparation and presentation tests. Every hunk
+in the six requested files was reviewed and included; its app suite passed without the guard. The stricter guard is
+compared against Haxeon `3d9c9361` on that same outer snapshot. The control pins compiler, stdlib **and UI sources**;
+an initial compiler-only control setup was stopped before measurements because it would use the candidate libraries.
+Native runtime and VM binaries are identical between the valid control and candidate.
+
+A failed framework check exposed a remaining tracked write: `Cannot write Observable field coalescingAllowed inside
+a reactive tracking scope`. External selection imports now defer their history group break to resolution, alongside
+history clears. Local selection updates remain immediate. The focused regression verifies a later edit stays in a
+separate undo group; the final framework and app gates pass with the strict guard intact.
+
+Nine alternating pairs give these action medians (KiB are the existing refill-quantized counter):
+
+| Action | Control → guard KiB | Control → guard ms |
+| --- | ---: | ---: |
+| console->telemetry | 74.5 → 74.5 | 1.1 → 1.1 |
+| hierarchy->sensors | 112.6 → 112.6 | 1.56 → 1.56 |
+| sensors->hierarchy | 80.1 → 80.1 | 1.21 → 1.21 |
+| telemetry->console | 92.9 → 92.9 | 1.16 → 1.15 |
+| hover-away | 13.6 → 13.6 | 0.42 → 0.42 |
+| hover-enter | 0.5 → 0.5 | 0 → 0 |
+| hover-field | 12.4 → 12.4 | 0.43 → 0.43 |
+| hover-inside | 0.5 → 0.5 | 0 → 0 |
+| hover-other | 10 → 10 | 0.42 → 0.42 |
+| idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| scroll-inspector | 21.2 → 21.2 | 0.72 → 0.71 |
+| type-backspace | 16.1 → 16.2 | 0.42 → 0.41 |
+| type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+
+Backspace's sampled 0.1 KiB increase is not accepted as evidence of increased program allocation. Temporary
+instrumentation restricted the exact census to the same input-and-submit window, stopping before harness JSON output.
+One 30-cycle capture per version/action discards its first cold action and gives these 29-action totals:
+
+| Exact action window | Before outer adoption (`8ab5cb995`) | Adopted control | Guard |
+| --- | ---: | ---: | ---: |
+| type-backspace | 12,450 objects / 485,424 B | 12,450 / 485,424 | 12,450 / 485,424 |
+| console → telemetry | 33,464 objects / 2,202,712 B | 33,464 / 2,202,712 | 33,464 / 2,202,712 |
+| telemetry → console | not separately captured | 50,463 objects / 2,741,448 B | 50,463 / 2,741,448 |
+
+Every allocation type total matches within each comparison. The first tab-action pair also matches all sampled stack
+groups after normalizing source line numbers and generated source-body hashes. Individual windows can place a buffer
+growth in different cycles; the cumulative action totals match. The console → telemetry counter reads 74.5 KiB in both
+current builds, versus 72.5 at the preceding checkpoint, but the pre-adoption exact census is equal too. These findings
+are consistent with refill granularity, rather than an added object or requested byte. The original nine-pair observations
+remain recorded; no budget ceiling or budget tooling changed. Temporary source instrumentation is removed.
+
+Selection census, three alternating pairs (objects / bytes):
+
+| Pair | Control | Guard |
+| --- | ---: | ---: |
+| 1 | 340,910 / 24,010,856 | 340,910 / 24,010,880 |
+| 2 | 340,910 / 24,010,880 | 340,910 / 24,010,872 |
+| 3 | 340,908 / 24,010,320 | 340,911 / 24,011,168 |
+
+All non-byte counts and sizes match; only raw byte buffers vary. Paired headless RSS growth in MiB, all windows:
+
+| Pair | Control | Guard |
+| --- | --- | --- |
+| 1 | 29.53 / 3.75 / 0.78 / 4.84 | 30.31 / 3.44 / 0.78 / 5 |
+| 2 | 30 / 4.06 / 0.78 / 4.84 | 30.47 / 3.91 / 0.78 / 4.84 |
+| 3 | 30.31 / 3.75 / 0.78 / 4.84 | 30.16 / 3.91 / 0.94 / 4.84 |
+
+All pass. Paired median changes are +0.47 / −0.15 / 0 / 0 MiB; the separate window medians are
+30.00 / 3.75 / 0.78 / 4.84 → 30.31 / 3.91 / 0.78 / 4.84 MiB. Positive samples are recorded without retries.
+The guard adds no creation stamp to an Observable object. It reuses one per-thread identity log, clears scoped
+references on normal and exceptional exit, and releases transient worker entries. Fresh-scope construction allocates
+exactly the same Observable objects as untracked construction: HashLink allocated bytes match, and Wasm32/Wasm GC
+count exactly 8 / 1,024 objects for 8 / 1,024 calls with either inlining mode. Existing effect/capture zero-allocation
+censuses remain green. The owner/worker isolation test is now in the parity list for all targets and both modes.
+
+Wasm GC's nine full-scene and three each static/text-heavy/editing pairs all match at 4,440 / 4,440 / 4,440 / 8,724
+objects, with the browser-loaded guest hash checked on every capture. Both Web targets build and pass browser smoke;
+three Wasm32 full-scene load pairs also complete. No timeout occurred.
+
+Final gates pass: 776 compiler tests, self-hosting fixed point, all ten UI scripts, 503 parity fixtures (14 existing
+skips), six refreshed UI snapshots, app suite, all nine retention scenarios, the first scheduled standalone budget
+check, and all paired headless windows. The final source is fingerprinted before measurements; the pre-fix retention
+build is excluded. Raw captures and diagnostic builds are removed once their results are recorded, and the idle outer
+gate checkout is removed.

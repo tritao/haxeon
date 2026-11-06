@@ -76,16 +76,26 @@ class TextEditorState implements SemanticsValueSource {
 	var hasDesiredVerticalX:Bool;
 	var caretBlinkResetTime:Float;
 	var disposed:Bool;
-	public var historyEnabled:Bool = true;
+	// Bit 0: local history enabled; bit 1: deferred clear; bit 2: deferred group break.
+	var historyFlags:Int = 1;
+	public var historyEnabled(get, never):Bool;
+	inline function get_historyEnabled():Bool return (historyFlags & 1) != 0;
 	final history = new EditHistory(256, 2097152);
 	var replayingHistory:Bool = false;
 	var lastHistoryEdit:Null<FieldHistoryEdit>;
 
 	public function configureHistory(enabled:Bool):Void {
-		if (historyEnabled != enabled) { history.clear(); lastHistoryEdit = null; historyEnabled = enabled; }
+		if (historyEnabled != enabled) {
+			history.clear(); lastHistoryEdit = null;
+			historyFlags = enabled ? 1 : 0;
+		}
 	}
 
-	public function breakHistoryGroup():Void { history.breakCoalescing(); lastHistoryEdit = null; }
+	public function breakHistoryGroup(?deferUntilResolved:Bool = false):Void {
+		if (deferUntilResolved) historyFlags |= 4;
+		else { history.breakCoalescing(); historyFlags &= ~4; }
+		lastHistoryEdit = null;
+	}
 	public function undo():Bool {
 		ensureLive();
 		if (offsets.revision != lastLayoutRevision) syncBuffer(offsets, offsets.revision);
@@ -191,7 +201,7 @@ class TextEditorState implements SemanticsValueSource {
 		disposed = false;
 	}
 
-	public function syncExternal(value:String):Bool {
+	public function syncExternal(value:String, ?deferHistoryClear:Bool = false):Bool {
 		ensureLive();
 		if (sharedDocument != null) {
 			offsets = new TextDocumentBuffer(offsets.text);
@@ -200,7 +210,9 @@ class TextEditorState implements SemanticsValueSource {
 		var next = value == null ? "" : value;
 		if (next == offsets.text)
 			return false;
-		history.clear(); lastHistoryEdit = null;
+		if (deferHistoryClear) historyFlags |= 2;
+		else { history.clear(); historyFlags &= ~2; }
+		lastHistoryEdit = null;
 		cancelPointerClick();
 		offsets.replace(0, offsets.codepointCount, next);
 		var caret = offsets.codepointCount;
@@ -233,18 +245,20 @@ class TextEditorState implements SemanticsValueSource {
 		presentationRevision = revision;
 	}
 
-	public function syncDocument(document:TextDocument):Bool {
+	public function syncDocument(document:TextDocument, ?deferHistoryClear:Bool = false):Bool {
 		if (document == null)
 			throw "Text editor document cannot be null";
 		sharedDocument = document;
-		return syncBuffer(document.storage(), document.revision);
+		return syncBuffer(document.storage(), document.revision, deferHistoryClear);
 	}
 
-	function syncBuffer(nextOffsets:TextDocumentBuffer, sharedRevision:Int):Bool {
+	function syncBuffer(nextOffsets:TextDocumentBuffer, sharedRevision:Int, ?deferHistoryClear:Bool = false):Bool {
 		ensureLive();
 		if (offsets == nextOffsets && sharedRevision == lastLayoutRevision)
 			return false;
-		history.clear(); lastHistoryEdit = null;
+		if (deferHistoryClear) historyFlags |= 2;
+		else { history.clear(); historyFlags &= ~2; }
+		lastHistoryEdit = null;
 		cancelPointerClick();
 		var sameDocument = offsets == nextOffsets;
 		if (offsets != nextOffsets) {
@@ -265,6 +279,14 @@ class TextEditorState implements SemanticsValueSource {
 		lastLayoutRevision = offsets.revision;
 		clampScrollOffset();
 		return true;
+	}
+
+	/** Finishes a document synchronization deferred by a tracked widget build. */
+	public function finishBuildSynchronization():Void {
+		if ((historyFlags & 6) == 0) return;
+		if ((historyFlags & 2) != 0) history.clear();
+		if ((historyFlags & 4) != 0) history.breakCoalescing();
+		historyFlags &= ~6;
 	}
 
 	function replaceOffsets(start:Int, end:Int, value:String):Bool {
@@ -496,14 +518,14 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	/** Imports an external anchored selection only when its logical value differs. */
-	public function setAnchoredSelection(value:TextSelection):Bool {
+	public function setAnchoredSelection(value:TextSelection, ?deferHistoryBreak:Bool = false):Bool {
 		ensureLive();
 		if (value == null) throw "Anchored selection is required";
 		if (value.anchor == selectionAnchor && value.focus == selectionFocus &&
 			value.anchorAffinity == selectionAnchorAffinity && value.focusAffinity == selectionFocusAffinity)
 			return false;
-		placeCaret(value.anchor, false, value.anchorAffinity);
-		placeCaret(value.focus, true, value.focusAffinity);
+		placeCaret(value.anchor, false, value.anchorAffinity, deferHistoryBreak);
+		placeCaret(value.focus, true, value.focusAffinity, deferHistoryBreak);
 		resetCaretBlink(Sys.time());
 		return true;
 	}
@@ -568,9 +590,9 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	/** Places a caret and optionally extends the existing anchored selection. */
-	public function placeCaret(offset:Int, extend:Bool, affinity:Int = 0):Bool {
+	public function placeCaret(offset:Int, extend:Bool, affinity:Int = 0, deferHistoryBreak:Bool = false):Bool {
 		ensureLive();
-		breakHistoryGroup();
+		breakHistoryGroup(deferHistoryBreak);
 		resetVerticalNavigation();
 		var next = clamp(layout.alignGrapheme(clamp(offset, 0, offsets.codepointCount)),
 			0, offsets.codepointCount);

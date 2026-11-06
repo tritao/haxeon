@@ -17,6 +17,8 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 cases=(objects arrays enums closures dynamic exceptions strings)
 # One list drives compilation and execution for every target and inline setting.
 inline_cases=(
+	reactive-write-scope
+	reactive-thread-isolation
 	dead-pure-values
 	receiver-check-elision
 	non-null-facts
@@ -204,6 +206,10 @@ for inline in 0 1; do
 			--export=IdentityClassCensus.prepare --export=IdentityClassCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-identity-class-census-inline-$inline.wasm" \
 			--entry=identity-class --root=stdlib --root=tests/programs tests/programs/identity-class.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=ScopeCreationCensus.prepare --export=ScopeCreationCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-scope-creation-census-inline-$inline.wasm" \
+			--entry=reactive-write-scope --root=stdlib --root=tests/programs tests/programs/reactive-write-scope.hx
 		for value_case in "${inline_cases[@]}"; do
 			HAXEON_INLINE="$inline" haxeon_compile_async \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
@@ -1031,6 +1037,18 @@ async function run(name, target) {
 	    if (result !== 42 || allocations !== 0)
 	      failures.push(`word access census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: word access census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const scopeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-scope-creation-census-inline-${inline}.wasm`));
+	  const scope = (await WebAssembly.instantiate(scopeBytes, {haxeon_runtime: runtime, std})).instance;
+	  scope.exports["ScopeCreationCensus.prepare"]();
+	  const scopeCount = target === "wasm32" ? scope.exports["haxeon.memory.allocation_count"] : scope.exports.__allocation_count;
+	  let scopeRuns = 1;
+	  for (const n of [8, 1024]) {
+	    const before = scopeCount(), result = scope.exports["ScopeCreationCensus.perform"](n), allocations = scopeCount() - before;
+	    scopeRuns += n;
+	    if (result !== scopeRuns || allocations !== n)
+	      failures.push(`scope creation census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: scope creation census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const rangesBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-generic-ranges-census-inline-${inline}.wasm`));
 	  const ranges = (await WebAssembly.instantiate(rangesBytes, {haxeon_runtime: runtime, std})).instance;

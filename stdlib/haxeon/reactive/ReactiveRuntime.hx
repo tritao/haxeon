@@ -8,6 +8,7 @@ class ReactiveRuntime {
 	#else
 	static final ownerClaimed:Bool = reactiveClaimOwner();
 	#end
+	static final creationLogs = new sys.thread.Tls<ReactiveCreationLog>();
 	static final pendingEffects:Array<Effect> = makePendingEffects();
 	static var flushing:Bool = false;
 	// The queue has one owner and cannot be flushed recursively. Keeping its cursor with
@@ -51,6 +52,24 @@ class ReactiveRuntime {
 		#end
 	}
 
+	/** Records an Observable allocated by this tracking invocation without retaining it afterwards. */
+	public static function recordObservableCreation(object:Dynamic):Void {
+		if (!isTracking()) return;
+		var log = creationLogs.value;
+		if (log == null) { log = new ReactiveCreationLog(); creationLogs.value = log; }
+		log.append(object);
+	}
+
+	static function finishCreationScope(previousStart:Int, previousCount:Int, previous:Null<ReactiveCollector>):Void {
+		var log = creationLogs.value;
+		if (log != null) {
+			log.clearFrom(previousCount);
+			log.start = previousStart;
+			// A transient stand-in thread must not retain its log after its outermost scope.
+			if (previous == null && previousCount == 0 && !isOwnerThread()) creationLogs.value = null;
+		}
+	}
+
 	/** Reactive subscriptions and observed writes belong to the application thread. */
 	@:allow(haxeon.reactive.ReactiveDependencySet)
 	static function claimSubscriptionOwner(source:ReactiveSource, fieldBit:Int):Void {
@@ -88,13 +107,19 @@ class ReactiveRuntime {
 		if (collector == null || run == null)
 			throw "Reactive tracking requires a collector and computation";
 		var previous = currentCollector();
+		var log = creationLogs.value;
+		var previousStart = log == null ? 0 : log.start;
+		var previousCount = log == null ? 0 : log.count;
+		if (log != null) log.start = previousCount;
 		setCollector(collector);
 		try {
 			var result = run();
 			setCollector(previous);
+			finishCreationScope(previousStart, previousCount, previous);
 			return result;
 		} catch (error:Dynamic) {
 			setCollector(previous);
+			finishCreationScope(previousStart, previousCount, previous);
 			throw error;
 		}
 	}
@@ -142,21 +167,23 @@ class ReactiveRuntime {
 			current.trackField(source, fieldBit);
 	}
 
-	/** A signal write is forbidden while tracking only after a computation has subscribed to its value. */
+	/** Signal writes are forbidden in every tracking invocation. */
 	public static function assertSignalWritable(source:ReactiveSource, ?operation:String):Void {
-		if (!source.hasFieldReaders(0)) return;
-		if (!isOwnerThread())
-			throw "Cannot write Signal.value from a non-owner thread";
 		if (isTracking())
 			throw "Cannot write " + (operation == null ? "a signal, State or Observable field" : operation) +
 				" inside a reactive tracking scope";
+		if (source.hasFieldReaders(0) && !isOwnerThread())
+			throw "Cannot write Signal.value from a non-owner thread";
 	}
 
 	/** 0 permits a write, 1 rejects a tracked write, and 2 rejects a write by another thread. */
-	public static function observableWriteStatus(source:Null<ObservableSource>, fieldBit:Int):Int {
-		if (source == null || !source.hasFieldReaders(fieldBit)) return 0;
-		if (!isOwnerThread()) return 2;
-		return isTracking() ? 1 : 0;
+	public static function observableWriteStatus(source:Null<ObservableSource>, fieldBit:Int, owner:Dynamic):Int {
+		if (isTracking()) {
+			var log = creationLogs.value;
+			if (log == null || !log.contains(owner)) return 1;
+		}
+		if (source != null && source.hasFieldReaders(fieldBit) && !isOwnerThread()) return 2;
+		return 0;
 	}
 
 	@:allow(haxeon.reactive.Effect)
@@ -202,6 +229,29 @@ class ReactiveRuntime {
 	}
 }
 
+/** Reused per-thread object identities, with one slice per nested tracking invocation. */
+private class ReactiveCreationLog {
+	final objects:Array<Dynamic> = [];
+	public var start:Int = 0;
+	public var count:Int = 0;
+	public function new() {}
+	public function append(object:Dynamic):Void {
+		if (count == objects.length) objects.push(object); else objects[count] = object;
+		count++;
+	}
+	public function contains(object:Dynamic):Bool {
+		var index = count;
+		while (index > start) {
+			index--;
+			if (objects[index] == object) return true;
+		}
+		return false;
+	}
+	public function clearFrom(first:Int):Void {
+		while (count > first) { count--; objects[count] = null; }
+	}
+}
+
 #if !wasm
 @:hlNative("haxeon_runtime", "__reactive_is_tracking")
 extern function reactiveIsTracking():Bool;
@@ -217,4 +267,5 @@ extern function reactiveCurrentCollector():Dynamic;
 
 @:hlNative("haxeon_runtime", "__reactive_set_collector")
 extern function reactiveSetCollector(value:Dynamic):Void;
+
 #end

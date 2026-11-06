@@ -246,6 +246,11 @@ class IrGenerator {
 	public static function observableStateOwner(className:String):Null<String>
 		return observableStateOwners.get(className);
 
+	public static function observableNamedFieldBit(className:String, fieldName:String):Null<Int> {
+		var fields = observableFieldBits.get(className);
+		return fields == null ? null : fields.get(fieldName);
+	}
+
 	/** Field reservation for an object's concrete Observable class. */
 	public static function observableClassFieldCount(className:String):Null<Int> {
 		var fields = observableFieldBits.get(className);
@@ -2497,6 +2502,8 @@ class IrGenerator {
 					objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
 				localTypes.set(objectName, objectType);
 				builder.store(objectName, object);
+				if (observableStateOwner(physicalName) != null)
+					builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
 				if (hasConstructor) {
 					var loweredArguments = lowerOperands(args, builder, localTypes),
 						constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
@@ -2545,6 +2552,8 @@ class IrGenerator {
 						+ 'object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
+					if (observableStateOwner(physicalName) != null)
+						builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
 					for (field in fields) {
 						var fieldValue = lowerExpression(field.value, builder, localTypes);
 						builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
@@ -3722,7 +3731,8 @@ class IrGenerator {
 		var statusName = '$' + 'observable-write-status:$serial';
 		localTypes.set(statusName, I32);
 		builder.store(statusName, builder.call(ReactiveRuntimeClass + ".observableWriteStatus",
-			[builder.load(sourceName, sourceType), builder.constInt(fieldBit)], I32));
+			[builder.load(sourceName, sourceType), builder.constInt(fieldBit),
+			 builder.toDyn(builder.load(receiverName, receiver.type))], I32));
 		var blockedBlock = builder.createBlock(), allowedBlock = builder.createBlock(), wrongThreadBlock = builder.createBlock(), trackingBlock = builder.createBlock();
 		builder.branch(builder.equal(builder.load(statusName, I32), builder.constInt(0)), allowedBlock, blockedBlock);
 		builder.select(blockedBlock);

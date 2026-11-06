@@ -99,8 +99,8 @@ private class VariantProbe implements View implements Observable {
   public var variant:String = "a";
   public var aRevision:Int = 0;
   public var bRevision:Int = 0;
-  public var aBuilds:Int = 0;
-  public var bBuilds:Int = 0;
+  @:unobservable public var aBuilds:Int = 0;
+  @:unobservable public var bBuilds:Int = 0;
   public var capacity:Int = 4;
   public function new() {}
   public function build(context:BuildContext):RenderNode {

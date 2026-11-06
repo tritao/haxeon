@@ -19,6 +19,27 @@ class ComboBoxTests {
  static function main():Void {
   var fonts = FontCollection.create();
   fonts.add(Sys.getEnv("NKUI_TEST_FONT_PATH"));
+  // A retained layout can resolve more than once; a deferred history clear must run only once.
+  var historyProbe = new haxeon.ui.widgets.text.TextEditorState(fonts, "");
+  historyProbe.insert("old");
+  check(historyProbe.syncExternal("external", true), "External text did not synchronize");
+  historyProbe.finishBuildSynchronization();
+  historyProbe.insert("new");
+  historyProbe.finishBuildSynchronization();
+  check(historyProbe.undo() && historyProbe.text == "external", "A repeated resolve cleared new editing history");
+  historyProbe.insert("ab");
+  var beforeSelection = historyProbe.text;
+  haxeon.reactive.ReactiveRuntime.withTracking(new haxeon.ui.core.Dependencies(), function() {
+   historyProbe.setAnchoredSelection(new haxeon.ui.widgets.text.TextSelection(0, 0), true);
+   return 0;
+  });
+  check(historyProbe.selectionFocus == 0 && historyProbe.text == beforeSelection,
+   "A tracked external selection must update the local caret without writing history");
+  historyProbe.finishBuildSynchronization();
+  historyProbe.insert("x");
+  check(historyProbe.undo() && historyProbe.text == beforeSelection,
+   "Deferred selection synchronization must keep subsequent typing in a separate undo group");
+  historyProbe.dispose();
   var ui = new UiContext(null, fonts);
   var changes = 0;
   var combo = new ComboBox<String>("combo", [new SelectOption("one", "One", "one"),

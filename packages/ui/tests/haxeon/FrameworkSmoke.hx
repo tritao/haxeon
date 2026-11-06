@@ -4543,14 +4543,14 @@ class FrameworkSmoke {
 		other.update(3);
 		var failed = false;
 		try ReactiveRuntime.withTracking(otherCapture, function() other.update(4)) catch (_:Dynamic) failed = true;
-		var fresh:Signal<Int> = null;
+		var fresh:Signal<Int> = null, freshSignalRejected = false, freshStateRejected = false;
 		ReactiveRuntime.withTracking(openCapture, function() {
 			fresh = new Signal<Int>(1);
-			fresh.update(2);
+			try fresh.update(2) catch (_:Dynamic) freshSignalRejected = true;
 		});
 		var freshState:State<Int> = context.state(context.id("fresh"), 0);
-		ReactiveRuntime.withTracking(openCapture, function() freshState.update(1));
-		return !otherDependencies.current() && failed && fresh != null && fresh.value == 2 && freshState.value == 1;
+		try ReactiveRuntime.withTracking(openCapture, function() freshState.update(1)) catch (_:Dynamic) freshStateRejected = true;
+		return !otherDependencies.current() && failed && freshSignalRejected && freshStateRejected && fresh != null && fresh.value == 1 && freshState.value == 0;
 	}
 
 	/** Observable fields share one source while keeping independent reader versions and capture bits. */

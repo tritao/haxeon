@@ -38,11 +38,12 @@ class ObservableTrackingMain {
 		return 'package haxeon.reactive;\n'
 			+ 'class ReactiveRuntime { public static var tracking:Bool = false; public static var wrongThread:Bool = false; '
 			+ 'public static function isTracking():Bool return tracking; '
+			+ 'public static function recordObservableCreation(object:Dynamic):Void {} '
 			+ 'public static function createObservableSource(count:Int):ObservableSource return new ObservableSource(count); '
 			+ 'public static function recordObservableRead(source:ObservableSource, bit:Int):Void source.recordFieldRead(bit); '
 			+ 'public static function invalidateObservable(source:ObservableSource, bit:Int):Void '
 			+ 'if (source != null) source.invalidateField(bit); '
-			+ 'public static function observableWriteStatus(source:ObservableSource, bit:Int):Int '
+			+ 'public static function observableWriteStatus(source:ObservableSource, bit:Int, owner:Dynamic):Int '
 			+ 'return source == null || !source.hasFieldReaders(bit) ? 0 : wrongThread ? 2 : tracking ? 1 : 0; }\n';
 
 	static function probeSource():String

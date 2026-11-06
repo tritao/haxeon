@@ -120,9 +120,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
    candidate after the renderer disappeared with 8.1 GiB free in `/dev/shm`; its browser log reports GPU stalls but
    no explicit crash or out-of-memory cause. The completed comparison ran without concurrent session builds.
 
-   The stricter tracking-write guard is parked while the outer editor viewport changes are uncommitted; its saved patch
-   and fixture are in `materia-cache/claude-scratch/haxeon-flat-work/write-guard/`. Resume and gate it once those
-   viewport field annotations land in outer `HEAD`.
+   Outer `97a56618c` prepares viewport presentation frames in the owner update phase and marks transient frame state
+   unobservable. Tracked builds consume the prepared snapshot. The stricter tracking-write guard can therefore reject
+   writes to pre-existing Observable objects even when no reader has subscribed to the written field.
 
    Writes batch per frame. A source pushes a *maybe stale* mark through the graph; a reader pulls by validating source
    versions. A derived node recomputes only when an input version changed and increments its own version only when its
@@ -300,8 +300,16 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    while preserving the written bits. Observable field reads track one field bit per object, and changed writes invalidate
    only that field's readers. A tracked struct field is updated by copying it, modifying the copy, and assigning the
    whole value back; the compiler rejects in-place mutation until it can track the entire place correctly. Signal and
-   `State` writes always throw inside tracking; Observable writes throw when that field already has readers, allowing fresh object
-   initialization. Property readers take no invocation context and track model reads directly. Command buttons read a
+   `State` writes always throw inside tracking. Observable writes during tracking are allowed only on objects created in
+   that same tracking invocation; an object made in an outer, inner or earlier invocation is not fresh for the current
+   scope. This makes the rule independent of whether a field happens to have readers. A reusable per-thread creation log
+   records object identities in nested scope slices, clears its references on exit, and compares class identity with `==`.
+   It adds no field to each Observable. Lookup checks the newest objects first, so ordinary constructor initialization
+   finds its just-created receiver immediately. Reflective writes follow the same rule; reflective copies register their
+   newly allocated receiver. Text fields apply external text and selection to their local editor resource during build,
+   then finish history clears and coalescing breaks in the resolution callback outside tracking. Repeated resolution
+   does not repeat a completed history change, and later edits retain their undo groups.
+   Property readers take no invocation context and track model reads directly. Command buttons read a
    retained derived enabled/checked result, so a context replacement that leaves the result unchanged does not rebuild
    the button. `State.updateQuietly`,
    `observe*`, root polling and plain-read validation are removed. The owned revision-adapter models were migrated and

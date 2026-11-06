@@ -15,7 +15,8 @@ class ObservableRestartMetadataMain {
     + 'public static function isTracking():Bool return true; '
     + 'public static function createObservableSource(count:Int):ObservableSource return new ObservableSource(count); '
     + 'public static function recordObservableRead(s:ObservableSource, bit:Int):Void s.recordFieldRead(bit); '
-    + 'public static function observableWriteStatus(s:ObservableSource, bit:Int):Int return 0; '
+    + 'public static function recordObservableCreation(object:Dynamic):Void {} '
+    + 'public static function observableWriteStatus(s:ObservableSource, bit:Int, owner:Dynamic):Int return 0; '
     + 'public static function invalidateObservable(s:ObservableSource, bit:Int):Void {} }');
    c.update("Base.hx", 'class Base implements Observable { public var a:Int; public function new() a = 1; }');
    c.update("Reader.hx", 'class Reader { public static function read(value:Base):Int return value.a; }');

@@ -3,7 +3,7 @@ package compiler.ir;
 import compiler.ir.Ir;
 
 private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjectField>; final methods:Array<{name:String, functionName:String, type:IrType}>;
-	final payload:Null<String>;}
+	final payload:Null<String>; final observable:Bool;}
 
 /**
  * Field reflection over compiled object layouts, for runtimes that cannot look up object fields by
@@ -78,7 +78,7 @@ class ObjectReflection {
 		for (object in objects) {
 			if (StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) return true;
 			for (field in object.fields)
-				if (needsLogicalReflection(field.type, values)) return true;
+				if (field.name == "$haxeonObservableState" || needsLogicalReflection(field.type, values)) return true;
 		}
 		return false;
 	}
@@ -97,7 +97,7 @@ class ObjectReflection {
 	static function affectedLayouts(layouts:Array<ReflectedLayout>, objects:Array<IrObject>):Array<ReflectedLayout> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
 		return [for (layout in layouts) {
-			var affected = layout.payload != null;
+			var affected = layout.payload != null || layout.observable;
 			for (field in layout.fields)
 				if (needsLogicalReflection(field.type, values)) affected = true;
 			if (affected) layout;
@@ -117,6 +117,7 @@ class ObjectReflection {
 				case "__reflect_delete_field": deleteFieldBody;
 				case "__reflect_copy": (inner, entry, source, _) -> {
 					var result = inner.newObject(entry.name);
+					if (entry.observable) recordObservableCreation(inner, result);
 					if (entry.payload != null) inner.fieldSet(result, "value", inner.fieldGet(source, "value", Obj(entry.payload)));
 					else for (field in entry.fields) inner.fieldSet(result, field.name, inner.fieldGet(source, field.name, field.type));
 					inner.returnValue(inner.toDyn(result));
@@ -127,6 +128,7 @@ class ObjectReflection {
 				};
 				case "__reflect_set_field": (inner, entry, target, args) -> {
 					forEachField(inner, args[0], entry, field -> {
+						guardObservableWrite(inner, entry, target, field.name);
 						inner.fieldSet(logicalObject(inner, entry, target), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? args[1] : inner.safeCast(args[1], field.type));
 						inner.returnValue(inner.constVoid());
 					});
@@ -161,11 +163,12 @@ class ObjectReflection {
 				chain.unshift(owner);
 				base = owner.base;
 			}
-			var fields:Array<IrObjectField> = [];
+			var fields:Array<IrObjectField> = [], observable = false;
 			var fieldOwners = payload == null ? chain : [byName.get(payload)];
 			for (owner in fieldOwners) if (owner != null)
 				for (field in owner.fields)
-					if (field.name != "$haxeonObservableState") fields.push(field);
+					if (field.name == "$haxeonObservableState") observable = true;
+					else fields.push(field);
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {
@@ -176,7 +179,7 @@ class ObjectReflection {
 				}
 			var names = [for (name in methods.keys()) name];
 			names.sort(Reflect.compare);
-			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)], payload: payload}, depth: chain.length});
+			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)], payload: payload, observable: observable}, depth: chain.length});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];
@@ -185,11 +188,15 @@ class ObjectReflection {
 	static function copy(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [], (builder, layout, typed, _) -> {
 			var result = builder.newObject(layout.name);
+			if (layout.observable) recordObservableCreation(builder, result);
 			if (layout.payload != null) builder.fieldSet(result, "value", builder.fieldGet(typed, "value", Obj(layout.payload)));
 			else for (field in layout.fields)
 				builder.fieldSet(result, field.name, builder.fieldGet(typed, field.name, field.type));
 			builder.returnValue(builder.toDyn(result));
 		}, builder -> builder.constNull(Dyn));
+
+	static function recordObservableCreation(builder:IrBuilder, object:IrValue):Void
+		builder.call("haxeon.reactive.ReactiveRuntime.recordObservableCreation", [builder.toDyn(object)], Void);
 
 	static function field(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], fieldBody, builder -> builder.constNull(Dyn));
@@ -213,6 +220,7 @@ class ObjectReflection {
 	static function setFieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
 		var value = arguments[1];
 		forEachField(builder, arguments[0], layout, field -> {
+			guardObservableWrite(builder, layout, typed, field.name);
 			builder.fieldSet(logicalObject(builder, layout, typed), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? value : builder.safeCast(value, field.type));
 			builder.returnValue(builder.constBool(true));
 		});
@@ -233,10 +241,24 @@ class ObjectReflection {
 	/** A fixed layout cannot lose a field, so deleting one resets it to what a deleted field reads as: null, or zero for numbers. */
 	static function deleteFieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
 		forEachField(builder, arguments[0], layout, field -> {
+			guardObservableWrite(builder, layout, typed, field.name);
 			builder.fieldSet(logicalObject(builder, layout, typed), field.name, zeroValue(builder, field.type));
 			builder.returnValue(builder.constBool(true));
 		});
 		builder.returnValue(builder.constBool(false));
+	}
+
+	static function guardObservableWrite(builder:IrBuilder, layout:ReflectedLayout, object:IrValue, field:String):Void {
+		if (!layout.observable) return;
+		var bit = IrGenerator.observableNamedFieldBit(layout.name, field);
+		if (bit == null) return;
+		var source = builder.fieldGet(object, "$haxeonObservableState", Obj("haxeon.reactive.ObservableSource"));
+		var status = builder.call("haxeon.reactive.ReactiveRuntime.observableWriteStatus", [source, builder.constInt(bit), builder.toDyn(object)], I32);
+		var allowed = builder.createBlock(), denied = builder.createBlock();
+		builder.branch(builder.equal(status, builder.constInt(0)), allowed, denied);
+		builder.select(denied);
+		builder.throwValue(builder.toDyn(builder.constString('Cannot write Observable field $field during tracking or from a non-owner thread')));
+		builder.select(allowed);
 	}
 
 	static function logicalObject(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue):IrValue

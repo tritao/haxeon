@@ -195,15 +195,15 @@ class TextField implements View {
 			editor.layout.codeWordBoundaries = codeWordBoundaries;
 			editor.configureTail(followTail && readOnly);
 			var documentChanged = document != null
-				? editor.syncDocument(document)
-				: editor.syncExternal(value);
+				? editor.syncDocument(document, true)
+				: editor.syncExternal(value, true);
 			if (documentChanged) {
 				editor.resetCaretBlink(Sys.time());
 				if (editor.tailFollowing)
 					editor.scrollToEnd();
 			}
 			if (selectionProvider != null)
-				editor.setAnchoredSelection(selectionProvider());
+				editor.setAnchoredSelection(selectionProvider(), true);
 			var additionalSelections = additionalSelectionProvider == null ? NoAdditionalSelections : additionalSelectionProvider();
 			var hasAdditionalCaret = false;
 			for (selection in additionalSelections) {
@@ -436,6 +436,8 @@ class TextField implements View {
 			};
 
 			editorContent.onResolved(function(geometry) {
+				editor.finishBuildSynchronization();
+				editor.configureHistory(!historyManagedExternally);
 				if (multiline) {
 					editor.updateLayout(geometry.width);
 					if (readOnly) {
@@ -557,7 +559,6 @@ class TextField implements View {
 				editor.draggingSelection = false;
 			});
 
-			editor.configureHistory(!historyManagedExternally);
 			var handleKey = function(event:UiEvent) {
 				if (!enabled)
 					return;

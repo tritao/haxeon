@@ -108,13 +108,11 @@ function main():Int {
 		return fresh.value;
 	});
 	var freshSignalEffect = new Effect(function() {
-		var fresh = new Signal<Int>(1);
-		fresh.update(6);
+		var fresh = new Signal<Int>(6);
 		freshSignalEffectValue = fresh.value;
 	});
 	var freshSignalDerived = new haxeon.reactive.Derived<Int>(function() {
-		var fresh = new Signal<Int>(1);
-		fresh.update(7);
+		var fresh = new Signal<Int>(7);
 		return fresh.value;
 	});
 	if (baseValue != 4 || countValue != 1 || otherValue != 2 || itemValue.value != 7 || ratioValue != 0.0 || labelValue != null) return fail(10);
