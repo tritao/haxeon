@@ -102,6 +102,7 @@ class TestCatalog {
 		"ValueArrayLoweringSelectionMain",
 		"FieldStorageSelectionMain",
 		"ScalarPreflightSelectionMain",
+		"ScalarClosureSelectionMain",
 		"IrIntegerBuilderMain",
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",
