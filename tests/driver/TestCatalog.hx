@@ -100,6 +100,7 @@ class TestCatalog {
 		"WasmLinearValueArrayAccessMain",
 		"ValueArrayAccessMain",
 		"ValueArrayLoweringSelectionMain",
+		"FieldStorageSelectionMain",
 		"IrIntegerBuilderMain",
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",

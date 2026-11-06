@@ -17,13 +17,16 @@ class IrNullableScalarFields {
 		names.sort(Reflect.compare);
 		for (name in names) {
 			var helper = helpers.get(name);
-			if (helper == null) throw 'Missing nullable scalar helper "$name"';
+			if (helper == null)
+				throw 'Missing nullable scalar helper "$name"';
 			rewritten.push(helper);
 		}
 		return rewritten;
 	}
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
+		if (!needsRewrite(fn))
+			return fn;
 		var next = nextValue(fn), changed = false, blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
@@ -41,12 +44,25 @@ class IrNullableScalarFields {
 						}
 					default:
 				}
-				copy.instructions.push(new Located(instruction, located.provenance));
+				copy.instructions.push(instruction == located.value ? located : new Located(instruction, located.provenance));
 			}
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
 		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+	}
+
+	function needsRewrite(fn:IrFunction):Bool {
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case FieldSet(owner, name, _):
+						var field = findField(owner.type, name);
+						if (field != null && field.nullableScalarStorage != null)
+							return true;
+					default:
+				}
+		return false;
 	}
 
 	function helperFor(type:IrType, storage:IrScalarStorage):String {
@@ -55,17 +71,27 @@ class IrNullableScalarFields {
 			case Nullable(I64): I64;
 			default: throw 'Invalid nullable scalar field type $type';
 		};
-		var bits = (switch (element) { case I64: true; default: false; }) ? 64 : 32, width = storage.size * 8;
-		if (width <= 0 || width >= bits) throw 'Invalid nullable scalar width $width for $type';
+		var bits = (switch (element) {
+			case I64: true;
+			default: false;
+		}) ? 64 : 32, width = storage.size * 8;
+		if (width <= 0 || width >= bits)
+			throw 'Invalid nullable scalar width $width for $type';
 		var name = '$' + 'nullable-scalar-normalize:' + bits + ':' + width + ':' + storage.signed;
-		if (helpers.exists(name)) return name;
+		if (helpers.exists(name))
+			return name;
 		var builder = new IrBuilder(), value = builder.argument("value", type);
-		var absent = builder.createBlock(), present = builder.createBlock(), same = builder.createBlock(), changed = builder.createBlock();
+		var absent = builder.createBlock(),
+			present = builder.createBlock(),
+			same = builder.createBlock(),
+			changed = builder.createBlock();
 		builder.branch(builder.equal(value, builder.constNull(type)), absent, present);
 		builder.select(absent);
 		builder.returnValue(value);
 		builder.select(present);
-		var raw = builder.safeCast(value, element), shift = builder.constInt(bits - width), shifted = builder.shiftLeft(raw, shift),
+		var raw = builder.safeCast(value, element),
+			shift = builder.constInt(bits - width),
+			shifted = builder.shiftLeft(raw, shift),
 			normalized = storage.signed ? builder.shiftRight(shifted, shift) : builder.unsignedShiftRight(shifted, shift);
 		builder.branch(builder.equal(raw, normalized), same, changed);
 		builder.select(same);
@@ -77,11 +103,17 @@ class IrNullableScalarFields {
 	}
 
 	function findField(type:IrType, name:String):Null<IrObjectField> {
-		var objectName = switch type { case Obj(value): value; default: return null; };
+		var objectName = switch type {
+			case Obj(value): value;
+			default: return null;
+		};
 		while (objectName != null) {
 			var object = objects.get(objectName);
-			if (object == null) return null;
-			for (field in object.fields) if (field.name == name) return field;
+			if (object == null)
+				return null;
+			for (field in object.fields)
+				if (field.name == name)
+					return field;
 			objectName = object.base;
 		}
 		return null;
@@ -89,12 +121,18 @@ class IrNullableScalarFields {
 
 	static function nextValue(fn:IrFunction):Int {
 		var next = 0;
-		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
-		for (block in fn.blocks) for (located in block.instructions) {
-			var output = IrOperands.output(located.value);
-			if (output != null && output.id >= next) next = output.id + 1;
-			for (input in IrOperands.inputs(located.value)) if (input.id >= next) next = input.id + 1;
-		}
+		for (argument in fn.arguments)
+			if (argument.id >= next)
+				next = argument.id + 1;
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null && output.id >= next)
+					next = output.id + 1;
+				for (input in IrOperands.inputs(located.value))
+					if (input.id >= next)
+						next = input.id + 1;
+			}
 		return next;
 	}
 }
