@@ -181,29 +181,27 @@ class SemanticProgram {
 		return cast result;
 	}
 
-	static function withBody(signature:AstFunction, body:AstFunction):AstFunction
-		return {
-			name: signature.name,
-			isStatic: signature.isStatic,
-			typeParameters: signature.typeParameters,
-			typeConstraints: signature.typeConstraints,
-			arguments: [
-				for (index in 0...signature.arguments.length) {
-					var argument = signature.arguments[index],
-						current = body.arguments[index];
-					{
-						name: argument.name,
-						type: argument.type,
-						optional: argument.optional,
-						defaultValue: current.defaultValue,
-						span: current.span
-					};
-				}
-			],
-			result: signature.result,
-			span: body.span,
-			statements: body.statements
-		};
+	static function withBody(signature:AstFunction, body:AstFunction):AstFunction {
+		// Preserve validated declaration attributes (notably inline) when only source syntax changes.
+		var result:Dynamic = Reflect.copy(signature);
+		Reflect.setField(result, "arguments", [
+			for (index in 0...signature.arguments.length) {
+				var argument = signature.arguments[index],
+					current = body.arguments[index];
+				{
+					name: argument.name,
+					type: argument.type,
+					optional: argument.optional,
+					defaultValue: current.defaultValue,
+					span: current.span
+				};
+			}
+		]);
+		Reflect.setField(result, "metadata", body.metadata);
+		Reflect.setField(result, "span", body.span);
+		Reflect.setField(result, "statements", body.statements);
+		return cast result;
+	}
 
 	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
 			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations, ?preparedLifecycle:DeclarationLifecycle,
