@@ -19,12 +19,29 @@ if [[ ! -x "$hashlink" ]]; then
 fi
 cli="$root_dir/out/haxeon-cli.hl"
 mkdir -p "$root_dir/out"
-if [[ ! -f "$cli" || "$root_dir/scripts/haxeon" -nt "$cli" ]] ||
-	find "$root_dir/src" -type f -name '*.hx' -newer "$cli" -print -quit | grep -q .; then
+# A checkout can give unchanged sources new mtimes. Hash the inputs instead so a
+# pin bump only rebuilds the CLI when its content changes. Include the pinned
+# host compiler and its standard library; additions and removals also invalidate.
+if command -v sha256sum >/dev/null 2>&1; then
+	checksum=(sha256sum)
+else
+	checksum=(shasum -a 256)
+fi
+fingerprint=$(
+	cd "$root_dir"
+	{
+		find src .tools/haxe/std -type f -exec "${checksum[@]}" {} +
+		"${checksum[@]}" scripts/haxeon .tools/haxe/haxe
+	} | LC_ALL=C sort | "${checksum[@]}"
+)
+stamp="$cli.inputs"
+if [[ ! -f "$cli" || ! -f "$stamp" || "$(cat "$stamp")" != "$fingerprint" ]]; then
 	temporary="$cli.tmp.$$"
-	trap 'rm -f "$temporary"' EXIT
+	trap 'rm -f "$temporary" "$temporary.inputs"' EXIT
 	"$haxe" -cp "$root_dir/src" -main tools.HaxeonCli -hl "$temporary"
+	printf '%s\n' "$fingerprint" > "$temporary.inputs"
 	mv "$temporary" "$cli"
+	mv "$temporary.inputs" "$stamp"
 	trap - EXIT
 fi
 export LD_LIBRARY_PATH="$hashlink_dir:$root_dir/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

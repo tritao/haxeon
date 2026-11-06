@@ -19,9 +19,10 @@ keep optimized `Release` native libraries in both modes, including the default
 development mode and live rebuilds.
 
 On Unix-like systems, `scripts/haxeon` compiles the CLI to cached HashLink
-bytecode when its sources change, then runs that bytecode. If HashLink is not
-installed yet, the script uses the pinned Haxe interpreter for bootstrap and
-diagnostic commands.
+bytecode when its input content changes, then runs that bytecode. The cache
+tracks the source tree, launcher, pinned Haxe binary and host standard library,
+including added and removed files. Checkout timestamps alone do not rebuild it.
+Build the matching checkout's HashLink runtime before invoking the launcher.
 
 ```sh
 ./scripts/haxeon init
