@@ -29,7 +29,7 @@ class WasmGcValueArrays {
 		if (accessors == null) accessors = [];
 		var throws = WasmModuleSupport.hasExceptions(program), dynamicStore = false, dynamicInsert = false;
 		WasmGcLaneStorage.register(module, functions, plan, program);
-		for (native in program.natives) if (used.exists(native.name) && plan.valueArrayWrapperTypeIndex >= 0) {
+		for (native in program.natives) if (used.exists(native.name) && compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			if (native.name == "__array_set_any" || native.name == "__array_push_any") dynamicStore = true;
 			if (native.name == "__array_insert_any" || native.name == "__array_unshift_any") dynamicInsert = true;
 		}

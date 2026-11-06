@@ -348,7 +348,7 @@ class WasmLinearModuleBuilder {
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
 		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> { return {parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)], results: WasmModuleSupport.resultTypes(fn.result)}; });
-		WasmLinearValueArrays.register(linear);
+		WasmLinearValueArrays.register(linear, usedNatives);
 		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
 		WasmLinearArrays.registerNativeAllocators(linear);
 		WasmLinearDynamicArrays.register(linear);

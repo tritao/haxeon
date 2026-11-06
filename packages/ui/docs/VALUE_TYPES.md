@@ -2195,3 +2195,99 @@ created Source objects; warmed carrier-array access and scalar handle transport 
 Twenty-two negative verifier checks cover carrier escapes, forged lane helpers and invalid scalar
 word transport. These are private payload proofs; source generic enum metadata, logical container
 and closure descriptors, escape adapters and source enum activation remain unfinished.
+
+## Reachable lane runtime operations (2026-11-06)
+
+An unused enum case such as `Items(values:Array<Pair>)` describes lane storage without making its
+allocation or mutation operations reachable. At `e7d8716e`, the reduced monomorphic enum failed to
+build on Wasm32 with `Unknown Wasm function "$lane-runtime:ensure"`. Adding an ordinary
+`Array<Dynamic>.push` reproduced the corresponding Wasm GC failure:
+`Unknown Wasm function "$lane-storage:new-like"`.
+
+Wasm32 now registers only reachable lane natives, including the allocator used by retyping.
+Wasm GC's Dynamic array paths check whether the lane policy was actually linked, independently
+of whether the type plan contains a lane wrapper. This keeps logical type descriptors available
+without emitting calls into an absent runtime. It adds no runtime fields or allocations.
+
+The `enum-unused-lane-payload` fixture covers iteration, reads/writes, growth, copies, slices,
+concat, reverse, splice and resize of ordinary Dynamic arrays alongside the unused lane payload.
+It passes on HashLink, Wasm32 and Wasm GC with both inlining modes. This is a compiler runtime
+reachability fix, required before concrete generic enum payload metadata exposes more such types;
+it does not activate source inline enums.
+
+Control: `e7d8716e`; both editor builds use outer `368cc15ea`, development mode, and the same
+checkout VM and native runtime. Their emitted modules are byte-identical:
+`bb2358c5c376cd70ef047d2665411c7af7414b0ca4bd7653aa083282b46c1267`.
+Nine alternating editor pairs, medians (control → candidate):
+
+| Action | KiB | Frame ms |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 72.5 → 72.5 | 1.2 → 1.23 |
+| tab-matrix/hierarchy->sensors | 112.8 → 112.8 | 1.72 → 1.77 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.34 → 1.35 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.25 → 1.27 |
+| interaction/hover-away | 13.6 → 13.6 | 0.44 → 0.44 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.0 → 0.0 |
+| interaction/hover-field | 12.4 → 12.4 | 0.45 → 0.44 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.0 → 0.0 |
+| interaction/hover-other | 10.0 → 10.0 | 0.44 → 0.43 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.75 → 0.72 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | — | 3.38 → 3.28 |
+
+All scheduled pair checks pass. Per-action allocation medians match; individual quantized counter
+samples vary even with identical executable bytes. No pair was retried or discarded.
+Selection-stress exact census, 30 cycles (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,011,088 | 340,910 / 24,010,800 |
+| 2 | 340,912 / 24,011,336 | 340,910 / 24,010,816 |
+| 3 | 340,909 / 24,010,632 | 340,911 / 24,011,144 |
+
+Every non-byte-buffer type matches in every pair: 305,725 objects / 21,593,528 bytes. Only raw
+byte buffers vary. All paired RSS windows pass (MiB; cycles 100–200 / 200–300 / 300–400 / 400–500):
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.16 / 3.75 / 0.78 / 5.0 | 30.0 / 3.75 / 0.78 / 5.0 |
+| 2 | 30.47 / 3.44 / 0.78 / 4.84 | 30.47 / 3.59 / 0.62 / 5.0 |
+| 3 | 30.16 / 4.22 / 0.78 / 5.0 | 29.69 / 4.38 / 0.62 / 4.84 |
+
+Paired median RSS deltas are −0.16 / +0.15 / −0.16 / 0 MiB. The positive observations are retained;
+the unchanged module and libraries provide the control for process/allocator variation.
+
+| Guest | Control bytes | Candidate bytes |
+| --- | ---: | ---: |
+| Wasm GC | 5,810,159 | 5,810,159 |
+| Wasm32 | 11,888,319 | 11,876,162 |
+
+The Wasm GC guest remains byte-identical (`af15b2d50ec8d6b85677741df51fc11d25df6dfc9a642bb52813d154484f99bf`).
+Wasm32 removes 12,157 bytes of unused helpers; the new guest is
+`65f4388a9d61671876a9093e898f6924895b20a902e1211be62a6312e605aa7a`.
+All 36 Wasm GC scene runs complete: full/static/text-heavy 4,440 → 4,440 objects; editing
+8,724 → 8,724. Three Wasm32 startup pairs also complete. Informational full-scene startup medians:
+
+| Guest | Compile ms | Init ms | First frame ms |
+| --- | ---: | ---: | ---: |
+| wasm-gc | 5.8 → 6.2 | 18.5 → 16.5 | 164.4 → 175.8 |
+| wasm32 | 5.9 → 6.0 | 15.5 → 14.6 | 182.6 → 166.0 |
+
+These timing observations are not used to infer a code cost from the identical Wasm GC guest.
+Final gates pass: 783 compiler tests with `scripts/test-driver.sh 16`, self-hosting fixed point,
+ten UI suites, 504 parity fixtures (14 existing skips), six UI value snapshots, app suite,
+all nine retention scenarios, the standalone editor budget check, paired headless memory
+checks and both browser smokes. All scheduled measurement pairs pass.
+
+The initial overlapping self-hosting seed ended with `Terminated` and
+`FAIL: the compiler sources do not build under the Haxe interpreter`. The system's `earlyoom`
+log identifies SIGTERM to Haxe PID 1705268 (3,406 MiB RSS) at 12:59:02, with available memory
+below 10%. The final-source run, after the large concurrent builds finished, passed both stages
+and the fixed-point check. Subsequent heavy jobs ran sequentially; parity used four compilation
+jobs without changing its cases, while the compiler suite retained 16 jobs. No system memory
+threshold, verification rule or budget ceiling changed. Raw captures were deleted after extraction,
+finished caches were pruned before the next Web build, and the idle gate checkout is removed
+after recording this commit.

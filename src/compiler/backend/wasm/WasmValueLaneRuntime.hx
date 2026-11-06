@@ -9,6 +9,10 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 
 /** Link the portable lane policy before the representation-specific storage and Dynamic array paths. */
 class WasmValueLaneRuntime {
+	/** A type descriptor alone does not make lane operations reachable. */
+	public static function isLinked(functions:Map<String, Int>):Bool
+		return functions.exists(IrValueLaneRuntime.PREFIX + "ensure");
+
 	public static function attach(program:IrProgram, reachable:Map<String, Bool>, used:Map<String, Bool>):Void {
 		var needed = false;
 		for (native in program.natives) if (used.exists(native.name) && StringTools.startsWith(native.symbol, "__value_array_")) needed = true;

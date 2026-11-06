@@ -10,16 +10,16 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 /** Byte-addressed scalar and reference access for Wasm32 inline arrays. */
 class WasmLinearValueArrays {
-	public static function register(context:WasmLinearContext):Void {
+	public static function register(context:WasmLinearContext, used:Map<String, Bool>):Void {
 		WasmLinearLaneStorage.register(context);
 		var retypeAllocator = -1;
-		for (native in context.program.natives) if (native.symbol == "__value_array_retype") {
+		for (native in context.program.natives) if (used.exists(native.name) && native.symbol == "__value_array_retype") {
 			var alloc:IrNative = {name:"$linear-value-array:retype-allocate", library:"haxeon_runtime", symbol:"__value_array_alloc",
 				arguments:[I32,TypeRef,I32,I32,I32,Bool], result:Array(Dyn)};
 			retypeAllocator = context.module.addFunction(allocate(context.module, alloc, context.allocatorFunction));
 			break;
 		}
-		for (native in context.program.natives) if (supports(native.symbol)) {
+		for (native in context.program.natives) if (used.exists(native.name) && supports(native.symbol)) {
 			if (compiler.backend.wasm.WasmValueLaneRuntime.bind(context.functions, native)) continue;
 			var fn = native.symbol == "__value_array_retype" ? retype(context.module, native, retypeAllocator) :
 				build(context.module, native, context.allocatorFunction);

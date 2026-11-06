@@ -83,7 +83,7 @@ class WasmGcDynamicArrays {
 		}
 		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
 		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var needsRead = false;
 			for (native in operations) if (native.name == "__array_pop_any" || native.name == "__array_shift_any"
 					|| native.name == "__array_concat_any") needsRead = true;
@@ -158,7 +158,7 @@ class WasmGcDynamicArrays {
 
 	function emit(module:WasmModule, native:IrNative):Int {
 		var result = (switch (native.result) { case Void: true; default: false; }) ? -1 : allocateLocal(plan.valueType(native.result));
-		if (plan.valueArrayWrapperTypeIndex >= 0 && native.name != "__array_alloc_typed_ref" && native.name != "__array_check_cast") {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions) && native.name != "__array_alloc_typed_ref" && native.name != "__array_check_cast") {
 			push(WasmGcValueArrays.resolveForward(plan, 0));
 			if (native.name == "__array_concat_any") push(WasmGcValueArrays.resolveForward(plan, 1));
 		}
@@ -669,7 +669,7 @@ class WasmGcDynamicArrays {
 
 	function get(array:Int, index:Int, result:Int):Void {
 		checkIndex(array, index);
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
 				signature = module.typeIndex(plan.wasmFunctionType([Array(Dyn), I32], Dyn));
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null)]);
@@ -687,7 +687,7 @@ class WasmGcDynamicArrays {
 
 	/** Write through the storage element type, converting before the array grows. */
 	function set(array:Int, index:Int, valueLocal:Int):Void {
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
 				accepts = module.typeIndex(plan.wasmFunctionType([Dyn], Bool));
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null),
@@ -709,7 +709,7 @@ class WasmGcDynamicArrays {
 
 	/** push, unshift and insert: encode for the storage, then run the concrete operation. */
 	function valueOperation(operation:String, array:Int, extra:Array<Int>, valueLocal:Int, result:Int):Void {
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var wrapper = plan.valueArrayWrapperTypeIndex, closure = allocateLocal(Ref({nullable:true, heap:Type(plan.closureTypeIndex)})),
 				position = allocateLocal(I32), accepts = module.typeIndex(plan.wasmFunctionType([Dyn], Bool));
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(wrapper)}), If(null),
@@ -740,7 +740,7 @@ class WasmGcDynamicArrays {
 		push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(0), I32LeS, If(null)]));
 		raiseText(emptyMessage);
 		body.push(End);
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var position = allocateLocal(I32), saved = allocateLocal(plan.valueType(Dyn));
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null)]);
 			if (operation == "pop") push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(1), I32Sub, LocalSet(position)]));
@@ -759,7 +759,7 @@ class WasmGcDynamicArrays {
 	}
 
 	function removeAt(array:Int, index:Int):Void {
-		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
 			LocalGet(array), LocalGet(index), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:remove-at")), Return, End]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
@@ -769,7 +769,7 @@ class WasmGcDynamicArrays {
 
 	/** Mixed storage concatenates into dynamic storage; equal storage keeps its element type. */
 	function concat(left:Int, right:Int, result:Int):Void {
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var wrapper = plan.valueArrayWrapperTypeIndex, total = allocateLocal(I32), offset = allocateLocal(I32),
 				index = allocateLocal(I32), length = allocateLocal(I32), boxed = allocateLocal(plan.valueType(Dyn));
 			push([LocalGet(left), RefTest({nullable:false, heap:Type(wrapper)}), LocalGet(right), RefTest({nullable:false, heap:Type(wrapper)}), I32Or, If(null),
@@ -837,7 +837,7 @@ class WasmGcDynamicArrays {
 
 	/** copy, slice, splice and reverse operate on storage without converting elements. */
 	function storageOperation(operation:String, array:Int, extra:Array<Int>, resultType:IrType, result:Int):Void {
-		if (plan.valueArrayWrapperTypeIndex >= 0) {
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null), LocalGet(array)]);
 			for (argument in extra) push([LocalGet(argument)]);
 			push([Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:" + operation)), Return, End]);
@@ -853,7 +853,7 @@ class WasmGcDynamicArrays {
 		push([LocalGet(length), I32Const(0), I32LtS, If(null)]);
 		raiseText("Array.resize length must be non-negative");
 		body.push(End);
-		if (plan.valueArrayWrapperTypeIndex >= 0) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
+		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) push([LocalGet(array), RefTest({nullable:false, heap:Type(plan.valueArrayWrapperTypeIndex)}), If(null),
 			LocalGet(array), LocalGet(length), Call(WasmModuleSupport.requiredFunctionIndex(functions, "$lane-runtime:resize")), Return, End]);
 		var current = elementType(array);
 		dispatch(current, function(element) {
