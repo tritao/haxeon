@@ -2832,6 +2832,75 @@ this final-source comparison.
 | wasm32/full | 15.8 → 17.5 | 5.1 → 5.7 | 2.5 → 2.6 | 12.7 → 11.6 | 156.6 → 138.8 |
 
 Source enum activation, public closure/field/reflection adapters and the UI enum conversions remain next. A
-separate reproduced live-patch ABI gap must be fixed before activation: enum storage association changes
-currently leave the enum ABI key unchanged; an external prototype including the association correctly changes
-`Patch` to `ReloadDomain([EnumChanged(E)])`.
+separate live-patch ABI follow-up below now includes the enum storage association in the ABI key, so a storage
+change requires a domain reload before source activation.
+
+### Enum storage association in the live-patch ABI
+
+Control is `2cd94d24`, with the same frozen outer input `595e13687` and the same checkout-built VM/runtime on both sides.
+The regression changes only an enum storage association while retaining its cases and private object layouts: the old
+planner returned `Patch`; the fix returns `ReloadDomain([EnumChanged(...)])` in either direction. An unchanged association
+with a body edit stays patchable. The fixture covers all three target layout plans and canonical IR round trips.
+Boxed enum ABI keys retain their previous spelling. Source enum activation remains unfinished.
+
+Nine alternating action pairs; KiB is the existing refill-quantized counter, and timing is median frame ms:
+
+| Action | KiB control → candidate | ms control → candidate |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 74.5 → 74.5 | 1.24 → 1.21 |
+| tab-matrix/hierarchy->sensors | 112.8 → 112.6 | 1.79 → 1.73 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.38 → 1.34 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.29 → 1.27 |
+| interaction/hover-away | 13.6 → 13.6 | 0.44 → 0.44 |
+| interaction/hover-enter | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-field | 12.4 → 12.4 | 0.44 → 0.45 |
+| interaction/hover-inside | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-other | 10 → 10 | 0.43 → 0.44 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.73 → 0.74 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.43 |
+| interaction/type-char | 16.1 → 16.1 | 0.43 → 0.43 |
+| selection-stress/selection | census below | 3.23 → 3.27 |
+
+The editor images are byte-identical; these timing and counter movements are not attributed to an ABI runtime
+improvement. Every action capture and the final budget gate passed. No ceiling changed.
+
+Three 30-cycle selection census pairs (objects / allocated bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,910 / 24,012,200 | 340,909 / 24,011,936 |
+| 2 | 340,910 / 24,012,248 | 340,910 / 24,012,240 |
+| 3 | 340,910 / 24,012,296 | 340,912 / 24,012,832 |
+
+Every census has exactly 305,725 non-byte objects / 21,594,968 non-byte bytes on each side. The remaining variation
+is in raw byte buffers; it is not claimed as an allocation reduction.
+
+RSS window growth in MiB, for cycles 100–200 / 200–300 / 300–400 / 400–500:
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 30.16 / 3.91 / 0.78 / 5.00 | 30.00 / 3.44 / 0.78 / 4.84 |
+| 2 | 30.47 / 3.75 / 0.78 / 4.84 | 29.22 / 4.06 / 0.94 / 4.84 |
+| 3 | 29.84 / 4.06 / 0.78 / 5.00 | 29.38 / 4.06 / 0.78 / 5.00 |
+
+Median paired candidate-minus-control deltas are −0.46 / 0.00 / 0.00 / 0.00 MiB. All six leak/RSS captures passed.
+The raw windows include the positive individual movements; no retry was used to select a passing result.
+
+Showcase: 18 Wasm GC pairs (9 full, 3 each static/text-heavy/editing) and 3 Wasm32 full-scene pairs; no timeout.
+
+| Target / scene | GC objects control → candidate | Frame median / p95 ms control → candidate |
+| --- | ---: | ---: |
+| wasm-gc / editing | 8,724 → 8,724 | 3.0 / 6.3 → 2.9 / 6.2 |
+| wasm-gc / full | 4,440 → 4,440 | 2.6 / 5.1 → 2.6 / 5.3 |
+| wasm-gc / static | 4,440 → 4,440 | 2.5 / 4.6 → 2.6 / 5.0 |
+| wasm-gc / text-heavy | 4,440 → 4,440 | 3.1 / 6.1 → 2.6 / 6.1 |
+| wasm32 / full | not reported | 2.7 / 5.1 → 2.7 / 5.8 |
+
+Development binary sizes are unchanged: editor 99,871,693 bytes, Wasm GC Showcase 5,810,217 bytes and Wasm32 Showcase
+11,876,090 bytes. Each control/candidate module pair has an identical SHA-256. Both browser smoke tests passed.
+
+Validation: 790 compiler tests, 0 failures; self-hosting fixed point; all ten UI gates; 506 parity fixtures (14 existing
+skips); all six UI snapshots; app suite; all nine retention scenarios; budgets; headless memory; the browser pairs above.
+Public enum closure/field/reflection adapters and source activation remain pending.

@@ -421,7 +421,9 @@ copy isolation, array-only reference roots across collection, null and payload D
 migration and alias writes. Typed read/write copies allocate zero objects at 8 and 1,024 calls on all three targets;
 constructing and iterating arrays of 8 versus 1,024 elements allocates four objects in either case: the header,
 two backing lanes and iterator. Storage does not add an element box. Both inlining modes are covered. Canonical IR version 15 retains the logical/storage association
-with an explicit presence flag and rejects obsolete serialized versions. Closure ABI rewriting preserves the enum's
+with an explicit presence flag and rejects obsolete serialized versions. The live-patch ABI includes the storage
+association: changing between boxed and lane storage requires a domain reload even when the enum cases are unchanged.
+Body edits with unchanged storage remain patchable. Closure ABI rewriting preserves the enum's
 storage association and recursion classification, including when an unrelated nullable field triggers Wasm nullable
 erasure. Source lowering, logical enum closure adapters and complete
 source-field reflection adapters still need to be connected before enabling the representation for source programs.

@@ -20,6 +20,25 @@ class InlineEnumArrayLayoutMain {
 			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks)];
 			program.objects = planner.generatedObjects();
 			program.enums = [{name:declaration.name, cases:declaration.cases, isRecursive:false, inlineStorage:shape.valueObject.name}];
+			var inlineAbi = compiler.abi.RuntimeAbi.describe(program);
+			var boxed = CanonicalIrCodec.decode(CanonicalIrCodec.encode(program));
+			boxed.enums = [declaration];
+			var boxedAbi = compiler.abi.RuntimeAbi.describe(boxed);
+			if (boxedAbi.enums.get(declaration.name) != "Empty();Value(I32,Bytes)")
+				throw "Boxed enum ABI signatures must remain unchanged";
+			for (pair in [[boxedAbi, inlineAbi], [inlineAbi, boxedAbi]]) {
+				switch compiler.abi.PatchPlanner.plan(pair[0], pair[1]) {
+					case ReloadDomain([EnumChanged(name)]) if (name == declaration.name):
+					default: throw "Changing enum storage must reload the domain";
+				}
+			}
+			var unchanged = CanonicalIrCodec.decode(CanonicalIrCodec.encode(program));
+			var edited = new IrBuilder(); edited.returnValue(edited.constInt(43));
+			unchanged.functions = [new IrFunction("main", edited.arguments, I32, edited.blocks)];
+			switch compiler.abi.PatchPlanner.plan(inlineAbi, compiler.abi.RuntimeAbi.describe(unchanged)) {
+				case Patch:
+				default: throw "A body edit with unchanged enum storage must remain patchable";
+			}
 			var obsolete = CanonicalIrCodec.encode(program);
 			obsolete.set(3, CanonicalIrCodec.VERSION - 1);
 			rejected(() -> { CanonicalIrCodec.decode(obsolete); }, "Unsupported canonical Haxeon IR version");
