@@ -14,6 +14,8 @@ typedef WasmDataSegment = {
 
 	/** Passive segments are not copied into memory; instructions such as `array.new_data` read them. */
 	@:optional final passive:Bool;
+	/** Diagnostic origin of this segment; not serialized. */
+	@:optional final censusCategory:String;
 }
 
 typedef WasmImport = {

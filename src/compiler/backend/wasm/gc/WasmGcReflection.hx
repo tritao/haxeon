@@ -32,7 +32,7 @@ class WasmGcReflection {
 		if (plan.staticDataTypeIndex < 0)
 			throw "Wasm GC reflection table has no planned array type";
 		var bytes = haxe.io.Bytes.alloc(size);
-		module.data.push({offset: 0, bytes: bytes, passive: true});
+		module.data.push({offset: 0, bytes: bytes, passive: true, censusCategory: "reflection"});
 		var global = module.globals.length;
 		module.globals.push({
 			type: Ref({nullable: true, heap: Type(plan.staticDataTypeIndex)}),

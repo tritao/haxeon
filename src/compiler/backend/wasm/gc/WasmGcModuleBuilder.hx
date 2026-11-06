@@ -354,7 +354,7 @@ class WasmGcModuleBuilder {
 		var blob = haxe.io.Bytes.alloc(staticData.end);
 		for (segment in staticData.segments)
 			blob.blit(segment.offset, segment.bytes, 0, segment.bytes.length);
-		module.data.push({offset: 0, bytes: blob, passive: true});
+		module.data.push({offset: 0, bytes: blob, passive: true, censusCategory: "static data"});
 		var global = module.globals.length;
 		module.globals.push({
 			type: Ref({nullable: true, heap: Type(plan.staticDataTypeIndex)}),

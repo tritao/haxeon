@@ -246,39 +246,48 @@ class WasmEncoder {
 		var body = new BytesOutput();
 		writeU32(body, module.functions.length);
 		for (fn in module.functions) {
-			var encoded = fn.encodedBody;
-			if (encoded != null) {
-				writeU32(body, encoded.length);
-				body.writeBytes(encoded, 0, encoded.length);
-				continue;
-			}
-			var functionBody = new BytesOutput();
-			writeLocals(functionBody, fn.locals);
-			writeInstructions(functionBody, fn.body);
-			functionBody.writeByte(0x0b);
-			var bytes = functionBody.getBytes();
+			var bytes = encodeFunctionBody(fn);
 			writeU32(body, bytes.length);
 			body.writeBytes(bytes, 0, bytes.length);
 		}
 		return body.getBytes();
 	}
 
+	/** The code-section payload for one function, excluding its length prefix. */
+	public static function encodeFunctionBody(fn:WasmFunction):Bytes {
+		if (fn.encodedBody != null) return fn.encodedBody;
+		var body = new BytesOutput();
+		writeLocals(body, fn.locals);
+		writeInstructions(body, fn.body);
+		body.writeByte(0x0b);
+		return body.getBytes();
+	}
+
 	static function encodeData(data:Array<WasmDataSegment>):Bytes {
 		var body = new BytesOutput();
 		writeU32(body, data.length);
-		for (segment in data) {
-			if (segment.passive == true)
-				body.writeByte(1);
-			else {
-				body.writeByte(0);
-				body.writeByte(0x41);
-				writeS32(body, segment.offset);
-				body.writeByte(0x0b);
-			}
-			writeU32(body, segment.bytes.length);
-			body.writeBytes(segment.bytes, 0, segment.bytes.length);
-		}
+		for (segment in data) writeDataSegment(body, segment);
 		return body.getBytes();
+	}
+
+	/** Segment bytes excluding the data vector count and section framing. */
+	public static function encodedDataSegmentLength(segment:WasmDataSegment):Int {
+		var body = new BytesOutput();
+		writeDataSegment(body, segment);
+		return body.getBytes().length;
+	}
+
+	static function writeDataSegment(body:BytesOutput, segment:WasmDataSegment):Void {
+		if (segment.passive == true)
+			body.writeByte(1);
+		else {
+			body.writeByte(0);
+			body.writeByte(0x41);
+			writeS32(body, segment.offset);
+			body.writeByte(0x0b);
+		}
+		writeU32(body, segment.bytes.length);
+		body.writeBytes(segment.bytes, 0, segment.bytes.length);
 	}
 
 	static function encodeDataCount(count:Int):Bytes {

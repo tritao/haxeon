@@ -204,7 +204,7 @@ class WasmLinearModuleBuilder {
 							if (!strings.exists(value)) {
 								var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds);
 								var offset = nextData;
-								module.data.push({offset: offset, bytes: bytes});
+								module.data.push({offset: offset, bytes: bytes, censusCategory: "strings"});
 								strings.set(value, offset);
 								nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 							}
@@ -215,7 +215,7 @@ class WasmLinearModuleBuilder {
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
 					offset = nextData;
-				module.data.push({offset: offset, bytes: bytes});
+				module.data.push({offset: offset, bytes: bytes, censusCategory: "strings"});
 				strings.set(value, offset);
 				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
@@ -231,7 +231,7 @@ class WasmLinearModuleBuilder {
 					if (!staticClosureDescriptors.exists(key)) {
 						var offset = WasmModuleSupport.align(nextData, 8), bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
 						bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
-						module.data.push({offset: offset, bytes: bytes});
+						module.data.push({offset: offset, bytes: bytes, censusCategory: "closure descriptors"});
 						staticClosureDescriptors.set(key, offset);
 						staticClosureRecords.set(key, {name: name, bytes: bytes});
 						nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
@@ -246,7 +246,7 @@ class WasmLinearModuleBuilder {
 			reflectionTable = WasmModuleSupport.align(nextData, 8);
 			reflectionCount = Std.int(reflectionSize / WasmReflectionTable.ROW_SIZE);
 			reflectionBytes = haxe.io.Bytes.alloc(reflectionSize);
-			module.data.push({offset: reflectionTable, bytes: reflectionBytes});
+			module.data.push({offset: reflectionTable, bytes: reflectionBytes, censusCategory: "reflection"});
 			nextData = reflectionTable + reflectionSize;
 		}
 		heapState = WasmModuleSupport.align(nextData, 8);
@@ -273,7 +273,7 @@ class WasmLinearModuleBuilder {
 		state.setInt32(WasmLayout.HEAP_STATE_BUDGET, WasmLayout.GC_MIN_ALLOCATION_BUDGET);
 		state.setInt32(WasmLayout.HEAP_STATE_FLAGS,
 			(options.wasmGcStress == true ? WasmLayout.HEAP_FLAG_STRESS : 0) | (options.wasmMemoryStats == true ? WasmLayout.HEAP_FLAG_STATS : 0));
-		module.data.push({offset: heapState, bytes: state});
+		module.data.push({offset: heapState, bytes: state, censusCategory: "runtime state"});
 		globals = [];
 		rootGlobals = [];
 		for (field in program.staticFields) {
