@@ -355,7 +355,18 @@ reference-slot counts across cases. The scalar and reference payloads overlap ac
 across targets: a recursive enum stays boxed, as does an enum whose largest case needs more than eight 64-bit scalar
 words plus reference slots and more than twice the next-largest case (using one as the minimum comparison size). This
 bounds the cost of putting one exceptional payload in every containing value. The thresholds are an implementation
-choice to be checked against the required no-regression measurements; this layout is not implemented yet.
+choice to be checked against the required no-regression measurements. The IR layout planner now implements this
+classification and overlapping payload shape; source enum storage and lowering remain pending. Classification packs
+scalar leaves into 64-bit words on a canonical 64-bit HashLink layout, even when the physical payload can use 32-bit
+words. Thus sixteen `Int` payloads occupy eight decision units, whereas seventeen occupy nine; pointer-width differences
+cannot change eligibility between targets. Flat payloads use the independently calculated canonical
+`portable-abi64` C layout for this decision, including its padding. The planner requires that layout rather than
+reusing Wasm offsets: nine pointers in a Wasm Flat record occupy only five 64-bit words, but nine in the canonical
+record. Each physical case is then planned again with the enum's common word width. Array and closure payloads are
+reference leaves and retain their semantic element and call types: the private payload record must not leak into
+their public runtime descriptors or reflection ABI.
+A one-case payload uses the same tag and lane scheme, leaving the layout usable for optional scalar values in the
+planned scalar stage without implementing scalar specialization here.
 
 This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and

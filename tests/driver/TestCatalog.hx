@@ -84,6 +84,7 @@ class TestCatalog {
 		"NullableArrayFlowMain",
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",
+		"InlineEnumLayoutMain",
 		"WasmLinearValueArrayAccessMain",
 		"ValueArrayAccessMain",
 		"IrIntegerBuilderMain",

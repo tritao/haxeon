@@ -69,7 +69,10 @@ class IrValueLaneLayout {
 		this.target = target;
 	}
 
-	public function shape(type:IrType):IrValueLaneShape {
+	/** A shared payload word width lets overlapping enum cases address the same scalar lane. */
+	public function shape(type:IrType, ?payloadWordBits:Int):IrValueLaneShape {
+		if (payloadWordBits != null && payloadWordBits != 32 && payloadWordBits != 64)
+			throw 'Unsupported payload word width $payloadWordBits';
 		var parts:Array<LanePart> = [];
 		append(type, [], [], null, parts);
 		var wordBits = 32;
@@ -79,6 +82,10 @@ class IrValueLaneLayout {
 				case Flat(_, _, leaves):
 					for (leaf in leaves) if (leaf.scalar != null && leaf.scalar.bits > 32) wordBits = 64;
 			}
+		if (payloadWordBits != null) {
+			if (payloadWordBits < wordBits) throw 'Payload word width $payloadWordBits cannot hold a $wordBits-bit leaf';
+			wordBits = payloadWordBits;
+		}
 		var slots:Array<IrValueLaneSlot> = [], scalarBits = 0, references = 0;
 		for (part in parts)
 			switch part {
