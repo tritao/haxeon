@@ -14,6 +14,10 @@ modules retain function names and line tables for profiler output and stack
 traces, and omit opcode spans and embedded source snapshots. The compiler CLI
 accepts the equivalent `--build-mode=release` or `--build-mode=development`.
 
+Module metadata mode is independent of native optimization. Host project builds
+keep optimized `Release` native libraries in both modes, including the default
+development mode and live rebuilds.
+
 On Unix-like systems, `scripts/haxeon` compiles the CLI to cached HashLink
 bytecode when its sources change, then runs that bytecode. If HashLink is not
 installed yet, the script uses the pinned Haxe interpreter for bootstrap and

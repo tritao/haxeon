@@ -27,7 +27,6 @@ import project.SourceCache;
 import project.RegistryPublisher;
 import sys.FileSystem;
 import sys.io.File;
-import build.BuildEnvironment.BuildProfile;
 import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 
@@ -653,7 +652,7 @@ class HaxeonCli {
 			var session = options.watch ? new BuildSession() : null;
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
-				options.buildMode == "development" ? BuildProfile.Debug : BuildProfile.Release);
+				options.buildMode == "development");
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
@@ -724,7 +723,7 @@ class HaxeonCli {
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
 								options.selfHosted, change.compilerOnly, options.live, instrument, session,
-								options.buildMode == "development" ? BuildProfile.Debug : BuildProfile.Release);
+								options.buildMode == "development");
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							return status == 0 ? candidate : null;

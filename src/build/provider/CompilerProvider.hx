@@ -23,7 +23,7 @@ class CompilerProvider {
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
 			sourcePaths:Array<String> = [], arguments = [
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
-				"--build-mode=" + (context.live || context.environment.profile == build.BuildEnvironment.BuildProfile.Debug ? "development" : "release"),
+				"--build-mode=" + (context.live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry
 			], inputs:Array<String> = [];

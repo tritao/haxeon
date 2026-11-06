@@ -16,6 +16,9 @@ class LoweringContext {
 	public final extraDefines:Array<String>;
 	public final selfHosted:Bool;
 
+	/** Module metadata policy, independent of native optimization and debug information. */
+	public final developmentMetadata:Bool;
+
 	/** Lower CMake packages onto workspace-wide trees keyed by (source, target) instead of per package. */
 	public final sharedNative:Bool;
 
@@ -29,7 +32,9 @@ class LoweringContext {
 	public final session:Null<BuildSession>;
 
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
-			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession, ?nativeCache:String) {
+			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession, ?nativeCache:String,
+			developmentMetadata:Bool = true) {
+		this.developmentMetadata = developmentMetadata;
 		this.nativeCache = nativeCache;
 		this.session = session;
 		this.sharedNative = sharedNative == true;
