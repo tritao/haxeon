@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+haxeon_dir=${HAXEON_DIR:-"$(cd "$repo_dir/../.." && pwd)"}
 nativekit_dir=${NATIVEKIT_DIR:-"$(cd "$repo_dir/../.." && pwd)/vendor/nativekit"}
 emsdk_dir="$nativekit_dir/.tools/emsdk"
 build_dir=${NATIVEKIT_WEB_BUILD_DIR:-"$repo_dir/build-web"}
@@ -12,6 +13,8 @@ haxeon_target=${NKUI_HAXEON_TARGET:-wasm32}
 exception_mode=${NATIVEKIT_HAXEON_EXCEPTION_MODE:-legacy}
 bundle_fonts=${NKUI_HAXEON_BUNDLE_FONTS:-OFF}
 subset_fonts=${NKUI_HAXEON_SUBSET_FONTS:-ON}
+self_hosted=${NATIVEKIT_HAXEON_SELF_HOSTED:-OFF}
+compiler_module=${NATIVEKIT_HAXEON_COMPILER_MODULE:-"$haxeon_dir/bootstrap/compiler.hl"}
 
 if [[ ! -f "$emsdk_dir/emsdk_env.sh" ]]; then
     echo "Emscripten is not installed. Run $nativekit_dir/tools/setup-web.sh first." >&2
@@ -25,6 +28,9 @@ emcmake cmake -S "$repo_dir" -B "$build_dir" -G Ninja \
     -DNK_BUILD_TESTS=ON \
     -DNK_BUILD_EXAMPLES=ON \
     -DNKUI_NATIVEKIT_DIR="$nativekit_dir" \
+    -DNKUI_HAXEON_DIR="$haxeon_dir" \
+    -DNKUI_HAXEON_SELF_HOSTED="$self_hosted" \
+    -DNKUI_HAXEON_COMPILER_MODULE="$compiler_module" \
     -DNKUI_HAXEON_TARGET="$haxeon_target" \
     -DNKUI_HAXEON_EXCEPTION_MODE="$exception_mode" \
     -DNKUI_HAXEON_MEMORY_STATS="$memory_stats" \

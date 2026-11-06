@@ -595,6 +595,21 @@ if(NK_BUILD_EXAMPLES)
         endif()
 
         if(EMSCRIPTEN)
+            option(NKUI_HAXEON_SELF_HOSTED
+                "Build the browser guest with a precompiled Haxeon compiler"
+                "$ENV{NATIVEKIT_HAXEON_SELF_HOSTED}")
+            set(NKUI_HAXEON_COMPILER_MODULE "$ENV{NATIVEKIT_HAXEON_COMPILER_MODULE}" CACHE FILEPATH
+                "Precompiled Haxeon compiler used for the browser guest")
+            if(NOT NKUI_HAXEON_COMPILER_MODULE)
+                set(NKUI_HAXEON_COMPILER_MODULE "${NKUI_HAXEON_DIR}/bootstrap/compiler.hl" CACHE FILEPATH
+                    "Precompiled Haxeon compiler used for the browser guest" FORCE)
+            endif()
+            set(NKUI_HAXEON_SELF_HOSTED_VALUE 0)
+            set(NKUI_HAXEON_COMPILER_DEPS "${NKUI_HAXEON_HAXE_BIN}")
+            if(NKUI_HAXEON_SELF_HOSTED)
+                set(NKUI_HAXEON_SELF_HOSTED_VALUE 1)
+                set(NKUI_HAXEON_COMPILER_DEPS "${NKUI_HAXEON_COMPILER_MODULE}")
+            endif()
             option(NKUI_HAXEON_BUNDLE_FONTS
                 "Bundle Haxeon showcase fonts into the Emscripten data file"
                 OFF)
@@ -671,6 +686,8 @@ if(NK_BUILD_EXAMPLES)
                     "NATIVEKIT_WASM_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
                     "HAXEON_DIR=${NKUI_HAXEON_DIR}"
                     "NATIVEKIT_HAXE_BIN=${NKUI_HAXEON_HAXE_BIN}"
+                    "NATIVEKIT_HAXEON_SELF_HOSTED=${NKUI_HAXEON_SELF_HOSTED_VALUE}"
+                    "NATIVEKIT_HAXEON_COMPILER_MODULE=${NKUI_HAXEON_COMPILER_MODULE}"
                     "NATIVEKIT_HAXEON_TARGET=${NKUI_HAXEON_TARGET}"
                     "NATIVEKIT_HAXEON_EXCEPTION_MODE=${NKUI_HAXEON_EXCEPTION_MODE}"
                     "NATIVEKIT_HAXEON_MEMORY_CONTRACT=${NKUI_HAXEON_MEMORY_CONTRACT}"
@@ -689,6 +706,7 @@ if(NK_BUILD_EXAMPLES)
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
                     ${NKUI_HAXEON_GUEST_HX_DEPS}
                     ${NKUI_HAXEON_DEPS}
+                    ${NKUI_HAXEON_COMPILER_DEPS}
                 WORKING_DIRECTORY "${NKUI_NATIVEKIT_DIR}"
                 USES_TERMINAL)
             add_custom_target(nativekit_ui_haxeon_guest
