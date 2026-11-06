@@ -94,7 +94,7 @@ class EnumEqualityGenerator {
 					for (fieldIndex in 0...constructor.params.length) {
 						var parameter = constructor.params[fieldIndex],
 							fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter),
+							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter, type),
 							leftField = session.representation.boundaryCast(new TypedExpression(TEnumField(left, constructorIndex, fieldIndex), storageType,
 								span), fieldType),
 							rightField = session.representation.boundaryCast(new TypedExpression(TEnumField(right, constructorIndex, fieldIndex), storageType,

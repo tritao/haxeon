@@ -26,6 +26,7 @@ inline_cases=(
 	jump-threading
 	identity-class
 	enum-generated-dependencies
+	enum-concrete-payloads
 	enum-unused-lane-payload
 	enum-interface-conformance
 	scoped-cleanup

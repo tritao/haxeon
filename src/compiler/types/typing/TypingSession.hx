@@ -56,6 +56,7 @@ class TypingSession {
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
 	public var interfaceDecls:Map<String, compiler.syntax.Ast.AstInterface> = [];
 	public var enumDecls:Map<String, compiler.syntax.Ast.AstEnum> = [];
+	public final enumRepresentations:EnumRuntimeRepresentations;
 	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
 	public var declarations:DeclarationIndex;
 	public var relations:TypeRelations;
@@ -119,6 +120,7 @@ class TypingSession {
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
 		this.representation = new TypeRepresentation(this);
+		this.enumRepresentations = new EnumRuntimeRepresentations(this);
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {

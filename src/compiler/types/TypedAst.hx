@@ -269,6 +269,9 @@ typedef TypedEnumCase = {
 /** Type-checked enum declaration. */
 typedef TypedEnum = {
 	final name:String;
+	final ?specializationOrigin:String;
+	final ?specializationArguments:Array<CompilerType>;
+	final ?isRecursive:Bool;
 	final ?equatable:Bool;
 	final ?hashable:Bool;
 	final metadata:Array<compiler.syntax.Ast.AstMetadata>;

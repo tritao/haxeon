@@ -339,8 +339,8 @@ therefore does not need a second wrapper allocation. Declared equality and refle
 generated operations. Casts, type tests, reflection and native boundaries preserve the source enum type; a raw pointer or
 object identity comparison is not a fallback. Dynamic array reads and writes use the same enum descriptor as typed access.
 An erased `Array<E<T>>` view must retain the concrete enum type at each element escape, including when the array was
-created and populated before that view. The current boxed enum ABI erases `T`, so inspecting the nominal enum name or
-its payload cannot recover the right conformance in general (a case may not contain `T` at all). Preserving array
+created and populated before that view. An erased boxed enum ABI cannot recover the right conformance by inspecting
+the nominal enum name or its payload in general (a case may not contain `T` at all). Preserving array
 aliases therefore also requires carrying the concrete type through the boxed representation; choosing equality by nominal
 name, payload shape, or object identity would change program meaning. The selected design gives each concrete boxed enum
 specialization a canonical runtime type descriptor, sharing its physical layout when possible. The descriptor selects the
@@ -349,6 +349,13 @@ table entry per element. Inline enum values keep their statically known type and
 a genuine erased boundary. Generic code that constructs or erases such an enum must retain the concrete specialization,
 as described in `GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
 representation remains pending.
+
+Concrete non-recursive enum payload schemas are now retained before erasure, including unused constructors and
+constructors which do not mention a generic parameter. A local generic factory, an instance body, a captured closure
+or a typedef cannot silently replace that schema with `Dynamic`. Recursion is determined from the semantic declaration
+graph and persists in canonical IR, so erased recursive payloads cannot accidentally become eligible for inline storage.
+Recursive generic payloads retain their current boxed storage during this metadata checkpoint; their value transport
+and source inline lowering remain unfinished.
 
 The candidate inline layout uses tag zero for null and one-based case tags, followed by the maximum scalar-word and
 reference-slot counts across cases. The scalar and reference payloads overlap across cases. Classification is stable

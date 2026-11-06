@@ -104,7 +104,7 @@ class HashGenerator {
 					for (fieldIndex in 0...constructor.params.length) {
 						var parameter = constructor.params[fieldIndex],
 							fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter),
+							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter, type),
 							fieldValue = session.representation.boundaryCast(new TypedExpression(TEnumField(value, constructorIndex, fieldIndex), storageType, span), fieldType);
 						request(session, fieldType, req.origin, parameter.span);
 						var running = new TypedExpression(TLocal(hashName), TInt, span),

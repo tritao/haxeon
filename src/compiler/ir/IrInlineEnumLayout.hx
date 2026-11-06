@@ -58,7 +58,7 @@ class IrInlineEnumLayout {
 		var existing = results.get(name);
 		if (existing != null) return existing;
 		var declaration = declarations.get(name);
-		if (declaration == null || recursive(name, name, [], [])) return reject(name);
+		if (declaration == null || declaration.isRecursive == true || recursive(name, name, [], [])) return reject(name);
 		if (!canonical) {
 			if (decisionPlanner == null)
 				decisionPlanner = new IrInlineEnumLayout([for (entry in declarations) entry],

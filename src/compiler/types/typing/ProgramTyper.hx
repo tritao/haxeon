@@ -149,6 +149,7 @@ class ProgramTyper {
 			for (enumDecl in program.enums)
 				{
 					name: enumDecl.name,
+					isRecursive: session.enumRepresentations.isRecursive(enumDecl.name),
 					equatable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Equatable"),
 					hashable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Hashable"),
 					metadata: enumDecl.metadata,
@@ -157,13 +158,14 @@ class ProgramTyper {
 							{
 								name: caseDecl.name,
 								metadata: caseDecl.metadata,
-								params: [for (param in caseDecl.params) bodyTyper.erasedEnumParameter(enumDecl, param)],
+								params: [for (param in caseDecl.params) session.representation.enumStorageType(enumDecl.typeParameters, param,
+									TInstance(NominalKind.Enum, enumDecl.name, []))],
 								span: caseDecl.span
 							}
 					],
 					span: enumDecl.span
 				}
-		] : cachedMetadata.enums, typedInterfaces:Array<TypedInterface> = cachedMetadata == null ? [
+		] : [for (declaration in cachedMetadata.enums) if (declaration.specializationOrigin == null) declaration], typedInterfaces:Array<TypedInterface> = cachedMetadata == null ? [
 			for (interfaceDecl in program.interfaces)
 				{
 					name: interfaceDecl.name,
@@ -191,6 +193,7 @@ class ProgramTyper {
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
 			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
 		if (cachedMetadata != null) {
+			session.enumRepresentations.restore(cachedMetadata.enums);
 			if (retainedOwners == null) retainedOwners = [];
 			session.representation.restoreGenericOwnerAliases(cachedMetadata.genericOwnerAliases, retainedOwners);
 			for (cached in typedClasses)
@@ -246,9 +249,14 @@ class ProgramTyper {
 		// Field and signature types can request owners without a construction expression. A
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
-		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0, pathClassIndex = 0;
+		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0, pathClassIndex = 0, enumIndex = 0;
 		var keyPaths = new KeyPathRuntime(session, typedClasses);
 		function drainRuntimeTypes():Void while (true) {
+			while (enumIndex < session.enumRepresentations.count()) {
+				var declaration = session.enumRepresentations.declaration(enumIndex++);
+				typedEnums.push(declaration);
+				assembler.registerProgramTypes([], [], [], [declaration], []);
+			}
 			var pathHelpers = keyPaths.drain();
 			for (helper in pathHelpers) typedFunctions.push(helper);
 			if (pathHelpers.length > 0) assembler.registerProgramTypes(pathHelpers, [], [], [], []);
@@ -262,6 +270,7 @@ class ProgramTyper {
 				typedFunctions.push(fn);
 				assembler.registerProgramTypes([fn], [], [], [], []);
 			}
+			if (enumIndex < session.enumRepresentations.count()) continue;
 			if (ownerIndex >= session.representation.genericOwnerRequestCount()) break;
 			var request = session.representation.genericOwnerRequest(ownerIndex++), declaration = ownerDeclarations.get(request.origin);
 			if (declaration == null) throw 'Missing generic owner declaration "${request.origin}"';
@@ -294,7 +303,7 @@ class ProgramTyper {
 		function requestCount():Int return Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests)
 			+ Lambda.count(session.hashRequests) + Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters)
 			+ Lambda.count(session.wireCodecRequests) + Lambda.count(session.jsonCodecRequests) + Lambda.count(session.keyPathDefinitions)
-			+ session.representation.genericOwnerRequestCount() + session.closureConversion.generatedFunctionCount();
+			+ session.representation.genericOwnerRequestCount() + session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
 		while (true) {
 			drainRuntimeTypes();
 			reflectNewClasses();

@@ -166,6 +166,21 @@ runtime descriptor at that boundary. Generic enum constructors without a context
 arguments from payloads; that existing compiler gap requires a separate fix. A concrete typed binding preserves the
 specialization before an erased boundary.
 
+Concrete non-recursive enum descriptors retain every constructor's resolved payload types before erasure, including
+constructors such as `Code(Int)` or `Empty` which do not mention the type parameter. IR completion requires those
+descriptors rather than reconstructing them by copying an erased template. Incremental metadata retains the source
+declaration and semantic arguments so cached callers can regenerate descriptors after an enum edit.
+An enum used only in a generic function's local, a captured closure, an owner's instance body or a generic typedef
+still makes that parameter layout-dependent; a `Dynamic` result does not erase the type before construction.
+This is an enum-layout dependency, not general scalar generic specialization.
+
+Recursion is classified from semantic declarations before payload erasure. The finite dependency graph follows stored
+type parameters through enum and value-struct wrappers, without expanding families such as `E<T> -> E<Array<T>>`;
+phantom arguments do not create dependencies. The decision is retained in canonical IR and invalidated with the enum
+declaration. Recursive generic enums still use their existing erased boxed payload storage at this checkpoint.
+Transporting their concrete value leaves belongs to the remaining source enum-storage lowering; this metadata step
+does not complete that ABI or activate inline enums.
+
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
 

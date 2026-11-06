@@ -2419,3 +2419,167 @@ for this dependency-order change. All scheduled comparisons and required gates p
 verification rule or immutable value changed. Raw captures were deleted after extraction; only the current
 comparison artifacts and measurement records are retained until the commit is recorded, then the idle
 gate checkout is removed.
+
+
+### Self-hosting body-typing follow-up (2026-11-06)
+
+The `36bc1497` review asked whether the combined completion loop repeatedly generates enough helper bodies
+to regress typing time. Three alternating pairs compare `430f68f7` and `36bc1497` compiler modules, both
+bootstrapped by the pinned Haxe and running on the same checkout-built VM. Each compiles the identical
+archived `36bc1497` compiler and stdlib: 640 source files, a fresh process per run, affinity `0,2,4,6`.
+The restored enum-metadata edits are outside this frozen workload and are not part of either measured compiler.
+
+The driver's `bodies=` metric is `ProgramTyper.metrics.bodiesMs`, ending immediately before
+`advanceAll(BodyTyped)` and including the helper completion loop. Ordinary class bodies are typed earlier
+in `metadata=`, which is shown too; `bodies=` alone is not total source-body typing time.
+
+| Pair | Bodies control → candidate ms | Metadata control → candidate ms | Typing/lowering control → candidate ms |
+| --- | ---: | ---: | ---: |
+| 1 | 51.63 → 52.58 | 5127.41 → 5451.24 | 10463.85 → 10806.72 |
+| 2 | 52.26 → 51.10 | 5401.67 → 5004.34 | 10755.05 → 10223.61 |
+| 3 | 56.93 → 53.91 | 5196.06 → 5503.34 | 10724.87 → 11354.68 |
+
+Body medians are 52.26 → 52.58 ms, with paired differences +0.95 / −1.16 / −3.02 ms; the paired
+median difference is −1.16 ms. These overlapping observations do not demonstrate a measurable body-typing
+increase. Metadata medians are 5,196.06 → 5,451.24 ms; total typing/lowering medians are
+10,724.87 → 10,806.72 ms. Those observations are retained without a speedup claim.
+
+Body-phase allocation medians are 31,196,448 → 31,371,160 bytes and 1,099,259 → 1,102,464 objects,
+with no body-phase collection in any run. The extra registrations and completion bookkeeping are visible
+in these compiler allocations; this is separate from editor action allocations. All six compiles emit
+identical 33,973,526-byte modules, SHA-256
+`9b3c65eaabef5abfc9c0f6842529fc591778f3f5222780a5ba00c477f537408c`.
+No generator-cursor change is justified by this timing sample. It does not establish that whole-request
+regeneration is cheap for every codec-heavy input; a measurable case should switch the generators to
+consume newly queued requests rather than weaken completion or repeat benchmarks until a pass.
+
+
+For the concrete enum-metadata candidate, a separate comparison compiles a frozen post-inference-fix
+643-file compiler/stdlib snapshot with `36bc1497` and the candidate. The same affinity, VM and alternating
+order apply. An earlier candidate run failed with `Null access` before timing completed: preliminary
+empty-array inference had requested an enum's physical storage without an instance. The reduced case is
+an empty array filled by `push` from an enum pattern. Inference now asks for semantic parameter types,
+and physical storage lookup requires its enum instance. The failure and original stack were retained;
+its incomplete comparison is excluded from the following replacement experiment on the corrected source.
+
+| Pair | Bodies control → candidate ms | Metadata control → candidate ms | Typing/lowering control → candidate ms |
+| --- | ---: | ---: | ---: |
+| 1 | 60.16 → 61.48 | 6027.51 → 4927.66 | 11512.28 → 9986.22 |
+| 2 | 58.89 → 61.25 | 5157.90 → 4969.28 | 10520.36 → 10040.73 |
+| 3 | 68.11 → 91.04 | 5407.51 → 5867.55 | 10815.50 → 11330.32 |
+
+Body medians are 60.16 → 61.48 ms, with paired differences +1.32 / +2.36 / +22.93 ms.
+The final-run rise is retained. The sample does not isolate repeated generator typing from new metadata
+work or run variation. Body allocation medians are 31,444,928 → 32,698,584 bytes and
+1,105,370 → 1,142,637 objects, with no body-phase collection. All six compiles emit the same
+34,040,156-byte module, SHA-256 `93bf18542ad2648b5e84641d888f5a4fa687de2786e531d833d5513c48be616e`.
+
+### Concrete enum payload metadata checkpoint (2026-11-06)
+
+This is metadata preparation for source inline enums, not activation of inline enum storage. The compiler retains every
+case of a closed generic enum, including constructors that do not mention its parameter, and carries the recursion
+decision through canonical IR. Generic factories and owners whose bodies create these enums retain the semantic
+argument. Recursive generic payloads still use the existing boxed erased transport at this checkpoint.
+
+Control compiler: `36bc1497`; candidate: this concrete-metadata change. The isolated outer checkout is `b1b31835f`.
+Outer main acquired committed machinekit changes since the previous checkpoint, so the control profile was rebuilt
+with archived `36bc1497` compiler source against the same 3,335-file input as the candidate. Comparing the previous
+99,536,585-byte profile directly would confound those outer changes with this compiler change. The native VM and
+runtime libraries are byte-identical in both sides. All captures are on disk and deleted after their numbers are saved.
+
+HashLink: nine alternating action pairs, three selection census pairs and three 500-cycle RSS pairs. Action timing
+uses affinity `0,2,4,6`. Allocation medians are unchanged except the quantized hierarchy-to-sensors counter:
+
+| Action | KiB control → candidate | Frame ms control → candidate |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 72.5 → 72.5 | 1.35 → 1.68 |
+| tab-matrix/hierarchy->sensors | 112.8 → 112.6 | 1.96 → 2.45 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.58 → 1.93 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.44 → 1.75 |
+| interaction/hover-away | 13.6 → 13.6 | 0.49 → 0.60 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-field | 12.4 → 12.4 | 0.49 → 0.68 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-other | 10.0 → 10.0 | 0.49 → 0.70 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.02 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.77 → 0.92 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.44 → 0.50 |
+| interaction/type-char | 16.1 → 16.1 | 0.45 → 0.50 |
+| selection-stress/selection | not reported | 3.63 → 3.81 |
+
+The 0.2 KiB counter decrease is not claimed as a permanent allocation improvement and does not justify lowering a
+budget. No action allocation median increased. Two candidate **measurement-mode** runs reported timing overruns:
+pair 4: `selection-stress selection: frameMs 7.12 is over the budget 6.0`; pair 5:
+`selection-stress selection: frameMs 6.05 is over the budget 6.0`. They are retained, not replaced. The separately
+scheduled non-measurement budget gate, including retention, passed. Selection medians are 3.63 → 3.81 ms; control
+runs range 2.99–5.46 ms and candidate runs 3.05–7.12 ms. These are timing findings, not evidence of a speedup.
+
+The checkout-built `hldump --hashes` compares 33,811 functions. Twenty differ: async outcome construction/projection,
+file-dialog callbacks and call-stack formatting. Selection functions are unchanged. For example, `Promise<Int>.complete`
+passes its integer directly into the concrete `Outcome<Int>` constructor instead of emitting `OToDyn`. This comparison
+does not establish a cause for the timing variation and does not discard either overrun.
+
+Selection-stress census (30 cycles, objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,910 / 24,010,792 | 340,912 / 24,011,288 |
+| 2 | 340,911 / 24,011,080 | 340,911 / 24,011,072 |
+| 3 | 340,912 / 24,011,280 | 340,911 / 24,011,136 |
+
+Every run has exactly 305,725 non-byte objects / 21,593,528 non-byte bytes; total differences are only byte buffers.
+Object medians are 340,911 on both sides, with paired median difference zero.
+
+RSS windows, MiB, control → candidate (initial / second / third / final windows):
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.16 / 3.59 / 0.78 / 4.84 | 29.84 / 3.91 / 0.78 / 4.84 |
+| 2 | 29.84 / 4.22 / 0.78 / 5.00 | 30.31 / 3.59 / 0.78 / 5.00 |
+| 3 | 30.16 / 3.91 / 0.78 / 4.84 | 30.00 / 3.75 / 0.78 / 5.00 |
+
+All six memory runs pass. Paired median differences are −0.16 / −0.16 / 0 / 0 MiB; these observations do not establish
+a memory improvement.
+
+Artifact bytes (development mode; no binary-size improvement is attributed to the small differences):
+
+| Module | Control | Candidate |
+| --- | ---: | ---: |
+| HashLink editor profile | 99,660,361 | 99,659,508 |
+| Wasm32 Showcase | 11,876,162 | 11,876,090 |
+| Wasm GC Showcase | 5,810,159 | 5,810,183 |
+
+Both Web builds and browser smoke tests pass. Wasm GC uses the committed allocation counter: nine full-scene pairs
+and three pairs each for static, text-heavy and editing, 36 runs total. All object counts agree in every pair.
+Wasm32 has three load pairs, six runs, without the GC object counter. Medians of per-run frame measurements, ms:
+
+| Target / scene | Objects control → candidate | Median frame control → candidate | p95 frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc/full | 4440 → 4440 | 2.40 → 2.50 | 4.60 → 5.10 |
+| wasm-gc/static | 4440 → 4440 | 2.50 → 2.40 | 5.20 → 4.50 |
+| wasm-gc/text-heavy | 4440 → 4440 | 2.40 → 2.30 | 4.50 → 4.40 |
+| wasm-gc/editing | 8724 → 8724 | 2.60 → 2.70 | 5.00 → 5.40 |
+| wasm32/full | not counted | 2.40 → 2.50 | 4.70 → 5.40 |
+
+Full-scene startup medians, ms:
+
+| Target | Compile control → candidate | Init control → candidate | First frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc | 6.2 → 6.2 | 18.3 → 19.4 | 161.9 → 172.0 |
+| wasm32 | 5.6 → 6.2 | 14.3 → 16.5 | 160.9 → 170.9 |
+
+The full and editing GC frame medians rise by 0.10 ms; other scene medians, p95s and startup observations are retained
+in the tables rather than rerun away. No causal timing improvement or regression is established by this sample.
+
+Required gates: 787 compiler tests, zero failures; self-hosting fixed point; all ten UI scripts; 506 parity fixtures
+across all three targets (14 existing skips), including all six UI value snapshots; the app suite; all nine retention
+scenarios; the separately scheduled performance budgets; all six headless memory runs; both Web smoke tests. The
+concrete-payload and generated-dependency fixtures additionally pass all twelve native target/inlining combinations.
+Compiler tests cover canonical IR, cold/cached/edited callers, recursive wrappers, phantom arguments, and semantic
+empty-array inference from enum patterns. The self-hosting phase-time follow-up immediately above records both the
+fixed-point control comparison and the corrected metadata candidate comparison. No budget ceiling, verification rule
+or immutable value changed.
+
+Source inline enum ABI, enum arrays/closures and the UI enum conversions remain subsequent steps; these gates do
+not claim they are implemented by the metadata checkpoint.

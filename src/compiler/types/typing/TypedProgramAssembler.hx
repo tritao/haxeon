@@ -26,6 +26,7 @@ class TypedProgramAssembler {
 			natives:Array<TypedNative>):Void {
 		function register(type:CompilerType, ?origin:String):Void {
 			registerAnonymousType(type);
+			session.enumRepresentations.discover(type);
 			session.representation.discoverGenericOwners(type, origin);
 		}
 		for (fn in functions) {

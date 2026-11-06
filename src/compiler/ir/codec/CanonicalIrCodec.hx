@@ -21,7 +21,7 @@ import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
 class CanonicalIrCodec {
-	public static inline final VERSION:Int = 13;
+	public static inline final VERSION:Int = 14;
 	static inline final MAGIC = "HIR";
 	static inline final MAX_ITEMS = 0x100000;
 
@@ -360,6 +360,7 @@ class CanonicalIrCodec {
 		writeCount(output, enums.length);
 		for (enumDecl in enums) {
 			IrTypeCodec.writeString(output, enumDecl.name);
+			output.writeByte(enumDecl.isRecursive == true ? 1 : 0);
 			writeCount(output, enumDecl.cases.length);
 			for (constructor in enumDecl.cases) {
 				IrTypeCodec.writeString(output, constructor.name);
@@ -372,10 +373,11 @@ class CanonicalIrCodec {
 		var result:Array<IrEnum> = [];
 		for (_ in 0...readCount(input)) {
 			var cases:Array<IrEnumCase> = [],
-				name = IrTypeCodec.readString(input, limit);
+				name = IrTypeCodec.readString(input, limit), recursive = input.readByte();
+			if (recursive > 1) throw "Invalid enum recursion flag";
 			for (_ in 0...readCount(input))
 				cases.push({name: IrTypeCodec.readString(input, limit), params: readTypes(input, limit)});
-			result.push({name: name, cases: cases});
+			result.push({name: name, cases: cases, isRecursive: recursive == 1});
 		}
 		return result;
 	}

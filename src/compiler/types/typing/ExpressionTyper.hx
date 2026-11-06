@@ -121,8 +121,8 @@ class ExpressionTyper {
 	}
 
 	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
-	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression
-		return switch expression {
+	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression {
+		var result = switch expression {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
@@ -200,6 +200,9 @@ class ExpressionTyper {
 					scope.invalidateAllExpressions();
 				call;
 		};
+		session.enumRepresentations.discover(result.type);
+		return result;
+	}
 
 	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan,
 			scope:Scope):TypedExpression {

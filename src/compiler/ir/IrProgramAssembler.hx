@@ -281,6 +281,7 @@ class IrProgramAssembler {
 			for (enumDecl in typed.enums)
 				{
 					name: enumDecl.name,
+					isRecursive: enumDecl.isRecursive,
 					cases: [
 						for (caseDecl in enumDecl.cases)
 							{name: caseDecl.name, params: [for (param in caseDecl.params) IrGenerator.lowerType(param)]}

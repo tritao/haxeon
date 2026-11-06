@@ -1024,12 +1024,12 @@ class CallResolver {
 		while (typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 		typedArguments = coerceArguments(typedArguments, expected, name);
-		for (index in 0...typedArguments.length)
-			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
-				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index]));
 		var resultType:CompilerType = enumCase.aliasType ?? TInstance(NominalKind.Enum, enumCase.enumName, []);
 		if (enumCase.aliasType == null && expectedType != null && enumName(expectedType) == enumCase.enumName)
 			resultType = expectedType;
+		for (index in 0...typedArguments.length)
+			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
+				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index], resultType));
 		return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span, false, null, null, enumCase.aliasName);
 	}
 

@@ -67,6 +67,7 @@ class TypeRepresentation {
 	static inline var MAX_OWNER_TYPE_DEPTH:Int = 64;
 	static inline var MAX_OWNER_TYPE_NODES:Int = 4096;
 	final session:TypingSession;
+	final enumBodyUses:Map<String, Bool> = [];
 	final conversions:ConversionResolver;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
 	final requestedOwners:Array<GenericOwnerRepresentation> = [];
@@ -155,11 +156,19 @@ class TypeRepresentation {
 			policies:Array<String> = [];
 		for (parameter in functionTypeParameters(fn)) {
 			var semantic = requiredMapValue(semanticSubstitutions, parameter),
-				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic, type -> requiresLayoutSpecialization(type));
+				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic, type -> requiresLayoutSpecialization(type)
+					|| functionUsesGenericEnum(fn, parameter));
 			substitutions.set(parameter, decision.representation);
 			policies.push(decision.policy);
 		}
 		return {substitutions: substitutions, policies: policies};
+	}
+
+	function functionUsesGenericEnum(fn:AstFunction, parameter:String):Bool {
+		var key = fn.span.file.path + ":" + fn.span.start + ":" + fn.name + ":" + parameter;
+		if (!enumBodyUses.exists(key)) enumBodyUses.set(key, compiler.types.analysis.GenericEnumUsage.uses(fn,
+			type -> enumContainsParameter(type, parameter, [])));
+		return enumBodyUses.get(key);
 	}
 
 	/**
@@ -202,7 +211,8 @@ class TypeRepresentation {
 		var substitutions:Map<String, CompilerType> = [], policies:Array<String> = [], representations:Array<CompilerType> = [];
 		for (index in 0...arguments.length) {
 			var parameter = declaration.typeParameters[index],
-				decision = GenericSpecializationPolicy.decideOwner(declaration, parameter, arguments[index], requiresLayoutSpecialization);
+				decision = GenericSpecializationPolicy.decideOwner(declaration, parameter, arguments[index],
+					type -> requiresLayoutSpecialization(type) || ownerUsesGenericEnum(declaration, parameter));
 			substitutions.set(parameter, decision.representation);
 			policies.push(decision.policy);
 			representations.push(decision.representation);
@@ -356,6 +366,7 @@ class TypeRepresentation {
 			if (method.isStatic || method.typeParameters != null && method.typeParameters.indexOf(parameter) >= 0) continue;
 			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, seen)) found = true;
 			if (enumContainsParameter(method.result, parameter, seen)) found = true;
+			if (!found && compiler.types.analysis.GenericEnumUsage.uses(method, type -> enumContainsParameter(type, parameter, seen))) found = true;
 		}
 		seen.pop();
 		return found;
@@ -507,16 +518,8 @@ class TypeRepresentation {
 	}
 
 	/** Physical storage type for an enum constructor payload. */
-	public function enumStorageType(typeParameters:Array<String>, parameter:AstEnumParameter):CompilerType {
-		// Generic enums publish one shared constructor layout. Payloads must not
-		// vary by source specialization, including concrete-looking payloads.
-		if (typeParameters.length > 0)
-			return TDynamic;
-		return physicalType(parameter.type, parameter.span, []);
-	}
-
-	public function erasedEnumParameter(declaration:AstEnum, parameter:AstEnumParameter):CompilerType
-		return enumStorageType(declaration.typeParameters, parameter);
+	public function enumStorageType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:CompilerType):CompilerType
+		return session.enumRepresentations.storage(typeParameters, parameter, instance);
 
 	/** Resolve an abstract's underlying representation without losing identity. */
 	public function abstractUnderlying(type:CompilerType):CompilerType

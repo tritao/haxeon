@@ -839,7 +839,8 @@ class BodyTyper {
 						if (index < info.params.length)
 							switch arguments[index] {
 								case Variable(binding, _) if (binding != "_"):
-									bindings.set(binding, session.representation.enumStorageType(info.typeParameters, info.params[index]));
+									bindings.set(binding, enumParameterType(info.typeParameters, info.params[index],
+										info.aliasType ?? TInstance(NominalKind.Enum, info.enumName, [])));
 								default:
 							}
 			default:
@@ -1054,7 +1055,8 @@ class BodyTyper {
 						if (index >= info.params.length)
 							break;
 						var parameter = info.params[index],
-							parameterType = session.representation.enumStorageType(info.typeParameters, parameter);
+							parameterType = enumParameterType(info.typeParameters, parameter,
+								enumInstance(expected) ?? info.aliasType ?? TInstance(NominalKind.Enum, info.enumName, []));
 						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
 					}
 				else {
@@ -1209,7 +1211,7 @@ class BodyTyper {
 					var parameter = info.params[index],
 						parameterType = enumParameterType(info.typeParameters, parameter, instanceType),
 						abstractName = enumAbstractPatternName(parameter.type),
-						storageType = session.representation.enumStorageType(info.typeParameters, parameter);
+						storageType = session.representation.enumStorageType(info.typeParameters, parameter, instanceType);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
 							var constantName = enumAbstractPatternConstant(abstractName, binding), owner = context.lexicalOwner,
@@ -2294,9 +2296,6 @@ class BodyTyper {
 	function enumParameterType(typeParameters:Array<String>, parameter:compiler.syntax.Ast.AstEnumParameter, instance:Null<CompilerType>):CompilerType {
 		return session.representation.enumParameterType(typeParameters, parameter, instance);
 	}
-
-	function erasedEnumParameter(declaration:AstEnum, parameter:compiler.syntax.Ast.AstEnumParameter):CompilerType
-		return session.representation.erasedEnumParameter(declaration, parameter);
 
 	static function requiredEnumParameters(parameters:Array<compiler.syntax.Ast.AstEnumParameter>):Int {
 		var minimum = 0;
