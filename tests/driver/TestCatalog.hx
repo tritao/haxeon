@@ -81,6 +81,7 @@ class TestCatalog {
 		"ReferenceIdentityMain",
 		"NullableStructIrMain",
 		"NullableScalarFlowMain",
+		"NullableScalarResultAbiMain",
 		"NullableArrayFlowMain",
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",

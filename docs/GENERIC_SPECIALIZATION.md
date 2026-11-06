@@ -19,6 +19,17 @@ lanes in locals on both targets. A regression test keeps a non-null managed obje
 instance and static typed closures: both Wasm targets allocate zero objects for 8 and 1,024 calls, with inlining on
 and off. The Wasm32 test also uses stress GC to check that the reference lanes stay live.
 
+Nullable primitive argument expansion composes with the scalar argument/result ABI. A function such as
+`make(value:Null<Int>):Pair` and a forwarding caller keep their scalar result slots when nullable flow replaces the
+argument with presence/payload components. The specialized function retains the outer scalar-ABI namespace in both its
+definition and call sites; the verifier's stack-reference escape rules are unchanged. Previously the nullable prefix hid
+that ABI and verification failed with `A scalar stack reference cannot escape its call`. The regression fixture checks
+both present and absent values, scalar-only and managed-reference results, on HashLink, Wasm32 and Wasm GC, with
+inlining enabled and disabled. Managed-reference cases require an explicitly exported Wasm setup function and reject a
+null owner, so the reference leaves carry a real object. All 8/1,024-call censuses allocate zero objects (HashLink uses
+the exact allocation census).
+This composes existing passes; it does not add scalar generic specialization or change the planned scalar stage.
+
 The initial editor measurement after this policy change reported 12.6 KiB for `hover-field`, versus 12.4 KiB at the
 starting baseline and in a build made with the committed pre-change compiler. In matched 60-cycle allocation censuses,
 both builds recorded 533,935 allocations and identical instrumented action medians. Two alternating pairs using the

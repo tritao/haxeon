@@ -17,7 +17,7 @@ class IrNullableScalarFlow {
 		for (fn in originals) {
 			var hasArgument = false;
 			for (arg in fn.arguments) if (inner(arg.type) != null) hasArgument = true;
-			if (hasArgument && inner(fn.result) == null && !StringTools.startsWith(fn.name, CALL_PREFIX)) candidates.set(fn.name, fn);
+			if (hasArgument && inner(fn.result) == null && !isSpecialization(fn.name)) candidates.set(fn.name, fn);
 		}
 		var changed = true;
 		while (changed) {
@@ -50,6 +50,15 @@ class IrNullableScalarFlow {
 			}
 		}
 	}
+
+	/** Nullable argument expansion preserves an existing scalar result/stack-reference ABI. */
+	static function specializationName(name:String):String {
+		var scalar = IrScalarArguments.PREFIX;
+		return StringTools.startsWith(name, scalar) ? scalar + CALL_PREFIX + name.substr(scalar.length) : CALL_PREFIX + name;
+	}
+
+	static function isSpecialization(name:String):Bool
+		return StringTools.startsWith(name, CALL_PREFIX) || StringTools.startsWith(name, IrScalarArguments.PREFIX + CALL_PREFIX);
 
 	static function inner(type:IrType):Null<IrType> return switch type {
 		case Nullable(I32): I32;
@@ -155,7 +164,7 @@ class IrNullableScalarFlow {
 							for (index in 0...args.length) if (inner(called.arguments[index].type) != null) {
 								var part = required(args[index]); expanded.push(part.present); expanded.push(part.payload);
 							} else expanded.push(args[index]);
-							target.instructions.push(new Located(Call(out, CALL_PREFIX + name, expanded), located.provenance));
+							target.instructions.push(new Located(Call(out, specializationName(name), expanded), located.provenance));
 						} else target.instructions.push(located);
 					case Call(out, "__dynamic_equal", args) if (args.length == 2 && parts.exists(args[0].id) && parts.exists(args[1].id)
 							&& Type.enumEq(args[0].type, args[1].type)):
@@ -191,7 +200,7 @@ class IrNullableScalarFlow {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!parts.exists(binding.value.id)) binding];
 		debug = IrInliner.substitute(blocks, substitutions, debug);
-		return {fn: new IrFunction(clone ? CALL_PREFIX + fn.name : fn.name, arguments, fn.result, blocks, debug, fn.inlineHint,
+		return {fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks, debug, fn.inlineHint,
 			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention), eligible: true};
 	}
 }
