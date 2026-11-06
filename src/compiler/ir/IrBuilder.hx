@@ -27,6 +27,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function intToInt64(value:IrValue):IrValue {
+		var out = temporary(I64);
+		emit(IntToInt64(out, value));
+		return out;
+	}
+
 	public function constFloat(value:Float, type:IrType = F64):IrValue {
 		var out = temporary(type);
 		emit(ConstFloat(out, value));
@@ -219,6 +225,12 @@ class IrBuilder {
 	public function fieldGet(object:IrValue, fieldName:String, type:IrType):IrValue {
 		var out = temporary(type);
 		emit(FieldGet(out, object, fieldName));
+		return out;
+	}
+
+	public function arrayGet(array:IrValue, index:IrValue, element:IrType):IrValue {
+		var out = temporary(element);
+		emit(ArrayGet(out, array, index));
 		return out;
 	}
 

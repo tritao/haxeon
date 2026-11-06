@@ -109,7 +109,7 @@ class IrInterpreter {
 	function executeInstruction(instruction:IrInstruction, values:Map<Int, Dynamic>):Dynamic {
 		return switch instruction {
 			case ConstVoid(_): null;
-			case ConstInt(_, value): value;
+			case ConstInt(output, value): output.type == I64 ? haxe.Int64.ofInt(value) : (value:Dynamic);
 			case ConstFloat(_, value): value;
 			case ConstString(_, value): value;
 			case StaticDataAddress(_, _): throw "IR interpreter cannot execute target static data addresses";
@@ -118,7 +118,8 @@ class IrInterpreter {
 			case ConstBool(_, value): value;
 			case ConstNull(_): null;
 			case TypeValue(_, type): new InterpTypeRef(type);
-			case ToDyn(_, input), IntToInt64(_, input): value(values, input);
+			case ToDyn(_, input): value(values, input);
+			case IntToInt64(_, input): haxe.Int64.ofInt(value(values, input));
 			case SafeCast(output, input):
 				var actual:Dynamic = value(values, input);
 				switch output.type {
@@ -136,6 +137,32 @@ class IrInterpreter {
 					default:
 				}
 				actual;
+			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right),
+				Mod(output, left, right), BitAnd(output, left, right), BitXor(output, left, right), BitOr(output, left, right) if (output.type == I64):
+				var a:haxe.Int64 = cast value(values, left), b:haxe.Int64 = cast value(values, right);
+				switch instruction {
+					case Add(_, _, _): a + b;
+					case Sub(_, _, _): a - b;
+					case Mul(_, _, _): a * b;
+					case Div(_, _, _): a / b;
+					case Mod(_, _, _): a % b;
+					case BitAnd(_, _, _): a & b;
+					case BitXor(_, _, _): a ^ b;
+					case BitOr(_, _, _): a | b;
+					default: throw "Invalid Int64 binary operation";
+				}
+			case ShiftLeft(output, left, right), ShiftRight(output, left, right), UnsignedShiftRight(output, left, right) if (output.type == I64):
+				var a:haxe.Int64 = cast value(values, left), shift:Int = value(values, right);
+				switch instruction {
+					case ShiftLeft(_, _, _): a << shift;
+					case ShiftRight(_, _, _): a >> shift;
+					case UnsignedShiftRight(_, _, _): a >>> shift;
+					default: throw "Invalid Int64 shift operation";
+				}
+			case Less(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left), cast value(values, right)) < 0;
+			case LessEqual(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left), cast value(values, right)) <= 0;
+			case Equal(_, left, right) if (left.type == I64 && right.type == I64):
+				haxe.Int64.compare(cast value(values, left), cast value(values, right)) == 0;
 			case Add(_, left, right): value(values, left) + value(values, right);
 			case Sub(_, left, right): value(values, left) - value(values, right);
 			case Mul(_, left, right): value(values, left) * value(values, right);
@@ -210,7 +237,13 @@ class IrInterpreter {
 				else {
 					var result = executeNative(name, args);
 					if (StringTools.startsWith(name, "__array_alloc_") && name != "__array_alloc_typed_ref" && Std.isOfType(result, InterpArray))
-						switch output.type { case Array(element): cast(result, InterpArray).elementType = element; default: }
+						switch output.type {
+							case Array(element):
+								var array:InterpArray = cast result;
+								array.elementType = element;
+								for (index in 0...array.values.length) array.values[index] = defaultValue(element);
+							default:
+						}
 					if (arguments.length > 0 && (StringTools.startsWith(name, "__array_copy_")
 							|| StringTools.startsWith(name, "__array_slice_") || StringTools.startsWith(name, "__array_concat_")))
 						switch arguments[0].type {
@@ -319,6 +352,9 @@ class IrInterpreter {
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
 			case "runtime.FloatBits.toInt64", "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
+			case "runtime.FloatBits.fromInt64", "__i64_to_f64_bits":
+				var bits:haxe.Int64 = cast arguments[0];
+				haxe.io.FPHelper.i64ToDouble(bits.low, bits.high);
 			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
 			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.toInt":
@@ -353,6 +389,8 @@ class IrInterpreter {
 	}
 
 	function dynamicEqual(left:Dynamic, right:Dynamic):Bool {
+		if (haxe.Int64.isInt64(left) && haxe.Int64.isInt64(right))
+			return haxe.Int64.compare(cast left, cast right) == 0;
 		if (left == right)
 			return true;
 		if (Std.isOfType(left, InterpEnum) && Std.isOfType(right, InterpEnum)) {
@@ -631,6 +669,7 @@ class IrInterpreter {
 	static function defaultValue(type:compiler.ir.Ir.IrType):Dynamic
 		return switch type {
 			case I32: 0;
+			case I64: haxe.Int64.ofInt(0);
 			case Bool: false;
 			case F32, F64: 0.0;
 			default: null;
