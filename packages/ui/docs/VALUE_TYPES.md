@@ -1687,3 +1687,90 @@ All full gates passed: 772 compiler tests, self-hosting fixed point, ten UI scri
 skips), all six UI value snapshots, the app suite, all nine retention scenarios, performance budgets and paired
 headless memory, and Wasm32/Wasm GC WebGL2 browser smoke tests. The comparison uses frozen bytecode/libraries; raw
 captures were deleted once their numbers were extracted. No measurement was retried to obtain a pass.
+
+
+### Inline enum layout and word-access checkpoint (2026-11-06)
+
+This checkpoint compares `44ce670a` with `bf962e0f` on the same outer source snapshot (`212462122`). It adds the
+portable enum layout planner and executable packed-word access helpers; source enum lowering and the UI enum port are
+still pending. `4ef16d5e` fixes full-width IR interpreter arithmetic, `a7cb8e80` plans the overlapping lanes,
+`0c05dfc6` tests packed integer/Float/Boolean access, and `bf962e0f` fixes source Int64 constructors in the interpreter.
+The word helper currently handles I32, I64, F64 and Boolean leaves; F32, pointer/handle leaves and reference-field
+storage still need integration before source enum lowering can be enabled.
+
+The freshly built control and candidate editor bytecode are **identical**, SHA-256
+`96004bf29a29702ad7a609b4339f07d8ce46a8aa9bf1e3029b598fb479da6383` (103,141,814 bytes).
+The VM library and runtime are also byte-for-byte identical. Rebuilding both compiler entrypoints from current source
+produces the same binaries used by the app and retention gates. The helpers do not yet change emitted editor code;
+timing differences in this checkpoint are measurement variation, not an optimization result.
+
+Nine fixed alternating action pairs use the preceding affinity (`0,2,4,6`), with one capture per scenario in each half.
+Every instrumented per-action allocation median ties. Selection has no per-action KiB metric in this harness; its
+allocation census is recorded separately below. Medians:
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| tab-matrix/console->telemetry | 74.5 | 74.5 | 1.94 | 1.97 |
+| tab-matrix/hierarchy->sensors | 114.6 | 114.6 | 2.98 | 2.89 |
+| tab-matrix/sensors->hierarchy | 80.1 | 80.1 | 2.16 | 2.19 |
+| tab-matrix/telemetry->console | 92.9 | 92.9 | 2.08 | 2.08 |
+| interaction/hover-away | 13.6 | 13.6 | 0.90 | 0.80 |
+| interaction/hover-enter | 0.5 | 0.5 | 0.01 | 0.01 |
+| interaction/hover-field | 12.4 | 12.4 | 0.91 | 0.86 |
+| interaction/hover-inside | 0.5 | 0.5 | 0.01 | 0.00 |
+| interaction/hover-other | 10 | 10 | 0.90 | 0.81 |
+| interaction/idle | 0.2 | 0.2 | 0.03 | 0.02 |
+| interaction/idle-focused | 0.2 | 0.2 | 0.02 | 0.02 |
+| interaction/scroll-inspector | 21.2 | 21.2 | 1.45 | 1.35 |
+| interaction/type-backspace | 16.2 | 16.2 | 0.79 | 0.77 |
+| interaction/type-char | 16.1 | 16.1 | 0.80 | 0.77 |
+| selection-stress/selection | n/a | n/a | 8.67 | 6.02 |
+
+The planned `--measure` samples report timing ceiling violations on both identical images. Selection's ceiling is
+6.0 ms; all nine pairs, including the slower samples, are retained here rather than discarded:
+
+| Pair | Control selection ms | Candidate selection ms |
+| --- | ---: | ---: |
+| 1 | 8.37 | 6.02 |
+| 2 | 8.67 | 10.37 |
+| 3 | 9.33 | 14.69 |
+| 4 | 9.90 | 11.76 |
+| 5 | 5.33 | 4.48 |
+| 6 | 12.64 | 4.75 |
+| 7 | 10.81 | 6.51 |
+| 8 | 4.34 | 5.17 |
+| 9 | 4.81 | 4.29 |
+
+The other reported timing violation is exactly `tab-matrix hierarchy->sensors: frameMs 4.68 is over the budget 4.0`
+(control pair 6). No allocation ceiling was exceeded. The first standalone `--budgets --skip-build --runs 1` gate after
+the planned pairs passes all three scenarios and all nine retention checks; selection's frame median in that run is
+4.7 ms. It was scheduled before the pairs started and was not a retry of a failed standalone gate. None of the
+measurement findings above is being counted as a passing gate or used to claim a performance improvement.
+
+Three alternating selection census pairs have identical non-`bytes` type counts: **305,725 objects / 21,593,528 bytes**
+on both sides in every pair. Full totals retain the raw `bytes` category:
+
+| Pair | Control objects / bytes | Candidate objects / bytes |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,010,840 | 340,910 / 24,010,592 |
+| 2 | 340,910 / 24,010,616 | 340,910 / 24,010,584 |
+| 3 | 340,910 / 24,010,496 | 340,909 / 24,010,352 |
+
+Three unrestricted paired headless runs all pass. RSS window growth in MiB:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.47 / 3.59 / 0.78 / 5.00 | 30.16 / 3.75 / 0.78 / 5.00 |
+| 2 | 30.31 / 3.91 / 0.78 / 5.00 | 29.84 / 3.91 / 0.78 / 5.00 |
+| 3 | 29.69 / 4.06 / 0.78 / 5.00 | 30.00 / 3.91 / 0.78 / 5.00 |
+
+Window medians are **30.31 / 3.91 / 0.78 / 5.00** for control and **30.00 / 3.91 / 0.78 / 5.00** for candidate.
+No allocation or memory median increases. Budget ceilings, verify behavior and immutable values are unchanged.
+
+The app suite, all nine retention scenarios, 774 compiler tests, self-hosting fixed point and all ten UI suites pass.
+Wasm parity passes 502 fixtures (14 existing skips) and all six UI value snapshots. Wasm32 and Wasm GC package builds
+and WebGL2 smoke checks pass. All 18 Wasm GC scene pairs complete: nine full and three each static, text-heavy and
+editing, with 120 warmup and 120 measured frames. Both actual browser-loaded guests have SHA-256
+`e81a925cba8fccafc6430f95fbe1cd6a27feb3f77e34a3b9bd080c3a5ea306a1`. Every full/static/text-heavy sample counts
+4,440 objects; every editing sample counts 8,724. Raw captures were deleted immediately after
+extracting their numbers, and the idle outer gate worktree was removed when editor measurements finished.
