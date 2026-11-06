@@ -40,8 +40,8 @@ class InlinerSourceIdentityMain {
 			elapsed = Sys.time() - wall;
 		if (cache.memo.get("caller0") != memo || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
-		if (bytes > 40 * 1024 * 1024)
-			throw 'Regenerated input allocated $bytes bytes, expected less than 40 MiB';
+		if (bytes > 8 * 1024 * 1024)
+			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
 		var fork = cache.copy();
 		var edited = program(2);
 		IrInliner.run(edited, fork, true);

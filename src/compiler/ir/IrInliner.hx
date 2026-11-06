@@ -127,34 +127,20 @@ class IrInlineCache {
 		return id == null ? 0 : id;
 	}
 
-	/** Immutable entries are replaced per run, so a transaction copy can share this map safely.
-	 * Full state bytes include source hashes and offsets: debug relocation must never reuse stale provenance.
-	 * Encode lazily only when representation lowering rebuilt an input under the same name.
+	/** Representation passes can rebuild identical immutable inputs. Compare their complete state without
+	 * materializing serialized graphs; hashes and debug placement still participate, and unknown data never matches.
+	 * Each run replaces the map, so transaction copies share only immutable entries and removed names are pruned.
 	 */
-	var sources:Map<String, {source:IrFunction, bytes:Null<Bytes>}> = [];
+	var sources:Map<String, IrFunction> = [];
 
 	public function stableSources(functions:Array<IrFunction>):Array<IrFunction> {
-		var next:Map<String, {source:IrFunction, bytes:Null<Bytes>}> = [],
-			result:Array<IrFunction> = [];
+		var next:Map<String, IrFunction> = [], result:Array<IrFunction> = [];
 		for (fn in functions) {
 			var known = sources.get(fn.name);
-			if (known == null)
-				known = {source: fn, bytes: null};
-			else if (known.source != fn) {
-				var oldBytes = known.bytes, bytes:Null<Bytes> = null;
-				if (oldBytes == null)
-					try {
-						oldBytes = IrFunctionStateCodec.encode(known.source);
-					} catch (_:Dynamic) {}
-				try {
-					bytes = IrFunctionStateCodec.encode(fn);
-				} catch (_:Dynamic) {}
-				known = oldBytes != null
-					&& bytes != null
-					&& oldBytes.compare(bytes) == 0 ? {source: known.source, bytes: oldBytes} : {source: fn, bytes: bytes};
-			}
+			if (known == null || !compiler.ir.codec.IrFunctionStateEquality.same(known, fn))
+				known = fn;
 			next.set(fn.name, known);
-			result.push(known.source);
+			result.push(known);
 		}
 		sources = next;
 		return result;

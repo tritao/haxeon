@@ -47,6 +47,7 @@ class TestCatalog {
 		"FrontendRestartMain",
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
+		"IrStateEqualityMain",
 		"StaticNullCheckReuseMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",
