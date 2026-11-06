@@ -356,6 +356,9 @@ class TypingSession {
 	/** Constants substituted into each typed body, including its omitted call arguments. */
 	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
 
+	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
+	public final defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>> = [];
+
 	function recordQuery(target:Map<String, Map<String, Bool>>, name:String, answer:Bool):Void {
 		var caller = currentContext.name;
 		if (caller == "")

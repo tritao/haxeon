@@ -617,6 +617,17 @@ class SemanticAssembly {
 				}
 			}
 		}
+		// A default argument is typed in the declaration's scope but embedded in its caller. Even a comment-only
+		// declaration edit changes that syntax's snapshot hash. Refresh exactly the callers which copied it.
+		var sourceFiles = [for (state in modules) state.source.path => state.source];
+		for (moduleName in names)
+			if (modules.exists(moduleName))
+				for (caller => sources in modules.get(moduleName).defaultArgumentSources)
+					for (path => source in sources)
+						if (!sourceFiles.exists(path) || sourceFiles.get(path).text != source.text) {
+							invalidate(invalid, invalidationReasons, enclosingFunction(caller), SourceRevision, path, null, "default-argument");
+							break;
+						}
 		// Rehydrated modules can retain field initializer fingerprints without
 		// retaining the generated constructor body. Treat that missing body as
 		// invalidated so normal typing and publication rebuild it.
@@ -677,13 +688,16 @@ class SemanticAssembly {
 		// A generated helper can depend on a type that its source function does not mention in its signature.
 		// When that helper is invalidated, retype its origin so the helper and its dependencies are requested again.
 		var helperOrigins:Map<String, String> = [];
-		for (moduleName in names) if (modules.exists(moduleName))
-			for (name => fn in modules.get(moduleName).typedFunctions)
-				if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
-					helperOrigins.set(name, fn.origin);
+		for (moduleName in names)
+			if (modules.exists(moduleName))
+				for (name => fn in modules.get(moduleName).typedFunctions)
+					if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
+						helperOrigins.set(name, fn.origin);
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
-		for (name in invalid.keys()) if (helperOrigins.exists(name)) work.push(name);
+		for (name in invalid.keys())
+			if (helperOrigins.exists(name))
+				work.push(name);
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
 				work.push(name);

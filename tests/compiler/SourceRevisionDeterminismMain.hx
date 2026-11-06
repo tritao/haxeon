@@ -40,6 +40,43 @@ class SourceRevisionDeterminismMain {
 					throw 'Source metadata differs after editing case ${cases.indexOf(source)}: $edited';
 			}
 		}
+		for (caller in [
+			"function call():Int return Defaults.read();",
+			"function call():Int {var f=()->Defaults.read();return f();}",
+			"function call():Int {var f=()->{var g=()->Defaults.read();return g();};return f();}",
+			"function call():Int return new Defaults().read();",
+			"function wrap<T>(x:T):Int return Defaults.read(); function call():Int return wrap(0);",
+			"function call():Int return new Defaults().value;"
+		]) {
+			var defaults = caller.indexOf(".value") >= 0 ? "class Defaults {public var value:Int; public function new(n:Int=42) value=n;}" : caller.indexOf("new Defaults") >= 0 ? "class Defaults {public function new() {} public function read(n:Int=42):Int return n;}" : "class Defaults {public static function read(n:Int=42):Int return n;}";
+			for (edited in [defaults + "\n// comment\n", " " + defaults, "\n" + defaults]) {
+				function program(text:String):Compiler {
+					var c = create("function main():Int return Caller.call()+Explicit.call();");
+					c.update("Explicit.hx", "function call():Int return 0;");
+					c.update("Caller.hx", caller);
+					c.update("Defaults.hx", text);
+					return c;
+				}
+				var incremental = program(defaults);
+				incremental.compile("Main");
+				incremental.update("Defaults.hx", edited);
+				var result = incremental.compile("Main");
+				if (result.retyped.indexOf("Explicit.call") >= 0)
+					throw "Unrelated caller was invalidated";
+				var warm = HlWriter.encode(result.module);
+				var cold = HlWriter.encode(program(edited).compile("Main").module);
+				if (warm.compare(cold) != 0)
+					throw "Cross-module default source metadata differs: " + caller;
+			}
+		}
+
+		var source = new compiler.Source.SourceFile("Defaults.hx", "original");
+		var state = new compiler.modules.ModuleState("Caller", source);
+		state.defaultArgumentSources.set("call", ["Defaults.hx" => source]);
+		state.copy().defaultArgumentSources.get("call").remove("Defaults.hx");
+		if (!state.defaultArgumentSources.get("call").exists("Defaults.hx"))
+			throw "Transaction copy mutated source dependencies";
+
 		Sys.println("PASS: initializer and default argument provenance matches cold compilation after source edits");
 	}
 }

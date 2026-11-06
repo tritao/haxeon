@@ -315,7 +315,10 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
-		if ((switch (result) { case TVoid: false; default: true; }) && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if ((switch (result) {
+			case TVoid: false;
+			default: true;
+		}) && !ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = ownerTypeArguments,
 			typeParameters = fn.typeParameters;
@@ -362,14 +365,16 @@ class BodyTyper {
 	}
 
 	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
-		var id = scope.requireId(name), declaration = LexicalStorageAnalysis.key(name, span);
+		var id = scope.requireId(name),
+			declaration = LexicalStorageAnalysis.key(name, span);
 		// Refine conservative receiver writes once their type is known. Whole assignments keep their storage and flow effects.
 		if (context.storage.candidateKind(declaration) == MutableCapture && !context.assignedDeclarations.exists(declaration)) {
 			if (referenceCapture(type)) {
 				context.storage.closureWrites.remove(declaration);
 				return;
 			}
-			if (valueCapture(type)) context.storage.closureWrites.remove(declaration);
+			if (valueCapture(type))
+				context.storage.closureWrites.remove(declaration);
 		}
 		context.storage.bind(declaration, id, type);
 	}
@@ -421,7 +426,8 @@ class BodyTyper {
 	function validateDeferredExpression(expression:AstExpression, loopDepth:Int):Void {
 		switch expression {
 			// A lambda has its own return and loop targets; its body is checked when it is typed.
-			case Lambda(_, _, _, _): return;
+			case Lambda(_, _, _, _):
+				return;
 			case BlockExpression(statements, result, _):
 				validateDeferredControl(statements, loopDepth);
 				validateDeferredExpression(result, loopDepth);
@@ -457,14 +463,23 @@ class BodyTyper {
 				case ScopedDeclaration(name, declared, initializer, span):
 					var declaration = VarDeclaration(name, declared, initializer, span);
 					var typed = statementTyper.typeSimpleStatement(declaration, scope, result, statements, statementIndex);
-					if (typed == null) throw "Scoped declaration was not typed";
-					for (item in typed) output.push(item);
+					if (typed == null)
+						throw "Scoped declaration was not typed";
+					for (item in typed)
+						output.push(item);
 					var boundType = scope.resolveDeclared(name);
-					if (boundType == null) throw "Scoped binding was not declared";
+					if (boundType == null)
+						throw "Scoped binding was not declared";
 					// A no-return initializer never registers cleanup and has no value to dispatch on.
-					if ((switch boundType { case TNever: true; default: false; }))
+					if ((switch boundType {
+						case TNever: true;
+						default: false;
+					}))
 						continue;
-					var element = switch boundType { case TNullable(inner): inner; default: boundType; };
+					var element = switch boundType {
+						case TNullable(inner): inner;
+						default: boundType;
+					};
 					var contract = lowerType(NamedType("Disposable"));
 					if (!satisfiesDisposable(element, contract))
 						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
@@ -520,7 +535,10 @@ class BodyTyper {
 		if (output.length == 0)
 			return false;
 		var previousIsNoReturn = switch output[output.length - 1] {
-			case TExpression(expression, _): (switch (expression.type) { case TNever: true; default: false; });
+			case TExpression(expression, _): (switch (expression.type) {
+					case TNever: true;
+					default: false;
+				});
 			default: false;
 		};
 		return previousIsNoReturn && switch statement {
@@ -688,7 +706,16 @@ class BodyTyper {
 			return null;
 		try {
 			var type = typeExpression(expression, scope).type;
-			return (switch (type) { case TNull: true; default: false; }) || (switch (type) { case TVoid: true; default: false; }) || (switch (type) { case TNever: true; default: false; }) ? null : type;
+			return (switch (type) {
+				case TNull: true;
+				default: false;
+			}) || (switch (type) {
+				case TVoid: true;
+				default: false;
+			}) || (switch (type) {
+				case TNever: true;
+				default: false;
+			}) ? null : type;
 		} catch (_:Dynamic) {
 			return null;
 		}
@@ -728,13 +755,18 @@ class BodyTyper {
 				case VarDeclaration(declaredName, declared, initializer, span):
 					if (declaredName == name)
 						return null;
-					declareSpeculative(scope, declaredName, declared == null || (switch (declared) { case InferredType: true; default: false; }) ? speculativeValueType(initializer,
-						scope) : lowerType(declared), span);
+					declareSpeculative(scope, declaredName, declared == null || (switch (declared) {
+						case InferredType: true;
+						default: false;
+					}) ? speculativeValueType(initializer, scope) : lowerType(declared), span);
 					switch initializer {
 						case Lambda(arguments, body, _, _):
 							var inside = new Scope(scope);
 							for (argument in arguments)
-								if ((switch (argument.type) { case InferredType: false; default: true; }))
+								if ((switch (argument.type) {
+									case InferredType: false;
+									default: true;
+								}))
 									declareSpeculative(inside, argument.name, lowerType(argument.type), argument.span);
 							found = storedIn(name, body, 0, inside, probe);
 						default:
@@ -742,7 +774,10 @@ class BodyTyper {
 				case UninitializedDeclaration(declaredName, declared, span):
 					if (declaredName == name)
 						return null;
-					if ((switch (declared) { case InferredType: false; default: true; }))
+					if ((switch (declared) {
+						case InferredType: false;
+						default: true;
+					}))
 						declareSpeculative(scope, declaredName, lowerType(declared), span);
 				case If(_, yes, no, _):
 					found = storedIn(name, yes, 0, scope, probe);
@@ -1101,7 +1136,10 @@ class BodyTyper {
 		};
 
 	function constrainLocal(name:String, expected:CompilerType):Bool {
-		if (context.localExpectedTypes.exists(name) || (switch (expected) { case TVoid: true; default: false; }))
+		if (context.localExpectedTypes.exists(name) || (switch (expected) {
+			case TVoid: true;
+			default: false;
+		}))
 			return false;
 		context.localExpectedTypes.set(name, expected);
 		return true;
@@ -1214,7 +1252,8 @@ class BodyTyper {
 						storageType = session.representation.enumStorageType(info.typeParameters, parameter, instanceType);
 					switch arguments[index] {
 						case Variable(binding, bindingSpan):
-							var constantName = enumAbstractPatternConstant(abstractName, binding), owner = context.lexicalOwner,
+							var constantName = enumAbstractPatternConstant(abstractName, binding),
+								owner = context.lexicalOwner,
 								staticField = owner == null ? null : findStaticFieldNullable(owner, binding),
 								inlineField = staticField == null ? null : inlineConstantResolver.resolve(staticField.owner, binding, bindingSpan);
 							if (binding == "_") {} else if (constantName != null
@@ -1560,15 +1599,23 @@ class BodyTyper {
 	@:allow(compiler.types.typing.CallResolver)
 	static function referencePrefixSpan(name:String, span:SourceSpan):SourceSpan {
 		var size = haxe.io.Bytes.ofString(name).length;
-		return span.start + size <= span.end && span.file.slice(span.start, span.start + size) == name
-			? new SourceSpan(span.file, span.start, span.start + size, span.isBareReference, span.referenceName) : span;
+		return span.start + size <= span.end
+			&& span.file.slice(span.start,
+				span.start + size) == name ? new SourceSpan(span.file, span.start, span.start + size, span.isBareReference, span.referenceName) : span;
 	}
 
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
-		var sourceName = span.isBareReference ? span.referenceName : null, owner = context.lexicalOwner, thisType = scope.resolve("this");
-		if (name != "this" && sourceName != null && sourceName.indexOf(".") < 0 && owner != null
-			&& (findStaticFieldNullable(owner, sourceName) != null || thisType != null && findFieldType(thisType, sourceName) != null
+		var sourceName = span.isBareReference ? span.referenceName : null,
+			owner = context.lexicalOwner,
+			thisType = scope.resolve("this");
+		if (name != "this"
+			&& sourceName != null
+			&& sourceName.indexOf(".") < 0
+			&& owner != null
+			&& (findStaticFieldNullable(owner, sourceName) != null
+				|| thisType != null
+				&& findFieldType(thisType, sourceName) != null
 				|| lexicalMethod(sourceName) != null))
 			name = sourceName;
 		span = referencePrefixSpan(name, span);
@@ -1583,7 +1630,10 @@ class BodyTyper {
 			if (pathConstant != null)
 				return new TypedExpression(TCall(pathConstant, []), type, span);
 			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.
-			if ((switch (type) { case TNull: true; default: false; })) {
+			if ((switch (type) {
+				case TNull: true;
+				default: false;
+			})) {
 				var declared = scope.resolveDeclared(name);
 				if (declared != null)
 					switch declared {
@@ -1765,7 +1815,8 @@ class BodyTyper {
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
-								classObject = typedMemberWithFlow(classObject, parts[index], referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
+								classObject = typedMemberWithFlow(classObject, parts[index], referencePrefixSpan(parts.slice(0, index + 1).join("."), span),
+									scope);
 							return classObject;
 						}
 						classEnd--;
@@ -1808,7 +1859,10 @@ class BodyTyper {
 							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
 							var value = typeExpression(literal, scope, TFunction(resolved, result));
 							// An unbound generic result uses Dynamic as an inference hint.
-							return (switch (expectedResult) { case TDynamic: true; default: false; }) ? value : coerce(value, expectedType, "annotated lambda", "E1003");
+							return (switch (expectedResult) {
+								case TDynamic: true;
+								default: false;
+							}) ? value : coerce(value, expectedType, "annotated lambda", "E1003");
 						default:
 					}
 				default:
@@ -1818,7 +1872,16 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements, new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
-		if ((switch (expectedType) { case TVoid: true; default: false; }) && (switch (typedResult.type) { case TVoid: false; default: true; }) && (switch (typedResult.type) { case TNever: false; default: true; })) {
+		if ((switch (expectedType) {
+			case TVoid: true;
+			default: false;
+		}) && (switch (typedResult.type) {
+			case TVoid: false;
+			default: true;
+		}) && (switch (typedResult.type) {
+			case TNever: false;
+			default: true;
+		})) {
 			typedStatements.push(TExpression(typedResult, typedResult.span));
 			typedResult = new TypedExpression(TVoidLiteral, TVoid, typedResult.span);
 		}
@@ -1827,9 +1890,21 @@ class BodyTyper {
 		// TNull is also used as the provisional result while a switch expression is
 		// still inferring its common branch type; defer coercion in that case so a
 		// later non-null branch can widen the result to Null<T>.
-		if (expectedType != null && (switch (expectedType) { case TNull: false; default: true; }) && (switch (expectedType) { case TVoid: false; default: true; }) && (switch (typedResult.type) { case TNever: false; default: true; }))
+		if (expectedType != null && (switch (expectedType) {
+			case TNull: false;
+			default: true;
+		}) && (switch (expectedType) {
+			case TVoid: false;
+			default: true;
+		}) && (switch (typedResult.type) {
+			case TNever: false;
+			default: true;
+		}))
 			typedResult = coerce(typedResult, expectedType, "block expression", "E1003");
-		if ((switch (typedResult.type) { case TNever: false; default: true; })) {
+		if ((switch (typedResult.type) {
+			case TNever: false;
+			default: true;
+		})) {
 			scope.mergeAssignmentsFrom([blockScope]);
 			scope.mergeRefinementsFrom([blockScope]);
 		}
@@ -1857,7 +1932,10 @@ class BodyTyper {
 
 	/** A proven-null field has a null value in its declared storage type, not an ABI cast to TNull. */
 	function refinedFieldValue(field:TypedExpression, refined:Null<CompilerType>):TypedExpression {
-		if ((switch (refined) { case TNull: true; default: false; }))
+		if ((switch (refined) {
+			case TNull: true;
+			default: false;
+		}))
 			switch field.type {
 				case TNullable(_):
 					return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, field.span)), field.type, field.span,
@@ -2061,7 +2139,9 @@ class BodyTyper {
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
 					method = requiredMapValue(session.signatures, methodKey);
-				if (session.relations.isValueClass(typedObject.type) && !session.isPureCall(methodKey) && !session.isReadOnlyReceiver(methodKey))
+				if (session.relations.isValueClass(typedObject.type)
+					&& !session.isPureCall(methodKey)
+					&& !session.isReadOnlyReceiver(methodKey))
 					ValuePlaceRules.rejectObservableMutation(session, typedObject, span);
 				if (isGeneric(method))
 					fail("E1007", "Generic instance method values are not supported yet", span);
@@ -2199,7 +2279,10 @@ class BodyTyper {
 	}
 
 	function argumentType(argument:compiler.syntax.Ast.AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType {
-		var type = if ((switch (argument.type) { case InferredType: true; default: false; }) && argument.defaultValue != null) {
+		var type = if ((switch (argument.type) {
+			case InferredType: true;
+			default: false;
+		}) && argument.defaultValue != null) {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
@@ -2219,6 +2302,13 @@ class BodyTyper {
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
+			var sources = session.defaultArgumentSources.get(defaultArgumentCaller);
+			if (sources == null) {
+				sources = [];
+				session.defaultArgumentSources.set(defaultArgumentCaller, sources);
+			}
+			if (typed.span.generatedReason == null)
+				sources.set(typed.span.file.path, typed.span.file);
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			return typed;
@@ -2274,7 +2364,10 @@ class BodyTyper {
 	}
 
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
-		if ((switch expected { case TDynamic: true; default: false; })) {
+		if ((switch expected {
+			case TDynamic: true;
+			default: false;
+		})) {
 			var name = scopedSource(value);
 			if (name != null)
 				fail("E1002", 'Scoped binding "$name" cannot be converted to Dynamic', value.span);
@@ -2637,10 +2730,10 @@ class BodyTyper {
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
 			case ErrorStatement(span): span;
-			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span), Assignment(_, _, span), IndexAssignment(_, _, _, span),
-				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span), Try(_, _, span), If(_, _, _, span), While(_, _, span),
-				DoWhile(_, _,
-					span), ForIn(_, _, _, _, span), Break(span), Continue(span), Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
+			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span), Assignment(_, _, span),
+				IndexAssignment(_, _, _, span), FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span),
+				Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span), Break(span), Continue(span),
+				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
 	static function fail(code:String, message:String, span:SourceSpan):Void

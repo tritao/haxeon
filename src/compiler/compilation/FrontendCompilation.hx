@@ -149,7 +149,8 @@ class FrontendCompilation {
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
-			inlineConstantDependencies:Map<String, Map<String, Bool>>;
+			inlineConstantDependencies:Map<String, Map<String, Bool>>,
+			defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>>;
 		try {
 			if (token != null)
 				token.check();
@@ -181,6 +182,7 @@ class FrontendCompilation {
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;
 			inlineConstantDependencies = typedResult.inlineConstantDependencies;
+			defaultArgumentSources = typedResult.defaultArgumentSources;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
 					structuralChanged);
@@ -278,6 +280,11 @@ class FrontendCompilation {
 				for (target in constants.keys())
 					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name, SemanticDependencyKind.InlineConstant, target,
 						context.resolveSemanticSymbol(target));
+			var sourceRecord = defaultArgumentSources.get(fn.name);
+			if (sourceRecord != null)
+				state.defaultArgumentSources.set(fn.name, sourceRecord);
+			else
+				state.defaultArgumentSources.remove(fn.name);
 			var purityRecord = purityQueries.get(fn.name);
 			if (purityRecord != null)
 				state.purityQueries.set(fn.name, purityRecord);
@@ -448,6 +455,7 @@ class FrontendCompilation {
 					state.typedSourceRevisions.remove(cached);
 					state.purityQueries.remove(cached);
 					state.noReturnQueries.remove(cached);
+					state.defaultArgumentSources.remove(cached);
 					state.pendingIrFunctions.remove(cached);
 					state.irFunctions.remove(cached);
 					state.irSourceRevisions.remove(cached);

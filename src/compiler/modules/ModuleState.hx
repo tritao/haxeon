@@ -73,6 +73,9 @@ class ModuleState {
 
 	public var noReturnQueries:Map<String, Map<String, Bool>> = [];
 
+	/** Foreign default-argument syntax embedded in each cached function, by source snapshot. */
+	public var defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>> = [];
+
 	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
 	public var pendingIrFunctions:Map<String, Bool> = [];
 
@@ -155,6 +158,7 @@ class ModuleState {
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.purityQueries = copyNestedMap(purityQueries);
 		result.noReturnQueries = copyNestedMap(noReturnQueries);
+		result.defaultArgumentSources = copyNestedMap(defaultArgumentSources);
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
@@ -192,8 +196,8 @@ class ModuleState {
 		return result;
 	}
 
-	static function copyNestedMap(source:Map<String, Map<String, Bool>>):Map<String, Map<String, Bool>> {
-		var result:Map<String, Map<String, Bool>> = [];
+	static function copyNestedMap<T>(source:Map<String, Map<String, T>>):Map<String, Map<String, T>> {
+		var result:Map<String, Map<String, T>> = [];
 		for (name => record in source)
 			result.set(name, copyMap(record));
 		return result;
