@@ -104,11 +104,20 @@ class WasmLinearModuleBuilder {
 		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
 			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true), exportAdapters:Map<String, String> = [];
 		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
-		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures),
+		var roots = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
+		if (WasmModuleSupport.hasFunction(logical, "__init")) roots.push("__init");
+		var entry = WasmModuleSupport.hasFunction(logical, "main") ? "main" :
+			WasmModuleSupport.hasFunction(logical, "Main.main") ? "Main.main" : logical.entryPoint;
+		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures, entry, roots),
 			existing = logical.functions.slice(0, originalCount), generated = logical.functions.slice(originalCount);
 		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
 		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
 		logical.functions = existing.concat(generated);
+		while (true) {
+			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions);
+			if (missing.length == 0) break;
+			logical.functions = logical.functions.concat(missing);
+		}
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		IrVerifier.verify(logical);
@@ -183,11 +192,24 @@ class WasmLinearModuleBuilder {
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		var plannedFunctions:Map<String, Bool> = [], rootSet:Map<String, Bool> = [];
+		for (fn in program.functions) plannedFunctions.set(fn.name, true);
 		var changed = true;
 		while (changed) {
 			changed = scalarAbi.retainOriginals(reachable, roots);
 			if (fieldLowering.retainOriginals(reachable, roots)) changed = true;
 			if (scalarAbi.retainVirtualTargets(program, reachable, roots)) changed = true;
+			for (root in roots) rootSet.set(root, true);
+			for (fn in program.functions) if (reachable.exists(fn.name))
+				for (block in fn.blocks) for (located in block.instructions) switch located.value {
+					case SafeCast(output, _): switch output.type {
+						case Function(_, _):
+							var name = WasmLinearClosureAdapters.castName(output.type);
+							if (plannedFunctions.exists(name) && !rootSet.exists(name)) { roots.push(name); rootSet.set(name, true); changed = true; }
+						default:
+					}
+					default:
+				}
 			if (changed) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);

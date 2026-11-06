@@ -46,6 +46,13 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		var deadClosure = Frontend.compile("function deadSource(value:String):String return value; "
+			+ "function dead():Int { var erased:Dynamic = deadSource; var casted:Bool->Bool = cast erased; return 0; } "
+			+ "function main():Int return 42;");
+		compiler.backend.wasm.linear.WasmLinearClosureAdapters.generate(deadClosure, [], deadClosure.entryPoint, []);
+		for (fn in deadClosure.functions)
+			if (StringTools.startsWith(fn.name, "__haxeon_closure_adapter_") || StringTools.startsWith(fn.name, "__haxeon_closure_cast_"))
+				throw "unreachable closure casts must not generate adapters";
 		WasmTypeIdPlanMain.run();
 		ValueDynamicEqualityInterpreterMain.run();
 		var allocationProgram = Frontend.compile("class Box { public var value:Int; "

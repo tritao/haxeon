@@ -1,6 +1,6 @@
 # Binary size investigation
 
-This report is in progress. Measurements below are a baseline, not a claim that the requested editor and three-target comparison is complete.
+This report is in progress. Measurements below are a baseline; the editor is measured on HashLink and the UI Showcase on HashLink, Wasm32, and Wasm GC.
 
 ## Method
 
@@ -8,7 +8,7 @@ Enable `HAXEON_IR_CENSUS=1` and save compiler standard error separately from sta
 
 The report verifies each Wasm data segment against its census entry and separates string, reflection, static-data, closure-descriptor and runtime-state segments, with framing counted separately.
 
-The earlier corrected editor snapshot had a task-local addition of `drawing(id)` at the MachineKit `Gantry.hx:1050` call, described in [the previous census](BYTECODE_OPPORTUNITIES.md#editor-capture-status). It is not the unchanged editor. Reproduction and measurements of that same snapshot remain outstanding. The prior task work directory and the measured modules at their documented sizes were not found in the searched scratch locations. The later outer revision `0d3ca41a8` already contains `drawing(id)` at this call, but that fact does not establish that its remaining inputs match the earlier task-local snapshot or its published input digest. The earlier capture recipe copied the then-current MachineKit source tree into `haxeon-bytecode-opt-work/machinekit-source-corrected`, used an `editor-comparison.sources.txt` manifest, and hashed each absolute path together with its file hash. The remaining app and package sources were symlinks to the then-current outer checkout rather than a frozen copy. Both the prior work directory and its worktree are absent; the path-dependent aggregate digest does not identify the individual input contents.
+The earlier corrected editor snapshot had a task-local addition of `drawing(id)` at the MachineKit `Gantry.hx:1050` call, described in [the previous census](BYTECODE_OPPORTUNITIES.md#editor-capture-status). It is not the unchanged editor. The user selected a new frozen baseline instead of reproducing that snapshot; see below. The prior task work directory and the measured modules at their documented sizes were not found in the searched scratch locations. The later outer revision `0d3ca41a8` already contains `drawing(id)` at this call, but that fact does not establish that its remaining inputs match the earlier task-local snapshot or its published input digest. The earlier capture recipe copied the then-current MachineKit source tree into `haxeon-bytecode-opt-work/machinekit-source-corrected`, used an `editor-comparison.sources.txt` manifest, and hashed each absolute path together with its file hash. The remaining app and package sources were symlinks to the then-current outer checkout rather than a frozen copy. Both the prior work directory and its worktree are absent; the path-dependent aggregate digest does not identify the individual input contents.
 
 Captured artifact SHA-256 values: HashLink `47fb976ea788e131a23b61d91aad3720425267a286c293e1924ce0cb27ac53b2`, Wasm32 `ea4e6a18d4b8aed73fe4cd41026044edbb084321a8ba7d3468368b41be2b574f`, and Wasm GC `2c076f48544fdd1663f4c2b165aee1ef461466cd531c4d7f4409b16d72c5dc42`. Paths embedded in HashLink debug information are part of the artifact.
 
@@ -58,10 +58,50 @@ Wasm GC emits 194 closure adapters (23,009 body bytes) and eight cast dispatcher
 
 Repeat Wasm32 and Wasm GC Showcase captures using the original Haxe interpreter invocation were byte-identical after adding data attribution. Running the Haxe-built compiler module via the checkout VM instead produced the same 4,238 functions and section sizes except for five additional code bytes, distributed across five generated functions. This is an observed compiler-invocation difference; comparisons here use the same invocation rather than attributing it to the measured change.
 
+## Reachable Wasm32 closure adapters
+
+The linear backend plans closure source signatures and cast targets from reachable functions, then expands generated adapters' function-valued casts until no new target appears. Cast-helper calls introduced by lowering are included in the final reachability calculation; generated adapters and dispatchers no longer use `Keep`. The varargs adapter dependencies are generated as needed. Reachability uses indexed helper lookups, and Wasm validation shares its unchanged function-signature vector across functions instead of rebuilding it for each one. A missing planned function-cast helper is a compile error instead of silently omitting the conversion. Tests cover unreachable casts and the existing dynamic, reflection, varargs and nested-callback behavior.
+
+At rebased baseline `93230bda`, using the same checkout-built HashLink-hosted compiler for both captures, Showcase Wasm32 fell from **30,017,042 to 11,867,682 bytes** and from **23,805 to 6,864 functions**. Closure adapters fell from 19,957 (6,447,798 body bytes) to 3,032 (774,201 bytes); cast dispatchers rose from 95 to 102 as nested conversions were added, and their bodies fell from 2,185,576 to 318,984 bytes. All bytes, including section framing, are attributed below:
+
+| Category | Before | After |
+|---|---:|---:|
+| code | 13,232,951 | 5,668,783 |
+| custom: haxeon.gc.roots | 6,743,591 | 2,774,465 |
+| custom: haxeon.memory.contract | 53 | 53 |
+| custom: haxeon.patch | 5,115,031 | 1,863,664 |
+| custom: haxeon.patch.slots | 2,281,028 | 555,015 |
+| custom: name | 2,078,451 | 497,377 |
+| data | 477,491 | 478,246 |
+| exception tags | 5 | 5 |
+| exports | 724 | 724 |
+| function signatures | 23,995 | 7,052 |
+| function tables | 8 | 7 |
+| globals | 1,130 | 1,130 |
+| header | 8 | 8 |
+| imports | 4,471 | 4,471 |
+| start | 4 | 4 |
+| table elements | 55,087 | 13,673 |
+| types | 3,014 | 3,005 |
+
+On the same compiler invocation, Showcase HashLink is byte-identical at 12,577,769 bytes and 6,529 functions, and Showcase Wasm GC is byte-identical at 5,493,751 bytes and 4,238 functions. Consequently every category is unchanged on those targets. The HashLink editor is byte-identical at 103,205,406 bytes and 32,378 functions, so every editor category is also unchanged. These editor inputs are checked against the frozen per-file manifest.
+
+The IR census is unchanged before and after: Showcase HashLink has 5,411 allocation sites (212 in loops), both Showcase Wasm targets have 7,703 (302 in loops), and the editor has 51,470 (6,512 in loops). These static site counts do not measure runtime allocation totals.
+
+The existing UI state and pointer allocation fixtures passed before and after on all three targets with inlining both off and on. On both Wasm targets, their measured loops allocate zero objects at sizes 8 and 1,024; the HashLink fixtures enforce their own allocation checks. These fixtures do not measure full Showcase or editor interaction totals.
+
+## Fresh editor baseline and Wasm capture limit
+
+The comparison input is now a frozen copy of outer revision `0d3ca41a8`, including its recorded native submodule revisions, with this worktree supplying Haxeon sources. The 3,479 source, standard-library and FFI input files have a path-and-content aggregate SHA-256 of `d89688bc62d12df9e82d9995d9dfef03412b85e0c6a5962c23ed3c8666d1ea6c`; the per-file manifest is in the task work directory. This replaces the unavailable older corrected snapshot. Two independent HashLink captures produced the same module SHA-256 `eab2b7cdbb9e458919a3cc67f124ec96563a17956d75496787f8838839603b16`.
+
+The editor HashLink module is 103,205,406 bytes with 32,378 functions. Its exact categories are: function encodings 14,640,885; function line and assignment debug 9,676,077; debug sections 75,518,194; strings 2,258,158; types 371,501; reflection members 268,053; constants 278,867; scalar constants 23,888; debug paths 108,397; globals 48,608; natives 12,738; header 40. Debug section payloads are 4,616,616 identity, 53,463,215 source-span and 17,438,341 snapshot bytes. The largest encoded function is `machinekit.motion.HgReferenceData.section` at 113,967 bytes; the largest type is `app.EditorScene` at 2,922 bytes.
+
+The editor is a desktop HashLink application; its native MachineKit FFI uses a 64-bit layout. Wasm editor builds are out of scope. Compare this frozen editor on HashLink and the UI Showcase on all three targets.
+
 ## HashLink line-table opportunity
 
 The checkout VM decodes the standard HashLink line-table repeat and forward-delta records, while `HlWriter.writeDebugLocations` currently emits an absolute three-byte line for every opcode. Applying a read-only model of repeat runs (up to 15 equal file/line entries) and forward deltas of 1–31 to the checkout `hldump --debug` output predicts a reduction from 992,682 to 217,173 encoded line/file bytes for the desktop Showcase, a 775,509-byte saving. The remaining 86,956 bytes of per-function debug data are assignment records and are excluded from this estimate. The largest modeled savings are in `TextOffsetMap.isExtend` (10,182 bytes), `Theme.refreshStyles` (8,891), and `Theme.palette` (7,385). The model covers 314,938 decoded opcode locations; it has not yet been implemented or verified against the debugger, profiler, stack traces, and hot reload.
 
 ## Remaining work
 
-Complete the corrected-editor captures, contributor and function-count comparison, and deterministic before/after measurements and allocation checks. Investigate and test the largest causes before selecting changes.
+Complete the HashLink editor and three-target Showcase before/after measurements and allocation checks. The HashLink line table and development metadata changes remain to be measured.

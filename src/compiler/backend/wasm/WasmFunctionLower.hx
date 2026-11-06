@@ -673,6 +673,8 @@ class WasmFunctionLower {
 									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
+						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)):
+							throw 'Missing reachable Wasm32 closure cast helper for ${Std.string(output.type)}';
 						case I32, F64 if ((switch (value.type) { case Dyn: true; default: false; })):
 							// Any boxed number converts to Int or Float, as on HashLink: JSON gives an Int box for a whole number.
 							emit(body, dynamicNumber(output.type, requiredLocal(values, value.id), requiredLocal(values, output.id)));
