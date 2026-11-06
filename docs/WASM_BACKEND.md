@@ -111,6 +111,8 @@ the browser rejects incompatible sharing or maximum limits at link time.
 The Haxe guest still runs on one thread: this option permits shared native
 host memory, and does not make Haxe objects or its collector thread safe.
 
+Builds default to development metadata; use `--build-mode release` for packaged
+or distributed modules (the direct compiler uses `--build-mode=release`).
 Development builds emit `haxeon.patch` and `haxeon.patch.slots` custom sections
 with stable function identities, semantic signatures, and table slots. Release
 builds omit those sections. Wasm32 development builds include `haxeon.gc.roots`;

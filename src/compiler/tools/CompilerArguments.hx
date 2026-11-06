@@ -6,7 +6,7 @@ import sys.io.File;
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
-		var target = "hl", buildMode = "release", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
+		var target = "hl", buildMode = "development", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
 			dumpFunction = -1, live = false, buildModeExplicit = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null,
 			wasmMemoryStats = false, wasmGcAllocationCount = false, wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null,
 			ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],

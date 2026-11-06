@@ -21,15 +21,17 @@ def main():
         output = root / 'main.hl'
         env = {**os.environ, 'HAXEON_COMPILER_SERVER': '0', 'XDG_CACHE_HOME': str(root / 'cache')}
         def build(mode):
-            subprocess.run([str(ROOT / 'scripts/haxeon'), 'build', '--compiler-only', '--build-mode', mode,
-                            '--project', str(root / 'haxeon.json'), '--output', str(output)],
+            subprocess.run([str(ROOT / 'scripts/haxeon'), 'build', '--compiler-only'] +
+                           ([] if mode is None else ['--build-mode', mode]) + ['--project', str(root / 'haxeon.json'), '--output', str(output)],
                            cwd=ROOT, env=env, check=True, capture_output=True, text=True)
             dump = subprocess.check_output([str(hldump), '--debug', str(output)], text=True)
             run = subprocess.run([str(ROOT / 'scripts/hl'), str(output)], cwd=ROOT, env=env, capture_output=True)
             assert run.returncode == 42, (mode, run.returncode, run.stderr)
             return output.read_bytes(), dump
         release, release_dump = build('release')
-        development, development_dump = build('development')
+        development, development_dump = build(None)
+        explicit_development, _ = build('development')
+        assert development == explicit_development
         release_again, _ = build('release')
         assert release == release_again
         assert 'section kind=1 ' in release_dump and 'section kind=2 ' not in release_dump and 'section kind=3 ' not in release_dump

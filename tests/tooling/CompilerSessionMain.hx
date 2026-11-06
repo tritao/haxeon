@@ -21,14 +21,15 @@ class CompilerSessionMain {
 		var rejectedReleaseLive = false;
 		try CompilerArguments.parse(modeArgs.concat(["--live", "--build-mode=release"])) catch (_:Dynamic) rejectedReleaseLive = true;
 		expect(rejectedReleaseLive, "live builds must reject an explicit release mode");
-		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
+		expect(CompilerArguments.parse(modeArgs).buildMode == "development", "default builds must select development metadata");
+		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])), _ -> {}, modeSession);
 		expect(release.module.debugSections.length == 1 && release.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
 			&& release.module.sourceSnapshots.length == 0,
 			"release artifacts must retain names but omit development spans and snapshots");
-		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=development"])), _ -> {}, modeSession);
+		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
 		expect(development.module.debugSections.length == 3 && development.module.sourceSnapshots.length > 0,
 			"development artifacts must retain debug identities, spans and source snapshots");
-		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
+		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])), _ -> {}, modeSession);
 		expect(releaseAgain.module.debugSections.length == 1 && releaseAgain.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
 			&& releaseAgain.module.sourceSnapshots.length == 0,
 			"a persistent session must honor changes to build mode");

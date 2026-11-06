@@ -5,8 +5,9 @@ for the current desktop host, experimental Wasm32 modules, and Android APKs, and
 can launch host programs or install and launch an Android app. The same command
 is available on Unix-like systems and Windows:
 
-Desktop and Wasm builds default to `release`. Use `--build-mode development` to retain metadata
-for development tools; `run --watch --live` selects it automatically. An
+Desktop and Wasm builds default to `development`, retaining metadata for
+debuggers and other development tools. Use `--build-mode release` when building
+artifacts for packaging or distribution; `run --watch --live` always selects development. An
 explicit release mode cannot be combined with `--live`. The Android debug host
 uses development metadata for live patching. Release HashLink
 modules retain function names and line tables for profiler output and stack
@@ -25,7 +26,7 @@ diagnostic commands.
 ./scripts/haxeon build
 ./scripts/haxeon build --plan
 ./scripts/haxeon build --jobs 8
-./scripts/haxeon build --build-mode development
+./scripts/haxeon build --build-mode release
 ./scripts/haxeon run
 ./scripts/haxeon build --target wasm32
 ./scripts/haxeon init --target android

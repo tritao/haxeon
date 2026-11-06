@@ -1035,7 +1035,7 @@ class HaxeonCli {
 	}
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
-		var projectPath = CONFIG_FILE, target:Null<String> = null, buildMode = "release", buildModeExplicit = false, output:Null<String> = null, device:Null<String> = null, defines = [],
+		var projectPath = CONFIG_FILE, target:Null<String> = null, buildMode = "development", buildModeExplicit = false, output:Null<String> = null, device:Null<String> = null, defines = [],
 			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, strictLive = false, jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null,
 			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null,

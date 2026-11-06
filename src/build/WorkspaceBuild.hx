@@ -71,7 +71,7 @@ class LoweredWorkspace {
 class WorkspaceBuild {
 	public static function lower(workspace:WorkspaceManifest, projects:Array<WorkspaceProject>, resolve:String->ResolvedProject, home:String,
 			defines:Array<String>):LoweredWorkspace {
-		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Release), merged = new Map<String, ExecutionAction>(),
+		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Debug), merged = new Map<String, ExecutionAction>(),
 			order:Array<String> = [], requestedBy = new Map<String, Array<String>>(), lowered:Array<LoweredWorkspaceProject> = [], raw = 0;
 		for (member in projects) {
 			var project = resolve(member.manifestPath);

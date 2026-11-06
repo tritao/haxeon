@@ -55,8 +55,8 @@ class WasmBackendMain {
 				throw "unreachable closure casts must not generate adapters";
 		var modeProgram = Frontend.compile("function main():Int return 42;");
 		for (target in [Wasm32, WasmGc]) {
-			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true}).bytes;
-			var development = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: true}).bytes;
+			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: false}).bytes;
+			var development = new WasmBackend().compile(modeProgram, {target: target, debugNames: true}).bytes;
 			for (name in ["haxeon.patch", "haxeon.patch.slots"]) {
 				if (containsBytes(release, name) || !containsBytes(development, name))
 					throw 'Wasm $target build mode did not select $name correctly';

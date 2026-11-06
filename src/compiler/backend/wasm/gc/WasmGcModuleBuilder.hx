@@ -286,7 +286,7 @@ class WasmGcModuleBuilder {
 			}
 		}
 		module.exportTable = module.tableMin != null;
-		if (options.developmentMetadata == true) {
+		if (options.developmentMetadata != false) {
 			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
 			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		}

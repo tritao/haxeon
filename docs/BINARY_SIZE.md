@@ -117,7 +117,7 @@ The UI state and pointer allocation fixture also passed before and after on all 
 
 ## Release and development metadata
 
-`release` is the default direct-compiler, desktop-project and Wasm build mode; `--build-mode=development` (or `haxeon build --build-mode development`) keeps metadata for development tools. Live builds select development metadata because they publish patches. Android's debug host is also a live-patch consumer. Compiler sessions include the mode in their configuration identity, so switching modes cannot reuse the wrong artifact.
+`development` is the default direct-compiler, desktop-project and Wasm build mode, retaining metadata for development tools. Use `--build-mode=release` with the direct compiler or `haxeon build --build-mode release` for distribution artifacts. Live builds select development metadata because they publish patches. Android's debug host is also a live-patch consumer. Compiler sessions include the mode in their configuration identity, so switching modes cannot reuse the wrong artifact.
 
 HashLink release modules retain the function-identity section: the VM reads its qualified names for profiler output and exception stack traces. A trial that removed it caused both existing checks to lose names, so it was rejected. Release modules omit opcode source spans and source snapshots; development and live builds retain them. Snapshots are content-addressed and stored once per distinct source content. Function names, the ordinary line and assignment tables, and reflection data remain available in release.
 

@@ -32,7 +32,7 @@ class HaxeonProjectBuild {
 
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int, planOnly:Bool, explain:Bool,
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false, instrument:Bool = false,
-			?session:BuildSession, profile:BuildProfile = BuildProfile.Release):Int {
+			?session:BuildSession, profile:BuildProfile = BuildProfile.Debug):Int {
 		if (project.manifest.target != "host")
 			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
 		var timings = new BuildTimings();
