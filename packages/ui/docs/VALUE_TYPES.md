@@ -1786,61 +1786,65 @@ inlining on and off. Managed cases explicitly export and require their setup fun
 Every 8/1,024-call census is zero; HashLink uses the exact object census. This composes existing lowering passes and
 does not implement the deferred scalar generic specialization stage.
 
-Control is `051387b3`; candidate adds the nullable ABI fix. Both editor modules are built on the same pinned outer
-source, `155d98937`, excluding the shared checkout's unrelated uncommitted changes. Their bytes are identical:
-SHA-256 `33f74708a70d81045dc13ee1d95d6b56893b54fd2b39b7b3ed7881165f43817a`, 104,057,908 bytes. The VM library and
-runtime are also identical. The retained control initially used the previous checkpoint's `212462122` source, but
-its provenance was mislabeled with the later submodule-bump revision. Comparing emitted functions exposed 89 intervening
-committed outer changes, including the Hobber accuracy budget. That mismatched comparison is discarded. The freshness
-guard now uses the artifact's build source revision; control was rebuilt on `155d98937`, then the fixed paired schedule
-was run against the frozen candidate. The already-passed candidate app, retention and standalone budget gates were not
-retried. No unrelated source files or budget ceilings were changed.
+Control is `051387b3`; candidate is `98465674`. Both editor modules are built on the same pinned outer
+source, `155d98937`, excluding the shared checkout's unrelated uncommitted changes. A compiler-selection audit during
+the binary-size merge found that the original control rebuild selected current compiler source: ordinary project
+builds use `HAXEON_COMPILER_SOURCE`; `HAXEON_MAIN_HL` and `HAXEON_COMPILER_HL` do not select that path.
+The original HashLink pairs are withdrawn. The replacement fixed schedule below uses explicit source archives of
+both revisions and the old CLI, with identical optimized native libraries and VM/runtime binaries.
 
-Nine alternating pairs, affinity `0,2,4,6`, action medians:
+The actual control is SHA-256 `58c0caa868503b5defb827a0fbed2af9a03dfd79fdf74544d304cd65ccf41b6d`; candidate is
+`33f74708a70d81045dc13ee1d95d6b56893b54fd2b39b7b3ed7881165f43817a`. Both are 104,057,908 bytes.
+Their only 425 differing bytes are 17 generated helper-name prefixes; replacing the old prefix with the corrected
+prefix makes the complete files byte-identical. The earlier claim of literal byte identity was incorrect.
+The original stale control also used `212462122` source, mislabeled with a later submodule-bump revision; 89 intervening
+outer changes exposed that separate error. Controls now record both the actual outer source revision and explicit
+compiler-source selection. The already-passed candidate app, retention and standalone budget gates are retained;
+no source files or budget ceilings were changed to repair the comparisons.
+
+Nine alternating pairs, affinity `0,2,4,6`, replacement action medians:
 
 | Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
 | --- | ---: | ---: | ---: | ---: |
-| console->telemetry | 74.5 | 74.5 | 1.09 | 1.09 |
-| hierarchy->sensors | 114.6 | 114.6 | 1.55 | 1.55 |
+| console->telemetry | 74.5 | 74.5 | 1.08 | 1.08 |
+| hierarchy->sensors | 114.6 | 114.6 | 1.53 | 1.53 |
 | sensors->hierarchy | 80.1 | 80.1 | 1.20 | 1.20 |
-| telemetry->console | 92.9 | 92.9 | 1.15 | 1.15 |
+| telemetry->console | 92.9 | 92.9 | 1.14 | 1.14 |
 | hover-away | 13.6 | 13.6 | 0.42 | 0.42 |
 | hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
-| hover-field | 12.4 | 12.4 | 0.43 | 0.43 |
+| hover-field | 12.4 | 12.4 | 0.43 | 0.42 |
 | hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
-| hover-other | 10.0 | 10.0 | 0.41 | 0.42 |
+| hover-other | 10.0 | 10.0 | 0.41 | 0.41 |
 | idle | 0.2 | 0.2 | 0.01 | 0.01 |
 | idle-focused | 0.2 | 0.2 | 0.01 | 0.01 |
-| scroll-inspector | 21.2 | 21.2 | 0.71 | 0.71 |
-| type-backspace | 16.2 | 16.2 | 0.41 | 0.42 |
-| type-char | 16.1 | 16.1 | 0.42 | 0.42 |
-| selection | — | — | 2.94 | 2.91 |
+| scroll-inspector | 21.2 | 21.2 | 0.70 | 0.71 |
+| type-backspace | 16.2 | 16.2 | 0.41 | 0.41 |
+| type-char | 16.1 | 16.1 | 0.41 | 0.41 |
+| selection | — | — | 2.93 | 2.92 |
 
-The harness does not report an allocation KiB median for selection; the exact census is below. All matched action
-samples were within their budgets. Timing differences are variation between identical programs, not a speedup claim.
+Selection-stress does not report an action KiB median. Exact 30-cycle census pairs, objects / bytes:
 
-Three alternating selection-stress census pairs:
-
-| Pair | Control objects / bytes | Candidate objects / bytes |
+| Pair | Control | Candidate |
 | --- | ---: | ---: |
-| 1 | 340,909 / 24,010,480 | 340,910 / 24,010,744 |
-| 2 | 340,911 / 24,010,952 | 340,910 / 24,010,808 |
-| 3 | 340,907 / 24,009,928 | 340,909 / 24,010,496 |
+| 1 | 340,910 / 24,010,960 | 340,911 / 24,011,240 |
+| 2 | 340,908 / 24,010,488 | 340,910 / 24,010,920 |
+| 3 | 340,911 / 24,011,256 | 340,911 / 24,011,256 |
 
-Every named type other than the raw `bytes` category is equal in every pair: 305,725 objects and 21,593,528 bytes.
-The differing totals are entirely in `bytes`; they are not attributed to a particular allocation site here. Neither the
-editor bytecode nor either runtime library differs between versions.
+Every type other than raw `bytes` matches in every pair: 305,725 objects / 21,593,528 bytes.
+The remaining small variation is recorded as raw-byte variation, without a new site-attribution claim.
 
-Headless memory windows, MiB, control → candidate; all six runs pass:
+Headless memory windows, MiB, control → candidate; all six replacement runs pass:
 
 | Pair | First window | Retained window | Primitives window | Tab-inspector window |
 | --- | ---: | ---: | ---: | ---: |
-| 1 | 30.78 → 30.16 | 3.59 → 3.44 | 0.78 → 0.78 | 5.00 → 4.84 |
-| 2 | 29.38 → 29.38 | 4.22 → 4.22 | 0.94 → 0.78 | 4.84 → 5.00 |
-| 3 | 29.69 → 30.00 | 3.59 → 3.59 | 0.62 → 0.78 | 5.00 → 5.00 |
+| 1 | 30.47 → 29.38 | 3.59 → 4.38 | 0.78 → 0.78 | 5.00 → 5.00 |
+| 2 | 30.16 → 30.16 | 3.91 → 4.22 | 0.78 → 0.78 | 5.62 → 5.16 |
+| 3 | 30.31 → 30.31 | 3.59 → 3.91 | 0.78 → 0.78 | 5.16 → 5.00 |
 
-All four median paired differences are zero. Medians calculated separately across each version's runs are
-29.69 / 3.59 / 0.78 / 5.00 → 30.00 / 3.59 / 0.78 / 5.00 MiB; the complete pairs show the same-binary variation.
+Median paired differences are +0.00 / +0.32 / +0.00 / -0.16 MiB. Separate-version medians are
+30.31 / 3.59 / 0.78 / 5.16 → 30.16 / 4.22 / 0.78 / 5.00 MiB. The second-window increase lies within the
+previously recorded identical-executable variation; the full vectors are retained rather than accepting a retry.
+All action allocation medians match. The compiler's targeted allocation fixtures remain zero on all targets.
 
 Wasm32 and Wasm GC package builds and WebGL2 browser smokes pass. Wasm GC fixed-step core uses 120 warmup and
 120 measured frames: all nine full-scene pairs and three each for static, text-heavy and editing match at
@@ -1854,3 +1858,121 @@ all six UI value snapshots, the app suite, all nine retention scenarios, the fir
 and paired headless memory. After strengthening the managed-reference fixture, the complete compiler suite was rerun
 and again reported 775 passed / 0 failed; compiler source and editor input/tool bytes did not change. Captures are
 deleted after extraction, and the idle editor gate checkout is removed.
+
+### Binary-size merge and native build policy (2026-11-06)
+
+The reviewed `binary-size` series is merged at `b34b0754`. The paired control is `98465674`; both editor modules use
+outer source `b75441f801f4d8cbd3704a59ad57a049e216cdf4`, isolated from unrelated uncommitted work. Project controls
+explicitly set `HAXEON_COMPILER_SOURCE` to the archived control source and use the corresponding old CLI. Artifact
+variables alone do not select the compiler for ordinary project builds. A first misconfigured comparison selected
+current source twice and is withdrawn; the tables below are the complete replacement fixed schedule. The already-passed
+standalone candidate budget and retention gates were not retried.
+
+The initial merge accidentally coupled development metadata to native `Debug` optimization. Its app gate failed with
+`Worker gallery tests failed: The gallery costs 10.7 ms of CPU per tick, over the limit of 5 ms`.
+Module metadata policy now travels separately from the native build profile. Both development and release retain the
+previous optimized native `Release` configuration; the corrected app suite passes at 1.8 ms per gallery tick. An
+end-to-end tiny CMake fixture checks native configuration and emitted metadata in default/development/release modes.
+No budget or limit was changed.
+
+Changing a prebuilt compiler through the Web build environment also left CMake's guest current: the selected compiler
+was absent from its command and dependencies. The build now configures that choice explicitly and depends on the
+selected module. The integration check rebuilds real Wasm32 and Wasm GC guests after compiler-path and file updates,
+checks byte identity for an identical compiler copy, and restores the original configuration. The initial stale-guest
+comparison is withdrawn. The replacement browser schedule verifies each actually loaded guest hash.
+
+| Artifact | Control bytes | Candidate bytes |
+| --- | ---: | ---: |
+| Editor HashLink, development | 104,683,583 | 97,644,103 |
+| Showcase Wasm32, development | 30,017,042 | 11,867,682 |
+| Showcase Wasm GC, allocation counter enabled | 5,802,490 | 5,802,490 |
+
+The HashLink reduction is compact line-table encoding; default development metadata stays enabled. The Wasm32 reduction
+is reachable closure adapters. The Wasm GC guests are byte-identical. Editor control SHA-256 is
+`55dbef2eed544de5e4efc61ac5f8da2e66f30fa331bb8374f374d126673aec73`; development candidate is
+`5c0cabd84bf30bd947ab57901ef21e17e6658e11a7389bbd41dd9bd71330ae70`.
+VM library SHA-256 is `db26c9e28722fd8a080d11f2c397a09f79f818615a8763b5b49c51f0683714eb` and runtime is
+`aeeb5a1bacd90f01db883c459762bec00914a461cc884effefd173fb4bdbdb29`, identical across the pair.
+
+Nine alternating editor pairs, affinity `0,2,4,6`, median action results:
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+| --- | ---: | ---: | ---: | ---: |
+| console->telemetry | 72.5 | 72.5 | 1.10 | 1.10 |
+| hierarchy->sensors | 112.6 | 112.6 | 1.56 | 1.57 |
+| sensors->hierarchy | 80.1 | 80.1 | 1.21 | 1.21 |
+| telemetry->console | 92.9 | 92.9 | 1.15 | 1.15 |
+| hover-away | 13.6 | 13.6 | 0.42 | 0.42 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.4 | 12.4 | 0.43 | 0.42 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 10.0 | 10.0 | 0.41 | 0.41 |
+| idle | 0.2 | 0.2 | 0.01 | 0.01 |
+| idle-focused | 0.2 | 0.2 | 0.01 | 0.01 |
+| scroll-inspector | 21.2 | 21.2 | 0.70 | 0.71 |
+| type-backspace | 16.1 | 16.1 | 0.41 | 0.41 |
+| type-char | 16.1 | 16.1 | 0.41 | 0.42 |
+| selection | — | — | 2.95 | 2.94 |
+
+Selection-stress reports no action KiB median. Three exact 30-cycle census pairs, objects / bytes:
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,908 / 24,010,240 | 340,907 / 24,010,000 |
+| 2 | 340,910 / 24,010,840 | 340,910 / 24,010,928 |
+| 3 | 340,910 / 24,010,816 | 340,910 / 24,010,928 |
+
+Every type other than raw `bytes` matches in all three pairs: 305,725 objects / 21,593,528 bytes.
+The remaining raw-byte differences are recorded without claiming a new allocation-site attribution.
+
+Headless RSS growth windows, MiB, control → candidate; all six runs pass:
+
+| Pair | First window | Retained window | Primitives window | Tab-inspector window |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 30.31 → 30.00 | 3.91 → 3.44 | 0.62 → 0.78 | 4.84 → 6.41 |
+| 2 | 30.62 → 29.53 | 3.28 → 4.06 | 0.94 → 0.78 | 4.84 → 4.84 |
+| 3 | 30.31 → 29.53 | 3.75 → 4.22 | 0.78 → 0.78 | 4.69 → 5.00 |
+
+Separate-version medians are 30.31 / 3.75 / 0.78 / 4.84 → 29.53 / 4.06 / 0.78 / 5.00 MiB;
+median paired differences are −0.78 / +0.47 / 0.00 / +0.31 MiB. The positive windows are reported explicitly.
+The withdrawn comparison used exactly the same candidate bytes twice, so its RSS samples remain a zero-change
+calibration only: 29.84–30.47 / 3.44–4.06 / 0.78–0.78 / 4.84–5.00 MiB. The later separate-version medians fall within
+that variation; one candidate tab-inspector window is 6.41 MiB and is retained in the table. There is no extra renderer
+or value-box allocation in the exact census. No ceiling was raised and no passing sample was selected by retry.
+
+Informational load/RSS capture: one control development, one candidate development, then one candidate release run;
+`noop`, one cycle, 1 Hz sampling, allocation sampling disabled, warm filesystem. The runtime's `Load bytecode` plus
+`Compile and link the module (JIT, native libraries)` phases are read from the native Perfetto export of each HLPC
+capture; the lightweight JSON export omits these startup phases. The existing first capture was re-exported, not rerun.
+All three modules share the same optimized native libraries. These single-run timings are not a speedup estimate or gate.
+
+| Mode | Module bytes | Bytecode load ms | JIT/native link ms | Sum ms | Peak RSS MiB | First-frame RSS MiB | Final RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| control-development | 104,683,583 | 158.12 | 1261.81 | 1419.93 | 319.43 | 312.80 | 312.80 |
+| development | 97,644,103 | 143.48 | 1258.51 | 1401.98 | 321.04 | 311.71 | 313.59 |
+| release | 25,841,618 | 104.74 | 1273.79 | 1378.53 | 315.18 | 315.18 | 315.18 |
+
+Release is selected explicitly with `--build-mode release`; its SHA-256 is
+`bc2645d2cc77af9277ad6ef82a38ddb00b14f6abbdc7c6545e751695fdd7e537`.
+The smaller file and lower sampled peak do not imply a lower first-frame or final RSS in this single run.
+
+Wasm GC uses nine full-scene and three each static/text-heavy/editing pairs, 120 warmup and 120 measured frames.
+Every sample matches at 4,440 / 4,440 / 4,440 / 8,724 objects. Both loaded guests have SHA-256
+`ff3dc27e5acfde09528c2b1ac52b10d7a2bd739086be1d2b719a67ab061d91c9`. The full-scene startup medians are:
+
+| Target / pairs | Guest fetch ms | Compile ms | Instantiate ms | Initialize ms | First frame ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| wasm-gc/full / 9 | 8.5 → 9.5 | 5.3 → 5.2 | 6.6 → 6.5 | 15.5 → 13.8 | 147.4 → 146.7 |
+| wasm32/full / 3 | 34.6 → 14.4 | 12.4 → 4.9 | 3.4 → 2.6 | 11.4 → 11.2 | 174.1 → 129.3 |
+
+Wasm32 source/control guest is SHA-256 `1d013e7996e93d0cec01975f506d2e98b847ed180bffdcdcee3d43bb166c7be3`;
+candidate is `5645df810a815c6f74594718d41222cb692fec8cec478e46a0ea4647ff63a4b6`.
+Its smaller transfer and compile load follow the adapter reduction. The Wasm32 browser runner does not expose the
+Wasm GC object counter; no object-count result is claimed for it.
+
+Gates pass: 775 compiler tests, self-hosting fixed point, all ten UI scripts, all three binary-size integration tests,
+502 cross-target parity fixtures (14 existing skips), all six UI value snapshots, the app suite, all nine retention
+scenarios, the first scheduled standalone editor budget check and all paired headless windows. Wasm32 and Wasm GC
+build/browser smokes and both real compiler-dependency checks pass. No profiler hang occurred in the informational
+capture; its missing JSON startup rows were an export-format selection error. All raw captures are removed after their
+numbers are extracted; the idle outer gate checkout and historical audit source archive are removed.
