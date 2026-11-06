@@ -355,6 +355,8 @@ class IrInterpreter {
 			case "runtime.FloatBits.fromInt64", "__i64_to_f64_bits":
 				var bits:haxe.Int64 = cast arguments[0];
 				haxe.io.FPHelper.i64ToDouble(bits.low, bits.high);
+			case "haxe.Int64.make": haxe.Int64.make(arguments[0], arguments[1]);
+			case "haxe.Int64.ofInt": haxe.Int64.ofInt(arguments[0]);
 			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
 			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.toInt":

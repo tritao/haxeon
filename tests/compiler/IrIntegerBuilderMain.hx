@@ -29,8 +29,24 @@ class IrIntegerBuilderMain {
 			|| new WasmBackend().compile(program, {target: WasmGc, debugNames: true}).bytes.length == 0)
 			throw "64-bit integer builder operations must lower on each backend";
 		checkWideArithmetic();
+		checkSourceConstructors();
 		Sys.println("PASS: IR builder preserves integer widths through modulo, bitwise operations and shifts");
 	}
+	static function checkSourceConstructors():Void {
+		var compiler = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		compiler.addSourceRoot("stdlib");
+		compiler.update("WideConstructors.hx", 'function main():Int { '
+			+ 'var wide = haxe.Int64.make(1, -1); var negative = haxe.Int64.ofInt(-7); '
+			+ 'return haxe.Int64.toInt(haxe.Int64.ushr(wide, 32)) == 1 '
+			+ '&& haxe.Int64.toInt(wide) == -1 && haxe.Int64.toInt(negative) == -7 '
+			+ '&& haxe.Int64.toInt(haxe.Int64.ushr(negative, 32)) == -1 ? 42 : 1; }');
+		var compiled = compiler.compile("WideConstructors");
+		if (new IrInterpreter(compiled.ir).run("main") != 42)
+			throw "IR interpreter lost a source Int64 constructor word or sign extension";
+		if (GeneratedProgramRunner.exitCode(compiled) != 42)
+			throw "Source Int64 constructors disagree with HashLink";
+	}
+
 	static function checkWideArithmetic():Void {
 		var b = new IrBuilder(), checks:Array<compiler.ir.Ir.IrValue> = [];
 		var high = b.shiftLeft(b.constInt(1, I64), b.constInt(40)), low = b.shiftLeft(b.constInt(1, I64), b.constInt(8));
