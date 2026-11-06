@@ -286,8 +286,10 @@ class WasmGcModuleBuilder {
 			}
 		}
 		module.exportTable = module.tableMin != null;
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		if (options.developmentMetadata != false) {
+			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
+			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		}
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 		var entry = functions.get(preferredEntry);
@@ -354,7 +356,7 @@ class WasmGcModuleBuilder {
 		var blob = haxe.io.Bytes.alloc(staticData.end);
 		for (segment in staticData.segments)
 			blob.blit(segment.offset, segment.bytes, 0, segment.bytes.length);
-		module.data.push({offset: 0, bytes: blob, passive: true});
+		module.data.push({offset: 0, bytes: blob, passive: true, censusCategory: "static data"});
 		var global = module.globals.length;
 		module.globals.push({
 			type: Ref({nullable: true, heap: Type(plan.staticDataTypeIndex)}),

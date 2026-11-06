@@ -72,7 +72,7 @@ class HlLower {
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
-			?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0):MeasuredHlCode {
+			?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0, developmentMetadata:Bool = true):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -89,7 +89,7 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve),
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -119,6 +119,7 @@ class HlLower {
 	var nativeVisible:Map<String, Bool> = [];
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
+	final developmentMetadata:Bool;
 
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
@@ -127,13 +128,15 @@ class HlLower {
 	var allocationPhases:Array<PhaseAllocation> = [];
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0) {
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
+			developmentMetadata:Bool = true) {
 		this.symbols = symbols;
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
 		this.preparedRuntimeNatives = runtimeNatives;
 		this.debugCache = debugCache;
+		this.developmentMetadata = developmentMetadata;
 		if (regenerated != null)
 			for (name in regenerated)
 				this.regenerated.set(name, true);
@@ -353,6 +356,7 @@ class HlLower {
 		}
 		var functionsDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctions = AllocationMeter.sample();
+		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push({
 			kind: HlWriter.FUNCTION_IDENTITIES,
@@ -360,47 +364,48 @@ class HlLower {
 			flags: 0,
 			payload: HlWriter.encodeFunctionIdentities(identities)
 		});
-		var allocationAfterIdentities = AllocationMeter.sample();
-		var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
-		for (index in 0...code.functions.length) {
-			var identity = identities[index],
-				loweredFunction = code.functions[index];
-			var cachedSpans = debugCache == null ? null : debugCache.functionSpans(loweredFunction);
-			if (cachedSpans != null) {
-				spanGroups.push({stableId: identity.stableId, mappings: cachedSpans});
-				continue;
+		var allocationAfterIdentities = AllocationMeter.sample(), allocationAfterSpanGroups = allocationAfterIdentities;
+		if (developmentMetadata) {
+			var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
+			for (index in 0...code.functions.length) {
+				var identity = identities[index],
+					loweredFunction = code.functions[index];
+				var cachedSpans = debugCache == null ? null : debugCache.functionSpans(loweredFunction);
+				if (cachedSpans != null) {
+					spanGroups.push({stableId: identity.stableId, mappings: cachedSpans});
+					continue;
+				}
+				var functionSpans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
+				for (opcode in 0...loweredFunction.debugLocations.length) {
+					var location = loweredFunction.debugLocations[opcode];
+					var span:compiler.hl.HlCode.HlOpcodeSourceSpan = {
+						stableId: identity.stableId,
+						opcode: opcode,
+						sourcePath: location.path,
+						start: location.start == null ? -1 : location.start,
+						end: location.end == null ? -1 : location.end,
+						line: location.line,
+						column: location.column,
+						endLine: location.endLine,
+						endColumn: location.endColumn,
+						sourceHash: location.sourceHash,
+						flags: location.flags
+					};
+					functionSpans.push(span);
+				}
+				if (debugCache != null)
+					debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
+				spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
 			}
-			var functionSpans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
-			for (opcode in 0...loweredFunction.debugLocations.length) {
-				var location = loweredFunction.debugLocations[opcode];
-				var span:compiler.hl.HlCode.HlOpcodeSourceSpan = {
-					stableId: identity.stableId,
-					opcode: opcode,
-					sourcePath: location.path,
-					start: location.start == null ? -1 : location.start,
-					end: location.end == null ? -1 : location.end,
-					line: location.line,
-					column: location.column,
-					endLine: location.endLine,
-					endColumn: location.endColumn,
-					sourceHash: location.sourceHash,
-					flags: location.flags
-				};
-				functionSpans.push(span);
-			}
-			if (debugCache != null)
-				debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
-			spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
+			allocationAfterSpanGroups = AllocationMeter.sample();
+			code.debugSections.push({
+				kind: HlWriter.OPCODE_SOURCE_SPANS,
+				version: 2,
+				flags: 0,
+				payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
+			});
 		}
-		if (debugCache != null)
-			debugCache.endGeneration();
-		var allocationAfterSpanGroups = AllocationMeter.sample();
-		code.debugSections.push({
-			kind: HlWriter.OPCODE_SOURCE_SPANS,
-			version: 2,
-			flags: 0,
-			payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
-		});
+		if (debugCache != null) debugCache.endGeneration();
 		var debugDoneAt = Sys.time() * 1000.0;
 		var allocationAfterDebug = AllocationMeter.sample();
 

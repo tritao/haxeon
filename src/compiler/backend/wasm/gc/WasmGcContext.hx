@@ -36,7 +36,7 @@ class WasmGcContext {
 		var segment = stringSegments.get(value);
 		if (segment == null) {
 			segment = module.data.length;
-			module.data.push({offset: 0, bytes: haxe.io.Bytes.ofString(value), passive: true});
+			module.data.push({offset: 0, bytes: haxe.io.Bytes.ofString(value), passive: true, censusCategory: "strings"});
 			stringSegments.set(value, segment);
 		}
 		return segment;

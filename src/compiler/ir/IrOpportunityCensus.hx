@@ -11,6 +11,7 @@ class IrOpportunityCensus {
 	/** Report the actual lowered HashLink operations, after register allocation. */
 	public static function reportHashLink(code:compiler.hl.HlCode, indices:Map<String, Int>):Void {
 		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		compiler.hl.HlWriter.reportSize(code);
 		var names:Map<Int, String> = [];
 		for (name => index in indices) names.set(index, name);
 		var functions = code.functions.copy();
@@ -29,12 +30,18 @@ class IrOpportunityCensus {
 	/** Report the final Wasm instruction model; linked pre-encoded functions are explicitly marked opaque. */
 	public static function reportWasm(module:compiler.backend.wasm.WasmModule, target:String):Void {
 		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		var segments = [for (segment in module.data) '{"category":'
+			+ haxe.Json.stringify(segment.censusCategory == null ? "unclassified data" : segment.censusCategory)
+			+ ',"bytes":' + compiler.backend.wasm.WasmEncoder.encodedDataSegmentLength(segment) + '}'];
+		Sys.stderr().writeString('SIZE_DATA_CENSUS {"target":' + haxe.Json.stringify(target) + ',"segments":[' + segments.join(",") + ']}\n');
 		for (fn in module.functions) {
 			var histogram:Map<String, Int> = [];
 			for (op in fn.body) addOpcode(histogram, constructorName(Std.string(op)));
 			Sys.stderr().writeString("EMITTED_CENSUS {\"target\":" + haxe.Json.stringify(target) + ",\"name\":"
 				+ haxe.Json.stringify(fn.name) + ",\"instructions\":" + fn.body.length + ",\"opaqueBytes\":"
-				+ (fn.encodedBody == null ? 0 : fn.encodedBody.length) + ",\"histogram\":" + encodeHistogram(sortedHistogram(histogram)) + "}\n");
+				+ (fn.encodedBody == null ? 0 : fn.encodedBody.length) + ",\"bytes\":"
+				+ compiler.backend.wasm.WasmEncoder.encodeFunctionBody(fn).length
+				+ ",\"histogram\":" + encodeHistogram(sortedHistogram(histogram)) + "}\n");
 		}
 	}
 

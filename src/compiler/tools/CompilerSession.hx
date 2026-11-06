@@ -77,6 +77,7 @@ class CompilerSession {
 			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {path: path, text: read(path)}],
 			identity = Json.stringify({
 				target: request.target,
+				buildMode: request.buildMode,
 				live: request.live,
 				importMemory: request.importMemory,
 				sharedMemory: request.sharedMemory == true,

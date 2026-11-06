@@ -663,7 +663,11 @@ class HotReloadMain {
 		probeCompiler("assembler");
 		// Version 1 omitted import ordering, so an initialized baseline cannot safely resume.
 		var state = assembler.exportState(),
-			legacyBytes = assemblerBytes.sub(0, 25 + 4 + state.symbols.length + 4 + state.cache.length);
+			legacySections = 4 + state.symbols.length + 4 + state.cache.length,
+			legacyBytes = haxe.io.Bytes.alloc(25 + legacySections);
+		// Version 4 added publishedGlobals after the version 1 header.
+		legacyBytes.blit(0, assemblerBytes, 0, 25);
+		legacyBytes.blit(25, assemblerBytes, 29, legacySections);
 		legacyBytes.set(3, 1);
 		var legacyRejected = false;
 		try
@@ -677,8 +681,9 @@ class HotReloadMain {
 			editedCompiler = new Compiler();
 		editedCompiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
 		var edited = editedCompiler.compile("Main").ir;
-		var uninterrupted = uninterruptedAssembler.assemble(edited, ["main"], Patch),
-			restored = restoredAssembler.assemble(edited, ["main"], Patch);
+		// Both functions name the edited source snapshot, including the unchanged body.
+		var uninterrupted = uninterruptedAssembler.assemble(edited, ["Main.add", "main"], Patch),
+			restored = restoredAssembler.assemble(edited, ["Main.add", "main"], Patch);
 		if (uninterrupted.revision != restored.revision
 			|| uninterrupted.baseInts != restored.baseInts
 			|| uninterrupted.baseFloats != restored.baseFloats

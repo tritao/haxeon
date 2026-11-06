@@ -46,6 +46,24 @@ import sys.io.File;
 
 class WasmBackendMain {
 	static function main():Void {
+		var deadClosure = Frontend.compile("function deadSource(value:String):String return value; "
+			+ "function dead():Int { var erased:Dynamic = deadSource; var casted:Bool->Bool = cast erased; return 0; } "
+			+ "function main():Int return 42;");
+		compiler.backend.wasm.linear.WasmLinearClosureAdapters.generate(deadClosure, [], deadClosure.entryPoint, []);
+		for (fn in deadClosure.functions)
+			if (StringTools.startsWith(fn.name, "__haxeon_closure_adapter_") || StringTools.startsWith(fn.name, "__haxeon_closure_cast_"))
+				throw "unreachable closure casts must not generate adapters";
+		var modeProgram = Frontend.compile("function main():Int return 42;");
+		for (target in [Wasm32, WasmGc]) {
+			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: false}).bytes;
+			var development = new WasmBackend().compile(modeProgram, {target: target, debugNames: true}).bytes;
+			for (name in ["haxeon.patch", "haxeon.patch.slots"]) {
+				if (containsBytes(release, name) || !containsBytes(development, name))
+					throw 'Wasm $target build mode did not select $name correctly';
+			}
+			if (target == Wasm32 && (containsBytes(release, "haxeon.gc.roots") || !containsBytes(development, "haxeon.gc.roots")))
+				throw "Wasm32 build mode did not select development root metadata correctly";
+		}
 		WasmTypeIdPlanMain.run();
 		ValueDynamicEqualityInterpreterMain.run();
 		var allocationProgram = Frontend.compile("class Box { public var value:Int; "
@@ -403,7 +421,11 @@ class WasmBackendMain {
 		if (WasmPatch.manifest(referenceProgram).length == 0 || WasmPatch.plan(referenceProgram, canonical) != Patch)
 			throw "Wasm patch metadata must preserve a compatible semantic ABI";
 		var patchBackend = new WasmBackend(), patchBase = patchBackend.compilePatchBase(referenceProgram, {target: Wasm32, debugNames: true});
+		if (!containsBytes(patchBase.bytes, "haxeon.patch.slots") || !containsBytes(patchBase.bytes, "haxeon.gc.roots"))
+			throw "Wasm patch bases must retain development metadata";
 		var patchArtifact = patchBackend.compilePatch(patchBase.state, canonical, ["main"], {target: Wasm32, debugNames: true});
+		if (!containsBytes(patchArtifact.bytes, "haxeon.patch.slots") || !containsBytes(patchArtifact.bytes, "haxeon.gc.roots"))
+			throw "Wasm patch replacements must retain development metadata";
 		var patchEntries = WasmPatch.readManifest(patchArtifact.manifest);
 		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main" || patchArtifact.changed.length != 1)
 			throw "Wasm patch compilation must produce a validated replacement artifact";

@@ -37,10 +37,10 @@ class WasmValidator {
 			if (signature.results.length != 0)
 				throw "Wasm exception tag function type must not have results";
 		}
+		var functionTypes = [for (index in 0...module.functionCount()) module.functionType(index)];
 		for (fn in module.functions)
 			if (fn.encodedBody == null)
-				validateFunction(fn, [for (index in 0...module.functionCount()) module.functionType(index)], module.globals, module, module.tableMin,
-					module.exceptionTagType);
+				validateFunction(fn, functionTypes, module.globals, module, module.tableMin, module.exceptionTagType);
 		for (entry in module.exports)
 			if (entry.functionIndex < 0 || entry.functionIndex >= module.functionCount())
 				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';

@@ -6,8 +6,8 @@ import sys.io.File;
 /** Parses and validates the stable command-line build interface. */
 class CompilerArguments {
 	public static function parse(arguments:Array<String>):CompilerRequest {
-		var target = "hl", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
-			dumpFunction = -1, live = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null,
+		var target = "hl", buildMode = "development", output = "out/main.hl", xmlOutput:Null<String> = null, irOutput:Null<String> = null, entry = "compiler.tools.HaxeonCompiler",
+			dumpFunction = -1, live = false, buildModeExplicit = false, importMemory = false, sharedMemory = false, memoryBase = 0, memoryContract:Null<String> = null,
 			wasmMemoryStats = false, wasmGcAllocationCount = false, wasmGcStress = false, wasmRuntimeNeutral = false, exports:Array<String> = [], ffiHeader:Null<String> = null,
 			ffiLibrary:Null<String> = null, ffiInterfaces:Array<String> = [], ffiProjections:Array<String> = [], roots:Array<String> = [],
 			defines:Array<String> = [], paths:Array<String> = [];
@@ -19,6 +19,10 @@ class CompilerArguments {
 				output = value(argument, "--output=");
 			else if (StringTools.startsWith(argument, "--target="))
 				target = value(argument, "--target=");
+			else if (StringTools.startsWith(argument, "--build-mode=")) {
+				buildMode = value(argument, "--build-mode=");
+				buildModeExplicit = true;
+			}
 			else if (StringTools.startsWith(argument, "--xml="))
 				xmlOutput = value(argument, "--xml=");
 			else if (argument == "--xml") {
@@ -92,6 +96,11 @@ class CompilerArguments {
 			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
 		if (live && target != "hl")
 			throw "--live requires --target=hl";
+		if (buildMode != "release" && buildMode != "development")
+			throw 'Unsupported compiler build mode "$buildMode"';
+		if (live && buildModeExplicit && buildMode != "development")
+			throw "--live requires development build mode";
+		if (live) buildMode = "development";
 		if ((wasmMemoryStats || wasmGcStress) && target != "wasm32")
 			throw "Wasm allocator options require --target=wasm32";
 		if (wasmGcAllocationCount && target != "wasmgc" && target != "wasm-gc")
@@ -110,6 +119,7 @@ class CompilerArguments {
 			throw "--wasm-memory-contract and --wasm-memory-base are mutually exclusive";
 		return {
 			target: target,
+			buildMode: buildMode,
 			defines: defines,
 			output: output,
 			xmlOutput: xmlOutput,

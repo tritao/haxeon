@@ -9,6 +9,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -57,7 +58,7 @@ class WasmLinearClosureAdapters {
 		};
 
 	/** Generate adapters for each semantic source and target of the same arity. */
-	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>):WasmLinearClosureAdapters {
+	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>, entry:String, roots:Array<String>):WasmLinearClosureAdapters {
 		var adapters = new WasmLinearClosureAdapters(program);
 		if (Lambda.exists(program.functions, fn -> fn.name == SIGNATURE_FUNCTION))
 			throw "Linear Wasm closure adapters were generated twice for one program";
@@ -75,14 +76,15 @@ class WasmLinearClosureAdapters {
 				default:
 			}
 		}
+		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
 				case InstanceClosure(_, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
 				case StaticClosure(output, _) | InstanceClosure(output, _, _):
 					noteType(output.type);
-					if (!scalarClosures.exists(Std.string(output.type))) sourceTypes.set(closureKey(output.type), output.type);
+					if (reachable.exists(fn.name) && !scalarClosures.exists(Std.string(output.type))) sourceTypes.set(closureKey(output.type), output.type);
 				case SafeCast(output, _): switch output.type {
-					case Function(_, _): noteType(output.type); targetTypes.set(closureKey(output.type), output.type);
+					case Function(_, _): noteType(output.type); if (reachable.exists(fn.name)) targetTypes.set(closureKey(output.type), output.type);
 					default:
 				}
 				case TypeValue(_, type): switch type {
@@ -94,10 +96,30 @@ class WasmLinearClosureAdapters {
 		var orderedSignatures = [for (key in signatureTypes.keys()) key];
 		orderedSignatures.sort(Reflect.compare);
 		for (index in 0...orderedSignatures.length) adapters.signatureIds.set(orderedSignatures[index], index + 1);
-		for (key => type in targetTypes) if (!sourceTypes.exists(key)) sourceTypes.set(key, type);
+		// Every generated adapter may cast nested function arguments or results, as well as
+		// its original closure. Those casts require their own dispatchers and adapters.
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (key => type in targetTypes) if (!sourceTypes.exists(key)) { sourceTypes.set(key, type); changed = true; }
+			var targetsNow = [for (key in targetTypes.keys()) key], sourcesNow = [for (key in sourceTypes.keys()) key];
+			for (target in targetsNow) for (source in sourcesNow)
+				if (source != target && arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
+					var fn = adapter(sourceTypes.get(source), source, targetTypes.get(target), target);
+					for (block in fn.blocks) for (located in block.instructions) switch located.value {
+						case SafeCast(output, _): switch output.type {
+							case Function(_, _):
+								var key = closureKey(output.type);
+								if (!targetTypes.exists(key)) { targetTypes.set(key, output.type); changed = true; }
+							default:
+						}
+						default:
+					}
+				}
+		}
 		var targets = [for (key in targetTypes.keys()) key], sources = [for (key in sourceTypes.keys()) key];
 		targets.sort(Reflect.compare); sources.sort(Reflect.compare);
-		if (Lambda.exists(program.functions, fn -> fn.name == WasmDynamicCalls.VARARGS_TARGET)) {
+		if (reachable.exists(WasmDynamicCalls.VARARGS_TARGET)) {
 			sources.push("varargs"); sourceTypes.set("varargs", WasmDynamicCalls.callbackType());
 		}
 		var pairs = [for (target in targets) {target: target, sources: [for (source in sources)
@@ -186,7 +208,7 @@ class WasmLinearClosureAdapters {
 				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs" ? WasmDynamicCalls.varargsAdapterName(targetType) :
 					adapterName(source.key, closureKey(targetType)), closure, targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
-		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, null, false, Keep);
+		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks);
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
@@ -200,7 +222,7 @@ class WasmLinearClosureAdapters {
 			], sourceResult = result(sourceType), targetResult = result(targetType), value = builder.callClosure(callee, converted, sourceResult);
 		builder.returnValue((switch (targetResult) { case Void: true; default: false; }) ? ((switch (sourceResult) { case Void: true; default: false; }) ? value : builder.constVoid()) : (switch (sourceResult) { case Void: true; default: false; }) ? zero(builder,
 			targetResult) : convert(builder, value, targetResult));
-		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks, null, false, Keep);
+		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks);
 	}
 
 	static function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {

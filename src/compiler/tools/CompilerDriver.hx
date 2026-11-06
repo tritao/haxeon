@@ -35,6 +35,7 @@ class CompilerDriver {
 		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
 		// A persistent session serves interactive and batch requests alike, so the mode is set per request.
 		compiler.livePatching = request.live;
+		compiler.developmentMetadata = request.buildMode == "development";
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
@@ -68,6 +69,7 @@ class CompilerDriver {
 					backendResult = backend.compile(result.ir, {
 						target: wasmTarget,
 						debugNames: true,
+						developmentMetadata: request.buildMode == "development",
 						importMemory: request.importMemory,
 						sharedMemory: request.sharedMemory == true,
 						memoryBase: request.memoryBase,

@@ -21,7 +21,7 @@ class WasmBackend implements Backend {
 
 	/** Compile the initial live module and retain its actual target-level type identities. */
 	public function compilePatchBase(program:IrProgram, options:BackendOptions):WasmPatchArtifact {
-		var compiled = compileInternal(program, options, null);
+		var compiled = compileInternal(program, developmentOptions(options), null);
 		return {bytes: compiled.artifact.bytes, manifest: WasmPatch.manifest(program), decision: Patch,
 			changed: [for (fn in program.functions) fn.name],
 			state: {abi: compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)), target: options.target,
@@ -46,7 +46,7 @@ class WasmBackend implements Backend {
 			default:
 				throw 'Wasm patch rejected by semantic ABI: ${Std.string(decision)}';
 		}
-		var result = compileInternal(program, options, changed);
+		var result = compileInternal(program, developmentOptions(options), changed);
 		if (!result.runtimeTypeIds.compatibleWith(previous.runtimeTypeIds))
 			throw "Wasm patch rejected by runtime type identity: live type IDs changed";
 		return {
@@ -57,6 +57,16 @@ class WasmBackend implements Backend {
 			state: {abi: abi, target: options.target, runtimeTypeIds: result.runtimeTypeIds}
 		};
 	}
+
+	/** Patch modules are development artifacts regardless of the ordinary build mode. */
+	static function developmentOptions(options:BackendOptions):BackendOptions
+		return {
+			target: options.target, debugNames: options.debugNames, developmentMetadata: true,
+			importMemory: options.importMemory, sharedMemory: options.sharedMemory, memoryBase: options.memoryBase,
+			memoryContract: options.memoryContract, wasmMemoryStats: options.wasmMemoryStats,
+			wasmGcAllocationCount: options.wasmGcAllocationCount, wasmGcStress: options.wasmGcStress,
+			wasmRuntimeNeutral: options.wasmRuntimeNeutral, exports: options.exports, wasmLinearRuntime: options.wasmLinearRuntime
+		};
 
 	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):WasmCompilation {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.

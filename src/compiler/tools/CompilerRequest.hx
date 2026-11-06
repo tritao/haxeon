@@ -7,6 +7,8 @@ typedef PackageSourceRoot = {
 
 typedef CompilerRequest = {
 	final target:String;
+	/** Build mode controls metadata required by development tools. */
+	final buildMode:String;
 	final defines:Array<String>;
 	final output:String;
 	final xmlOutput:Null<String>;

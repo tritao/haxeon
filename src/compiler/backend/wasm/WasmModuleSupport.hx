@@ -140,7 +140,7 @@ class WasmModuleSupport {
 										data = HaxeBytes.alloc(bytes.length);
 									for (index in 0...bytes.length)
 										data.set(index, bytes[index]);
-									segments.push({offset: offset, bytes: data});
+									segments.push({offset: offset, bytes: data, censusCategory: "static data"});
 									addresses.set(key, offset);
 									next = offset + data.length;
 								}

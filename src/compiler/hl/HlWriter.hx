@@ -114,6 +114,111 @@ class HlWriter {
 		return writer.getBytes();
 	}
 
+	/** Measure exactly the components written by writeCode, without changing the module. */
+	public static function reportSize(code:HlCode):Void {
+		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		var writer = new HlWriter();
+		writer.prepareDebugFiles(code);
+		var part = new HlWriter();
+		part.writeStrings(code.strings);
+		var strings = part.getBytes().length;
+		part = new HlWriter();
+		if (writer.hasDebug) {
+			part.writeUnsignedIndex(writer.debugFiles.length);
+			part.writeStrings(writer.debugFiles);
+		}
+		var debugFiles = part.getBytes().length;
+		var typeSizes:Array<{index:Int, bytes:Int}> = [], types = 0, reflection = 0;
+		for (index in 0...code.types.length) {
+			part = new HlWriter(); part.writeType(code.types[index]);
+			var size = part.getBytes().length;
+			types += size;
+			part = new HlWriter(); part.writeReflectionMembers(code.types[index]);
+			reflection += part.getBytes().length;
+			typeSizes.push({index: index, bytes: size});
+		}
+		typeSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
+		var stringSizes:Array<{index:Int, bytes:Int}> = [];
+		for (index in 0...code.strings.length)
+			stringSizes.push({index: index, bytes: HaxeBytes.ofString(code.strings[index]).length});
+		stringSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
+		var topTypes = [for (entry in typeSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes
+			+ ',"type":' + haxe.Json.stringify(typeDescription(code.types[entry.index], code.strings)) + '}'];
+		var topStrings = [for (entry in stringSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes
+			+ ',"value":' + haxe.Json.stringify(code.strings[entry.index]) + '}'];
+		var uses:Map<Int, Int> = [];
+		for (fn in code.functions) for (opcode in fn.opcodes) switch opcode {
+			case LoadString(_, index): uses.set(index, (uses.exists(index) ? uses.get(index) : 0) + 1);
+			default:
+		}
+		var stringUses = [for (index => count in uses) {index: index, count: count}];
+		stringUses.sort((a, b) -> a.count != b.count ? b.count - a.count : a.index - b.index);
+		var topStringUses = [for (entry in stringUses.slice(0, 30)) '{"index":' + entry.index + ',"references":' + entry.count
+			+ ',"value":' + haxe.Json.stringify(code.strings[entry.index]) + '}'];
+		part = new HlWriter();
+		for (global in code.globals) part.writeIndex(global);
+		var globals = part.getBytes().length;
+		part = new HlWriter();
+		for (native in code.natives) {
+			part.writeIndex(native.library); part.writeIndex(native.name); part.writeIndex(native.type);
+			part.writeUnsignedIndex(native.functionIndex);
+		}
+		var natives = part.getBytes().length;
+		part = new HlWriter(); part.writePrefixWithDebug(code, writer);
+		var prefix = part.getBytes().length;
+		var functions = 0, functionDebug = 0, debugSizes:Array<{index:Int, bytes:Int}> = [];
+		for (fn in code.functions) {
+			var plain = encodeFunction(fn).length;
+			functions += plain;
+			var debug = writer.encodePreparedFunction(fn).length - plain;
+			functionDebug += debug;
+			if (debug > 0) debugSizes.push({index: fn.functionIndex, bytes: debug});
+		}
+		debugSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
+		var topFunctionDebug = [for (entry in debugSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes + '}'];
+		part = new HlWriter(); part.writeConstants(code);
+		var constants = part.getBytes().length;
+		part = new HlWriter(); part.writeDebugSections(code);
+		var debugSections = part.getBytes().length;
+		var sections = [for (section in code.debugSections) '{"kind":' + section.kind + ',"version":' + section.version
+			+ ',"payload":' + section.payload.length + '}'];
+		var scalarConstants = code.ints.length * 4 + code.floats.length * 8;
+		var header = prefix - strings - debugFiles - types - globals - natives - scalarConstants;
+		Sys.stderr().writeString('SIZE_CENSUS {"target":"hl","header":' + header + ',"scalarConstants":' + scalarConstants
+			+ ',"strings":' + strings + ',"debugFiles":' + debugFiles + ',"types":' + (types - reflection)
+			+ ',"reflectionMembers":' + reflection + ',"globals":' + globals
+			+ ',"natives":' + natives + ',"functions":' + functions + ',"functionDebug":' + functionDebug
+			+ ',"constants":' + constants + ',"debugSections":' + debugSections + ',"sections":[' + sections.join(",")
+			+ '],"topTypes":[' + topTypes.join(",") + '],"topStrings":[' + topStrings.join(",")
+			+ '],"topStringUses":[' + topStringUses.join(",") + '],"topFunctionDebug":[' + topFunctionDebug.join(",") + ']}\n');
+	}
+
+	function writePrefixWithDebug(code:HlCode, prepared:HlWriter):Void {
+		hasDebug = prepared.hasDebug;
+		debugFiles = prepared.debugFiles;
+		debugFileIndices = prepared.debugFileIndices;
+		writePrefix(code);
+	}
+
+	static function typeDescription(type:HlTypeDef, strings:Array<String>):String
+		return switch type {
+			case Object(name, _, _, _, _, _): "object " + strings[name];
+			case Structure(name, _, _, _, _): "struct " + strings[name];
+			case Enum(name, _, _): "enum " + strings[name];
+			case Abstract(name): "abstract " + strings[name];
+			default: Std.string(type);
+		};
+
+	/** Member records within the type table; their names and type headers remain in their own categories. */
+	function writeReflectionMembers(type:HlTypeDef):Void
+		switch type {
+			case Object(_, _, _, fields, methods, bindings) | Structure(_, _, fields, methods, bindings):
+				writeObjectMembers(fields, methods, bindings);
+			case Virtual(fields): writeFields(fields);
+			case Enum(_, _, constructors): writeEnumConstructors(constructors);
+			default:
+		}
+
 	function writeCode(code:HlCode):Void {
 		prepareDebugFiles(code);
 		if (cache != null)
@@ -423,21 +528,13 @@ class HlWriter {
 			case Virtual(fields):
 				output.writeByte(HlType.Virtual);
 				writeUnsignedIndex(fields.length);
-				for (field in fields) {
-					writeIndex(field.name);
-					writeIndex(field.type);
-				}
+				writeFields(fields);
 			case Enum(name, global, constructors):
 				output.writeByte(HlType.Enum);
 				writeIndex(name);
 				writeUnsignedIndex(global);
 				writeUnsignedIndex(constructors.length);
-				for (constructor in constructors) {
-					writeIndex(constructor.name);
-					writeUnsignedIndex(constructor.params.length);
-					for (param in constructor.params)
-						writeIndex(param);
-				}
+				writeEnumConstructors(constructors);
 		}
 	}
 
@@ -449,10 +546,27 @@ class HlWriter {
 		writeUnsignedIndex(fields.length);
 		writeUnsignedIndex(methods.length);
 		writeUnsignedIndex(Std.int(bindings.length / 2));
+		writeObjectMembers(fields, methods, bindings);
+	}
+
+	function writeFields(fields:Array<compiler.hl.HlCode.HlObjectField>):Void {
 		for (field in fields) {
 			writeIndex(field.name);
 			writeIndex(field.type);
 		}
+	}
+
+	function writeEnumConstructors(constructors:Array<compiler.hl.HlCode.HlEnumConstructor>):Void {
+		for (constructor in constructors) {
+			writeIndex(constructor.name);
+			writeUnsignedIndex(constructor.params.length);
+			for (param in constructor.params) writeIndex(param);
+		}
+	}
+
+	function writeObjectMembers(fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>,
+			bindings:Array<Int>):Void {
+		writeFields(fields);
 		for (method in methods) {
 			writeIndex(method.name);
 			writeUnsignedIndex(method.functionIndex);
@@ -535,18 +649,11 @@ class HlWriter {
 	}
 
 	function writeDebugLocations(fn:HlFunction):Void {
-		var currentFile = -1;
-		for (index in 0...fn.opcodes.length) {
+		var currentFile = -1, currentLine = 0, index = 0;
+		while (index < fn.opcodes.length) {
 			var location:HlDebugLocation = fn.debugLocations.length == 0 ? {
-				path: "<generated>",
-				line: 1,
-				start: null,
-				end: null,
-				column: 1,
-				endLine: 1,
-				endColumn: 1,
-				sourceHash: 0,
-				flags: 1
+				path: "<generated>", line: 1, start: null, end: null, column: 1,
+				endLine: 1, endColumn: 1, sourceHash: 0, flags: 1
 			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
@@ -558,9 +665,29 @@ class HlWriter {
 				output.writeByte(file & 0xFF);
 				currentFile = file;
 			}
-			output.writeByte((location.line & 0x1F) << 3);
-			output.writeByte((location.line >> 5) & 0xFF);
-			output.writeByte((location.line >> 13) & 0xFF);
+			if (location.line == currentLine) {
+				var count = 1;
+				while (count < 15 && index + count < fn.opcodes.length) {
+					if (fn.debugLocations.length != 0) {
+						var next = fn.debugLocations[index + count];
+						if (next.path != location.path || next.line != currentLine) break;
+					}
+					count++;
+				}
+				output.writeByte((count << 2) | 2);
+				index += count;
+			} else {
+				var delta = location.line - currentLine;
+				if (delta > 0 && delta <= 31)
+					output.writeByte((delta << 3) | 4);
+				else {
+					output.writeByte((location.line & 0x1F) << 3);
+					output.writeByte((location.line >> 5) & 0xFF);
+					output.writeByte((location.line >> 13) & 0xFF);
+				}
+				currentLine = location.line;
+				index++;
+			}
 		}
 	}
 

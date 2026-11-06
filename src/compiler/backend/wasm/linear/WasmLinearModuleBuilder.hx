@@ -104,11 +104,20 @@ class WasmLinearModuleBuilder {
 		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
 			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true), exportAdapters:Map<String, String> = [];
 		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
-		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures),
+		var roots = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
+		if (WasmModuleSupport.hasFunction(logical, "__init")) roots.push("__init");
+		var entry = WasmModuleSupport.hasFunction(logical, "main") ? "main" :
+			WasmModuleSupport.hasFunction(logical, "Main.main") ? "Main.main" : logical.entryPoint;
+		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures, entry, roots),
 			existing = logical.functions.slice(0, originalCount), generated = logical.functions.slice(originalCount);
 		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
 		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
 		logical.functions = existing.concat(generated);
+		while (true) {
+			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions);
+			if (missing.length == 0) break;
+			logical.functions = logical.functions.concat(missing);
+		}
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		IrVerifier.verify(logical);
@@ -183,11 +192,24 @@ class WasmLinearModuleBuilder {
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		var plannedFunctions:Map<String, Bool> = [], rootSet:Map<String, Bool> = [];
+		for (fn in program.functions) plannedFunctions.set(fn.name, true);
 		var changed = true;
 		while (changed) {
 			changed = scalarAbi.retainOriginals(reachable, roots);
 			if (fieldLowering.retainOriginals(reachable, roots)) changed = true;
 			if (scalarAbi.retainVirtualTargets(program, reachable, roots)) changed = true;
+			for (root in roots) rootSet.set(root, true);
+			for (fn in program.functions) if (reachable.exists(fn.name))
+				for (block in fn.blocks) for (located in block.instructions) switch located.value {
+					case SafeCast(output, _): switch output.type {
+						case Function(_, _):
+							var name = WasmLinearClosureAdapters.castName(output.type);
+							if (plannedFunctions.exists(name) && !rootSet.exists(name)) { roots.push(name); rootSet.set(name, true); changed = true; }
+						default:
+					}
+					default:
+				}
 			if (changed) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
@@ -204,7 +226,7 @@ class WasmLinearModuleBuilder {
 							if (!strings.exists(value)) {
 								var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds);
 								var offset = nextData;
-								module.data.push({offset: offset, bytes: bytes});
+								module.data.push({offset: offset, bytes: bytes, censusCategory: "strings"});
 								strings.set(value, offset);
 								nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 							}
@@ -215,7 +237,7 @@ class WasmLinearModuleBuilder {
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
 					offset = nextData;
-				module.data.push({offset: offset, bytes: bytes});
+				module.data.push({offset: offset, bytes: bytes, censusCategory: "strings"});
 				strings.set(value, offset);
 				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
@@ -231,7 +253,7 @@ class WasmLinearModuleBuilder {
 					if (!staticClosureDescriptors.exists(key)) {
 						var offset = WasmModuleSupport.align(nextData, 8), bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
 						bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
-						module.data.push({offset: offset, bytes: bytes});
+						module.data.push({offset: offset, bytes: bytes, censusCategory: "closure descriptors"});
 						staticClosureDescriptors.set(key, offset);
 						staticClosureRecords.set(key, {name: name, bytes: bytes});
 						nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
@@ -246,7 +268,7 @@ class WasmLinearModuleBuilder {
 			reflectionTable = WasmModuleSupport.align(nextData, 8);
 			reflectionCount = Std.int(reflectionSize / WasmReflectionTable.ROW_SIZE);
 			reflectionBytes = haxe.io.Bytes.alloc(reflectionSize);
-			module.data.push({offset: reflectionTable, bytes: reflectionBytes});
+			module.data.push({offset: reflectionTable, bytes: reflectionBytes, censusCategory: "reflection"});
 			nextData = reflectionTable + reflectionSize;
 		}
 		heapState = WasmModuleSupport.align(nextData, 8);
@@ -273,7 +295,7 @@ class WasmLinearModuleBuilder {
 		state.setInt32(WasmLayout.HEAP_STATE_BUDGET, WasmLayout.GC_MIN_ALLOCATION_BUDGET);
 		state.setInt32(WasmLayout.HEAP_STATE_FLAGS,
 			(options.wasmGcStress == true ? WasmLayout.HEAP_FLAG_STRESS : 0) | (options.wasmMemoryStats == true ? WasmLayout.HEAP_FLAG_STATS : 0));
-		module.data.push({offset: heapState, bytes: state});
+		module.data.push({offset: heapState, bytes: state, censusCategory: "runtime state"});
 		globals = [];
 		rootGlobals = [];
 		for (field in program.staticFields) {
@@ -457,11 +479,14 @@ class WasmLinearModuleBuilder {
 	}
 
 	function publishMetadata(gcRootMetadata:haxe.io.Bytes):Void {
-		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
+		if (runtimeNeutral || options.developmentMetadata != false)
+			module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
 		if (runtimeNeutral)
 			module.customSections.push({name: WasmRuntimeNeutralProfile.SECTION_NAME, bytes: WasmRuntimeNeutralProfile.sectionBytes()});
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		if (options.developmentMetadata != false) {
+			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
+			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		}
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 	}
