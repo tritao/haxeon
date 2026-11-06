@@ -43,6 +43,7 @@ class InlineMemo {
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
+
 	/** Final cleanup depends only on the inliner's result and must not affect inlining decisions. */
 	public var cleaned:Map<String, {source:IrFunction, result:IrFunction}> = [];
 
@@ -126,8 +127,42 @@ class IrInlineCache {
 		return id == null ? 0 : id;
 	}
 
+	/** Immutable entries are replaced per run, so a transaction copy can share this map safely.
+	 * Full state bytes include source hashes and offsets: debug relocation must never reuse stale provenance.
+	 * Encode lazily only when representation lowering rebuilt an input under the same name.
+	 */
+	var sources:Map<String, {source:IrFunction, bytes:Null<Bytes>}> = [];
+
+	public function stableSources(functions:Array<IrFunction>):Array<IrFunction> {
+		var next:Map<String, {source:IrFunction, bytes:Null<Bytes>}> = [],
+			result:Array<IrFunction> = [];
+		for (fn in functions) {
+			var known = sources.get(fn.name);
+			if (known == null)
+				known = {source: fn, bytes: null};
+			else if (known.source != fn) {
+				var oldBytes = known.bytes, bytes:Null<Bytes> = null;
+				if (oldBytes == null)
+					try {
+						oldBytes = IrFunctionStateCodec.encode(known.source);
+					} catch (_:Dynamic) {}
+				try {
+					bytes = IrFunctionStateCodec.encode(fn);
+				} catch (_:Dynamic) {}
+				known = oldBytes != null
+					&& bytes != null
+					&& oldBytes.compare(bytes) == 0 ? {source: known.source, bytes: oldBytes} : {source: fn, bytes: bytes};
+			}
+			next.set(fn.name, known);
+			result.push(known.source);
+		}
+		sources = next;
+		return result;
+	}
+
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
+		result.sources = sources;
 		for (name => entry in memo)
 			result.memo.set(name, entry);
 		for (name => fn in published)
@@ -256,13 +291,23 @@ class IrInliner {
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
 	static function describe(object:IrObject):String {
 		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
-		var fields = [for (field in object.fields) if (object.isValue || IrFieldStorage.scalar(field) != null || field.nullableScalarStorage != null || (switch (field.type) { case F32: true; default: false; })) {
-			var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field), nullable = field.nullableScalarStorage;
-			field.name + "=" + Std.string(field.type)
-				+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
-				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')
-				+ (nullable == null ? "" : ':nullable=${nullable.size}:${nullable.signed}');
-		}].join(",");
+		var fields = [
+			for (field in object.fields)
+				if (object.isValue
+					|| IrFieldStorage.scalar(field) != null
+					|| field.nullableScalarStorage != null
+					|| (switch (field.type) {
+						case F32: true;
+						default: false;
+					})) {var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field), nullable = field.nullableScalarStorage;
+					field.name
+					+ "="
+					+ Std.string(field.type)
+					+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
+					+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')
+					+ (nullable == null ? "" : ':nullable=${nullable.size}:${nullable.signed}');
+					}
+		].join(",");
 		return object.name + "<" + Std.string(object.base) + ":" + object.isValue + ":" + methods + ":" + fields;
 	}
 
@@ -285,6 +330,7 @@ class IrInliner {
 	 * not change, because a callee they inlined did.
 	 */
 	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool, ?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
+		program.functions = cache.stableSources(program.functions);
 		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [],
@@ -302,7 +348,8 @@ class IrInliner {
 				var source = result;
 				result = IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(result)));
 				clean = {source: source, result: result};
-			} else result = clean.result;
+			} else
+				result = clean.result;
 			cleaned.set(fn.name, clean);
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
@@ -603,16 +650,21 @@ class IrInliner {
 			if (found)
 				break;
 		}
-		if (!found) for (block in fn.blocks) {
-			for (located in block.instructions) switch located.value {
-				case NewObject(_, name):
-					var object = table.get(name);
-					if (object != null && object.isValue) found = true;
-				default:
+		if (!found)
+			for (block in fn.blocks) {
+				for (located in block.instructions)
+					switch located.value {
+						case NewObject(_, name):
+							var object = table.get(name);
+							if (object != null && object.isValue)
+								found = true;
+						default:
+					}
+				if (found)
+					break;
 			}
-			if (found) break;
-		}
-		if (!found && !IrCopyElision.hasCopies(fn.blocks)) return fn;
+		if (!found && !IrCopyElision.hasCopies(fn.blocks))
+			return fn;
 		var blocks:Array<IrBlock> = [], nextValue = 0, nextBlock = 0;
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
@@ -655,8 +707,7 @@ class IrInliner {
 				nextValue = splice(block, position, callee, substitutions, nextValue);
 				continue;
 			}
-			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock,
-				needsReceiverCheck(block.instructions[position].value));
+			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock, needsReceiverCheck(block.instructions[position].value));
 			nextValue = expansion.nextValue;
 			nextBlock = expansion.nextBlock;
 			// Continue with the first inlined block; calls left in it were not candidates.
@@ -667,7 +718,8 @@ class IrInliner {
 			bindings = substitute(blocks, substitutions, bindings);
 		var replaced = IrScalarReplacement.run(blocks, table, nextValue);
 		if (packedValueFields)
-			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue, replaced.substitutions)};
+			replaced = {substitutions: replaced.substitutions, nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue,
+				replaced.substitutions)};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
 		var consult = function(name:String):Void {
@@ -680,15 +732,14 @@ class IrInliner {
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
-	function needsReceiverCheck(instruction:IrInstruction):Bool return switch instruction {
-		case MethodCall(_, receiver, _, _, _): switch receiver.type {
-			case Obj(name):
-				var object = table.get(name);
-				object == null || !object.isValue;
-			default: true;
+	function needsReceiverCheck(instruction:IrInstruction):Bool
+		return switch instruction {
+			case MethodCall(_, receiver, _, _, _): switch receiver.type {
+					case Obj(name): var object = table.get(name); object == null || !object.isValue;
+					default: true;
+				};
+			default: false;
 		};
-		default: false;
-	};
 
 	/** Replaces the call at `block.instructions[position]` by the callee's instructions; the result is substituted for the call's output. */
 	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
@@ -705,7 +756,9 @@ class IrInliner {
 			default:
 				throw "Inliner expected a call";
 		}
-		var source = callee.blocks[0], values:Map<Int, IrValue> = [], copies:Array<Located<IrInstruction>> = [];
+		var source = callee.blocks[0],
+			values:Map<Int, IrValue> = [],
+			copies:Array<Located<IrInstruction>> = [];
 		if (needsReceiverCheck(call.value)) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
 			copies.push(new Located(Call(checked, IrReceiverCheck.NAME, [resolve(actuals[0], substitutions)]), call.provenance));
@@ -734,7 +787,10 @@ class IrInliner {
 			case Return(value): use(value);
 			default: throw "A straight-line callee must return";
 		};
-		if ((switch (callOutput.type) { case Void: true; default: false; }))
+		if ((switch (callOutput.type) {
+			case Void: true;
+			default: false;
+		}))
 			copies.push(new Located(ConstVoid(callOutput), call.provenance));
 		else
 			substitutions.set(callOutput.id, returned);
@@ -835,8 +891,13 @@ class IrInliner {
 			default:
 				throw "Inliner expected a call";
 		}
-		var values:Map<Int, IrValue> = [], blockIds:Map<Int, Int> = [], upcasts:Array<Located<IrInstruction>> = [];
-		var mustCheck = checkReceiver == null ? switch call.value { case MethodCall(_, _, _, _, _): true; default: false; } : checkReceiver;
+		var values:Map<Int, IrValue> = [],
+			blockIds:Map<Int, Int> = [],
+			upcasts:Array<Located<IrInstruction>> = [];
+		var mustCheck = checkReceiver == null ? switch call.value {
+			case MethodCall(_, _, _, _, _): true;
+			default: false;
+		} : checkReceiver;
 		if (mustCheck) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
 			upcasts.push(new Located(Call(checked, IrReceiverCheck.NAME, [actuals[0]]), call.provenance));
@@ -889,7 +950,10 @@ class IrInliner {
 			cloned.push(copy);
 		}
 		// The continuation defines the call's output, then runs whatever followed the call.
-		if ((switch (callOutput.type) { case Void: true; default: false; }))
+		if ((switch (callOutput.type) {
+			case Void: true;
+			default: false;
+		}))
 			continuation.instructions.push(new Located(ConstVoid(callOutput), call.provenance));
 		else
 			continuation.instructions.push(new Located(Phi(callOutput, returned), call.provenance));
@@ -1000,7 +1064,8 @@ class IrInliner {
 			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
 			case ToVirtual(out, value): ToVirtual(use(out), use(value));
 			case Upcast(out, value): Upcast(use(out), use(value));
-			case MethodCall(out, object, name, arguments, terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
+			case MethodCall(out, object, name, arguments,
+				terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
 			case NewObject(out, typeName): NewObject(use(out), typeName);
 			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);
 			case FieldSet(object, name, value): FieldSet(use(object), name, use(value));
