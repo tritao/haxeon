@@ -202,6 +202,7 @@ run_timed profiler-span-ids-integration python3 "$root_dir/tests/integration/tes
 run_timed profiler-report-integration python3 "$root_dir/tests/integration/test-profiler-report.py"
 run_timed profiler-spans-integration python3 "$root_dir/tests/integration/test-profiler-spans.py"
 run_timed hldump-integration python3 "$root_dir/tests/integration/test-hldump.py"
+run_timed debug-line-encoding python3 "$root_dir/tests/integration/test-debug-line-encoding.py"
 run_timed binary-size-report python3 "$root_dir/tests/integration/test-binary-size-report.py"
 run_timed fatal-stack-integration python3 "$root_dir/tests/integration/test-fatal-stack.py"
 run_timed stdout-buffering-integration python3 "$root_dir/tests/integration/test-stdout-buffering.py"

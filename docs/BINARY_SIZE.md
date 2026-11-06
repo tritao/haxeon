@@ -62,7 +62,7 @@ Repeat Wasm32 and Wasm GC Showcase captures using the original Haxe interpreter 
 
 The linear backend plans closure source signatures and cast targets from reachable functions, then expands generated adapters' function-valued casts until no new target appears. Cast-helper calls introduced by lowering are included in the final reachability calculation; generated adapters and dispatchers no longer use `Keep`. The varargs adapter dependencies are generated as needed. Reachability uses indexed helper lookups, and Wasm validation shares its unchanged function-signature vector across functions instead of rebuilding it for each one. A missing planned function-cast helper is a compile error instead of silently omitting the conversion. Tests cover unreachable casts and the existing dynamic, reflection, varargs and nested-callback behavior.
 
-At rebased baseline `93230bda`, using the same checkout-built HashLink-hosted compiler for both captures, Showcase Wasm32 fell from **30,017,042 to 11,867,682 bytes** and from **23,805 to 6,864 functions**. Closure adapters fell from 19,957 (6,447,798 body bytes) to 3,032 (774,201 bytes); cast dispatchers rose from 95 to 102 as nested conversions were added, and their bodies fell from 2,185,576 to 318,984 bytes. All bytes, including section framing, are attributed below:
+At compiler base `bf962e0f` with the size-report tooling, using the same checkout-built HashLink-hosted compiler for both captures, Showcase Wasm32 fell from **30,017,042 to 11,867,682 bytes** and from **23,805 to 6,864 functions**. Closure adapters fell from 19,957 (6,447,798 body bytes) to 3,032 (774,201 bytes); cast dispatchers rose from 95 to 102 as nested conversions were added, and their bodies fell from 2,185,576 to 318,984 bytes. All bytes, including section framing, are attributed below:
 
 | Category | Before | After |
 |---|---:|---:|
@@ -98,10 +98,23 @@ The editor HashLink module is 103,205,406 bytes with 32,378 functions. Its exact
 
 The editor is a desktop HashLink application; its native MachineKit FFI uses a 64-bit layout. Wasm editor builds are out of scope. Compare this frozen editor on HashLink and the UI Showcase on all three targets.
 
-## HashLink line-table opportunity
+## HashLink line tables
 
-The checkout VM decodes the standard HashLink line-table repeat and forward-delta records, while `HlWriter.writeDebugLocations` currently emits an absolute three-byte line for every opcode. Applying a read-only model of repeat runs (up to 15 equal file/line entries) and forward deltas of 1–31 to the checkout `hldump --debug` output predicts a reduction from 992,682 to 217,173 encoded line/file bytes for the desktop Showcase, a 775,509-byte saving. The remaining 86,956 bytes of per-function debug data are assignment records and are excluded from this estimate. The largest modeled savings are in `TextOffsetMap.isExtend` (10,182 bytes), `Theme.refreshStyles` (8,891), and `Theme.palette` (7,385). The model covers 314,938 decoded opcode locations; it has not yet been implemented or verified against the debugger, profiler, stack traces, and hot reload.
+The writer now uses the standard HashLink repeat record for runs of up to 15 identical file/line locations and the standard forward-delta record for line advances of 1–31. Other line changes use the existing absolute record. The current line persists across file records, matching the VM decoder. This removes no source locations or assignment records.
+
+| Module | Bytes before | Bytes after | Functions before / after | Line and assignment bytes before / after |
+|---|---:|---:|---:|---:|
+| Showcase HashLink | 12,577,769 | 11,802,260 | 6,529 / 6,529 | 1,079,638 / 304,129 |
+| Editor HashLink | 103,205,406 | 96,258,911 | 32,378 / 32,378 | 9,676,077 / 2,729,582 |
+| Showcase Wasm32 | 11,867,682 | 11,867,682 | 6,864 / 6,864 | not applicable |
+| Showcase Wasm GC | 5,493,751 | 5,493,751 | 4,238 / 4,238 | not applicable |
+
+Every other byte category is unchanged for each HashLink module; both Wasm modules are byte-identical. `hldump --debug` produced identical complete decoded output for each HashLink before/after pair, including every opcode location. A focused fixture exercises repeated locations across the 15-record boundary, both ends of the forward-delta range, a backward line change, and a file switch. The HLD3 debugger and live-patch harness, hot-reload tests, exception-stack test, profiler recording test, and debug-metadata tests passed. Two stale assumptions in the hot-reload test fixture were corrected: a version-1 state must exclude the later `publishedGlobals` field, and both functions whose source snapshot changed must be marked regenerated.
+
+The static IR allocation-site counts are unchanged: 5,411 on Showcase HashLink, 7,703 on each Showcase Wasm target, and 51,470 on the editor. These are site counts rather than runtime totals.
+
+The UI state and pointer allocation fixture also passed before and after on all three targets with inlining off and on, including zero allocations in its measured Wasm loops; its output was identical.
 
 ## Remaining work
 
-Complete the HashLink editor and three-target Showcase before/after measurements and allocation checks. The HashLink line table and development metadata changes remain to be measured.
+Complete the HashLink editor and three-target Showcase before/after measurements and allocation checks. The development metadata changes remain to be measured.

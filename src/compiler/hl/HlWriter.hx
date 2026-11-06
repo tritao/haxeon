@@ -649,18 +649,11 @@ class HlWriter {
 	}
 
 	function writeDebugLocations(fn:HlFunction):Void {
-		var currentFile = -1;
-		for (index in 0...fn.opcodes.length) {
+		var currentFile = -1, currentLine = 0, index = 0;
+		while (index < fn.opcodes.length) {
 			var location:HlDebugLocation = fn.debugLocations.length == 0 ? {
-				path: "<generated>",
-				line: 1,
-				start: null,
-				end: null,
-				column: 1,
-				endLine: 1,
-				endColumn: 1,
-				sourceHash: 0,
-				flags: 1
+				path: "<generated>", line: 1, start: null, end: null, column: 1,
+				endLine: 1, endColumn: 1, sourceHash: 0, flags: 1
 			} : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
@@ -672,9 +665,29 @@ class HlWriter {
 				output.writeByte(file & 0xFF);
 				currentFile = file;
 			}
-			output.writeByte((location.line & 0x1F) << 3);
-			output.writeByte((location.line >> 5) & 0xFF);
-			output.writeByte((location.line >> 13) & 0xFF);
+			if (location.line == currentLine) {
+				var count = 1;
+				while (count < 15 && index + count < fn.opcodes.length) {
+					if (fn.debugLocations.length != 0) {
+						var next = fn.debugLocations[index + count];
+						if (next.path != location.path || next.line != currentLine) break;
+					}
+					count++;
+				}
+				output.writeByte((count << 2) | 2);
+				index += count;
+			} else {
+				var delta = location.line - currentLine;
+				if (delta > 0 && delta <= 31)
+					output.writeByte((delta << 3) | 4);
+				else {
+					output.writeByte((location.line & 0x1F) << 3);
+					output.writeByte((location.line >> 5) & 0xFF);
+					output.writeByte((location.line >> 13) & 0xFF);
+				}
+				currentLine = location.line;
+				index++;
+			}
 		}
 	}
 
