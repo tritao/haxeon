@@ -351,6 +351,8 @@ class IrInterpreter {
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
+			case "__f32_to_i32_bits": haxe.io.FPHelper.floatToI32(arguments[0]);
+			case "__i32_to_f32_bits": haxe.io.FPHelper.i32ToFloat(arguments[0]);
 			case "runtime.FloatBits.toInt64", "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
 			case "runtime.FloatBits.fromInt64", "__i64_to_f64_bits":
 				var bits:haxe.Int64 = cast arguments[0];

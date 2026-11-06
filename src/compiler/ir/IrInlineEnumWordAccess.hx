@@ -16,6 +16,8 @@ class IrInlineEnumWordAccess {
 
 	/** Bit conversions are native on HashLink and lowered to Wasm reinterpret instructions. */
 	public static function natives():Array<IrNative> return [
+		{name: "__f32_to_i32_bits", library: "haxeon_runtime", symbol: "__f32_to_i32_bits", arguments: [F32], result: I32},
+		{name: "__i32_to_f32_bits", library: "haxeon_runtime", symbol: "__i32_to_f32_bits", arguments: [I32], result: F32},
 		{name: "__f64_to_i64_bits", library: "haxeon_runtime", symbol: "__f64_to_i64_bits", arguments: [F64], result: I64},
 		{name: "__i64_to_f64_bits", library: "haxeon_runtime", symbol: "__i64_to_f64_bits", arguments: [I64], result: F64},
 		{name: "haxe.Int64.toInt", library: "haxeon_runtime", symbol: "__int64_to_int", arguments: [I64], result: I32}
@@ -24,6 +26,7 @@ class IrInlineEnumWordAccess {
 	/** The caller initializes the destination's words before storing any payload leaves. */
 	public function write(builder:IrBuilder, owner:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
 		if (slot.isReference) throw "Reference slots are not scalar words";
+		if (slot.bitWidth > bits) throw "A scalar payload must fit its enum word width";
 		var encoded = encode(builder, value), first = Std.int(Math.min(slot.bitWidth, bits - slot.bitOffset));
 		writePart(builder, owner, slot.index, slot.bitOffset, first, encoded);
 		var remaining = slot.bitWidth - first;
@@ -33,6 +36,7 @@ class IrInlineEnumWordAccess {
 
 	public function read(builder:IrBuilder, owner:IrValue, slot:IrValueLaneSlot):IrValue {
 		if (slot.isReference) throw "Reference slots are not scalar words";
+		if (slot.bitWidth > bits) throw "A scalar payload must fit its enum word width";
 		var first = Std.int(Math.min(slot.bitWidth, bits - slot.bitOffset)),
 			value = readPart(builder, owner, slot.index, slot.bitOffset, first), remaining = slot.bitWidth - first;
 		if (remaining > 0)
@@ -72,6 +76,7 @@ class IrInlineEnumWordAccess {
 		case I32: bits == 32 ? value : builder.intToInt64(value);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__f64_to_i64_bits", [value], I64);
+		case F32: var encoded = builder.call("__f32_to_i32_bits", [value], I32); bits == 32 ? encoded : builder.intToInt64(encoded);
 		case Bool:
 			var yes = builder.createBlock(), no = builder.createBlock(), done = builder.createBlock();
 			builder.branch(value, yes, no);
@@ -85,6 +90,7 @@ class IrInlineEnumWordAccess {
 		case I32: bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__i64_to_f64_bits", [value], F64);
+		case F32: builder.call("__i32_to_f32_bits", [bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], F32);
 		case Bool: builder.equal(builder.equal(value, builder.constInt(0, wordType)), builder.constBool(false));
 		default: throw 'Unsupported enum scalar payload $type';
 	};

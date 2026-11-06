@@ -555,6 +555,18 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw "Invalid Wasm runtime memory.load i32 signature";
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
+		if (name == "__f32_to_i32_bits") {
+			if (!compiler.ir.IrVerifier.sameType(output.type, I32) || arguments.length != 1
+				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, F32) || argumentLocals.length != 1)
+				throw "Invalid Wasm Float32 bit conversion signature";
+			return [LocalGet(argumentLocals[0]), F32DemoteF64, I32ReinterpretF32, LocalSet(outputLocal)];
+		}
+		if (name == "__i32_to_f32_bits") {
+			if (!compiler.ir.IrVerifier.sameType(output.type, F32) || arguments.length != 1
+				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, I32) || argumentLocals.length != 1)
+				throw "Invalid Wasm Float32 bit conversion signature";
+			return [LocalGet(argumentLocals[0]), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)];
+		}
 		if (name == "__f64_to_i64_bits" || name == "runtime.FloatBits.toInt64") {
 			if ((switch (output.type) { case I64: false; default: true; }) || arguments.length != 1 || (switch (arguments[0].type) { case F64: false; default: true; }) || argumentLocals.length != 1)
 				throw "Invalid Wasm FloatBits.toInt64 signature";

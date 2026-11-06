@@ -31,6 +31,18 @@ HL_PRIM double HL_NAME(__i64_to_f64_bits)(int64_t bits) {
 	return value;
 }
 
+HL_PRIM int HL_NAME(__f32_to_i32_bits)(float value) {
+	int bits;
+	memcpy(&bits, &value, sizeof(bits));
+	return bits;
+}
+
+HL_PRIM float HL_NAME(__i32_to_f32_bits)(int bits) {
+	float value;
+	memcpy(&value, &bits, sizeof(value));
+	return value;
+}
+
 HL_PRIM int64_t HL_NAME(__int64_of_int)(int value) { return (int64_t)value; }
 HL_PRIM int64_t HL_NAME(__int64_from_float)(double value) { return (int64_t)value; }
 HL_PRIM int64_t HL_NAME(__int64_make)(int high, int low) { return (int64_t)(((uint64_t)(uint32_t)high << 32) | (uint32_t)low); }

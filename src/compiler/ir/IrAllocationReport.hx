@@ -133,7 +133,7 @@ class IrAllocationReport {
 		if (body == "iterator_has_next" || body == "iterator_next_i32" || body == "iterator_next_f64")
 			return null;
 		switch body {
-			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "std_int_f64", "std_int_dynamic", "std_is_exact_type", "std_is_of_type",
+			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "f32_to_i32_bits", "i32_to_f32_bits", "std_int_f64", "std_int_dynamic", "std_is_exact_type", "std_is_of_type",
 				"std_parse_float", "std_parse_int", "std_random", "exception_matches", "sys_profile_counter", "sys_profile_frame", "sys_profile_span":
 				return null;
 			default:

@@ -1976,3 +1976,64 @@ scenarios, the first scheduled standalone editor budget check and all paired hea
 build/browser smokes and both real compiler-dependency checks pass. No profiler hang occurred in the informational
 capture; its missing JSON startup rows were an export-format selection error. All raw captures are removed after their
 numbers are extracted; the idle outer gate checkout and historical audit source archive are removed.
+
+## Float32 enum payload words
+
+Control is Haxeon `25eb407f`; both builds use committed outer `8ab5cb995` on the same machine.
+This checkpoint adds payload bit access, without activating source inline enums. The editor profiles are byte-identical
+(97,753,655 bytes, SHA-256 `ff19cde59d778231dc445ad4b36c5ac0da543452ae1dcccfa040731a2ffd90c9`).
+The HashLink VM is unchanged; the candidate native runtime adds the two Float32 bit conversions.
+Nine alternating action pairs give these allocation and frame-time medians:
+
+| Action | Control → candidate KiB | Control → candidate ms |
+| --- | ---: | ---: |
+| console->telemetry | 72.5 → 72.5 | 1.1 → 1.09 |
+| hierarchy->sensors | 112.6 → 112.6 | 1.55 → 1.54 |
+| sensors->hierarchy | 80.1 → 80.1 | 1.21 → 1.21 |
+| telemetry->console | 92.9 → 92.9 | 1.16 → 1.15 |
+| hover-away | 13.6 → 13.6 | 0.42 → 0.42 |
+| hover-enter | 0.5 → 0.5 | 0 → 0 |
+| hover-field | 12.4 → 12.4 | 0.42 → 0.43 |
+| hover-inside | 0.5 → 0.5 | 0 → 0 |
+| hover-other | 10 → 10 | 0.41 → 0.42 |
+| idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| scroll-inspector | 21.2 → 21.2 | 0.71 → 0.71 |
+| type-backspace | 16.1 → 16.1 | 0.41 → 0.41 |
+| type-char | 16.1 → 16.1 | 0.41 → 0.42 |
+
+Selection census, three alternating pairs (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,912 / 24,011,264 | 340,910 / 24,010,856 |
+| 2 | 340,909 / 24,010,592 | 340,910 / 24,010,904 |
+| 3 | 340,908 / 24,010,176 | 340,911 / 24,011,112 |
+
+Every capture has exactly 305,725 non-byte objects / 21,593,528 bytes; the small differences are confined to
+raw byte buffers. Paired headless RSS window growth, MiB (all four windows in order):
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30 / 3.44 / 0.78 / 5 | 30.31 / 3.59 / 0.78 / 4.84 |
+| 2 | 29.53 / 4.22 / 0.62 / 4.84 | 30.31 / 3.75 / 0.78 / 5.78 |
+| 3 | 29.53 / 4.38 / 0.78 / 4.84 | 29.84 / 3.75 / 0.62 / 5 |
+
+Paired median deltas are +0.31 / −0.47 / 0 / +0.16 MiB. Positive sampled windows, including 5.78 MiB, are
+recorded, not retried. The previous checkpoint included a 6.41 MiB final window; its separate unchanged-build
+calibration spanned 4.84–5.00 MiB there. Thus the 5.78 MiB sample exceeds that calibration range, while the paired
+median delta is +0.16 MiB. There is no claim that every RSS sample is identical or lower.
+All memory checks and the first scheduled standalone budget check pass, with unchanged allocation medians.
+
+Wasm GC uses nine full-scene pairs and three pairs each for static, text-heavy and editing, 120 warmup / 120 measured
+frames. Every pair matches at 4,440 / 4,440 / 4,440 / 8,724 objects respectively. Both loaded guests retain SHA-256
+`ff3dc27e5acfde09528c2b1ac52b10d7a2bd739086be1d2b719a67ab061d91c9`. Wasm32's three full-scene load pairs
+use byte-identical guests (`5645df810a815c6f74594718d41222cb692fec8cec478e46a0ea4647ff63a4b6`); its runner
+has no Wasm GC object counter. No browser timeout occurred.
+
+The word-access fixture verifies Float32 rounding and bit transport (negative values, signed zero, subnormal, NaN
+and infinity), crossing 32- and 64-bit words, on the interpreter and all three backends, with and without inlining.
+The HashLink exact census and both Wasm allocation counters report zero allocations for 8 and 1,024 warmed calls.
+775 compiler tests, self-hosting fixed point, all ten UI suites, 502 parity fixtures (14 existing skips), all six UI
+snapshots, the app suite, nine retention scenarios, budgets, memory, and both Web build/smoke checks pass.
+Raw captures are deleted after extracting their results; this checkpoint's idle gate checkout is removed.

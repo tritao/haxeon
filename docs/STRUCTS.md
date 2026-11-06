@@ -368,6 +368,13 @@ their public runtime descriptors or reflection ABI.
 A one-case payload uses the same tag and lane scheme, leaving the layout usable for optional scalar values in the
 planned scalar stage without implementing scalar specialization here.
 
+The payload word accessor transports `Float32` through its 32-bit representation, including when a field crosses
+a word boundary. HashLink uses allocation-free native bit conversions and Wasm uses reinterpret instructions;
+the interpreter implements the same conversions. The word-access fixture covers signed zero, subnormals, infinity
+and NaN with 32- and 64-bit payload words, with inlining enabled and disabled. After scalar replacement, 8 and
+1,024 calls allocate zero objects on HashLink, Wasm32 and Wasm GC. This is payload-access infrastructure; it does
+not activate source enum storage or scalar generic specialization.
+
 This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline
