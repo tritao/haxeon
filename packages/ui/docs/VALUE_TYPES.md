@@ -2291,3 +2291,131 @@ jobs without changing its cases, while the compiler suite retained 16 jobs. No s
 threshold, verification rule or budget ceiling changed. Raw captures were deleted after extraction,
 finished caches were pruned before the next Web build, and the idle gate checkout is removed
 after recording this commit.
+
+
+### Complete dependencies requested by generated enum methods (2026-11-06)
+
+A handwritten enum equality method can construct a specialized owner whose methods request hashing,
+key paths and captured closures. On `430f68f7`, the regression fails IR verification with
+`Unknown or mismatched IR object "$generic:$owner:LateBox[constrained]<class:Key<>>"`.
+Typing source bodies and each helper category once leaves declarations requested by later bodies unfinished.
+Owners, closures, key paths, codecs, reflection adapters, equality and hashing now complete together to a
+fixed point; the native type descriptor snapshot is taken afterward. This fixes the dependency ordering
+without weakening verification. Source inline enum activation remains a subsequent step.
+
+The regression runs on HashLink, Wasm32 and Wasm GC with inlining off and on. The interpreter test also
+checks cold, cached and edited builds. Final-source compiler validation passes 785 tests with zero failures,
+self-hosting reaches a fixed point, all ten UI suites pass, parity checks 505 fixtures with 14 existing skips,
+and the six UI value snapshots pass. The frozen outer checkout is `3e5757d80`; the compiler control is
+`430f68f7`. Its application sources match the preceding frozen measurement checkout; only the submodule pin differs.
+The app suite and all nine retention scenarios pass.
+
+The freshly built HashLink profile module is byte-identical to the control: 99,536,585 bytes,
+SHA-256 `bb2358c5c376cd70ef047d2665411c7af7414b0ca4bd7653aa083282b46c1267`.
+The VM and runtime library bytes are unchanged. Nine alternating control/candidate pairs give these medians:
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+| --- | ---: | ---: | ---: | ---: |
+| tab-matrix/console→telemetry | 72.5 | 74.5 | 1.16 | 1.12 |
+| tab-matrix/hierarchy→sensors | 112.6 | 113.0 | 1.66 | 1.61 |
+| tab-matrix/sensors→hierarchy | 80.1 | 80.1 | 1.27 | 1.24 |
+| tab-matrix/telemetry→console | 92.9 | 92.9 | 1.21 | 1.17 |
+| interaction/hover-away | 13.6 | 13.6 | 0.43 | 0.43 |
+| interaction/hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| interaction/hover-field | 12.4 | 12.4 | 0.44 | 0.43 |
+| interaction/hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| interaction/hover-other | 10.0 | 10.0 | 0.42 | 0.42 |
+| interaction/idle | 0.2 | 0.2 | 0.01 | 0.01 |
+| interaction/idle-focused | 0.2 | 0.2 | 0.01 | 0.01 |
+| interaction/scroll-inspector | 21.2 | 21.2 | 0.72 | 0.72 |
+| interaction/type-backspace | 16.2 | 16.2 | 0.42 | 0.41 |
+| interaction/type-char | 16.1 | 16.1 | 0.42 | 0.42 |
+| selection-stress/selection | — | — | 3.06 | 3.08 |
+
+All 18 action runs and the separately scheduled standalone budget gate pass. The +2.0 KiB
+console→telemetry and +0.4 KiB hierarchy→sensors medians are observations of the same binary,
+not increases in program allocation. A separate diagnostic uses census mode to disable the
+refill fast path and measure exact bytes. Three alternating pairs, 100 cycles each, give identical
+median bytes for all four tab actions in every run (99 steady frames per action):
+
+| Action | Control bytes | Candidate bytes |
+| --- | ---: | ---: |
+| hierarchy→sensors | 115,136 | 115,136 |
+| sensors→hierarchy | 81,384 | 81,384 |
+| console→telemetry | 75,800 | 75,800 |
+| telemetry→console | 94,520 | 94,520 |
+
+This directly checks the refill-counter explanation rather than discarding the original KiB results.
+No budget tooling or ceiling changed. Timings from the identical uninstrumented binary are observations
+of machine variation, not a compiler speedup.
+
+Three selection-stress census pairs, 30 cycles each (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,908 / 24,010,224 | 340,911 / 24,011,080 |
+| 2 | 340,910 / 24,010,744 | 340,910 / 24,010,800 |
+| 3 | 340,911 / 24,011,008 | 340,909 / 24,010,544 |
+
+Every type other than raw `bytes` matches exactly in each pair: 305,725 objects / 21,593,528 bytes.
+The raw-buffer differences above do not establish a program allocation increase.
+
+Paired 500-cycle RSS windows in MiB:
+
+| Pair | Control windows | Candidate windows |
+| --- | --- | --- |
+| 1 | 30.16 / 4.06 / 0.78 / 5.47 | 29.84 / 4.06 / 0.62 / 5.00 |
+| 2 | 29.69 / 4.22 / 0.78 / 4.69 | 29.53 / 3.91 / 0.78 / 5.00 |
+| 3 | 30.62 / 3.44 / 0.78 / 4.84 | 29.84 / 4.22 / 0.78 / 4.84 |
+
+All six memory gates pass. The paired median window differences are −0.32 / 0 / 0 / 0 MiB;
+the same-binary variation does not establish a memory improvement.
+
+An initial diagnostic suite was cancelled because `TMPDIR` was unset: `LspProtocolMain` placed its
+workspace fixture inside the checkout and discovered the checkout's ancestor `.hxml` files, spending
+time recovering compiler syntax. Its result was not accepted. The complete final-source suite above
+uses the dedicated disk scratch directory. Heavy gates run sequentially; completed parity, test-main
+and self-hosting build trees were removed before the editor build, whose disk preflight showed 7.7 GiB free.
+
+Both Showcase guests build and pass their browser smokes. Their sizes are unchanged:
+
+| Target | Control bytes | Candidate bytes |
+| --- | ---: | ---: |
+| Wasm GC | 5,810,159 | 5,810,159 |
+| Wasm32 | 11,876,162 | 11,876,162 |
+
+The Wasm guests are not byte-identical. The Wasm GC change is confined to 47 bytes in the type
+section: 27 function-signature entries are permuted, with the same multiset of types. Struct and array
+type definitions are unchanged, and none of the changed type indices is used by a function declaration.
+Every other section, including executable code, matches. Control/candidate SHA-256:
+
+- Wasm GC: `af15b2d50ec8d6b85677741df51fc11d25df6dfc9a642bb52813d154484f99bf` /
+  `fa645ffd3c9ff6c57168d24902c4d4897e343475e93c59cc5aedaf6eb4659e8e`.
+- Wasm32: `65f4388a9d61671876a9093e898f6924895b20a902e1211be62a6312e605aa7a` /
+  `f263ce0d8feaf514e0369f32b7147093959f882417fcb3918111467ea37a7c4f`.
+
+All 36 Wasm GC runs complete: nine alternating full-scene pairs and three pairs each for static,
+text-heavy and editing. Counts are equal in every pair; load and frame timings below are observations,
+not a claim of a compiler speedup. Three Wasm32 load pairs also complete. Full-scene startup medians, ms:
+
+| Target | Compile control → candidate | Init control → candidate | First frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc | 6.0 → 6.6 | 19.3 → 17.5 | 167.8 → 168.4 |
+| wasm32 | 5.9 → 6.1 | 15.9 → 16.0 | 158.6 → 155.9 |
+
+Scene object counts and medians of per-run frame measurements, ms:
+
+| Scene | Control → candidate objects | Median frame control → candidate | p95 frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc/full | 4440 → 4440 | 2.30 → 2.20 | 4.70 → 4.70 |
+| wasm-gc/static | 4440 → 4440 | 2.30 → 2.50 | 4.40 → 4.60 |
+| wasm-gc/text-heavy | 4440 → 4440 | 2.30 → 2.60 | 4.40 → 5.00 |
+| wasm-gc/editing | 8724 → 8724 | 2.60 → 2.60 | 5.00 → 5.00 |
+| wasm32/full | not counted → not counted | 2.50 → 2.40 | 4.90 → 4.90 |
+
+The three-pair static and text-heavy frame medians are 0.20 and 0.30 ms higher respectively; these
+observations are retained rather than rerun away. They do not establish a speedup or a causal timing cost
+for this dependency-order change. All scheduled comparisons and required gates pass. No budget ceiling,
+verification rule or immutable value changed. Raw captures were deleted after extraction; only the current
+comparison artifacts and measurement records are retained until the commit is recorded, then the idle
+gate checkout is removed.

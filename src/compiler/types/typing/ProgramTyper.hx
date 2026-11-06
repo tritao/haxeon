@@ -246,12 +246,17 @@ class ProgramTyper {
 		// Field and signature types can request owners without a construction expression. A
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
-		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0;
+		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0, pathClassIndex = 0;
 		var keyPaths = new KeyPathRuntime(session, typedClasses);
-		while (true) {
+		function drainRuntimeTypes():Void while (true) {
 			var pathHelpers = keyPaths.drain();
 			for (helper in pathHelpers) typedFunctions.push(helper);
 			if (pathHelpers.length > 0) assembler.registerProgramTypes(pathHelpers, [], [], [], []);
+			while (pathClassIndex < keyPaths.newClasses.length) {
+				var cache = keyPaths.newClasses[pathClassIndex++];
+				typedClasses.push(cache);
+				assembler.registerProgramTypes([], [cache], [], [], []);
+			}
 			while (generatedIndex < session.closureConversion.generatedFunctionCount()) {
 				var fn = session.closureConversion.generatedFunction(generatedIndex++);
 				typedFunctions.push(fn);
@@ -265,17 +270,16 @@ class ProgramTyper {
 			for (method in specialized.methods) typedFunctions.push(method);
 			assembler.registerProgramTypes(specialized.methods, [specialized], [], [], []);
 		}
-		for (cache in keyPaths.newClasses) typedClasses.push(cache);
-		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
-		for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums))
-			typedFunctions.push(codec);
-		for (codec in WireCodecGenerator.generateJson(session, typedClasses, typedEnums))
-			typedFunctions.push(codec);
+		drainRuntimeTypes();
 		// Reflection can expose a field as Dynamic without a source-level enum conversion.
 		// Keep the concrete enum operations available for those raw runtime descriptors.
-		for (classDecl in typedClasses) for (field in classDecl.fields) {
+		var reflectedClassIndex = 0;
+		function requestFieldReflection(classDecl:TypedClass):Void {
 			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : typedFunctions.length > 0 ? typedFunctions[0].name : null;
-			if (origin != null) EnumDynamicBox.requestReflectedTypes(session, field.type, origin, field.span);
+			if (origin != null) for (field in classDecl.fields) EnumDynamicBox.requestReflectedTypes(session, field.type, origin, field.span);
+		}
+		function reflectNewClasses():Void {
+			while (reflectedClassIndex < typedClasses.length) requestFieldReflection(typedClasses[reflectedClassIndex++]);
 		}
 		// Native signatures can expose a typed enum (including a container element) as Dynamic.
 		if (typedFunctions.length > 0) for (native in typedNatives) {
@@ -283,20 +287,46 @@ class ProgramTyper {
 			for (argument in native.arguments) EnumDynamicBox.requestReflectedTypes(session, argument, owner.name, owner.span);
 			EnumDynamicBox.requestReflectedTypes(session, native.result, owner.name, owner.span);
 		}
-		// Equality and hash bodies can request each other, including through handwritten enum methods.
+		// Generated bodies can request owners, closures, paths and further helpers. Complete
+		// them together; a helper is not finished merely because its own request map is stable.
 		var equalities:Map<String, TypedFunction> = [], hashes:Map<String, TypedFunction> = [], enumMethods:Map<String, TypedFunction> = [],
-			enumAdapters:Map<String, TypedClass> = [];
+			enumAdapters:Map<String, TypedClass> = [], codecs:Map<String, TypedFunction> = [];
+		function requestCount():Int return Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests)
+			+ Lambda.count(session.hashRequests) + Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters)
+			+ Lambda.count(session.wireCodecRequests) + Lambda.count(session.jsonCodecRequests) + Lambda.count(session.keyPathDefinitions)
+			+ session.representation.genericOwnerRequestCount() + session.closureConversion.generatedFunctionCount();
 		while (true) {
-			var before = Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
-				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters);
-			for (adapter in EnumInterfaceAdapter.generate(session)) enumAdapters.set(adapter.name, adapter);
-			for (hash in HashGenerator.generate(session, bodyTyper)) hashes.set(hash.name, hash);
-			for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues)) equalities.set(equality.name, equality);
-			for (equality in EnumEqualityGenerator.generate(session, bodyTyper)) equalities.set(equality.name, equality);
-			for (method in EnumConformanceMethods.generate(session, bodyTyper)) enumMethods.set(method.name, method);
-			if (before == Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
-				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters)) break;
+			drainRuntimeTypes();
+			reflectNewClasses();
+			var before = requestCount();
+			for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums).concat(WireCodecGenerator.generateJson(session, typedClasses, typedEnums))) {
+				codecs.set(codec.name, codec);
+				assembler.registerProgramTypes([codec], [], [], [], []);
+			}
+			for (adapter in EnumInterfaceAdapter.generate(session)) {
+				enumAdapters.set(adapter.name, adapter);
+				requestFieldReflection(adapter);
+				assembler.registerProgramTypes(adapter.methods, [adapter], [], [], []);
+			}
+			for (hash in HashGenerator.generate(session, bodyTyper)) {
+				hashes.set(hash.name, hash); assembler.registerProgramTypes([hash], [], [], [], []);
+			}
+			for (equality in ValueEqualityGenerator.generate(session, bodyTyper.expressionTyper.compareKnownValues)) {
+				equalities.set(equality.name, equality); assembler.registerProgramTypes([equality], [], [], [], []);
+			}
+			for (equality in EnumEqualityGenerator.generate(session, bodyTyper)) {
+				equalities.set(equality.name, equality); assembler.registerProgramTypes([equality], [], [], [], []);
+			}
+			for (method in EnumConformanceMethods.generate(session, bodyTyper)) {
+				enumMethods.set(method.name, method); assembler.registerProgramTypes([method], [], [], [], []);
+			}
+			drainRuntimeTypes();
+			reflectNewClasses();
+			if (before == requestCount()) break;
 		}
+		var codecNames = [for (name in codecs.keys()) name];
+		codecNames.sort(Reflect.compare);
+		for (name in codecNames) typedFunctions.push(codecs.get(name));
 		var adapterNames = [for (name in enumAdapters.keys()) name];
 		adapterNames.sort(Reflect.compare);
 		for (name in adapterNames) {
@@ -314,6 +344,7 @@ class ProgramTyper {
 		equalityNames.sort(Reflect.compare);
 		for (name in equalityNames) typedFunctions.push(equalities.get(name));
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
+		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var bodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterBodies = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);

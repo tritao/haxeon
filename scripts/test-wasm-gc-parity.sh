@@ -25,6 +25,7 @@ inline_cases=(
 	field-forwarding-blocks
 	jump-threading
 	identity-class
+	enum-generated-dependencies
 	enum-unused-lane-payload
 	enum-interface-conformance
 	scoped-cleanup

@@ -317,3 +317,10 @@ owners are not complete until those paths and incremental invalidation are teste
 Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the
 field. The cross-target reflection tests cover direct and generic owners, optional payloads, null and invalid writes,
 reference identity within the copied value, and both inlining modes.
+
+Generated methods participate in the same dependency completion as source bodies. In particular, a handwritten enum
+equality method may first request a specialized owner, whose methods request hashing or captured closures. Owners,
+closures, key paths, reflection adapters, codecs, equality and hashing helpers are completed together until no new
+requests remain; collecting each category once in phase order leaves valid programs with missing IR declarations.
+`enum-generated-dependencies` covers that chain on all three targets with inlining enabled and disabled, and
+`GeneratedDependencyCompletionMain` checks interpreter execution and cold, cached and edited builds.

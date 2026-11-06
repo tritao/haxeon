@@ -511,6 +511,7 @@ defer-cleanup	42
 scoped-cleanup	42
 enum-interface-conformance	42
 enum-unused-lane-payload	42
+enum-generated-dependencies	42
 array-sort-merge	42
 struct-interface-unbox-census	42
 scalar-closure-nested-callback	42

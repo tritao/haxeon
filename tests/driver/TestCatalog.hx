@@ -32,6 +32,7 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"ValueLaneRuntimeMain",
+		"GeneratedDependencyCompletionMain",
 		"KeyPathTypingMain",
 		"KeyPathSpecMain",
 		"InheritedMethodContractMain",
