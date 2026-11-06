@@ -30,7 +30,8 @@ class SourceLocation {
 	public static function fromSpan(span:SourceSpan):SourceLocation {
 		var start = span.file.lineColumnAt(span.start),
 			end = span.file.lineColumnAt(span.end);
-		return new SourceLocation(span.file.path, span.start, span.end, start.line, start.column, end.line, end.column, span.file.contentHash());
+		return new SourceLocation(span.file.path, span.start, span.end, start.line, start.column, end.line, end.column,
+			span.generatedReason == null ? span.file.contentHash() : 0);
 	}
 }
 
@@ -57,7 +58,7 @@ class SourceProvenance {
 	}
 
 	public static function user(span:SourceSpan):SourceProvenance
-		return new SourceProvenance(SourceLocation.fromSpan(span), UserSource);
+		return new SourceProvenance(SourceLocation.fromSpan(span), span.generatedReason == null ? UserSource : CompilerGenerated(span.generatedReason));
 
 	public static function generated(reason:String, ?anchor:SourceSpan):SourceProvenance
 		return new SourceProvenance(anchor == null ? null : SourceLocation.fromSpan(anchor), CompilerGenerated(reason));

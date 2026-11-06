@@ -133,6 +133,7 @@ class TypingSession {
 	}
 
 	var helperSpans:Map<String, SourceSpan> = [];
+	final builtinHelperSpan:SourceSpan = SourceSpan.generated("value-equality");
 
 	/** A shared generated implementation belongs to the type, independently of which caller requested it. */
 	public function helperSpan(type:CompilerType, fallback:SourceSpan):SourceSpan {
@@ -141,6 +142,7 @@ class TypingSession {
 			case TInstance(_, name, _), TAbstract(name, _, _):
 				var span = helperSpans.get(name);
 				span == null ? fallback : span;
+			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): builtinHelperSpan;
 			case _: fallback;
 		};
 	}

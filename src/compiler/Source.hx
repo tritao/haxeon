@@ -147,7 +147,11 @@ class SourceSpan {
 	/** Original reference path before module or import expansion; introduced package roots are not value bindings. */
 	public final referenceName:Null<String>;
 
-	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String) {
+	/** Compiler-owned syntax has no user source snapshot. */
+	public final generatedReason:Null<String>;
+
+	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String, ?generatedReason:String) {
+		this.generatedReason = generatedReason;
 		this.file = file;
 		this.start = start;
 		this.end = end;
@@ -155,6 +159,10 @@ class SourceSpan {
 		this.referenceName = referenceName;
 	}
 
+	public static function generated(reason:String):SourceSpan
+		return new SourceSpan(new SourceFile("<generated:" + reason + ">", ""), 0, 0, false, null, reason);
+
 	public function merge(other:SourceSpan):SourceSpan
-		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end);
+		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end, false, null,
+			generatedReason == other.generatedReason ? generatedReason : null);
 }
