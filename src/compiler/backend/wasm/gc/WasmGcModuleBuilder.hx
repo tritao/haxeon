@@ -286,8 +286,10 @@ class WasmGcModuleBuilder {
 			}
 		}
 		module.exportTable = module.tableMin != null;
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		if (options.developmentMetadata == true) {
+			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});
+			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		}
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 		var entry = functions.get(preferredEntry);

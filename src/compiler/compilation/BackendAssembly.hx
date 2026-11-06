@@ -74,6 +74,7 @@ class BackendAssembly {
 		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
+		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
@@ -84,7 +85,7 @@ class BackendAssembly {
 			reloadReasons.push(reason);
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
-		attachSourceSnapshots(context, assembly.module);
+		if (candidateAssembler.developmentMetadata) attachSourceSnapshots(context, assembly.module);
 		if (!context.isWasmTarget()) compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();

@@ -160,6 +160,7 @@ class HlModuleAssembler {
 	 * fields live patches can add to it. Zero without live patching.
 	 */
 	public var fieldReserve:Int = 0;
+	public var developmentMetadata:Bool = true;
 
 	/** The function a live build adds to initialize an object's added fields on existing instances (see `IrProgramAssembler`). */
 	public static inline final LIVE_INITIALIZER:String = "__liveinit";
@@ -188,6 +189,7 @@ class HlModuleAssembler {
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
+		result.developmentMetadata = developmentMetadata;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
@@ -833,7 +835,7 @@ class HlModuleAssembler {
 				addedFunctions.push({slot: slot, name: name});
 			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
-			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve),
+			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve, developmentMetadata),
 			module = lowered.code;
 		var loweredAt = Sys.time() * 1000.0;
 		// A running module can take new String constants and the value slots of new object types but no other global, so a

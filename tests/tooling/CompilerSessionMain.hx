@@ -16,6 +16,23 @@ class CompilerSessionMain {
 			fresh = root + "/fresh.hl";
 		File.saveContent(main, "class Main { public static function main():Int { return Value.get(); } }");
 		File.saveContent(value, "class Value { public static function get():Int { return 7; } }");
+		var modeSession = new CompilerSession(), modeArgs = ["--target=hl", "--entry=Main", "--root=" + root, "--output=" + output, main, value];
+		expect(CompilerArguments.parse(modeArgs.concat(["--live"])).buildMode == "development", "live builds must select development metadata");
+		var rejectedReleaseLive = false;
+		try CompilerArguments.parse(modeArgs.concat(["--live", "--build-mode=release"])) catch (_:Dynamic) rejectedReleaseLive = true;
+		expect(rejectedReleaseLive, "live builds must reject an explicit release mode");
+		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
+		expect(release.module.debugSections.length == 1 && release.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+			&& release.module.sourceSnapshots.length == 0,
+			"release artifacts must retain names but omit development spans and snapshots");
+		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=development"])), _ -> {}, modeSession);
+		expect(development.module.debugSections.length == 3 && development.module.sourceSnapshots.length > 0,
+			"development artifacts must retain debug identities, spans and source snapshots");
+		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
+		expect(releaseAgain.module.debugSections.length == 1 && releaseAgain.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+			&& releaseAgain.module.sourceSnapshots.length == 0,
+			"a persistent session must honor changes to build mode");
+
 		// Live mode: this block asserts that backend assembly reuses lowered functions between compiles, which only a
 		// session that keeps its assembler history does. ArtifactBuildMain covers the default, history-free mode.
 		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--live", main, value],

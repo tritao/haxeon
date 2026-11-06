@@ -42,6 +42,7 @@ class CompilationContext {
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;
 	public var livePatching(get, never):Bool;
+	public var developmentMetadata(get, never):Bool;
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
 
@@ -206,6 +207,9 @@ class CompilationContext {
 
 	function get_livePatching():Bool
 		return owner.livePatching;
+
+	function get_developmentMetadata():Bool
+		return owner.developmentMetadata;
 
 	function set_compiledOnce(value:Bool):Bool {
 		owner.compiledOnce = value;

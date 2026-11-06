@@ -229,6 +229,8 @@ class Compiler {
 	 * functions, strings or ids from earlier revisions. Frontend caches stay incremental either way.
 	 */
 	public var livePatching = true;
+	/** Emit metadata used by development tooling in addition to runtime data. */
+	public var developmentMetadata = true;
 
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
@@ -272,6 +274,7 @@ class Compiler {
 			compiledOnce = cloneFrom.compiledOnce;
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
+			developmentMetadata = cloneFrom.developmentMetadata;
 			for (name in cloneFrom.rootModules)
 				rootModules.push(name);
 		} else if (identityState == null) {

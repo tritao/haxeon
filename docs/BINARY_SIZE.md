@@ -115,6 +115,25 @@ The static IR allocation-site counts are unchanged: 5,411 on Showcase HashLink, 
 
 The UI state and pointer allocation fixture also passed before and after on all three targets with inlining off and on, including zero allocations in its measured Wasm loops; its output was identical.
 
+## Release and development metadata
+
+`release` is the default direct-compiler, desktop-project and Wasm build mode; `--build-mode=development` (or `haxeon build --build-mode development`) keeps metadata for development tools. Live builds select development metadata because they publish patches. Android's debug host is also a live-patch consumer. Compiler sessions include the mode in their configuration identity, so switching modes cannot reuse the wrong artifact.
+
+HashLink release modules retain the function-identity section: the VM reads its qualified names for profiler output and exception stack traces. A trial that removed it caused both existing checks to lose names, so it was rejected. Release modules omit opcode source spans and source snapshots; development and live builds retain them. Snapshots are content-addressed and stored once per distinct source content. Function names, the ordinary line and assignment tables, and reflection data remain available in release.
+
+Wasm release modules omit the patch manifest and slot sections. Ordinary Wasm32 release modules also omit the root custom section, while the runtime-neutral profile retains it as part of its host contract. The compiler still computes the root maps used to generate precise collector stack frames in every Wasm32 mode. `compilePatchBase` and `compilePatch` produce development metadata because they are live-patch consumers. Wasm name sections remain for diagnostic names.
+
+| Module | Development bytes | Release bytes | Functions, both modes | Changed byte categories (development → release) |
+|---|---:|---:|---:|---|
+| Showcase HashLink | 11,802,260 | 2,937,709 | 6,529 | debug sections 9,661,339 → 796,788 |
+| Showcase Wasm32 | 11,867,682 | 6,674,538 | 6,864 | roots 2,774,465 → 0; patch 1,863,664 → 0; slots 555,015 → 0 |
+| Showcase Wasm GC | 5,493,751 | 3,876,215 | 4,238 | patch 1,308,563 → 0; slots 308,973 → 0 |
+| Editor HashLink | 96,258,911 | 25,357,341 | 32,378 | debug sections 75,518,194 → 4,616,624 |
+
+Every other category is identical in each pair. All development modules match the pre-split modules byte-for-byte. For both HashLink pairs, all bytes preceding the debug-section table are identical and complete `hldump --debug` output agrees after removing section descriptions. Both Wasm pairs have byte-identical non-custom sections. The static IR allocation-site counts are unchanged in both modes: 5,411 for HashLink Showcase, 7,703 for each Wasm Showcase, and 51,470 for the editor. The release UI state and pointer allocation fixture passes on all three targets with inlining on and off, with output identical to the pre-split run; measured Wasm loops allocate zero objects. These checks do not establish full-workload runtime allocation totals.
+
+The release exception-stack and profiler-recording tests pass with function names retained; development HLD3 and hot-reload tests pass. Focused tests cover project and compiler-session mode switching, release versus development Wasm sections, patch artifacts, and the runtime-neutral root contract. The editor's FFI is desktop-only, so it is measured on HashLink; Showcase is measured on all three targets.
+
 ## Remaining work
 
-Complete the HashLink editor and three-target Showcase before/after measurements and allocation checks. The development metadata changes remain to be measured.
+The compiler suite passed 774 tests, self-hosting reached a fixed point, Wasm parity passed 502 fixtures (14 skipped) and six UI snapshots, and ten UI scripts passed. Potential further work includes compacting the retained identity-record format; the current record is retained because runtime stack traces and profiler names consume it, and the development tooling reads its full fields.

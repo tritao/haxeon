@@ -27,6 +27,7 @@ import project.SourceCache;
 import project.RegistryPublisher;
 import sys.FileSystem;
 import sys.io.File;
+import build.BuildEnvironment.BuildProfile;
 import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 
@@ -44,6 +45,8 @@ private typedef ProjectConfig = {
 private typedef BuildOptions = {
 	final projectPath:String;
 	final target:Null<String>;
+	final buildMode:String;
+	final buildModeExplicit:Bool;
 	final output:Null<String>;
 	final device:Null<String>;
 	final defines:Array<String>;
@@ -649,7 +652,8 @@ class HaxeonCli {
 			// edit is already warm.
 			var session = options.watch ? new BuildSession() : null;
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session);
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
+				options.buildMode == "development" ? BuildProfile.Debug : BuildProfile.Release);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
@@ -719,7 +723,8 @@ class HaxeonCli {
 							}
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-								options.selfHosted, change.compilerOnly, options.live, instrument, session);
+								options.selfHosted, change.compilerOnly, options.live, instrument, session,
+								options.buildMode == "development" ? BuildProfile.Debug : BuildProfile.Release);
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							return status == 0 ? candidate : null;
@@ -746,6 +751,9 @@ class HaxeonCli {
 				throw 'Native C package "${resolvedPackage.name}" requires target "host" or an Android NDK provider; target "$target" is not supported yet';
 		var config = loadConfig(projectConfigPath);
 		if (targetInfo.isAndroid()) {
+			// The Android debug host always accepts live patches.
+			if (options.buildModeExplicit && options.buildMode == "release")
+				throw "The Android live-patch host requires development build mode";
 			configureAndroidEnvironment(home);
 			var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
 			if (nativeStatus != 0)
@@ -769,6 +777,7 @@ class HaxeonCli {
 			"--run",
 			"compiler.tools.HaxeonCompiler",
 			"--target=" + (target == "host" ? "hl" : "wasm32"),
+			"--build-mode=" + options.buildMode,
 			"--output=" + output,
 			"--entry=" + config.entry
 		];
@@ -1026,7 +1035,7 @@ class HaxeonCli {
 	}
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
-		var projectPath = CONFIG_FILE, target:Null<String> = null, output:Null<String> = null, device:Null<String> = null, defines = [],
+		var projectPath = CONFIG_FILE, target:Null<String> = null, buildMode = "release", buildModeExplicit = false, output:Null<String> = null, device:Null<String> = null, defines = [],
 			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, strictLive = false, jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null,
 			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null,
@@ -1064,7 +1073,7 @@ class HaxeonCli {
 					throw 'Option "--profile-output" requires a value';
 				profileOutput = arguments[index++];
 				profile = true;
-			} else if (argument == "--project" || argument == "--target" || argument == "--output" || argument == "--define" || argument == "--device"
+			} else if (argument == "--project" || argument == "--target" || argument == "--build-mode" || argument == "--output" || argument == "--define" || argument == "--device"
 				|| argument == "--jobs") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
@@ -1074,6 +1083,9 @@ class HaxeonCli {
 						projectPath = value;
 					case "--target":
 						target = value;
+					case "--build-mode":
+						buildMode = value;
+						buildModeExplicit = true;
 					case "--output":
 						output = value;
 					case "--define":
@@ -1091,6 +1103,10 @@ class HaxeonCli {
 				projectPath = argument.substr("--project=".length);
 			else if (StringTools.startsWith(argument, "--target="))
 				target = argument.substr("--target=".length);
+			else if (StringTools.startsWith(argument, "--build-mode=")) {
+				buildMode = argument.substr("--build-mode=".length);
+				buildModeExplicit = true;
+			}
 			else if (StringTools.startsWith(argument, "--output="))
 				output = argument.substr("--output=".length);
 			else if (StringTools.startsWith(argument, "--device="))
@@ -1125,9 +1141,15 @@ class HaxeonCli {
 		}
 		if (projectPath.length == 0)
 			throw 'Option "--project" requires a value';
+		if (buildMode != "release" && buildMode != "development")
+			throw 'Unsupported build mode "$buildMode"';
+		if (live && buildModeExplicit && buildMode != "development")
+			throw "--live requires development build mode";
 		return {
 			projectPath: projectPath,
 			target: target,
+			buildMode: buildMode,
+			buildModeExplicit: buildModeExplicit,
 			output: output,
 			device: device,
 			defines: defines,
@@ -1500,6 +1522,7 @@ class HaxeonCli {
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");
+		Sys.println("       [--build-mode release|development]  Select artifact build mode");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
 		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");

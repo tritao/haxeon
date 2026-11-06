@@ -479,11 +479,14 @@ class WasmLinearModuleBuilder {
 	}
 
 	function publishMetadata(gcRootMetadata:haxe.io.Bytes):Void {
-		module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
+		if (runtimeNeutral || options.developmentMetadata == true)
+			module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
 		if (runtimeNeutral)
 			module.customSections.push({name: WasmRuntimeNeutralProfile.SECTION_NAME, bytes: WasmRuntimeNeutralProfile.sectionBytes()});
-		module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
-		module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		if (options.developmentMetadata == true) {
+			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
+			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
+		}
 		if (contract != null)
 			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
 	}

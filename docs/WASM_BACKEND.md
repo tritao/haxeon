@@ -33,7 +33,7 @@ Haxeon currently emits two executable Wasm targets:
   objects.
 
 Both targets share canonical IR, CFG lowering, arithmetic, calls, exceptions,
-and the target-independent function and patch metadata. The GC target uses the
+and the target-independent development function and patch metadata. The GC target uses the
 engine's tracing collector for managed references and emits no Haxeon
 mark/sweep collector or shadow-root stack. Its ordinary modules need no linear
 memory. Linear memory can still be added for raw-memory FFI operations.
@@ -111,10 +111,15 @@ the browser rejects incompatible sharing or maximum limits at link time.
 The Haxe guest still runs on one thread: this option permits shared native
 host memory, and does not make Haxe objects or its collector thread safe.
 
-Both targets emit `haxeon.patch` and `haxeon.patch.slots` custom sections with
-stable function identities, semantic signatures, and table slots.
-`WasmBackend.compilePatch` validates replacement artifacts against the
-semantic ABI and returns a filtered manifest for atomic host publication.
+Development builds emit `haxeon.patch` and `haxeon.patch.slots` custom sections
+with stable function identities, semantic signatures, and table slots. Release
+builds omit those sections. Wasm32 development builds include `haxeon.gc.roots`;
+release builds retain it for the runtime-neutral profile, whose host contract
+requires it. Root maps used to generate the collector's stack frames are still
+computed for all Wasm32 builds. `WasmBackend.compilePatchBase` and
+`WasmBackend.compilePatch` always produce development metadata: the latter
+validates replacement artifacts against the semantic ABI and returns a
+filtered manifest for atomic host publication.
 Wasm32 uses linear-memory closure environments; Wasm GC stores closure
 environments in GC-managed structs. Both retain the current function-table
 dispatch model.

@@ -16,6 +16,8 @@ enum BackendTarget {
 typedef BackendOptions = {
 	final target:BackendTarget;
 	final debugNames:Bool;
+	/** Development artifacts carry metadata for hot reload and inspection. */
+	final ?developmentMetadata:Bool;
 	final ?importMemory:Bool;
 	final ?sharedMemory:Bool;
 	final ?memoryBase:Int;
