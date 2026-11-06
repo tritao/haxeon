@@ -92,10 +92,10 @@ class SemanticProgram {
 					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
 			}
 			var next:Dynamic = copyWithMethods(decl, methods);
-			// An instance field initializer is typed as part of `new`, so an edit to one reports `new` as
-			// changed while the initializer itself lives in the field, not in any method body.
-			if (selected.exists(decl.name + ".new"))
-				Reflect.setField(next, "fields", withInitializers(decl.fields, replacement.fields));
+			// Keep validated field types while refreshing source-bearing initializer syntax.
+			Reflect.setField(next, "span", replacement.span);
+			Reflect.setField(next, "metadata", replacement.metadata);
+			Reflect.setField(next, "fields", withInitializers(decl.fields, replacement.fields));
 			classes[index] = cast next;
 		}
 		var currentAbstracts = [for (decl in current.abstracts) decl.name => decl],
@@ -157,11 +157,11 @@ class SemanticProgram {
 		var currentByName = [for (field in current) field.name => field];
 		return [
 			for (field in fields) {
-				var replacement = field.isStatic ? null : currentByName.get(field.name);
+				var replacement = currentByName.get(field.name);
 				replacement == null ? field : {
 					name: field.name,
 					isPublic: field.isPublic,
-					metadata: field.metadata,
+					metadata: replacement.metadata,
 					type: field.type,
 					initializer: replacement.initializer,
 					readAccess: field.readAccess,
@@ -187,7 +187,19 @@ class SemanticProgram {
 			isStatic: signature.isStatic,
 			typeParameters: signature.typeParameters,
 			typeConstraints: signature.typeConstraints,
-			arguments: signature.arguments,
+			arguments: [
+				for (index in 0...signature.arguments.length) {
+					var argument = signature.arguments[index],
+						current = body.arguments[index];
+					{
+						name: argument.name,
+						type: argument.type,
+						optional: argument.optional,
+						defaultValue: current.defaultValue,
+						span: current.span
+					};
+				}
+			],
 			result: signature.result,
 			span: body.span,
 			statements: body.statements

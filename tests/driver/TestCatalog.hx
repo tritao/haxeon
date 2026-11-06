@@ -102,6 +102,7 @@ class TestCatalog {
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",
 		"DeterministicNamesMain",
+		"SourceRevisionDeterminismMain",
 		"NestedAdapterRetentionMain",
 		"ExternMain",
 		"CaptureAnalysisMain",

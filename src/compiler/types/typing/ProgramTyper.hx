@@ -57,7 +57,8 @@ class ProgramTyper {
 					'enum abstract value "${decl.name}.${value.name}"', "E1002");
 		}
 		session.bindNominalDeclarations();
-		for (declaration in program.enums) validateEnumConformance(declaration);
+		for (declaration in program.enums)
+			validateEnumConformance(declaration);
 		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
@@ -142,7 +143,13 @@ class ProgramTyper {
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
-			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result)) { case TInt: false; default: true; }) && (switch (bodyTyper.lowerType(main.result)) { case TVoid: false; default: true; })))
+			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result)) {
+				case TInt: false;
+				default: true;
+			}) && (switch (bodyTyper.lowerType(main.result)) {
+				case TVoid: false;
+				default: true;
+			})))
 				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
 		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [
@@ -197,8 +204,10 @@ class ProgramTyper {
 			if (retainedOwners == null) retainedOwners = [];
 			session.representation.restoreGenericOwnerAliases(cachedMetadata.genericOwnerAliases, retainedOwners);
 			for (cached in typedClasses)
-				if (cached.specializationOrigin != null && cached.specializationArguments != null
-					&& retainedOwners.exists(cached.name) && session.classDecls.exists(cached.specializationOrigin))
+				if (cached.specializationOrigin != null
+					&& cached.specializationArguments != null
+					&& retainedOwners.exists(cached.name)
+					&& session.classDecls.exists(cached.specializationOrigin))
 					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
 			typedClasses = [for (cached in typedClasses) if (cached.specializationOrigin == null) cached];
 		}
@@ -276,7 +285,8 @@ class ProgramTyper {
 			if (declaration == null) throw 'Missing generic owner declaration "${request.origin}"';
 			var specialized = typeClass(declaration, null, false, request);
 			typedClasses.push(specialized);
-			for (method in specialized.methods) typedFunctions.push(method);
+			for (method in specialized.methods)
+				typedFunctions.push(method);
 			assembler.registerProgramTypes(specialized.methods, [specialized], [], [], []);
 		}
 		drainRuntimeTypes();
@@ -341,17 +351,21 @@ class ProgramTyper {
 		for (name in adapterNames) {
 			var adapter = enumAdapters.get(name);
 			typedClasses.push(adapter);
-			for (method in adapter.methods) typedFunctions.push(method);
+			for (method in adapter.methods)
+				typedFunctions.push(method);
 		}
 		var enumMethodNames = [for (name in enumMethods.keys()) name];
 		enumMethodNames.sort(Reflect.compare);
-		for (name in enumMethodNames) typedFunctions.push(enumMethods.get(name));
+		for (name in enumMethodNames)
+			typedFunctions.push(enumMethods.get(name));
 		var hashNames = [for (name in hashes.keys()) name];
 		hashNames.sort(Reflect.compare);
-		for (name in hashNames) typedFunctions.push(hashes.get(name));
+		for (name in hashNames)
+			typedFunctions.push(hashes.get(name));
 		var equalityNames = [for (name in equalities.keys()) name];
 		equalityNames.sort(Reflect.compare);
-		for (name in equalityNames) typedFunctions.push(equalities.get(name));
+		for (name in equalityNames)
+			typedFunctions.push(equalities.get(name));
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var bodiesDoneAt = Sys.time() * 1000.0;
@@ -411,7 +425,8 @@ class ProgramTyper {
 		}
 		return [
 			for (cachedClass in cached) {
-				var changed = owners.exists(cachedClass.name);
+				var declaration = parsedByName.get(cachedClass.name);
+				var changed = owners.exists(cachedClass.name) || (declaration != null && declaration.span.file != cachedClass.span.file);
 				if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
 					var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
 						cachedMethods = [for (method in cachedClass.methods) method.name => method];
@@ -454,10 +469,11 @@ class ProgramTyper {
 		validateStructPropertyMetadata(classDecl, isValue, isNativeValue);
 		// Reject value capabilities on reference declarations before typing their fields or initializers.
 		if (!isStruct && (classDecl.interfaces.length > 0 || classDecl.base != null)) {
-			var actual = TInstance(NominalKind.Class,classDecl.name,
-				[for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name,parameter)]);
-			for (capability in ["Hashable","Equatable"])
-				if (session.relations.isAssignable(actual,TInstance(NominalKind.Interface,capability,[])))
+			var actual = TInstance(NominalKind.Class, classDecl.name, [
+				for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)
+			]);
+			for (capability in ["Hashable", "Equatable"])
+				if (session.relations.isAssignable(actual, TInstance(NominalKind.Interface, capability, [])))
 					BodyTyper.fail("E1025", 'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality', classDecl.span);
 		}
 
@@ -497,7 +513,10 @@ class ProgramTyper {
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
 			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
-			if ((switch (type) { case TVoid: true; default: false; }))
+			if ((switch (type) {
+				case TVoid: true;
+				default: false;
+			}))
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
@@ -561,8 +580,9 @@ class ProgramTyper {
 				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
-		var declaredType = TInstance(NominalKind.Class, classDecl.name,
-			[for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)]);
+		var declaredType = TInstance(NominalKind.Class, classDecl.name, [
+			for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)
+		]);
 		validateObservable(classDecl, declaredType, classSemanticSubstitutions, isValue, isNativeValue);
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
@@ -570,7 +590,8 @@ class ProgramTyper {
 			baseName = BodyTyper.inheritanceName(parsedBase);
 			var baseType = session.declarations.resolve(parsedBase, classDecl.span, erasedSubstitutions),
 				baseSpecialization = session.representation.genericOwner(baseType);
-			if (baseSpecialization != null) baseName = baseSpecialization.name;
+			if (baseSpecialization != null)
+				baseName = baseSpecialization.name;
 		}
 		return {
 			name: specialization == null ? classDecl.name : specialization.name,
@@ -593,8 +614,8 @@ class ProgramTyper {
 		};
 	}
 
-	function validateObservable(classDecl:AstClass, declaredType:CompilerType,
-			classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool, isNativeValue:Bool):Void {
+	function validateObservable(classDecl:AstClass, declaredType:CompilerType, classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool,
+			isNativeValue:Bool):Void {
 		if (!DeclaredConformance.has(session, declaredType, "Observable"))
 			return;
 		// Observable field access is generated after typing. Its per-object source is
@@ -610,8 +631,7 @@ class ProgramTyper {
 				BodyTyper.fail("E1025", 'Observable class "${classDecl.name}" must extend an Observable base class', classDecl.span);
 		}
 		for (field in DiffIntrinsics.storedFields(classDecl)) {
-			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span,
-				classSemanticSubstitutions);
+			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, classSemanticSubstitutions);
 			var enumField = switch fieldType {
 				case TInstance(NominalKind.Enum, _, _), TNullable(TInstance(NominalKind.Enum, _, _)): true;
 				default: false;
@@ -623,21 +643,23 @@ class ProgramTyper {
 		}
 	}
 
-	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType,
-			classSemanticSubstitutions:Map<String, CompilerType>):Void {
-		if (!session.relations.isStruct(declaredType)) return;
+	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType, classSemanticSubstitutions:Map<String, CompilerType>):Void {
+		if (!session.relations.isStruct(declaredType))
+			return;
 		if (DeclaredConformance.has(session, declaredType, "Equatable")) {
 			var hasEquals = false, hasHash = false;
 			for (method in classDecl.methods)
 				if (method.name == "equals") {
 					hasEquals = true;
-					if (method.isStatic || method.arguments.length != 1
+					if (method.isStatic
+						|| method.arguments.length != 1
 						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, classSemanticSubstitutions), declaredType)
 						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TBool))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool', method.span);
 				} else if (method.name == "hash" && DeclaredConformance.has(session, declaredType, "Hashable")) {
 					hasHash = true;
-					if (method.isStatic || method.arguments.length != 0
+					if (method.isStatic
+						|| method.arguments.length != 0
 						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TInt))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int', method.span);
 				}
@@ -645,7 +667,8 @@ class ProgramTyper {
 				for (entry in DiffIntrinsics.conformanceFields(session, declaredType)) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsEquality(session, fieldType))
-						BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable', field.span);
+						BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable',
+							field.span);
 				}
 			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
 				if (hasEquals)
@@ -654,7 +677,8 @@ class ProgramTyper {
 				for (entry in hashFields) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
-						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable', field.span);
+						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable',
+							field.span);
 				}
 			}
 		}
@@ -679,7 +703,8 @@ class ProgramTyper {
 			var implementation:Null<AstFunction> = null;
 			if (declaration.methods != null)
 				for (candidate in declaration.methods)
-					if (candidate.name == method.name) implementation = candidate;
+					if (candidate.name == method.name)
+						implementation = candidate;
 			if (implementation == null || implementation.isStatic)
 				BodyTyper.fail("E1007", 'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"', declaration.span);
 			if ((implementation.typeParameters != null && implementation.typeParameters.length > 0)
@@ -691,56 +716,72 @@ class ProgramTyper {
 	/** Equality and hashing are properties of the enum type, not its chosen physical representation. */
 	function validateEnumConformance(declaration:compiler.syntax.Ast.AstEnum):Void {
 		var substitutions:Map<String, CompilerType> = [];
-		for (parameter in declaration.typeParameters) substitutions.set(parameter, TTypeParameter(declaration.name, parameter));
+		for (parameter in declaration.typeParameters)
+			substitutions.set(parameter, TTypeParameter(declaration.name, parameter));
 		var requiredMethods:Map<String, Bool> = [];
-		if (declaration.conformances != null) for (conformance in declaration.conformances) {
-			var resolved = session.declarations.resolve(conformance, declaration.span, substitutions);
-			validateEnumInterface(declaration, resolved, substitutions, requiredMethods);
-		}
-		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
-			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
+		if (declaration.conformances != null)
+			for (conformance in declaration.conformances) {
+				var resolved = session.declarations.resolve(conformance, declaration.span, substitutions);
+				validateEnumInterface(declaration, resolved, substitutions, requiredMethods);
+			}
+		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name, [for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
 			equatable = DeclaredConformance.has(session, type, "Equatable"),
-			hashable = DeclaredConformance.has(session, type, "Hashable"), hasEquals = false, hasHash = false;
+			hashable = DeclaredConformance.has(session, type, "Hashable"),
+			hasEquals = false,
+			hasHash = false;
 		var hasPayload = false;
-		for (constructor in declaration.cases) if (constructor.params.length > 0) hasPayload = true;
+		for (constructor in declaration.cases)
+			if (constructor.params.length > 0)
+				hasPayload = true;
 		var seenMethods:Map<String, Bool> = [];
-		if (declaration.methods != null) for (method in declaration.methods) {
-			if (seenMethods.exists(method.name))
-				BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
-			seenMethods.set(method.name, true);
-			if (!hasPayload && (method.name == "equals" || method.name == "hash"))
-				BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', method.span);
-			if (method.name != "equals" && method.name != "hash") {
-				if (!requiredMethods.exists(method.name))
-					BodyTyper.fail("E1025", 'Enum method "${declaration.name}.${method.name}" must implement a declared interface method', method.span);
-				continue;
+		if (declaration.methods != null)
+			for (method in declaration.methods) {
+				if (seenMethods.exists(method.name))
+					BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
+				seenMethods.set(method.name, true);
+				if (!hasPayload && (method.name == "equals" || method.name == "hash"))
+					BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', method.span);
+				if (method.name != "equals" && method.name != "hash") {
+					if (!requiredMethods.exists(method.name))
+						BodyTyper.fail("E1025", 'Enum method "${declaration.name}.${method.name}" must implement a declared interface method', method.span);
+					continue;
+				}
+				if (method.name == "equals") {
+					hasEquals = true;
+					if (!equatable)
+						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals', method.span);
+					if (method.isStatic
+						|| method.arguments.length != 1
+						|| (method.typeParameters != null && method.typeParameters.length > 0)
+						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), type)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
+						BodyTyper.fail("E1003", 'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool', method.span);
+				} else {
+					hasHash = true;
+					if (!hashable)
+						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Hashable to define hash', method.span);
+					if (method.isStatic
+						|| method.arguments.length != 0
+						|| (method.typeParameters != null && method.typeParameters.length > 0)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
+						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int', method.span);
+				}
 			}
-			if (method.name == "equals") {
-				hasEquals = true;
-				if (!equatable) BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals', method.span);
-				if (method.isStatic || method.arguments.length != 1 || (method.typeParameters != null && method.typeParameters.length > 0)
-					|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), type)
-					|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
-					BodyTyper.fail("E1003", 'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool', method.span);
-			} else {
-				hasHash = true;
-				if (!hashable) BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Hashable to define hash', method.span);
-				if (method.isStatic || method.arguments.length != 0 || (method.typeParameters != null && method.typeParameters.length > 0)
-					|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
-					BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int', method.span);
-			}
-		}
 		if (hashable && hasEquals && !hasHash)
 			BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}" with a handwritten equals; provide hash():Int', declaration.span);
-		if (!equatable) return;
-		for (constructor in declaration.cases) for (parameter in constructor.params) {
-			var fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-				field = parameter.name == null ? "payload" : parameter.name;
-			if (!hasEquals && !DeclaredConformance.supportsEquality(session, fieldType))
-				BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable', parameter.span);
-			if (hashable && !hasHash && !DeclaredConformance.supportsHash(session, fieldType))
-				BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable', parameter.span);
-		}
+		if (!equatable)
+			return;
+		for (constructor in declaration.cases)
+			for (parameter in constructor.params) {
+				var fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+					field = parameter.name == null ? "payload" : parameter.name;
+				if (!hasEquals && !DeclaredConformance.supportsEquality(session, fieldType))
+					BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable',
+						parameter.span);
+				if (hashable && !hasHash && !DeclaredConformance.supportsHash(session, fieldType))
+					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable',
+						parameter.span);
+			}
 	}
 
 	/** A nullable value still contains its payload inline, so it cannot break a by-value cycle. */
@@ -763,8 +804,10 @@ class ProgramTyper {
 
 	function validateFiniteValueField(type:CompilerType, visiting:Array<String>, complete:Map<String, Bool>):Void {
 		switch type {
-			case TNullable(element): validateFiniteValueField(element, visiting, complete);
-			case TAbstract(_, _, representation): validateFiniteValueField(representation, visiting, complete);
+			case TNullable(element):
+				validateFiniteValueField(element, visiting, complete);
+			case TAbstract(_, _, representation):
+				validateFiniteValueField(representation, visiting, complete);
 			case TInstance(NominalKind.Class, name, _) if (session.relations.isValueClass(type)):
 				var nested = session.declarations.classes.get(name);
 				if (nested != null)
@@ -816,10 +859,9 @@ class ProgramTyper {
 				continue;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified)),
-				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					substitutions, specialization == null ? null : specialization.name + "." + method.name, null,
-					specialization == null ? null : specialization.name, specialization == null ? null : specialization.typeArguments)
-					: methodSignature(method, classDecl.name, substitutions);
+				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic, substitutions,
+					specialization == null ? null : specialization.name + "." + method.name, null, specialization == null ? null : specialization.name,
+					specialization == null ? null : specialization.typeArguments) : methodSignature(method, classDecl.name, substitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
@@ -855,8 +897,10 @@ class ProgramTyper {
 
 	function isConstrainedOwnerTemplate(name:String):Bool {
 		var declaration = session.classDecls.get(name);
-		return declaration != null && declaration.typeParameters.length > 0
-			&& declaration.typeConstraints != null && declaration.typeConstraints.length > 0;
+		return declaration != null
+			&& declaration.typeParameters.length > 0
+			&& declaration.typeConstraints != null
+			&& declaration.typeConstraints.length > 0;
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
@@ -1072,8 +1116,9 @@ class ProgramTyper {
 			var initializer = field.initializer;
 			if (initializer == null)
 				throw 'Missing initializer for "$className.${field.name}"';
-			statements.push(TFieldAssign(new TypedExpression(TLocal("this"), receiverType == null ? TInstance(NominalKind.Class, className, []) : receiverType, field.span), field.name,
-				initializer, field.span));
+			statements.push(TFieldAssign(new TypedExpression(TLocal("this"),
+				receiverType == null ? TInstance(NominalKind.Class, className, []) : receiverType, field.span),
+				field.name, initializer, field.span));
 		}
 		return statements;
 	}
