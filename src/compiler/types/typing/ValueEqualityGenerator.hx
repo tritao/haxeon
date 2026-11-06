@@ -21,8 +21,7 @@ class ValueEqualityGenerator {
 	}
 
 	/** Field comparisons may request nested value helpers. Process new requests until no more are needed. */
-	public static function generate(session:TypingSession,
-			compare:(TypedExpression, TypedExpression, SourceSpan)->TypedExpression):Array<TypedFunction> {
+	public static function generate(session:TypingSession, compare:(TypedExpression, TypedExpression, SourceSpan) -> TypedExpression):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		// Discover the full helper graph from source requests before typing any generated helper. This gives nested
 		// helpers the origin of a real caller, so they are emitted into that caller's module and remain traceable when
@@ -35,7 +34,10 @@ class ValueEqualityGenerator {
 				collect(session, root.type, root, session.valueEqualityRequests, new Map());
 		}
 		while (true) {
-			var pending = [for (name in session.valueEqualityRequests.keys()) if (!generated.exists(name)) name];
+			var pending = [
+				for (name in session.valueEqualityRequests.keys())
+					if (!generated.exists(name)) name
+			];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
@@ -60,21 +62,24 @@ class ValueEqualityGenerator {
 		return [for (name in names) generated.get(name)];
 	}
 
-	static function collect(session:TypingSession, type:CompilerType, root:EqualityRequest,
-			requests:Map<String, EqualityRequest>, seen:Map<String, Bool>):Void {
+	static function collect(session:TypingSession, type:CompilerType, root:EqualityRequest, requests:Map<String, EqualityRequest>,
+			seen:Map<String, Bool>):Void {
 		var name = equalsName(type);
 		if (seen.exists(name))
 			return;
 		seen.set(name, true);
 		switch type {
 			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")):
-				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
+				if (!requests.exists(name))
+					requests.set(name, {type: type, origin: root.origin, span: root.span});
 				collect(session, element, root, requests, seen);
-			case TInstance(NominalKind.Class, className, arguments) if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
+			case TInstance(NominalKind.Class, className, arguments)
+				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(className);
 				if (declaration == null)
 					throw 'Missing value type declaration "$className"';
-				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
+				if (!requests.exists(name))
+					requests.set(name, {type: type, origin: root.origin, span: root.span});
 				if (DiffIntrinsics.conformanceMethod(session, type, "equals") == null) {
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
 						var fieldType = entry.type;
@@ -95,8 +100,9 @@ class ValueEqualityGenerator {
 		};
 
 	static function compareFunction(session:TypingSession, request:EqualityRequest,
-			compare:(TypedExpression, TypedExpression, SourceSpan)->TypedExpression):TypedFunction {
-		var type = request.type, span = request.span,
+			compare:(TypedExpression, TypedExpression, SourceSpan) -> TypedExpression):TypedFunction {
+		var type = request.type,
+			span = session.helperSpan(type, request.span),
 			left = new TypedExpression(TLocal("left"), type, span),
 			right = new TypedExpression(TLocal("right"), type, span),
 			statements:Array<TypedStatement> = [];
@@ -114,7 +120,8 @@ class ValueEqualityGenerator {
 				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
 				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 				statements.push(TReturn(compare(leftValue, rightValue, span), span));
-			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
+			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)
+				&& DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
 					throw 'Missing value type declaration "$name"';
@@ -128,7 +135,8 @@ class ValueEqualityGenerator {
 					statements.push(TReturn(new TypedExpression(TMethodCall(receiver, custom.declaration.name + ".equals", [argument]), TBool, span), span));
 				} else {
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
-					var field = entry.field, fieldType = entry.type,
+						var field = entry.field,
+							fieldType = entry.type,
 							physical = session.representation.resolveField(type, field.name, field.span).physical,
 							leftField = session.representation.boundaryCast(new TypedExpression(TField(left, field.name), physical, span), fieldType),
 							rightField = session.representation.boundaryCast(new TypedExpression(TField(right, field.name), physical, span), fieldType),
@@ -142,10 +150,25 @@ class ValueEqualityGenerator {
 				throw 'Invalid value equality request for "$type"';
 		}
 		return {
-			name: equalsName(type), origin: request.origin, originKind: Helper, typeArguments: null,
-			owner: null, isStatic: true, isConstructor: false,
-			arguments: [{name: "left", type: type}, {name: "right", type: type}], result: TBool,
-			statements: statements, cells: [], cellCaptures: [], span: span
+			name: equalsName(type),
+			origin: request.origin,
+			originKind: Helper,
+			typeArguments: null,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: [
+				{
+					name: "left",
+					type: type
+				},
+				{name: "right", type: type}
+			],
+			result: TBool,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: span
 		};
 	}
 }

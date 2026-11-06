@@ -104,6 +104,7 @@ class TestCatalog {
 		"IncrementalSnapshotMain",
 		"DeterministicNamesMain",
 		"SourceRevisionDeterminismMain",
+		"GeneratedEqualityProvenanceMain",
 		"NestedAdapterRetentionMain",
 		"ExternMain",
 		"CaptureAnalysisMain",

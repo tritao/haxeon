@@ -60,8 +60,8 @@ typedef FrontendResult = {
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>,
-			?pendingSignatures:Map<String, Bool>, ?pendingStructural:Map<String, Bool>):FrontendResult {
+			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>, ?pendingSignatures:Map<String, Bool>,
+			?pendingStructural:Map<String, Bool>):FrontendResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var modules = context.modules,
 			graph = context.graph,
@@ -182,8 +182,8 @@ class FrontendCompilation {
 			noReturnQueries = typedResult.noReturnQueries;
 			inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
-				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics,
-					bodyChanged, signatureChanged, structuralChanged);
+				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
+					structuralChanged);
 			context.cachedSemanticProgram = semantic;
 		} catch (error:CompileError) {
 			for (name in names) {
@@ -217,8 +217,10 @@ class FrontendCompilation {
 		var allocationAfterIndexRebuild = AllocationMeter.sample();
 		var retyped = [], regenerated = [];
 		var previousTyped = context.lastTypedProgram;
-		var currentSpecializedOwners:Map<String, Bool> = [for (classDecl in typedNew.classes)
-			if (classDecl.specializationOrigin != null) classDecl.name => true];
+		var currentSpecializedOwners:Map<String, Bool> = [
+			for (classDecl in typedNew.classes)
+				if (classDecl.specializationOrigin != null) classDecl.name => true
+		];
 		if (previousTyped != null) {
 			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
 			for (classDecl in previousTyped.classes)
@@ -352,8 +354,9 @@ class FrontendCompilation {
 				for (lambdaName in lambdaNames.keys())
 					// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
 					// produced by that typing can survive; a formerly capture-free closure may now have another name.
-					if (!LambdaName.is(lambdaName) || !typedByName.exists(LambdaName.outermost(lambdaName)) ||
-							typedByName.exists(lambdaName))
+					if (!LambdaName.is(lambdaName)
+						|| !typedByName.exists(LambdaName.outermost(lambdaName))
+						|| typedByName.exists(lambdaName))
 						valid.set(lambdaName, true);
 			}
 			// An unchanged caller can retain a call to a generated specialization.
@@ -372,9 +375,12 @@ class FrontendCompilation {
 				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
 				var sourceOwner = origin != null
 					&& initializerModule(origin, owners) != null ? origin.substr(0, origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
+				// Shared helpers may move to another requesting module. Keep only the fresh owner's copy,
+				// otherwise assembling cached bodies can resurrect the previous owner's stale IR.
+				var supersededOwner = typedByName.exists(cached) && owners.get(cached) != name;
 				// Even when the generic origin is unchanged, a specialization can depend on a changed type's
 				// representation. Its cached body and optional-value helpers are no longer valid in that case.
-				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner)
+				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner) && !supersededOwner
 					&& !invalidated.exists(cached) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
@@ -421,7 +427,8 @@ class FrontendCompilation {
 			// functions belong to that same retired body, even when its generic source method is unchanged.
 			var retired:Map<String, Bool> = [];
 			for (cached => fn in state.typedFunctions)
-				if (fn.physicalOwner != null && !currentSpecializedOwners.exists(fn.physicalOwner)) retired.set(cached, true);
+				if (fn.physicalOwner != null && !currentSpecializedOwners.exists(fn.physicalOwner))
+					retired.set(cached, true);
 			var foundRetired = true;
 			while (foundRetired) {
 				foundRetired = false;
@@ -431,7 +438,8 @@ class FrontendCompilation {
 						foundRetired = true;
 					}
 			}
-			for (cached in retired.keys()) valid.remove(cached);
+			for (cached in retired.keys())
+				valid.remove(cached);
 			var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
 			if (removed.length > 0) {
 				state = context.writableState(name, rollbackModules);
@@ -566,13 +574,16 @@ class FrontendCompilation {
 				irCNatives.push(native);
 		// A live HashLink build initializes the fields it adds to running objects (see `IrProgramAssembler.liveInitializersFrom`).
 		var published = context.assembler,
-			liveInitializers = context.livePatching && !context.isWasmTarget() && published.isPublished() ? IrProgramAssembler.liveInitializersFrom(typedNew,
-				name -> published.publishedObject(name), (name, field) -> published.publishedField(name, field)) : [];
+			liveInitializers = context.livePatching
+				&& !context.isWasmTarget()
+				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(typedNew, name -> published.publishedObject(name),
+					(name, field) -> published.publishedField(name, field)) : [];
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
-		var cNativeNames = [for (native in irCNatives) native.name].join(","), ownPrints:Map<String, String> = [];
+		var cNativeNames = [for (native in irCNatives) native.name].join(","),
+			ownPrints:Map<String, String> = [];
 		for (fn in cached)
 			if (PositionalName.is(fn.name))
 				ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
@@ -582,7 +593,8 @@ class FrontendCompilation {
 			var texts:Map<String, String> = [for (state in context.modules) state.source.path => state.source.text];
 			for (fn in cached)
 				if (PositionalName.is(fn.name)) {
-					var place = PositionalName.placeOf(fn), parsed = PositionalName.parsePlace(place);
+					var place = PositionalName.placeOf(fn),
+						parsed = PositionalName.parsePlace(place);
 					if (place == null || parsed == null || !texts.exists(parsed.path))
 						continue;
 					ir.positionalPlaces.set(fn.name, place);
@@ -612,7 +624,10 @@ class FrontendCompilation {
 			compiler.ir.IrValuePhiScalarization.rewrite(ir);
 		}
 		var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-		ir.functions = [for (fn in ir.functions) compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())];
+		ir.functions = [
+			for (fn in ir.functions)
+				compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
+		];
 		compiler.ir.IrNullableScalarFlow.rewrite(ir);
 		IrInliner.packedValueFields = !context.isWasmTarget();
 		// Compare and publish the final IR even when only load/store forwarding is enabled.
@@ -665,51 +680,81 @@ class FrontendCompilation {
 	}
 
 	/** Physical owners referenced by unchanged cached functions and the generated functions they call. */
-	static function retainedGenericOwners(context:CompilationContext, modules:Array<String>, owners:Map<String, String>,
-			selected:Map<String, Bool>, lowerToIr:Bool):Map<String, Bool> {
+	static function retainedGenericOwners(context:CompilationContext, modules:Array<String>, owners:Map<String, String>, selected:Map<String, Bool>,
+			lowerToIr:Bool):Map<String, Bool> {
 		var result:Map<String, Bool> = [], previous = context.lastTypedProgram;
-		if (previous == null) return result;
-		var known:Map<String, Bool> = [for (entry in previous.classes) if (entry.specializationOrigin != null) entry.name => true];
-		if (!known.keys().hasNext()) return result;
+		if (previous == null)
+			return result;
+		var known:Map<String, Bool> = [
+			for (entry in previous.classes)
+				if (entry.specializationOrigin != null) entry.name => true
+		];
+		if (!known.keys().hasNext())
+			return result;
 		// A type-only request has no complete IR graph to inspect.
-		if (!lowerToIr) return known;
-		var functions:Map<String, IrFunction> = [], physicalMethods:Map<String, String> = [];
+		if (!lowerToIr)
+			return known;
+		var functions:Map<String, IrFunction> = [],
+			physicalMethods:Map<String, String> = [];
 		for (module in modules) {
 			var state = context.modules.get(module);
-			if (state == null) continue;
-			for (name => fn in state.irFunctions) functions.set(name, fn);
-			for (name => fn in state.typedFunctions) if (fn.physicalOwner != null) physicalMethods.set(name, fn.physicalOwner);
+			if (state == null)
+				continue;
+			for (name => fn in state.irFunctions)
+				functions.set(name, fn);
+			for (name => fn in state.typedFunctions)
+				if (fn.physicalOwner != null)
+					physicalMethods.set(name, fn.physicalOwner);
 		}
-		var pending = [for (name in owners.keys()) if (!selected.exists(name) && functions.exists(name)) name], visited:Map<String, Bool> = [];
+		var pending = [
+			for (name in owners.keys())
+				if (!selected.exists(name) && functions.exists(name)) name
+		], visited:Map<String, Bool> = [];
 		function visitType(type:IrType):Void {
 			switch type {
-				case Obj(name): if (known.exists(name)) result.set(name, true);
-				case Array(element), Iterator(element), Nullable(element): visitType(element);
-				case Function(arguments, value): for (argument in arguments) visitType(argument); visitType(value);
+				case Obj(name):
+					if (known.exists(name))
+						result.set(name, true);
+				case Array(element), Iterator(element), Nullable(element):
+					visitType(element);
+				case Function(arguments, value):
+					for (argument in arguments)
+						visitType(argument);
+					visitType(value);
 				default:
 			}
 		}
 		while (pending.length > 0) {
 			var name = pending.pop();
-			if (visited.exists(name)) continue;
+			if (visited.exists(name))
+				continue;
 			visited.set(name, true);
 			var fn = functions.get(name);
-			if (fn == null) continue;
+			if (fn == null)
+				continue;
 			var physical = physicalMethods.get(name);
-			if (physical != null && known.exists(physical)) result.set(physical, true);
-			for (argument in fn.arguments) visitType(argument.type);
+			if (physical != null && known.exists(physical))
+				result.set(physical, true);
+			for (argument in fn.arguments)
+				visitType(argument.type);
 			visitType(fn.result);
-			for (block in fn.blocks) for (located in block.instructions) {
-				var instruction = located.value, output = compiler.ir.IrOperands.output(instruction);
-				if (output != null) visitType(output.type);
-				for (input in compiler.ir.IrOperands.inputs(instruction)) visitType(input.type);
-				switch instruction {
-					case TypeValue(_, type): visitType(type);
-					case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
-						if (functions.exists(target) && !selected.exists(target)) pending.push(target);
-					default:
+			for (block in fn.blocks)
+				for (located in block.instructions) {
+					var instruction = located.value,
+						output = compiler.ir.IrOperands.output(instruction);
+					if (output != null)
+						visitType(output.type);
+					for (input in compiler.ir.IrOperands.inputs(instruction))
+						visitType(input.type);
+					switch instruction {
+						case TypeValue(_, type):
+							visitType(type);
+						case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
+							if (functions.exists(target) && !selected.exists(target))
+								pending.push(target);
+						default:
+					}
 				}
-			}
 		}
 		return result;
 	}
@@ -877,7 +922,8 @@ class FrontendCompilation {
 		};
 
 	/** The literal defaults of the optional parameters of `ir`'s functions (`IrProgram.parameterDefaults`). */
-	static function parameterDefaults(ir:IrProgram, signatures:Map<String, compiler.syntax.Ast.AstFunction>):Map<String, Map<String, compiler.ir.Ir.IrDefault>> {
+	static function parameterDefaults(ir:IrProgram,
+			signatures:Map<String, compiler.syntax.Ast.AstFunction>):Map<String, Map<String, compiler.ir.Ir.IrDefault>> {
 		var result:Map<String, Map<String, compiler.ir.Ir.IrDefault>> = [];
 		for (fn in ir.functions) {
 			var signature = signatures.get(fn.name);
@@ -918,10 +964,16 @@ class FrontendCompilation {
 	}
 
 	static function explicitSignature(fn:compiler.syntax.Ast.AstFunction):Bool {
-		if ((switch (fn.result) { case InferredType: true; default: false; }))
+		if ((switch (fn.result) {
+			case InferredType: true;
+			default: false;
+		}))
 			return false;
 		for (argument in fn.arguments)
-			if ((switch (argument.type) { case InferredType: true; default: false; }))
+			if ((switch (argument.type) {
+				case InferredType: true;
+				default: false;
+			}))
 				return false;
 		return true;
 	}

@@ -470,7 +470,8 @@ class ProgramTyper {
 		// Reject value capabilities on reference declarations before typing their fields or initializers.
 		if (!isStruct && (classDecl.interfaces.length > 0 || classDecl.base != null)) {
 			var actual = TInstance(NominalKind.Class, classDecl.name, [
-				for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)
+				for (parameter in classDecl.typeParameters)
+					TTypeParameter(classDecl.name, parameter)
 			]);
 			for (capability in ["Hashable", "Equatable"])
 				if (session.relations.isAssignable(actual, TInstance(NominalKind.Interface, capability, [])))
@@ -581,7 +582,8 @@ class ProgramTyper {
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
 		var declaredType = TInstance(NominalKind.Class, classDecl.name, [
-			for (parameter in classDecl.typeParameters) TTypeParameter(classDecl.name, parameter)
+			for (parameter in classDecl.typeParameters)
+				TTypeParameter(classDecl.name, parameter)
 		]);
 		validateObservable(classDecl, declaredType, classSemanticSubstitutions, isValue, isNativeValue);
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);

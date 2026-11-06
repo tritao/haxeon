@@ -61,6 +61,7 @@ class TypingSession {
 	public var declarations:DeclarationIndex;
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
+
 	/** Typed lambdas by position and captured bindings: the copies of a switch arm with several patterns capture different locals. */
 	public final lambdaCache:Map<String, TypedExpression> = [];
 
@@ -80,21 +81,29 @@ class TypingSession {
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
 	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
 	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
+
 	/** Language `==` on declared values follows their one conformance equality. */
 	public final valueEqualityRequests:Map<String, EqualityRequest> = [];
+
 	/** Static Type.enumEq comparisons use enum tags and payloads without declaring enum value conformance. */
 	public final enumEqualityRequests:Map<String, EqualityRequest> = [];
+
 	/** Concrete enum interface methods requested by statically dispatched calls. */
 	public final enumMethodRequests:Map<String, EnumMethodRequest> = [];
+
 	/** Real enum-to-interface conversions need an interface-dispatch object. */
 	public final enumInterfaceAdapters:Map<String, EnumInterfaceAdapterRequest> = [];
+
 	/** Hash implementations generated from declared `Hashable` conformance. */
 	public final hashRequests:Map<String, EqualityRequest> = [];
+
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
+
 	/** Resolved field sequences used by path operations and descriptor generation. */
 	public final keyPathDefinitions:Map<String, KeyPathTyping.KeyPathDefinition> = [];
+
 	public final keyPathParameters:Map<String, Map<String, String>> = [];
 	public final keyPathCompositions:Map<String, Bool> = [];
 
@@ -123,7 +132,27 @@ class TypingSession {
 		this.enumRepresentations = new EnumRuntimeRepresentations(this);
 	}
 
+	var helperSpans:Map<String, SourceSpan> = [];
+
+	/** A shared generated implementation belongs to the type, independently of which caller requested it. */
+	public function helperSpan(type:CompilerType, fallback:SourceSpan):SourceSpan {
+		return switch type {
+			case TNullable(element): helperSpan(element, fallback);
+			case TInstance(_, name, _), TAbstract(name, _, _):
+				var span = helperSpans.get(name);
+				span == null ? fallback : span;
+			case _: fallback;
+		};
+	}
+
 	public function bindSemantic(semantic:SemanticProgram):Void {
+		for (declaration in semantic.program.enums)
+			helperSpans.set(declaration.name, declaration.span);
+		for (declaration in semantic.program.classes)
+			helperSpans.set(declaration.name, declaration.span);
+		for (declaration in semantic.program.abstracts)
+			helperSpans.set(declaration.name, declaration.span);
+
 		declarations = semantic.declarations;
 		relations = semantic.relations;
 		signatures = semantic.signatures;
@@ -161,7 +190,10 @@ class TypingSession {
 
 	/** Whether writes through a binding may update the binding itself rather than a referenced object. */
 	public function mayHoldValue(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
-		if (type != null && (switch (type) { case InferredType: false; default: true; })) {
+		if (type != null && (switch (type) {
+			case InferredType: false;
+			default: true;
+		})) {
 			var resolved:Null<CompilerType> = null;
 			try {
 				resolved = declarations.resolve(type, null, currentContext.typeSubstitutions);
@@ -169,7 +201,8 @@ class TypingSession {
 				// The normal typing pass reports invalid or inferred annotations with the right source context.
 				return true;
 			}
-			if (resolved == null) return true;
+			if (resolved == null)
+				return true;
 			return valueStorageType(resolved);
 		}
 		return switch initializer {
@@ -189,13 +222,17 @@ class TypingSession {
 
 	/** Storage analysis runs before expression typing; unknown receivers conservatively retain place writes. */
 	public function mayBeKeyPath(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
-		if (type != null && (switch type { case InferredType: false; default: true; })) {
+		if (type != null && (switch type {
+			case InferredType: false;
+			default: true;
+		})) {
 			try {
 				return switch declarations.resolve(type, null, currentContext.typeSubstitutions) {
 					case TKeyPath(_, _, _), TDynamic, TTypeParameter(_, _): true;
 					default: false;
 				};
-			} catch (_:compiler.Diagnostic.CompileError) return true;
+			} catch (_:compiler.Diagnostic.CompileError)
+				return true;
 		}
 		return switch initializer {
 			case New(_, _, _), ArrayLiteral(_, _), ObjectLiteral(_, _), Lambda(_, _, _, _): false;
@@ -331,10 +368,13 @@ class TypingSession {
 
 	/** Payload enum keys use their declared hash and equality in the ordinary specialized map. */
 	public function mapName(key:CompilerType, value:CompilerType):Null<String> {
-		var payloadKey = isPayloadEnumKey(key), hashable = DeclaredConformance.has(this, key, "Hashable");
-		if (payloadKey && !hashable) return null;
+		var payloadKey = isPayloadEnumKey(key),
+			hashable = DeclaredConformance.has(this, key, "Hashable");
+		if (payloadKey && !hashable)
+			return null;
 		var builtin = payloadKey ? null : RuntimeType.mapName(key, value);
-		if (builtin == null && !hashable) return null;
+		if (builtin == null && !hashable)
+			return null;
 		if (requiresSpecializedMap(key, value)) {
 			runtimeDependencyTracker.record(currentContext.name, RuntimeType.SPECIALIZED_MAP);
 			representation.specializedMapOwner(key, value);
@@ -345,10 +385,14 @@ class TypingSession {
 
 	public function isPayloadEnumKey(key:CompilerType):Bool {
 		var info = enumKeyType(key);
-		if (info == null) return false;
+		if (info == null)
+			return false;
 		var declaration = enumDecls.get(info.name);
-		if (declaration == null) return false;
-		for (constructor in declaration.cases) if (constructor.params.length > 0) return true;
+		if (declaration == null)
+			return false;
+		for (constructor in declaration.cases)
+			if (constructor.params.length > 0)
+				return true;
 		return false;
 	}
 
@@ -356,13 +400,15 @@ class TypingSession {
 		return isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key);
 
 	public function requiresSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return isPayloadEnumKey(key) || RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
+		return isPayloadEnumKey(key)
+			|| RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
 
-	function mapValueType(type:CompilerType):Bool return switch type {
-		case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
-		case TInstance(NominalKind.Class, _, _): relations.isValueClass(type);
-		default: false;
-	};
+	function mapValueType(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(_, _, representation), TNullable(representation): mapValueType(representation);
+			case TInstance(NominalKind.Class, _, _): relations.isValueClass(type);
+			default: false;
+		};
 
 	static function enumKeyType(type:CompilerType):Null<{name:String, arguments:Array<CompilerType>}> {
 		return switch type {

@@ -120,7 +120,7 @@ class SemanticProgram {
 			imports: program.imports,
 			importAliases: program.importAliases,
 			aliases: program.aliases,
-			enums: program.enums,
+			enums: current.enums,
 			enumAbstracts: program.enumAbstracts,
 			abstracts: abstracts,
 			interfaces: program.interfaces,
