@@ -97,6 +97,7 @@ class TestCatalog {
 		"InlineEnumPointerWordMain",
 		"WasmLinearValueArrayAccessMain",
 		"ValueArrayAccessMain",
+		"ValueArrayLoweringSelectionMain",
 		"IrIntegerBuilderMain",
 		"GenericCallbackContextMain",
 		"IncrementalSnapshotMain",
