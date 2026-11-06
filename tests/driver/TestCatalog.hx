@@ -91,6 +91,7 @@ class TestCatalog {
 		"InlineEnumCarrierBoundaryMain",
 		"InlineEnumScalarWordBoundaryMain",
 		"InlineEnumReferenceMain",
+		"InlineEnumReferenceCycleMain",
 		"InlineEnumPayloadMain",
 		"InlineEnumCarrierArrayMain",
 		"InlineEnumPointerWordMain",

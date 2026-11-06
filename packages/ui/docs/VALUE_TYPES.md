@@ -2583,3 +2583,105 @@ or immutable value changed.
 
 Source inline enum ABI, enum arrays/closures and the UI enum conversions remain subsequent steps; these gates do
 not claim they are implemented by the metadata checkpoint.
+
+### Reference cycles do not make enum layouts recursive (2026-11-06)
+
+The semantic classifier and IR planner now follow only value containment: enums, value structs and nullable values.
+Array, iterator, map, key-path, closure, managed-class and anonymous-record payloads break the path. The baseline
+classified `Tree.Node(Array<Tree>)`, `H.On(H->Void)` and map payloads as recursive/boxed; the candidate classifies them
+as finite inline shapes. Direct nullable enum containment stays boxed. No target requires conservative classification
+for the tested reference cycles.
+
+`InlineEnumReferenceCycleMain` constructs/copies the actual private case storage for array, closure and map payloads.
+Its only retained roots are carrier globals. HashLink forces major collections and reuses garbage slots; Wasm GC forces
+V8 collections; Wasm32 enables guest GC stress and asserts the guest collection counter advances during churn. All
+three payload kinds survive. HashLink exact census and both Wasm allocation counters report **zero allocations** for
+8 and 1,024 copies, on all three targets, with inlining disabled and enabled. Both Haxe evaluation and a HashLink-hosted
+compiler run the checks. This tests inline carrier construction/projection and roots; source enum construction remains
+on its existing ABI until the separate source-lowering step.
+
+Layout recursion and boxed generic descriptor completion are separate relations over the same finite declaration graph.
+Removing reference dependencies from both exposed unbounded requests for `E<T> -> Array<E<Array<T>>>`; a diagnostic-only
+overlay stopped after 16 requests. Preserving the existing boxed-transport dependency relation keeps that reduced case
+at two schemas, while its value-recursion flag is false and the inline planner accepts its finite layout. This transport
+check does not select a boxed inline representation. Concrete cyclic generic transport remains part of source lowering.
+
+Required gates pass: 788 compiler tests, zero failures (rerun after strengthening guest-GC coverage); self-hosting fixed
+point; ten UI scripts; 506 cross-target fixtures with 14 existing skips and all six UI snapshots; app; all nine retention
+scenarios; the separately scheduled budgets; six headless memory runs; both Web builds and smoke tests. All eighteen
+measurement-mode action runs also report no budget failures. No ceiling, verification rule or immutable value changed.
+
+Control: `861c37aa`; frozen outer input: `2425ee7bc` (3,336 files). Both compilers build this same outer input; the
+control compiler comes from its archived commit. Intervening outer awake/rendering changes are therefore shared by both
+sides. The editor profiles are byte-identical: 99,788,585 bytes, SHA-256
+`41ac5670063181aa2811b73c26fb15c7af48054f4f5d884ed1c95e71e78a23dd`. The native VM/runtime libraries are also identical.
+
+Nine alternating action pairs, affinity `0,2,4,6`; medians:
+
+| Action | KiB control → candidate | Frame ms control → candidate |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 72.5 → 72.5 | 1.12 → 1.12 |
+| tab-matrix/hierarchy->sensors | 112.8 → 113.0 | 1.60 → 1.61 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.24 → 1.23 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.18 → 1.18 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.43 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-field | 12.4 → 10.9 | 0.44 → 0.43 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-other | 10.0 → 10.0 | 0.43 → 0.42 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.72 → 0.72 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | not reported | 3.00 → 3.05 |
+
+The hierarchy-to-sensors KiB counter moves +0.2 and hover-field moves −1.5 despite identical programs. Three further
+alternating 100-cycle, census-enabled tab-action pairs measure exact action-window byte medians (99 steady frames per
+action): hierarchy-to-sensors **115,136 → 115,136**, sensors-to-hierarchy **81,384 → 81,384**, console-to-telemetry
+**75,800 → 75,800**, telemetry-to-console **94,520 → 94,520**, equal in every run. This establishes no actual tab-action
+allocation increase; the counter is quantized by shared buffer refills. The hover-field decrease is not claimed as a
+permanent improvement and does not justify lowering a budget. The original runs are retained, not replaced.
+
+Selection-stress census, 30 cycles, objects / bytes:
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,911 / 24,012,464 | 340,910 / 24,012,176 |
+| 2 | 340,911 / 24,012,448 | 340,910 / 24,012,152 |
+| 3 | 340,910 / 24,012,160 | 340,909 / 24,011,904 |
+
+Every run has exactly 305,725 non-byte objects / 21,594,968 non-byte bytes; only byte buffers vary. Three paired
+500-cycle RSS windows, MiB:
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 30.31 / 4.06 / 0.78 / 5.00 | 29.53 / 4.22 / 0.78 / 4.84 |
+| 2 | 29.84 / 4.06 / 0.78 / 5.00 | 30.00 / 4.06 / 0.78 / 5.00 |
+| 3 | 30.47 / 3.75 / 0.78 / 5.00 | 29.69 / 3.75 / 0.62 / 5.00 |
+
+All six memory gates pass; paired median deltas are −0.78 / 0 / 0 / 0 MiB. Identical programs and these observations
+do not establish a memory or timing improvement.
+
+Wasm GC: nine full-scene pairs, three pairs each for static, text-heavy and editing, 36 runs; Wasm32: three full-scene
+load pairs, six runs. Object counts agree in every GC pair. The guests are byte-identical: Wasm GC 5,810,183 bytes,
+Wasm32 11,876,090 bytes. Medians of per-run frame measurements, ms:
+
+| Target / scene | Objects control → candidate | Median frame control → candidate | p95 frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc/full | 4440 → 4440 | 2.20 → 2.20 | 4.50 → 3.80 |
+| wasm-gc/static | 4440 → 4440 | 2.00 → 2.00 | 3.70 → 3.60 |
+| wasm-gc/text-heavy | 4440 → 4440 | 2.30 → 2.50 | 3.90 → 4.20 |
+| wasm-gc/editing | 8724 → 8724 | 2.50 → 2.40 | 4.60 → 4.40 |
+| wasm32/full | not counted | 2.20 → 2.20 | 4.00 → 3.60 |
+
+Full-scene startup medians, ms:
+
+| Target | Compile control → candidate | Init control → candidate | First frame control → candidate |
+| --- | ---: | ---: | ---: |
+| wasm-gc | 5.7 → 5.5 | 16.0 → 17.4 | 158.0 → 160.7 |
+| wasm32 | 5.3 → 5.7 | 13.7 → 13.9 | 138.0 → 154.9 |
+
+The text-heavy frame median is 0.20 ms higher; that observation is retained with the others, without attributing a
+causal cost to this classification change. Raw captures were deleted immediately after extraction. The finished gate
+checkout and obsolete builds are removed at the commit boundary; only the next control artifacts and records remain.

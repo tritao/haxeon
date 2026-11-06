@@ -350,16 +350,22 @@ a genuine erased boundary. Generic code that constructs or erases such an enum m
 as described in `GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
 representation remains pending.
 
-Concrete non-recursive enum payload schemas are now retained before erasure, including unused constructors and
+Concrete enum payload schemas are now retained before erasure, including unused constructors and
 constructors which do not mention a generic parameter. A local generic factory, an instance body, a captured closure
-or a typedef cannot silently replace that schema with `Dynamic`. Recursion is determined from the semantic declaration
-graph and persists in canonical IR, so erased recursive payloads cannot accidentally become eligible for inline storage.
-Recursive generic payloads retain their current boxed storage during this metadata checkpoint; their value transport
-and source inline lowering remain unfinished.
+or a typedef cannot silently replace that schema with `Dynamic`. By-value recursion is determined from the semantic
+declaration graph and persists in canonical IR, so erased by-value cycles cannot accidentally become eligible for inline
+storage. The existing boxed generic transport separately bounds cyclic descriptor families, including non-regular
+families through references; that transport check does not determine inline eligibility. Their value transport and source
+inline lowering remain unfinished.
 
 The candidate inline layout uses tag zero for null and one-based case tags, followed by the maximum scalar-word and
 reference-slot counts across cases. The scalar and reference payloads overlap across cases. Classification is stable
-across targets: a recursive enum stays boxed, as does an enum whose largest case needs more than eight 64-bit scalar
+across targets: an enum containing itself by value stays boxed. Direct enum payloads, value structs and `Null<value>`
+continue a value-containment path. Arrays, maps, iterators, key paths, closures, managed classes and anonymous records
+are reference payloads: each cuts the path and occupies one reference slot, regardless of the types it refers to.
+Consequently `enum Tree { Node(children:Array<Tree>); }` and `enum H { On(f:H->Void); }` have finite inline layouts.
+This rule is shared by the semantic classifier and IR layout planner; Wasm GC does not require conservative boxing
+for these reference cycles. An enum also stays boxed if its largest case needs more than eight 64-bit scalar
 words plus reference slots and more than twice the next-largest case (using one as the minimum comparison size). This
 bounds the cost of putting one exceptional payload in every containing value. The thresholds are an implementation
 choice to be checked against the required no-regression measurements. The IR layout planner now implements this

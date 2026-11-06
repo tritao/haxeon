@@ -58,9 +58,13 @@ class EnumPayloadMetadataMain {
 		if (recursive.enums.length > 6) throw "Non-regular recursive enum expanded without a bound";
 		for (candidate in [recursive, CanonicalIrCodec.decode(CanonicalIrCodec.encode(recursive))]) {
 			var layout = new IrInlineEnumLayout(candidate.enums, candidate.objects, 64, HashLink);
-			for (entry in candidate.enums)
-				if (entry.name != "Outer" && (entry.isRecursive != true || layout.shape(entry.name) != null))
-					throw 'Recursive source enum lost its boxed decision: ${entry.name}';
+			for (entry in candidate.enums) {
+				var origin = EnumRuntimeType.declaration(entry.name);
+				if (origin == "Growing" && (entry.isRecursive != true || layout.shape(entry.name) != null))
+					throw 'By-value recursive enum lost its boxed decision: ${entry.name}';
+				if (origin == "Indirect" && (entry.isRecursive == true || layout.shape(entry.name) == null))
+					throw 'A reference descriptor cycle rejected a finite inline layout: ${entry.name}';
+			}
 			if (layout.shape("Outer") == null) throw "A boxed recursive child must not force its parent to be boxed";
 		}
 		var wrapped = Frontend.compile('enum Wrapper<T> { Wrap(value:T); } '

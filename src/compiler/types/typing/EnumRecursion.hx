@@ -3,6 +3,11 @@ package compiler.types.typing;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
+enum EnumDependencyKind {
+	ValueLayout;
+	BoxedDescriptor;
+}
+
 private typedef PayloadDependencyNode = {
 	final key:String;
 	final name:String;
@@ -11,16 +16,20 @@ private typedef PayloadDependencyNode = {
 	final used:Map<String, Bool>;
 }
 
-/** Find recursive enum declarations without expanding non-regular generic instances. */
+/** Finite declaration dependencies; inline size and boxed descriptor completion are distinct relations. */
 class EnumRecursion {
 	final session:TypingSession;
+	final kind:EnumDependencyKind;
 	final nodes:Map<String, PayloadDependencyNode> = [];
 	final edges:Map<String, Map<String, Bool>> = [];
 	final results:Map<String, Bool> = [];
 	var ready = false;
 	var changed = false;
 
-	public function new(session:TypingSession) this.session = session;
+	public function new(session:TypingSession, kind:EnumDependencyKind = ValueLayout) {
+		this.session = session;
+		this.kind = kind;
+	}
 
 	public function isRecursive(name:String):Bool {
 		if (!ready) build();
@@ -77,13 +86,17 @@ class EnumRecursion {
 				for (index in 0...arguments.length)
 					if (index < node.parameters.length && node.used.exists(node.parameters[index])) visit(arguments[index], current, dependencies);
 			}
-		case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
+		case TAbstract(_, _, representation), TNullable(representation):
 			visit(representation, current, dependencies);
-		case TMap(key, value), TKeyPath(key, value, _): visit(key, current, dependencies); visit(value, current, dependencies);
-		case TFunction(arguments, result):
+		case TArray(element), TIterator(element) if (kind == BoxedDescriptor):
+			visit(element, current, dependencies);
+		case TMap(key, value), TKeyPath(key, value, _) if (kind == BoxedDescriptor):
+			visit(key, current, dependencies); visit(value, current, dependencies);
+		case TFunction(arguments, result) if (kind == BoxedDescriptor):
 			for (argument in arguments) visit(argument, current, dependencies);
 			visit(result, current, dependencies);
-		// Managed classes and anonymous records are reference leaves, as in the IR layout planner.
+		// Containers, closures, key paths, managed classes and anonymous records are
+		// reference leaves. Only containment by value can make an inline layout recursive.
 		default:
 	};
 

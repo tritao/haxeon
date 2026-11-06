@@ -159,11 +159,7 @@ class IrInlineEnumLayout {
 
 	function contains(root:String, type:IrType, seenEnums:Array<String>, seenObjects:Array<String>):Bool return switch type {
 		case Enum(name): name == root || (seenEnums.indexOf(name) < 0 && recursive(root, name, seenEnums, seenObjects));
-		case Nullable(inner), Array(inner), Iterator(inner): contains(root, inner, seenEnums, seenObjects);
-		case Function(arguments, result):
-			var found = contains(root, result, seenEnums, seenObjects);
-			for (argument in arguments) if (contains(root, argument, seenEnums, seenObjects)) found = true;
-			found;
+		case Nullable(inner): contains(root, inner, seenEnums, seenObjects);
 		case Obj(name):
 			var object = objects.get(name), found = false;
 			if (object != null && object.isValue && seenObjects.indexOf(name) < 0)

@@ -11,10 +11,12 @@ class EnumRuntimeRepresentations {
 	final requested:Map<String, CompilerType> = [];
 	final queue:Array<CompilerType> = [];
 	final recursion:EnumRecursion;
+	final descriptorRecursion:EnumRecursion;
 
 	public function new(session:TypingSession) {
 		this.session = session;
 		recursion = new EnumRecursion(session);
+		descriptorRecursion = new EnumRecursion(session, BoxedDescriptor);
 	}
 
 	public function count():Int return queue.length;
@@ -71,9 +73,10 @@ class EnumRuntimeRepresentations {
 
 	public function storage(parameters:Array<String>, parameter:AstEnumParameter, instance:CompilerType):CompilerType {
 		var name = EnumRuntimeType.name(instance), origin = name == null ? null : EnumRuntimeType.declaration(name);
-		// Recursive generic enums remain boxed. Erasing their payload is also what bounds
-		// non-regular recursion such as E<T> -> E<Array<T>> to a finite descriptor graph.
-		if (parameters.length > 0 && origin != null && isRecursive(origin)) return TDynamic;
+		// The existing boxed generic transport needs a finite descriptor graph even for
+		// E<T> -> Array<E<Array<T>>>. This does not make a reference cycle recursive by
+		// value or reject its inline layout; source value transport remains a later step.
+		if (parameters.length > 0 && origin != null && descriptorRecursion.isRecursive(origin)) return TDynamic;
 		return session.representation.enumParameterType(parameters, parameter, instance);
 	}
 

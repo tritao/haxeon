@@ -30,6 +30,8 @@ class InlineEnumLayoutMain {
 			declaration("Optional", [Nullable(Obj("OptionalFields"))]),
 			declaration("Recursive", [Enum("Recursive")]),
 			declaration("RecursiveArray", [Array(Enum("RecursiveArray"))]),
+			declaration("RecursiveIterator", [Iterator(Enum("RecursiveIterator"))]),
+			declaration("RecursiveFunction", [Function([Enum("RecursiveFunction")], Void)]),
 			declaration("MutualA", [Enum("MutualB")]), declaration("MutualB", [Enum("MutualA")]),
 			declaration("BoxedChild", [Enum("Recursive")]),
 			declaration("EightWords", [for (_ in 0...16) I32]),
@@ -75,7 +77,12 @@ class InlineEnumLayoutMain {
 				throw "nested nullability must keep distinct presence bits and traced references";
 			if (layout.shape("EightWords") == null || layout.shape("Balanced") == null || layout.shape("EightReferences") == null || layout.shape("SmallFlatPointers") == null)
 				throw "the inline cutoff must count 64-bit scalar words plus references";
-			for (name in ["Recursive", "RecursiveArray", "MutualA", "MutualB", "NineWords", "Unbalanced", "NineReferences", "Pointers", "FlatPointers"])
+			for (name in ["RecursiveArray", "RecursiveIterator", "RecursiveFunction"]) {
+				var referenceCycle = layout.shape(name);
+				if (referenceCycle == null || referenceCycle.scalarWords != 0 || referenceCycle.references != 1)
+					throw 'A reference payload must break the layout cycle for $name on $target';
+			}
+			for (name in ["Recursive", "MutualA", "MutualB", "NineWords", "Unbalanced", "NineReferences", "Pointers", "FlatPointers"])
 				if (layout.shape(name) != null) throw 'Expected boxed representation for $name on $target';
 			var single = layout.shape("SinglePayload");
 			if (single == null || single.wordBits != 32 || single.scalarWords != 1 || single.references != 0

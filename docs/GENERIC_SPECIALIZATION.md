@@ -174,12 +174,14 @@ An enum used only in a generic function's local, a captured closure, an owner's 
 still makes that parameter layout-dependent; a `Dynamic` result does not erase the type before construction.
 This is an enum-layout dependency, not general scalar generic specialization.
 
-Recursion is classified from semantic declarations before payload erasure. The finite dependency graph follows stored
-type parameters through enum and value-struct wrappers, without expanding families such as `E<T> -> E<Array<T>>`;
-phantom arguments do not create dependencies. The decision is retained in canonical IR and invalidated with the enum
-declaration. Recursive generic enums still use their existing erased boxed payload storage at this checkpoint.
-Transporting their concrete value leaves belongs to the remaining source enum-storage lowering; this metadata step
-does not complete that ABI or activate inline enums.
+Layout recursion is classified from semantic declarations before payload erasure. Its finite dependency graph follows
+stored type parameters through enums, value structs and nullable values; reference containers, closures and managed
+objects break the path. Phantom arguments do not create dependencies. The decision is retained in canonical IR and
+invalidated with the enum declaration. The existing boxed generic transport has a separate descriptor dependency
+relation: it must bound families such as `E<T> -> Array<E<Array<T>>>` even though they have finite inline size. That
+transport still erases cyclic generic payload schemas at this checkpoint; it never marks a reference cycle recursive by
+value or rejects its inline layout. Transporting concrete value leaves belongs to the remaining source enum-storage
+lowering; this metadata step does not complete that ABI or activate source inline enums.
 
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
