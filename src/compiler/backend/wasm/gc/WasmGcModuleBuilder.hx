@@ -436,6 +436,7 @@ class WasmGcModuleBuilder {
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _) if (name == WasmScalarAbi.RETURN_MARKER || name == WasmScalarAbi.RETHROW_MARKER
 							|| name == compiler.ir.IrReceiverCheck.NAME || name == compiler.ir.IrReferenceIdentity.NAME
+							|| compiler.ir.IrScalarWordBits.matches(name)
 							|| name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK
 							|| declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):

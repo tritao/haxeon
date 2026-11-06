@@ -1438,6 +1438,13 @@ class HlLower {
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
+		if (compiler.ir.IrScalarWordBits.matches(name)) {
+			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
+			var scalar = name == compiler.ir.IrScalarWordBits.PACK ? arguments[0].type : output.type;
+			if (compiler.ir.IrVerifier.sameType(scalar,IrType.Abstract("native_callback"))) throw "HashLink callbacks belong in the reference lane";
+			instructions.push(HlInstruction.UnsafeCast(defineRegister(output,registers,registerTypes),requireRegister(arguments[0],registers)));
+			return true;
+		}
 		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
 			return true;

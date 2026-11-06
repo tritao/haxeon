@@ -24,6 +24,7 @@ typedef IrInlineEnumShape = {
 /** Plans inline enum payloads using the same packing rules as struct arrays. */
 class IrInlineEnumLayout {
 	public static inline final CANONICAL_ABI = "portable-abi64";
+	public static inline final VALUE_PREFIX = "$inline-enum:";
 	final declarations:Map<String, IrEnum>;
 	final objects:Map<String, IrObject>;
 	final pointerBits:Int;
@@ -89,7 +90,7 @@ class IrInlineEnumLayout {
 		var fields:Array<IrObjectField> = [{name: "tag", type: I32}];
 		for (index in 0...scalarWords) fields.push({name: 'scalar$index', type: wordBits == 64 ? I64 : I32});
 		for (index in 0...references) fields.push({name: 'reference$index', type: IrValueLaneReference.type()});
-		var valueObject:IrObject = {name: '$' + 'inline-enum:$name', isValue: true, base: null, interfaces: [], fields: fields, methods: []};
+		var valueObject:IrObject = {name: VALUE_PREFIX + name, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
 		objects.set(valueObject.name, valueObject);
 		var result:IrInlineEnumShape = {name: name, wordBits: wordBits, scalarWords: scalarWords, references: references,
 			cases: mapped, valueObject: valueObject};
@@ -102,7 +103,7 @@ class IrInlineEnumLayout {
 	/** Enum value declarations created while planning the requested shapes, in deterministic order. */
 	public function generatedObjects():Array<IrObject> {
 		var names = [for (name in objects.keys())
-			if (StringTools.startsWith(name, "$inline-enum:")) name];
+			if (StringTools.startsWith(name, VALUE_PREFIX)) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) objects.get(name)];
 	}

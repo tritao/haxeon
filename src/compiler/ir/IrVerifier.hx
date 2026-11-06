@@ -41,6 +41,7 @@ class IrVerifier {
 
 	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>):Void {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
+		var scalarFunctions = [for (fn in program.functions) if (StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)) fn.name => true];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
 		for (native in program.cNatives)
@@ -50,6 +51,7 @@ class IrVerifier {
 		for (fn in program.functions)
 			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
 		var objects:Map<String, IrObject> = [];
+		var physicalValues:Map<String, Bool> = [];
 		var interfaces:Map<String, IrInterface> = [];
 		var enums:Map<String, IrEnum> = [];
 		for (object in program.objects) {
@@ -61,6 +63,17 @@ class IrVerifier {
 				else if (field.nullableScalarStorage != null && !validNullableScalarStorage(field.type, field.nullableScalarStorage))
 					throw 'Invalid nullable scalar storage for "${object.name}.${field.name}"';
 			objects.set(object.name, object);
+		}
+		// Private enum records and values containing opaque references need logical escape adapters.
+		for (object in program.objects)
+			if (object.isValue && StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX)) physicalValues.set(object.name, true);
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (object in program.objects) if (object.isValue && !physicalValues.exists(object.name))
+				for (field in object.fields) if (requiresLogicalValueAdapter(field.type, physicalValues)) {
+					physicalValues.set(object.name, true); changed = true; break;
+				}
 		}
 		for (interfaceDecl in program.interfaces) {
 			if (interfaces.exists(interfaceDecl.name))
@@ -78,12 +91,27 @@ class IrVerifier {
 				throw 'Duplicate IR static field "${field.name}"';
 			globals.set(field.name, field.type);
 		}
+		// Carrier results are permitted only for an actual reference leaf in a lane array.
+		var carrierSlots:Map<String, Bool> = [];
+		var laneValues = new IrInlineValueLayout(IrObjectTable.of(objects));
+		for (fn in program.functions) {
+			var access = IrValueArraySlotHelpers.carrierAccess(fn.name);
+			if (access == null) continue;
+			var fieldFound = false;
+			for (slot in laneValues.slots(access.element))
+				if (!slot.isPresence && IrValueLaneReference.isCarrier(slot.type) && sameCarrierPath(slot.path, access.path)) fieldFound = true;
+			if (!fieldFound || fn.arguments.length != (access.write ? 3 : 2)
+				|| !sameType(fn.arguments[0].type, Array(access.element)) || !sameType(fn.arguments[1].type, I32)
+				|| (access.write ? !IrValueLaneReference.isCarrier(fn.arguments[2].type) || !sameType(fn.result, Void)
+					: !IrValueLaneReference.isCarrier(fn.result))) throw "Invalid lane carrier accessor signature";
+			carrierSlots.set(fn.name, access.write);
+		}
 		if (!signatures.exists(program.entryPoint))
 			throw 'Unknown IR entry point "${program.entryPoint}"';
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name))
 				try {
-					verifyFunction(fn, signatures, objects, interfaces, enums, globals);
+					verifyFunction(fn, signatures, objects, interfaces, enums, globals, scalarFunctions, carrierSlots, physicalValues);
 				} catch (error:String) {
 					throw 'IR verification failed for ${fn.name}: $error';
 				}
@@ -154,13 +182,14 @@ class IrVerifier {
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
 
 	static function verifyFunction(fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>, objects:Map<String, IrObject>,
-			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>):Void {
+			interfaces:Map<String, IrInterface>, enums:Map<String, IrEnum>, globals:Map<String, IrType>, scalarFunctions:Map<String, Bool>, carrierSlots:Map<String, Bool>, physicalValues:Map<String, Bool>):Void {
 		if (IrHlScalarRef.element(fn.result) != null) throw "A scalar stack reference cannot be returned";
-		if (IrValueLaneReference.isCarrier(fn.result)) throw "A value lane reference cannot be returned";
+		if (IrValueLaneReference.isCarrier(fn.result) && !(carrierSlots.exists(fn.name) && !carrierSlots.get(fn.name))) throw "A value lane reference cannot be returned";
 		for (arg in fn.arguments)
 			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX))
 				throw "A scalar stack reference cannot cross an ordinary function boundary";
-			else if (IrValueLaneReference.isCarrier(arg.type))
+			else if (IrValueLaneReference.isCarrier(arg.type) && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)
+				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name)))
 				throw "A value lane reference cannot cross an ordinary function boundary";
 		var graph = new IrGraph(fn),
 			values:Map<Int, IrType> = [],
@@ -173,7 +202,7 @@ class IrVerifier {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				verifyScalarReferenceUse(instruction);
+				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -237,7 +266,33 @@ class IrVerifier {
 		}
 	}
 
-	static function verifyScalarReferenceUse(instruction:IrInstruction):Void {
+	static function sameCarrierPath(left:Array<String>, right:Array<String>):Bool {
+		if (left.length != right.length) return false;
+		for (index in 0...left.length) if (left[index] != right[index]) return false;
+		return true;
+	}
+
+	static function requiresLogicalValueAdapter(type:IrType, values:Map<String, Bool>):Bool return switch type {
+		case Obj(name): values.exists(name);
+		case Nullable(element), Array(element), Iterator(element): requiresLogicalValueAdapter(element, values);
+		case Function(arguments, result):
+			var found = requiresLogicalValueAdapter(result, values);
+			for (argument in arguments) if (requiresLogicalValueAdapter(argument, values)) found = true;
+			found;
+		default: IrValueLaneReference.isCarrier(type);
+	};
+
+	static function verifyScalarReferenceUse(instruction:IrInstruction, scalarFunctions:Map<String, Bool>, carrierSlots:Map<String, Bool>,
+			physicalValues:Map<String, Bool>):Void {
+		switch instruction {
+			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)):
+				throw "Inline value storage requires a logical Dynamic adapter";
+			case SafeCast(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
+				|| sameType(value.type, Dyn) && !IrValueLaneReference.isCarrier(output.type) && requiresLogicalValueAdapter(output.type, physicalValues)):
+				throw "Inline value storage requires a logical cast adapter";
+			default:
+		}
+
 		switch instruction {
 			case StaticClosure(output, name), InstanceClosure(output, name, _) if (scalarClosureType(output.type)
 				&& !StringTools.startsWith(name, IrScalarArguments.PREFIX)):
@@ -251,9 +306,16 @@ class IrVerifier {
 		var output = IrOperands.output(instruction);
 		if (output != null && IrValueLaneReference.isCarrier(output.type)) switch instruction {
 			case Call(_, name, _) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.READ):
+			case ConstNull(_), FieldGet(_, _, _), Phi(_, _):
+			case Call(_, name, _) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && !carrierSlots.get(name)):
 			default: throw "Only a value lane operation can create a lane reference";
 		}
 		for (input in IrOperands.inputs(instruction)) if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
+			case FieldSet(_, _, value) if (value.id == input.id):
+			case Phi(_, _):
+			case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
+			case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
+				|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
 			case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
 			case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
 			default: throw "A value lane reference cannot escape its operation";
@@ -433,6 +495,12 @@ class IrVerifier {
 						&& !isReference(a.type)))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
+				if (IrScalarWordBits.matches(name)) {
+					switch instruction { case CNativeCall(_, _, _): throw "Scalar word transport is not a C native"; default: }
+					if (args.length != 1 || !IrScalarWordBits.valid(name,args[0].type,out.type)) throw "Invalid scalar word transport signature";
+					require(values,args[0]);
+					return;
+				}
 				if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK) {
 					switch instruction { case CNativeCall(_, _, _): throw "A lane reference cast is not a C native"; default: }
 					if (args.length != 1) throw 'Wrong lane reference cast arity';

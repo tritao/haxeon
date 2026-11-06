@@ -1360,6 +1360,13 @@ class WasmFunctionLower {
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
+				if (compiler.ir.IrScalarWordBits.matches(name)) {
+					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
+					body.push(LocalGet(requiredLocal(values,arguments[0].id)));
+					body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
+					body.push(LocalSet(requiredLocal(values,output.id)));
+					return;
+				}
 				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 					if (gcRepresentation != null) {

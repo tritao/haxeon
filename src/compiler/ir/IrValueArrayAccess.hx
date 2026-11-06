@@ -19,7 +19,7 @@ class IrValueArrayAccess {
 		if (slot.isReference) {
 			declare(IrValueLaneReference.READ, [Array(Dyn), I32, I32], IrValueLaneReference.type());
 			var carrier = builder.call(IrValueLaneReference.READ, args, IrValueLaneReference.type());
-			return builder.call(IrValueLaneReference.UNPACK, [carrier], slot.type);
+			return IrValueLaneReference.isCarrier(slot.type) ? carrier : builder.call(IrValueLaneReference.UNPACK, [carrier], slot.type);
 		}
 		var suffix = scalarSuffix(slot.type), name = '__value_array_read_$suffix';
 		var types:Array<IrType> = [Array(Dyn), I32, I32];
@@ -37,7 +37,7 @@ class IrValueArrayAccess {
 		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
 		if (slot.isReference) {
 			declare(IrValueLaneReference.WRITE, [Array(Dyn), I32, I32, IrValueLaneReference.type()], Void);
-			args.push(builder.call(IrValueLaneReference.PACK, [value], IrValueLaneReference.type()));
+			args.push(IrValueLaneReference.isCarrier(value.type) ? value : builder.call(IrValueLaneReference.PACK, [value], IrValueLaneReference.type()));
 			builder.call(IrValueLaneReference.WRITE, args, Void);
 			return;
 		}

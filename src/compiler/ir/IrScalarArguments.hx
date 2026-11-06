@@ -27,6 +27,7 @@ class IrScalarArguments {
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
 				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
+				&& !StringTools.startsWith(fn.name, IrInlineEnumCaseAccess.HELPER_PREFIX)
 				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
 				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)

@@ -375,6 +375,25 @@ and NaN with 32- and 64-bit payload words, with inlining enabled and disabled. A
 1,024 calls allocate zero objects on HashLink, Wasm32 and Wasm GC. This is payload-access infrastructure; it does
 not activate source enum storage or scalar generic specialization.
 
+The case-access helpers now construct and project nested payloads through those words and traced reference slots,
+including narrow signed fields, optional scalars and optional managed structs. New cases initialize unused references
+to null. Raw pointers and type handles use scalar words; Wasm callback handles do too, while HashLink callbacks stay
+in the traced lane. Managed objects and Dynamic values cannot enter the scalar-word protocol.
+
+Opaque reference slots can pass through the existing private scalar ABI and verified lane accessors without a
+Dynamic box. Carrier accessor names encode a field path, not a leaf ordinal: optional scalar erasure can change the
+number of preceding leaves. The verifier checks the actual carrier field and complete array/index/value signature.
+Private enum records, including scalar-only records, and values containing reference carriers require a logical
+adapter at a Dynamic boundary; hiding a carrier in a nested value does not permit an escape. Public enum, array and
+closure descriptors must continue to describe the source types.
+
+Native fixtures exercise the helpers on all three targets with inlining enabled and disabled. At 8 / 1,024 calls,
+mixed payload construction and forwarding allocate only the explicitly created source objects; packet array access
+and pointer/type transport allocate nothing after setup. HashLink major collections and an exposed Wasm GC collection
+also preserve a source whose only live root is its payload reference slot. These are physical payload tests, not source
+enum activation: concrete generic enum metadata, logical container/closure ABIs and genuine escape adapters remain
+required before typed source enum storage changes.
+
 This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline

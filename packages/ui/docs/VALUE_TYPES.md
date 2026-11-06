@@ -2120,3 +2120,78 @@ skips), six refreshed UI snapshots, app suite, all nine retention scenarios, the
 check, and all paired headless windows. The final source is fingerprinted before measurements; the pre-fix retention
 build is excluded. Raw captures and diagnostic builds are removed once their results are recorded, and the idle outer
 gate checkout is removed.
+
+## Enum payload reference and case helpers (2026-11-06)
+
+Control: `f91fec13`; candidate: the payload-helper checkpoint following it. Both use outer
+`12cf449ce`, the same checkout VM and native runtime, and development build mode. The rebuilt
+editor performance module is byte-for-byte identical (`bde021f673ad7487eac986ef4b1a6f958258c0c971d5ac317eee03ffc0e38c2a`),
+as are the Showcase guests: Wasm GC `af15b2d50ec8d6b85677741df51fc11d25df6dfc9a642bb52813d154484f99bf`,
+Wasm32 `b256f2dd09ebe595618ba75eecdf44a61597e069b2750ccea54ecea43fb9d77a`.
+This checkpoint does not activate source enum storage; these comparisons verify that adding
+the physical helpers and verifier rules leaves existing emitted programs unchanged.
+
+Nine alternating pairs, medians (control → candidate):
+
+| Action | KiB | Frame ms |
+| --- | ---: | ---: |
+| tab-matrix/console->telemetry | 74.5 → 74.5 | 1.12 → 1.13 |
+| tab-matrix/hierarchy->sensors | 112.6 → 112.6 | 1.61 → 1.62 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.24 → 1.24 |
+| tab-matrix/telemetry->console | 92.9 → 93.1 | 1.18 → 1.19 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.49 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.0 → 0.0 |
+| interaction/hover-field | 12.4 → 12.4 | 0.44 → 0.49 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.0 → 0.0 |
+| interaction/hover-other | 10.0 → 10.0 | 0.42 → 0.48 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.72 → 0.8 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | — | 3.01 → 3.18 |
+
+The quantized counter's telemetry→console +0.2 KiB is not an allocation change in the program:
+exactly the same module and libraries ran on both sides. Timing also varied with machine load.
+Preserve the scheduled pair-8 candidate failure: `selection-stress selection: frameMs 6.01 is over
+the budget 6.0`. Selection medians in the first five pairs were 2.93–3.19 ms; later control samples
+reached 4.16–5.29 ms and candidates 3.18–6.01 ms. No pair was retried or discarded. The separate,
+already-scheduled budget gate passed (selection 4.5 ms); its retention checks passed all nine scenarios.
+
+Selection-stress exact census, 30 cycles (objects / bytes):
+
+| Pair | Control | Candidate |
+| --- | ---: | ---: |
+| 1 | 340,909 / 24,010,760 | 340,908 / 24,010,560 |
+| 2 | 340,911 / 24,011,224 | 340,909 / 24,010,760 |
+| 3 | 340,910 / 24,011,008 | 340,910 / 24,011,048 |
+
+Every pair has identical non-byte-buffer types: 305,725 objects / 21,593,528 bytes. Only raw byte
+buffers vary. All three headless memory runs passed, with the following RSS window growth in MiB
+(cycles 100–200 / 200–300 / 300–400 / 400–500):
+
+| Pair | Control | Candidate |
+| --- | --- | --- |
+| 1 | 29.53 / 4.22 / 0.62 / 5.0 | 30.0 / 4.06 / 0.78 / 5.0 |
+| 2 | 29.22 / 4.22 / 0.78 / 5.0 | 29.53 / 4.38 / 0.78 / 5.0 |
+| 3 | 29.84 / 4.22 / 0.78 / 4.84 | 30.94 / 3.75 / 0.78 / 4.84 |
+
+Paired median RSS deltas are +0.47 / −0.16 / 0 / 0 MiB. The positive first-window observation is retained;
+the identical executable and library bytes rule out an implementation memory increase between
+these executions. Nothing was retried to obtain a lower window.
+
+All 36 Wasm GC scene runs completed: full/static/text-heavy 4,440 → 4,440 objects; editing
+8,724 → 8,724. Three Wasm32 startup pairs and both browser smokes also completed.
+The compiler suite passed 782 tests, self-hosting reached a fixed point, all ten UI scripts
+passed, and parity passed 503 fixtures (14 skips) plus six UI value snapshots. The app suite
+passed in the detached outer checkout. Its first attempt mixed the old runner with the newer
+shared checkout's two-line fingerprint protocol and failed with `Project fingerprint has an invalid result`;
+setting `MATERIA_INSTALL_ROOT` to the frozen checkout corrected that setup mismatch without a product edit.
+
+The new native fixtures exercise mixed case construction/projection, nested and optional payloads,
+managed reference rooting, pointer/type transport, and carrier lane arrays on HashLink, Wasm32 and Wasm GC,
+with inlining enabled and disabled. At 8 / 1,024 calls, mixed cases allocate exactly the explicitly
+created Source objects; warmed carrier-array access and scalar handle transport allocate zero.
+Twenty-two negative verifier checks cover carrier escapes, forged lane helpers and invalid scalar
+word transport. These are private payload proofs; source generic enum metadata, logical container
+and closure descriptors, escape adapters and source enum activation remain unfinished.

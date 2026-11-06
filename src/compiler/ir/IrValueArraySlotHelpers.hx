@@ -27,11 +27,11 @@ class IrValueArraySlotHelpers {
 
 	public function getter(slot:Int):String {
 		checkSlot(slot);
-		return name(element, slot, false);
+		return IrValueLaneReference.isCarrier(shape.slots[slot].type) ? carrierName(element, shape.slots[slot].path, false) : name(element, slot, false);
 	}
 	public function setter(slot:Int):String {
 		checkSlot(slot);
-		return name(element, slot, true);
+		return IrValueLaneReference.isCarrier(shape.slots[slot].type) ? carrierName(element, shape.slots[slot].path, true) : name(element, slot, true);
 	}
 
 	/** Request a check before evaluating the rest of a place operation. */
@@ -207,6 +207,21 @@ class IrValueArraySlotHelpers {
 	function checkSlot(slot:Int):Void {
 		if (slot < 0 || slot >= shape.slots.length) throw 'Invalid value lane slot $slot';
 	}
+
+	/** Carrier helpers name their field path: optional scalar erasure can change ordinal slot indices. */
+	public static function carrierAccess(name:String):Null<{element:IrType, path:Array<String>, write:Bool}> {
+		if (!StringTools.startsWith(name, PREFIX)) return null;
+		var parts = name.substr(PREFIX.length).split(":");
+		if (parts.length != 4 || parts[2] != "carrier" || parts[0] != "read" && parts[0] != "write") return null;
+		var element = IrTypeCodec.decode(haxe.crypto.Base64.decode(parts[1])), write = parts[0] == "write";
+		var path:Array<String> = haxe.Json.parse(haxe.crypto.Base64.decode(parts[3]).toString());
+		if (name != carrierName(element, path, write)) throw "Noncanonical lane carrier accessor";
+		return {element: element, path: path, write: write};
+	}
+
+	static function carrierName(element:IrType, path:Array<String>, write:Bool):String
+		return PREFIX + (write ? "write:" : "read:") + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":carrier:"
+			+ haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify(path)));
 
 	static function name(element:IrType, slot:Int, write:Bool):String {
 		if (slot < 0) throw 'Invalid value lane slot $slot';

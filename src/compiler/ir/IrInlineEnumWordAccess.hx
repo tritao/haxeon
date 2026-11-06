@@ -74,6 +74,9 @@ class IrInlineEnumWordAccess {
 
 	function encode(builder:IrBuilder, value:IrValue):IrValue return switch value.type {
 		case I32: bits == 32 ? value : builder.intToInt64(value);
+		case RawPtr, TypeRef, Abstract("native_callback"):
+			var encoded = builder.call(IrScalarWordBits.PACK, [value], I64);
+			bits == 64 ? encoded : builder.call("haxe.Int64.toInt", [encoded], I32);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__f64_to_i64_bits", [value], I64);
 		case F32: var encoded = builder.call("__f32_to_i32_bits", [value], I32); bits == 32 ? encoded : builder.intToInt64(encoded);
@@ -88,6 +91,8 @@ class IrInlineEnumWordAccess {
 
 	function decode(builder:IrBuilder, value:IrValue, type:IrType):IrValue return switch type {
 		case I32: bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32);
+		case RawPtr, TypeRef, Abstract("native_callback"):
+			builder.call(IrScalarWordBits.UNPACK, [bits == 64 ? value : builder.intToInt64(value)], type);
 		case I64 if (bits == 64): value;
 		case F64 if (bits == 64): builder.call("__i64_to_f64_bits", [value], F64);
 		case F32: builder.call("__i32_to_f32_bits", [bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], F32);
