@@ -874,8 +874,9 @@ class BodyTyper {
 						if (index < info.params.length)
 							switch arguments[index] {
 								case Variable(binding, _) if (binding != "_"):
-									bindings.set(binding, enumParameterType(info.typeParameters, info.params[index],
-										info.aliasType ?? TInstance(NominalKind.Enum, info.enumName, [])));
+									bindings.set(binding,
+										enumParameterType(info.typeParameters, info.params[index],
+											info.aliasType ?? TInstance(NominalKind.Enum, info.enumName, [])));
 								default:
 							}
 			default:
