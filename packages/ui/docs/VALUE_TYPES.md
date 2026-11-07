@@ -3177,3 +3177,91 @@ retained in the disk measurement record; raw captures are removed after extracti
 Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI scripts; 509 parity fixtures with 14
 existing skips; six UI snapshots; app suite; nine retention scenarios; budgets and six headless memory captures;
 all browser pairs above. Source inline-enum lowering and the UI enum conversions remain unfinished.
+
+
+### Registered enum arrays use the assembled-program lane pass
+
+Control: `a9c0e31c`; candidate: the enum-array discovery change. The existing logical-enum-array fixture now supplies
+ordinary allocations, element operations and iterator operations to `IrValueArrayProgramRewrite.rewriteAll`, instead
+of manually assembling the factory and element helpers. The pass discovers registered inline enums, passes their
+storage declarations to the layout factory, and checks physical value types at logical enum element boundaries.
+A recursive enum in the same program remains a reference array. Negative read/iterator fixtures reject a logical
+boxed enum where a private value packet is required.
+
+The control discovery pass fails this fixture with `IR verification failed for main: ordinary array operation on inline
+value lanes`. Candidate passes on HashLink, Wasm32 and Wasm GC with ordinary inlining enabled and disabled. Warm typed
+read/write calls allocate zero objects at 8 and 1,024 calls; construction plus iteration has constant allocation counts
+for 8 versus 1,024 elements. Mutation coverage includes push, unshift, insert, pop and shift; existing Dynamic/native
+round trips, aliasing and managed-reference GC checks remain in the fixture. Source enum activation remains separate.
+
+The full editor comparison freezes outer `46044a271` on both sides. The editor module is byte-for-byte identical
+between control and candidate (99,957,149 bytes; SHA256
+`89c9d7b7cf31ee776b6f70177a10e7bcde3f6b24b60f54e7e76bd1eeb1830c6b`). Source inline storage is not activated by
+this discovery change. Nine alternating action pairs report:
+
+| Action | KiB control → candidate | Median ms control → candidate |
+|---|---:|---:|
+| tab-matrix/console->telemetry | 72.5 → 72.5 | 1.14 → 1.14 |
+| tab-matrix/hierarchy->sensors | 112.8 → 112.8 | 1.63 → 1.66 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.27 → 1.28 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.19 → 1.21 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.43 |
+| interaction/hover-enter | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-field | 12.4 → 12.4 | 0.44 → 0.44 |
+| interaction/hover-inside | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-other | 10 → 10 | 0.42 → 0.42 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.72 → 0.72 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | not measured | 3.06 → 3.1 |
+
+The ordinary KiB readings are quantized by buffer refills. Changes below occur with identical executable artifacts;
+no new runtime allocation path or timing improvement is attributed to the compiler discovery change. No budget was
+raised and no completed measurement was replaced. Selection census results (three pairs):
+
+| Pair | Objects control → candidate | Bytes control → candidate |
+|---|---:|---:|
+| 1 | 340912 → 340911 | 24012856 → 24012616 |
+| 2 | 340909 → 340912 | 24012096 → 24012928 |
+| 3 | 340910 → 340909 | 24012448 → 24012176 |
+
+Every non-byte type ties in every pair: 305,725 objects / 21,594,968 bytes. All six memory captures pass the unchanged
+gate. Their four RSS windows (MiB) are:
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 30.31 / 3.91 / 0.78 / 5 | 30 / 3.91 / 0.94 / 5 |
+| 2 | 30.31 / 3.75 / 0.78 / 5 | 30 / 4.22 / 0.78 / 4.84 |
+| 3 | 29.38 / 4.22 / 0.62 / 5.16 | 29.22 / 4.22 / 0.62 / 5.94 |
+
+Paired median deltas are -0.31 / +0.00 / +0.00 / +0.00 MiB. Positive observations are retained; they occur with the same module, VM and runtime.
+
+Self-hosting BodyTyped observations (ms), control → candidate: seed 227.90 → 240.63; stage 1 69.55 → 55.60;
+stage 2 48.64 → 47.47. These single observations move in both directions and do not establish a generator timing
+regression or speedup. This change does not alter the typer or generation loops. The compiler reaches its fixed point.
+
+Both Showcase modules are also byte-for-byte identical: Wasm GC 5,808,484 bytes (SHA256
+`24f2a3a31d18d28769165a80e35336155ef2b317b36b29b187e95aa70877b8ea`), Wasm32 11,810,665 bytes
+(`3b1e48cc20dc72fa5724d2e727d4d2f2f51500d4048f95a0ddb84e62113c667b`). All 36 Wasm GC and six Wasm32
+captures complete. Object counts tie at 4,440 for full/static/text-heavy and 8,724 for editing. Frame median / p95
+observations (ms), control → candidate:
+
+| Target / scene | Median / p95 |
+|---|---:|
+| wasm-gc/editing | 2.9 / 5.7 → 2.9 / 6.1 |
+| wasm-gc/full | 2.3 / 4.8 → 2.3 / 4.4 |
+| wasm-gc/static | 2.3 / 4.8 → 2.3 / 4.2 |
+| wasm-gc/text-heavy | 2.5 / 4.7 → 2.3 / 4.4 |
+| wasm32/full | 2.5 / 4.7 → 2.7 / 5.3 |
+
+The first browser launch attempt produced no measurement: the copied logging wrapper had lost its executable bit,
+and the harness reported `Chrome DevTools endpoint did not become available` / connection refused. Its failure log is
+preserved. Restoring the script mode and adding an executable preflight fixes the launch; no completed capture was
+replaced and no guest source changed. The completed comparisons above include the slower Wasm32 observations.
+
+Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI scripts; 509 parity fixtures with
+14 existing skips; six UI snapshots; app suite; nine retention scenarios; all budget runs, six memory captures and
+all browser pairs above. Full paired records and hashes are retained on disk; raw captures are deleted after reading.
+Source inline-enum activation and the UI enum conversions remain unfinished.

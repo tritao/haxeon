@@ -6,13 +6,16 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Assemble the per-shape lowering after mutable places have been marked by the frontend. */
 class IrValueArrayProgramRewrite {
-	/** Discover every concrete struct array in the assembled program before generating any helpers. */
+	/** Discover every concrete value array in the assembled program before generating any helpers. */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget):Void {
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
+			inlineEnums:Map<String, Bool> = [for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
 			elements:Map<String, IrType> = [];
 		function visit(type:IrType):Void switch type {
 			case Array(element):
 				switch element {
+					case Enum(name) if (inlineEnums.exists(name)):
+						elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
 					case Obj(name) | Nullable(Obj(name)) if (values.exists(name)):
 						elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
 					default:
@@ -44,7 +47,7 @@ class IrValueArrayProgramRewrite {
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
 		var declarations:Map<String, IrObject> = [for (object in program.objects) object.name => object],
-			objects = IrObjectTable.of(declarations), factory = new IrValueArrayFactory(objects, element, pointerBits, target),
+			objects = IrObjectTable.of(declarations), factory = new IrValueArrayFactory(objects, element, pointerBits, target, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
 			originals:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn], rewritten:Array<IrFunction> = [];

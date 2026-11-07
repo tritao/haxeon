@@ -9,7 +9,8 @@ import compiler.ir.codec.IrTypeCodec;
 class IrValueArrayElements {
 	public static inline final PREFIX = "$value-array:element:";
 	final element:IrType;
-	final storage:IrType;
+	/** Physical value carried at element boundaries; the array itself retains its logical element type. */
+	public final storage:IrType;
 	final helpers:IrValueArraySlotHelpers;
 	final bridge:IrValueArrayBridge;
 	final suffix:String;

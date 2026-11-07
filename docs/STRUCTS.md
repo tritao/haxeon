@@ -416,6 +416,11 @@ as struct arrays, preserving aliases. Wasm GC validates both the logical enum ty
 before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
 reference-array operations on enum lane arrays as well as struct lane arrays.
 
+The assembled-program array pass discovers registered inline enum elements alongside structs. Container and iterator
+types keep the nominal enum descriptor; typed element operations use the registered private value storage. The pass
+checks that distinction on reads, writes, insertion/removal and iterator results. Recursive or oversized enums without
+inline storage retain ordinary reference arrays, including when both representations occur in the same program.
+
 Declared and reflective enum equality helpers participate in the same scalar/reference value-call ABI as other
 generated value functions. Their naming policy is owned by `EnumEqualityGenerator` and shared by HashLink's scalar
 argument rewrite and the Wasm value ABI. Eligible inline enum equality and checked unboxing retain value packets in
