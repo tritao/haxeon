@@ -744,7 +744,10 @@ class UiContext {
 			if (buildFeedbackPass >= 7) throw "UI interaction feedback did not converge after 8 passes";
 			if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
 				nativeLayoutEndedAt, Sys.time(), nodeCount);
-			return submitInternal(frame, cacheKey, view == null ? build : function() return view, false, buildFeedbackPass + 1);
+			// Re-run the original factory: its conditional reads decide which views exist.
+			// A constant view here would replace root subscriptions with only View.build's
+			// reads, leaving later model changes unable to invalidate the cached tree.
+			return submitInternal(frame, cacheKey, build, false, buildFeedbackPass + 1);
 		}
 		// Routing can add changes after the build. Keep them until the feedback pass has patched their owners.
 		interactionStates.acknowledge();
