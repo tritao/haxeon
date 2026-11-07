@@ -19,7 +19,18 @@ class JsonMain {
 			+ "  var escaped:Dynamic = Json.parse('{\\\"value\\\":\\\"line\\\\n\\\\u263A\\\"}');\n"
 			+ "  if (Reflect.field(escaped, 'value') != 'line\\n☺') return 3;\n"
 			+ "  var rejected = false; try Json.parse('{bad') catch (_:Dynamic) rejected = true;\n"
-			+ "  return rejected ? 42 : 4;\n"
+			+ "  if (!rejected) return 4;\n"
+			+ "  var shared:Dynamic = { a: 1 };\n"
+			+ "  var twice = Json.stringify({ x: shared, y: shared, z: [shared, [shared]] });\n"
+			+ "  if (twice != '{\\\"x\\\":{\\\"a\\\":1},\\\"y\\\":{\\\"a\\\":1},\\\"z\\\":[{\\\"a\\\":1},[{\\\"a\\\":1}]]}') return 5;\n"
+			+ "  var loop:Dynamic = { name: 'loop' }; Reflect.setField(loop, 'self', loop);\n"
+			+ "  var objectCycle = false; try Json.stringify(loop) catch (_:Dynamic) objectCycle = true;\n"
+			+ "  if (!objectCycle) return 6;\n"
+			+ "  var ring:Array<Dynamic> = []; ring.push([ring]);\n"
+			+ "  var arrayCycle = false; try Json.stringify(ring) catch (_:Dynamic) arrayCycle = true;\n"
+			+ "  if (!arrayCycle) return 7;\n"
+			+ "  var again = Json.stringify({ x: shared, y: shared });\n"
+			+ "  return again.length == 25 ? 42 : 8;\n"
 			+ "}");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
 	}

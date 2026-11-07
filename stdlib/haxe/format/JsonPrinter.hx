@@ -34,7 +34,8 @@ class JsonPrinter {
 	}
 
 	final output = new StringBuf();
-	final stack:Array<Dynamic> = [];
+	/** The arrays and objects being written, by identity: a value met again inside itself is a cycle. */
+	final active = new haxe.ds.ObjectMap<Dynamic, Bool>();
 	final replacer:Null<(key:Dynamic, value:Dynamic) -> Dynamic>;
 	final indent:String;
 	var depth:Int = 0;
@@ -90,7 +91,7 @@ class JsonPrinter {
 		if (length > 0)
 			line();
 		output.add("]");
-		stack.pop();
+		active.remove(value);
 	}
 
 	function writeObject(value:Dynamic):Void {
@@ -111,14 +112,13 @@ class JsonPrinter {
 		if (fields.length > 0)
 			line();
 		output.add("}");
-		stack.pop();
+		active.remove(value);
 	}
 
 	function enter(value:Dynamic):Void {
-		for (active in stack)
-			if (active == value)
-				throw "Cyclic value cannot be encoded as JSON";
-		stack.push(value);
+		if (active.exists(value))
+			throw "Cyclic value cannot be encoded as JSON";
+		active.set(value, true);
 	}
 
 	function line():Void {
