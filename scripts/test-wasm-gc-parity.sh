@@ -85,6 +85,7 @@ inline_cases=(
 	struct-array-dynamic-equality
 	struct-array-dynamic-store
 	value-argument-snapshots
+	function-global-null
 	struct-managed-narrow
 	struct-managed-nullable-narrow
 	nullable-scalar-ieee-equality
@@ -184,6 +185,10 @@ for inline in 0 1; do
 			--export=FloatHashCensus.prepare --export=FloatHashCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-float-hash-census-inline-$inline.wasm" \
 			--entry=hash-float-extremes --root=tests/programs tests/programs/hash-float-extremes.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=FunctionGlobals.prepare --export=FunctionGlobals.perform \
+			--output="$parity_output_dir/wasm-parity-$target-function-global-census-inline-$inline.wasm" \
+			--entry=function-global-null --root=tests/programs tests/programs/function-global-null.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=ValueArgumentCensus.prepare --export=ValueArgumentCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-value-argument-census-inline-$inline.wasm" \
@@ -878,6 +883,16 @@ async function run(name, target) {
 	    if (result !== n || allocations !== 0)
 	      failures.push(`enum dynamic escape census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: enum dynamic escape census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const functionGlobalBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-function-global-census-inline-${inline}.wasm`));
+	  const functionGlobal = (await WebAssembly.instantiate(functionGlobalBytes, {haxeon_runtime: runtime, std})).instance;
+	  functionGlobal.exports["FunctionGlobals.prepare"]();
+	  const functionGlobalCount = target === "wasm32" ? functionGlobal.exports["haxeon.memory.allocation_count"] : functionGlobal.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = functionGlobalCount(), result = functionGlobal.exports["FunctionGlobals.perform"](n), allocations = functionGlobalCount() - before;
+	    if (result !== 42 * n || allocations !== 0)
+	      failures.push(`function global census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: function global census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const argumentBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-value-argument-census-inline-${inline}.wasm`));
 	  const argument = (await WebAssembly.instantiate(argumentBytes, {haxeon_runtime: runtime, std})).instance;

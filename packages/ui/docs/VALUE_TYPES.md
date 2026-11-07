@@ -3265,3 +3265,83 @@ Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI
 14 existing skips; six UI snapshots; app suite; nine retention scenarios; all budget runs, six memory captures and
 all browser pairs above. Full paired records and hashes are retained on disk; raw captures are deleted after reading.
 Source inline-enum activation and the UI enum conversions remain unfinished.
+
+
+### Function-valued globals retain null and closure semantics
+
+Control: `e8d70a4b`; candidate: the HashLink function-global storage fix. The native VM initializes raw `HFUN` globals
+with its `null_function` code pointer. Haxeon's source function-valued fields contain closure references, so a default
+field incorrectly compared non-null and calling it read machine code as a closure. The boxed source control reproduced
+a SIGSEGV at the closure call; the core identifies the sentinel's code address in the supposed closure register.
+
+HashLink's symbol table now uses `HNULL(HFUN)` for data-global storage, retaining the function signature and normal
+closure registers. This stores the same pointer and adds no heap wrapper. No runtime or submodule pin changes are
+needed. The ABI fixture checks nullable global metadata, argument/result signatures, ordinary scalar globals and
+unchanged callable registers. Its old-storage control fails with `Function data global uses the raw HFUN slot ABI`.
+The source fixture checks default null, initialization, clearing/restoring, GC survival of a captured owner and warmed
+calls. The candidate passes on all three targets with inlining on/off; 8 and 1,024 typed calls allocate zero bytes in
+HashLink's exact census and zero objects on both Wasm targets. Source inline-enum activation remains unfinished.
+
+The full editor comparison freezes outer `46044a271` on both sides. Its emitted control and candidate modules are byte-for-byte identical (99,957,149 bytes; SHA256
+`89c9d7b7cf31ee776b6f70177a10e7bcde3f6b24b60f54e7e76bd1eeb1830c6b`). Nine alternating action pairs report:
+
+| Action | KiB control → candidate | Median ms control → candidate |
+|---|---:|---:|
+| tab-matrix/console->telemetry | 74.5 → 72.5 | 1.17 → 1.17 |
+| tab-matrix/hierarchy->sensors | 113 → 113 | 1.68 → 1.68 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.29 → 1.29 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.21 → 1.21 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.42 |
+| interaction/hover-enter | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-field | 10.9 → 12.4 | 0.44 → 0.43 |
+| interaction/hover-inside | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-other | 10 → 10 | 0.43 → 0.42 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.72 → 0.71 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | census below | 3.13 → 3.11 |
+
+Selection census (three pairs):
+
+| Pair | Objects control → candidate | Bytes control → candidate |
+|---|---:|---:|
+| 1 | 340909 → 340912 | 24012128 → 24012800 |
+| 2 | 340910 → 340911 | 24012408 → 24012584 |
+| 3 | 340908 → 340910 | 24011824 → 24012288 |
+
+Every non-byte type ties in every pair: 305,725 objects / 21,594,968 bytes. Byte-buffer variation occurs with the same
+executable, VM and runtime hashes. All six memory captures pass. Four RSS windows (MiB):
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 30.62 / 3.75 / 0.47 / 4.84 | 30.47 / 3.59 / 0.78 / 5 |
+| 2 | 29.69 / 3.75 / 0.78 / 5 | 30.78 / 3.28 / 0.94 / 4.84 |
+| 3 | 29.69 / 3.91 / 0.78 / 4.84 | 30.62 / 3.59 / 0.62 / 5.16 |
+
+Paired median deltas: +0.93 / -0.32 / +0.16 / +0.16 MiB. The positive observations are retained; identical program/runtime/VM artifacts rule out a new program memory path here. No ceiling or completed capture was changed.
+
+Self-hosting BodyTyped observations (ms), control → candidate: seed 240.63 → 230.22; stage-1 55.60 → 49.19; stage-2 47.47 → 48.99. These single observations are recorded without a timing attribution; the change is in backend global metadata.
+
+Both Showcase modules also tie byte-for-byte: Wasm GC 5,808,484 bytes (SHA256
+`24f2a3a31d18d28769165a80e35336155ef2b317b36b29b187e95aa70877b8ea`), Wasm32 11,810,665 bytes
+(`3b1e48cc20dc72fa5724d2e727d4d2f2f51500d4048f95a0ddb84e62113c667b`). All 36 Wasm GC and six Wasm32 captures
+complete without timeout. Object counts tie at 4,440 for full/static/text-heavy and 8,724 for editing.
+Frame median / p95 observations (ms), control → candidate:
+
+| Target / scene | Median / p95 |
+|---|---:|
+| wasm-gc/editing | 2.9 / 5.7 → 2.8 / 5.4 |
+| wasm-gc/full | 2.5 / 4.9 → 2.5 / 4.9 |
+| wasm-gc/static | 2.1 / 4.3 → 2.5 / 4.7 |
+| wasm-gc/text-heavy | 2.5 / 4.9 → 2.3 / 5.0 |
+| wasm32/full | 2.8 / 4.8 → 2.6 / 5.3 |
+
+The slower static-scene and Wasm32 p95 observations are retained. These same-image timings imply no change-specific
+speedup or slowdown. No capture was replaced and no ceiling was raised. Full paired rows and artifact hashes are
+retained on disk; raw captures are deleted after their numbers are extracted.
+
+Validation: 796 compiler tests, 0 failures; self-hosting fixed point; all ten UI scripts; 510 parity fixtures with
+14 existing skips; six UI snapshots; app suite; nine retention scenarios; all budget runs, six memory captures and
+all browser pairs above. Source inline-enum lowering and UI conversions remain unfinished.

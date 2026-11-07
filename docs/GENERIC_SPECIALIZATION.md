@@ -252,6 +252,11 @@ layouts are rejected without changing the destination. Function writes check the
 signature before the store. HashLink and Wasm GC retain semantic function signatures; a scalar struct closure crossing
 Dynamic is recognized by its signature-specific adapter without boxing its ordinary typed calls.
 
+HashLink stores function-valued data globals in typed nullable closure-reference slots (`HNULL(HFUN)`). The VM's raw
+`HFUN` global slots initialize with a code pointer and cannot hold the default-null state of a source closure field.
+The nullable slot stores the existing closure pointer and retains its full signature; registers and typed calls keep
+the ordinary function ABI. Clearing and restoring a callback, including across GC, does not create a wrapper.
+
 Wasm32 records the semantic signature separately from the calling representation. A static closure refers to a shared
 immutable module descriptor containing its function slot and signature; a bound closure keeps the signature in its
 existing header. A Dynamic cast to another signature creates a checked adapter, including when both signatures use the

@@ -701,7 +701,13 @@ class HlSymbolTable {
 			return globalIndices.get(name);
 		ensureWritable();
 		var index = globals.length;
-		globals.push(internType(type));
+		// HFUN globals are raw-function slots: the VM initializes them with a code pointer, not a closure.
+		// Data globals hold nullable closure references. HNULL retains the signature without adding a box.
+		var storage = switch type {
+			case Function(_, _): Nullable(type);
+			default: type;
+		};
+		globals.push(internType(storage));
 		globalIndices.set(name, index);
 		if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
 			stringConstants.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});
