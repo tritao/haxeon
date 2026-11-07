@@ -107,6 +107,8 @@ class TooltipContentTests {
       check(hints(root) == 0, "a hidden " + Std.string(placement) + " tooltip built its content");
       anchor = cast root.children[0].resolved;
       ui.pointerMove(anchor.x + 4.0, anchor.y + 4.0);
+      check(ui.animations.rebuildingCount == 0 && !ui.animations.needsFrame && ui.animations.waitSeconds() > 0,
+        "waiting for a tooltip requested continuous rebuilding frames");
       root = settle(ui, side, frame, 0.2, 2, function(tree) return hints(tree) > 0);
       check(hints(root) == 0, "a " + Std.string(placement) + " tooltip appeared before its hover delay");
       root = settle(ui, side, frame, 0.2, 6, function(tree) return hints(tree) > 0);
@@ -132,6 +134,15 @@ class TooltipContentTests {
       root = ui.submit(side, frame);
       check(hints(root) == 0, "the tooltip stayed visible after keyboard focus left");
     }
+    var suppressed = new Tooltip("suppressed", new Button("Anchor"), new Text("Hint"));
+    suppressed.placement = TooltipPlacement.Right;
+    suppressed.showWhen = () -> false;
+    root = ui.submit(suppressed, frame);
+    anchor = cast root.children[0].resolved;
+    ui.pointerMove(anchor.x + 4, anchor.y + 4);
+    root = settle(ui, suppressed, frame, 0.2, 8, _ -> false);
+    check(hints(root) == 0 && ui.animations.activeCount == 0,
+      "an ineligible positioned tooltip started a timer or showed content");
     Sys.println("PASS: tooltip content is built only while shown, and shown tooltips are placed");
     fonts.dispose();
     return 0;

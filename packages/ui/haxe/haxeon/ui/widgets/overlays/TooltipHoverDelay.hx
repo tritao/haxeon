@@ -1,23 +1,25 @@
 package haxeon.ui.widgets.overlays;
 
-import haxeon.ui.animation.Animation;
+import haxeon.ui.animation.DelayedAnimation;
+import haxeon.ui.animation.RetainedAnimation;
 import haxeon.ui.animation.AnimationScheduler;
 
-class TooltipHoverDelay implements Animation {
+/** Waiting for a hint changes no layout or paint until the deadline updates its visibility state. */
+class TooltipHoverDelay implements DelayedAnimation implements RetainedAnimation {
 	final scheduler:AnimationScheduler;
 	final changed:Bool->Void;
 	var remaining:Float = 0;
 	var pending:Bool = false;
 	var disposed:Bool = false;
-	public var delaySeconds:Float;
+	public var durationSeconds:Float;
 	public function new(scheduler:AnimationScheduler, changed:Bool->Void, delaySeconds:Float = 0.8) {
-		this.delaySeconds = delaySeconds;
+		this.durationSeconds = delaySeconds;
 		this.scheduler = scheduler; this.changed = changed;
 	}
 	public function start():Void {
 		if (disposed) return;
 		pending = true;
-		remaining = delaySeconds;
+		remaining = durationSeconds;
 		changed(false);
 		scheduler.track(this);
 	}
@@ -27,6 +29,7 @@ class TooltipHoverDelay implements Animation {
 		scheduler.remove(this);
 		changed(false);
 	}
+	public function delaySeconds():Float return pending ? Math.max(0, remaining) : 0;
 	public function advance(deltaSeconds:Float):Bool {
 		if (!pending || disposed) return false;
 		remaining -= deltaSeconds;

@@ -188,7 +188,7 @@ class Tooltip implements View {
 			var delay = context.resourceState(context.id("hover-delay"),
 				function() return new TooltipHoverDelay(context.animations, function(value) { state.update(value); }, delaySeconds),
 				function(value) value.dispose()).value;
-			delay.delaySeconds = delaySeconds;
+			delay.durationSeconds = delaySeconds;
 			var style = new LayoutStyle();
 			style.clipToParent = false;
 			if (fillAnchor) style.width = LayoutAxis.grow();
@@ -265,7 +265,9 @@ class Tooltip implements View {
 			header.on(UiEventKind.FocusLost, function(_) { focused.update(false); });
 			header.on(UiEventKind.HoverEnter, function(_) {
 				focused.update(false);
-				if (hoverGroup != null) hoverGroup.enter(key.value); else delay.start();
+				if (showWhen == null || showWhen()) {
+					if (hoverGroup != null) hoverGroup.enter(key.value); else delay.start();
+				}
 			});
 			header.on(UiEventKind.HoverLeave, function(_) {
 				if (hoverGroup != null) hoverGroup.leave(key.value); else delay.cancel();
