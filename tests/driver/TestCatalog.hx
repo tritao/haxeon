@@ -226,6 +226,7 @@ class TestCatalog {
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"CodeIdentityObjectMain",
+		"IdentityPathMain",
 		"EqualityHelperEditMain",
 		"SharedEqualityHelperEditMain",
 		"SharedWireHelperEditMain",

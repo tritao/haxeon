@@ -118,6 +118,7 @@ class HaxeonCli {
 				case "update": update(arguments);
 				case "tree": tree(arguments);
 				case "why": why(arguments);
+				case "identity-path": IdentityPath.run(arguments, args -> build(args, false));
 				case "publish": publish(arguments);
 				case "package": packageCommand(arguments);
 				case "doctor": doctor(arguments);
@@ -1511,6 +1512,7 @@ class HaxeonCli {
 		Sys.println("  package check [--project PATH]     Validate the resolved package graph");
 		Sys.println("  tree                            Show the resolved package graph");
 		Sys.println("  why PACKAGE                     Explain a dependency path");
+		Sys.println("  identity-path [--project PATH] FROM TO  Why the code identity of module FROM depends on module TO");
 		Sys.println("  doctor                         Check the local compiler and HashLink runtime");
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");

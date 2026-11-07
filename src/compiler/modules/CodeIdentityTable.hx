@@ -31,13 +31,36 @@ class CodeIdentityTable {
 		var state = modules.get(MODULE);
 		if (state == null)
 			return;
-		var text = render(state.source.text, identities(modules, names, context.identitySalt()));
+		var salt = context.identitySalt();
+		var computed = identities(modules, names, salt);
+		dumpGraph(modules, names, computed);
+		var text = render(state.source.text, computed);
 		if (text == state.source.text)
 			return;
 		state = context.writableState(MODULE, rollback);
 		state.update(new SourceFile(state.source.path, text));
 		context.parse(state, entry, body, signatures, structural);
 		context.addTypeDependencies(state);
+	}
+
+	/**
+	 * Diagnostics for `haxeon identity-path`: when `HAXEON_IDENTITY_GRAPH` names a file, the import graph the identities were made
+	 * from is written there, one module per line: `name`, a tab, then its imports separated by commas.
+	 */
+	static function dumpGraph(modules:Map<String, ModuleState>, names:Array<String>, computed:Map<String, String>):Void {
+		var path = Sys.getEnv("HAXEON_IDENTITY_GRAPH");
+		if (path == null || path == "")
+			return;
+		var lines = [];
+		var members = [for (name in computed.keys()) name];
+		members.sort(Reflect.compare);
+		for (name in members) {
+			var state = modules.get(name);
+			var imports = [for (dependency in state.dependencies) if (computed.exists(dependency)) dependency];
+			imports.sort(Reflect.compare);
+			lines.push(name + "\t" + imports.join(","));
+		}
+		File.saveContent(path, lines.join("\n") + "\n");
 	}
 
 	/** `template` with the text between the markers replaced by the table literal. */
