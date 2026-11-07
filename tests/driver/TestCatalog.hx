@@ -134,6 +134,7 @@ class TestCatalog {
 		"LambdaNameMain",
 		"IrProgramAssemblerMain",
 		"EnumInterpreterTypeMain",
+		"ValueInterfaceHelperReuseMain",
 		"NominalInterfaceTypeMain",
 		"NullStringMapMain",
 		"EnumPayloadMetadataMain",

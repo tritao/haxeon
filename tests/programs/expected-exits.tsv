@@ -534,3 +534,4 @@ host-enum-export	42
 source-inline-enum	42
 closure-method-value-arguments	42
 map-null-string-keys	42
+value-interface-helper-reuse	42
