@@ -42,7 +42,7 @@ class IrValueArrayFactory {
 
 	public function natives():Array<IrNative> {
 		var arrayType:IrType = Array(element), readType:IrType = Function([arrayType, I32], Dyn),
-			writeType:IrType = Function([arrayType, I32, Dyn], Void), acceptsType:IrType = Function([Dyn], Bool),
+			writeType:IrType = Function([arrayType, I32, Dyn, Bool], Void), acceptsType:IrType = Function([Dyn], Bool),
 			layoutTypes:Array<IrType> = [TypeRef, I32, I32, I32, Bool];
 		return [
 			{name: allocNative(), library: "haxeon_runtime", symbol: "__value_array_alloc", arguments: [I32].concat(layoutTypes), result: arrayType},
@@ -51,6 +51,8 @@ class IrValueArrayFactory {
 			{name: retypeNative(), library: "haxeon_runtime", symbol: "__value_array_retype",
 				arguments: [Array(Dyn)].concat(layoutTypes).concat([readType, writeType, acceptsType]), result: arrayType},
 			{name: "__value_array_ensure", library: "haxeon_runtime", symbol: "__value_array_ensure", arguments: [Array(Dyn), I32], result: Void},
+			{name: "__value_array_prepare_write", library: "haxeon_runtime", symbol: "__value_array_prepare_write",
+				arguments: [Array(Dyn), I32, Bool, Bool], result: I32},
 			{name: "__value_array_mark", library: "haxeon_runtime", symbol: "__value_array_mark", arguments: [Array(Dyn), I32], result: Void},
 			{name: "__value_array_remove_at", library: "haxeon_runtime", symbol: "__value_array_remove_at", arguments: [Array(Dyn), I32], result: Void},
 			{name: "__value_array_insert_empty", library: "haxeon_runtime", symbol: "__value_array_insert_empty",
@@ -78,7 +80,7 @@ class IrValueArrayFactory {
 	function closures(builder:IrBuilder):Array<IrValue> {
 		var arrayType:IrType = Array(element);
 		return [builder.staticClosure(bridge.readName(), Function([arrayType, I32], Dyn)),
-			builder.staticClosure(bridge.writeName(), Function([arrayType, I32, Dyn], Void)),
+			builder.staticClosure(bridge.writeName(), Function([arrayType, I32, Dyn, Bool], Void)),
 			builder.staticClosure(bridge.acceptsName(), Function([Dyn], Bool))];
 	}
 }

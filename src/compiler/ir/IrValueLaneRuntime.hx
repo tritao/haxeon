@@ -13,7 +13,7 @@ class IrValueLaneRuntime {
 	static final array:IrType = Array(Dyn);
 
 	public static function functions(roundSparseCapacity:Bool = true):Array<IrFunction> return [
-		reserve(roundSparseCapacity), ensure(), clearElement(), clearRange(), move(), resize(), insert(), removeAt(),
+		capacityFor(roundSparseCapacity), reserve(), prepareWrite(), ensure(), clearElement(), clearRange(), move(), resize(), insert(), removeAt(),
 		copy(), slice(), concat(), splice(), reverse()
 	];
 
@@ -23,7 +23,7 @@ class IrValueLaneRuntime {
 				arguments: arguments, result: result};
 		return [
 			entry("length", [array], I32), entry("capacity", [array], I32), entry("has-validity", [array], Bool),
-			entry("publish-length", [array, I32], Void), entry("replace-capacity", [array, I32], Void),
+			entry("publish-length", [array, I32], Void), entry("replace-capacity", [array, I32, Bool], Void),
 			entry("new-like", [array, I32], array), entry("compatible", [array, array], Bool), entry("fail", [I32], Void),
 			entry("clear-scalars", [array, I32, I32], Void), entry("clear-references", [array, I32, I32], Void),
 			entry("copy-scalars", [array, I32, array, I32, I32], Void), entry("copy-references", [array, I32, array, I32, I32], Void),
@@ -85,10 +85,11 @@ class IrValueLaneRuntime {
 		b.jump(header); b.select(done);
 	}
 
-	static function reserve(roundSparseCapacity:Bool):IrFunction {
+	static function capacityFor(roundSparseCapacity:Bool):IrFunction {
 		var b = new IrBuilder(), a = b.argument("array", array), required = b.argument("capacity", I32),
 			capacity = primitive(b, "capacity", [a], I32), done = b.createBlock(), grow = b.createBlock();
 		b.branch(b.lessEqual(required, capacity), done, grow);
+		b.select(done); b.returnValue(capacity);
 		b.select(grow);
 		var initial = roundSparseCapacity ? choose(b, b.less(capacity, b.constInt(4)), () -> b.constInt(4), () -> capacity) : capacity,
 			incoming:Array<IrPhiInput> = [{block: b.currentBlock().id, value: initial}],
@@ -103,10 +104,35 @@ class IrValueLaneRuntime {
 		if (!roundSparseCapacity) grown = choose(b, b.less(grown, required), () -> required, () -> grown);
 		incoming.push({block: b.currentBlock().id, value: grown});
 		b.jump(header); b.select(allocate);
-		// Storage allocation is an atomic transaction: allocation failure retains the old lanes and capacity.
-		primitive(b, "replace-capacity", [a, next], Void);
-		b.jump(done); b.select(done); b.returnValue(b.constVoid());
-		return finish(b, "reserve", Void);
+		b.returnValue(next);
+		return finish(b, "capacity-for", I32);
+	}
+
+	static function reserve():IrFunction {
+		var b = new IrBuilder(), a = b.argument("array", array), required = b.argument("capacity", I32),
+			capacity = call(b, "capacity-for", [a, required], I32);
+		primitive(b, "replace-capacity", [a, capacity, b.constBool(false)], Void);
+		b.returnValue(b.constVoid()); return finish(b, "reserve", Void);
+	}
+
+	/** All conversions and leaf snapshots precede this transaction. No allocation follows its commit. */
+	static function prepareWrite():IrFunction {
+		var b = new IrBuilder(), a = b.argument("array", array), index = b.argument("index", I32),
+			inserting = b.argument("insert", Bool), references = b.argument("references", Bool),
+			size = length(b, a), insertBlock = b.createBlock(), storeBlock = b.createBlock(), done = b.createBlock();
+		b.branch(inserting, insertBlock, storeBlock);
+		b.select(insertBlock); guard(b, b.less(size, b.constInt(0x7fffffff)), 2);
+		var next = b.add(size, b.constInt(1)), capacity = call(b, "capacity-for", [a, next], I32);
+		primitive(b, "replace-capacity", [a, capacity, references], Void);
+		var position = call(b, "insert", [a, index], I32), inserted = b.currentBlock().id; b.jump(done);
+		b.select(storeBlock); guard(b, b.lessEqual(b.constInt(0), index), 0);
+		guard(b, b.less(index, b.constInt(0x7fffffff)), 0);
+		var required = choose(b, b.less(index, size), () -> size, () -> b.add(index, b.constInt(1))),
+			storeCapacity = call(b, "capacity-for", [a, required], I32);
+		primitive(b, "replace-capacity", [a, storeCapacity, references], Void);
+		call(b, "ensure", [a, index]); var stored = b.currentBlock().id; b.jump(done);
+		b.select(done); b.returnValue(b.phi(I32, [{block: inserted, value: position}, {block: stored, value: index}]));
+		return finish(b, "prepare-write", I32);
 	}
 
 	static function ensure():IrFunction {

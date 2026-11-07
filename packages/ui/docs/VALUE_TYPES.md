@@ -2977,3 +2977,111 @@ differs from the previous section; both sides of this comparison use the new inp
 Validation: 791 compiler tests, 0 failures; self-hosting fixed point; ten UI gates; 507 parity fixtures (14 existing skips);
 six UI snapshots; app suite; nine retention scenarios; budgets; headless memory; all scene pairs above. Source inline
 enum activation and the remaining closure/reflection/native integration are still pending.
+
+
+### Dynamic lane writes without staging arrays
+
+Control: `74db4f7a`; candidate: the following runtime change on `flat-structs`, with outer input frozen at
+`46044a271` on the same machine. A dynamic lane write previously converted into a temporary one-element array, then
+copied its lanes. The write bridge now converts and snapshots every leaf before preparing storage and committing it.
+The shared policy prepares any missing Wasm GC reference lane before publishing growth or shifting elements. Rejected
+writes retain all aliases and contents. No per-array scratch cache or compatibility path was added.
+
+The new `struct-array-dynamic-store` fixture warms capacity and reference storage, then performs two dynamic stores
+and one insertion per call. Its exact paired census is identical with inlining disabled and enabled:
+
+| Target / exact measure | 8 calls, control → candidate | 1,024 calls, control → candidate |
+|---|---:|---:|
+| HashLink allocated bytes, census mode | 4,992 → 0 | 638,976 → 0 |
+| Wasm32 objects | 72 → 0 | 9,216 → 0 |
+| Wasm GC objects | 56 → 0 | 7,168 → 0 |
+
+HashLink census mode disables allocation-buffer charging, so these byte totals are exact. The fixture also checks
+rejected sparse writes and insertions, overlapping insertion, saved copies, optional payload clearing, and the first
+managed reference arriving during capacity growth. The three-target IR test covers optional structs containing type
+handles without constructing an invalid null handle.
+
+The external source-inline-enum Dynamic probe improves from 14 to 8 allocations per call on Wasm32 and from 13 to 8
+on Wasm GC. Its boxed source control still uses 7. A Wasm GC per-site trace identifies exactly three backing/header
+objects versus two in the control, two `Owner` objects on each side, and three genuine enum boxes on each side. The
+candidate has no private enum-packet allocation in that trace; dynamic reads materialize values that the boxed control
+already stores as objects. This prerequisite does not activate source inline enums. The remaining source ABI work and
+the measured UI allocation requirement remain pending; this escape-heavy micro-probe is not evidence of a UI win.
+
+Self-hosting seed body-typing time (`bodies` in the compiler phase report) was 229.34 ms in the control checkpoint and
+228.70 ms in this candidate on the same machine. These single gate observations show no measurable growth and are
+not a compile-speed claim; no generator request policy changed in this commit.
+
+Host measurements for the staging-array removal use nine alternating control/candidate action pairs. Per-action
+medians follow; all runs passed their budgets, and the final budget run also passed retention.
+
+| Scenario / action | KiB, control → candidate | ms, control → candidate |
+|---|---:|---:|
+| tab-matrix / console->telemetry | 74.5 → 72.5 | 1.10 → 1.11 |
+| tab-matrix / hierarchy->sensors | 113.0 → 112.8 | 1.57 → 1.57 |
+| tab-matrix / sensors->hierarchy | 80.1 → 80.1 | 1.21 → 1.21 |
+| tab-matrix / telemetry->console | 92.9 → 92.9 | 1.16 → 1.17 |
+| interaction / hover-away | 13.6 → 13.6 | 0.42 → 0.42 |
+| interaction / hover-enter | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction / hover-field | 12.4 → 10.9 | 0.43 → 0.43 |
+| interaction / hover-inside | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction / hover-other | 10.0 → 10.0 | 0.42 → 0.42 |
+| interaction / idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction / idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction / scroll-inspector | 21.2 → 21.2 | 0.71 → 0.71 |
+| interaction / type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction / type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress / selection | not reported | 2.96 → 2.98 |
+
+Every action's allocation median is nonincreasing. The KiB counter remains quantized by buffer refills: its downward
+steps are not treated as durable object/byte reductions or used to lower ceilings. The deterministic store/insert
+micro-census above establishes the actual removal of staging allocations. No budget ceiling changed.
+
+Selection-stress exact census, three alternating pairs (objects / bytes):
+
+| Pair | Control | Candidate |
+|---|---:|---:|
+| 1 | 340,911 / 24,012,520 | 340,911 / 24,012,568 |
+| 2 | 340,911 / 24,012,584 | 340,911 / 24,012,624 |
+| 3 | 340,910 / 24,012,232 | 340,909 / 24,011,984 |
+
+All six captures have exactly 305,725 non-`bytes` objects / 21,594,968 bytes. The small raw-byte-buffer variations are
+retained in the totals above; there is no selection allocation-reduction claim.
+
+RSS growth windows in MiB, for 100→200 / 200→300 / 300→400 / 400→500 cycles:
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 29.53 / 4.22 / 0.78 / 4.69 | 30.00 / 4.38 / 0.94 / 4.84 |
+| 2 | 29.53 / 4.06 / 0.78 / 5.00 | 30.16 / 3.59 / 0.78 / 5.00 |
+| 3 | 30.00 / 3.59 / 0.78 / 5.00 | 30.31 / 3.44 / 0.62 / 5.00 |
+
+Paired median deltas are +0.47 / -0.15 / +0.00 / +0.00 MiB. The positive first window remains explicit;
+it is below the earlier recorded same-image A/A spread (including a +1.41 MiB first-window difference). All six
+headless captures passed without memory/leak failures. No captures were replaced to obtain a pass.
+
+The development editor module changes from 99,956,762 to 99,957,149 bytes (+387). The VM binary is unchanged; the candidate
+uses the updated native runtime matching its four-argument write bridge. Both sides use the same frozen outer input.
+
+Browser measurements for the staging-array removal: nine full-scene pairs and three pairs each for static,
+text-heavy and editing on Wasm GC; three full-scene pairs on Wasm32. Both smoke tests passed, every capture completed,
+and no timeout was counted as a pass. Object counts tie in every pair.
+
+| Target / scene | Objects, control → candidate | Median / p95 ms, control → candidate |
+|---|---:|---:|
+| wasm-gc/editing | 8,724 → 8,724 | 3.5 / 6.5 → 3.4 / 6.3 |
+| wasm-gc/full | 4,440 → 4,440 | 3.6 / 7.5 → 3.0 / 5.0 |
+| wasm-gc/static | 4,440 → 4,440 | 3.6 / 5.9 → 3.1 / 4.8 |
+| wasm-gc/text-heavy | 4,440 → 4,440 | 2.8 / 5.1 → 3.1 / 7.3 |
+| wasm32/full | not reported | 2.7 / 5.3 → 2.8 / 6.2 |
+
+Timing moves in both directions; the table preserves the slower text-heavy and Wasm32 observations and makes no
+browser speedup claim. Wasm GC Showcase shrinks from 5,810,217 to 5,808,484 bytes; Wasm32 shrinks from 11,876,090 to
+11,810,665 bytes. Control/candidate artifact hashes and every paired row are retained in the disk measurement record;
+raw captures were deleted after extracting their numbers.
+
+Validation: 792 compiler tests, 0 failures; self-hosting fixed point; all ten UI scripts; 508 parity fixtures (14 existing
+skips); six UI snapshots; the app suite; nine retention scenarios; all budget runs and six headless memory captures;
+all browser pairs above. The first compiler-suite attempt exposed three synthetic/native test bridges still using the
+old callback protocol. They were ported, retaining exception, alias, GC and missing-barrier assertions, and the full
+suite was rerun after that correction. Source inline-enum lowering and the remaining semantic ABI work are unfinished.

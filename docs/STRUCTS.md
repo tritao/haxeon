@@ -416,6 +416,14 @@ as struct arrays, preserving aliases. Wasm GC validates both the logical enum ty
 before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
 reference-array operations on enum lane arrays as well as struct lane arrays.
 
+Dynamic writes and insertions snapshot all checked scalar and reference leaves before changing the destination.
+The shared lane policy then prepares capacity and any missing reference backing in one storage transaction, shifts
+an insertion if needed, and commits those leaves. A failed conversion preserves the original length, contents and
+aliases. Absent optional payloads clear their storage through the presence setter; inactive leaves are not stored,
+including type handles, which have no typed null value. This removes the temporary one-element staging array on
+HashLink, Wasm32 and Wasm GC. Once capacity and reference backing exist, repeated dynamic stores and insertions allocate
+zero objects; genuine Dynamic input/output boxes remain escape costs.
+
 These are tested logical-array ABI helpers, not source-level inline enum activation. The fixtures exercise typed
 copy isolation, array-only reference roots across collection, null and payload Dynamic round trips, native-array
 migration and alias writes. Typed read/write copies allocate zero objects at 8 and 1,024 calls on all three targets;

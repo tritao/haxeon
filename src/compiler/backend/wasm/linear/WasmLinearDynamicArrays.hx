@@ -920,17 +920,14 @@ class WasmLinearDynamicArrays {
 			strideLocal = builder.local("stride", I32),
 			slot = builder.local("slot", I32);
 		if (context.functions.exists("$lane-storage:new-like")) {
-			var staged = builder.local("value-stage", I32);
 			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
 				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
 			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
-			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$lane-storage:new-like")), LocalSet(staged),
-				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
-				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]})), LocalGet(array), LocalGet(index),
-				Call(concrete("$lane-runtime:ensure")), LocalGet(array), LocalGet(index), LocalGet(staged), I32Const(0),
-				I32Const(1), Call(concrete("$lane-runtime:move")), Return, End]);
+			builder.emitAll([End, LocalGet(array), LocalGet(index), LocalGet(value), I32Const(0),
+				LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+				CallIndirect(module.typeIndex({parameters:[I32,I32,I32,I32], results:[]})), Return, End]);
 		}
 		loadElementType(builder, array);
 		builder.localSet(elementType);
@@ -991,26 +988,22 @@ class WasmLinearDynamicArrays {
 			value = builder.parameter("value", positioned ? 2 : 1),
 			elementType = builder.local("elementType", I32);
 		if (context.functions.exists("$lane-storage:new-like")) {
-			var staged = builder.local("value-stage", I32), at = builder.local("value-position", I32);
+			var at = builder.local("value-position", I32);
 			builder.emitAll(WasmLinearValueArrays.resolveForward(array));
 			builder.emitAll([LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null),
 				LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
 				CallIndirect(module.typeIndex({parameters:[I32], results:[I32]})), I32Eqz, If(null)]);
 			builder.i32Const(string("Array element type mismatch: ")); raise(builder);
-			builder.emitAll([End, LocalGet(array), I32Const(1), Call(concrete("$lane-storage:new-like")), LocalSet(staged),
-				LocalGet(staged), I32Const(0), LocalGet(value), LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
-				CallIndirect(module.typeIndex({parameters:[I32,I32,I32], results:[]}))]);
-			if (operation == "push") builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(at),
-				LocalGet(array), LocalGet(at), Call(concrete("$lane-runtime:ensure"))]);
+			builder.emit(End);
+			if (operation == "push") builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), LocalSet(at)]);
+			else if (operation == "unshift") builder.emitAll([I32Const(0), LocalSet(at)]);
 			else {
-				builder.localGet(array);
-				if (operation == "unshift") builder.i32Const(0); else {
-					if (position == null) throw "Positioned array insertion requires an index";
-					builder.localGet(position);
-				}
-				builder.emitAll([Call(concrete("$lane-runtime:insert")), LocalSet(at)]);
+				if (position == null) throw "Positioned array insertion requires an index";
+				builder.emitAll([LocalGet(position), LocalSet(at)]);
 			}
-			builder.emitAll([LocalGet(array), LocalGet(at), LocalGet(staged), I32Const(0), I32Const(1), Call(concrete("$lane-runtime:move"))]);
+			builder.emitAll([LocalGet(array), LocalGet(at), LocalGet(value), I32Const(operation == "push" ? 0 : 1),
+				LocalGet(array), I32Load(WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+				CallIndirect(module.typeIndex({parameters:[I32,I32,I32,I32], results:[]}))]);
 			if (!positioned) builder.emitAll([LocalGet(array), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET)]);
 			builder.emitAll([Return, End]);
 		}

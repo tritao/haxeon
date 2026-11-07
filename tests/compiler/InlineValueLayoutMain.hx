@@ -343,7 +343,7 @@ class InlineValueLayoutMain {
 		// These synthetic native descriptors deliberately exercise layouts unrelated to Mixed.
 		// Keep their array view untyped; typed places carry an exact compiler-known lane layout.
 		var allocationType:IrType = Array(Dyn), readClosureType:IrType = Function([allocationType, I32], Dyn),
-			writeClosureType:IrType = Function([allocationType, I32, Dyn], Void), acceptsClosureType:IrType = Function([Dyn], Bool),
+			writeClosureType:IrType = Function([allocationType, I32, Dyn, Bool], Void), acceptsClosureType:IrType = Function([Dyn], Bool),
 			allocationBuilder = new IrBuilder(), arrays:Array<compiler.ir.Ir.IrValue> = [];
 		var readName = "$value-array:bridge:allocation-read", writeName = "$value-array:bridge:allocation-write",
 			acceptsName = "$value-array:bridge:allocation-accepts";
@@ -396,7 +396,7 @@ class InlineValueLayoutMain {
 		allocationBuilder.select(allocationFailure); allocationBuilder.returnValue(allocationBuilder.constInt(0));
 		var bridgeRead = new IrBuilder(); bridgeRead.argument("array", allocationType); bridgeRead.argument("index", I32);
 		bridgeRead.returnValue(bridgeRead.constNull(Dyn));
-		var bridgeWrite = new IrBuilder(); bridgeWrite.argument("array", allocationType); bridgeWrite.argument("index", I32); bridgeWrite.argument("value", Dyn);
+		var bridgeWrite = new IrBuilder(); bridgeWrite.argument("array", allocationType); bridgeWrite.argument("index", I32); bridgeWrite.argument("value", Dyn); bridgeWrite.argument("insert", Bool);
 		bridgeWrite.returnValue(bridgeWrite.constVoid());
 		var bridgeAccepts = new IrBuilder(); bridgeAccepts.argument("value", Dyn); bridgeAccepts.returnValue(bridgeAccepts.constBool(true));
 		var allocationProgram = new IrProgram("main");

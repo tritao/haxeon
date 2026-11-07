@@ -83,6 +83,7 @@ inline_cases=(
 	struct-array-nested-nullable
 	struct-array-equality
 	struct-array-dynamic-equality
+	struct-array-dynamic-store
 	struct-managed-narrow
 	struct-managed-nullable-narrow
 	nullable-scalar-ieee-equality
@@ -182,6 +183,10 @@ for inline in 0 1; do
 			--export=FloatHashCensus.prepare --export=FloatHashCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-float-hash-census-inline-$inline.wasm" \
 			--entry=hash-float-extremes --root=tests/programs tests/programs/hash-float-extremes.hx
+		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+			--export=DynamicStoreCensus.prepare --export=DynamicStoreCensus.perform \
+			--output="$parity_output_dir/wasm-parity-$target-dynamic-store-census-inline-$inline.wasm" \
+			--entry=struct-array-dynamic-store --root=tests/programs tests/programs/struct-array-dynamic-store.hx
 		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
 			--export=DynamicArrayEqualityCensus.prepare --export=DynamicArrayEqualityCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-value-equality-census-inline-$inline.wasm" \
@@ -868,6 +873,18 @@ async function run(name, target) {
 	    if (result !== n || allocations !== 0)
 	      failures.push(`enum dynamic escape census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
 	    else console.log(`PASS: enum dynamic escape census on ${target}, inline=${inline}, n=${n}`);
+	  }
+	  const storeBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-dynamic-store-census-inline-${inline}.wasm`));
+	  const store = (await WebAssembly.instantiate(storeBytes, {haxeon_runtime: runtime, std})).instance;
+	  store.exports["DynamicStoreCensus.prepare"](); store.exports["DynamicStoreCensus.perform"]();
+	  const storeCount = target === "wasm32" ? store.exports["haxeon.memory.allocation_count"] : store.exports.__allocation_count;
+	  for (const n of [8, 1024]) {
+	    const before = storeCount(); let result = 0;
+	    for (let i = 0; i < n; i++) result = store.exports["DynamicStoreCensus.perform"]();
+	    const allocations = storeCount() - before;
+	    if (result !== 42 || allocations !== 0)
+	      failures.push(`struct dynamic store census (${target}, inline=${inline}, n=${n}): result=${result}, allocations=${allocations}`);
+	    else console.log(`PASS: struct dynamic store census on ${target}, inline=${inline}, n=${n}`);
 	  }
 	  const valueEqualityBytes = fs.readFileSync(path.join(outputDir, `wasm-parity-${target}-value-equality-census-inline-${inline}.wasm`));
 	  const valueEquality = (await WebAssembly.instantiate(valueEqualityBytes, {haxeon_runtime: runtime, std})).instance;

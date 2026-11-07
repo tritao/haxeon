@@ -13,6 +13,7 @@ extern bool realtime___value_array_is_initialized(varray*, int);
 extern void realtime___value_array_mark(varray*, int);
 extern void realtime___value_array_clear(varray*, int);
 extern void realtime___value_array_clear_ref(varray*, int, int);
+extern int realtime___value_array_prepare_write(varray*, int, bool, bool);
 extern void realtime___value_array_set_bridge(varray*, vclosure*, vclosure*, vclosure*);
 extern varray *realtime___value_array_retype(varray*, hl_type*, int, int, int, bool, vclosure*, vclosure*, vclosure*);
 extern int realtime___value_array_read_i32(varray*, int, int, int, bool);
@@ -65,11 +66,12 @@ static vdynamic *bridge_read(varray *array, int index) {
 	return hl_make_dyn(&value, &hlt_i32);
 }
 
-static void bridge_write(varray *array, int index, vdynamic *value) {
+static void bridge_write(varray *array, int index, vdynamic *value, bool inserting) {
 	int input = value->t == &value_type ? *(int*)value->v.ptr : value->v.i;
-	realtime___value_array_ensure(array, index);
-	realtime___value_array_write_i32(array, index, 0, 32, input);
+	/* Match generated bridges: conversion may throw before storage preparation; commit cannot call user code. */
 	if( input == 777 ) hl_error("probe bridge write");
+	index = realtime___value_array_prepare_write(array, index, inserting, false);
+	realtime___value_array_write_i32(array, index, 0, 32, input);
 	realtime___value_array_mark(array, index);
 }
 

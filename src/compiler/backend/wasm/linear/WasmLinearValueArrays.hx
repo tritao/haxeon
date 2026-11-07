@@ -38,7 +38,7 @@ class WasmLinearValueArrays {
 			"__value_array_read_type", "__value_array_write_type", "__value_array_read_callback", "__value_array_write_callback",
 			"__value_array_read_ref", "__value_array_write_ref", "__value_array_clear_ref", "__value_array_clear_scalar",
 			"__value_array_validate", "__value_array_is_initialized", "__value_array_mark", "__value_array_alloc", "__value_array_set_bridge",
-			"__value_array_ensure", "__value_array_clear", "__value_array_resize", "__value_array_insert_empty", "__value_array_copy", "__value_array_slice", "__value_array_reverse",
+			"__value_array_ensure", "__value_array_prepare_write", "__value_array_clear", "__value_array_resize", "__value_array_insert_empty", "__value_array_copy", "__value_array_slice", "__value_array_reverse",
 			"__value_array_concat", "__value_array_splice", "__value_array_remove_at", "__value_array_retype": true;
 		default: false;
 	};
@@ -57,7 +57,7 @@ class WasmLinearValueArrays {
 		var b = new WasmFunctionBuilder(native.name, {parameters:[for (_ in native.arguments) I32], results:[I32]}),
 			resolved = b.local("resolved", I32), index = b.local("index", I32), size = b.local("size", I32),
 			item = b.local("item", I32), candidate = b.local("candidate", I32),
-			accept = module.typeIndex({parameters:[I32], results:[I32]}), write = module.typeIndex({parameters:[I32,I32,I32], results:[]});
+			accept = module.typeIndex({parameters:[I32], results:[I32]}), write = module.typeIndex({parameters:[I32,I32,I32,I32], results:[]});
 		b.emitAll([LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End, LocalGet(0), LocalSet(resolved)]);
 		b.emitAll(resolveForward(resolved));
 		b.emitAll([LocalGet(resolved), I32Load(WasmLayout.VALUE_ARRAY_MARKER_OFFSET), I32Const(WasmLayout.VALUE_ARRAY_MARKER), I32Eq, If(null)]);
@@ -78,7 +78,7 @@ class WasmLinearValueArrays {
 		for (pair in [{offset:WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,arg:6}, {offset:WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET,arg:7},
 				{offset:WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET,arg:8}]) b.emitAll([LocalGet(candidate), LocalGet(pair.arg), I32Store(pair.offset)]);
 		b.emitAll([I32Const(0), LocalSet(index), Block(null), Loop(null), LocalGet(index), LocalGet(size), I32Eq, BrIf(1),
-			LocalGet(candidate), LocalGet(index), LocalGet(0), I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(index), I32Const(4), I32Mul, I32Add, I32Load(0),
+			LocalGet(candidate), LocalGet(index), LocalGet(0), I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(index), I32Const(4), I32Mul, I32Add, I32Load(0), I32Const(0),
 			LocalGet(7), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), CallIndirect(write), LocalGet(index), I32Const(1), I32Add, LocalSet(index), Br(0), End, End,
 			LocalGet(candidate), LocalGet(0), I32Store(WasmLayout.VALUE_ARRAY_FORWARD_HEADER_OFFSET), LocalGet(0), LocalGet(candidate),
 			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET), LocalGet(0), LocalGet(1), I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
@@ -180,12 +180,12 @@ class WasmLinearValueArrays {
 
 
 	public static function replaceCapacity(native:IrNative, allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 2 || allocator < 0) throw "Invalid Wasm32 value-array growth";
-		var b = new WasmFunctionBuilder(native.name, {parameters:[I32,I32], results:[]}), oldCapacity = b.local("old-capacity", I32),
+		if (native.arguments.length != 3 || allocator < 0) throw "Invalid Wasm32 value-array growth";
+		var b = new WasmFunctionBuilder(native.name, {parameters:[I32,I32,I32], results:[]}), oldCapacity = b.local("old-capacity", I32),
 			capacity = b.local("capacity", I32), oldPayload = b.local("old-payload", I32), payload = b.local("payload", I32),
 			scalarBytes = b.local("scalar-bytes", I32), refBytes = b.local("reference-bytes", I32), total = b.local("checked-size", I64),
 			scalar = b.local("new-scalar", I32), references = b.local("new-references", I32);
-		b.emitAll([LocalGet(0), I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET), LocalSet(oldCapacity), LocalGet(1), LocalSet(capacity)]);
+		b.emitAll([LocalGet(0), I32Load(WasmLayout.ARRAY_CAPACITY_OFFSET), LocalSet(oldCapacity), LocalGet(1), LocalSet(capacity), LocalGet(oldCapacity), LocalGet(capacity), I32Eq, If(null), Return, End]);
 		for (pair in [{cap:oldCapacity, dest:oldPayload}, {cap:capacity, dest:payload}]) {
 			b.emitAll([LocalGet(pair.cap), I64ExtendI32U, LocalGet(0), I32Load(WasmLayout.VALUE_ARRAY_SCALAR_STRIDE_OFFSET), I64ExtendI32U,
 				I64Mul, I64Const(31), I64Add, I64Const(32), I64DivS, I64Const(4), I64Mul, LocalTee(total), I64Const(0x7ffffff0), I64LeS,

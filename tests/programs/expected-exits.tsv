@@ -525,3 +525,4 @@ array-insert-negative-index	42
 struct-array-lane-policy	42
 struct-array-word-access	42
 reactive-write-scope	42
+struct-array-dynamic-store	42
