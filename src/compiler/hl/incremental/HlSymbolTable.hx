@@ -454,7 +454,7 @@ class HlSymbolTable {
 	 * fields added later, in instances that already exist (see `assignReservedField`).
 	 */
 	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>,
-			reserve:Int = 0):Int {
+			reserve:Int = 0, ?typedEntries:Array<compiler.ir.Ir.IrObjectMethod>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
@@ -508,6 +508,12 @@ class HlSymbolTable {
 			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
+		if (typedEntries != null) for (entry in typedEntries) {
+			var typedIndex = functionIndices.get(entry.functionName);
+			if (typedIndex == null) throw 'Unknown typed interface entry "${entry.functionName}"';
+			methods.push({name: internString(entry.name), functionIndex: typedIndex, prototype: compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE});
+		}
+
 		var definition:HlTypeDef = object.isValue ? Structure(internString(object.name), global, fields, methods,
 			[]) : Object(internString(object.name), base, global, fields, methods, []);
 		if (pendingTypes.exists(key)) {

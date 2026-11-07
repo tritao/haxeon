@@ -76,6 +76,7 @@ class WasmScalarAbi {
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
+					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.ADAPTER_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)

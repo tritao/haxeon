@@ -6,6 +6,10 @@ import compiler.ir.IrVerifier;
 
 class InterfaceValueDispatchMain {
  static function main():Void {
+  var nested=compiler.ir.IrScalarArguments.PREFIX+compiler.ir.IrOptionalScalarFlow.PREFIX;
+  if(!IrTypedInterfaceDispatch.isDispatchEntry(nested+IrTypedInterfaceDispatch.PREFIX+"Reader:read:key")
+   || !IrTypedInterfaceDispatch.isAdapterEntry(nested+IrTypedInterfaceDispatch.adapterName(IrTypedInterfaceDispatch.PREFIX+"Reader:read:key","Owner")))
+   throw "Optional value ABI entries lost their dispatch identity";
   var value:IrObject={name:"Value",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"number",type:I32}]};
   var owner:IrObject={name:"Owner",isValue:false,base:null,interfaces:["Derived"],fields:[{name:"value",type:Obj("Value")}],
    methods:[{name:"read",functionName:"Owner.read"},{name:"accept",functionName:"Owner.accept"},{name:"plain",functionName:"Owner.plain"}]};
@@ -35,18 +39,39 @@ class InterfaceValueDispatchMain {
   if(oldMethods!=3 || methods!=1 || calls!=2 || closures!=2)throw "Wrong direct/bound value-interface normalization";
   IrTypedInterfaceDispatch.generate(rewritten,[value,owner],interfaces);
   var length=rewritten.length;
-  if(length!=original.length+2)throw "Direct and bound calls did not share their dispatchers";
+  if(length!=original.length+4)throw "Direct and bound calls did not share their dispatchers";
   IrTypedInterfaceDispatch.generate(rewritten,[value,owner],interfaces);
   if(rewritten.length!=length)throw "Repeated dispatcher generation duplicated definitions";
   var p=new IrProgram("main");p.objects=[value,owner];p.interfaces=interfaces;p.functions=rewritten;
   p.natives=[{name:"__std_is_of_type",library:"haxeon_runtime",symbol:"__std_is_of_type",arguments:[Dyn,TypeRef],result:Bool}];
   IrVerifier.verify(p);
+  var tables=new compiler.ir.hl.HlTypedInterfaceTables(p),entries=tables.entries.get("Owner");
+  if(entries==null || entries.length!=2)throw "Missing per-class typed entries";
+  var lowered=compiler.ir.hl.HlLower.lower(p),privateEntries=0;
+  for(type in lowered.types)switch type {
+   case Object(_,_,_,_,methods,_):for(method in methods)if(method.prototype==compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE)privateEntries++;
+   default:
+  }
+  if(privateEntries!=2)throw "HashLink typed entries were emitted as source methods";
+  compiler.hl.HlValidator.validate(lowered);
+  var stored=compiler.hl.persistence.HlTypeDefStateCodec.encode(lowered.types);
+  var restored=compiler.hl.persistence.HlTypeDefStateCodec.decode(stored,lowered.strings.length,lowered.globals.length);
+  if(compiler.hl.persistence.HlTypeDefStateCodec.encode(restored).compare(stored)!=0)throw "Private typed entries did not survive persistence";
+  var bad=rewritten.copy();
+  for(i in 0...bad.length)if(IrTypedInterfaceDispatch.isAdapterEntry(bad[i].name)) {
+   var entry=bad[i];bad[i]=new IrFunction(entry.name,entry.arguments,Bool,entry.blocks);break;
+  }
+  var invalid=new IrProgram("main");invalid.functions=bad;invalid.objects=p.objects;invalid.interfaces=p.interfaces;
+  var badRejected=false;try new compiler.ir.hl.HlTypedInterfaceTables(invalid) catch(error:Dynamic)badRejected=Std.string(error).indexOf("Invalid private typed interface entry")>=0;
+  if(!badRejected)throw "Unchecked typed method ABI was accepted";
   // Candidate discovery must be fresh even when an existing dispatcher has the same signature.
   IrTypedInterfaceDispatch.generate(rewritten,[value],interfaces);
   for(fn in rewritten)if(StringTools.startsWith(fn.name,IrTypedInterfaceDispatch.PREFIX))for(block in fn.blocks)for(located in block.instructions)
-   switch located.value {case Call(_,"Owner.read"|"Owner.accept",_):throw "Regeneration retained a removed implementation";default:}
+   switch located.value {case Call(_,name,_) if(name=="Owner.read" || name=="Owner.accept" || IrTypedInterfaceDispatch.isAdapterEntry(name)):throw "Regeneration retained a removed implementation";default:}
   IrTypedInterfaceDispatch.generate(rewritten,[value,owner],interfaces);
-  var index=original.length,existing=rewritten[index];
+  var index=-1;for(i in 0...rewritten.length)if(StringTools.startsWith(rewritten[i].name,IrTypedInterfaceDispatch.PREFIX)){index=i;break;}
+  if(index<0)throw "Missing dispatcher definition";
+  var existing=rewritten[index];
   rewritten[index]=new IrFunction(existing.name,existing.arguments,Bool,existing.blocks);
   var rejected=false;try IrTypedInterfaceDispatch.generate(rewritten,[value,owner],interfaces) catch(error:Dynamic) {
    rejected=Std.string(error).indexOf("Conflicting typed interface dispatch")>=0;

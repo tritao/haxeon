@@ -14,6 +14,7 @@ interface ValueReader {
  function echo(value:InterfaceValue):InterfaceValue;
  function replace(value:InterfaceValue):Void;
  function fail(value:InterfaceValue):InterfaceValue;
+ function optional(value:InterfaceValue,present:Bool):Null<InterfaceValue>;
 }
 interface InheritedValueReader extends ValueReader {}
 class ValueReaderImpl implements InheritedValueReader {
@@ -23,16 +24,18 @@ class ValueReaderImpl implements InheritedValueReader {
  public function echo(value:InterfaceValue):InterfaceValue return value;
  public function replace(value:InterfaceValue):Void this.value=value;
  public function fail(value:InterfaceValue):InterfaceValue throw "expected interface failure";
+ public function optional(value:InterfaceValue,present:Bool):Null<InterfaceValue> return present?value:null;
 }
 class InterfaceValueCensus {
  public static var reader:ValueReader;
  public static var inherited:InheritedValueReader;
  public static var readBound:Void->InterfaceValue;
  public static var echoBound:InterfaceValue->InterfaceValue;
+ public static var optionalBound:(InterfaceValue,Bool)->Null<InterfaceValue>;
  public static function prepare():Void {
   var implementation=new ValueReaderImpl(new InterfaceValue(2,new InterfaceValueOwner(40)));
   reader=implementation; inherited=implementation;
-  readBound=reader.read; echoBound=inherited.echo;
+  readBound=reader.read; echoBound=inherited.echo; optionalBound=reader.optional;
  }
  public static function perform(count:Int):Int {
   var sum=0;
@@ -42,6 +45,9 @@ class InterfaceValueCensus {
    var second=echo(read());
    var third=inherited.read();
    if(first.number+first.owner.number!=42 || second.number+second.owner.number!=42)return -1;
+   var optional=reader.optional(first,true);
+   if(optional==null || optional.number!=2 || optional.owner!=first.owner)return -2;
+   if(reader.optional(first,false)!=null)return -3;
    sum+=third.number+third.owner.number;
   }
   return sum;
@@ -57,6 +63,9 @@ function main():Int {
  var caught=false;
  try reader.fail(saved) catch(error:Dynamic) caught=true;
  if(!caught)return 2;
+ // Nullable closure results still use their logical result ABI; exercise correctness outside the component-call census.
+ var optionalFn=InterfaceValueCensus.optionalBound,optional=optionalFn(saved,true);
+ if(optional==null || optional.number!=saved.number || optional.owner!=saved.owner || optionalFn(saved,false)!=null)return 5;
  #if !wasm
  hl.Gc.major();
  #end

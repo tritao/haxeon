@@ -285,6 +285,7 @@ class WasmGcModuleBuilder {
 				throw 'Wasm GC lowering failed in ${fn.name}: ${Std.string(error)}';
 			}
 		}
+		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots, plan.objectRootTypeIndex);
 		module.exportTable = module.tableMin != null;
 		if (options.developmentMetadata != false) {
 			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(originalProgram, patchChanged)});

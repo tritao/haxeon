@@ -3,6 +3,8 @@ package compiler.hl;
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
 	public static inline final VERSION = 7;
+	/** Private value-ABI metadata, excluded from source methods and reflection. */
+	public static inline final TYPED_METHOD_PROTOTYPE = -2;
 
 	public var ints:Array<Int> = [];
 	public var floats:Array<Float> = [];

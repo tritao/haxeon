@@ -6,6 +6,27 @@ import compiler.ir.SourceProvenance.Located;
 /** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 class IrTypedInterfaceDispatch {
 	public static inline final PREFIX = "$typed-interface:";
+	public static inline final ADAPTER_PREFIX = "$typed-interface-entry:";
+
+	/** The same entry can be lowered through optional-flow and component-argument ABIs. */
+	public static function originalEntryName(name:String):String {
+		while (true) {
+			if (StringTools.startsWith(name, IrScalarArguments.PREFIX)) name = name.substr(IrScalarArguments.PREFIX.length);
+			else if (StringTools.startsWith(name, IrOptionalScalarFlow.PREFIX)) name = name.substr(IrOptionalScalarFlow.PREFIX.length);
+			else return name;
+		}
+	}
+
+	/** Dispatch entries stay outlined so a backend can use its class method table. */
+	public static function isDispatchEntry(name:String):Bool
+		return StringTools.startsWith(originalEntryName(name), PREFIX);
+
+	public static function isAdapterEntry(name:String):Bool
+		return StringTools.startsWith(originalEntryName(name), ADAPTER_PREFIX);
+
+	public static function adapterName(dispatch:String, object:String):String
+		return ADAPTER_PREFIX + dispatch.length + ":" + dispatch + ":" + object.length + ":" + object;
+
 
 	/** Select the value ABI after physical value layouts are known, including nongeneric contracts. */
 	public static function rewriteValueCalls(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>):Array<IrFunction> {
@@ -150,27 +171,33 @@ class IrTypedInterfaceDispatch {
 				var owner = valueName == null ? candidate : byName.get(valueName);
 				var implementation = owner == null ? null : findMethod(owner, method);
 				if (implementation == null || implementation.arguments.length != arguments.length + 1) continue;
-				var matched = builder.createBlock(), next = builder.createBlock(), type = Obj(candidate.name);
-				builder.branch(builder.call("__std_is_of_type", [dynamicReceiver, builder.typeValue(type)], Bool), matched, next);
-				builder.select(matched);
-				// Incompatible concrete carriers indicate an invalid erased cast. Do not emit a
-				// boxing conversion in an unreachable branch of a value-specialized dispatcher.
+				var entryName = adapterName(name, candidate.name), entry = new IrBuilder(),
+					dynamicValue = entry.argument("receiver", Dyn),
+					entryArgs = [for (index in 0...arguments.length) entry.argument('argument$index', arguments[index].type)];
 				var compatible = true;
-				for (index in 0...arguments.length)
-					if (!carriersCompatible(arguments[index].type, implementation.arguments[index + 1].type)) compatible = false;
+				for (index in 0...entryArgs.length)
+					if (!carriersCompatible(entryArgs[index].type, implementation.arguments[index + 1].type)) compatible = false;
 				if (!carriersCompatible(signature.result, implementation.result)) compatible = false;
-				if (!compatible) {
-					builder.throwValue(builder.toDyn(builder.constString('Invalid implementation for $interfaceName.$method')));
-					builder.select(next);
-					continue;
+				if (!compatible) entry.throwValue(entry.toDyn(entry.constString('Invalid implementation for $interfaceName.$method')));
+				else {
+					var concrete = entry.safeCast(dynamicValue, Obj(candidate.name)),
+						target = valueName == null ? concrete : entry.fieldGet(concrete, "value", Obj(valueName)),
+						adapted = [for (index in 0...entryArgs.length)
+							GenericOwnerErasure.convert(entry, entryArgs[index], implementation.arguments[index + 1].type, byName)],
+						result = entry.call(implementation.name, [target].concat(adapted), implementation.result);
+					entry.returnValue((switch signature.result { case Void: true; default: false; }) ? result :
+						GenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
-				var concrete = builder.safeCast(dynamicReceiver, type),
-					target = valueName == null ? concrete : builder.fieldGet(concrete, "value", Obj(valueName));
-				var adapted = [for (index in 0...arguments.length)
-					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type, byName)];
-				var result = builder.call(implementation.name, [target].concat(adapted), implementation.result);
-				builder.returnValue((switch signature.result { case Void: true; default: false; })
-					? result : GenericOwnerErasure.convert(builder, result, signature.result, byName));
+				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks),
+					entryIndex = functionIndices.get(entryName);
+				if (entryIndex == null) {
+					functionIndices.set(entryName, functions.length);
+					functions.push(entryFunction);
+				} else functions[entryIndex] = entryFunction;
+				var matched = builder.createBlock(), next = builder.createBlock();
+				builder.branch(builder.call("__std_is_of_type", [dynamicReceiver, builder.typeValue(Obj(candidate.name))], Bool), matched, next);
+				builder.select(matched);
+				builder.returnValue(builder.call(entryName, [dynamicReceiver].concat(arguments), signature.result));
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));

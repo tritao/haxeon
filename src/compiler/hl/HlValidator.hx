@@ -46,8 +46,10 @@ class HlValidator {
 					for (method in methods) {
 						requireString(code, method.name, "object method name");
 						requireFunctionIndex(code, method.functionIndex, "object method");
-						if (method.prototype < 0)
+						if (method.prototype < 0 && method.prototype != HlCode.TYPED_METHOD_PROTOTYPE)
 							throw 'Invalid object method prototype ${method.prototype}';
+						if (method.prototype == HlCode.TYPED_METHOD_PROTOTYPE && !StringTools.startsWith(code.strings[method.name], "$typed-method:"))
+							throw "Invalid private typed method key";
 					}
 				case Structure(name, global, fields, methods, bindings):
 					requireString(code, name, "structure name");

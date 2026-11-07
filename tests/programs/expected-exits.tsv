@@ -529,3 +529,4 @@ struct-array-dynamic-store	42
 value-argument-snapshots	42
 function-global-null	42
 interface-value-carriers	42
+interface-value-dispatch-table	42

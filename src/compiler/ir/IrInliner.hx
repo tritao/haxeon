@@ -486,7 +486,7 @@ class IrInliner {
 				frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
-		if (original.arguments.length != actuals.length || !looksInlinable(original))
+		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name) || IrTypedInterfaceDispatch.isAdapterEntry(original.name) || original.arguments.length != actuals.length || !looksInlinable(original))
 			return null;
 		for (index in 0...actuals.length)
 			if (!bindable(actuals[index].type, original.arguments[index].type))

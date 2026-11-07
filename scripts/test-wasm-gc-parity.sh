@@ -87,6 +87,7 @@ inline_cases=(
 	value-argument-snapshots
 	function-global-null
 	interface-value-carriers
+	interface-value-dispatch-table
 	struct-managed-narrow
 	struct-managed-nullable-narrow
 	nullable-scalar-ieee-equality

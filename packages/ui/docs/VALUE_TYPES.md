@@ -3605,3 +3605,109 @@ The two corrected self-hosting errors above remain documented. All final-source 
 and UI enum conversions remain unfinished.
 
 Records and hashes are retained under `haxeon-flat-work/interface-value-gates`; raw captures are removed after extraction.
+
+
+### Constant-time typed interface dispatch (November 2026)
+
+Control is `ccf4a141`, with the editor frozen at `46044a2712525a635588feb4572fa0f2053dc06c`.
+The source audit and 1/8/32-implementation benchmark are in `GENERIC_SPECIALIZATION.md`. Only
+`ViewportContent.paint(Canvas, Rect)` currently selects this ABI in the UI package (one implementer); no editor-only
+contract does. The editor profile module remains byte-identical at 99,957,149 bytes, SHA-256
+`89c9d7b7cf31ee776b6f70177a10e7bcde3f6b24b60f54e7e76bd1eeb1830c6b`.
+
+HashLink fork `4a33fa08` changes the checkout VM's `libhl.so`: 892,080 → 892,432 bytes. Control SHA-256 is
+`d1893528f97c678299f81273974f2d33d8384eaca01acf28d1ba9e942fcc8900`; candidate is
+`97abb73a9557c77a0042f4f62819790975009447fd18d330253146d5393aebba`. Paired captures preload the matching library
+and runtime while using the same checkout-built launcher. Class tables live in module metadata, without enlarging
+instances. They add no per-call allocations.
+
+Nine alternating action pairs give the following medians; timing is median frame ms and KiB uses the refill-quantized
+counter. All scheduled captures pass their budgets.
+
+| Action | KiB control → candidate | ms control → candidate |
+|---|---:|---:|
+| tab-matrix/console->telemetry | 72.5 → 74.5 | 1.09 → 1.09 |
+| tab-matrix/hierarchy->sensors | 113 → 112.8 | 1.53 → 1.53 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.2 → 1.2 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.15 → 1.15 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.42 |
+| interaction/hover-enter | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-field | 12.4 → 12.4 | 0.43 → 0.43 |
+| interaction/hover-inside | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-other | 10 → 10 | 0.42 → 0.42 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.71 → 0.71 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.42 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | Census below | 2.91 → 2.91 |
+
+Three additional alternating tab-matrix pairs restrict the exact byte counter to each action's window. All three
+pairs tie on every action: console→telemetry 115,136 bytes; hierarchy→sensors 81,384; sensors→hierarchy 75,800;
+telemetry→console 94,520. Each capture has 968,681 objects; excluding raw byte buffers, all six have 755,734 objects /
+54,315,768 bytes. The ordinary +2.0 KiB for console→telemetry is a refill boundary, not an increased program allocation.
+Neither that movement nor the −0.2 KiB on hierarchy→sensors changes a budget ceiling.
+
+Selection-stress census (30 cycles), objects / bytes:
+
+| Pair | Control | Candidate |
+|---|---:|---:|
+| 1 | 340,912 / 24,013,008 | 340,910 / 24,012,504 |
+| 2 | 340,910 / 24,012,496 | 340,909 / 24,012,440 |
+| 3 | 340,911 / 24,012,760 | 340,911 / 24,012,752 |
+
+All six have exactly 305,725 non-byte-buffer objects / 21,594,968 corresponding bytes. Total variation is confined
+to raw byte buffers.
+
+Three paired 500-cycle headless RSS windows, MiB:
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 30 / 4.06 / 0.78 / 5 | 30.16 / 3.75 / 0.94 / 4.69 |
+| 2 | 30.16 / 3.75 / 0.78 / 5 | 30.16 / 4.22 / 0.78 / 6.25 |
+| 3 | 30.16 / 3.75 / 0.78 / 4.84 | 29.69 / 3.75 / 0.78 / 4.84 |
+
+Median windows are 30.16 / 3.75 / 0.78 / 5 → 30.16 / 3.75 / 0.78 / 4.84 MiB. All six memory gates pass.
+The 6.25 MiB fourth window is retained, with no retry.
+
+All 36 Wasm GC scene captures and six Wasm32 full-scene captures complete without a timeout. Every GC capture ties:
+4,440 objects in full/static/text-heavy; 8,724 in editing. Frame median / p95 observations (ms):
+
+| Target / scene | Control → candidate median / p95 |
+|---|---:|
+| wasm-gc/editing | 2.8 / 4.8 → 2.8 / 5.1 |
+| wasm-gc/full | 2.2 / 3.9 → 2.3 / 4.4 |
+| wasm-gc/static | 2.2 / 3.9 → 2.2 / 3.9 |
+| wasm-gc/text-heavy | 2.2 / 4.6 → 2.3 / 4.2 |
+| wasm32/full | 2.3 / 4.4 → 2.4 / 4.5 |
+
+Both final web modules are byte-identical to control. Wasm GC is 5,808,484 bytes, SHA-256
+`24f2a3a31d18d28769165a80e35336155ef2b317b36b29b187e95aa70877b8ea`; Wasm32 is 11,810,665 bytes,
+`3b1e48cc20dc72fa5724d2e727d4d2f2f51500d4048f95a0ddb84e62113c667b`. The runtime HDLL is also identical:
+562,576 bytes, `9e07bd7d74e0a743fd94f15098b91f8d18a4524c1f2450738391bfc87ef30dbb`. Positive browser timing
+observations are retained without a code-change attribution: each target uses the same guest bytes, host and loader.
+
+Final fixed-point BodyTyped observations (ms), control → candidate: seed 226.58 → 222.26; stage 1 50.64 → 45.84;
+stage 2 47.84 → 46.58. Three additional quiet alternating native-hosted compiler builds have median BodyTyped
+63.87 → 62.15 ms (control 63.13 / 63.87 / 64.34; candidate 62.15 / 62.21 / 61.81). These supplementary builds
+explicitly list compiler sources, with stdlib dependencies discovered from the stdlib root; the official fixed-point
+gate lists both source trees. There is no observed typing-time increase requiring generator cursor work in this item.
+Framework compile observations are 525.28 → 389.24 seconds, retained as single observations rather than an attributed gain.
+
+The first compiler-suite attempt omitted the external `TMPDIR`. `LspProtocolMain` consequently created its workspace
+folders below the compiler checkout, discovered that ancestor project and spent over 21 minutes indexing it. A sampled
+stack resolved to `LspProtocol.changeWorkspaceFolders → LanguageService.analyze → recoverCurrentSyntax → SemanticIndex`;
+this was not a GC deadlock. That invalid harness run was terminated, its temporary folders removed, and the external
+`TMPDIR` restored. Corrected runs pass; the final-source run reports 802 tests, zero failures. The first exact-tabs
+launcher invocation also omitted its required phase argument and raised `IndexError` before any capture; the corrected
+invocation records all three pairs. Neither harness error discards or retries a completed measurement.
+
+Final-source validation: 802 compiler tests, zero failures; self-hosting fixed point; all ten UI scripts; 512 parity
+fixtures with 14 existing skips; six UI snapshots; app suite; all nine retention scenarios; all eighteen action captures
+and the final budget gate; six memory gates; 42 browser captures; three exact-byte tab pairs. The final compiler's
+editor rebuild reproduces the measured module byte for byte, so the completed allocation/RSS pairs apply to this source.
+All final-source gates pass. Source inline enum activation and UI enum conversions remain unfinished.
+
+Records and hashes are retained under `haxeon-flat-work/typed-interface-tables-gates`; raw captures are deleted after
+recording their numbers. The finished isolated editor gate worktree has been removed. This item finishes under the
+previous full-gate policy; subsequent commits use the user-approved tiered gates.

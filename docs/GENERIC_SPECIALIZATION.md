@@ -369,3 +369,103 @@ Normalization preserves the cached source IR. Dispatcher generation checks an ex
 body from the current implementations, replacing that definition rather than appending a duplicate. Removing or adding
 an implementation therefore cannot leave a stale dispatch tree. Invalid receivers retain the checked throwing path;
 Dynamic/reflection escapes keep their semantic adapters.
+
+
+### Constant-time typed interface dispatch
+
+The `ccf4a141` dispatch tree removes value boxes but tests implementations in sequence. Before inline enum activation,
+class-owned typed method entries replace this selection. Public methods retain their semantic signatures for
+Dynamic and reflection; private entries carry the complete scalar/reference ABI. A missing compatible entry keeps
+checked dispatch rather than calling a function with an unchecked signature.
+
+The source audit uses this worktree at `ccf4a141` and editor revision `46044a2712525a635588feb4572fa0f2053dc06c`.
+Of the 16 UI and seven editor interfaces, only `haxeon.ui.core.ViewportContent.paint(Canvas, Rect)` currently crosses
+this path: its one implementation is `GraphicsSurfaceViewportContent`. `View` has 104 transitive concrete implementers,
+but `build` currently returns the class `RenderNode`, so it does not yet select a value ABI. Neither does any editor-only
+interface in this revision. The emitted UI framework function map confirms the single `ViewportContent.paint` dispatcher.
+
+| Source contract | Concrete implementers | Typed value entry |
+| --- | ---: | --- |
+| `haxeon.ui.semantics.SemanticsValueSource` | 1 | No |
+| `haxeon.ui.properties.PropertyEditorExtension` | 4 | No |
+| `haxeon.ui.host.DesktopUiApplication` | 1 | No |
+| `haxeon.ui.host.UiDiagnosticsProvider` | 0 | No |
+| `haxeon.ui.host.UiApplication` | 1 | No |
+| `haxeon.ui.core.View` | 104 | No |
+| `haxeon.ui.core.ViewportContent` | 1 | `paint(Canvas, Rect)` |
+| `haxeon.ui.docking.DockWorkspacePersistence` | 1 | No |
+| `haxeon.ui.animation.RetainedAnimation` | 3 | No |
+| `haxeon.ui.animation.DelayedAnimation` | 2 | No |
+| `haxeon.ui.animation.Animation` | 11 | No |
+| `haxeon.ui.widgets.collections.TreeViewModel` | 4 | No |
+| `haxeon.ui.widgets.collections.ListViewModel` | 2 | No |
+| `haxeon.ui.widgets.collections.ListViewItemMetadata` | 1 | No |
+| `haxeon.ui.widgets.commands.SearchPickerModel` | 1 | No |
+| `haxeon.ui.LayoutContent` | 3 | No |
+| `app.SessionMember` | 16 | No |
+| `app.SceneAssemblyDrag` | 2 | No |
+| `app.SessionParticipant` | 1 | No |
+| `app.PreparedSceneStore` | 1 | No |
+| `app.CadSessionModel` | 4 | No |
+| `app.SetupScript` | 1 | No |
+| `app.editor.ObjectKindProvider` | 3 | No |
+
+The 1/8/32 benchmark selects the base-class receiver after every deeper subclass, so it is the last candidate regardless
+of lexical tie ordering. Each call returns a packet containing an integer and a managed reference, checks its contents,
+and accumulates a result. All implementations remain reachable. Three alternating process pairs, five samples per
+process, 100,000 calls per sample, CPU 2, after warmup; both inlining modes are measured. Times are median ns/call.
+The three compilers are the pre-`ccf4a141` compiler (`6f816201`), the reviewed chain (`ccf4a141`), and the
+typed-table replacement. Every cell is old path → chain → table, from the same final three-way paired run:
+
+| Target | Inlining | 1 implementation | 8 implementations | 32 implementations |
+| --- | --- | --- | --- | --- |
+| HashLink | off | 47.10 → 15.83 → 14.86 | 47.19 → 80.77 → 14.74 | 46.83 → 305.27 → 14.75 |
+| HashLink | on | 47.85 → 14.81 → 14.91 | 47.50 → 81.81 → 14.85 | 47.39 → 299.39 → 14.27 |
+| Wasm32 | off | 2.78 → 12.69 → 10.46 | 3.22 → 49.25 → 12.68 | 5.80 → 312.16 → 18.33 |
+| Wasm32 | on | 2.78 → 10.34 → 8.28 | 3.23 → 47.23 → 11.03 | 5.81 → 307.58 → 18.08 |
+| Wasm GC | off | 0.50 → 11.56 → 9.73 | 9.06 → 74.91 → 14.16 | 35.86 → 465.55 → 22.94 |
+| Wasm GC | on | 0.50 → 11.90 → 4.38 | 9.00 → 76.06 → 16.41 | 29.98 → 454.96 → 18.91 |
+
+HashLink's control allocates exactly 256/32,768 bytes for 8/1,024 calls in every case; `ccf4a141` allocates zero.
+Both Wasm controls already flatten this fixture through their older scalar-virtual lowering: their nominal boxed source
+path therefore allocates zero too, and already has linear selection. The new chain also allocates zero on both Wasm
+targets. Calling the Wasm control a boxed runtime implementation would be incorrect.
+
+The chain has an implementer-count regression. Table selection performs a bounded number of probes independent
+of implementation count; bucket shape and indirect-call costs still affect the measured times. The single-entry Wasm
+case checks the complete class ID and calls its entry directly. For small Wasm contracts the old path can still be faster
+(the one-entry GC control is 0.50 ns/call); the replacement removes the unbounded chain rather than claiming a universal
+micro-benchmark speedup. Editor and Showcase timing observations are recorded in `packages/ui/docs/VALUE_TYPES.md`.
+
+
+The typed table keeps an ordinary semantic method and a separate private entry per implementing class and used
+value signature. HashLink stores the entries in class runtime metadata; a cached semantic slot selects a cached static
+closure directly. The closure lives in the class module's metadata arena and refers to the ordinary patchable code
+entry, so it adds no instance bytes or per-call objects. Runtime class metadata has one lazy table pointer; entries and
+cached closures are constructed only when used. Private entries are excluded from source method lookup and reflection.
+Appending an implementation must validate this metadata in a patch as well as in a full module.
+
+Wasm uses the existing class ID to index static typed entries. A deterministic two-level perfect hash selects a
+function-table index with at most two `br_table` operations; a full ID comparison rejects an unknown receiver. The
+indirect call requires the complete canonical function type, including reference leaves and multi-value results.
+This preserves the class header and avoids allocating GC vtable objects or adding a field to every instance. It also
+avoids adding a linear memory merely to hold metadata in a GC-only module. These static class entries provide the
+constant-time selection without growing the managed representation. The checked chain is reached only if the receiver
+has no compatible entry. The interpreter uses the checked IR path.
+
+All table cases allocate zero bytes on HashLink and zero objects on both Wasm targets at 8/1,024 calls, with inlining
+on and off. Private adapters remain outlined so the backend can select their entries. Optional-flow and scalar-argument
+wrappers retain the entry's identity, including a struct argument with a nullable struct result. Canonical physical Wasm
+function types, not reference-record identity, decide entry compatibility. The 128-class lookup test checks every entry,
+10,000 unknown IDs and an incompatible result signature. The 32-class source fixture checks distinct implementation
+results, inherited contracts, ordinary scalar methods, bound calls, Dynamic restoration and reflection on all targets.
+The HashLink patch test appends an implementation, edits it after its entry is cached, and verifies module retirement.
+
+One existing value-ABI gap is distinct from method selection: a bound closure returning `Null<S>` still uses a boxed
+logical result ABI on HashLink. Its correctness is covered outside the component-call zero-byte census. Carrying its
+presence/scalar/reference leaves through the escaping closure ABI remains required before the no-box port is complete.
+
+`python3 scripts/benchmark-typed-interface-dispatch.py --compiler boxed=/disk/old.hl --compiler table=/disk/new.hl
+--output /disk/new-empty-run` regenerates the 1/8/32 sources and records every paired process sample, allocation count,
+and guest build log. For the previous source path use `6f816201`; for the reviewed chain use `ccf4a141`. The output
+directory must be new: a failed run is retained rather than overwritten.
