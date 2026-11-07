@@ -8,6 +8,7 @@ class SourceFile {
 
 	final lineStarts:Array<Int>;
 	final hash:Int;
+	final secondHash:Int;
 
 	public function new(path:String, text:String) {
 		this.path = path;
@@ -15,13 +16,16 @@ class SourceFile {
 		bytes = haxe.io.Bytes.ofString(text);
 		lineStarts = [0];
 		var contentHash:Int = cast 0x811C9DC5;
+		var second:Int = cast 0x2545F491;
 		for (index in 0...bytes.length) {
 			var code = bytes.get(index);
 			contentHash = (contentHash ^ code) * 16777619;
+			second = (((second << 5) | (second >>> 27)) ^ code) * cast 0x85EBCA6B;
 			if (code == "\n".code)
 				lineStarts.push(index + 1);
 		}
 		hash = contentHash;
+		secondHash = second;
 	}
 
 	public function span(start:Int, end:Int):SourceSpan
@@ -129,6 +133,24 @@ class SourceFile {
 
 	static inline function utf8Width(code:Int):Int
 		return code < 0x80 ? 1 : code < 0xE0 ? 2 : code < 0xF0 ? 3 : 4;
+
+	/** The same identity as `strongHash` for bytes that are not a source file. */
+	public static function hashBytes(bytes:haxe.io.Bytes):String {
+		var first:Int = cast 0x811C9DC5, second:Int = cast 0x2545F491;
+		for (index in 0...bytes.length) {
+			var code = bytes.get(index);
+			first = (first ^ code) * 16777619;
+			second = (((second << 5) | (second >>> 27)) ^ code) * cast 0x85EBCA6B;
+		}
+		return StringTools.hex(first, 8) + StringTools.hex(second, 8) + "-" + bytes.length;
+	}
+
+	/**
+	 * A 64-bit identity of the source bytes (two independent 32-bit hashes) plus their length, as text. Strong enough to tell
+	 * two edits of one file apart for cache keys; `contentHash` alone (32 bits) is not.
+	 */
+	public function strongHash():String
+		return StringTools.hex(hash, 8) + StringTools.hex(secondHash, 8) + "-" + bytes.length;
 
 	/** Stable FNV-1a identity of the UTF-8 source snapshot used for compilation. */
 	public function contentHash():Int

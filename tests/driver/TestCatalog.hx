@@ -224,6 +224,7 @@ class TestCatalog {
 		"LiveStrictSignatureLambdaMain",
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
+		"CodeIdentityMain",
 		"EqualityHelperEditMain",
 		"SharedEqualityHelperEditMain",
 		"SharedWireHelperEditMain",

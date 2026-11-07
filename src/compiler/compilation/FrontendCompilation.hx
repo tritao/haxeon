@@ -130,6 +130,7 @@ class FrontendCompilation {
 			context.cacheReachability(entryModule, names, initializationClasses);
 			graphInitializationMs = Sys.time() * 1000.0 - initializationStartedAt;
 		}
+		compiler.modules.CodeIdentityTable.refresh(context, names, rollbackModules, entryModule, bodyChanged, signatureChanged, structuralChanged);
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGraph = AllocationMeter.sample();
 

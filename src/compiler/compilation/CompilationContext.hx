@@ -64,6 +64,9 @@ class CompilationContext {
 	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void
 		moduleAnalyzer.parse(state, entry, body, signatures, structural);
 
+	public function identitySalt():String
+		return owner.identitySalt();
+
 	public function addTypeDependencies(state:ModuleState):Void
 		moduleAnalyzer.addTypeDependencies(state);
 

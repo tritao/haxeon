@@ -966,6 +966,16 @@ class Compiler {
 		return natives.signatures();
 	}
 
+	/** What every module identity is mixed with: the compiler (or the `compiler-version` define, for tests) and the defines. */
+	function identitySalt():String {
+		var version = defines.get("compiler-version");
+		if (version == null)
+			version = compiler.modules.CodeIdentityTable.compilerVersion();
+		var lines = [for (name => value in defines) if (name != "compiler-version") name + "=" + value];
+		lines.sort(Reflect.compare);
+		return "compiler:" + version + "\n" + lines.join("\n");
+	}
+
 	/** Select the C ABI used by native-layout queries and source records. */
 	public function nativeLayoutTarget():String {
 		var configured = defines.get("native-abi-target");
