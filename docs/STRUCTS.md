@@ -474,7 +474,7 @@ compiler change, and **L** spans multiple semantic/runtime boundaries. Update th
 | E1 | Classify each enum from its concrete schema and reachable uses, including escapes through enclosing values, owners, containers and callbacks, with one consistent representation per program. | M | Yes |
 | E2 | Connect production construction, null/tag tests, matching, payload projection, joins and copy snapshots to the existing lane helpers, preserving canonical source IR, program metadata and incremental storage/reload checks. | M | Yes |
 | E3 | Complete allocation-free ordinary class/virtual/bound value calls, including inheritance, without introducing globally sized per-class typed tables. | L | Only for enums crossing those call forms |
-| E4 | Carry nullable result presence/scalar/reference leaves through escaping typed closures; the reproduced HashLink path still boxes. | M | Only for enums crossing that call form |
+| E4 | Carry nullable struct result presence/scalar/reference leaves through escaping typed closures when those structs contain enums; the reproduced HashLink path still boxes. | M | Only for enums crossing that call form |
 | E5 | Replace the experiment's program-wide C-native rejection with checks of actual enum-exposing native/host/export boundaries, retaining unrelated native declarations. | S | Yes |
 | E6 | Complete nominal Dynamic, reflection, thrown-value and native escape adapters without extra temporary packets. | L | No; exclude unsupported escapes initially |
 | E7 | Connect logical enum descriptors through source closure signatures, reflected fields and erased container views without exposing private packet types; array/iterator lane associations are tested already. | M | Only for uses admitted by the first subset |
@@ -494,6 +494,14 @@ checked lane verifier and constant-time interface dispatch are foundations to re
 UI enum conversion follows source activation as its own measured commits; it is not a prerequisite for the first
 allocation improvement. Unrelated generic-owner correctness work is not an activation prerequisite unless an admitted
 enum use actually crosses that boundary.
+
+Host export staging for E5 is implemented: `Compiler.setExportedFunctions` declares host roots before source layout
+selection, using the same `Expose` retention as `@:expose`. The CLI supplies `--export` roots there and includes them
+in session identity; changing the roots invalidates compilation without modifying cached source IR. Equivalent root
+sets do not invalidate it. The cross-target host-root fixture returns a cached nominal enum at 8/1,024 calls with zero
+allocations in both inlining modes. Boundary-specific native checks and production source lowering remain pending.
+Source `Null<E>` already uses the enum's tag-zero representation; E4 concerns an enclosing nullable struct, not an
+extra presence wrapper around the enum itself.
 
 ### Enum equality checkpoint measurements (candidate)
 

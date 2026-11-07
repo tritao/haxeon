@@ -100,6 +100,7 @@ class TestCatalog {
 		"FunctionGlobalAbiMain",
 		"ScalarClosureCarrierMain",
 		"InterfaceValueDispatchMain",
+		"HostExportRootsMain",
 		"WasmTypedInterfaceTablesMain",
 		"InlineEnumPointerWordMain",
 		"WasmLinearValueArrayAccessMain",

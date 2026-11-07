@@ -92,6 +92,9 @@ class CompilationContext {
 			default: HashLink;
 		};
 
+	public function exportedFunctions():Array<String>
+		return owner.exportedFunctions.copy();
+
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
 		return owner.semanticWorkspace.resolveSymbolId(name);
 

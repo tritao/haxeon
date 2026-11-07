@@ -572,6 +572,10 @@ class FrontendCompilation {
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
 			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
+		var exported = [for (name in context.exportedFunctions()) name => true];
+		if (exported.keys().hasNext())
+			ir.functions = [for (fn in ir.functions) exported.exists(fn.name)
+				? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose) : fn];
 		var cNativeNames = [for (native in irCNatives) native.name].join(","), ownPrints:Map<String, String> = [];
 		for (fn in cached)
 			if (PositionalName.is(fn.name))

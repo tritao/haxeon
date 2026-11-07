@@ -88,6 +88,7 @@ inline_cases=(
 	function-global-null
 	interface-value-carriers
 	interface-value-dispatch-table
+	host-enum-export
 	struct-managed-narrow
 	struct-managed-nullable-narrow
 	nullable-scalar-ieee-equality

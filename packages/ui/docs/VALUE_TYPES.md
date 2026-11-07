@@ -3711,3 +3711,19 @@ All final-source gates pass. Source inline enum activation and UI enum conversio
 Records and hashes are retained under `haxeon-flat-work/typed-interface-tables-gates`; raw captures are deleted after
 recording their numbers. The finished isolated editor gate worktree has been removed. This item finishes under the
 previous full-gate policy; subsequent commits use the user-approved tiered gates.
+
+### Host export roots before enum layout selection (Tier 1 checkpoint)
+
+Requested exports now reach the frontend as `Expose` roots before value layout/call lowering. This prepares the
+first source enum classification to keep host-exposed enum signatures nominal. Adding or removing export roots
+invalidates compilation; equivalent root sets reuse it, and cached source IR remains unchanged.
+
+`HostExportRootsMain` checks the CLI session input and all three targets with inlining off/on. At 8/1,024 calls,
+returning the cached nominal enum and inspecting it allocate zero bytes on HashLink and zero objects on Wasm32 and
+Wasm GC. Source `@:expose` retention survives removal of the requested roots. Tier 1 passes: 804 compiler tests,
+zero failures, and the self-hosting fixed point.
+
+BodyTyped single-run observations (ms), table checkpoint → export-root checkpoint: seed 222.26 → 229.68;
+stage 1 45.84 → 46.72; stage 2 46.58 → 49.42. These observations are retained without a change-specific timing
+attribution. Editor/Web builds and Tier 2/3 validation belong to the upcoming batch head; no product measurements
+are claimed for this staging commit.

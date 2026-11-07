@@ -216,6 +216,7 @@ class Compiler {
 
 	var configurationScopeIdentity:String = "default";
 	var defines:Map<String, String> = [];
+	var exportedFunctions:Array<String> = [];
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -275,6 +276,7 @@ class Compiler {
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
 			developmentMetadata = cloneFrom.developmentMetadata;
+			exportedFunctions = cloneFrom.exportedFunctions.copy();
 			for (name in cloneFrom.rootModules)
 				rootModules.push(name);
 		} else if (identityState == null) {
@@ -580,6 +582,24 @@ class Compiler {
 	public function addRootModule(name:String):Void
 		if (rootModules.indexOf(name) < 0)
 			rootModules.push(name);
+
+	/** Host-visible signatures are layout inputs, not just late backend export names. */
+	public function setExportedFunctions(names:Array<String>):Void {
+		if (sameExportedFunctions(names, exportedFunctions)) return;
+		var next = names.copy();
+		next.sort(Reflect.compare);
+		var unique:Array<String> = [];
+		for (name in next) if (unique.length == 0 || unique[unique.length - 1] != name) unique.push(name);
+		if (sameExportedFunctions(unique, exportedFunctions)) return;
+		exportedFunctions = unique;
+		sourceGeneration++;
+	}
+
+	static function sameExportedFunctions(first:Array<String>, second:Array<String>):Bool {
+		if (first.length != second.length) return false;
+		for (index in 0...first.length) if (first[index] != second[index]) return false;
+		return true;
+	}
 
 	/** Add a filesystem root whose modules are loaded on demand during resolution. */
 	public function addSourceRoot(path:String):Void {
