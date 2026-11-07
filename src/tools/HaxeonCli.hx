@@ -102,7 +102,21 @@ private typedef CommandCapture = {
 class HaxeonCli {
 	static final CONFIG_FILE = "haxeon.json";
 
+	/** The directory the user started the CLI from: a launched program runs in its project's directory and learns this one from `HAXEON_INVOKED_FROM`. */
+	static var invokedFrom = "";
+
+	/** Environment for a launched program: where the user started it from, unless the caller already said. */
+	static function launchEnvironment():Map<String, String> {
+		var environment = new Map<String, String>(), existing = Sys.getEnv("HAXEON_INVOKED_FROM");
+		if (existing == null || existing == "")
+			environment.set("HAXEON_INVOKED_FROM", invokedFrom);
+		return environment;
+	}
+
 	public static function main():Void {
+		invokedFrom = Sys.getCwd();
+		while (invokedFrom.length > 1 && StringTools.endsWith(invokedFrom, "/"))
+			invokedFrom = invokedFrom.substr(0, invokedFrom.length - 1);
 		var arguments = Sys.args();
 		if (arguments.length == 0) {
 			usage();
@@ -418,6 +432,13 @@ class HaxeonCli {
 		missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
 		missingRequired = reportPath("HashLink runtime", hashlinkPath, true) || missingRequired;
 		missingRequired = reportPath("Haxeon runtime library", nativeRuntimePath, true) || missingRequired;
+		if (!missingRequired && !RuntimeLibrary.skipped()) {
+			var lacking = RuntimeLibrary.missing(home);
+			if (lacking.length > 0) {
+				Sys.println("stale: " + RuntimeLibrary.describe(home, lacking));
+				missingRequired = true;
+			}
+		}
 		reportPath("self-hosted compiler", compilerPath, false);
 		reportPath("Android SDK", androidSdk, false);
 		reportPath("Android NDK 30.0.16248370", Path.join([androidSdk, "ndk", "30.0.16248370"]), false);
@@ -601,6 +622,8 @@ class HaxeonCli {
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
 		if (launch && targetInfo.isWasm())
 			throw 'The "$target" target can be built, but this CLI has no runner for it yet.';
+		if (launch && targetInfo.equals(Target.detectHost()))
+			RuntimeLibrary.requireCurrent(haxeonHome());
 		if (options.plan && launch)
 			throw 'Option "--plan" is only valid with "haxeon build"';
 		if (options.explain && launch)
@@ -742,7 +765,7 @@ class HaxeonCli {
 				return runProfiled(home, output, options.runtimeArguments, project.root, capture, project.manifest.entry, options.profileSources);
 			}
 			Sys.println('Launching $output');
-			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, new Map());
+			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root, launchEnvironment());
 		}
 		if (options.plan)
 			throw 'Plan output is currently available for host builds only';
@@ -811,7 +834,7 @@ class HaxeonCli {
 			throw 'HashLink is missing: $hashlink (run scripts/build-native.sh)';
 		configureRuntimeLibraryPath(home);
 		Sys.println('Launching $output');
-		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, new Map());
+		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory, launchEnvironment());
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
