@@ -60,7 +60,9 @@ scalar flow, and belongs with flat structs ([STRUCTS.md](STRUCTS.md) stages 2–
 and effects; `Paint` remains a native resource with identity and lifetime. Enums have no identity, including when boxed; payload enums require declared `Equatable` or `Hashable` for
 `==`/`!=`, while nullary enums have tag equality. The full rule, including `Type.enumEq`, is in
 [STRUCTS.md](STRUCTS.md#enum-value-semantics-and-inline-layout). Declared equality is implemented. Source inline storage starts with the closed non-generic subset documented there;
-the remaining escape, native-layout and generic transport blockers are listed explicitly.
+the remaining escape, native-layout and generic transport blockers are listed explicitly. Spare-bit (niche) encoding
+may later store a presence flag or tag within a payload, shrinking forms such as `Null<Bool>` and small enums in structs;
+consider it with a2's inline `Null<T>`.
 
 ### Resource cleanup
 
@@ -127,14 +129,66 @@ optional type per use (for example `hx_optional_rect`). Wasm GC keeps its flatte
 wherever bytes are exposed. Implement with native memory and the node-store prototype (ADR 0002 stage 2), with
 cross-target layout tests, and record it in STRUCTS.md "Flat and Portable".
 
+### Errors as values: `Result<T, E>` and `?`
+
+`Result<T, E>` is an ordinary payload enum (`Ok(value)`, `Err(error)`), stored inline like other eligible enums, so
+returning one allocates nothing. A postfix `?` on a `Result` expression returns early with the error and otherwise
+yields the value; it is allowed only in functions whose result is a compatible `Result`. Errors that callers are
+expected to handle (parsing, IO, RPC, file formats) use `Result`; exceptions remain for programming errors and
+unrecoverable failures. Decide together with the must-use rule below.
+
+### Must-use results
+
+A call whose result type is declared must-use (`Result`, `Disposable` values, builders) and whose result is discarded is
+a compile error, unless explicitly discarded (`_ = f();`). Catches swallowed errors and leaked resources; pairs with
+scoped cleanup. Declared by conformance or a single compiler-known marker interface, not per-call metadata.
+
+### Allocation-free iterator chains
+
+`filter`, `map`, `fold`, `sum`, `any`, `count` and similar adapters over arrays, struct arrays and ranges lower to a
+single loop with no closure, iterator or intermediate array allocation, specialized like other generic code. The
+existing `Lambda`/array helpers that allocate per step are ported to the same API and deleted (no parallel forms).
+Measured by the usual zero-allocation censuses on all targets. A strong fit for per-frame UI code.
+
+### Explicit `unsafe` regions for raw memory
+
+`RawPtr` arithmetic, unchecked `NativeSpan` access and other operations whose misuse corrupts memory are allowed only
+inside an `unsafe { ... }` block (or an `unsafe` function), so dangerous code is visible and searchable. Checked
+`NativeSpan` access stays safe. Relevant now that native memory is the default for frame data.
+
+### Interface extensions: retroactive conformance and static members
+
+Haxeon keeps interfaces as its only abstraction (no separate trait system) and extends them only where a consumer needs
+it:
+
+- **Conformance extensions:** `extension Rect implements Hashable { ... }` makes an existing type conform outside its
+  declaration. Allowed only in the package that declares the type or the one that declares the interface (an orphan
+  rule), so conformances cannot conflict. Needed when a bindings or stdlib value type must be a map key or `Codable`.
+- **Static interface members and `Self`:** an interface may require static functions, and may name the conforming type
+  as `Self` (`static function decode(r:Reader):Self`). Decoding needs this because no value exists yet to call an
+  instance method on (`function load<T:Decodable>(r:Reader):T return T.decode(r);`). In specialized generic code `T` is
+  concrete and `T.decode(r)` is a direct static call with no boxing; in erased code the call goes through the type's
+  runtime descriptor (the same per-type metadata as the constant-time class tables). Same route as Swift required
+  initializers, Rust associated functions and C# 11 `static abstract` members. Also enables default values
+  (`static function defaultValue():Self`) and generic math (`T.zero()`, `T.add(a, b)`). Rejected alternatives: passing
+  decoder objects at every call site (unchecked, verbose), decode-into-a-default-value (needs a static default anyway,
+  fails for immutable structs and enums), and compiler special cases for `Codable` (violates the general-mechanisms
+  rule). Implement when `Codable` is picked up, on all three backends with the usual tests.
+
+Default interface methods stay on demand; associated types and blanket implementations are not planned unless the
+iterator work requires them.
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.
 
 - **`if let` / `guard let`:** unwrap an optional, including `Null<S>`, and narrow in one step.
 - **Default interface methods:** static extensions cover most uses; add on demand.
-- **Serialization by conformance:** express STRUCTS.md's descriptors and the [MessagePack](MESSAGEPACK.md) attributes as
-  a conformance (`implements Codable`), consistent with `Hashable`, `Diffable` and `Observable`.
+- **`Codable`** (= `Encodable` + `Decodable`): format-independent field encoding for value types, synthesized when every
+  field conforms; `Encodable`/`Decodable` alone for one-way data. Not object-graph serialization (objects have identity;
+  graphs stay explicit), and distinct from Haxe's `haxe.Serializer` format. Replaces the MessagePack attributes and the
+  metadata-driven codec requests; requires static interface members (decode) and uses conformance extensions for types
+  declared elsewhere.
 
 ### Not planned
 
