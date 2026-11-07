@@ -1879,8 +1879,9 @@ class CallResolver {
 	}
 
 	function iterator(values:TypedExpression, element:CompilerType, span:SourceSpan):TypedExpression {
-		var dynamicValues = coerce(values, TDynamic, "iterator source", "E1014");
-		return new TypedExpression(TCall("__iterator_new", [dynamicValues]), TIterator(element), span);
+		// This becomes a typed IteratorNew IR operation. A Dynamic coercion can
+		// replace an enum array with its erased view and lose the element type.
+		return new TypedExpression(TCall("__iterator_new", [values]), TIterator(element), span);
 	}
 
 	public static function mapKeyIteratorSource(value:TypedExpression):Null<TypedExpression>

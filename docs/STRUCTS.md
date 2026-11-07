@@ -874,7 +874,9 @@ for every array or element. Empty HashLink value arrays allocate their backing l
 working-set cost of reserving storage for arrays that remain empty. Ordinary typed accesses do not call these accessors.
 An unwritten slot of a non-null value array reads as null through a dynamic view, matching existing dynamic-array behavior.
 
-Explicit typed iterators retain the array and an index, and read values through the lane accessors. Their generated
+Explicit typed iterators retain the array and an index, and read values through the lane accessors.
+Iterator creation keeps the concrete array type through typing; it does not erase an enum array through a Dynamic view first. This applies to
+array iterators and the array views used by map iterators, including nullable enum elements. Their generated
 structural adapters use the scalar value calling convention, so iterating does not allocate a box per element, even
 with inlining disabled. Dynamic iteration and reflection materialize a value at the escape. HashLink array string
 conversion uses the array representation's read accessor, including for arrays nested in other arrays; it must not

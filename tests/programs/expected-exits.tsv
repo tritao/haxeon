@@ -26,6 +26,7 @@ contextual-callbacks	42
 generic-contextual-callback	42
 nullable-map-get	42
 enum-array-pattern	42
+enum-array-iterator-escape	42
 anonymous-function	42
 enum-abstract	42
 enum-argument-string	42

@@ -54,6 +54,7 @@ inline_cases=(
 	hash-float-dependency
 	hash-float-extremes
 	struct-array-iterator-escape
+	enum-array-iterator-escape
 	struct-array-reflection-escape
 	struct-array-string-escape
 	member-module-shadow
