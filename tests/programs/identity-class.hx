@@ -1,3 +1,23 @@
+interface IdentityClock { function tick(delta:Float):Bool; }
+interface IdentityWaitingClock extends IdentityClock { function wait():Float; }
+interface IdentityRetainedClock extends IdentityClock {}
+interface IdentityOtherWaitingClock extends IdentityClock { function wait():Float; }
+class IdentityWaitingObject implements IdentityWaitingClock {
+ public function new() {}
+ public function tick(delta:Float):Bool return delta > 0;
+ public function wait():Float return 1;
+}
+class IdentityInheritedWaitingObject extends IdentityWaitingObject { public function new() { super(); } }
+class IdentityRetainedObject implements IdentityRetainedClock {
+ public function new() {}
+ public function tick(delta:Float):Bool return delta > 0;
+}
+class IdentityClockLookalike {
+ public function new() {}
+ public function tick(delta:Float):Bool return delta > 0;
+ public function wait():Float return 1;
+}
+
 interface IdentityView { function number():Int; }
 
 class IdentityObject implements IdentityView {
@@ -26,6 +46,20 @@ class IdentityClassCensus {
 }
 
 function main():Int {
+ var waiting = new IdentityWaitingObject(), child = new IdentityInheritedWaitingObject();
+ var retained = new IdentityRetainedObject();
+ var waitingView:IdentityWaitingClock = waiting, baseView:IdentityClock = waiting;
+ var dynamicWaiting:Dynamic = waiting, dynamicView:Dynamic = waitingView;
+ if (Std.isOfType(waiting, IdentityRetainedClock) || Std.isOfType(waitingView, IdentityRetainedClock)
+  || Std.isOfType(baseView, IdentityRetainedClock) || Std.isOfType(dynamicView, IdentityRetainedClock)) return 12;
+ if (Std.isOfType(waiting, IdentityOtherWaitingClock) || Std.isOfType(waitingView, IdentityOtherWaitingClock)) return 13;
+ if (!Std.isOfType(waiting, IdentityWaitingClock) || !Std.isOfType(waitingView, IdentityClock)
+  || !Std.isOfType(baseView, IdentityWaitingClock) || !Std.isOfType(dynamicWaiting, IdentityClock)) return 14;
+ if (!Std.isOfType(child, IdentityWaitingClock) || !Std.isOfType(child, IdentityClock)
+  || Std.isOfType(child, IdentityRetainedClock)) return 15;
+ if (!Std.isOfType(retained, IdentityRetainedClock) || !Std.isOfType(retained, IdentityClock)
+  || Std.isOfType(retained, IdentityWaitingClock)) return 16;
+ if (Std.isOfType(new IdentityClockLookalike(), IdentityClock)) return 17;
  var a = new IdentityObject(7), b = new IdentityObject(7);
  if (a == b || a != a || !a.equals(b)) return 1;
  var av:IdentityView=a, alias:IdentityView=a, bv:IdentityView=b;

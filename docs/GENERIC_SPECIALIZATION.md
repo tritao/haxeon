@@ -252,6 +252,12 @@ layouts are rejected without changing the destination. Function writes check the
 signature before the store. HashLink and Wasm GC retain semantic function signatures; a scalar struct closure crossing
 Dynamic is recognized by its signature-specific adapter without boxing its ordinary typed calls.
 
+Interface checks require declared conformance, including inherited base interfaces; a matching method shape does not
+establish conformance. HashLink records a virtual cache for each declared interface and every base interface. Runtime
+checks match those exact cache types and unwrap an interface view before checking its concrete object. HashLink's
+structural virtual-prefix cast is not a conformance test: it would accept an unrelated sibling interface with fewer
+methods. This distinction also applies to interface values carried through Dynamic.
+
 HashLink stores function-valued data globals in typed nullable closure-reference slots (`HNULL(HFUN)`). The VM's raw
 `HFUN` global slots initialize with a code pointer and cannot hold the default-null state of a source closure field.
 The nullable slot stores the existing closure pointer and retains its full signature; registers and typed calls keep

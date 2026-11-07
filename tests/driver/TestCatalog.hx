@@ -124,6 +124,7 @@ class TestCatalog {
 		"LambdaNameMain",
 		"IrProgramAssemblerMain",
 		"EnumInterpreterTypeMain",
+		"NominalInterfaceTypeMain",
 		"EnumPayloadMetadataMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",

@@ -3840,3 +3840,20 @@ pinned outer revision, rather than treating the new micro result as a real-edito
 
 BodyTyped observations (ms), verifier → callback transport: seed 214.87 → 216.86; stage 1 44.76 → 44.83;
 stage 2 46.74 → 46.08. These are single-run observations without timing attribution.
+
+### Nominal interface checks found by the batch app gate
+
+On frozen outer `8195b397f04e2d527430607e8e3624a38df8d950`, both the `530bda5a` compiler control and `42bae206`
+candidate stop at `SceneVisibilityTests.hx:311`: `hover updates the row without rebuilding its owner`. A small probe
+isolates a waiting `TooltipHoverDelay` incrementing the scheduler's rebuilding revision. The tooltip scheduling fix is
+separate; the app failure has not been accepted as a pass.
+
+Implementing the existing delayed-animation contract exposed a HashLink runtime error: a class implementing
+`DelayedAnimation` also passed the test for unrelated `RetainedAnimation`, because the latter's methods are a prefix of
+the former's. The runtime now checks exact declared-interface caches, including cached ancestors, and unwraps interface
+views before testing. No fields, wrappers or allocation operations are added. The same compiled regression module exits
+12 under the control runtime and 42 under the corrected runtime. The fixture checks sibling interfaces with identical
+and prefix method sets, inherited classes, base-interface views, Dynamic views and undeclared lookalikes. It passes in
+the interpreter and on all three targets with inlining off/on; its existing HashLink tracked loop remains allocation-free.
+Tier 1: 810 compiler tests, zero failures. Paired product measurements remain pending on the final batch head; the
+control runtime is retained separately. Records: `haxeon-flat-work/enum-first-batch-gates/nominal-interface`.

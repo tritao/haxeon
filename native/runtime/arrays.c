@@ -1,6 +1,5 @@
-/* A class implements an interface when it, or a class it extends, has an unnamed field of the interface's virtual
- * type (or of one that extends it): the compiler adds one per implemented interface, and HashLink uses it as the
- * interface's cache. A plain cast never relates an object type to a virtual type. */
+/* The compiler adds an unnamed virtual cache for every declared interface and its bases.
+ * Match those exact types: HashLink's structural virtual-prefix cast also accepts unrelated interfaces. */
 static bool realtime_implements( hl_type *object_type, hl_type *interface_type ) {
 	if( interface_type->kind != HVIRTUAL )
 		return false;
@@ -8,7 +7,7 @@ static bool realtime_implements( hl_type *object_type, hl_type *interface_type )
 		hl_type_obj *object = type->obj;
 		for( int index = 0; index < object->nfields; index++ ) {
 			hl_obj_field *field = object->fields + index;
-			if( field->t->kind == HVIRTUAL && (field->name == NULL || field->name[0] == 0) && hl_safe_cast(field->t, interface_type) )
+			if( field->t == interface_type && (field->name == NULL || field->name[0] == 0) )
 				return true;
 		}
 		if( object->super == NULL )
@@ -19,13 +18,14 @@ static bool realtime_implements( hl_type *object_type, hl_type *interface_type )
 
 static bool realtime_is_of_type( vdynamic *value, hl_type *type ) {
 	if( value == NULL || type == NULL ) return false;
-	if( hl_safe_cast(value->t, type) ) return true;
-	if( value->t->kind == HOBJ && realtime_implements(value->t, type) ) return true;
 	/* Interface values are HashLink virtual wrappers around the concrete object. */
 	if( value->t->kind == HVIRTUAL ) {
 		vdynamic *concrete = ((vvirtual*)value)->value;
 		return concrete != NULL && realtime_is_of_type(concrete, type);
 	}
+	if( type->kind == HVIRTUAL )
+		return value->t->kind == HOBJ && realtime_implements(value->t, type);
+	if( hl_safe_cast(value->t, type) ) return true;
 	return false;
 }
 
