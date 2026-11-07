@@ -136,7 +136,11 @@ class ScrollView implements View {
 			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
 			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
 			binding.value.attach(controller, context.animations, function(_) {
-				if (contentRevision != null && (lastOffsetX != controller.offsetX || lastOffsetY != controller.offsetY)) {
+				// A scroll from input or an animation moves the window: tell the owner. An offset set while a view is
+				// building (an owner keeping its anchor or a selection in view) is already in the window being built,
+				// and writing state there is forbidden; the resolved-geometry check below covers any later change.
+				if (contentRevision != null && !haxeon.reactive.ReactiveRuntime.isTracking()
+					&& (lastOffsetX != controller.offsetX || lastOffsetY != controller.offsetY)) {
 					lastOffsetX = controller.offsetX; lastOffsetY = controller.offsetY;
 					contentRevision.update(contentRevision.value + 1);
 				}
@@ -173,9 +177,12 @@ class ScrollView implements View {
 				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
-				if (contentRevision != null && (builtOffsetX != controller.offsetX || builtOffsetY != controller.offsetY ||
-					builtViewportWidth != controller.viewportWidth || builtViewportHeight != controller.viewportHeight)) {
-					// Layout may resize the viewport or clamp its offset. Rebuild the window before painting this frame.
+				if (contentRevision != null && context.buildFeedbackPass == 0 && (builtOffsetX != controller.offsetX
+					|| builtOffsetY != controller.offsetY || builtViewportWidth != controller.viewportWidth
+					|| builtViewportHeight != controller.viewportHeight)) {
+					// Layout may resize the viewport or clamp its offset: rebuild the window once before painting this
+					// frame. Content whose size depends on its own window (a viewport that fits its rows) can disagree
+					// again after that rebuild; it is settled on the next frame rather than by unbounded rebuilds.
 					contentRevision.update(contentRevision.value + 1);
 					context.requestBuildFeedbackBeforeLayout();
 				}

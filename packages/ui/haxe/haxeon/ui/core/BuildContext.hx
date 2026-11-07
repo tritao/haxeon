@@ -317,6 +317,12 @@ class BuildContext {
 	var buildBeforeLayoutFeedbackRequested = false;
 	var reactiveBuildPending = false;
 
+	/**
+	 * Which build of the current submit this is: 0 for the frame's first build, then one more for every feedback
+	 * rebuild. Views that request feedback from geometry use it to settle within a bounded number of passes.
+	 */
+	public var buildFeedbackPass(default, null):Int = 0;
+
 	/** Resolved constraints changed which children a view must build; settle them before publishing the frame. */
 	public function requestBuildFeedback():Void
 		buildFeedbackRequested = true;

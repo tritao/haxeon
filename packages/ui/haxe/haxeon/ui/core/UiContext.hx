@@ -449,6 +449,7 @@ class UiContext {
 		ensureLive();
 		if (frame == null || build == null)
 			throw "A UI frame requires a view and layout frame";
+		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
 		ReactiveRuntime.flushEffects();
 		var styleResolutionsBefore = buildContext.styleResolver.resolutions;
 		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
