@@ -469,3 +469,24 @@ presence/scalar/reference leaves through the escaping closure ABI remains requir
 --output /disk/new-empty-run` regenerates the 1/8/32 sources and records every paired process sample, allocation count,
 and guest build log. For the previous source path use `6f816201`; for the reviewed chain use `ccf4a141`. The output
 directory must be new: a failed run is retained rather than overwritten.
+
+### Typed callbacks passed through methods
+
+A function reference keeps its typed value ABI when passed to a class or interface method if every possible receiver
+implementation accepts the exact callback signature at that argument position. The Wasm scalar-closure planner checks
+those contracts through the existing subtype/implementer index; unknown targets, arity mismatches and differing callback
+signatures remain outside that ABI. This is a compile-time check; method dispatch and closure calls retain their
+existing constant-time runtime paths.
+
+Previously the planner's safe-use list omitted `MethodCall`. It therefore kept a callback taking a value struct (or a
+newly inline enum packet) on the boxed ABI. Wasm32's closure-cast planner then generated same-arity conversion adapters
+against unrelated casts. `rpc-lifecycle` exposed this when a `RpcConnectResult -> Void` callback was paired with a
+`ManagedBytes -> Bytes` decoder: the adapter tried to cast Dynamic to the private enum packet and the verifier correctly
+rejected it. Recognizing the verified typed method argument keeps that callback scalar and removes it from the boxed
+adapter source set. No Dynamic conversion or verifier exception was added.
+
+The regression fixture includes inherited, overridden, concrete and interface methods, prepared enum/struct callbacks,
+and an unrelated Dynamic function cast of the same arity. A forged differing override must not be admitted. With both
+inlining modes, each typed method path at 8/1,024 iterations changes from 16/2,048 Wasm32 and Wasm GC allocations to zero;
+HashLink remains at zero bytes. `rpc-lifecycle` returns 42 on all three targets in both modes. Logical enum descriptors
+at genuine Dynamic/reflection callable boundaries remain E7 widening work in STRUCTS.md.

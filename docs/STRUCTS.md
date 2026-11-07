@@ -545,6 +545,11 @@ iterations. Explicit array iteration and element copies are checked separately f
 not include allocation of the iterator itself. E9's real-editor decrease remains a required measurement before the UI
 conversion milestone; a synthetic zero-allocation fixture alone does not close it.
 
+Typed closure references may also travel through ordinary class and interface method arguments without boxing their
+enum payloads. The Wasm planner admits this only when every possible receiver implementation has the exact callback
+signature; a mismatching implementation is not a typed transport. This closes the reproduced `rpc-lifecycle` Wasm32
+adapter-generation failure without admitting a new Dynamic escape or changing the representation classification.
+
 ### Enum equality checkpoint measurements (candidate)
 
 On the same machine, the starting baseline was Haxeon `ca255ae6` and outer `045d3585c`. The candidate keeps the

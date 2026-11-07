@@ -532,3 +532,4 @@ interface-value-carriers	42
 interface-value-dispatch-table	42
 host-enum-export	42
 source-inline-enum	42
+closure-method-value-arguments	42

@@ -3808,3 +3808,35 @@ No paired product measurements have been accepted from this incomplete Tier 2 he
 Final-source Tier 1: 807 compiler tests, zero failures; all affected six-mode fixtures; self-hosting fixed point.
 BodyTyped observations (ms), activation → verifier: seed 235.50 → 214.87; stage 1 45.65 → 44.76;
 stage 2 45.78 → 46.74. These remain single-run observations, not a change-specific timing attribution.
+
+### Typed callback method transport (Tier 1 checkpoint)
+
+The `rpc-lifecycle` bisection isolates the Wasm32 build failure to activation: the pre-activation `962367ad` control
+compiles; `57e69910` fails while generating an adapter from `RpcConnectResult -> Void` to `ManagedBytes -> Bytes`.
+The scalar-closure safe-use list did not recognize method arguments, so the first callback was incorrectly left in the
+boxed adapter source set. The fix checks every possible receiver's declared callback argument against its exact type.
+It keeps the callback on the typed scalar ABI; no Dynamic fallback or verifier exemption is introduced.
+
+Paired micro census, `79d4abb7` → candidate, same machine, both inlining modes. Each path calls two relays per iteration;
+closures and reference payloads are prepared before the window:
+
+| Path | HashLink bytes (8 / 1,024) | Wasm32 objects (8 / 1,024) | Wasm GC objects (8 / 1,024) |
+|---|---|---|---|
+| Enum callback through interface methods | 0 / 0 → 0 / 0 | 16 / 2,048 → 0 / 0 | 16 / 2,048 → 0 / 0 |
+| Struct callback through interface methods | 0 / 0 → 0 / 0 | 16 / 2,048 → 0 / 0 | 16 / 2,048 → 0 / 0 |
+| Enum callback through concrete methods | 0 / 0 → 0 / 0 | 16 / 2,048 → 0 / 0 | 16 / 2,048 → 0 / 0 |
+
+The allocation comparison omits the unrelated function-cast call so the failing control can compile. The permanent
+regression fixture includes that cast, reproducing the RPC adapter-planning shape as well as checking zero allocations.
+It covers inheritance/overrides, verifies that the enum stays inline and forges an incompatible override that must be
+excluded. The actual RPC lifecycle passes on HashLink, Wasm32 and Wasm GC with inlining off/on. One standalone Node
+probe initially omitted the fixture's `__math_is_finite` host import; using the same `Number.isFinite` import as the
+committed parity harness runs it successfully. No guest result or performance measurement was discarded.
+
+Tier 1 passes: 809 compiler tests, zero failures; affected six-mode fixtures and self-hosting fixed point. The repaired
+batch's Tier 2/3 validation remains pending. Records are under
+`haxeon-flat-work/enum-method-closures`; product comparisons still use the batch's `530bda5a` compiler control on the
+pinned outer revision, rather than treating the new micro result as a real-editor decrease.
+
+BodyTyped observations (ms), verifier → callback transport: seed 214.87 → 216.86; stage 1 44.76 → 44.83;
+stage 2 46.74 → 46.08. These are single-run observations without timing attribution.

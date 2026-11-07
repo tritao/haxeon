@@ -89,6 +89,7 @@ class TestCatalog {
 		"InlineEnumLayoutMain",
 		"SourceInlineEnumMain",
 		"InlineEnumInvariantMain",
+		"MethodClosureValueMain",
 		"InlineEnumWordMain",
 		"InlineEnumCarrierBoundaryMain",
 		"InlineEnumScalarWordBoundaryMain",
