@@ -89,8 +89,13 @@ class ScrollView implements View {
 				var stored:State<ScrollController> = context.resourceState(viewport.id, function() return controller, function(_) {});
 				controller = stored.value;
 			}
-			// The offset is applied to the content in place after layout (see onResolved below), so a scroll needs a new
-			// frame but not a rebuild. It does not write a signal read by the surrounding cached subtree.
+			// Virtual content is built by the surrounding owner before ScrollView builds. Subscribe that owner to
+			// offset changes, so translating retained rows cannot leave an obsolete materialization window on screen.
+			var contentRevision:Null<State<Int>> = contentFollowsOffset ? context.state(context.id("content-revision"), 0) : null;
+			if (contentRevision != null) contentRevision.value;
+			var builtOffsetX = controller.offsetX, builtOffsetY = controller.offsetY;
+			var builtViewportWidth = controller.viewportWidth, builtViewportHeight = controller.viewportHeight;
+			// Fully materialized content only moves in place; it reads no scroll-dependent signal.
 			var binding = context.resourceState(context.id("controller-binding"), function() return new ScrollBinding(),
 				function(value) value.dispose());
 			var visibility = context.resourceState(context.id("scrollbar-visibility"), function() return new ScrollbarVisibilityController(), function(value) value.dispose());
@@ -129,7 +134,12 @@ class ScrollView implements View {
 			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
 			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
+			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
 			binding.value.attach(controller, context.animations, function(_) {
+				if (contentRevision != null && (lastOffsetX != controller.offsetX || lastOffsetY != controller.offsetY)) {
+					lastOffsetX = controller.offsetX; lastOffsetY = controller.offsetY;
+					contentRevision.update(contentRevision.value + 1);
+				}
 				context.willEditRetained(translatedContent);
 				translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX, -controller.offsetY);
 				visibility.value.reveal();
@@ -163,6 +173,12 @@ class ScrollView implements View {
 				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
+				if (contentRevision != null && (builtOffsetX != controller.offsetX || builtOffsetY != controller.offsetY ||
+					builtViewportWidth != controller.viewportWidth || builtViewportHeight != controller.viewportHeight)) {
+					// Layout may resize the viewport or clamp its offset. Rebuild the window before painting this frame.
+					contentRevision.update(contentRevision.value + 1);
+					context.requestBuildFeedbackBeforeLayout();
+				}
 				if (transform.tx != -controller.offsetX || transform.ty != -controller.offsetY) {
 					context.willEditRetained(translatedContent);
 					translatedContent.layout.style.transform = Transform2D.identity().translated(-controller.offsetX,

@@ -51,6 +51,13 @@ Run the picker interaction tests after building the native UI library:
 packages/ui/tools/test-search-picker.sh
 ```
 
+Virtualized trees, lists and grids set `ScrollView.contentFollowsOffset`: offset
+changes invalidate their tracked content owner so the visible window is rebuilt.
+Ordinary scroll views move their retained content in place. Viewport resizing and
+offset clamping settle virtual content before painting. The regression project
+`tests/virtual-scroll/haxeon.json` covers cached views, wheel and animated scrolling,
+horizontal grid windows, resizing and shrinking data without a selection click.
+
 ## Component Lab
 
 The Haxe package `haxeon.ui.lab` provides a reusable isolated-component
