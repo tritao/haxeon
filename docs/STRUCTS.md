@@ -692,6 +692,10 @@ static rules as `==`, including identity for class references.
 Class instances used as keys in `haxe.ds.ObjectMap` use identity; declaring value conformance on a class is not a way
 to select map equality.
 
+String-keyed runtime maps preserve `null` as a distinct key, separate from `""` and `"null"`. Replacement, growth, copying,
+key/value iteration and removal retain that distinction. Use `exists` to distinguish an absent key from a stored null
+value. Queries of a missing null key do not allocate.
+
 Synthesis retains the existing field-conformance rule. A class-valued field cannot supply value conformance; a struct
 that needs such a field in its equality supplies an explicit `equals`, using `==` for the reference comparison. A
 handwritten hash must remain consistent with that equality. `Diffable` class snapshots compare their contents

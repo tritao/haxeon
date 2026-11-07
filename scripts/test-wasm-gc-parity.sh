@@ -17,6 +17,7 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 cases=(objects arrays enums closures dynamic exceptions strings)
 # One list drives compilation and execution for every target and inline setting.
 inline_cases=(
+	map-null-string-keys
 	reactive-write-scope
 	reactive-thread-isolation
 	dead-pure-values

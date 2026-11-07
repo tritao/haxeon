@@ -3893,3 +3893,34 @@ all six UI snapshot target/inlining configurations and Tier 1 (811 compiler test
 fix to invalidation, with no new ownership or caching mechanism. The full app gate and paired product measurements
 remain pending on this batch head. Records: `haxeon-flat-work/tooltip-deadlines` and
 `haxeon-flat-work/enum-first-batch-gates/hover-probe`.
+
+### Null string-map keys found by the full app gate
+
+After the tooltip correction, the app reached `SceneCollisionTests.editor` and crashed in
+`EditorScene.object(null)` (`EditorScene.hx:1972`, caller `SceneCollisionTests.hx:183`). GDB shows
+`hl_hbget -> hl_hbfind -> hl_hash_gen` with a null key. The tiny nonempty-map query reproduces under the archived
+`530bda5a` compiler and the original `4a33fa08` VM/libraries too. Both Wasm targets already return a missing result.
+
+HashLink now hashes null as zero and compares it as a distinct key, including when it collides with the empty string.
+It adds no storage or allocations and preserves the literal `"null"` key separately. The fixture covers replacement,
+growth through 64 additional keys, key/value iteration, shallow copies, removal, clear, stored null values, and numeric
+as well as reference values. The IR interpreter previously rejected `__map_string_ref_alloc`; its logical String-map
+model now runs the same fixture.
+
+Missing-key get/exists/remove census, both inlining modes:
+
+| Target / measure | 8 queries | 1,024 queries |
+|---|---:|---:|
+| HashLink allocated bytes | 0 | 0 |
+| Wasm32 allocated objects | 0 | 0 |
+| Wasm GC allocated objects | 0 | 0 |
+
+Tier 1 passes: 813 compiler tests, zero failures, the interpreter/six-mode fixture and self-hosting fixed point.
+The full frozen-source app suite exits zero, including `SceneCollisionTests`. An initial fixture dereferenced a nullable
+get result before checking it; a local null check fixes that invalid test. A first census harness omitted the requested
+Wasm exports; it now declares them before layout selection and at the backend boundary. No product measurements were
+accepted from either diagnostic. BodyTyped observations (ms), nominal-identity checkpoint → this change:
+seed 223.43 → 229.14; stage 1 44.88 → 44.05; stage 2 46.37 → 44.59. These are single-run observations; the native-hosted
+stages decreased. Product allocation/RSS/browser comparisons remain pending on the final batch head.
+Records: `haxeon-flat-work/map-null-keys`; the original app failure is retained as
+`enum-first-batch-gates/app-scene-collision-failure.log`.

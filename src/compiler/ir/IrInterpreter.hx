@@ -282,7 +282,47 @@ class IrInterpreter {
 		};
 	}
 
+	/** Logical String-map model; native targets choose their own hash tables and value carriers. */
+	function executeStringMap(name:String, arguments:Array<Dynamic>):Dynamic {
+		var parts = name.substr("__map_string_".length).split("_");
+		if (parts.length != 2) throw 'Unsupported String map native "$name"';
+		var element:IrType = switch parts[0] {
+			case "i32": I32;
+			case "i64": I64;
+			case "bool": Bool;
+			case "f64": F64;
+			case "bytes": Bytes;
+			case "ref": Dyn;
+			default: throw 'Unsupported String map value kind "${parts[0]}"';
+		};
+		if (parts[1] == "alloc") return new InterpStringMap(element);
+		var map:InterpStringMap = cast arguments[0];
+		return switch parts[1] {
+			case "get": var at = map.find(arguments[1]); at < 0 ? null : map.entries[at].value;
+			case "exists": map.find(arguments[1]) >= 0;
+			case "set":
+				var at = map.find(arguments[1]);
+				if (at < 0) map.entries.push({key: arguments[1], value: arguments[2]});
+				else map.entries[at].value = arguments[2];
+				null;
+			case "remove":
+				var at = map.find(arguments[1]);
+				if (at < 0) false; else {map.entries.splice(at, 1); true;}
+			case "size": map.entries.length;
+			case "clear": map.entries.resize(0); null;
+			case "copy":
+				var result = new InterpStringMap(map.elementType);
+				for (entry in map.entries) result.entries.push({key: entry.key, value: entry.value});
+				result;
+			case "keys": new InterpArray([for (entry in map.entries) entry.key], map.entries.length, Bytes);
+			case "values": new InterpArray([for (entry in map.entries) entry.value], map.entries.length, map.elementType);
+			default: throw 'Unsupported String map operation "${parts[1]}"';
+		};
+	}
+
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
+		if (StringTools.startsWith(name, "__map_string_"))
+			return executeStringMap(name, arguments);
 		if (StringTools.startsWith(name, "$scalar-closure:receiver:") || StringTools.startsWith(name, "$wasm:closure-receiver:")) {
 			var value = arguments[0], probe = arguments[1];
 			if (!Std.isOfType(value, InterpClosure) || !Std.isOfType(probe, InterpClosure)) return null;
@@ -766,5 +806,15 @@ private class InterpClosure {
 		this.type = type;
 		this.source = source;
 		this.nativeName = nativeName;
+	}
+}
+
+private class InterpStringMap {
+	public final entries:Array<{key:Dynamic, value:Dynamic}> = [];
+	public final elementType:IrType;
+	public function new(elementType:IrType) this.elementType = elementType;
+	public function find(key:Dynamic):Int {
+		for (index in 0...entries.length) if (entries[index].key == key) return index;
+		return -1;
 	}
 }
