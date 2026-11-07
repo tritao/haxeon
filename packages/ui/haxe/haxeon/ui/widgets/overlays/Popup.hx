@@ -156,17 +156,14 @@ class Popup implements View {
 				var surface = new RenderNode(context.id("popup-surface"),
 					LayoutVisualKind.Custom, surfaceStyle);
 				surface.hitTestSelf = false;
-				var background = context.theme.tokens.navigationBackground;
+				var background = context.theme.tokens.surface;
 				var border = context.theme.tokens.border;
 				surface.onPaint(function(canvas, geometry) {
 					var width = geometry.width;
 					var height = geometry.height;
-					canvas.fillRectIfPositive(new Rect(0.0, 0.0, width, height), background);
-					canvas.fillRectIfPositive(new Rect(0.0, 0.0, width, 1.0), border);
-					canvas.fillRectIfPositive(new Rect(0.0, height - 1.0, width, 1.0), border);
-					canvas.fillRectIfPositive(new Rect(0.0, 1.0, 1.0, height - 2.0), border);
-					canvas.fillRectIfPositive(new Rect(width - 1.0, 1.0, 1.0,
-							height - 2.0), border);
+					if (width <= 2.0 || height <= 2.0) return;
+					canvas.fillRoundedRect(new Rect(0.0, 0.0, width, height), 6.0, border);
+					canvas.fillRoundedRect(new Rect(1.0, 1.0, width - 2.0, height - 2.0), 5.0, background);
 				});
 				panel.add(surface);
 				var shadowStyle = new LayoutStyle();
@@ -187,9 +184,9 @@ class Popup implements View {
 					if (bounds == null) return;
 					var rect = new Rect(bounds.x - geometry.x, bounds.y - geometry.y,
 						bounds.width, bounds.height);
-					var square = [0.0, 0.0, 0.0, 0.0];
-					canvas.drawBoxShadow(rect, 0.0, 6.0, 20.0, 0.0, square, shadow);
-					canvas.drawBoxShadow(rect, 0.0, 1.0, 3.0, 0.0, square, contactShadow);
+					var corners = [6.0, 6.0, 6.0, 6.0];
+					canvas.drawBoxShadow(rect, 0.0, 6.0, 20.0, 0.0, corners, shadow);
+					canvas.drawBoxShadow(rect, 0.0, 1.0, 3.0, 0.0, corners, contactShadow);
 				});
 				root.add(shadowLayer);
 			}

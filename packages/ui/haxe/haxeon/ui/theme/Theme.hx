@@ -242,19 +242,20 @@ class Theme {
 			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item"), [
 			StyleValue.width(LayoutAxis.grow()),
-			StyleValue.padding(new Insets(8.0, 4.0, 8.0, 4.0)),
+			StyleValue.height(LayoutAxis.fit(30.0)),
+			StyleValue.padding(new Insets(12.0, 5.0, 12.0, 5.0)),
 			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
-			StyleValue.radius(StyleProperty.RadiusTopLeft, 0.0),
-			StyleValue.radius(StyleProperty.RadiusTopRight, 0.0),
-			StyleValue.radius(StyleProperty.RadiusBottomRight, 0.0),
-			StyleValue.radius(StyleProperty.RadiusBottomLeft, 0.0)
+			StyleValue.radius(StyleProperty.RadiusTopLeft, 4.0),
+			StyleValue.radius(StyleProperty.RadiusTopRight, 4.0),
+			StyleValue.radius(StyleProperty.RadiusBottomRight, 4.0),
+			StyleValue.radius(StyleProperty.RadiusBottomLeft, 4.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Disabled),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Hovered),
 			[StyleValue.background(tokens.selectionHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Focused),
-			[StyleValue.background(tokens.selectionField)]);
+			[StyleValue.background(tokens.selectionHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Pressed),
 			[StyleValue.background(tokens.selectionPressed)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger"), [
@@ -412,8 +413,7 @@ class Theme {
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
-			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0),
-			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration(), BorderDecoration.deviceHairline()])),
+			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration()])),
 			// Compositor effects include their ink overflow; shadow parameters alone
 			// do not paint a shadow, and node-local decorations are clipped.
 			StyleValue.effects(EffectChain.of([new DropShadowEffect(0.0, 2.0, 3.0, tokens.selectionPopupShadow)])),
