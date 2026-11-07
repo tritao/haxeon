@@ -421,6 +421,12 @@ types keep the nominal enum descriptor; typed element operations use the registe
 checks that distinction on reads, writes, insertion/removal and iterator results. Recursive or oversized enums without
 inline storage retain ordinary reference arrays, including when both representations occur in the same program.
 
+Interface methods with value arguments or results use the typed value-call ABI even for nongeneric contracts.
+Direct calls and bound methods, including inherited contracts, share dispatchers selected from physical layouts.
+The same policy applies to structs and inline enum storage; ordinary reference-only interface calls keep their
+reference ABI. Source IR stays immutable across this normalization, and regenerating a dispatcher recomputes its
+implementation set.
+
 Typed scalar closures use the same private callable ABI as direct scalar functions for traced reference leaves and
 raw result slots. The verifier requires exact component types and actual verified function targets; a native symbol
 cannot claim that ABI by borrowing its naming prefix. Dynamic and reflective escapes still require their logical

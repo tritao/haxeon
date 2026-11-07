@@ -355,3 +355,17 @@ closures, key paths, reflection adapters, codecs, equality and hashing helpers a
 requests remain; collecting each category once in phase order leaves valid programs with missing IR declarations.
 `enum-generated-dependencies` covers that chain on all three targets with inlining enabled and disabled, and
 `GeneratedDependencyCompletionMain` checks interpreter execution and cold, cached and edited builds.
+
+
+### Value carriers in nongeneric interface contracts
+
+Interface calls with physical value arguments or results use the same typed dispatcher as specialized generic
+contracts, even when the declared and instantiated signatures are identical. The common IR normalization runs after
+physical value layouts are known and before scalar-call ABI selection. It also normalizes bound interface methods,
+including inherited contracts, without changing reference-only or scalar-only interface calls. This applies equally
+to structs and to the physical value storage registered for eligible inline enums.
+
+Normalization preserves the cached source IR. Dispatcher generation checks an existing signature and rebuilds its
+body from the current implementations, replacing that definition rather than appending a duplicate. Removing or adding
+an implementation therefore cannot leave a stale dispatch tree. Invalid receivers retain the checked throwing path;
+Dynamic/reflection escapes keep their semantic adapters.

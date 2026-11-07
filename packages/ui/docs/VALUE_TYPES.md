@@ -3464,3 +3464,144 @@ error log is retained. This was harness recovery, with no product change or repe
 
 Records and hashes are retained under `haxeon-flat-work/carrier-closure-gates`; raw captures are removed after extraction.
 Source inline-enum lowering and UI enum conversions remain unfinished.
+
+
+### Nongeneric interface calls preserve value carriers
+
+Control: `6f816201`; candidate: the shared value-interface normalization. A nongeneric interface method returning a
+struct with an Int and managed reference allocated two private value packets per HashLink call: 16 / 2,048 objects at
+8 / 1,024 calls, with inlining off or on. Selecting the existing typed dispatcher before scalar ABI selection removes
+both packets (0 / 0 in the same exact census). The same common policy replaces the enum prototype's local dispatcher
+selection; it passes all three targets with inlining on/off.
+
+The source fixture also exposed a correctness gap in the control: bound interface methods failed compilation with
+`Unknown or receiver-less IR closure target "ValueReader.read"`. The candidate handles direct and bound calls through
+inherited contracts, value arguments and results, replacement/copy independence, exceptions and managed references.
+HashLink exact bytes and Wasm32/Wasm GC object counts are zero in its measured loops at 8 / 1,024 calls, with both
+inlining settings. HashLink major GC runs before measurement; Wasm32 runs with GC stress. The IR test checks that source
+functions remain unchanged, reference-only methods retain their calls, direct/bound uses share dispatchers, signature
+mismatches are rejected, and regenerated bodies do not retain a removed implementation. Scalar-only specialization is
+unchanged and remains in roadmap item a2. Source inline-enum activation and UI conversions remain unfinished.
+
+The first self-hosting attempt rejected an implementation check with
+`IrTypedInterfaceDispatch.hx:42:10: E1025: Enum "compiler.ir.IrInstruction" does not conform to Equatable`.
+Host Haxe accepted an enum-identity comparison used to detect replacements; the compiler's own value-equality rules
+correctly rejected it. Normalization now records an explicit replacement flag. No enum conformance or equality rule
+was changed. The failed source/logs are retained; affected gates run again on the corrected source.
+
+A second self-hosting check reported `IrTypedInterfaceDispatch.hx:179:19: E1014: Array index must be Int` at the nullable
+map lookup used to replace a dispatcher. Generation now explicitly checks the lookup before indexing. This preserves
+the consistency check and source-level null safety; it does not use a cast or relax the verifier. Both failed attempts
+are retained separately from final-source validation.
+
+Paired measurements use control `6f816201` and frozen outer `46044a2712525a635588feb4572fa0f2053dc06c` on the same machine.
+Nine alternating pairs give the following medians (KiB use the refill-quantized counter). Every scheduled action capture
+and the separately scheduled final budget gate pass; no capture was replaced and no ceiling was raised.
+
+| Action | Control → candidate KiB | Control → candidate ms |
+|---|---:|---:|
+| tab-matrix/console->telemetry | 74.5 → 74.5 | 1.10 → 1.10 |
+| tab-matrix/hierarchy->sensors | 113 → 112.8 | 1.55 → 1.57 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.20 → 1.21 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.15 → 1.15 |
+| interaction/hover-away | 13.6 → 13.6 | 0.43 → 0.42 |
+| interaction/hover-enter | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-field | 10.9 → 12.4 | 0.43 → 0.43 |
+| interaction/hover-inside | 0.5 → 0.5 | 0.00 → 0.00 |
+| interaction/hover-other | 10 → 10 | 0.42 → 0.41 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.72 → 0.71 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.41 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | not reported | 2.96 → 2.92 |
+
+Hover-field moves +1.5 KiB and hierarchy→sensors moves −0.2 KiB in the ordinary counter despite byte-identical program
+images. Three additional alternating census-enabled pairs per scenario give these exact rounded-byte medians in
+**every** run. Tab medians use 99 steady frames per action from 100 cycles; interaction uses the harness’s last 75
+samples from 100 cycles. Census timing is not mixed with ordinary timing.
+
+| Scenario / action | Control exact bytes | Candidate exact bytes |
+|---|---:|---:|
+| tab-matrix/hierarchy->sensors | 115,136 | 115,136 |
+| tab-matrix/sensors->hierarchy | 81,384 | 81,384 |
+| tab-matrix/console->telemetry | 75,800 | 75,800 |
+| tab-matrix/telemetry->console | 94,520 | 94,520 |
+| interaction/hover-enter | 1,288 | 1,288 |
+| interaction/hover-inside | 1,288 | 1,288 |
+| interaction/hover-other | 9,816 | 9,816 |
+| interaction/hover-field | 11,248 | 11,248 |
+| interaction/hover-away | 12,664 | 12,664 |
+| interaction/scroll-inspector | 21,744 | 21,744 |
+| interaction/idle | 840 | 840 |
+| interaction/type-char | 16,440 | 16,440 |
+| interaction/type-backspace | 16,696 | 16,696 |
+| interaction/idle-focused | 840 | 840 |
+
+All six tab censuses have exactly 968,681 objects, including 755,734 non-byte-buffer objects / 54,315,768 corresponding
+bytes. All six corrected interaction censuses have exactly 782,489 objects, including 552,783 non-byte-buffer objects /
+37,722,320 corresponding bytes. Raw byte-buffer totals vary between captures. Exact action-window bytes tie; neither
+ordinary-counter movement is treated as a changed program allocation or a permanent improvement to budget against.
+
+Selection-stress census (30 cycles), objects / bytes:
+
+| Pair | Control | Candidate |
+|---|---:|---:|
+| 1 | 340,911 / 24,012,592 | 340,911 / 24,012,704 |
+| 2 | 340,910 / 24,012,376 | 340,912 / 24,012,808 |
+| 3 | 340,910 / 24,012,368 | 340,911 / 24,012,600 |
+
+All six selection captures have exactly 305,725 non-byte-buffer objects / 21,594,968 corresponding bytes. Differences
+in total objects/bytes are raw byte buffers, retained without a site attribution.
+
+Three paired 500-cycle headless RSS windows, MiB:
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 30 / 4.06 / 0.62 / 5 | 30 / 3.59 / 0.78 / 4.84 |
+| 2 | 30 / 3.59 / 0.78 / 5 | 30.16 / 3.44 / 0.62 / 5 |
+| 3 | 30 / 3.91 / 1.09 / 4.84 | 30.16 / 4.22 / 0.78 / 5 |
+
+Paired median deltas are +0.16 / −0.15 / −0.16 / 0.00 MiB. All six memory gates pass. The positive first-window
+observation is retained; byte-identical program, VM and runtime artifacts provide no changed memory path to attribute
+it to.
+
+All 36 Wasm GC scene captures and six Wasm32 full-scene captures complete. Object counts tie in every Wasm GC capture:
+4,440 in full/static/text-heavy and 8,724 in editing. Frame median / p95 observations (ms):
+
+| Target / scene | Control → candidate median / p95 |
+|---|---:|
+| wasm-gc/editing | 2.3 / 4.1 → 2.2 / 3.9 |
+| wasm-gc/full | 2.2 / 4.2 → 2.1 / 3.9 |
+| wasm-gc/static | 1.8 / 3.0 → 1.8 / 2.9 |
+| wasm-gc/text-heavy | 2.0 / 3.8 → 2.0 / 3.6 |
+| wasm32/full | 2.1 / 3.7 → 2.1 / 3.5 |
+
+All five artifacts are byte-identical to control and retain the previous checkpoint’s SHA-256 hashes:
+
+| Artifact | Control = candidate bytes |
+|---|---:|
+| profile-candidate.hl | 99,957,149 |
+| candidate-webgc.wasm | 5,808,484 |
+| candidate-web32.wasm | 11,810,665 |
+| candidate-libhl.so | 892,080 |
+| candidate-runtime.hdll | 562,576 |
+
+Self-hosting BodyTyped observations (ms), control → candidate: seed 228.15 → 226.58; stage 1 50.65 → 50.64; stage 2
+48.72 → 47.84. Framework compile observations are 492.04 → 525.28 seconds; this slower single observation is retained.
+These are single observations, without a change-specific timing attribution.
+
+The first interaction diagnostic reused the tab timeline extractor, but interaction stores its byte summaries in
+`interaction.json`; its timeline allocation fields are null. Six original diagnostic records retain whole-scenario
+object counts with empty action maps. The corrected parser reads `interaction.json`, requires all ten actions, and
+then deletes each raw capture after recording the numbers. Three fresh diagnostic pairs supply the interaction byte
+table above; the original ordinary action measurements were neither overwritten nor rerun. The parser error and its
+original records are retained on disk.
+
+Final-source validation: self-hosting fixed point; 799 compiler tests, 0 failures; all ten UI scripts; 511 parity
+fixtures with 14 existing skips; six UI snapshots; app suite; nine retention scenarios; all eighteen action captures and
+the final budget gate; six memory gates; 42 browser captures; three exact-byte pairs each for tabs and interaction.
+The two corrected self-hosting errors above remain documented. All final-source gates pass. Source enum activation
+and UI enum conversions remain unfinished.
+
+Records and hashes are retained under `haxeon-flat-work/interface-value-gates`; raw captures are removed after extraction.

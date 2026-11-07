@@ -534,6 +534,7 @@ class IrProgramAssembler {
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
 		if (objects != null && interfaces != null) {
+			allFunctions = IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces);
 			var beforeTypedInterfaces = allFunctions.length;
 			IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces);
 			if (allFunctions.length > beforeTypedInterfaces) {

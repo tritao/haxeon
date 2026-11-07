@@ -1,10 +1,60 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.SourceProvenance.Located;
 
-/** Closed-world typed entry points for generic interface calls and bound methods. */
+/** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 class IrTypedInterfaceDispatch {
 	public static inline final PREFIX = "$typed-interface:";
+
+	/** Select the value ABI after physical value layouts are known, including nongeneric contracts. */
+	public static function rewriteValueCalls(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>):Array<IrFunction> {
+		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true],
+			contracts:Map<String, Bool> = [for (entry in interfaces) entry.name => true];
+		function isValue(type:IrType):Bool return switch type { case Obj(name): values.exists(name); default: false; };
+		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
+			return isValue(result) || Lambda.exists(arguments, isValue);
+		var rewritten:Array<IrFunction> = [];
+		for (fn in functions) {
+			var blocks:Array<IrBlock> = [], changed = false;
+			for (block in fn.blocks) {
+				var target = new IrBlock(block.id);
+				for (located in block.instructions) {
+					var replaced = false;
+					var instruction = switch located.value {
+						case MethodCall(output, receiver, method, arguments, _):
+							switch receiver.type {
+								case Virtual(name):
+									var carriesValue = isValue(output.type);
+									for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
+									if (!carriesValue) located.value;
+									else {
+										replaced = true;
+										Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments));
+									}
+								default: located.value;
+							}
+						case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
+							var separator = name.lastIndexOf(".");
+							if (separator < 0 || !contracts.exists(name.substr(0, separator))) located.value;
+							else switch [receiver.type, output.type] {
+								case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
+									replaced = true;
+									InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver);
+								default: located.value;
+							}
+						default: located.value;
+					};
+					if (!replaced) target.instructions.push(located);
+					else { changed = true; target.instructions.push(new Located(instruction, located.provenance)); }
+				}
+				target.terminator = block.terminator;
+				blocks.push(target);
+			}
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+		}
+		return rewritten;
+	}
 
 	public static function callName(interfaceName:String, method:String, arguments:Array<IrType>, result:IrType):String {
 		var signature = Std.string(arguments) + ":" + Std.string(result);
@@ -33,7 +83,8 @@ class IrTypedInterfaceDispatch {
 		}
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			byFunction:Map<String, IrFunction> = [for (fn in functions) fn.name => fn];
+			byFunction:Map<String, IrFunction> = [for (fn in functions) fn.name => fn],
+			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;
 			if (visited.exists(actual)) return false;
@@ -81,6 +132,13 @@ class IrTypedInterfaceDispatch {
 			if (parts.length != 3 || signature == null || signature.arguments.length == 0) throw 'Invalid typed interface dispatch "$name"';
 			var interfaceName = parts[0], method = parts[1], receiverType = signature.arguments[0];
 			if (!IrVerifier.sameType(receiverType, Virtual(interfaceName))) throw 'Invalid typed interface receiver for "$name"';
+			var existing = byFunction.get(name);
+			if (existing != null) {
+				if (!IrVerifier.sameType(existing.result, signature.result) || existing.arguments.length != signature.arguments.length)
+					throw 'Conflicting typed interface dispatch "$name"';
+				for (index in 0...signature.arguments.length)
+					if (!IrVerifier.sameType(existing.arguments[index].type, signature.arguments[index])) throw 'Conflicting typed interface dispatch "$name"';
+			}
 			var candidates = [for (object in objects) if (!object.isValue && implementsInterface(object, interfaceName)) object];
 			candidates.sort((a, b) -> { var order = depth(b) - depth(a); return order == 0 ? Reflect.compare(a.name, b.name) : order; });
 			var builder = new IrBuilder(), receiver = builder.argument("receiver", receiverType),
@@ -116,7 +174,13 @@ class IrTypedInterfaceDispatch {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks));
+			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks);
+			if (existing == null) functions.push(generated);
+			else {
+				var index = functionIndices.get(name);
+				if (index == null) throw 'Missing typed interface dispatcher index "$name"';
+				functions[index] = generated;
+			}
 		}
 	}
 }
