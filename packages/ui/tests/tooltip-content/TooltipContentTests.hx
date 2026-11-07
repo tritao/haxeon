@@ -64,6 +64,40 @@ class TooltipContentTests {
     check(!visible(root.children[1]), "leaving the anchor did not hide the inline tooltip");
     check(hints(root) == 0, "the hidden inline tooltip kept its content");
 
+    // An inline tooltip overlapping the previous row must not trap hover or clicks.
+    var clicks = 0;
+    var target = new Tooltip("previous", new Button("Previous", null, () -> clicks++), new Text("Previous hint"));
+    var source = new Tooltip("overlap", new Button("Next"), new Text("Hint"));
+    var pair = new haxeon.ui.widgets.layout.Column("pair", [
+      new haxeon.ui.widgets.KeyedView("target", target),
+      new haxeon.ui.widgets.KeyedView("source", source)
+    ]);
+    root = ui.submit(pair, frame);
+    var sourceBounds = root.children[1].children[0].globalBounds();
+    ui.pointerMove(sourceBounds.x + 4, sourceBounds.y + sourceBounds.height / 2);
+    root = ui.submit(pair, frame);
+    var overlay = root.children[1].children[1];
+    check(visible(overlay), "the overlapping tooltip did not appear");
+    var targetBounds = root.children[0].globalBounds();
+    var overlayBounds = overlay.globalBounds();
+    var px = Math.max(targetBounds.x, overlayBounds.x) + 4;
+    var py = Math.max(targetBounds.y, overlayBounds.y) + 4;
+    check(px < Math.min(targetBounds.x + targetBounds.width, overlayBounds.x + overlayBounds.width)
+      && py < Math.min(targetBounds.y + targetBounds.height, overlayBounds.y + overlayBounds.height),
+      "the regression fixture must overlap the neighbouring button");
+    var path = haxeon.ui.core.HitTest.path(root, px, py);
+    check(path.indexOf(root.children[0]) >= 0 && path.indexOf(overlay) < 0,
+      "the tooltip intercepted its neighbour's hit target");
+    ui.pointerMove(px, py);
+    ui.pointerDown(px, py, 0);
+    ui.pointerUp(px, py, 0);
+    check(clicks == 1, "the neighbouring button cannot be clicked through the tooltip");
+    root = ui.submit(pair, frame);
+    check(!visible(root.children[1].children[1]), "the old tooltip stayed visible after moving to its neighbour");
+    check(visible(root.children[0].children[1]), "the neighbouring tooltip did not replace the old tooltip");
+    ui.clearFocus();
+    ui.pointerLeave();
+
     // Side-placed tooltip: shown after its hover delay, placed inside the viewport.
     for (placement in [TooltipPlacement.Below, TooltipPlacement.Above, TooltipPlacement.Right]) {
       var side = new Tooltip("side-" + Std.string(placement), new Button("Anchor"), new Text("Hint"));
@@ -91,6 +125,12 @@ class TooltipContentTests {
       ui.pointerMove(250.0, 190.0);
       root = settle(ui, side, frame, 0.2, 6, function(tree) return hints(tree) == 0);
       check(hints(root) == 0, "a " + Std.string(placement) + " tooltip kept its content after the pointer left");
+      check(ui.focusWidget(root.children[0].id), "the tooltip anchor cannot receive keyboard focus");
+      root = ui.submit(side, frame);
+      check(hints(root) == 1, "keyboard focus did not show the tooltip");
+      ui.clearFocus();
+      root = ui.submit(side, frame);
+      check(hints(root) == 0, "the tooltip stayed visible after keyboard focus left");
     }
     Sys.println("PASS: tooltip content is built only while shown, and shown tooltips are placed");
     fonts.dispose();

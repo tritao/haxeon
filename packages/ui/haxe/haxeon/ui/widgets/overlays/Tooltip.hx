@@ -8,13 +8,15 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
+import haxeon.ui.core.HitTestBehavior;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleTarget;
+import haxeon.ui.style.StyleState;
 
-/** Hover-triggered tooltip layered above its anchor with persistent Haxe state. */
+/** Informational tooltip layered above its anchor. Content never participates in pointer hit testing. */
 class Tooltip implements View {
 	/** Preferred side. Null preserves explicit x/y positioning. */
 	public var placement:Null<TooltipPlacement> = null;
@@ -79,12 +81,13 @@ class Tooltip implements View {
 		if (placement != null) return buildPositioned(context);
 		return context.withScope(key, function() {
 			var state:State<Bool> = context.state(context.id("visible"), false);
+			var focused = context.state(context.id("focused"), false);
 			var pointer = context.resourceState(context.id("pointer-state"), function() return new TooltipPointerState(), function(_) {}).value;
 			if (pointer.dismissRevision != dismissRevision) {
 				pointer.dismissRevision = dismissRevision;
 				pointer.suppressed = true;
 			}
-			var visible = state.value && !pointer.suppressed;
+			var visible = (state.value || focused.value) && !pointer.suppressed;
 			// Preserve signed zero for explicit coordinates rather than treating -0 as the default +0.
 			var defaultPosition = x == 0.0 && 1.0 / x > 0.0 && y == -28.0;
 			var tooltipStyle = defaultPosition ? (visible ? DefaultVisibleStyle : DefaultHiddenStyle) :
@@ -133,6 +136,7 @@ class Tooltip implements View {
 				}
 			});
 			anchorNode.on(UiEventKind.HoverEnter, function(_) {
+				focused.update(false);
 				pointer.suppressed = false;
 				state.update(!requirePointerMovement && (showWhen == null || showWhen()));
 			});
@@ -144,9 +148,14 @@ class Tooltip implements View {
 					state.update(true);
 				}
 			});
+			anchorNode.on(UiEventKind.Focus, function(_) {
+				pointer.suppressed = false;
+				focused.update((context.interactionStates.get(anchorNode.id) & StyleState.Hovered) == 0 && (showWhen == null || showWhen()));
+			});
+			anchorNode.on(UiEventKind.Blur, function(_) { focused.update(false); });
+			anchorNode.on(UiEventKind.FocusLost, function(_) { focused.update(false); });
 			anchorNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
-			tooltipNode.on(UiEventKind.HoverEnter, function(_) { state.update(true); });
-			tooltipNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
+			tooltipNode.hitTestBehavior = HitTestBehavior.None;
 			root.hitTestSelf = false;
 			return root;
 		});
@@ -175,6 +184,7 @@ class Tooltip implements View {
 	function buildPositioned(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var state = context.resourceState(context.id("visible"), function() return false, function(_) {});
+			var focused = context.state(context.id("focused"), false);
 			var delay = context.resourceState(context.id("hover-delay"),
 				function() return new TooltipHoverDelay(context.animations, function(value) { state.update(value); }, delaySeconds),
 				function(value) value.dispose()).value;
@@ -192,7 +202,7 @@ class Tooltip implements View {
 			tipStyle.overlay = true;
 			tipStyle.positionY = 44;
 			tipStyle.clipToParent = false;
-			tipStyle.visible = hoverGroup == null ? state.value : groupVisible;
+			tipStyle.visible = focused.value || (hoverGroup == null ? state.value : groupVisible);
 			tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
 			var tipId = context.id("tooltip");
 			var computed = context.resolveStyle(new StyleTarget("tooltip", key.value, key.value, null, ["tooltip"],
@@ -246,9 +256,15 @@ class Tooltip implements View {
 				}
 			});
 			// The overlay must never extend the tab's hover area into the editor.
-			tip.walk(function(node) { node.hitTestSelf = false; });
+			tip.hitTestBehavior = HitTestBehavior.None;
 			root.add(tip);
+			header.on(UiEventKind.Focus, function(_) {
+				focused.update((context.interactionStates.get(header.id) & StyleState.Hovered) == 0 && (showWhen == null || showWhen()));
+			});
+			header.on(UiEventKind.Blur, function(_) { focused.update(false); });
+			header.on(UiEventKind.FocusLost, function(_) { focused.update(false); });
 			header.on(UiEventKind.HoverEnter, function(_) {
+				focused.update(false);
 				if (hoverGroup != null) hoverGroup.enter(key.value); else delay.start();
 			});
 			header.on(UiEventKind.HoverLeave, function(_) {
