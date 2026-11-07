@@ -44,6 +44,7 @@ class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 
 	final tokens:Array<Token>;
+	final finalLocals:Map<String, Bool> = [];
 	var position:Int = 0;
 
 	/** Braceless `try` bodies being parsed: their last statement may omit the semicolon before `catch`. */
@@ -647,6 +648,7 @@ class Parser {
 			appendStatements(statements, parseStatements());
 			end = statementSpan(statements[statements.length - 1]);
 		}
+		compiler.types.analysis.FinalLocalChecker.check(arguments, statements, finalLocals);
 		return {
 			name: name,
 			isStatic: isStatic,
@@ -1346,16 +1348,20 @@ class Parser {
 	}
 
 	function parseStatements():Array<AstStatement> {
-		if (!check(TokenKind.Var))
+		if (!check(TokenKind.Var) && !check(TokenKind.Final))
 			return [parseStatement()];
+		var immutable = check(TokenKind.Final);
 		var start = advance().span, declarations = [];
 		do {
 			var nameToken = consume(TokenKind.Identifier),
 				type = match(TokenKind.Colon) ? parseType() : null;
 			if (match(TokenKind.Assign)) {
 				var initializer = parseAnchoredExpression(nameToken.text + "=");
-				declarations.push(VarDeclaration(nameToken.text, type, initializer, start.merge(expressionSpan(initializer))));
+				var span = start.merge(expressionSpan(initializer));
+				declarations.push(VarDeclaration(nameToken.text, type, initializer, span));
+				if (immutable) finalLocals.set(compiler.types.analysis.BindingWalker.key(nameToken.text, span), true);
 			} else {
+				if (immutable) fail(current(), "Local final declarations require an initializer");
 				// Without an annotation, the typer takes the type from the first assignment, as Haxe does.
 				declarations.push(UninitializedDeclaration(nameToken.text, type == null ? InferredType : type, start.merge(previous().span)));
 			}

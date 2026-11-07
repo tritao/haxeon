@@ -71,6 +71,7 @@ class TestCatalog {
 		"FieldAliasFlowMain",
 		"MemberModuleShadowMain",
 		"FinalFieldMain",
+		"FinalLocalMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",
 		"DeclaredEqualityInliningMain",
