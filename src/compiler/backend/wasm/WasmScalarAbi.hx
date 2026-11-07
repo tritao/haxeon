@@ -72,6 +72,7 @@ class WasmScalarAbi {
 				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
 			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
+					&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)

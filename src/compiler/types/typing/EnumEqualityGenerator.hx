@@ -11,11 +11,18 @@ import haxe.crypto.Sha256;
 
 /** Generates declared enum equality and the separate structural Type.enumEq operation. */
 class EnumEqualityGenerator {
+	public static inline final EQUALS_PREFIX = "$enum-equals:";
+	public static inline final REFLECTIVE_PREFIX = "$enum-reflect-equals:";
+
+	/** Both generated operations keep a semantic value signature when eligible enums become inline values. */
+	public static function isEqualityName(name:String):Bool
+		return StringTools.startsWith(name, EQUALS_PREFIX) || StringTools.startsWith(name, REFLECTIVE_PREFIX);
+
 	public static function equalsName(type:CompilerType):String
-		return "$enum-equals:" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return EQUALS_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
 	public static function reflectiveName(type:CompilerType):String
-		return "$enum-reflect-equals:" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return REFLECTIVE_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void
 		requestNamed(session, equalsName(type), type, origin, span);

@@ -96,6 +96,7 @@ class TestCatalog {
 		"InlineEnumCarrierArrayMain",
 		"InlineEnumArrayLayoutMain",
 		"InlineEnumLogicalArrayMain",
+		"InlineEnumEqualityAbiMain",
 		"InlineEnumPointerWordMain",
 		"WasmLinearValueArrayAccessMain",
 		"ValueArrayAccessMain",

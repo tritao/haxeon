@@ -32,6 +32,7 @@ class IrScalarArguments {
 				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
 				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
+				&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
 				&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;

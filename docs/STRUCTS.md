@@ -416,6 +416,12 @@ as struct arrays, preserving aliases. Wasm GC validates both the logical enum ty
 before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
 reference-array operations on enum lane arrays as well as struct lane arrays.
 
+Declared and reflective enum equality helpers participate in the same scalar/reference value-call ABI as other
+generated value functions. Their naming policy is owned by `EnumEqualityGenerator` and shared by HashLink's scalar
+argument rewrite and the Wasm value ABI. Eligible inline enum equality and checked unboxing retain value packets in
+leaves across those calls; genuine Dynamic materialization still creates the nominal boxed enum. This transport rule
+does not enable source inline storage by itself or relax place-snapshot ownership checks.
+
 Dynamic writes and insertions snapshot all checked scalar and reference leaves before changing the destination.
 The shared lane policy then prepares capacity and any missing reference backing in one storage transaction, shifts
 an insertion if needed, and commits those leaves. A failed conversion preserves the original length, contents and

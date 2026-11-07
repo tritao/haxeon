@@ -3085,3 +3085,95 @@ skips); six UI snapshots; the app suite; nine retention scenarios; all budget ru
 all browser pairs above. The first compiler-suite attempt exposed three synthetic/native test bridges still using the
 old callback protocol. They were ported, retaining exception, alias, GC and missing-barrier assertions, and the full
 suite was rerun after that correction. Source inline-enum lowering and the remaining semantic ABI work are unfinished.
+
+
+### Enum equality uses the ordinary value ABI
+
+Control: `098fa40a`; candidate: the next equality-helper classification change. The generated-function filters in
+`IrScalarArguments` and `WasmScalarAbi` omitted declared and reflective enum equality, although the Wasm backend
+already had the general scalar/reference argument and result ABI. Both filters now use the naming predicate owned
+by `EnumEqualityGenerator`. The ownership guard, receiver rules and ordinary inlining policy are unchanged.
+
+The three-target IR fixture uses concrete inline enum storage, managed reference payloads, null and empty cases,
+declared and reflective equality, and checked Dynamic round trips. Both inlining modes produce the same census:
+
+| Measure, all three targets | 8 calls, control → candidate | 1,024 calls, control → candidate |
+|---|---:|---:|
+| Typed equality objects | 0 → 0 | 0 → 0 |
+| Equality after two genuine Dynamic round trips | 32 → 16 | 4,096 → 2,048 |
+
+An overlay of the old two filters fails the strict new test on every target/mode combination. The separate ordinary
+struct fixture checks multiple value arguments, a field snapshot before another argument mutates its owner, mutable
+receivers and a genuine Dynamic escape. Its warmed census already measured zero before this change; this fix does
+not broaden ownership analysis. The external source enum probe drops from seven to two allocations per call on both
+Wasm targets without forced inlining. Source inline-enum activation and the remaining logical/physical ABI work are
+still pending.
+
+The full comparison freezes outer `46044a271` on both sides. Editor module, Showcase modules, VM and runtime are
+byte-for-byte identical between control and candidate: this checkpoint changes the eligible inline-enum helper path,
+which source application lowering does not activate yet. Nine alternating action pairs report:
+
+| Action | KiB control → candidate | Median ms control → candidate |
+|---|---:|---:|
+| tab-matrix/console->telemetry | 72.5 → 74.5 | 1.1 → 1.11 |
+| tab-matrix/hierarchy->sensors | 112.8 → 113 | 1.57 → 1.58 |
+| tab-matrix/sensors->hierarchy | 80.1 → 80.1 | 1.21 → 1.22 |
+| tab-matrix/telemetry->console | 92.9 → 92.9 | 1.16 → 1.16 |
+| interaction/hover-away | 13.6 → 13.6 | 0.42 → 0.42 |
+| interaction/hover-enter | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-field | 10.9 → 10.9 | 0.43 → 0.43 |
+| interaction/hover-inside | 0.5 → 0.5 | 0 → 0 |
+| interaction/hover-other | 10 → 10 | 0.42 → 0.41 |
+| interaction/idle | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/idle-focused | 0.2 → 0.2 | 0.01 → 0.01 |
+| interaction/scroll-inspector | 21.2 → 21.2 | 0.71 → 0.71 |
+| interaction/type-backspace | 16.2 → 16.2 | 0.42 → 0.41 |
+| interaction/type-char | 16.1 → 16.1 | 0.42 → 0.42 |
+| selection-stress/selection | not measured | 2.93 → 2.96 |
+
+The increased tab counters above are observations from identical executable artifacts, not an introduced allocation
+path. No ceiling changes and no replacement runs were used. A separate census-enabled
+three-pair tab check gives identical exact bytes in every action window: hierarchy→sensors 115,136;
+sensors→hierarchy 81,384; console→telemetry 75,800; telemetry→console 94,520. Census mode disables the refill
+fast path, so these are exact allocated bytes, confirming that the normal KiB movement is buffer accounting.
+The extraction script initially encountered a null cycle on an unmeasured frame; it was corrected and consumed
+the already completed capture, without replacing that measurement. Three selection census pairs record:
+
+| Pair | Objects control → candidate | Bytes control → candidate |
+|---|---:|---:|
+| 1 | 340911 → 340912 | 24012624 → 24012792 |
+| 2 | 340910 → 340909 | 24012288 → 24011992 |
+| 3 | 340909 → 340912 | 24011952 → 24012544 |
+
+Every non-byte type ties in all three pairs (305,725 objects / 21,594,968 bytes). The differing byte buffers and measured
+RSS variation occur with the same module, VM and runtime hashes. Six memory captures pass; their four RSS windows (MiB):
+
+| Pair | Control | Candidate |
+|---|---|---|
+| 1 | 29.84 / 4.06 / 0.78 / 5 | 30.16 / 3.59 / 0.94 / 4.84 |
+| 2 | 30.31 / 4.06 / 0.78 / 4.84 | 29.69 / 4.22 / 0.78 / 5 |
+| 3 | 30 / 3.59 / 0.62 / 4.84 | 30.62 / 3.44 / 0.94 / 6.25 |
+
+Paired median deltas are +0.32 / −0.15 / +0.16 / +0.16 MiB, retained without retries. The third candidate's last window
+is 6.25 MiB; it passes the unchanged gate. These are same-image observations, not evidence of a layout memory increase.
+
+All 36 Wasm GC captures and six Wasm32 captures complete without timeout. Full/static/text-heavy scenes keep 4,440
+objects; editing keeps 8,724. Frame medians / p95 (ms), control → candidate:
+
+| Target / scene | Median / p95 |
+|---|---:|
+| wasm-gc/editing | 2.6 / 5.4 → 2.9 / 5.2 |
+| wasm-gc/full | 2.3 / 4.3 → 2.2 / 4.3 |
+| wasm-gc/static | 2.1 / 3.8 → 1.9 / 3.5 |
+| wasm-gc/text-heavy | 2.3 / 4.5 → 2.3 / 4.6 |
+| wasm32/full | 2.4 / 4.5 → 2.3 / 4.6 |
+
+No timing improvement is attributed to this change: the actual application artifacts tie. Editor stays 99,957,149 bytes
+(SHA256 `89c9d7b7cf31ee776b6f70177a10e7bcde3f6b24b60f54e7e76bd1eeb1830c6b`), Wasm GC 5,808,484 bytes
+(`24f2a3a31d18d28769165a80e35336155ef2b317b36b29b187e95aa70877b8ea`), Wasm32 11,810,665 bytes
+(`3b1e48cc20dc72fa5724d2e727d4d2f2f51500d4048f95a0ddb84e62113c667b`). Every paired row and artifact hash is
+retained in the disk measurement record; raw captures are removed after extracting their numbers.
+
+Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI scripts; 509 parity fixtures with 14
+existing skips; six UI snapshots; app suite; nine retention scenarios; budgets and six headless memory captures;
+all browser pairs above. Source inline-enum lowering and the UI enum conversions remain unfinished.
