@@ -463,6 +463,38 @@ and reference-slot layout. Existing payload-enum comparisons declare conformance
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline
 enum lowering remains pending.
 
+### Source inline enum activation: remaining blockers
+
+Inventory at `530bda5a`. Source enums still use boxed storage; the source-lowering experiment is preserved on disk,
+outside the production pipeline. Sizes describe scope, not elapsed time: **S** is a local change, **M** is a cross-cutting
+compiler change, and **L** spans multiple semantic/runtime boundaries. Update this list as each item lands.
+
+| ID | Remaining work | Size | Needed for the first subset? |
+|---|---|---|---|
+| E1 | Classify each enum from its concrete schema and reachable uses, including escapes through enclosing values, owners, containers and callbacks, with one consistent representation per program. | M | Yes |
+| E2 | Connect production construction, null/tag tests, matching, payload projection, joins and copy snapshots to the existing lane helpers, preserving canonical source IR, program metadata and incremental storage/reload checks. | M | Yes |
+| E3 | Complete allocation-free ordinary class/virtual/bound value calls, including inheritance, without introducing globally sized per-class typed tables. | L | Only for enums crossing those call forms |
+| E4 | Carry nullable result presence/scalar/reference leaves through escaping typed closures; the reproduced HashLink path still boxes. | M | Only for enums crossing that call form |
+| E5 | Replace the experiment's program-wide C-native rejection with checks of actual enum-exposing native/host/export boundaries, retaining unrelated native declarations. | S | Yes |
+| E6 | Complete nominal Dynamic, reflection, thrown-value and native escape adapters without extra temporary packets. | L | No; exclude unsupported escapes initially |
+| E7 | Connect logical enum descriptors through source closure signatures, reflected fields and erased container views without exposing private packet types; array/iterator lane associations are tested already. | M | Only for uses admitted by the first subset |
+| E8 | Carry enum value representations through generic owners/functions and their erased semantic descriptors; concrete payload schemas are retained already, but schema retention alone does not specialize their transport. | L | No; exclude unsupported generic uses initially |
+| E9 | Gate activated source forms on all targets/inlining modes, cached/edited builds and GC roots, and show a real editor allocation decrease without action or RSS regressions. | M | Yes |
+
+The first activation need not wait for E3/E4 and E6–E8 in their entirety. Start with a bounded, documented eligibility rule for
+finite concrete enums whose admitted uses have verified value storage and call ABIs and no unsupported Dynamic,
+reflection or native escape. A boundary through an enclosing object, container or closure counts too. An enum outside
+that eligibility rule keeps the existing boxed representation consistently; do not insert per-call boxing fallbacks
+into an otherwise inline typed path or add a feature flag/parallel implementation. By-value recursion and the
+disproportionately large-case rule above remain the permanent layout exclusions. Record the exact initial eligibility
+rule with E1/E2, then widen it one blocker at a time and keep this inventory current.
+
+The existing tag/scalar/reference planner, case access, declared equality/hash generation, logical array storage,
+checked lane verifier and constant-time interface dispatch are foundations to reuse, not additional activation projects.
+UI enum conversion follows source activation as its own measured commits; it is not a prerequisite for the first
+allocation improvement. Unrelated generic-owner correctness work is not an activation prerequisite unless an admitted
+enum use actually crosses that boundary.
+
 ### Enum equality checkpoint measurements (candidate)
 
 On the same machine, the starting baseline was Haxeon `ca255ae6` and outer `045d3585c`. The candidate keeps the
