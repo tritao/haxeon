@@ -5,6 +5,11 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
+#if !wasm
+@:hlNative("haxeon_runtime", "__reflect_class_name")
+extern function reflectClassName(object:Dynamic):Null<String>;
+#end
+
 /**
  * Which code and native libraries a running program was built from, for caches whose entries are only valid for the code that
  * computed them.
@@ -21,6 +26,47 @@ class CodeIdentity {
 	public static function ofModule(name:String):Null<String>
 		return CodeIdentityTable.lookup(name);
 
+	/** The runtime's qualified class name of `object`, or null for closures, records, null and on Wasm. */
+	public static function className(object:Dynamic):Null<String> {
+		#if wasm
+		return null;
+		#else
+		return reflectClassName(object);
+		#end
+	}
+
+	/**
+	 * The identity of the module that defines `object`'s concrete class (a subclass instance gives the subclass's module, whose
+	 * identity also covers its base classes' modules). A class that is not its module's main class (a private or nested class)
+	 * gives null: the runtime names it without its module, so it cannot be told from a class of that name elsewhere. A generic
+	 * instantiation gives its class's module identity. Classes in the root package are never identified, for the same reason
+	 * (a private class could share their name). Null also for closures, records, enums, null, classes outside the program, and on
+	 * Wasm (no runtime class names there).
+	 */
+	public static function ofObject(object:Dynamic):Null<String> {
+		#if wasm
+		return null;
+		#else
+		var name = reflectClassName(object);
+		if (name == null)
+			return null;
+		var generic = name.indexOf("<");
+		if (generic >= 0)
+			name = name.substr(0, generic);
+		if (name.indexOf(".") < 0)
+			return null;
+		while (true) {
+			var found = ofModule(name);
+			if (found != null)
+				return found;
+			var dot = name.lastIndexOf(".");
+			if (dot < 0)
+				return null;
+			name = name.substr(0, dot);
+		}
+		#end
+	}
+
 	/**
 	 * A fingerprint of the shared libraries of the native package `packageName` that this program loads (the content of
 	 * every library the build published for it, beside the program under `native/<package>`). Null when the program has no
@@ -32,6 +78,40 @@ class CodeIdentity {
 		var result = computeNativeBuild(packageName);
 		nativeBuilds.set(packageName, result);
 		return result;
+	}
+
+	/**
+	 * A fingerprint of the shared libraries this process has loaded whose file names start with `namePrefix` (their names and
+	 * sizes, not their locations): the same libraries installed somewhere else give the same value and a rebuilt one a different
+	 * value. For dependencies that live outside the program's own `native` directory (OCCT). Null where the loaded libraries
+	 * cannot be listed (anything but Linux) or none match; callers then rely on other identities.
+	 */
+	public static function loadedLibraries(namePrefix:String):Null<String> {
+		#if wasm
+		return null;
+		#else
+		if (Sys.systemName() != "Linux" || !FileSystem.exists("/proc/self/maps"))
+			return null;
+		var seen = new Map<String, Bool>();
+		var entries:Array<String> = [];
+		for (line in File.getContent("/proc/self/maps").split("\n")) {
+			var slash = line.indexOf("/");
+			if (slash < 0)
+				continue;
+			var path = line.substr(slash);
+			var name = Path.withoutDirectory(path);
+			if (!StringTools.startsWith(name, namePrefix) || seen.exists(path))
+				continue;
+			seen.set(path, true);
+			var meta = FileSystem.metadata(path);
+			if (meta != null)
+				entries.push(name + ":" + meta.size);
+		}
+		if (entries.length == 0)
+			return null;
+		entries.sort(Reflect.compare);
+		return Sha256.encode(entries.join("\n"));
+		#end
 	}
 
 	static function computeNativeBuild(packageName:String):Null<String> {

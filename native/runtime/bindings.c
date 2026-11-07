@@ -297,6 +297,7 @@ DEFINE_PRIM(_BOOL,__reflect_has_field,_DYN _STRING);
 DEFINE_PRIM(_BOOL,__reflect_delete_field,_DYN _STRING);
 DEFINE_PRIM(_I32,__reflect_field_count,_DYN);
 DEFINE_PRIM(_STRING,__reflect_field_name,_DYN _I32);
+DEFINE_PRIM(_STRING,__reflect_class_name,_DYN);
 DEFINE_PRIM(_DYN,__reflect_dynamic_object,_NO_ARG);
 DEFINE_PRIM(_BOOL,__reflect_is_function,_DYN);
 DEFINE_PRIM(_BOOL,__reflect_is_object,_DYN);

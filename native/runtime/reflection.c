@@ -128,6 +128,15 @@ HL_PRIM vstring *HL_NAME(__reflect_field_name)(vdynamic *object, int index) {
 	return name == NULL ? NULL : realtime_string_wrap(name, (int)ustrlen(name));
 }
 
+/* The qualified class name of an object (the declaring module for a main class), or NULL for a closure, a value or a record. */
+HL_PRIM vstring *HL_NAME(__reflect_class_name)(vdynamic *object) {
+	if (!object) return NULL;
+	hl_type *type = object->t;
+	if (type->kind == HVIRTUAL && ((vvirtual *)object)->value) type = ((vvirtual *)object)->value->t;
+	if (type->kind != HOBJ || !type->obj || !type->obj->name) return NULL;
+	return realtime_string_wrap((uchar *)type->obj->name, (int)ustrlen(type->obj->name));
+}
+
 HL_PRIM vdynamic *HL_NAME(__reflect_dynamic_object)(void) {
 	return (vdynamic *)hl_alloc_dynobj();
 }

@@ -225,6 +225,7 @@ class TestCatalog {
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
+		"CodeIdentityObjectMain",
 		"EqualityHelperEditMain",
 		"SharedEqualityHelperEditMain",
 		"SharedWireHelperEditMain",
