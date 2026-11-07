@@ -214,7 +214,7 @@ class HlWriter {
 		switch type {
 			case Object(_, _, _, fields, methods, bindings) | Structure(_, _, fields, methods, bindings):
 				writeObjectMembers(fields, methods, bindings);
-			case Virtual(fields): writeFields(fields);
+			case Virtual(name, fields): writeFields(fields);
 			case Enum(_, _, constructors): writeEnumConstructors(constructors);
 			default:
 		}
@@ -525,8 +525,9 @@ class HlWriter {
 			case Structure(name, global, fields, methods, bindings):
 				output.writeByte(HlType.Struct);
 				writeObjectType(name, -1, global, fields, methods, bindings);
-			case Virtual(fields):
+			case Virtual(name, fields):
 				output.writeByte(HlType.Virtual);
+				writeIndex(name);
 				writeUnsignedIndex(fields.length);
 				writeFields(fields);
 			case Enum(name, global, constructors):

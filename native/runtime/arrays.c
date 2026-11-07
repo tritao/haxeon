@@ -1,5 +1,6 @@
 /* The compiler adds an unnamed virtual cache for every declared interface and its bases.
- * Match those exact types: HashLink's structural virtual-prefix cast also accepts unrelated interfaces. */
+ * A module-local type pointer is the fast path; a nominal contract identity survives module reloads.
+ * HashLink's structural virtual-prefix cast also accepts unrelated interfaces. */
 static bool realtime_implements( hl_type *object_type, hl_type *interface_type ) {
 	if( interface_type->kind != HVIRTUAL )
 		return false;
@@ -7,7 +8,10 @@ static bool realtime_implements( hl_type *object_type, hl_type *interface_type )
 		hl_type_obj *object = type->obj;
 		for( int index = 0; index < object->nfields; index++ ) {
 			hl_obj_field *field = object->fields + index;
-			if( field->t == interface_type && (field->name == NULL || field->name[0] == 0) )
+			if( (field->name == NULL || field->name[0] == 0) &&
+				(field->t == interface_type || (field->t->kind == HVIRTUAL && field->t->virt->nominal_identity != NULL
+				&& interface_type->virt->nominal_identity != NULL
+				&& ucmp(field->t->virt->nominal_identity, interface_type->virt->nominal_identity) == 0)) )
 				return true;
 		}
 		if( object->super == NULL )

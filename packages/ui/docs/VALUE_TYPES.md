@@ -3857,3 +3857,23 @@ and prefix method sets, inherited classes, base-interface views, Dynamic views a
 the interpreter and on all three targets with inlining off/on; its existing HashLink tracked loop remains allocation-free.
 Tier 1: 810 compiler tests, zero failures. Paired product measurements remain pending on the final batch head; the
 control runtime is retained separately. Records: `haxeon-flat-work/enum-first-batch-gates/nominal-interface`.
+
+### Interface conformance across live generations
+
+The review follow-up reproduced a real limit in the pointer-only fix: re-emitting the interface's source module and
+appending an implementing class preserve existing type pointers, but a full reload creates new pointers. A retained
+pre-patch object then failed the new module's conformance test (`Old object lost conformance after reload: 1`).
+Virtual types now carry a nominal contract identity in shared metadata (HLB 8 / HLP 11); the same-generation pointer
+comparison stays first. No instance fields, wrapper fields or global registries are added. The live regression retains
+both the old object and a cached interface view, checks inherited interfaces and casts/calls after each edit, forces a
+major GC while the old generation awaits retirement, rejects a same-shaped sibling and a changed contract, and drains
+the retirement backlog after release. The corrected test passes.
+
+Tier 1 on the final source: 811 compiler tests, zero failures, the six-mode nominal-interface fixture and the
+self-hosting fixed point. The first fixed-point run caught `HlSymbolTable.hx:441:50: E1014: Array index must be Int`
+from a nullable map lookup used as an index; using the existing typed index API fixes it. A strengthened reflection
+probe initially omitted the runtime intrinsic configuration; the final fixture configures the compiler explicitly.
+Neither diagnostic was accepted as a gate pass. BodyTyped observations (ms), callback checkpoint → this change:
+seed 216.86 → 223.43; stage 1 44.83 → 44.88; stage 2 46.08 → 46.37. These remain single-run observations; they do not
+establish a repeated-generator regression. Product Tier 2/3 comparisons remain pending after the
+separate tooltip deadline correction. Records: `haxeon-flat-work/enum-interface-identity`.

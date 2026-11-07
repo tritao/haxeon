@@ -68,7 +68,7 @@ class AddedClassPatchMain {
 		for (type in HlPatchReader.decode(changed.patchBytes).types)
 			switch type {
 				case Object(_, _, _, _, _, _): objects++;
-				case Virtual(_): virtuals++;
+				case Virtual(_, _): virtuals++;
 				default:
 			}
 		// Counter, Wide, Fixed, Heavy and the new lambda's environment; Weighted.

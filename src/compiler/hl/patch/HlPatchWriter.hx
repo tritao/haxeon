@@ -481,8 +481,9 @@ class HlPatchWriter {
 					h = hashBytes(intBytes(bindings.length), h);
 					for (binding in bindings)
 						h = hashBytes(intBytes(binding), h);
-				case Virtual(fields):
+				case Virtual(name, fields):
 					h = hashBytes(intBytes(HashLinkType.Virtual), h);
+					h = hashBytes(intBytes(name), h);
 					h = hashBytes(intBytes(fields.length), h);
 					for (field in fields) {
 						h = hashBytes(intBytes(field.name), h);
@@ -536,8 +537,9 @@ class HlPatchWriter {
 			case Structure(name, global, fields, methods, bindings):
 				out.writeByte(HashLinkType.Struct);
 				writeObjectType(out, name, -1, global, fields, methods, bindings);
-			case Virtual(fields):
+			case Virtual(name, fields):
 				out.writeByte(HashLinkType.Virtual);
+				writeIndex(out, name);
 				writeIndex(out, fields.length);
 				for (field in fields) {
 					writeIndex(out, field.name);

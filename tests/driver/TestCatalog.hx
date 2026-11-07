@@ -348,6 +348,8 @@ class TestCatalog {
 				"an unboxed dynamic value survives assignment in nested try blocks"),
 			hxmlCase("runtime", "jit-address-taken", "tests/hxml/jit-address-taken-test.hxml", "jit-address-taken-test.hl", 0,
 				"the JIT keeps reading locals whose address is passed to a callee from memory"),
+			hxmlCase("runtime", "nominal-interface-patch", "tests/hxml/nominal-interface-patch-test.hxml", "nominal-interface-patch-test.hl", 0,
+				"declared interfaces survive live patches and module reloads"),
 			hxmlCase("runtime", "typed-interface-patch", "tests/hxml/typed-interface-patch-test.hxml", "typed-interface-patch-test.hl", 0,
 				"typed class entries remain patchable"),
 			hxmlCase("runtime", "inline-patch", "tests/hxml/inline-patch-test.hxml", "inline-patch-test.hl", 0,

@@ -254,8 +254,11 @@ Dynamic is recognized by its signature-specific adapter without boxing its ordin
 
 Interface checks require declared conformance, including inherited base interfaces; a matching method shape does not
 establish conformance. HashLink records a virtual cache for each declared interface and every base interface. Runtime
-checks match those exact cache types and unwrap an interface view before checking its concrete object. HashLink's
-structural virtual-prefix cast is not a conformance test: it would accept an unrelated sibling interface with fewer
+checks match those exact cache types and unwrap an interface view before checking its concrete object. Across a full
+module reload, virtual types retain a stable nominal identity: the interface name plus a fingerprint of its declared
+methods and base-interface contracts. The identity lives in type metadata, in both development and release modules;
+it adds no fields to instances or interface wrappers. A pointer match remains the fast path within a generation.
+HashLink's structural virtual-prefix cast is not a conformance test: it would accept an unrelated sibling interface with fewer
 methods. This distinction also applies to interface values carried through Dynamic.
 
 HashLink stores function-valued data globals in typed nullable closure-reference slots (`HNULL(HFUN)`). The VM's raw

@@ -65,7 +65,8 @@ class HlValidator {
 						if (method.prototype < 0)
 							throw 'Invalid structure method prototype ${method.prototype}';
 					}
-				case Virtual(fields):
+				case Virtual(name, fields):
+					requireString(code, name, "virtual identity");
 					for (field in fields) {
 						requireString(code, field.name, "virtual field name");
 						requireType(code, field.type, "virtual field type");

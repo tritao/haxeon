@@ -412,7 +412,7 @@ class HlSymbolTable {
 					if (typeIndices.exists(baseKey)) {
 						var baseIndex = typeIndices.get(baseKey);
 						switch types[baseIndex] {
-							case Virtual(baseFields):
+							case Virtual(_, baseFields):
 								if (slot < baseFields.length)
 									fields[slot] = baseFields[slot];
 							default:
@@ -437,12 +437,23 @@ class HlSymbolTable {
 				throw 'Interface "$name" has an unassigned virtual slot';
 			} else
 				completeFields.push(field);
+		var contract = [name];
+		for (base in interfaceDecl.bases) {
+			var baseIndex = internType(IrType.Virtual(base));
+			switch types[baseIndex] {
+				case Virtual(baseIdentity, _): contract.push(strings[baseIdentity]);
+				default: throw 'Base interface "$base" has no virtual identity';
+			}
+		}
+		for (method in interfaceDecl.methods)
+			contract.push(method.name + ":" + Std.string(method.arguments) + "->" + Std.string(method.result));
+		var identity = internString(name + "#" + haxe.crypto.Sha256.encode(contract.join("\n")));
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
-			types[index] = Virtual(completeFields);
+			types[index] = Virtual(identity, completeFields);
 			pendingTypes.remove(key);
 		} else {
-			types.push(Virtual(completeFields));
+			types.push(Virtual(identity, completeFields));
 			typeIndices.set(key, index);
 		}
 		interfaceMethodIndices.set(name, slots);
