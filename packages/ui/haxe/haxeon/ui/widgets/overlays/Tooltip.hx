@@ -178,7 +178,7 @@ class Tooltip implements View {
 			var delay = context.resourceState(context.id("hover-delay"),
 				function() return new TooltipHoverDelay(context.animations, function(value) { state.update(value); }, delaySeconds),
 				function(value) value.dispose()).value;
-			delay.delaySeconds = delaySeconds;
+			delay.durationSeconds = delaySeconds;
 			var style = new LayoutStyle();
 			style.clipToParent = false;
 			if (fillAnchor) style.width = LayoutAxis.grow();

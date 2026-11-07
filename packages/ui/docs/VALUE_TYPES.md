@@ -3877,3 +3877,19 @@ Neither diagnostic was accepted as a gate pass. BodyTyped observations (ms), cal
 seed 216.86 → 223.43; stage 1 44.83 → 44.88; stage 2 46.08 → 46.37. These remain single-run observations; they do not
 establish a repeated-generator regression. Product Tier 2/3 comparisons remain pending after the
 separate tooltip deadline correction. Records: `haxeon-flat-work/enum-interface-identity`.
+
+### Waiting tooltip deadlines preserve retained rows
+
+The frozen app failure above was present in both compiler control and candidate. Its standalone `SceneTreeRow` probe
+showed the owner build count rising from 1 to 2 immediately on hover: starting `TooltipHoverDelay` incremented the
+scheduler's rebuilding revision while the tooltip was still waiting. The timer now implements the existing
+`DelayedAnimation` contract. Positive waits leave rebuilding state unchanged; crossing the deadline invalidates the
+view, while cancellation before the deadline removes the wait. The timer's configured duration is `durationSeconds`;
+`delaySeconds()` reports its remaining wait. All callers use the new form.
+
+The reduced app row now stays at one owner build across hover. Regression checks cover the wake deadline, unchanged
+revision while waiting, expiration, cancellation and an immediate deadline. Search-picker integration passes, as do
+all six UI snapshot target/inlining configurations and Tier 1 (811 compiler tests, zero failures). This is a correctness
+fix to invalidation, with no new ownership or caching mechanism. The full app gate and paired product measurements
+remain pending on this batch head. Records: `haxeon-flat-work/tooltip-deadlines` and
+`haxeon-flat-work/enum-first-batch-gates/hover-probe`.
