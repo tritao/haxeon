@@ -421,6 +421,11 @@ types keep the nominal enum descriptor; typed element operations use the registe
 checks that distinction on reads, writes, insertion/removal and iterator results. Recursive or oversized enums without
 inline storage retain ordinary reference arrays, including when both representations occur in the same program.
 
+Typed scalar closures use the same private callable ABI as direct scalar functions for traced reference leaves and
+raw result slots. The verifier requires exact component types and actual verified function targets; a native symbol
+cannot claim that ABI by borrowing its naming prefix. Dynamic and reflective escapes still require their logical
+adapters. Wasm's typed-call null-check helpers retain the private ABI when they forward these components.
+
 Declared and reflective enum equality helpers participate in the same scalar/reference value-call ABI as other
 generated value functions. Their naming policy is owned by `EnumEqualityGenerator` and shared by HashLink's scalar
 argument rewrite and the Wasm value ABI. Eligible inline enum equality and checked unboxing retain value packets in

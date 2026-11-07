@@ -84,8 +84,11 @@ class WasmDynamicCalls {
 							if (dynamicCall)
 								targets.set(Std.string(signature), signature);
 							var key = (dynamicCall ? "dynamic:" : "typed:") + Std.string(signature);
-							if (!helpers.exists(key))
-								helpers.set(key, callHelper("__haxeon_invoke_" + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction));
+							if (!helpers.exists(key)) {
+								var prefix = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature)
+									? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
+								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction));
+							}
 							var callee = closure;
 							if (dynamicCall) {
 								callee = temp(Dyn);

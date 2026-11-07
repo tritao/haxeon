@@ -305,12 +305,12 @@ class IrVerifier {
 		}
 
 		switch instruction {
-			case StaticClosure(output, name), InstanceClosure(output, name, _) if (scalarClosureType(output.type)
-				&& !StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+			case StaticClosure(output, name), InstanceClosure(output, name, _) if (IrScalarArguments.isPrivateClosureType(output.type)
+				&& !scalarFunctions.exists(name)):
 				throw "A scalar closure must target a verified scalar function";
-			case ToDyn(_, value) if (scalarClosureType(value.type)):
+			case ToDyn(_, value) if (IrScalarArguments.isPrivateClosureType(value.type)):
 				throw "A scalar closure cannot cross a Dynamic boundary without an adapter";
-			case SafeCast(output, value) if (scalarClosureType(output.type) || scalarClosureType(value.type)):
+			case SafeCast(output, value) if (IrScalarArguments.isPrivateClosureType(output.type) || IrScalarArguments.isPrivateClosureType(value.type)):
 				throw "A scalar closure cannot cross a cast boundary without an adapter";
 			default:
 		}
@@ -327,6 +327,7 @@ class IrVerifier {
 			case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
 			case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
 				|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
+			case CallClosure(_, closure, args) if (IrScalarArguments.isPrivateClosureType(closure.type) && scalarClosureArgument(closure.type, args, input)):
 			case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
 			case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
 			default: throw "A value lane reference cannot escape its operation";
@@ -337,7 +338,7 @@ class IrVerifier {
 		}
 		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
 			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
-			case Call(_, name, _) if (StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+			case Call(_, name, _) if (scalarFunctions.exists(name)):
 			case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
 			default: throw "A scalar stack reference cannot escape its call";
 		}
@@ -355,16 +356,6 @@ class IrVerifier {
 				var found = false;
 				for (index in 0...arguments.length)
 					if (arguments[index].id == input.id && index < expected.length && sameType(expected[index], input.type)) found = true;
-				found;
-			default: false;
-		};
-
-	static function scalarClosureType(type:IrType):Bool
-		return switch type {
-			case Function(arguments, result):
-				var found = IrHlScalarRef.element(result) != null;
-				for (argument in arguments)
-					if (IrHlScalarRef.element(argument) != null) found = true;
 				found;
 			default: false;
 		};
