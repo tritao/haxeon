@@ -3924,3 +3924,90 @@ seed 223.43 → 229.14; stage 1 44.88 → 44.05; stage 2 46.37 → 44.59. These 
 stages decreased. Product allocation/RSS/browser comparisons remain pending on the final batch head.
 Records: `haxeon-flat-work/map-null-keys`; the original app failure is retained as
 `enum-first-batch-gates/app-scene-collision-failure.log`.
+
+
+### Closed source enum batch: final product comparison
+
+This closes the product validation for `5b916e9c` through `7a3b0126`, including the fail-closed enum verifier,
+typed callback ABI and the app-gate correctness fixes described above. Control is `530bda5a`, candidate source is
+`7a3b0126`; both use the frozen outer source `8195b397f04e2d527430607e8e3624a38df8d950` on the same machine.
+All product captures use three alternating control/candidate pairs, with no concurrent session builds. Every scheduled
+capture completed; no gate was accepted by retrying. The app failures above were reproduced on the control and fixed
+at their causes before starting the final captures.
+
+The native VM also changes, from HashLink `4a33fa08` to `bfddf398`. Each capture runs its own version's actual VM and
+profiler, with its matching `libhl.so` and runtime preloaded. The control VM was rebuilt from the pinned archived
+source in Release with frame pointers, then paired with the original saved control libraries. Candidate VM size is
+550,704 → 558,896 bytes; `libhl.so` stays 892,432 bytes, but changes SHA-256 from
+`97abb73a9557c77a0042f4f62819790975009447fd18d330253146d5393aebba` to
+`2766508657eab6e7702b5e6850a321d5507ca92e934fdac1925aea3cb9af7f98`.
+The isolated gate checkout adds measurement-only runtime/profiler environment overrides to its profile helper; the
+shared outer checkout and budget tooling are unchanged. VM, profiler, library and module hashes are in the compact
+measurement manifest. These are batch comparisons, not isolated attribution to enum storage or one correctness fix.
+
+Artifacts differ, so Tier 3 was run rather than skipped:
+
+| Development module | Control bytes | Candidate bytes | Candidate SHA-256 |
+|---|---:|---:|---|
+| Editor profile / HashLink | 100,301,360 | 100,487,012 | `4a31ad6757be4b87455a9d43d7400348d4ec8770d547a663456efa88151a33d0` |
+| Showcase / Wasm GC | 5,808,484 | 5,809,798 | `c53fad9b5a0e86d9698268b5fa1efa112f46bb42132e858d47022286abb958c6` |
+| Showcase / Wasm32 | 11,810,665 | 11,813,835 | `714594fdb78ee67f891082d5bc738abbd0504c415e7b24b6eaf177a5f6f97a1d` |
+
+Per-action medians follow. KiB is the existing refill-quantized counter; timing is median frame ms. All six paired
+budget captures pass, as does the separate final candidate budget/retention gate. A single hierarchy-to-sensors pair
+reads 112.5 → 112.8 KiB; the other two tie at 112.5 and the three-pair median ties. No ceiling changed.
+
+| Scenario / action | Control KiB | Candidate KiB | Delta KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|---:|
+| tab-matrix / console->telemetry | 74.500 | 74.500 | +0.000 | 1.110 | 1.010 |
+| tab-matrix / hierarchy->sensors | 112.500 | 112.500 | +0.000 | 1.570 | 1.490 |
+| tab-matrix / sensors->hierarchy | 77.800 | 77.800 | +0.000 | 1.210 | 1.120 |
+| tab-matrix / telemetry->console | 91.200 | 91.200 | +0.000 | 1.170 | 1.070 |
+| interaction / hover-away | 13.600 | 13.600 | +0.000 | 0.430 | 0.420 |
+| interaction / hover-enter | 0.500 | 0.500 | +0.000 | 0.000 | 0.000 |
+| interaction / hover-field | 12.400 | 12.400 | +0.000 | 0.440 | 0.430 |
+| interaction / hover-inside | 0.500 | 0.500 | +0.000 | 0.000 | 0.000 |
+| interaction / hover-other | 10.000 | 10.000 | +0.000 | 0.420 | 0.410 |
+| interaction / idle | 0.200 | 0.200 | +0.000 | 0.010 | 0.010 |
+| interaction / idle-focused | 0.200 | 0.200 | +0.000 | 0.010 | 0.010 |
+| interaction / scroll-inspector | 21.200 | 21.200 | +0.000 | 0.720 | 0.710 |
+| interaction / type-backspace | 16.200 | 16.200 | +0.000 | 0.420 | 0.410 |
+| interaction / type-char | 16.100 | 16.100 | +0.000 | 0.420 | 0.410 |
+
+The selection action has no per-action KiB sample in this harness; its three-pair frame median is 2.92 → 2.78 ms.
+The separate 30-cycle selection census gives total object counts 332,497 / 332,498 / 332,498 for control and
+332,497 / 332,497 / 332,496 for candidate. Median recorded bytes are 23,592,240 → 23,591,936. Every named type's
+object and byte totals equal its paired control in all three pairs; only the generic `bytes` category varies.
+This small raw-buffer difference is not evidence of an inline-enum allocation win. E9's real-app enum allocation
+decrease remains open and will be measured while widening the admitted subset.
+
+All headless memory captures pass. RSS window growth in MiB, preserving each alternating pair:
+
+| Pair | Control windows | Candidate windows |
+|---|---|---|
+| 1 | 30.00 / 3.59 / 0.78 / 5.00 | 29.69 / 3.59 / 0.78 / 5.00 |
+| 2 | 29.84 / 4.38 / 0.78 / 5.00 | 29.53 / 3.91 / 0.78 / 5.00 |
+| 3 | 30.62 / 3.59 / 0.78 / 5.00 | 30.16 / 3.59 / 0.78 / 5.00 |
+
+The Wasm GC opt-in counter matches in every scene and every pair. Timing/load medians are recorded alongside the
+counts; the small Wasm32 frame and static/text-heavy startup increases are observations, not allocation wins or
+reasons to retry a capture.
+
+| Target / scene | Objects control → candidate (each of three pairs) | First-frame ms control → candidate | Frame median ms control → candidate |
+|---|---:|---:|---:|
+| Wasm GC / full | 4,440 → 4,440 | 169.6 → 158.2 | 2.4 → 2.2 |
+| Wasm GC / static | 4,440 → 4,440 | 166.3 → 175.1 | 2.1 → 2.1 |
+| Wasm GC / text-heavy | 4,440 → 4,440 | 176.3 → 177.2 | 2.5 → 2.4 |
+| Wasm GC / editing | 8,724 → 8,724 | 173.6 → 154.4 | 2.8 → 2.5 |
+| Wasm32 / full | Counter unavailable | 173.5 → 148.0 | 2.2 → 2.3 |
+
+Tier 1 on the final compiler source: 813 tests, zero failures and a self-hosting fixed point. Tier 2 passes all ten
+UI scripts, 516 cross-target parity fixtures (14 skipped), all six UI value snapshots, the complete app suite,
+all nine retention scenarios, editor budgets and the paired headless memory checks. Browser UI smoke passes on
+both Web targets. The source enum micro-fixture still shows HashLink 384 / 49,152 bytes → zero and both Wasm
+targets 16 / 2,048 objects → zero at 8 / 1,024 calls, with inlining off/on. These fixture wins do not replace E9's
+pending real-app decrease.
+
+Records: `haxeon-flat-work/enum-first-batch-gates/{artifact-comparison,paired-vm-manifest,final-tier2-progress}.json`,
+`paired-{actions,census,rss,web-core,web32-load}.jsonl` and the final gate logs. Raw captures and completed parity
+guests were deleted after recording their results.
