@@ -481,6 +481,56 @@ compiler change, and **L** spans multiple semantic/runtime boundaries. Update th
 | E8 | Carry enum value representations through generic owners/functions and their erased semantic descriptors; concrete payload schemas are retained already, but schema retention alone does not specialize their transport. | L | No; exclude unsupported generic uses initially |
 | E9 | Gate activated source forms on all targets/inlining modes, cached/edited builds and GC roots, and show a real editor allocation decrease without action or RSS regressions. | M | Yes |
 
+#### Widening order from measured editor allocations
+
+The published `f69bfe43` batch has no real-editor enum allocation decrease. Rank the next steps by the existing
+interaction, tab-matrix and selection censuses, rather than by inventory number. The table below covers the 15
+budgeted editor actions. Current-source isolated windows corroborate those aggregate censuses: count only the second
+matching input-through-frame action, excluding setup and all other actions. Every allocation is counted; stack sampling
+is separate. Diagnostic builds collect `IrInlineEnumEligibility.reasons` plus subsequent blocking reasons without
+changing selection; their editor, Wasm32 Showcase and Wasm GC Showcase outputs are byte-identical to the published
+modules. The action-window harness is a measurement-only change in the detached outer checkout.
+
+| Payload enum | Editor action | Objects / bytes per action | Editor blockers | Showcase blockers |
+|---|---|---:|---|---|
+| `DockNode` | Each of `hierarchy->sensors`, `sensors->hierarchy`, `console->telemetry`, `telemetry->console` | 54 / 1,992 | Permanent by-value recursion; also E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+| `TextEditIntent` | `type-char` | 1 / 24 | E6 registered reflection/Dynamic/casts; E7 callable descriptors | E6 registered reflection; E7 callable descriptors |
+| `PropertyValue` (setup control) | All 15 measured action windows | 0 / 0 | E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+
+No other payload enum allocates in these windows. In particular, backspace uses a payload-free cached intent.
+`PropertyValue`'s 14 objects / 312 bytes in the selection aggregate are setup costs, not a per-selection allocation.
+`TextEditorHistoryKind` is payload-free and adds no per-action enum allocation. The current effect/decoration/mask values and scalar sizing modes account for no repeated allocations in these
+windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
+measured typing path.
+
+First connect the logical callable descriptors and reflection/Dynamic escape adapters required together by
+`TextEditIntent` (E7/E6), using the existing scalar/reference value ABI and boxing only at genuine escapes. Record the
+real editor typing delta in that widening commit. E4 nullable closures and E8 generic transport do not block this
+measured finite enum. After that, investigate why one tab switch constructs 54 `DockNode` values and reuse unchanged persistent dock-tree
+branches in the UI rather than changing their compiler representation. `DockNode.Split` contains `DockNode` directly
+by value; its cost cannot justify bypassing the permanent recursive-enum classification. Then perform the UI value
+enum conversions, with measured deltas for allocating forms and the required type-honesty ports for the others.
+Byte-identical editor/Web output skips paired measurements under Tier 3. Do not count a setup control or a renamed
+allocation as an enum win.
+
+The following widening work is explicitly a follow-up after this session, not an activation prerequisite. The census
+evidence is bounded to the 15 budgeted action windows above; it does not claim these features are cost-free in every
+possible program. Keep the documented boxed classification for their unsupported uses until their complete ABIs land.
+
+| Follow-up | Remaining work | Current census evidence |
+|---|---|---|
+| E3 | Ordinary/bound class value calls and inheritance, with typed constant-time dispatch and no global dense tables | `PropertyValue` is blocked here but allocates zero in all 15 windows; `TextEditIntent` is not blocked here |
+| E4 | Nullable struct closure result presence plus scalar/reference leaves when the struct contains an enum | No allocating finite payload enum in these windows needs this path; nullable enums themselves already use tag zero |
+| E8 | Concrete generic enum instances and enum transport in generic owners/functions/erased views | No additional allocating finite payload enum in these windows is unlocked by this work |
+| E6 beyond the typing path | General direct enum Dynamic/reflection/throw/native escape adapters | Only the callable/reflection paths needed by `TextEditIntent` are in this session; no other finite payload enum allocates in these windows |
+| E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
+| E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
+
+Records: `haxeon-flat-work/enum-impact/{editor,showcase-gc,showcase-w32}-eligibility.json`,
+`diagnostic-artifacts.json`, `action-inventory.jsonl` and `action-census-harness.patch`. The existing aggregate records
+are in `typed-interface-tables-gates/paired-exact-tabs.jsonl`,
+`interface-value-gates/paired-exact-interaction-v2.jsonl` and `enum-first-batch-gates/paired-census.jsonl`.
+
 The first activation need not wait for E3/E4 and E6–E8 in their entirety. Start with a bounded, documented eligibility rule for
 finite concrete enums whose admitted uses have verified value storage and call ABIs and no unsupported Dynamic,
 reflection or native escape. A boundary through an enclosing object, container or closure counts too. An enum outside
