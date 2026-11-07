@@ -522,6 +522,19 @@ existing lane association and checked logical reflection bridges. Closure enviro
 bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
 generated after classification. Private enum packets are excluded from that public layout registry.
 
+After lowering, `IrVerifier` rejects a selected enum's nominal value carrier in every object/static field, native/C-native
+or interface/function signature, instruction output or operand, phi input, terminator and debug binding. The scan covers
+all bodies even during selective incremental verification. Only the generated box/unbox adapters, identified against
+the selected declaration and canonical adapter signature (including their existing scalar/optional ABI clones), may
+contain boxed enum temporaries. An arbitrary helper prefix does not grant that exception.
+
+Arrays and iterators retain logical `Enum(E)` element descriptors while transporting reference handles to lane storage;
+that exception does not admit an array or iterator of callbacks taking/returning nominal `E` values. A nominal enum type
+token is metadata, not a value: its uses are limited to matching array allocation/retyping descriptors and the array
+bridge's exact-type check; unused tokens left by allocation rewriting carry no value. Any other use fails verification.
+Public enum case schemas remain nominal descriptors. These invariants turn a missed eligibility/lowering case into a
+compiler error instead of allowing mismatched storage to reach a backend.
+
 The logical IR-only frontend still assembles nominal types without selecting a target representation. The production
 compiler supplies its target and host export roots to assembly before selecting the physical enum layout. Cached
 source functions remain nominal and unmodified; changing an escape reselects storage on the assembled copy.

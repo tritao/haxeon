@@ -32,6 +32,102 @@ class IrVerifier {
 		}
 	}
 
+	/** Physical values must not retain an inline enum's nominal boxed carrier. */
+	public static function verifyInlineEnumsLowered(program:IrProgram):Void {
+		var selected:Map<String, IrEnum> = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => declaration];
+		if (!selected.keys().hasNext()) return;
+		function forbidden(type:IrType):Null<String> return switch type {
+			case Enum(name): selected.exists(name) ? name : null;
+			case Array(element), Iterator(element): switch element {
+				// Containers retain their logical element descriptor; their values are lane handles.
+				case Enum(_), Nullable(Enum(_)): null;
+				default: forbidden(element);
+			};
+			case Nullable(element): forbidden(element);
+			case Function(arguments, result):
+				var found = forbidden(result);
+				for (argument in arguments) if (found == null) found = forbidden(argument);
+				found;
+			default: null;
+		};
+		function check(type:IrType, where:String):Void {
+			var name = forbidden(type);
+			if (name != null) throw 'IR inline enum "$name" retains nominal value storage in $where';
+		}
+		var escapes:Map<String, Bool> = [], functions = [for (fn in program.functions) fn.name => fn],
+			nativeSymbols = [for (native in program.natives) native.name => native.symbol];
+		for (name => declaration in selected) {
+			var storage:IrType = Obj(declaration.inlineStorage);
+			for (box in [true, false]) {
+				var entry = box ? IrInlineEnumEscapes.boxName(name) : IrInlineEnumEscapes.unboxName(name), fn = functions.get(entry);
+				if (fn != null && fn.arguments.length == 1 && sameType(fn.arguments[0].type, box ? storage : Dyn)
+					&& sameType(fn.result, box ? Dyn : storage)) escapes.set(entry, true);
+			}
+		}
+		for (object in program.objects) for (field in object.fields) check(field.type, 'field ${object.name}.${field.name}');
+		for (field in program.staticFields) check(field.type, 'static field ${field.name}');
+		for (contract in program.interfaces) for (method in contract.methods) {
+			for (argument in method.arguments) check(argument, 'interface ${contract.name}.${method.name}');
+			check(method.result, 'interface result ${contract.name}.${method.name}');
+		}
+		for (native in program.natives) {
+			for (argument in native.arguments) check(argument, 'native ${native.name}');
+			check(native.result, 'native result ${native.name}');
+		}
+		for (native in program.cNatives) {
+			for (argument in native.arguments) check(argument, 'C native ${native.name}');
+			check(native.result, 'C native result ${native.name}');
+		}
+		for (fn in program.functions) {
+			var original = IrTypedInterfaceDispatch.originalEntryName(fn.name);
+			if (escapes.exists(original)) continue;
+			for (argument in fn.arguments) check(argument.type, 'argument ${fn.name}');
+			check(fn.result, 'result ${fn.name}');
+			var descriptors:Map<Int, IrType> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case TypeValue(out, type) if (forbidden(type) != null): descriptors.set(out.id, type);
+				default:
+			}
+			function descriptorUse(value:IrValue, instruction:Null<IrInstruction>):Void {
+				var type = descriptors.get(value.id);
+				if (type == null) return;
+				var valid = false;
+				if (instruction != null) switch instruction {
+					case Call(out, callee, arguments):
+						var symbol = nativeSymbols.get(callee);
+						if (symbol == null) symbol = callee;
+						if (arguments.length > 1 && arguments[1].id == value.id) {
+							if (symbol == "__value_array_alloc" || symbol == "__value_array_retype" || symbol == "__array_alloc_typed_ref")
+								valid = switch out.type {case Array(element): sameType(element, type); default:false;};
+							else if (symbol == "__std_is_exact_type") {
+								var bridge = "$value-array:bridge:" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type)) + ":accepts";
+								valid = original == bridge && fn.arguments.length == 1 && sameType(fn.arguments[0].type, Dyn) && sameType(fn.result, Bool);
+							}
+						}
+					default:
+				}
+				if (!valid) check(type, 'non-array descriptor use ${fn.name}');
+			}
+			for (binding in fn.debugBindings) { check(binding.value.type, 'debug binding ${fn.name}'); descriptorUse(binding.value, null); }
+			for (block in fn.blocks) {
+				for (located in block.instructions) {
+					var instruction = located.value, out = IrOperands.output(instruction);
+					if (out != null) check(out.type, 'instruction output ${fn.name}');
+					for (input in IrOperands.inputs(instruction)) { check(input.type, 'instruction operand ${fn.name}'); descriptorUse(input, instruction); }
+					switch instruction {
+						case Phi(_, inputs): for (input in inputs) { check(input.value.type, 'phi input ${fn.name}'); descriptorUse(input.value, null); }
+						case MakeEnum(_, name, _, _) if (selected.exists(name)): check(Enum(name), 'boxed constructor ${fn.name}');
+						default:
+					}
+				}
+				if (block.terminator != null) switch block.terminator.value {
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): check(value.type, 'terminator ${fn.name}'); descriptorUse(value, null);
+					default:
+				}
+			}
+		}
+	}
+
 	public static function verify(program:IrProgram):Void {
 		verifySelected(program, null);
 	}
@@ -89,6 +185,7 @@ class IrVerifier {
 			IrInlineEnumStorage.validate(enumDecl, objectTable);
 			enums.set(enumDecl.name, enumDecl);
 		}
+		verifyInlineEnumsLowered(program);
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
 			if (globals.exists(field.name))

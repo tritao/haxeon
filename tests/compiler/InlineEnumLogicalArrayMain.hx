@@ -64,17 +64,18 @@ class InlineEnumLogicalArrayMain {
   dynamicCheck.call("__array_set_any",[dynamicArray,zero,dynamicCheck.constNull(Dyn)],Void);
   var empty=dynamicCheck.call("__array_get_any",[dynamicArray,zero],Dyn),good=dynamicCheck.createBlock(),bad=dynamicCheck.createBlock();
   dynamicCheck.branch(dynamicCheck.equal(empty,dynamicCheck.constNull(Dyn)),good,bad);dynamicCheck.select(good);
-  var boxed=dynamicCheck.temporary(type);dynamicCheck.emit(MakeEnum(boxed,"Element",1,[dynamicCheck.constInt(37),savedOwner]));
-  dynamicCheck.call("__array_set_any",[dynamicArray,zero,dynamicCheck.toDyn(boxed)],Void);
-  var escaped=dynamicCheck.safeCast(dynamicCheck.call("__array_get_any",[dynamicArray,zero],Dyn),type),number=dynamicCheck.temporary(I32);dynamicCheck.emit(EnumField(number,escaped,1,0));
+  var caseAccess=new compiler.ir.IrInlineEnumCaseAccess(planner.shape("Element"),table);
+  var boxed=dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.boxName("Element"),[caseAccess.construct(dynamicCheck,1,[dynamicCheck.constInt(37),savedOwner])],Dyn);
+  dynamicCheck.call("__array_set_any",[dynamicArray,zero,boxed],Void);
+  var escaped=dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.unboxName("Element"),[dynamicCheck.call("__array_get_any",[dynamicArray,zero],Dyn)],Obj(packet.name)),number=caseAccess.field(dynamicCheck,escaped,1,0);
   // Simulate a native producer's ordinary Array<Enum>, then migrate it without changing aliases.
   var nativeArray=dynamicCheck.call("__array_alloc_typed_ref",[dynamicCheck.constInt(1),dynamicCheck.typeValue(type)],arrayType);
-  dynamicCheck.call("__array_set_any",[nativeArray,zero,dynamicCheck.toDyn(boxed)],Void);
+  dynamicCheck.call("__array_set_any",[nativeArray,zero,boxed],Void);
   var migrated=dynamicCheck.call(factory.retypeName(),[nativeArray],arrayType);
-  var migratedValue=dynamicCheck.safeCast(dynamicCheck.call("__array_get_any",[migrated,zero],Dyn),type),migratedNumber=dynamicCheck.temporary(I32);dynamicCheck.emit(EnumField(migratedNumber,migratedValue,1,0));
+  var migratedValue=dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.unboxName("Element"),[dynamicCheck.call("__array_get_any",[migrated,zero],Dyn)],Obj(packet.name)),migratedNumber=caseAccess.field(dynamicCheck,migratedValue,1,0);
   var migratedOK=dynamicCheck.createBlock();dynamicCheck.branch(dynamicCheck.equal(migratedNumber,dynamicCheck.constInt(37)),migratedOK,bad);dynamicCheck.select(migratedOK);
-  var emptyCase=dynamicCheck.temporary(type);dynamicCheck.emit(MakeEnum(emptyCase,"Element",0,[]));
-  dynamicCheck.call("__array_set_any",[nativeArray,zero,dynamicCheck.toDyn(emptyCase)],Void);
+  var emptyCase=dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.boxName("Element"),[caseAccess.construct(dynamicCheck,0,[])],Dyn);
+  dynamicCheck.call("__array_set_any",[nativeArray,zero,emptyCase],Void);
   var aliasTag=dynamicCheck.call(helpers.getter(helpers.slot(["tag"])),[migrated,zero],I32),aliasOK=dynamicCheck.createBlock();
   dynamicCheck.branch(dynamicCheck.equal(aliasTag,dynamicCheck.constInt(1)),aliasOK,bad);dynamicCheck.select(aliasOK);
   var done=dynamicCheck.createBlock();dynamicCheck.branch(dynamicCheck.equal(number,dynamicCheck.constInt(37)),done,bad);dynamicCheck.select(done);dynamicCheck.returnValue(dynamicCheck.constInt(42));dynamicCheck.select(bad);dynamicCheck.returnValue(dynamicCheck.constInt(1));

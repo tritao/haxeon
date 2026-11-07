@@ -3783,3 +3783,28 @@ Tier 3 preflight on outer `8195b397f04e2d527430607e8e3624a38df8d950` (editor con
 The outputs differ, so Tier 3 requires the paired allocation/RSS/browser runs. No real-app allocation decrease is claimed
 before those runs. Records are under `haxeon-flat-work/enum-first-batch-gates`; controls and candidates share the pinned
 outer source, native runtime and build conditions.
+
+### Fail-closed inline enum IR validation (Tier 1 checkpoint)
+
+A global verifier invariant rejects selected enums' nominal carriers in physical signatures, fields, instruction values
+and phi inputs, including bodies outside a selective incremental verification set. Only canonical generated escape
+adapters and logical array/iterator descriptors are exempt. Type tokens may feed matching array descriptors and the
+array bridge's exact-type check; other descriptor uses fail. The negative fixture forges 14 cases in each of the six
+target/inlining modes (84 checks), including nested function/nullable/array/iterator types, native/C-native signatures,
+phi operands, non-array type-token uses and a misleading helper name. Positive fixtures retain logical collection
+handles and check real generated adapters.
+
+The older manual logical-array fixture now expresses its genuine Dynamic/native round trips through the generated
+box/unbox adapters, while its typed census remains zero at 8/1,024 calls on all targets and inlining modes. An initial
+fixed-point check caught a three-binding `MakeEnum` pattern in the new verifier; Haxeon correctly requires all four
+bindings, unlike the host compiler's permissive pattern. The pattern was corrected before the final Tier 1 run.
+
+The preceding activation's Tier 2 run passed all ten UI scripts but stopped at `rpc-lifecycle` on Wasm32:
+`IR verification failed for __haxeon_closure_adapter_34a39671ba8460368538a2bf65b2a36e_010640cf77729dfb6daf9068fb271e80:
+Inline value storage requires a logical cast adapter`. The isolated `962367ad` control compiles that fixture;
+`57e69910` reproduces the failure. The batch remains unpublished and the RPC cause is the next correctness commit.
+No paired product measurements have been accepted from this incomplete Tier 2 head.
+
+Final-source Tier 1: 807 compiler tests, zero failures; all affected six-mode fixtures; self-hosting fixed point.
+BodyTyped observations (ms), activation → verifier: seed 235.50 → 214.87; stage 1 45.65 → 44.76;
+stage 2 45.78 → 46.74. These remain single-run observations, not a change-specific timing attribution.
