@@ -9,11 +9,13 @@ class MenuItem {
 	public final enabled:Bool;
 	public final shortcut:Null<String>;
 	public final separatorBefore:Bool;
+	public final isHeading:Bool;
 
 	public function new(key:String, label:String, ?onSelect:Void->Void, enabled:Bool = true,
-			?shortcut:String, separatorBefore:Bool = false) {
+			?shortcut:String, separatorBefore:Bool = false, isHeading:Bool = false) {
 		this.shortcut = shortcut;
 		this.separatorBefore = separatorBefore;
+		this.isHeading = isHeading;
 		if (key == null || key.length == 0)
 			throw "Menu items require stable non-empty keys";
 		this.key = key;
@@ -22,4 +24,7 @@ class MenuItem {
 		this.onSelect = onSelect == null ? function() {} : onSelect;
 		this.enabled = enabled;
 	}
+	/** A non-interactive section label, excluded from menu keyboard navigation. */
+	public static function section(key:String, label:String, separatorBefore:Bool = false):MenuItem
+		return new MenuItem(key, label, null, false, null, separatorBefore, true);
 }

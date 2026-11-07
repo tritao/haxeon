@@ -242,19 +242,20 @@ class Theme {
 			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item"), [
 			StyleValue.width(LayoutAxis.grow()),
-			StyleValue.padding(new Insets(8.0, 4.0, 8.0, 4.0)),
+			StyleValue.height(LayoutAxis.fit(30.0)),
+			StyleValue.padding(new Insets(12.0, 5.0, 12.0, 5.0)),
 			StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
-			StyleValue.radius(StyleProperty.RadiusTopLeft, 0.0),
-			StyleValue.radius(StyleProperty.RadiusTopRight, 0.0),
-			StyleValue.radius(StyleProperty.RadiusBottomRight, 0.0),
-			StyleValue.radius(StyleProperty.RadiusBottomLeft, 0.0)
+			StyleValue.radius(StyleProperty.RadiusTopLeft, 4.0),
+			StyleValue.radius(StyleProperty.RadiusTopRight, 4.0),
+			StyleValue.radius(StyleProperty.RadiusBottomRight, 4.0),
+			StyleValue.radius(StyleProperty.RadiusBottomLeft, 4.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Disabled),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Hovered),
 			[StyleValue.background(tokens.selectionHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Focused),
-			[StyleValue.background(tokens.selectionField)]);
+			[StyleValue.background(tokens.selectionHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Pressed),
 			[StyleValue.background(tokens.selectionPressed)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger"), [

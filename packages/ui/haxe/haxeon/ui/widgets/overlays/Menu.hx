@@ -62,8 +62,18 @@ class Menu implements View {
 				separatorStyle.background = context.theme.tokens.border;
 				var separator = new haxeon.ui.widgets.layout.Spacer(item.key + "-separator", separatorStyle.width, separatorStyle.height);
 				separator.style.background = separatorStyle.background;
+				var separatorContainer = new LayoutStyle();
+				separatorContainer.width = LayoutAxis.grow();
 				children.push(new KeyedView(item.key + "-separator", new haxeon.ui.widgets.layout.Padding(
-					item.key + "-separator-spacing", separator, new Insets(0.0, 3.0, 0.0, 3.0))));
+					item.key + "-separator-spacing", separator, new Insets(8.0, 5.0, 8.0, 5.0), separatorContainer)));
+			}
+			if (item.isHeading) {
+				var headingStyle = new LayoutStyle();
+				headingStyle.width = LayoutAxis.grow();
+				headingStyle.padding = new Insets(12.0, 5.0, 12.0, 4.0);
+				children.push(new KeyedView(item.key, new Text(item.label, headingStyle,
+					context.theme.tokens.textSecondary, TextStyleOverride.text(11.0))));
+				continue;
 			}
 			var button = new Button(item.label, null, function() {
 				if (item.hasSelectHandler)
