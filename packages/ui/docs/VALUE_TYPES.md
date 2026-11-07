@@ -3727,3 +3727,59 @@ BodyTyped single-run observations (ms), table checkpoint → export-root checkpo
 stage 1 45.84 → 46.72; stage 2 46.58 → 49.42. These observations are retained without a change-specific timing
 attribution. Editor/Web builds and Tier 2/3 validation belong to the upcoming batch head; no product measurements
 are claimed for this staging commit.
+
+### First closed source inline enum subset (Tier 1 checkpoint)
+
+Source constructors, matches, tag-zero nulls, nullable joins, direct functions, typed closures, object/static fields and
+array elements now share the existing lane layout. Classification is program-wide and conservative; the exact admitted
+forms and remaining widening work are listed in STRUCTS.md (E1–E9). Unsupported escapes keep the whole enum boxed.
+No UI enum conversion is included in this checkpoint.
+
+Paired focused census, export-root checkpoint `962367ad` → activation candidate, same source and machine, both inlining
+modes:
+
+| Target / measure | 8 iterations | 1,024 iterations |
+|---|---:|---:|
+| HashLink allocated bytes | 384 → 0 | 49,152 → 0 |
+| Wasm32 allocated objects | 16 → 0 | 2,048 → 0 |
+| Wasm GC allocated objects | 16 → 0 | 2,048 → 0 |
+
+The window constructs two payload enums per iteration and exercises null joins, copies, field/static stores and a typed
+closure result. Reference payloads and the closure are prepared before the window. A first diagnostic had created the
+closure inside the loop: its one Wasm GC object per iteration was closure creation, not enum boxing. Separately, the
+production phi pass initially retained three Wasm32 / four Wasm GC packets per iteration because it discarded an enum
+join split when the merged value escaped to a return. Enum tag-zero packets always exist, so their joins now snapshot
+leaves even on branch edges without requiring the merged packet to disappear in that same pass. The final focused
+fixture also checks float/bool/nested payloads, typed array construction, explicit iterators, nullable elements and
+reference roots across collection.
+
+The initial full Tier 1 run recorded 805 passes and one failure: `EnumTypedefConstructorMain` supplied target-specific
+HashLink IR to both Wasm backends and failed with `Wasm call to unsupported native or missing function
+"$hl:scalar-address"`. The test now compiles independently for each target and executes both Wasm targets with
+inlining off/on, including cold and typedef-retargeted sources. Final-source Tier 1 passes: 806 compiler tests, zero failures, the six target/inlining modes, negative verifier/native-layout checks, and the self-hosting fixed point. Tier 2/3 validation remains pending on the batch head. Production probes also caught generated reflection exposing private packets (including a Showcase
+`Reflect.reflectObjectCopy.$inline-enum:haxeon.platform.async.Outcome` helper). Private packets now stay outside the
+public reflection registry; eligibility includes enum-bearing registered reflection layouts before helpers are generated.
+Native field offsets computed for boxed enums are also excluded until E2 supplies recalculated physical layouts. Editor/Web artifact comparison and any required Tier 3 measurements are pending; this table is a compiler
+fixture result, not the required real-app allocation decrease.
+
+The first editor-control launcher only set prebuilt-compiler environment variables, which the project build provider
+does not use for its interpreted compiler path; it therefore read candidate sources and stopped at the reflection
+verifier before producing a control. The corrected launcher points `HAXEON_COMPILER_SOURCE` at an archive of
+`530bda5a` and uses an absolute output path. No allocation/RSS result was collected from that invalid control launch.
+
+BodyTyped single-run observations (ms), export-root checkpoint → activation: seed 229.68 → 235.50;
+stage 1 46.72 → 45.65; stage 2 49.42 → 45.78. These are observations while other builds ran, not a typing-time
+regression attribution; both native-hosted stages decreased. Generator cursor work is not indicated by these data.
+
+Tier 3 preflight on outer `8195b397f04e2d527430607e8e3624a38df8d950` (editor controls use archived compiler
+`530bda5a`; Showcase controls use the unchanged UI source at that checkpoint):
+
+| Development module | Control bytes | Candidate bytes | Identical? |
+|---|---:|---:|---|
+| editor | 100,301,360 | 100,471,118 | no |
+| webgc | 5,808,484 | 5,809,044 | no |
+| web32 | 11,810,665 | 11,812,644 | no |
+
+The outputs differ, so Tier 3 requires the paired allocation/RSS/browser runs. No real-app allocation decrease is claimed
+before those runs. Records are under `haxeon-flat-work/enum-first-batch-gates`; controls and candidates share the pinned
+outer source, native runtime and build conditions.

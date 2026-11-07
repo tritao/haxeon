@@ -54,13 +54,13 @@ capabilities.
 
 ### Inline enums with payloads
 
-Enums with payloads (`Paint.Solid(color)`) allocate one object per value today. A value enum stores its tag and largest
+Enums with payloads can allocate one object per value. An inline enum stores its tag and largest
 payload inline, as `Null<S>` stores its presence flag; `Null<S>` is the one-case version. It reuses struct flattening and
-scalar flow, and belongs with flat structs ([STRUCTS.md](STRUCTS.md) stages 2–3). Candidates: `Paint`, sizing modes,
-effects. Enums have no identity, including when boxed; payload enums require declared `Equatable` or `Hashable` for
+scalar flow, and belongs with flat structs ([STRUCTS.md](STRUCTS.md) stages 2–3). UI conversions cover sizing modes
+and effects; `Paint` remains a native resource with identity and lifetime. Enums have no identity, including when boxed; payload enums require declared `Equatable` or `Hashable` for
 `==`/`!=`, while nullary enums have tag equality. The full rule, including `Type.enumEq`, is in
-[STRUCTS.md](STRUCTS.md#enum-value-semantics-and-inline-layout). Declared equality is implemented for boxed enums;
-inline enum storage remains to be implemented.
+[STRUCTS.md](STRUCTS.md#enum-value-semantics-and-inline-layout). Declared equality is implemented. Source inline storage starts with the closed non-generic subset documented there;
+the remaining escape, native-layout and generic transport blockers are listed explicitly.
 
 ### Resource cleanup
 
@@ -162,7 +162,7 @@ Check each against what Haxeon already supports before designing it.
    meaning what it looks like.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
-   value equality and remain boxed, and inline enum lowering remains to be implemented. See [STRUCTS.md](STRUCTS.md) and
+   value equality. The closed source subset uses inline lanes; wider enum transport and the UI conversion remain in progress. See [STRUCTS.md](STRUCTS.md) and
    [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Key paths are implemented before UI bindings: typed stored-field references, checked writes, composition,
    equality/hash and the `Diff.bit` port.

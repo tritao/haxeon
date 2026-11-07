@@ -451,9 +451,10 @@ class IrGenerator {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
-			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache):IrProgram
+			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
+			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram
 		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives,
-			reflectableObjects, staticChecks);
+			reflectableObjects, staticChecks, valueTarget, exportedFunctions);
 
 	static function lastSeparator(value:String):Int {
 		var index = value.length - 1;

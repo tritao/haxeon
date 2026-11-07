@@ -87,6 +87,7 @@ class TestCatalog {
 		"NullableStructIncrementalMain",
 		"InlineValueLayoutMain",
 		"InlineEnumLayoutMain",
+		"SourceInlineEnumMain",
 		"InlineEnumWordMain",
 		"InlineEnumCarrierBoundaryMain",
 		"InlineEnumScalarWordBoundaryMain",

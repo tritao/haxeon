@@ -66,6 +66,13 @@ class ObjectReflection {
 		return remaining;
 	}
 
+	/** Whether assembly will generate object-layout reflection helpers from this native surface. */
+	public static function usesObjectLayouts(natives:Array<IrNative>):Bool {
+		for (native in natives)
+			if (isHashLinkReflection(native.symbol) || StringTools.startsWith(native.symbol, "__reflect_object_")) return true;
+		return false;
+	}
+
 	static function isHashLinkReflection(symbol:String):Bool
 		return switch symbol {
 			case "__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count",

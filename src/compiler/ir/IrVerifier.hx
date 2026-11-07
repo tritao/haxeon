@@ -413,6 +413,13 @@ class IrVerifier {
 			case ConstBool(out, _):
 				expect(out, Bool);
 			case ConstNull(out):
+				switch out.type {
+					case Obj(name) if (StringTools.startsWith(name, IrInlineEnumLayout.VALUE_PREFIX)):
+						var declaration = enums.get(name.substr(IrInlineEnumLayout.VALUE_PREFIX.length));
+						if (declaration != null && declaration.inlineStorage == name)
+							throw "IR inline enum null must use a tag-zero packet";
+					default:
+				}
 				if (!isReference(out.type))
 					throw 'IR null constant must produce a reference value';
 			case TypeValue(out, _):

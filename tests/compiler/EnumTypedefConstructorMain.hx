@@ -1,4 +1,5 @@
 import compiler.Compiler;
+import compiler.tools.CompilerDriver;
 import compiler.Compiler.CompileResult;
 import compiler.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
@@ -32,13 +33,13 @@ class EnumTypedefConstructorMain {
 		c.update("Main.hx", program(BODY));
 		var clean = c.compile("Main");
 		execute(clean, 42);
-		wasm(clean, "clean");
+		wasm(c, "clean");
 		c.update("document/Edits.hx", "package document; typedef Edit = OtherEdit;");
 		var changed = c.compile("Main");
 		if (changed.retyped.indexOf("main") < 0)
 			throw "Retargeting a typedef must retype its constructor caller";
 		execute(changed, 42);
-		wasm(changed, "incremental");
+		wasm(c, "incremental");
 		c.update("document/Edits.hx", "package document; typedef Edit = SourceEdit;");
 		execute(c.compile("Main"), 42);
 
@@ -64,7 +65,7 @@ class EnumTypedefConstructorMain {
 			'import document.Cells.IntCell; function main():Int { var cell=IntCell.Value(42); return switch cell { case IntCell.Value(n): n; case IntCell.Missing: 0; }; }');
 		var bound = generic.compile("Main");
 		execute(bound, 42);
-		wasm(bound, "bound");
+		wasm(generic, "bound");
 
 		// A caller that uses the alias only as a nullary value must also be invalidated.
 		var nullary = compiler();
@@ -128,8 +129,23 @@ class EnumTypedefConstructorMain {
 			throw 'enum typedef returned $status: $output';
 	}
 
-	static function wasm(result:CompileResult, label:String):Void {
+	static function wasm(source:Compiler, label:String):Void {
+		// Compile for each target: production IR already contains the selected target's value ABI.
 		for (target in [Wasm32, WasmGc])
-			File.saveBytes('out/enum-typedef-$target-$label.wasm', new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+			for (inlineEnabled in [false, true]) {
+				var isolated = new Compiler(null, CompilerIntrinsics.configuration());
+				isolated.addSourceRoot("stdlib");
+				isolated.configure("enum-typedef-" + target + inlineEnabled, "enum-typedef",
+					CompilerDriver.targetDefines(target == Wasm32 ? "wasm32" : "wasm-gc").concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+				for (name => state in source.modules)
+					isolated.update(state.source.path, state.source.text, name);
+				var result = isolated.compile("Main"),
+					path = 'out/enum-typedef-$target-$label-$inlineEnabled.wasm';
+				File.saveBytes(path, new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+				var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("enum typedef result");';
+				if (Sys.command("node", ["-e", js, path]) != 0)
+					throw "Enum typedef Wasm execution failed";
+				sys.FileSystem.deleteFile(path);
+			}
 	}
 }

@@ -571,11 +571,7 @@ class FrontendCompilation {
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
-			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
-		var exported = [for (name in context.exportedFunctions()) name => true];
-		if (exported.keys().hasNext())
-			ir.functions = [for (fn in ir.functions) exported.exists(fn.name)
-				? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose) : fn];
+			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks, context.valueArrayTarget(), context.exportedFunctions());
 		var cNativeNames = [for (native in irCNatives) native.name].join(","), ownPrints:Map<String, String> = [];
 		for (fn in cached)
 			if (PositionalName.is(fn.name))

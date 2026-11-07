@@ -11,11 +11,12 @@ class IrValuePhiScalarization {
 	public static function rewrite(program:IrProgram):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-		program.functions = [for (fn in program.functions) rewriteFunction(fn, objects, table, layouts)];
+		var packets = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.inlineStorage => true];
+		program.functions = [for (fn in program.functions) rewriteFunction(fn, objects, table, layouts, packets)];
 	}
 
 	public static function rewriteFunction(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
-			layouts:IrInlineValueLayout):IrFunction {
+			layouts:IrInlineValueLayout, ?alwaysPresent:Map<String, Bool>):IrFunction {
 		function valueName(type:IrType):Null<String> return switch type {
 			case Obj(name) if (objects.exists(name) && objects.get(name).isValue): name;
 			default: null;
@@ -95,12 +96,17 @@ class IrValuePhiScalarization {
 		}
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case Phi(out, inputs) if (valueName(out.type) != null):
+				var packet = alwaysPresent != null && alwaysPresent.exists(valueName(out.type));
 				var valid = inputs.length > 0;
 				for (input in inputs) {
 					var pred = byId.get(input.block), terminator = pred == null ? null : pred.terminator;
-					if (terminator == null || !known.exists(input.value.id) || !Type.enumEq(input.value.type, out.type)
-							|| !isolated(input, block.id, out)) valid = false;
-					else switch terminator.value { case Jump(id) if (id == block.id): default: valid = false; }
+					if (terminator == null || (!packet && !known.exists(input.value.id)) || !Type.enumEq(input.value.type, out.type)
+							|| (!packet && !isolated(input, block.id, out))) valid = false;
+					else switch terminator.value {
+						case Jump(id) if (id == block.id):
+						case Branch(_, yes, no) if (packet && (yes == block.id || no == block.id)):
+						default: valid = false;
+					}
 				}
 				if (valid) plans.set(out.id, {output: out, inputs: inputs});
 			default:
@@ -189,7 +195,8 @@ class IrValuePhiScalarization {
 		var candidate = new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
 		var optimized = IrScalarReplacement.rewrite(candidate, table, true, true);
 		for (block in optimized.blocks) for (located in block.instructions) switch located.value {
-			case NewObject(out, _) if (plans.exists(out.id)): return fn;
+			case NewObject(out, _) if (plans.exists(out.id)
+				&& !(alwaysPresent != null && alwaysPresent.exists(valueName(out.type)))): return fn;
 			default:
 		}
 		return optimized;
