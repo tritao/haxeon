@@ -272,9 +272,13 @@ class LspProtocolMain {
 				hasUnopenedMember = true;
 		if (!hasUnopenedMember)
 			throw "project-backed completion omitted members from unopened dependencies";
-		var temporaryRoot = Sys.getEnv("TMPDIR");
-		if (temporaryRoot == null || temporaryRoot.length == 0) temporaryRoot = sys.FileSystem.fullPath(".");
-		var watchRoot = Path.join([temporaryRoot, "haxeon-lsp-watch-" + Std.string(Std.int(Sys.time() * 1000000))]),
+		// Outside the checkout: its build.hxml would make every folder below it part of the compiler's own project.
+		var temporaryRoot = Sys.getEnv(Sys.systemName() == "Windows" ? "TEMP" : "TMPDIR");
+		if (temporaryRoot == null || temporaryRoot.length == 0)
+			temporaryRoot = "/tmp";
+		// Sys.time() in microseconds overflows Int on HashLink; a random suffix keeps concurrent runs apart.
+		var runId = Std.string(Math.floor(Sys.time() * 1000)) + "-" + Std.random(1000000);
+		var watchRoot = Path.join([temporaryRoot, "haxeon-lsp-watch-" + runId]),
 			watchSourceRoot = Path.join([watchRoot, "src"]),
 			watchAppRoot = Path.join([watchSourceRoot, "app"]),
 			watchLibRoot = Path.join([watchSourceRoot, "lib"]),
@@ -440,7 +444,7 @@ class LspProtocolMain {
 		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
 			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
-		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000))]),
+		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + runId]),
 			folderA = Path.join([folderRoot, "folder-a"]),
 			folderB = Path.join([folderRoot, "folder-b"]),
 			folderASource = Path.join([folderA, "src"]),
