@@ -42,7 +42,7 @@ typedef SemanticAssemblyResult = {
 class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>, structuralChanged:Map<String, Bool>,
-			refreshUnchangedModules:Bool = true):SemanticAssemblyResult {
+			refreshUnchangedModules:Bool = true, continuation:Bool = false):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		#if haxeon
 		var allocatedAtStart = hl.Gc.totalAllocated();
@@ -546,8 +546,10 @@ class SemanticAssembly {
 		}
 
 		var invalid:Map<String, Bool> = [],
-			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
-			initialBuild = true;
+			invalidationReasons:Map<String,
+				Array<InvalidationReason>> = [], // A continuation picks up a pass whose typed functions are already published to the module states, though no module has
+		// a good revision until the whole compilation commits: it is incremental over that pass, not a first build.
+			initialBuild = !continuation;
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;

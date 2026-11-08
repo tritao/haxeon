@@ -139,6 +139,10 @@ typedef CompileMetrics = {
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
 	final frontendRestarts:Array<String>;
+
+	/** The functions each typing pass of the frontend typed, in order: a pass that continues another types only what is new. */
+	final frontendPassFunctions:Array<Int>;
+
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
 	final semanticCanonicalizationMs:Float;
@@ -788,6 +792,7 @@ class Compiler {
 					graphDependencyMs: 0.0,
 					graphInitializationMs: 0.0,
 					frontendRestarts: [],
+					frontendPassFunctions: [],
 					semanticAssemblyMs: 0.0,
 					semanticAliasMs: 0.0,
 					semanticCanonicalizationMs: 0.0,

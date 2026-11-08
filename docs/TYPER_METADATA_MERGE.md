@@ -1,6 +1,6 @@
 # Typed metadata merge: warm rebuilds and the cold-build frontend restart
 
-Status: steps 1 and 2 done, step 3 (restart continuation) next (2026-11-08). Branch `typer-metadata-merge`.
+Status: steps 1-3 done; key path helper lifetime and the final report remain (2026-11-08). Branch `typer-metadata-merge`.
 
 ## Findings from step 1 (refined root cause)
 
@@ -102,37 +102,41 @@ Pick the long-term clean design: metadata tracked per declaring module, so mergi
 changed modules", not ad-hoc patching. Write down the design in this file before coding it.
 Gate: the step-1 test passes; the warm second `app` build succeeds; the full driver suite has no new failures.
 
-### 3. Make the frontend restart a continuation (attempted 2026-11-08, not landed)
+### 3. Make the frontend restart a continuation (landed 2026-11-08)
 
-The continuation (dependency check after publication, empty change sets and carried `regenerated`/`retyped` for pass 2, a
-`continuation` flag so `SemanticAssembly.run` does not treat pass 2 as a first build; saved as `step3-wip-v2.patch` in the
-scratch directory) works for the restart reasons that only add a module a function calls (`DynamicOps`, `Reflect`,
-`ObservableSource`, ...): pass 2 types only what is new. It cannot land because of one reason on `app`:
-`$type-dependency:haxeon.ui.TextLayout needs haxeon.collections.HashMap`. The specialized map owner exists only while the
-`HashMap` module is in the program, so adding the module changes the representation of an existing class field
-(`TextLayout.graphemeGeometry`). Everything typed against the old representation is stale, nothing in the change tracking
-knows (no declaration changed; `indexSemantics` is off in the CLI, so there are no semantic dependencies either), and pass 2
-fails IR verification (`Unknown or mismatched IR field haxeon.ui.TextLayout.graphemeGeometry`). It also shows that the type
-dependency is recorded late (after the bodies, or when `TextLayout` is typed with `HashMap` present), so a cheap early restart
-before the bodies are typed is not possible without more work.
+Two kinds of reason made the frontend restart, and they need different treatment:
+- **A module a function only calls** (`haxeon.DynamicOps`, `Reflect`, `ObservableSource`, `ReactiveRuntime`, `Std`, `FloatBits`,
+  `Int64`): typing a body does not depend on the module being present. The dependency check now runs after the typed functions
+  are published, and the next pass is a continuation: it gets empty change sets, carries `regenerated` and `retyped`, and
+  `SemanticAssembly.run(..., continuation)` does not treat it as a first build. It types the new module's functions only.
+- **A module that changes a representation**: only `haxeon.collections.HashMap` does (`RuntimeDependencyTracker.changesRepresentation`).
+  The specialized map owner exists only while the module is in the program, so everything typed without it is typed against the
+  wrong representation (the earlier attempt failed IR verification on `TextLayout.graphemeGeometry`). Whether a map needs the
+  owner is a fact about declarations (`TypingSession.requiresSpecializedMap`: payload enum key, declared `Hashable`, value class),
+  so `RepresentationDependencies.missing` answers it from the typed class fields, method and interface signatures, enum payloads
+  and the signatures of non-generic free functions, right after the metadata is typed and before any body is. If the module is
+  missing, `RuntimeModulesRequired` makes the frontend add it and run again. Nothing is typed in the aborted pass: it costs the
+  semantic assembly and analysis (about 1.2 s and 0.8 GB of allocation on `app`), not a typing pass. A typedef is covered by the
+  field or signature that uses it.
 
-What the experiment established: the 10,332 functions pass 2 selects as "module snapshot" refreshes are harmless (they were
-never typed in pass 1: FFI struct methods, so they can never be "typed at the current revision"); the restart costs 15.1 s of
-80 s (semantic 3.2 s, typing 11.9 s) and the continuation would bring that to well under 1 s.
+Correctness guard: if a typing pass still finds a representation-changing module (a map met only inside a body, or in a generic
+class's field once instantiated), the scan missed a case and the pass is thrown away as before. Reasons carry their kind in
+`metrics.frontendRestarts` (`declared:`, `continued:`, `representation:`) and `metrics.frontendPassFunctions` lists the functions
+each pass typed. `FrontendRestartMain` covers the three kinds, and each result equals a compile that imports the module.
 
-Options, to be decided: (a) seed the representation-defining modules before pass 1 from a declaration-level scan of the class
-field and signature types (a map type that needs the specialized owner), so no restart is needed; (b) keep the old restart
-only for reasons that change a representation (`$type-dependency:` and `HashMap`) and continue for the others, which on `app`
-still restarts once; (c) persist the discovered dependencies per project, so the next cold build starts with them. (a) is the
-cleanest; it needs the typing session's `requiresSpecializedMap` before bodies are typed.
+With indexing on (`indexSemantics`, the editor), `SemanticAssembly` refreshes every module on purpose, so a continuation there
+retypes everything as the old restart did; the command line builds with it off.
 
-### 3. Make the frontend restart a continuation
-Rebuild the experiment cleanly (no traces): the dependency check after publication in `FrontendCompilation.run`,
-empty change sets for pass 2, carried `regenerated`/`retyped` sets, and a continuation flag for
-`SemanticAssembly.run` so pass 2 does not invalidate every function for `source-revision`.
-Extend `FrontendRestartMain` (or add a test) to check that the restart no longer retypes unchanged functions.
-Gate: cold `app` build succeeds and `compile-count` (objects allocated, deterministic) drops clearly below the step-2
-number; output equivalence on `cnckit/tests` (byte-identical .hl, see Measuring).
+Measured on `app` (materia at e11c35e2f^), cold: reasons are one `declared` (`TextLayout needs HashMap`), six `continued`
+(`DynamicOps`) and no `representation`; 806.2M objects and 34.3 GB allocated against 878.9M and 36.5 GB, compiler 67.6 s. The
+per-pass timeline (allocation, time): declaration pass 5.1 GB and 9.1 s, of which the graph and parse phase is 3.9 GB and is
+needed anyway; the one full typing pass about 11.9 GB and 17 s with publication; the continuation 2.7 GB and about 7 s, of which
+typing and publication are 1.2 GB and 1.7 s. What remains of the old second pass is the semantic assembly and analysis of the
+whole program (2.1 GB, 5.2 s per run, twice now), because `SemanticAssembly` reuses a module's canonical contribution only when
+no signature or structural change is pending, and a new module always brings some. Relaxing that (reuse for modules whose
+imports cannot resolve to the new declarations) is the next saving, about 5 s; not done here.
+
+Gate: `cnckit/tests` output is byte-identical to the baseline compiler (`d78093d3`) in the same install path.
 
 ### 4. Results
 Record before/after for cold `app` and warm `app` (compiler ms, `compile-count`, `compile-bytes`, functions typed in

@@ -162,6 +162,7 @@ class CompilationPipeline {
 				graphDependencyMs: frontend.graphDependencyMs,
 				graphInitializationMs: frontend.graphInitializationMs,
 				frontendRestarts: frontend.frontendRestarts,
+				frontendPassFunctions: frontend.frontendPassFunctions,
 				semanticAssemblyMs: frontendDoneAt - frontendGraphDoneAt,
 				semanticAliasMs: frontend.semanticAliasMs,
 				semanticCanonicalizationMs: frontend.semanticCanonicalizationMs,

@@ -7,6 +7,13 @@ class RuntimeDependencyTracker {
 
 	public function new() {}
 
+	/**
+		Whether having `target` in the program changes how types are represented, so a body typed without it is typed
+		differently than with it. Modules that functions only call (`haxeon.DynamicOps`, `Reflect`, the reactive runtime) do not.
+	**/
+	public static function changesRepresentation(target:String):Bool
+		return target == compiler.runtime.RuntimeType.SPECIALIZED_MAP;
+
 	public function record(functionName:String, target:String):Void {
 		var targets = dependencies.get(functionName);
 		if (targets == null) {

@@ -23,6 +23,8 @@ import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.EnumRuntimeType;
 import compiler.types.typing.RetainedFromPrevious;
+import compiler.types.typing.RuntimeDependencyTracker;
+import compiler.types.typing.RuntimeModulesRequired;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
@@ -53,6 +55,7 @@ typedef FrontendResult = {
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
 	final frontendRestarts:Array<String>;
+	final frontendPassFunctions:Array<Int>;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -63,7 +66,8 @@ typedef FrontendResult = {
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>, ?pendingSignatures:Map<String, Bool>,
-			?pendingStructural:Map<String, Bool>):FrontendResult {
+			?pendingStructural:Map<String, Bool>, ?carried:{regenerated:Array<String>, retyped:Array<String>
+		}):FrontendResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var modules = context.modules,
 			graph = context.graph,
@@ -137,7 +141,7 @@ class FrontendCompilation {
 		var allocationAfterGraph = AllocationMeter.sample();
 
 		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged,
-			indexSemantics),
+			indexSemantics, carried != null),
 			canonicalProgram = semanticAssembly.canonicalProgram,
 			functions = semanticAssembly.functions,
 			owners = semanticAssembly.owners,
@@ -150,6 +154,7 @@ class FrontendCompilation {
 		var allocationAfterAnalysis = allocationAfterSemantic;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
+		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
 			inlineConstantDependencies:Map<String, Map<String, Bool>>,
@@ -174,6 +179,7 @@ class FrontendCompilation {
 				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true]));
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
+			context.frontendPassFunctions.push(typedNew.functions.length);
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces, typedNew.genericOwnerAliases);
 			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
@@ -182,14 +188,25 @@ class FrontendCompilation {
 			IrGenerator.bindNativeStringFastPaths(!context.isWasmTarget());
 			IrGenerator.bindNativeReflectionDispatch(context.isWasmTarget());
 			typerMetrics = typedResult.metrics;
+			runtimeDependencies = typedResult.runtimeDependencies;
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;
 			inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			defaultArgumentSources = typedResult.defaultArgumentSources;
-			if (includeTypedRuntimeDependencies(context, typedResult.runtimeDependencies, typedNew, owners, names, rollbackModules))
+			// The declarations did not show a module that changes a representation (a map met only inside a body), so what was
+			// typed is typed against the wrong representation and nothing of this pass is kept.
+			if (includeTypedRuntimeDependencies(context, [
+				for (dependency in runtimeDependencies) if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) dependency
+			], typedNew.functions, owners, names, rollbackModules, "representation"))
 				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
-					structuralChanged);
+					structuralChanged, carried);
 			context.cachedSemanticProgram = semantic;
+		} catch (needed:RuntimeModulesRequired) {
+			// The declarations show a module the program lacks and that changes a representation: add it before typing anything.
+			if (!includeTypedRuntimeDependencies(context, needed.dependencies, [], owners, names, rollbackModules, "declared"))
+				throw 'The runtime modules the declarations need are already in the program: ${[for (dependency in needed.dependencies) dependency.target].join(", ")}';
+			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
+				structuralChanged, carried);
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state:compiler.modules.ModuleState = modules.get(name);
@@ -220,7 +237,8 @@ class FrontendCompilation {
 			}
 		}
 		var allocationAfterIndexRebuild = AllocationMeter.sample();
-		var retyped = [], regenerated = [];
+		var retyped = carried == null ? [] : carried.retyped.copy(),
+			regenerated = carried == null ? [] : carried.regenerated.copy();
 		var previousTyped = context.lastTypedProgram;
 		var currentSpecializedOwners:Map<String, Bool> = [
 			for (classDecl in typedNew.classes)
@@ -467,7 +485,7 @@ class FrontendCompilation {
 			}
 		}
 		var allocationAfterModulePrune = AllocationMeter.sample();
-		retyped.sort(Reflect.compare);
+		retyped = uniqueSorted(retyped);
 		var allocationAfterPrune = AllocationMeter.sample();
 		if (lowerToIr)
 			for (name in names) {
@@ -494,7 +512,14 @@ class FrontendCompilation {
 					regenerated.push(functionName);
 				}
 			}
-		regenerated.sort(Reflect.compare);
+		regenerated = uniqueSorted(regenerated);
+		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
+		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
+		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules, "continued")) {
+			context.setLastTypedProgram(typedNew);
+			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [], [],
+				{regenerated: regenerated, retyped: retyped});
+		}
 		var typingLoweringDoneAt = Sys.time() * 1000.0;
 		var allocationAfterTyping = AllocationMeter.sample();
 		var allocationPhases = [
@@ -536,6 +561,7 @@ class FrontendCompilation {
 				graphDependencyMs: graphDependencyMs,
 				graphInitializationMs: graphInitializationMs,
 				frontendRestarts: context.frontendRestarts,
+				frontendPassFunctions: context.frontendPassFunctions,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
@@ -684,11 +710,21 @@ class FrontendCompilation {
 			graphDependencyMs: graphDependencyMs,
 			graphInitializationMs: graphInitializationMs,
 			frontendRestarts: context.frontendRestarts,
+			frontendPassFunctions: context.frontendPassFunctions,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
 			allocationPhases: allocationPhases
 		};
+		}
+
+	static function uniqueSorted(names:Array<String>):Array<String> {
+		names.sort(Reflect.compare);
+		var result:Array<String> = [];
+		for (name in names)
+			if (result.length == 0 || result[result.length - 1] != name)
+				result.push(name);
+		return result;
 	}
 
 	/**
@@ -1148,9 +1184,10 @@ class FrontendCompilation {
 	}
 
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
-			typed:TypedProgram, owners:Map<String, String>, names:Array<String>, rollbackModules:Map<String, ModuleState>):Bool {
+			typedFunctions:Array<compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, names:Array<String>,
+			rollbackModules:Map<String, ModuleState>, kind:String):Bool {
 		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
-		for (fn in typed.functions)
+		for (fn in typedFunctions)
 			typedByName.set(fn.name, fn);
 		var changed = false;
 		for (dependency in dependencies) {
@@ -1170,13 +1207,15 @@ class FrontendCompilation {
 				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
+			else if (owners.exists(dependency.functionName))
+				owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
 			var state = context.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
-				context.frontendRestarts.push('${dependency.functionName} needs $target');
+				context.frontendRestarts.push('$kind: ${dependency.functionName} needs $target');
 				state.dependencies.push(target);
 				state.dependencies.sort(Reflect.compare);
 				changed = true;
