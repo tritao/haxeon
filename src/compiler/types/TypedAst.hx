@@ -167,8 +167,10 @@ enum TypedStatement {
 	TReturn(expression:TypedExpression, span:SourceSpan);
 	TReturnVoid(span:SourceSpan);
 	TThrow(expression:TypedExpression, span:SourceSpan);
+
 	/** Cleanup registered at this point and executed on exit from the containing block. */
 	TDefer(body:Array<TypedStatement>, span:SourceSpan, scopedDisposal:Bool);
+
 	TTry(tryBranch:Array<TypedStatement>, catches:Array<TypedCatch>, span:SourceSpan);
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
@@ -314,6 +316,7 @@ typedef TypedFunction = {
 
 	/** Physical receiver owner for a specialized generic instance method. */
 	final ?physicalOwner:String;
+
 	final isStatic:Bool;
 	final isConstructor:Bool;
 
@@ -355,11 +358,13 @@ typedef TypedField = {
 /** Class declaration with resolved field, method, and inheritance contracts. */
 typedef TypedClass = {
 	final name:String;
+
 	/** Type parameter names on the source generic declaration. */
 	final ?genericParameters:Array<String>;
 
 	/** Source declaration and representation arguments for a specialized generic owner. */
 	final ?specializationOrigin:String;
+
 	final ?specializationArguments:Array<CompilerType>;
 	final isValue:Bool;
 	final isFlat:Bool;
@@ -446,8 +451,10 @@ typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.T
 /** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {
 	final nativeAbiTarget:String;
+
 	/** Semantic generic instances mapped to their physical specialized owners. */
 	final genericOwnerAliases:Map<String, String>;
+
 	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
 	final enums:Array<TypedEnum>;
 	final interfaces:Array<TypedInterface>;
@@ -455,6 +462,10 @@ typedef TypedProgram = {
 	final functions:Array<TypedFunction>;
 	final closurePlan:TypedClosurePlan;
 	final anonymousTypes:Array<TypedAnonymous>;
+
+	/** The anonymous types each unit (a function, or a class's field initializers) registered, kept for units a later build does not type again. */
+	final ?anonymousUnits:Map<String, Array<TypedAnonymous>>;
+
 	final natives:Array<TypedNative>;
 }
 

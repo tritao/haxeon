@@ -579,6 +579,13 @@ class FrontendCompilation {
 				cachedNames.push(functionName);
 		}
 		cachedNames.sort(Reflect.compare);
+		// A generated helper can be cached by more than one module (the one that asked for it first and the one that owns it now);
+		// the program has it once, as a fresh build does.
+		var distinctNames:Array<String> = [];
+		for (name in cachedNames)
+			if (distinctNames.length == 0 || distinctNames[distinctNames.length - 1] != name)
+				distinctNames.push(name);
+		cachedNames = distinctNames;
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))

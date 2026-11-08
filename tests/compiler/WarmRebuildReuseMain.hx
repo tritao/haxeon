@@ -17,7 +17,11 @@ class WarmRebuildReuseMain {
 	static final shapeSource = "enum Shape { Circle(radius:Int); Square(side:Int); }";
 	static final areaSource = "class Area { public static function of(shape:Shape):Int return switch shape { case Circle(radius): 3 * radius * radius; case Square(side): side * side; }; }";
 	static final libSource = "class Lib { public static function add(a:Int, b:Int):Int return a + b; public static function name():String return \"lib\"; public static function boxed():Int return new Box<Int>(3).get(); }";
-	static final mainSource = "class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)); return total == 18 && Lib.name().length == 3 ? 42 : 1; } }";
+
+	/** Field initializers register anonymous types (`{}`) when they are typed, which a warm build does not do again for an unchanged class. */
+	static final configSource = "class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
+
+	static final mainSource = "class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)); return total == 18 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -25,6 +29,7 @@ class WarmRebuildReuseMain {
 			"Shape.hx" => shapeSource,
 			"Area.hx" => areaSource,
 			"Lib.hx" => libSource,
+			"Config.hx" => configSource,
 			"Main.hx" => mainSource
 		];
 
@@ -72,7 +77,8 @@ class WarmRebuildReuseMain {
 			// return its last result.
 			compiler.addSourceRoot("stdlib");
 			var warm = compiler.compile("Main"),
-				fresh = newCompiler(files).compile("Main");
+				freshCompiler = newCompiler(files),
+				fresh = freshCompiler.compile("Main");
 			var reuse = warm.metrics.reuse;
 			// A checked build assembles the module again to compare it, so it reports the IR as the only reused part.
 			var wanted = expectReuse ? (check ? "ir" : "ir+module") : null;
@@ -80,6 +86,10 @@ class WarmRebuildReuseMain {
 				throw 'expected reuse "$wanted" but the build reported "$reuse"';
 			if (!expectReuse && StringTools.startsWith(reuse, "ir"))
 				throw 'the build reused "$reuse" after an edit';
+			var warmTypes = anonymousTypes(compiler),
+				freshTypes = anonymousTypes(freshCompiler);
+			if (warmTypes != freshTypes)
+				throw 'the warm typed program lists other anonymous types than a fresh one\nwarm:  $warmTypes\nfresh: $freshTypes';
 			var warmBytes = HlWriter.encode(warm.module),
 				freshBytes = HlWriter.encode(fresh.module);
 			if (warmBytes.compare(freshBytes) != 0)
@@ -90,6 +100,14 @@ class WarmRebuildReuseMain {
 			failures.push('$label: ${Std.string(error)}');
 		}
 		Sys.putEnv("HAXEON_CHECK_REUSE", checkBefore == null ? "0" : checkBefore);
+	}
+
+	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */
+	static function anonymousTypes(compiler:Compiler):String {
+		var program = compiler.lastTypedProgram;
+		if (program == null)
+			throw "no typed program";
+		return [for (entry in program.anonymousTypes) entry.name].join("\n");
 	}
 
 	static function newCompiler(files:Map<String, String>):Compiler {

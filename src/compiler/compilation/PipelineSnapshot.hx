@@ -102,9 +102,29 @@ class PipelineSnapshot {
 		return "length";
 	}
 
+	static function count(functions:Array<IrFunction>, name:String):Int {
+		var total = 0;
+		for (fn in functions)
+			if (fn.name == name)
+				total++;
+		return total;
+	}
+
 	static function differingFunction(previous:Array<IrFunction>, next:Array<IrFunction>):Null<String> {
-		if (previous.length != next.length)
-			return "count " + previous.length + " -> " + next.length;
+		if (previous.length != next.length) {
+			var before:Map<String, Bool> = [for (fn in previous) fn.name => true],
+				after:Map<String, Bool> = [for (fn in next) fn.name => true];
+			var removed = [for (fn in previous) if (!after.exists(fn.name)) fn.name],
+				added = [for (fn in next) if (!before.exists(fn.name)) fn.name];
+			var repeated:Array<String> = [], seen:Map<String, Bool> = [];
+			for (fn in previous.concat(next)) {
+				if (seen.exists(fn.name) && repeated.indexOf(fn.name) < 0 && (count(previous, fn.name) > 1 || count(next, fn.name) > 1))
+					repeated.push(fn.name);
+				seen.set(fn.name, true);
+			}
+			return "count " + previous.length + " -> " + next.length + " (removed: " + removed.slice(0, 3).join(", ") + "; added: "
+				+ added.slice(0, 3).join(", ") + "; listed twice: " + repeated.slice(0, 3).join(", ") + ")";
+		}
 		for (index in 0...previous.length)
 			if (!IrFunctionStateEquality.same(previous[index], next[index]))
 				return next[index].name;
