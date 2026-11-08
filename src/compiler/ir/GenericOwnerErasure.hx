@@ -8,6 +8,18 @@ class GenericOwnerErasure {
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
 	public static inline final METHOD_REFERENCE_PREFIX = "$generic-method-reference:";
 
+	/**
+		The generic class and member a `$generic-method-reference:<class>:<member>:<receiver type>:<closure type>` target is
+		for, or null when `target` is not one. The class is a declared generic class, whose name has no colon; the types after
+		it may contain colons (`class:Promise<Array<String>>`), which is why only the first two components are read.
+	**/
+	public static function methodReferenceOf(target:String):Null<{owner:String, member:String}> {
+		if (!StringTools.startsWith(target, METHOD_REFERENCE_PREFIX))
+			return null;
+		var parts = target.substr(METHOD_REFERENCE_PREFIX.length).split(":");
+		return parts.length < 3 ? null : {owner: parts[0], member: parts[1]};
+	}
+
 	public static function typeTestName(owner:String, exact:Bool):String
 		return TYPE_TEST_PREFIX + (exact ? "exact:" : "instance:") + owner;
 
@@ -106,9 +118,11 @@ class GenericOwnerErasure {
 			names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
-			var parts = name.substr(METHOD_REFERENCE_PREFIX.length).split(":"), request = requests.get(name);
-			if (parts.length < 3 || request == null) throw 'Invalid generic method reference "$name"';
-			var owner = parts[0], member = parts[1], signature = switch request.closure {
+			var reference = methodReferenceOf(name),
+				request = requests.get(name);
+			if (reference == null || request == null)
+				throw 'Invalid generic method reference "$name"';
+			var owner = reference.owner, member = reference.member, signature = switch request.closure {
 				case Function(arguments, result): {arguments: arguments, result: result};
 				default: throw 'Generic method reference "$name" is not a function';
 			}, builder = new IrBuilder(), receiver = builder.argument("receiver", request.receiver),

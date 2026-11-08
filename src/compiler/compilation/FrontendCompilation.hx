@@ -562,6 +562,7 @@ class FrontendCompilation {
 				throw 'Cached function "$functionName" has no IR body';
 			cached.push(functions.get(functionName));
 		}
+		dropUnusedKeyPathFields(typedNew, cached);
 		if (token != null)
 			token.check();
 		var resolvedObjects = resolvedObjectsFrom(objectCache, typedNew, functionNamesOf(cachedNames, typedNew));
@@ -698,7 +699,6 @@ class FrontendCompilation {
 			declared:Map<String, Bool>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
-			staticFields:Map<String, Bool> = [],
 			previous = context.lastTypedProgram;
 		if (previous == null)
 			return null;
@@ -713,16 +713,14 @@ class FrontendCompilation {
 			return {
 				program: previous,
 				classes: result,
-				enums: retainedEnums,
-				staticFields: staticFields
+				enums: retainedEnums
 			};
 		// A type-only request has no complete IR graph to inspect.
 		if (!lowerToIr)
 			return {
 				program: previous,
 				classes: known,
-				enums: knownEnums,
-				staticFields: null
+				enums: knownEnums
 			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [];
@@ -753,16 +751,17 @@ class FrontendCompilation {
 			members.push(member);
 		}
 		for (name in knownEnums.keys()) {
-			var separator = name.indexOf(EnumRuntimeType.SEPARATOR);
-			if (separator >= 0)
-				enumsByHash.set(name.substr(separator + EnumRuntimeType.SEPARATOR.length), name);
+			var hash = EnumRuntimeType.specializationHash(name);
+			if (hash != null)
+				enumsByHash.set(hash, name);
 		}
 		var pending:Array<String> = [];
 		for (name in functions.keys()) {
 			if (selected.exists(name))
 				continue;
 			var owner = physicalMethods.get(name),
-				helperOf = StringTools.startsWith(name, "$enum") ? enumsByHash.get(name.substr(name.lastIndexOf(":") + 1)) : null;
+				helperHash = EnumRuntimeType.helperHash(name),
+				helperOf = helperHash == null ? null : enumsByHash.get(helperHash);
 			if (owner != null)
 				addMember(membersByOwner, owner, name);
 			else if (helperOf != null)
@@ -823,10 +822,8 @@ class FrontendCompilation {
 							visitType(type);
 						case GlobalGet(_, field), GlobalSet(field, _):
 							var separator = field.lastIndexOf(".");
-							if (separator > 0 && known.exists(field.substr(0, separator))) {
+							if (separator > 0 && known.exists(field.substr(0, separator)))
 								retain(field.substr(0, separator));
-								staticFields.set(field, true);
-							}
 						default:
 					}
 				}
@@ -834,9 +831,55 @@ class FrontendCompilation {
 		return {
 			program: previous,
 			classes: result,
-			enums: retainedEnums,
-			staticFields: staticFields
+			enums: retainedEnums
 		};
+	}
+
+	/**
+	 * A key path cache holds one static field for each key path literal that is in the program. Which literals stay is known
+	 * only once the unused helpers are pruned, so the fields are settled here and a cache carried from the previous program
+	 * does not keep a field for a path nothing reads any more.
+	 */
+	static function dropUnusedKeyPathFields(typed:TypedProgram, functions:Array<IrFunction>):Void {
+		var read:Map<String, Bool> = [];
+		for (fn in functions)
+			if (StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.LITERAL_PREFIX))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case GlobalGet(_, field):
+								read.set(field, true);
+							default:
+						}
+		var kept:Array<compiler.types.TypedAst.TypedClass> = [];
+		for (entry in typed.classes) {
+			if (entry.name.indexOf(".$keypaths$") < 0) {
+				kept.push(entry);
+				continue;
+			}
+			var fields = [
+				for (field in entry.fields) if (!field.isStatic || read.exists(entry.name + "." + field.name)) field
+			];
+			if (fields.length == 0)
+				continue;
+			kept.push(fields.length == entry.fields.length ? entry : {
+				name: entry.name,
+				genericParameters: entry.genericParameters,
+				isValue: entry.isValue,
+				isFlat: entry.isFlat,
+				isPortable: entry.isPortable,
+				isNativeValue: entry.isNativeValue,
+				nativeLayouts: entry.nativeLayouts,
+				base: entry.base,
+				interfaces: entry.interfaces,
+				fields: fields,
+				methods: entry.methods,
+				span: entry.span
+			});
+		}
+		typed.classes.splice(0, typed.classes.length);
+		for (entry in kept)
+			typed.classes.push(entry);
 	}
 
 	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */

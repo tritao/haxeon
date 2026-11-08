@@ -48,6 +48,24 @@ stays in the program. Each compares the specialized owners (fields, methods), en
 final sources. Mutation checks: with the enum filter removed the removal scenario fails; with the all-functions scan seeded
 from owner methods too it fails (owners pile up).
 
+Key path caches: a retained cache class is copied from the previous program (fields in a new array), so a retyped function that
+asks for the same cache finds that copy by name and adds its field to it: one class, fields united. After the prune,
+`dropUnusedKeyPathFields` leaves one static field per `$keypath.literal:` helper still in the program. Debt: the prune keeps a
+shared helper while its recorded origin is unchanged (the origin of a key path helper is the first function that typed it,
+here `Node.new`, not the function that uses it), so a key path whose last user was edited away or removed keeps its helper
+and its field until that origin changes; a fresh compile has neither. This is how the prune already behaved with reused
+metadata; two scenarios tolerate it (the cache may hold more fields than a fresh one, never fewer).
+
+Cost of `retainedFromPrevious` on `app` (31,841 functions, every instruction of every non-selected function): 354-357 ms
+per pass on the warm builds (loaded machine). Below the 0.5 s bar, so no per-function summaries yet; the restart pass will
+run it once more.
+
+Name parsing: the enum helper ownership and the method reference origin are read through `EnumRuntimeType.helperHash` /
+`specializationHash` and `GenericOwnerErasure.methodReferenceOf`, next to the code that builds those names. A helper's hash
+is its last `HASH_LENGTH` characters; a method reference's class is a declared generic class (no colon) and everything
+after the member may contain colons. Debt: these are still names, not fields; a structured record of the helper's enum and
+the reference's class and member where the IR function or closure is made would remove the parsing.
+
 Results of step 2 (materia at e11c35e2f^, since `app` on main needs `haxeon.build.InputFiles` from uncommitted stdlib edits):
 
 | `app` build | compiler | functions retyped | objects allocated | bytes |

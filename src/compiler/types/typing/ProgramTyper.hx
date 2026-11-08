@@ -455,7 +455,6 @@ class ProgramTyper {
 					&& session.representation.typeNamesExist(cached.specializationArguments))
 					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
 			} else if (!session.classDecls.exists(cached.name)) {
-				var staticFields = retained.staticFields;
 				carried.push({
 					name: cached.name,
 					genericParameters: cached.genericParameters,
@@ -466,11 +465,7 @@ class ProgramTyper {
 					nativeLayouts: cached.nativeLayouts,
 					base: cached.base,
 					interfaces: cached.interfaces,
-					fields: [
-						for (field in cached.fields) if (!field.isStatic
-							|| staticFields == null
-							|| staticFields.exists(cached.name + "." + field.name)) field
-					],
+					fields: cached.fields.copy(),
 					methods: cached.methods,
 					span: cached.span
 				});
