@@ -110,6 +110,9 @@ typedef CompileResult = {
 	final reloadReasons:Array<AbiChange>;
 	final functionIndices:Map<String, Int>;
 	final functionIds:Map<String, Int>;
+
+	/** The modules of the compiled program (every module the frontend reached), sorted by name. */
+	final moduleNames:Array<String>;
 	final runtimeIdentity:Bytes;
 
 	/** No runtime publication is required; revision stays at the acknowledged baseline. */
@@ -689,6 +692,24 @@ class Compiler {
 	public function analyze(entryModule:String, ?token:CancellationToken):AnalysisResult
 		return new AnalysisTransaction(this, entryModule, token).run();
 
+	/**
+		Whether a module loaded lazily from a root would now be found elsewhere: a file in an earlier root was added under the
+		name of one already loaded. The session cannot be reused then, since its module would be the wrong one.
+	 */
+	public function hasShadowedModule():Bool {
+		var probe = sourceLoader.copy();
+		for (name => state in modules) {
+			var path = state.source.path;
+			if (!haxe.io.Path.isAbsolute(path))
+				continue;
+			var scratch:Map<String, compiler.modules.ModuleState> = [];
+			var found = probe.load(name, scratch);
+			if (found != null && found.source.path != path)
+				return true;
+		}
+		return false;
+	}
+
 	public function dependentModules(module:String):Array<String>
 		return graph.dependents(module);
 
@@ -752,6 +773,7 @@ class Compiler {
 				reloadReasons: [],
 				functionIndices: cached.functionIndices,
 				functionIds: cached.functionIds,
+				moduleNames: cached.moduleNames,
 				runtimeIdentity: cached.runtimeIdentity,
 				unchanged: true,
 				baseRevision: cached.revision,

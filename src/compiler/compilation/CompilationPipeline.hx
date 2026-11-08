@@ -143,6 +143,7 @@ class CompilationPipeline {
 			reloadReasons: reloadReasons,
 			functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
 			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
+			moduleNames: names,
 			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, candidateAssembler.cache.stableIds),
 			unchanged: assembly.unchanged
 			&& (publicationBaseline == null

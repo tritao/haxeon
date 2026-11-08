@@ -13,6 +13,8 @@ typedef CompilerRequest = {
 	final output:String;
 	final xmlOutput:Null<String>;
 	final irOutput:Null<String>;
+	/** Where to write the modules this compile read: one `[name, path, sha256 of its text]` per module, sorted by name. */
+	final inputsOutput:Null<String>;
 	final entry:String;
 	final dumpFunction:Int;
 	final importMemory:Bool;

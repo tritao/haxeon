@@ -156,6 +156,8 @@ class CompilerDriver {
 				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 			if (request.irOutput != null)
 				File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
+			if (request.inputsOutput != null)
+				File.saveContent(request.inputsOutput, inputsReport(compiler, result.moduleNames));
 			if (request.ffiHeader != null && request.ffiLibrary != null)
 				File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 			var typedProgram = compiler.lastTypedProgram;
@@ -201,6 +203,20 @@ class CompilerDriver {
 	}
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
+	/** The modules the compile read, as JSON: `[name, path, sha256 of the text the compiler used]`, sorted by name. */
+	static function inputsReport(session:compiler.Compiler, names:Array<String>):String {
+		var sorted = names.copy();
+		sorted.sort(Reflect.compare);
+		var rows:Array<Array<String>> = [];
+		for (name in sorted) {
+			var state = session.modules.get(name);
+			if (state == null)
+				throw "Compiled module has no source: " + name;
+			rows.push([name, state.source.path, build.execution.ContentDigest.makeHex(Bytes.ofString(state.source.text))]);
+		}
+		return Json.stringify(rows);
+	}
+
 	static function hasPublication(output:String, result:CompileResult):Bool {
 		var stamp = output + ".live.stamp";
 		return FileSystem.exists(stamp)
