@@ -1773,7 +1773,7 @@ class LspProtocolMain {
 	}
 
 	static function haxeonManifestWorkspace():Void {
-		var base = sys.FileSystem.absolutePath("out/lsp-haxeon-workspace");
+		var base = sys.FileSystem.fullPath("out") + "/lsp-haxeon-workspace-" + Date.now().getTime() + "-" + Std.random(0x7fffffff);
 		deleteTree(base);
 		for (directory in [
 			base,
