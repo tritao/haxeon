@@ -71,6 +71,7 @@ class CountingDiagnosticLanguageService extends LanguageService {
 class LspProtocolMain {
 	static function main():Void {
 		haxeonManifestWorkspace();
+		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
 		recoveredTypeNavigation();
 		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
@@ -1728,6 +1729,47 @@ class LspProtocolMain {
 		if (rename.error == null || rename.error.code != -32801)
 			throw "navigation fallback weakened rename freshness protection";
 		Sys.println("PASS: current recovered this.member definitions, shadowing and edits with broken dependencies; rename remains protected");
+	}
+
+	/** Package discovery resolves symbolic links; a workspace opened through a link must still own its manifest sources. */
+	static function linkedManifestWorkspace():Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		var target = sys.FileSystem.absolutePath("out/lsp-linked-workspace-target"),
+			base = sys.FileSystem.absolutePath("out/lsp-linked-workspace");
+		if (Sys.command("rm", ["-f", base]) != 0)
+			throw "could not remove the previous workspace link";
+		deleteTree(target);
+		for (directory in [
+			target,
+			target + "/app",
+			target + "/app/src",
+			target + "/app/src/app",
+			target + "/lib",
+			target + "/lib/code"
+		])
+			sys.FileSystem.createDirectory(directory);
+		if (Sys.command("ln", ["-s", target, base]) != 0)
+			throw "could not link the workspace";
+		sys.io.File.saveContent(base + "/app/haxeon.json",
+			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"dependencies":{"helper":{"path":"../lib"}}}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"]}');
+		sys.io.File.saveContent(base + "/lib/code/Value.hx", "class Value { public static function answer():Int return 42; }");
+		var mainPath = base + "/app/src/app/Main.hx",
+			protocol = new LspProtocol();
+		sys.io.File.saveContent(mainPath, "package app; class Main { public static function main():Int return Value.answer(); }");
+		request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 851,
+			method: "initialize",
+			params: {rootUri: "file://" + base + "/app"}
+		}));
+		if (protocol.project.configurations.length != 1
+			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
+			|| !protocol.project.hasDiskSource(mainPath)
+			|| !protocol.project.hasDiskSource(base + "/lib/code/Value.hx"))
+			throw "a manifest workspace opened through a symbolic link lost its sources";
+		Sys.println("PASS: a manifest workspace opened through a symbolic link keeps its sources and dependencies");
 	}
 
 	static function haxeonManifestWorkspace():Void {
