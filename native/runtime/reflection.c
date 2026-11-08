@@ -145,6 +145,10 @@ HL_PRIM bool HL_NAME(__reflect_is_function)(vdynamic *value) {
 	return value && (value->t->kind == HFUN || value->t->kind == HMETHOD);
 }
 
+HL_PRIM bool HL_NAME(__reflect_is_enum)(vdynamic *value) {
+	return value && value->t->kind == HENUM;
+}
+
 HL_PRIM bool HL_NAME(__reflect_is_object)(vdynamic *value) {
 	if (!value || realtime_is_string(value)) return false;
 	switch (value->t->kind) {

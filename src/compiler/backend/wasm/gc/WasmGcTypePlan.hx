@@ -49,6 +49,8 @@ class WasmGcTypePlan {
 	public final objectTypeIndices:Map<String, Int> = [];
 	public final objectFieldIndices:Map<String, Map<String, Int>> = [];
 	public final enumTypeIndices:Map<String, Int> = [];
+	/** Boxed enum kind, independent of the concrete declaration and payload. */
+	public var enumRootTypeIndex(default, null):Int = -1;
 	public final enumConstructorTypeIndices:Map<String, Array<Int>> = [];
 	public final arrayTypes:Map<String, WasmGcArrayTypePlan> = [];
 	public final mapTypes:Map<String, WasmGcMapTypePlan> = [];
@@ -255,7 +257,7 @@ class WasmGcTypePlan {
 		return constructors[constructor];
 	}
 
-	/** Enum constructor structs repeat the base tag at field zero; payload fields start at one. */
+	/** Enum constructors inherit the shared tag at field zero; payload fields start at one. */
 	public function enumFieldIndex(name:String, constructor:Int, field:Int):Int {
 		var declaration = enumDeclarations.get(name);
 		if (declaration == null || constructor < 0 || constructor >= declaration.cases.length)
@@ -601,6 +603,7 @@ class WasmGcTypePlan {
 			objectRootTypeIndex = reserveType();
 		for (object in orderedObjects)
 			objectTypeIndices.set(object.name, reserveType());
+		if (program.enums.length > 0) enumRootTypeIndex = reserveType();
 		for (enumDecl in program.enums) {
 			enumTypeIndices.set(enumDecl.name, reserveType());
 			var constructorTypes:Array<Int> = [];
@@ -725,10 +728,12 @@ class WasmGcTypePlan {
 		}
 		if (objectRootTypeIndex >= 0)
 			setType(objectRootTypeIndex, false, [], Struct([{type: Value(I32), mutable: true}]));
+		if (enumRootTypeIndex >= 0)
+			setType(enumRootTypeIndex, false, [], Struct([{type: Value(I32), mutable: false}]));
 		for (enumDecl in program.enums) {
 			var base = enumType(enumDecl.name),
 				baseFields:Array<WasmFieldType> = [{type: Value(I32), mutable: false}];
-			setType(base, false, [], Struct(baseFields));
+			setType(base, false, [enumRootTypeIndex], Struct(baseFields));
 			var constructorTypes = enumConstructorTypeIndices.get(enumDecl.name);
 			for (index in 0...enumDecl.cases.length) {
 				var fields = baseFields.copy();

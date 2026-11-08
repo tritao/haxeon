@@ -24,12 +24,17 @@
 extern function reflectCompare(left:Dynamic, right:Dynamic):Int;
 #else
 
+@:hlNative("haxeon_runtime", "__reflect_is_enum")
+extern function reflectIsEnum(value:Dynamic):Bool;
+
 /**
  * HashLink's `hl_dyn_compare` order: null first, strings bytewise, numbers by value, and
  * `0xAABBCCDD` (HashLink's invalid-comparison result) for NaN or mismatched primitive kinds.
  * HashLink orders distinct objects by address, which Wasm does not expose; they compare as 1.
  */
 function reflectCompare(left:Dynamic, right:Dynamic):Int {
+	if (reflectIsEnum(left) || reflectIsEnum(right))
+		return DynamicOrder.INVALID;
 	if (left == null)
 		return right == null ? 0 : -1;
 	if (right == null)

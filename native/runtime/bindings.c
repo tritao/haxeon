@@ -301,6 +301,7 @@ DEFINE_PRIM(_STRING,__reflect_field_name,_DYN _I32);
 DEFINE_PRIM(_STRING,__reflect_class_name,_DYN);
 DEFINE_PRIM(_DYN,__reflect_dynamic_object,_NO_ARG);
 DEFINE_PRIM(_BOOL,__reflect_is_function,_DYN);
+DEFINE_PRIM(_BOOL,__reflect_is_enum,_DYN);
 DEFINE_PRIM(_BOOL,__reflect_is_object,_DYN);
 DEFINE_PRIM(_DYN,__reflect_array_get,_DYN _I32);
 DEFINE_PRIM(_I32,__reflect_array_length,_DYN);

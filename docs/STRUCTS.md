@@ -462,6 +462,13 @@ This rule avoids making allocation strategy observable and does not require an i
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums. The first source inline subset excludes any use whose logical equality adapter is not yet connected.
 
+Boxed-enum kind checks use the runtime representation rather than source enum type tokens. Wasm GC enum bases
+share one tagged root, so the check is one `ref.test`; the root reuses the existing tag and adds no payload field or
+per-value allocation. Wasm32 loads the header once and uses a balanced decision tree over the module's resolved enum
+type IDs, without a lookup allocation or an added header field. `Reflect.compare` returns the
+invalid-comparison result when either operand is an enum, including when the other operand is null. These checks
+apply to canonical escape boxes; typed inline packets keep their scalar/reference lanes.
+
 ### Source inline enum activation: remaining blockers
 
 The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
