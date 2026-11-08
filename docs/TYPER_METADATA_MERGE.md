@@ -1,6 +1,6 @@
 # Typed metadata merge: warm rebuilds and the cold-build frontend restart
 
-Status: steps 1-3 and the key path helper lifetime done; the seeding experiment and the final report remain (2026-11-08). Branch `typer-metadata-merge`.
+Status: done (2026-11-08). Open items at the end of Results. Branch `typer-metadata-merge`.
 
 ## Findings from step 1 (refined root cause)
 
@@ -106,41 +106,111 @@ Gate: the step-1 test passes; the warm second `app` build succeeds; the full dri
 
 Two kinds of reason made the frontend restart, and they need different treatment:
 - **A module a function only calls** (`haxeon.DynamicOps`, `Reflect`, `ObservableSource`, `ReactiveRuntime`, `Std`, `FloatBits`,
-  `Int64`): typing a body does not depend on the module being present. The dependency check now runs after the typed functions
-  are published, and the next pass is a continuation: it gets empty change sets, carries `regenerated` and `retyped`, and
-  `SemanticAssembly.run(..., continuation)` does not treat it as a first build. It types the new module's functions only.
+  `Int64`): typing a body does not depend on the module being present. The dependency check runs after the typed functions are
+  published and the next pass is a continuation: it gets empty change sets, carries `regenerated` and `retyped`, and
+  `SemanticAssembly.run(..., continuation)` does not treat it as a first build. It types the new module's functions only. Reasons
+  are reported in `metrics.frontendRestarts` and the functions each pass typed in `metrics.frontendPassFunctions`.
 - **A module that changes a representation**: only `haxeon.collections.HashMap` does (`RuntimeDependencyTracker.changesRepresentation`).
   The specialized map owner exists only while the module is in the program, so everything typed without it is typed against the
-  wrong representation (the earlier attempt failed IR verification on `TextLayout.graphemeGeometry`). Whether a map needs the
-  owner is a fact about declarations (`TypingSession.requiresSpecializedMap`: payload enum key, declared `Hashable`, value class),
-  so `RepresentationDependencies.missing` answers it from the typed class fields, method and interface signatures, enum payloads
-  and the signatures of non-generic free functions, right after the metadata is typed and before any body is. If the module is
-  missing, `RuntimeModulesRequired` makes the frontend add it and run again. Nothing is typed in the aborted pass: it costs the
-  semantic assembly and analysis (about 1.2 s and 0.8 GB of allocation on `app`), not a typing pass. A typedef is covered by the
-  field or signature that uses it.
-
-Correctness guard: if a typing pass still finds a representation-changing module (a map met only inside a body, or in a generic
-class's field once instantiated), the scan missed a case and the pass is thrown away as before. Reasons carry their kind in
-`metrics.frontendRestarts` (`declared:`, `continued:`, `representation:`) and `metrics.frontendPassFunctions` lists the functions
-each pass typed. `FrontendRestartMain` covers the three kinds, and each result equals a compile that imports the module.
+  wrong representation (the first attempt failed IR verification on `TextLayout.graphemeGeometry`). Such a module is never
+  discovered late: `FrontendCompilation.seedRepresentationModules` makes `RuntimeType.SPECIALIZED_MAP` a root module of every
+  compile that can find it (two functions, +7.5 KB, in a program that has no use for it). An intermediate version found it from the
+  declarations (`TypingSession.requiresSpecializedMap` over typed fields and signatures, before any body) and restarted the
+  frontend to add it; seeding replaced it (see the experiment below). If typing reports a representation module that is not in
+  the program anyway, the compile stops with `Representation module "X" must be seeded but is not in the program (needed by "Y")`
+  instead of compiling against the wrong representation. A compiler with no stdlib root has no such module and could not make a
+  specialized map before either (the old restart threw "has no source module"), so no working configuration changed.
 
 With indexing on (`indexSemantics`, the editor), `SemanticAssembly` refreshes every module on purpose, so a continuation there
 retypes everything as the old restart did; the command line builds with it off.
 
-Measured on `app` (materia at e11c35e2f^), cold: reasons are one `declared` (`TextLayout needs HashMap`), six `continued`
-(`DynamicOps`) and no `representation`; 806.2M objects and 34.3 GB allocated against 878.9M and 36.5 GB, compiler 67.6 s. The
-per-pass timeline (allocation, time): declaration pass 5.1 GB and 9.1 s, of which the graph and parse phase is 3.9 GB and is
-needed anyway; the one full typing pass about 11.9 GB and 17 s with publication; the continuation 2.7 GB and about 7 s, of which
-typing and publication are 1.2 GB and 1.7 s. What remains of the old second pass is the semantic assembly and analysis of the
-whole program (2.1 GB, 5.2 s per run, twice now), because `SemanticAssembly` reuses a module's canonical contribution only when
-no signature or structural change is pending, and a new module always brings some. Relaxing that (reuse for modules whose
-imports cannot resolve to the new declarations) is the next saving, about 5 s; not done here.
+Gates: cold `app` (materia at e11c35e2f^) has six `continued` restarts (`DynamicOps`) and none else: 752.6M objects and
+32.0 GB allocated against 878.9M and 36.3 GB at the start. `cnckit/tests` has exactly the two `HashMap` functions
+(`haxeon.Hashing.mix`, `haxeon.collections.HashMap.insertionBucket`) more than the baseline compiler (`d78093d3`) in the same
+install path and nothing less, and the program prints the same output and exits 0 ("CncKit tests passed (436 assertions)").
+Before seeding it was byte-identical.
 
-Gate: `cnckit/tests` output is byte-identical to the baseline compiler (`d78093d3`) in the same install path.
+Per-pass timeline of the declaration-scan version (allocation, time): declaration pass 5.1 GB and 9.1 s, of which graph and parse is
+3.9 GB and needed anyway; the one full typing pass about 11.9 GB and 17 s with publication; the continuation 2.7 GB and about 7 s,
+of which typing and publication are 1.2 GB. The semantic assembly and analysis of the whole program run again in every pass
+(2.1 GB, 5.2 s), because `SemanticAssembly` reuses a module's canonical contribution only when no signature or structural change
+is pending and a new module always brings some.
+
+#### Seeding experiment (2026-11-08)
+
+Instead of discovering the runtime modules, always put them in the program. Measured with a temporary `HAXEON_SEED` root-module
+hook (not committed); the modules are `HashMap`, `DynamicOps`, `Reflect`, `Std`, `FloatBits`, `Int64`, `ObservableSource` and
+`ReactiveRuntime`.
+
+Cold `app` (materia at e11c35e2f^):
+
+| seeded | restarts | objects | bytes | output |
+|---|---|---|---|---|
+| nothing (the landed design) | 1 declared, 6 continued | 806.4M | 34.35 GB | 101,204,743 |
+| `HashMap` | 6 continued | 752.6M | 32.0 GB | 101,204,743 |
+| all eight | none | 686.1M | 29.18 GB | 101,205,143 |
+
+The function names are identical in the three builds (35,169), so seeding produces the same program; the `.hl` hash differs
+(ordering and debug data only).
+
+What a program that does not need them pays, because seeded modules stay in the output (the backend does not drop uncalled
+functions): hello world (9.2k objects, 1.5 KB) gains +59k objects and +7.5 KB with `HashMap`, +25k and +9.8 KB with `Std`,
++22k and +0.4 KB with `FloatBits`, +19k and +0.4 KB with `Int64`, +183k and +39 KB with `Reflect` (22 functions), +263k and
++49 KB with `DynamicOps` (39 functions), +956k and +123 KB with the reactive runtime (104 functions), +1.27M and +168 KB with
+all. In `cnckit/tests` (23.9M objects, 3.46 MB) `HashMap` adds 2 functions and 7.5 KB, the four cheap modules 4 functions, all
+eight 129 functions, 136 KB and 1.08M objects (+4.5%).
+
+Decision: seed `HashMap` only. It costs two functions and 7.5 KB where it is not needed and removes the declaration pass (-54M
+objects on `app`) and every representation restart. The called-only modules stay discovered: seeding `DynamicOps`, `Reflect` and
+the reactive runtime would add +49, +39 and +123 KB to every program to save one continuation (about 66M objects) in the programs
+that use them. Seeding all eight would also have let the continuation be deleted (686.1M objects, no restarts) at +168 KB per
+program; rejected.
 
 ### 4. Results
-Record before/after for cold `app` and warm `app` (compiler ms, `compile-count`, `compile-bytes`, functions typed in
-pass 2) in this file, plus anything left undone.
+
+Branch `typer-metadata-merge`, on top of `d78093d3` (main with the perf commits). Commits:
+- `5eedb8e7` Reading the generated identity table's template again is not an edit (the warm failure, with `TypedMetadataMergeMain`).
+- `9ad82bec` A module remembers the text it was loaded from, apart from the text it compiles (`ModuleState.loadedText`).
+- `d72c5615` Typing keeps what unchanged code still uses of the previous program, reused metadata or not.
+- `3e65a97a` Key path caches settle after the prune; name parsing sits next to the names.
+- `2f6cbb4d`, then the final step 3 commit: restart reasons by kind, the continuation, and `HashMap` seeded in place of the scan.
+- the key path helper lifetime (`pruneUnusedKeyPathHelpers`, exact equality in the tests).
+
+`app` (materia at e11c35e2f^; the current `app` on main needs `haxeon.build.InputFiles` from uncommitted stdlib edits). Objects and
+bytes are `compile-count` / `compile-bytes`; times are noisy (the machine was loaded):
+
+| build | restarts | functions typed per pass | objects | bytes | compiler |
+|---|---|---|---|---|---|
+| cold, start of this plan | 7 reasons, 1 restart (everything typed twice) | all, all | 878.9M | 36.3 GB | 76-79 s |
+| cold, now | 6 `continued`, 0 else | all, then the new module only | 752.6M | 32.0 GB | 67-94 s |
+| warm, no edit (failed before) | 0 | 0 retyped | 223.3M | 11.6 GB | 29-50 s |
+| warm, after editing `Main.hx` (failed before) | 0 | 33 retyped | 272.7M | 13.6 GB | 35-68 s |
+
+Warm no-op, where the 223M objects go (`--timings` allocation phases): backend assembly 100.2M (function lowering 71.2M, verification
+19.9M, debug 4.7M; the same as a cold build, 99.8M), IR assembly 98.5M (cold 168.5M; the difference is IR generation), semantic 9.9M,
+typing and lowering 10.3M, graph 1.3M, ABI 2.6M, encode 25.8M. By time: IR assembly 12.3 s, backend lowering 11.8 s (lowering 6.3 s,
+verify 1.8 s), output 2.5 s, frontend 1.9 s, typing 1.5 s.
+
+Suite (`HAXEON_NATIVE_READY=1 scripts/test-driver.sh 8`): the same failure set as the untouched branch after every commit (only
+`LspProtocolMain`, already failing on main), 1114 passing checks. `retainedFromPrevious` costs 354-357 ms per pass on a warm `app`.
+
+Design decisions: the plan's "metadata merge" became carrying specialization state into every typing pass (`RetainedFromPrevious`),
+because declaration metadata was cheap and not the problem; generated classes and enum helpers count only once their type is
+retained; a loaded module keeps the caller's text apart from the compiled text; a representation-changing module is part of the
+program instead of being discovered; restarts for called-only modules are continuations.
+
+Open (not started):
+- (i) Backend relowering on warm builds: a warm no-op `app` build still allocates 100M objects and takes about 12 s in the backend, because
+  a plain build assembles from scratch (`BackendAssembly`, live patching off) and the per-function IR cache is used only under live
+  patching. This is the next big item.
+- (ii) Per-pass `SemanticAssembly` reuse when a module is added: each continuation redoes the assembly and analysis of the whole
+  program (2.1 GB, about 5 s) because contributions are reused only when no signature or structural change is pending.
+- (iii) The HashLink backend keeps uncalled functions (the Wasm backend prunes by reachability, `WasmModuleSupport`), which is why
+  seeding a module costs output size. I believe the reason is live patching (the assembler gives every function a stable slot and
+  id, so a patch that starts calling a function finds it already in the module); I have not verified that.
+- A shared generated helper still has one recorded origin for the other helper families (`$value$equality:`, `$wire:`, `$json:`,
+  enum helpers); only key path helpers are tied to their users.
+- The enum helper and method reference names are still parsed, not recorded as fields.
 
 ## Baselines (main + perf commits, 2026-11-08)
 - Cold `app`: ~76-79 s compiler time (noisy), 878.9M objects / 36.3 GB allocated (`compile-count`, `compile-bytes`).

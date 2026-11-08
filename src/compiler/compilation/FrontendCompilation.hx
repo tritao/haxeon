@@ -24,7 +24,6 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.EnumRuntimeType;
 import compiler.types.typing.RetainedFromPrevious;
 import compiler.types.typing.RuntimeDependencyTracker;
-import compiler.types.typing.RuntimeModulesRequired;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
@@ -68,6 +67,7 @@ class FrontendCompilation {
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>, ?pendingSignatures:Map<String, Bool>,
 			?pendingStructural:Map<String, Bool>, ?carried:{regenerated:Array<String>, retyped:Array<String>
 		}):FrontendResult {
+		seedRepresentationModules(context);
 		var allocationAtStart = AllocationMeter.sample();
 		var modules = context.modules,
 			graph = context.graph,
@@ -195,20 +195,16 @@ class FrontendCompilation {
 			keyPathUses = typedResult.keyPathUses;
 			inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			defaultArgumentSources = typedResult.defaultArgumentSources;
-			// The declarations did not show a module that changes a representation (a map met only inside a body), so what was
-			// typed is typed against the wrong representation and nothing of this pass is kept.
-			if (includeTypedRuntimeDependencies(context, [
-				for (dependency in runtimeDependencies) if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) dependency
-			], typedNew.functions, owners, names, rollbackModules, "representation"))
-				return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
-					structuralChanged, carried);
+			// A module that changes a representation is in the program before anything is typed (see `seedRepresentationModules`),
+			// so typing cannot have used a representation without it. If one is reported missing, a module was left out of the
+			// seeds: fail here, naming it, and do not compile what was typed against the wrong representation.
+			for (dependency in runtimeDependencies)
+				if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) {
+					var representationModule = context.loadSourceModuleDependency(dependency.target);
+					if (representationModule == null || names.indexOf(representationModule) < 0)
+						throw 'Representation module "${dependency.target}" must be seeded but is not in the program (needed by "${dependency.functionName}")';
+				}
 			context.cachedSemanticProgram = semantic;
-		} catch (needed:RuntimeModulesRequired) {
-			// The declarations show a module the program lacks and that changes a representation: add it before typing anything.
-			if (!includeTypedRuntimeDependencies(context, needed.dependencies, [], owners, names, rollbackModules, "declared"))
-				throw 'The runtime modules the declarations need are already in the program: ${[for (dependency in needed.dependencies) dependency.target].join(", ")}';
-			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, bodyChanged, signatureChanged,
-				structuralChanged, carried);
 		} catch (error:CompileError) {
 			for (name in names) {
 				var state:compiler.modules.ModuleState = modules.get(name);
@@ -511,7 +507,7 @@ class FrontendCompilation {
 		regenerated = uniqueSorted(regenerated);
 		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
-		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules, "continued")) {
+		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules)) {
 			context.setLastTypedProgram(typedNew);
 			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [], [],
 				{regenerated: regenerated, retyped: retyped});
@@ -713,6 +709,18 @@ class FrontendCompilation {
 			allocationPhases: allocationPhases
 		};
 		}
+
+	/**
+	 * The modules whose presence changes how types are represented are part of every program that can have them, so no body is
+	 * ever typed without one (see `RuntimeDependencyTracker.changesRepresentation`). Today that is the specialized map owner's
+	 * `RuntimeType.SPECIALIZED_MAP`: two functions in a program that has no use for it. A program without a stdlib root has no such
+	 * module and cannot make a specialized map either.
+	 */
+	static function seedRepresentationModules(context:CompilationContext):Void {
+		var module = context.loadSourceModuleDependency(compiler.runtime.RuntimeType.SPECIALIZED_MAP);
+		if (module != null && context.rootModules.indexOf(module) < 0)
+			context.rootModules.push(module);
+	}
 
 	static function removeCachedFunctions(state:ModuleState, names:Array<String>):Void
 		for (cached in names) {
@@ -1232,7 +1240,7 @@ class FrontendCompilation {
 
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
 			typedFunctions:Array<compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, names:Array<String>,
-			rollbackModules:Map<String, ModuleState>, kind:String):Bool {
+			rollbackModules:Map<String, ModuleState>):Bool {
 		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
 		for (fn in typedFunctions)
 			typedByName.set(fn.name, fn);
@@ -1254,15 +1262,13 @@ class FrontendCompilation {
 				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
-			else if (owners.exists(dependency.functionName))
-				owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
 			var state = context.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
-				context.frontendRestarts.push('$kind: ${dependency.functionName} needs $target');
+				context.frontendRestarts.push('${dependency.functionName} needs $target');
 				state.dependencies.push(target);
 				state.dependencies.sort(Reflect.compare);
 				changed = true;

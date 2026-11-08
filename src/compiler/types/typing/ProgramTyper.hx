@@ -236,10 +236,6 @@ class ProgramTyper {
 				}
 			}
 		if (cachedMetadata == null) {
-			// What the declarations show the program needs is known before any body is typed against a program without it.
-			var missingModules = RepresentationDependencies.missing(session, typedClasses, typedInterfaces, typedEnums, program.functions);
-			if (missingModules.length > 0)
-				throw new RuntimeModulesRequired(missingModules);
 			typedClasses = layoutNativeClasses(typedClasses);
 			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
 		} else {
