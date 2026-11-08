@@ -56,6 +56,9 @@ class TypingSession {
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
 	public var interfaceDecls:Map<String, compiler.syntax.Ast.AstInterface> = [];
 	public var enumDecls:Map<String, compiler.syntax.Ast.AstEnum> = [];
+
+	var enumsByFile:Null<Map<String, Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}>>> = null;
+
 	public final enumRepresentations:EnumRuntimeRepresentations;
 	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
 	public var declarations:DeclarationIndex;
@@ -160,8 +163,35 @@ class TypingSession {
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
 		enumDecls = declarations.enums;
+		enumsByFile = null;
 		enumAbstractDecls = declarations.enumAbstracts;
 	}
+
+	/**
+		The enums declared in the file at `path`. A bare case name resolves against its own file's enums, so this replaces
+		a scan of every enum in the program for each identifier typed. `declarations.enums` is final, so the index lasts
+		until the next `bindSemantic`.
+	**/
+	public function enumsInFile(path:String):Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}> {
+		var index = enumsByFile;
+		if (index == null) {
+			index = [];
+			for (name => declaration in enumDecls) {
+				var filePath = declaration.span.file.path,
+					entries = index.get(filePath);
+				if (entries == null) {
+					entries = [];
+					index.set(filePath, entries);
+				}
+				entries.push({name: name, declaration: declaration});
+			}
+			enumsByFile = index;
+		}
+		var found = index.get(path);
+		return found == null ? noEnums : found;
+	}
+
+	static final noEnums:Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}> = [];
 
 	public function bindNominalDeclarations():Void {
 		interfaceDecls = declarations.interfaces;

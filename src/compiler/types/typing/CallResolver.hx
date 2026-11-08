@@ -1059,23 +1059,24 @@ class CallResolver {
 
 	function uniqueEnumCaseInfo(name:String, argumentCount:Int, span:SourceSpan):Null<EnumConstructorInfo> {
 		var found:Null<EnumConstructorInfo> = null;
-		for (enumName => declaration in session.enumDecls)
-			if (declaration.span.file.path == span.file.path)
-				for (index in 0...declaration.cases.length) {
-					var enumCase = declaration.cases[index];
-					if (enumCase.name != name
-						|| argumentCount < requiredEnumParameters(enumCase.params)
-						|| argumentCount > enumCase.params.length)
-						continue;
-					if (found != null)
-						return null;
-					found = {
-						enumName: enumName,
-						index: index,
-						params: enumCase.params,
-						typeParameters: declaration.typeParameters
-					};
-				}
+		for (entry in session.enumsInFile(span.file.path)) {
+			var declaration = entry.declaration;
+			for (index in 0...declaration.cases.length) {
+				var enumCase = declaration.cases[index];
+				if (enumCase.name != name
+					|| argumentCount < requiredEnumParameters(enumCase.params)
+					|| argumentCount > enumCase.params.length)
+					continue;
+				if (found != null)
+					return null;
+				found = {
+					enumName: entry.name,
+					index: index,
+					params: enumCase.params,
+					typeParameters: declaration.typeParameters
+				};
+			}
+		}
 		return found;
 	}
 

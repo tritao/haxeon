@@ -856,16 +856,15 @@ class BodyTyper {
 				var info = enumCaseInfo(name);
 				if (info == null && name.indexOf(".") < 0) {
 					var matchedName:Null<String> = null;
-					for (enumName => declaration in session.enumDecls)
-						if (declaration.span.file.path == span.file.path)
-							for (enumCase in declaration.cases)
-								if (enumCase.name == name
-									&& arguments.length >= requiredEnumParameters(enumCase.params)
-									&& arguments.length <= enumCase.params.length) {
-									if (matchedName != null)
-										return;
-									matchedName = enumName;
-								}
+					for (entry in session.enumsInFile(span.file.path))
+						for (enumCase in entry.declaration.cases)
+							if (enumCase.name == name
+								&& arguments.length >= requiredEnumParameters(enumCase.params)
+								&& arguments.length <= enumCase.params.length) {
+								if (matchedName != null)
+									return;
+								matchedName = entry.name;
+							}
 					if (matchedName != null)
 						info = enumCaseInfo(matchedName + "." + name);
 				}
@@ -2498,17 +2497,18 @@ class BodyTyper {
 
 	function uniqueEnumLiteral(name:String, span:SourceSpan):Null<TypedExpression> {
 		var enumName:Null<String> = null, index = -1;
-		for (candidateName => declaration in session.enumDecls)
-			if (declaration.span.file.path == span.file.path)
-				for (candidateIndex in 0...declaration.cases.length) {
-					var enumCase = declaration.cases[candidateIndex];
-					if (enumCase.name != name || enumCase.params.length != 0)
-						continue;
-					if (enumName != null)
-						fail("E1005", 'Ambiguous enum value "$name"', span);
-					enumName = candidateName;
-					index = candidateIndex;
-				}
+		for (entry in session.enumsInFile(span.file.path)) {
+			var declaration = entry.declaration;
+			for (candidateIndex in 0...declaration.cases.length) {
+				var enumCase = declaration.cases[candidateIndex];
+				if (enumCase.name != name || enumCase.params.length != 0)
+					continue;
+				if (enumName != null)
+					fail("E1005", 'Ambiguous enum value "$name"', span);
+				enumName = entry.name;
+				index = candidateIndex;
+			}
+		}
 		if (enumName == null)
 			return null;
 		return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
