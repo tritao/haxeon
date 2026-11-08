@@ -45,6 +45,7 @@ class TestCatalog {
 		"TestMain",
 		"AuditVerifierMain",
 		"FrontendRestartMain",
+		"TypedMetadataMergeMain",
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
 		"IrStateEqualityMain",

@@ -80,6 +80,24 @@ class CodeIdentityTable {
 		return template.substring(0, begin + BEGIN.length) + '"' + lines.toString() + '"' + template.substring(end);
 	}
 
+	/**
+	 * Whether `incoming` is the template `current` was rendered from. The table module is generated text, so reading its
+	 * file again (as a reused compiler session does for every loaded module) is not an edit: only text outside the markers
+	 * can make it one.
+	 */
+	public static function isRenderingOf(current:String, incoming:String):Bool {
+		var currentBegin = current.indexOf(BEGIN),
+			currentEnd = current.indexOf(END),
+			incomingBegin = incoming.indexOf(BEGIN),
+			incomingEnd = incoming.indexOf(END);
+		return currentBegin >= 0
+			&& currentEnd >= currentBegin
+			&& incomingBegin >= 0
+			&& incomingEnd >= incomingBegin
+			&& current.substring(0, currentBegin) == incoming.substring(0, incomingBegin)
+			&& current.substring(currentEnd) == incoming.substring(incomingEnd);
+	}
+
 	/** The identity of each module in `names` (the generated table module itself excluded, and edges to it ignored). */
 	public static function identities(modules:Map<String, ModuleState>, names:Array<String>, salt:String):Map<String, String> {
 		var known:Map<String, Bool> = [], edges:Map<String, Array<String>> = [];

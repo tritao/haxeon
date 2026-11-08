@@ -1,6 +1,37 @@
 # Typed metadata merge: warm rebuilds and the cold-build frontend restart
 
-Status: planned (2026-11-08). Branch `typer-metadata-merge`.
+Status: step 1 done, step 2 in progress (2026-11-08). Branch `typer-metadata-merge`.
+
+## Findings from step 1 (refined root cause)
+
+The warm failure needs three things together, which is why plain unit tests did not reproduce it:
+
+1. The program reads a code identity, so the generated module `haxeon.build.CodeIdentityTable` is part of it.
+2. A reused session reads every loaded module from disk again (`CompilerSession.prepare`, then
+   `Compiler.refreshLoadedSource`). The table module is generated text: its file holds the template and the compiler renders
+   the identities between the markers. The template differs from the rendered text, so the module was treated as edited
+   on every warm build, `CodeIdentityTable.refresh` rendered it again, and the compiler saw a structural change to
+   `static:haxeon.build.CodeIdentityTable.data`.
+3. Any structural change makes `canReuseSemantic` false (`FrontendCompilation`). The typer then runs without cached
+   metadata but with a partial `selected` set (one function here), builds specialized owners only for the functions it
+   retypes, and the prune step retires every other specialization (`fn.physicalOwner` not in `currentSpecializedOwners`).
+   Unchanged callers still reference them, here through a bound method of `Promise<Array<String>>`, and erasure fails
+   with `Missing target for generic method reference`. The class needs an owner of its own: `Promise<T>` reaches the
+   generic enum `Outcome<T>` through `Future<T>` (`TypeRepresentation.genericOwner`).
+
+So there are two defects. (A) re-reading a generated module's template is not an edit. (B) the non-reuse typer path
+drops specialized owners that unchanged code still uses; this is also what a restart with added modules needs fixed.
+The "metadata merge" of the plan is therefore about carrying specialization state (owners, aliases, enum
+specializations) into the non-reuse path, not about the cost of declaration metadata: with a small `selected` set the
+"metadata" phase is cheap, since it is mostly the typing of the selected bodies.
+
+Scenarios in `tests/compiler/TypedMetadataMergeMain.hx` (each followed by a disk re-read of all loaded modules):
+- second compile without an edit: fixed by (A); passes.
+- after editing the module that makes the specialization / binds the method: pass (the specialization is recreated).
+- after editing the entry module, editing the generic class, adding a module: still fail on (B); to be added with its fix.
+  Editing the generic class also hits a second gap: `callersOfSpecializations` (SemanticAssembly) only follows
+  `$generic:` call targets, not `$generic-method-reference:` closures.
+
 
 ## Problem
 
@@ -29,6 +60,9 @@ selected 10,366 of 33,609 functions instead of all of them, but failed with the 
 the metadata merge fixes the warm rebuild and unblocks the restart win.
 
 ## Steps
+
+Step 1 (done): `tests/compiler/TypedMetadataMergeMain.hx`; its failing scenarios are added together with their fix (no
+failing tests on the branch). Step 2 is split: 2a is (A) with the scenario that passes; 2b is (B).
 
 ### 1. Reproduce in a small compiler test
 Add a test in `tests/compiler/` (pattern: `FrontendRestartMain.hx`, `SpecializedMapIncrementalMain.hx`) that reproduces
