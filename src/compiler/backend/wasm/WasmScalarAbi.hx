@@ -318,7 +318,7 @@ class WasmScalarAbi {
 				}
 				safe;
 			case CallClosure(_, closure, arguments):
-				switch closure.type {
+				switch closureFunction(closure.type) {
 					case Function(expected, _):
 						var safe = expected.length == arguments.length;
 						if (safe) for (index in 0...arguments.length)
@@ -352,18 +352,26 @@ class WasmScalarAbi {
 	}
 
 	function noteClosure(type:IrType, candidates:Map<String, Bool>):Bool {
-		return switch type {
+		var signature = closureFunction(type);
+		return switch signature {
 			case Function(arguments, result):
 				var hasValue = values.isValue(result), safe = scalarizable(result);
 				for (argument in arguments) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
-				if (hasValue && safe) candidates.set(Std.string(type), true);
+				if (hasValue && safe) candidates.set(Std.string(signature), true);
 				hasValue && safe;
 			default: false;
 		};
 	}
 
 	static function closureArity(type:IrType):Int
-		return switch type { case Function(arguments, _): arguments.length; default: -1; };
+		return switch closureFunction(type) { case Function(arguments, _): arguments.length; default: -1; };
+
+	static function closureFunction(type:IrType):Null<IrType>
+		return switch type {
+			case Function(_, _): type;
+			case Nullable(inner): switch inner { case Function(_, _): inner; default: null; };
+			default: null;
+		};
 
 	/** The receiver may be scalarized when no reference to its place escapes the method. */
 	function receiverDoesNotEscape(fn:IrFunction, candidates:Map<String, Bool>):Bool {

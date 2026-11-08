@@ -99,10 +99,19 @@ class IrVerifier {
 						if (arguments.length > 1 && arguments[1].id == value.id) {
 							if (symbol == "__value_array_alloc" || symbol == "__value_array_retype" || symbol == "__array_alloc_typed_ref")
 								valid = switch out.type {case Array(element): sameType(element, type); default:false;};
-							else if (symbol == "__std_is_exact_type") {
+							else if (symbol == "__std_is_exact_type" && StringTools.startsWith(original, "$value-array:bridge:")) {
 								var bridge = "$value-array:bridge:" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type)) + ":accepts";
 								valid = original == bridge && fn.arguments.length == 1 && sameType(fn.arguments[0].type, Dyn) && sameType(fn.result, Bool);
 							}
+							else if ((symbol == "__std_is_exact_type" || symbol == "__std_is_of_type") && logicalEnumDescriptorFunction(original))
+								valid = switch type {
+									case Enum(name):
+										var expected = original == IrEnumDynamicDispatch.EQUAL || original == IrEnumDynamicDispatch.REFLECT ? 2 : 1,
+										allDynamic = fn.arguments.length == expected;
+										for (argument in fn.arguments) if (!sameType(argument.type, Dyn)) allDynamic = false;
+										selected.exists(name) && allDynamic && sameType(fn.result, Bool);
+									default: false;
+								};
 						}
 					default:
 				}
@@ -127,6 +136,10 @@ class IrVerifier {
 			}
 		}
 	}
+
+	static function logicalEnumDescriptorFunction(name:String):Bool
+		return name == IrEnumDynamicDispatch.EQUAL || name == IrEnumDynamicDispatch.REFLECT
+			|| StringTools.startsWith(name, "$enum-dynamic-test:");
 
 	public static function verify(program:IrProgram):Void {
 		verifySelected(program, null);

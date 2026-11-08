@@ -136,7 +136,7 @@ class WasmDynamicCalls {
 			var names = [for (key in targets.keys()) key];
 			names.sort(Reflect.compare);
 			for (key in names)
-				result.functions.push(varargsAdapter(varargsAdapterName(targets.get(key)), targets.get(key)));
+				result.functions.push(varargsAdapter(varargsAdapterName(targets.get(key)), targets.get(key), program.enums));
 			result.natives.push({
 				name: VARARGS_CALL,
 				library: "haxeon_runtime",
@@ -153,7 +153,7 @@ class WasmDynamicCalls {
 	}
 
 	/** Dependencies introduced by generated closure bodies belong to the same adapter plan. */
-	public static function missingVarargsAdapters(functions:Array<IrFunction>):Array<IrFunction> {
+	public static function missingVarargsAdapters(functions:Array<IrFunction>, enums:Array<IrEnum>):Array<IrFunction> {
 		if (!Lambda.exists(functions, fn -> fn.name == VARARGS_TARGET)) return [];
 		var names = [for (fn in functions) fn.name => true], targets:Map<String, IrType> = [];
 		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -166,17 +166,30 @@ class WasmDynamicCalls {
 			default:
 		}
 		var ordered = [for (name in targets.keys()) name]; ordered.sort(Reflect.compare);
-		return [for (name in ordered) varargsAdapter(name, targets.get(name))];
+		return [for (name in ordered) varargsAdapter(name, targets.get(name), enums)];
 	}
 
 	public static function varargsAdapterName(type:IrType):String
 		return "__haxeon_varargs_adapter_" + Std.string(type);
 
-	public static function varargsAdapter(name:String, type:IrType):IrFunction {
+	public static function varargsAdapter(name:String, type:IrType, enums:Array<IrEnum>):IrFunction {
 		var b = new IrBuilder(),
 			original = b.argument("closure", Dyn),
 			params:Array<IrType> = [],
-			result:IrType = Void;
+			result:IrType = Void,
+			inlineEnums:Map<String, String> = [];
+	for (declaration in enums) if (declaration.inlineStorage != null)
+		inlineEnums.set(declaration.inlineStorage, declaration.name);
+	function toDynamic(value:IrValue):IrValue return switch value.type {
+		case Obj(storage) if (inlineEnums.exists(storage)):
+			b.call(compiler.ir.IrInlineEnumEscapes.boxName(inlineEnums.get(storage)), [value], Dyn);
+		default: b.toDyn(value);
+	};
+	function fromDynamic(value:IrValue, target:IrType):IrValue return switch target {
+		case Obj(storage) if (inlineEnums.exists(storage)):
+			b.call(compiler.ir.IrInlineEnumEscapes.unboxName(inlineEnums.get(storage)), [value], target);
+		default: b.safeCast(value, target);
+	};
 		switch type {
 			case Function(a, r):
 				params = a;
@@ -188,11 +201,11 @@ class WasmDynamicCalls {
 		var array = b.call("__array_alloc_ref", [b.constInt(values.length)], Array(Dyn));
 		for (i in 0...values.length) {
 			var index = b.constInt(i),
-				value = (switch (values[i].type) { case Dyn: true; default: false; }) ? values[i] : b.toDyn(values[i]);
+				value = (switch (values[i].type) { case Dyn: true; default: false; }) ? values[i] : toDynamic(values[i]);
 			b.currentBlock().instructions.push(new Located(ArraySet(array, index, value), SourceProvenance.generated("wasm-varargs")));
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
-		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : b.safeCast(called, result));
+		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : fromDynamic(called, result));
 		return new IrFunction(name, b.arguments, result, b.blocks, null, false, Keep);
 	}
 

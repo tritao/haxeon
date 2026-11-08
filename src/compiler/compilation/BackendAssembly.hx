@@ -43,6 +43,26 @@ class BackendAssembly {
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		var nextAbi = RuntimeAbi.describe(ir), previousAbi = context.publishedAbi, baseAssembler = context.assembler;
+		// Compilation sessions retain a HashLink assembly even when the requested
+		// artifact is Wasm. Keep its closure ABI adaptation local to that assembly;
+		// the Wasm backend receives the original logical program and builds its own
+		// target-specific adapters.
+		var assemblyIr = ir;
+		if (context.isWasmTarget()) {
+			assemblyIr = new IrProgram(ir.entryPoint);
+			assemblyIr.natives = ir.natives.copy();
+			assemblyIr.cNatives = ir.cNatives;
+			assemblyIr.functions = ir.functions.copy();
+			assemblyIr.objects = ir.objects;
+			assemblyIr.interfaces = ir.interfaces;
+			assemblyIr.enums = ir.enums;
+			assemblyIr.staticFields = ir.staticFields;
+			assemblyIr.positionalFingerprints = ir.positionalFingerprints;
+			assemblyIr.parameterDefaults = ir.parameterDefaults;
+			assemblyIr.positionalPlaces = ir.positionalPlaces;
+			assemblyIr.positionalSources = ir.positionalSources;
+			compiler.ir.IrScalarClosures.rewrite(assemblyIr);
+		}
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
@@ -77,7 +97,7 @@ class BackendAssembly {
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+		var assembly = candidateAssembler.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
 			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));

@@ -532,6 +532,9 @@ interface-value-carriers	42
 interface-value-dispatch-table	42
 host-enum-export	42
 source-inline-enum	42
+inline-enum-callback-escape	42
+inline-enum-dynamic-reach	42
+inline-enum-reflection-reach	42
 closure-method-value-arguments	42
 map-null-string-keys	42
 value-interface-helper-reuse	42

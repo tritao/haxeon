@@ -593,7 +593,7 @@ class IrProgramAssembler {
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
 			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
-				IrGenerator.usesNativeReflectionDispatch(), existing, true));
+				IrGenerator.usesNativeReflectionDispatch(), existing, true, true));
 		}
 		if (objects != null) {
 			var optionalStorage = new IrOptionalFieldStorage(objects);

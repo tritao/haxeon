@@ -56,11 +56,13 @@ class WasmGcModuleBuilder {
 		}
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
 			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
-		IrVerifier.verify(program);
 		var originalProgram = program;
 		var exports = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
 			boundaryPlan = new WasmScalarAbi(program, exports, true), exportAdapters:Map<String, String> = [];
 		program = WasmScalarClosureEscapes.rewrite(program, boundaryPlan.scalarClosures, exports, exportAdapters);
+		// Closure escapes need their explicit logical adapters before the verifier
+		// checks that inline values do not cross Dynamic boundaries unadapted.
+		IrVerifier.verify(program);
 		var exportRoots = [for (name in exports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
 		var scalarAbi = new WasmScalarAbi(program, exportRoots, false, true);
 		program = scalarAbi.rewrite();

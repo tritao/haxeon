@@ -136,7 +136,7 @@ class WasmLinearClosureAdapters {
 	}
 
 	/** Checked erased writes compare the semantic closure signature. */
-	function rewriteSignatureChecks():Void {
+	public function rewriteSignatureChecks():Void {
 		var helpers:Map<String, IrType> = [], rewritten:Array<IrFunction> = [];
 		for (fn in program.functions) {
 			var types:Map<Int, IrType> = [];

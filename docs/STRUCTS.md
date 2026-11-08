@@ -501,7 +501,7 @@ modules. The action-window harness is a measurement-only change in the detached 
 | Payload enum | Editor action | Objects / bytes per action | Editor blockers | Showcase blockers |
 |---|---|---:|---|---|
 | `DockNode` | Each of `hierarchy->sensors`, `sensors->hierarchy`, `console->telemetry`, `telemetry->console` | 54 / 1,992 | Permanent by-value recursion; also E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
-| `TextEditIntent` | `type-char` | 1 / 24 | E6 registered reflection/Dynamic/casts; E7 callable descriptors | E6 registered reflection; E7 callable descriptors |
+| `TextEditIntent` | `type-char` | 1 / 24 | E3 checked casts of `Virtual(...)`; E6 registered reflection/Dynamic reach; E7 runtime type descriptors | E6 registered reflection; E7 callable descriptors |
 | `PropertyValue` (setup control) | All 15 measured action windows | 0 / 0 | E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
 
 No other payload enum allocates in these windows. In particular, backspace uses a payload-free cached intent.
@@ -510,11 +510,17 @@ No other payload enum allocates in these windows. In particular, backspace uses 
 windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
 measured typing path.
 
-First connect the logical callable descriptors and reflection/Dynamic escape adapters required together by
-`TextEditIntent` (E7/E6), using the existing scalar/reference value ABI and boxing only at genuine escapes. Record the
-real editor typing delta in that widening commit. E4 nullable closures and E8 generic transport do not block this
-measured finite enum. After that, investigate why one tab switch constructs 54 `DockNode` values and reuse unchanged persistent dock-tree
-branches in the UI rather than changing their compiler representation. `DockNode.Split` contains `DockNode` directly
+The latest candidate still allocates one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
+had 835 objects each and median totals of 60,064 / 60,056 bytes. It does not regress, but does not unlock the enum.
+Its remaining trace includes checked casts and runtime descriptors for virtual contracts, for example
+`$checked-dynamic-cast:Virtual(haxeon.ui.core.View)`. These uses also appear in generic-erased interface code; resolving
+them needs the deferred E3 virtual-call/type-check and E7 descriptor work, rather than one local escape adapter.
+Control/candidate editor builds took 148,925 / 141,789 ms; self-hosting stage-1 `BodyTyped` took 51.53 / 41.22 ms.
+The candidate's corresponding editor `BodyTyped` phase was 1,249 / 1,207 ms. Record the enum as still blocked and
+continue with the measured UI allocation site rather than widening E3/E7 in this session. E4 nullable closures and E8
+generic transport do not block this measured finite enum. Next, investigate why one tab switch constructs 54 `DockNode`
+values and reuse unchanged persistent dock-tree branches in the UI rather than changing their compiler representation.
+`DockNode.Split` contains `DockNode` directly
 by value; its cost cannot justify bypassing the permanent recursive-enum classification. Then perform the UI value
 enum conversions, with measured deltas for allocating forms and the required type-honesty ports for the others.
 Byte-identical editor/Web output skips paired measurements under Tier 3. Do not count a setup control or a renamed
@@ -577,7 +583,11 @@ adapters. Native Flat struct payloads and enum-bearing native fields wait for in
 whole enum; there is no switch or per-call boxing fallback. Arrays retain their nominal element descriptors and use the
 existing lane association and checked logical reflection bridges. Closure environments are internal typed storage, not
 bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
-generated after classification. Private enum packets are excluded from that public layout registry.
+generated after classification. When a class reference is reachable from a Dynamic escape or registered reflection
+layout, eligibility walks its fields transitively through class references, nullable/value fields, arrays, iterators, map
+key/value types, closure signatures and captured closure environments, and interface implementations. Enums found in
+that graph stay boxed until reflective field get/set adapters are registered; the IR verifier cannot see the native
+runtime's nested `Reflect.field` traversal. Private enum packets are excluded from that public layout registry.
 
 After lowering, `IrVerifier` rejects a selected enum's nominal value carrier in every object/static field, native/C-native
 or interface/function signature, instruction output or operand, phi input, terminator and debug binding. The scan covers
@@ -596,7 +606,9 @@ The logical IR-only frontend still assembles nominal types without selecting a t
 compiler supplies its target and host export roots to assembly before selecting the physical enum layout. Cached
 source functions remain nominal and unmodified; changing an escape reselects storage on the assembled copy.
 `SourceInlineEnumMain` checks cold and edited builds, including adding and removing Dynamic and registered-reflection escapes, on all three
-targets with inlining off and on. Its allocation fixture prepares reference payloads and a typed closure before the
+targets with inlining off and on. `InlineEnumDynamicReachMain` verifies that a Dynamic-root escape follows nested class,
+array, map and captured-closure references and rejects each enum for that reason; `InlineEnumReflectionReachMain` runs
+two-level `Reflect.field` get/set and `Reflect.fields` listing on all targets. The allocation fixture prepares reference payloads and a typed closure before the
 window, then exercises construction, null joins, static and object fields, copies and closure results at 8 and 1,024
 iterations. Explicit array iteration and element copies are checked separately from the allocation window, which does
 not include allocation of the iterator itself. E9's real-editor decrease remains a required measurement before the UI

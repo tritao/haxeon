@@ -95,7 +95,6 @@ class WasmLinearModuleBuilder {
 	}
 
 	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig):compiler.backend.wasm.WasmCompilation {
-		IrVerifier.verify(program);
 		var logical = new IrProgram(program.entryPoint);
 		logical.functions = program.functions.copy(); logical.objects = program.objects.copy(); logical.natives = program.natives.copy();
 		logical.cNatives = program.cNatives; logical.interfaces = program.interfaces; logical.enums = program.enums; logical.staticFields = program.staticFields;
@@ -104,6 +103,9 @@ class WasmLinearModuleBuilder {
 		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
 			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true), exportAdapters:Map<String, String> = [];
 		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
+		// Keep the inline-value Dynamic-boundary invariant while verifying the
+		// explicit closure adapters generated for this target.
+		IrVerifier.verify(logical);
 		var roots = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
 		if (WasmModuleSupport.hasFunction(logical, "__init")) roots.push("__init");
 		var entry = WasmModuleSupport.hasFunction(logical, "main") ? "main" :
@@ -114,10 +116,13 @@ class WasmLinearModuleBuilder {
 		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
 		logical.functions = existing.concat(generated);
 		while (true) {
-			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions);
+			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions, logical.enums);
 			if (missing.length == 0) break;
 			logical.functions = logical.functions.concat(missing);
 		}
+		// Interface/cast adapters may have been generated after the initial
+		// signature rewrite. Keep their checked closure casts on the target ABI too.
+		adapters.rewriteSignatureChecks();
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		IrVerifier.verify(logical);
