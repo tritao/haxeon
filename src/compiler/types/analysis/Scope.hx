@@ -144,9 +144,9 @@ class Scope {
 		if (scopes.length == 0)
 			return;
 		for (value in visibleValues()) {
-			var merged = scopes[0].resolvedTypeById(value.id);
+			var merged = scopes[0].refinedType(value);
 			for (index in 1...scopes.length)
-				if (!TypeRelations.equals(merged, scopes[index].resolvedTypeById(value.id))) {
+				if (!TypeRelations.equals(merged, scopes[index].refinedType(value))) {
 					merged = value.declared;
 					break;
 				}
@@ -393,11 +393,9 @@ class Scope {
 		return outer != null && outer.isAssignedId(id);
 	}
 
-	function resolvedTypeById(id:String):CompilerType {
-		var value = resolveById(id);
-		if (value == null)
-			throw 'Missing binding "$id" while merging flow facts';
-		var refined = facts.resolve(id);
+	/** `value` as this scope sees it: its flow-refined type, or the declared one. */
+	function refinedType(value:ScopeValue):CompilerType {
+		var refined = facts.resolve(value.id);
 		return refined == null ? value.declared : refined;
 	}
 
