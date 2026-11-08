@@ -63,6 +63,11 @@ Four further structural problems sit next to incrementality.
    - `FrontendCompilation` binds target facts into `IrGenerator` statics before generation (`bindHeaderlessValueClasses`,
      `bindNativeStringFastPaths`, `bindNativeReflectionDispatch` and others, `FrontendCompilation.hx:186-192`), and
      `IrInliner.packedValueFields` is a static.
+   - Beyond target flags, `IrGenerator` keeps about twenty static maps of whole-program state (`valueClasses`,
+     `classBases`, `genericOwnerOrigins`, `observableClasses`, `inlineValueObjects`, `generatedObjects`… at
+     `IrGenerator.hx:54-73`). Later passes read some of them, such as `observableClassFieldCount` in
+     `IrProgramAssembler`. They are not part of `IrProgram`, so a memoized result that reads them goes stale without any
+     recorded read.
    - `IrProgramAssembler.assemble` takes a value-lane target. Inline-enum lowering and value-array rewriting derive pointer
      widths from it (`IrInlineEnumLowering.hx:11-15`, `FrontendCompilation.hx:640`).
    - The scalar ABI passes run in a different order per target (`FrontendCompilation.hx:643-657`).
@@ -72,9 +77,16 @@ Four further structural problems sit next to incrementality.
    decisions and target lowering.
 2. **Representation decisions are made inside rewrites.** Whether an enum is stored inline, which closures and arguments
    are scalar, which value-array shapes exist and which helpers are needed are decided inside the passes that also rewrite
-   bodies. So rewrites read other functions, some passes rebuild the whole program (`IrInlineEnumLowering` remaps every
-   declaration; `IrScalarArguments` scans every call site), and helpers have to be owned by name. After the
-   2026-11-08 merge, six new passes added 54M allocated objects to every warm `app` build.
+   bodies. So rewrites read other functions, every pass scans the whole program, and helpers have to be owned by name.
+   After the 2026-11-08 merge, six new passes added 54M allocated objects to every warm `app` build. A per-pass probe
+   found that only `IrInlineEnumLowering` (and, in a small way, `IrStaticNullChecks`) returned new but equal functions.
+   That was fixed in `fc02b21d` (−36M on a warm no-op). The rest of the cost is scanning, which no per-function fix
+   removes.
+   - The pipeline is not linear. Passes call other passes: inline-enum lowering reruns typed-interface dispatch, scalar
+     closures rerun interface boxing and checked casts, and scalar arguments and value arrays run phi scalarization and
+     scalar replacement inside their loops.
+   - Several passes push objects or functions into the shared input arrays in place (`IrValueInterfaceBoxes`,
+     `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `GenericOwnerErasure.generate`, `ObjectReflection`).
 3. **Generated entities are identified by encoded names.** There are more than twenty-five prefixes (`$generic:`,
    `$generic-method-reference:`, `$value$equality:`, `$wire:`, `$json:`, `$inline-enum-global:<len>:<name>:<field>`,
    `$scalar-arguments:`, `$value-array:…`, `$typed-interface-entry:`…). They are parsed back into structure in more than
@@ -133,7 +145,9 @@ Each layer reads only the layers above it, through queries:
 7. **Backend lowering:** per function, relocatable (`WARM_REBUILD_REUSE.md` design A), for HashLink and each Wasm backend.
 8. **Link:** assigns indices and writes the module or the patch.
 
-The Wasm builders stop running IR passes themselves: whatever they need runs in layer 6 for their target.
+The Wasm builders stop running IR passes themselves: whatever they need runs in layer 6 for their target. A pass that
+today calls another pass inside it becomes explicit stages in layer 6, ordered by the summaries they need. Repeating a
+stage is allowed; hiding one inside another is not.
 
 ### 3. The target profile is an input
 
@@ -141,6 +155,11 @@ There is one `TargetProfile` value: backend, pointer width, value-lane target, n
 fields, live patching. It is passed explicitly and read through the query interface. It replaces the `IrGenerator.bind*`
 statics, `IrInliner.packedValueFields` and the scattered `isWasmTarget()` checks. Layer 4 does not read it; layers 5–8
 do.
+
+The rest of the static program state in `IrGenerator` goes the same way. What generation needs from the typed program
+(value classes, class bases, generic owners and origins, observable classes and field bits, typed interface contracts)
+becomes an explicit generation context: a query over layer 3, passed in and read through the query interface. What later
+passes need from it becomes part of `IrProgram` or a summary. No compiler stage keeps program state in statics.
 
 ### 4. Passes are a summary plus a local rewrite
 
@@ -152,9 +171,19 @@ A pass declares:
 A rewrite that changes nothing returns the same object (the framework asserts this in check mode). Generated helpers are a
 function of the summary: the helper set is derived from it, so a helper exists exactly while something needs it.
 
-A pass that really needs a fixpoint over all functions, such as `IrStaticNullChecks`, `IrOptionalScalarFlow` and
-`IrNullableScalarFlow` today, states why. Its fixpoint becomes a summary computed incrementally from per-function
-contributions.
+A pass that changes tables (objects, interfaces, enums, statics, natives) lists them, and the changes are part of its
+summary, not a side effect on shared arrays.
+
+Three passes are true fixpoints: `IrScalarArguments`, `IrNullableScalarFlow` and `IrOptionalScalarFlow`. All three prune
+candidates, starting from the largest set and removing what fails. Their summary is computed incrementally over the
+dependency cone of the changed functions:
+
+1. reset the cone;
+2. rerun the removal with everything else fixed;
+3. repeat for the readers of any candidacy that flipped.
+
+If no candidacy flips, the cost is the changed function alone. A pass whose cone turns out to be the whole program says
+so and stays whole-program.
 
 ### 5. Structured identities for generated entities
 
@@ -229,8 +258,10 @@ their last user is ported; there are no compatibility aliases.
     check mode;
   - per-function verification;
   - live patching ported onto the same relocatables.
-- **M1 Target profile (3):** replace the generator and inliner statics and the target branches with `TargetProfile`.
-  Small, and it unblocks M2.
+- **M1 Target profile and generation context (3):** replace the target branches and every static that holds program or
+  target state (`IrGenerator`'s maps and flags, `IrInliner.packedValueFields`) with `TargetProfile` and an explicit
+  generation context. It unblocks M2: until then, any memoized pass result can silently depend on unrecorded state.
+  The M0 program-level shortcut must include this state in its input digest until M1 lands.
 - **M2 Pass framework (4):**
   - define the pass interface and the summaries;
   - inventory the ~25 passes as already local, local plus a summary, or genuinely global;
