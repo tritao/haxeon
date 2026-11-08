@@ -41,15 +41,19 @@ function main():Int {
 	Reflect.setField(leaf, "intent", Selected("after"));
 	if (!checkLeaf(leaf, "after")) return 2;
 
+	var rootFields = Reflect.fields(root);
+	rootFields.sort(Reflect.compare);
+	if (rootFields.join(",") != "branch,byId,create,items") return 3;
+
 	var reflectedFields = Reflect.fields(leaf);
 	reflectedFields.sort(Reflect.compare);
-	if (reflectedFields.join(",") != "intent,next") return 3;
+	if (reflectedFields.join(",") != "intent,next") return 4;
 
 	var items:Array<ReflectedLeaf> = cast Reflect.field(root, "items"),
 		byId:Map<String, ReflectedLeaf> = cast Reflect.field(root, "byId"),
 		create:Void->ReflectedLeaf = cast Reflect.field(root, "create");
-	if (!checkLeaf(items[0], "after")) return 4;
-	if (!checkLeaf(byId.get("branch"), "after")) return 5;
-	if (!checkLeaf(create(), "after")) return 6;
+	if (!checkLeaf(items[0], "after")) return 5;
+	if (!checkLeaf(byId.get("branch"), "after")) return 6;
+	if (!checkLeaf(create(), "after")) return 7;
 	return 42;
 }
