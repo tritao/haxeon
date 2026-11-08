@@ -1088,14 +1088,15 @@ class HlLower {
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
 		}
 
-		var scopedAssignments:Array<HlDebugAssignment> = [];
+		var scopedAssignments:Array<HlDebugAssignment> = [],
+			lastScopeLocations:Map<String, Int> = [];
 		for (index in 0...debugAssignments.length) {
 			var assignment = debugAssignments[index],
 				binding = assignmentBindings[index];
 			scopedAssignments.push({
 				name: assignment.name,
 				position: assignment.position,
-				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length)
+				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length, lastScopeLocations)
 			});
 		}
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
@@ -1106,19 +1107,28 @@ class HlLower {
 		for (_ in 0...count)
 			output.push(debugLocation(provenance));
 
+	static final generatedDebugLocation:HlDebugLocation = {
+		path: "<generated>",
+		line: 1,
+		start: -1,
+		end: -1,
+		column: 1,
+		endLine: 1,
+		endColumn: 1,
+		sourceHash: 0,
+		flags: 1
+	};
+
+	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
+	static var lastDebugLocation:{provenance:SourceProvenance, location:HlDebugLocation} = null;
+
+	/** Locations are immutable, so opcodes from one provenance share a single one. */
 	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
+		var last = lastDebugLocation;
+		if (last != null && last.provenance == provenance)
+			return last.location;
 		var location = provenance.location;
-		return location == null ? {
-			path: "<generated>",
-			line: 1,
-			start: -1,
-			end: -1,
-			column: 1,
-			endLine: 1,
-			endColumn: 1,
-			sourceHash: 0,
-			flags: 1
-		} : {
+		var result:HlDebugLocation = location == null ? generatedDebugLocation : {
 			path: location.path,
 			line: location.line,
 			start: location.start,
@@ -1131,20 +1141,35 @@ class HlLower {
 				case CompilerGenerated(_): 1;
 				case UserSource: 0;
 			}
-			};
+		};
+		lastDebugLocation = {provenance: provenance, location: result};
+		return result;
 	}
 
-	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int):Int {
-		var last = position;
-		for (index in position...locations.length) {
-			var location = locations[index];
-			if (location.path == binding.path
-				&& location.start != null
-				&& location.start >= binding.scopeStart
-				&& location.start < binding.scopeEnd)
-				last = index;
+	/**
+		The scope ends after the last location inside the binding's source range at or
+		after `position`. That is the binding's overall last in-range location when
+		it falls at or after `position`, so it is found once per scope, not once per
+		assignment.
+	**/
+	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
+			lastByScope:Map<String, Int>):Int {
+		var key = binding.identity + ":" + binding.scopeStart + ":" + binding.scopeEnd,
+			lastInScope = lastByScope.get(key);
+		if (lastInScope == null) {
+			lastInScope = -1;
+			var index = locations.length - 1;
+			while (index >= 0) {
+				var location = locations[index];
+				if (location.start != null && location.start >= binding.scopeStart && location.start < binding.scopeEnd && location.path == binding.path) {
+					lastInScope = index;
+					break;
+				}
+				index--;
+			}
+			lastByScope.set(key, lastInScope);
 		}
-		var end = last + 1;
+		var end = (lastInScope >= position ? lastInScope : position) + 1;
 		return end >= instructionCount ? -1 : end;
 	}
 
