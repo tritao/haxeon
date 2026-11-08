@@ -20,7 +20,7 @@ class SourceFile {
 		for (index in 0...bytes.length) {
 			var code = bytes.get(index);
 			contentHash = (contentHash ^ code) * 16777619;
-			second = (((second << 5) | (second >>> 27)) ^ code) * cast 0x85EBCA6B;
+			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B : Int);
 			if (code == "\n".code)
 				lineStarts.push(index + 1);
 		}
@@ -140,7 +140,7 @@ class SourceFile {
 		for (index in 0...bytes.length) {
 			var code = bytes.get(index);
 			first = (first ^ code) * 16777619;
-			second = (((second << 5) | (second >>> 27)) ^ code) * cast 0x85EBCA6B;
+			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B : Int);
 		}
 		return StringTools.hex(first, 8) + StringTools.hex(second, 8) + "-" + bytes.length;
 	}
