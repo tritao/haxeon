@@ -8,6 +8,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.BodyTyper;
 import compiler.types.typing.ProgramTyper;
+import compiler.types.typing.RetainedFromPrevious;
 
 typedef TyperPhaseMetrics = compiler.types.typing.TypingMetrics.TyperPhaseMetrics;
 typedef MeasuredTypedProgram = compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
@@ -32,7 +33,7 @@ class Typer {
 	public static function typeAnalyzedMeasured(semantic:SemanticProgram, selected:Map<String, Bool>,
 			?externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
 			?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts, requireMain:Bool = true,
-			?retainedOwners:Map<String, Bool>):MeasuredTypedProgram
+			?retained:RetainedFromPrevious):MeasuredTypedProgram
 		return new ProgramTyper(new BodyTyper(externals, specializations,
-			nativeAbiTarget)).typeProgramMeasured(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retainedOwners);
+			nativeAbiTarget)).typeProgramMeasured(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained);
 }

@@ -1,6 +1,6 @@
 # Typed metadata merge: warm rebuilds and the cold-build frontend restart
 
-Status: step 1 done, step 2 in progress (2026-11-08). Branch `typer-metadata-merge`.
+Status: steps 1 and 2 done, step 3 (restart continuation) next (2026-11-08). Branch `typer-metadata-merge`.
 
 ## Findings from step 1 (refined root cause)
 
@@ -30,39 +30,37 @@ Design of fix (A): `ModuleState` keeps `loadedText`, the text the caller supplie
 `loadedText` for every module; the generated identity table renders into `source` through `ModuleState.render` and leaves
 `loadedText` alone. `Compiler` knows nothing about the table.
 
-Scenarios in `tests/compiler/TypedMetadataMergeMain.hx` (each followed by a disk re-read of all loaded modules):
-- second compile without an edit: fixed by (A); passes.
-- after editing the module that makes the specialization / binds the method: pass (the specialization is recreated).
-- after editing the entry module, editing the generic class, adding a module: still fail on (B); to be added with its fix.
-  Editing the generic class also hits a second gap: `callersOfSpecializations` (SemanticAssembly) only follows
-  `$generic:` call targets, not `$generic-method-reference:` closures.
+Design of fix (B), `RetainedFromPrevious` (`ProgramTyper.takeFromPrevious`): every typing pass, reused metadata or not,
+asks again for what unchanged code still takes from the previous typed program. Owners and enum specializations are
+requested again and typed from the current declarations (a specialization of an edited generic class is rebuilt, not
+copied; one whose type arguments no longer exist is dropped, `TypeRepresentation.typeNamesExist`). Generated classes no
+source declares (key path caches) are copied with only the static fields retained code reads. What is retained is
+decided by `FrontendCompilation.retainedFromPrevious`, which scans every function that stays in the program (not only
+those a source function reaches: later IR passes inline helper calls into the cached callers, so the helpers left behind
+are what still name their classes and fields). The methods of a generated class and the helpers of an enum
+specialization count only once something else retains their type, otherwise they would keep it alive for ever.
+`callersOfSpecializations` also follows `$generic-method-reference:` closures.
 
+Scenarios in `tests/compiler/TypedMetadataMergeMain.hx`: second compile without an edit; after editing the entry module, the
+module that makes the specialization, the module that binds the method, the generic class; after giving the generic class
+a method; after adding a module; after removing the modules that make and bind the specialization while `Promise<Int>`
+stays in the program. Each compares the specialized owners (fields, methods), enums and aliases with a fresh compile of the
+final sources. Mutation checks: with the enum filter removed the removal scenario fails; with the all-functions scan seeded
+from owner methods too it fails (owners pile up).
 
-## Problem
+Results of step 2 (materia at e11c35e2f^, since `app` on main needs `haxeon.build.InputFiles` from uncommitted stdlib edits):
 
-Two symptoms with one root cause.
+| `app` build | compiler | functions retyped | objects allocated | bytes |
+|---|---|---|---|---|
+| cold | 74-106 s (noisy) | 30,479 | 878.9M | 36.5 GB |
+| warm, no edit (fails before) | 31-57 s | 0 | 223.3M | 11.6 GB |
+| warm, after editing `Main.hx` (fails before) | 41 s | 33 | 272.6M | 13.6 GB |
 
-1. **Warm rebuild fails.** Build `materia/app` (`haxeon build --project haxeon.json --compiler-only`), then build it
-   again while the first compiler worker is still alive ("reusing compiler session"). The second build fails on `main`:
-   `Missing target for generic method reference ... haxeon.platform.async.Promise:cancel`
-   (thrown in `src/compiler/ir/GenericOwnerErasure.hx`).
-2. **A cold build types the program twice.** Typing discovers runtime helper modules late (`haxeon.DynamicOps`,
-   `HashMap`, `Reflect`), and `FrontendCompilation.run` restarts the whole front end
-   (`includeTypedRuntimeDependencies(...)` then `return run(...)`). On a cold `app` build the second pass repeats
-   semantic analysis (~3.2 s) and typing (~11.9 s), about 19% of an ~80 s build.
-
-**Root cause (found 2026-11-08, not yet fixed).** When `ProgramTyper.typeProgramMeasured` gets `cachedMetadata`, it
-takes enums, interfaces and classes wholesale from the previous typed program (`cachedMetadata.enums`,
-`cachedMetadata.interfaces`, `refreshCachedClasses(...)`, lines ~155-219). It cannot accept declarations from modules
-that were added since, and generic specializations created by the previous program's functions (retained owners,
-`currentSpecializedOwners` in `FrontendCompilation`, around line 223 and the prune at line ~438) are dropped. The prune
-step then retires specialized methods that are still referenced, so erasure cannot find
-`$generic:$owner:haxeon.platform.async.Promise[layout]<Array<String>>.cancel`.
-
-An earlier experiment (`/home/joao/dev/materia-cache/claude-scratch/restart-continuation-experiment.patch`, against an older base, with debug traces) made the restart a continuation:
-publish pass 1's results, then run pass 2 as a normal incremental compile with empty change sets. Pass 2 then
-selected 10,366 of 33,609 functions instead of all of them, but failed with the same missing-target error. So fixing
-the metadata merge fixes the warm rebuild and unblocks the restart win.
+Where a warm no-op build spends its 223M objects (`--timings` allocation phases): backend assembly 100.2M (function lowering
+71.2M, verification 19.9M, debug 4.7M; the same as a cold build, 99.8M), IR assembly 98.5M (whole-program IR passes; cold
+168.5M, the difference is IR generation), semantic 9.9M, typing and lowering 10.3M, graph 1.3M, ABI 2.6M, encode 25.8M. By time:
+IR assembly 12.3 s, backend lowering 11.8 s (lowering 6.3 s, verify 1.8 s), output 2.5 s, frontend 1.9 s, typing 1.5 s. A plain build
+assembles from scratch, so the per-function lowering cache never applies; not changed here.
 
 ## Steps
 

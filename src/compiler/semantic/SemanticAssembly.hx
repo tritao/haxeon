@@ -867,9 +867,9 @@ class SemanticAssembly {
 							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): name;
 							default: null;
 						};
-						if (target == null || !StringTools.startsWith(target, "$generic:"))
+						var origin = target == null ? null : genericOrigin(target);
+						if (origin == null)
 							continue;
-						var origin = enclosingFunction(target);
 						if (seen.exists(origin))
 							continue;
 						seen.set(origin, true);
@@ -883,6 +883,18 @@ class SemanticAssembly {
 			}
 		}
 		return result;
+	}
+
+	/** The generic function or method a call or closure target was made from, or null when the target is not generic. */
+	static function genericOrigin(target:String):Null<String> {
+		if (StringTools.startsWith(target, "$generic:"))
+			return enclosingFunction(target);
+		// A bound method of a generic class: `$generic-method-reference:<class>:<member>:<receiver type>:<closure type>`.
+		if (StringTools.startsWith(target, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX)) {
+			var parts = target.substr(compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX.length).split(":");
+			return parts.length < 2 ? null : parts[0] + "." + parts[1];
+		}
+		return null;
 	}
 
 	/**

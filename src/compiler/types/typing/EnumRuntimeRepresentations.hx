@@ -48,10 +48,13 @@ class EnumRuntimeRepresentations {
 		}
 	}
 
-	/** Restore the semantic requests as well as their names for unchanged incremental callers. */
-	public function restore(enums:Array<TypedEnum>):Void
+	/** Ask again for the retained specializations of `enums`, so unchanged incremental callers keep their names. */
+	public function restore(enums:Array<TypedEnum>, retained:Map<String, Bool>):Void
 		for (declaration in enums)
-			if (declaration.specializationOrigin != null && session.enumDecls.exists(declaration.specializationOrigin))
+			if (declaration.specializationOrigin != null
+				&& retained.exists(declaration.name)
+				&& session.enumDecls.exists(declaration.specializationOrigin)
+				&& session.representation.typeNamesExist(declaration.specializationArguments))
 				discover(TInstance(NominalKind.Enum, declaration.specializationOrigin, declaration.specializationArguments));
 
 	public function declaration(index:Int):TypedEnum {

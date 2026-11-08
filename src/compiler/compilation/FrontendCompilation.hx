@@ -21,6 +21,8 @@ import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.typing.EnumRuntimeType;
+import compiler.types.typing.RetainedFromPrevious;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
@@ -169,7 +171,7 @@ class FrontendCompilation {
 			allocationAfterAnalysis = AllocationMeter.sample();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
-				canReuseSemantic ? retainedGenericOwners(context, names, owners, selected, lowerToIr) : null);
+				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true]));
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			IrGenerator.bindEnumConstructors(typedNew.enums);
@@ -688,21 +690,40 @@ class FrontendCompilation {
 		};
 	}
 
-	/** Physical owners referenced by unchanged cached functions and the generated functions they call. */
-	static function retainedGenericOwners(context:CompilationContext, modules:Array<String>, owners:Map<String, String>, selected:Map<String, Bool>,
-			lowerToIr:Bool):Map<String, Bool> {
-		var result:Map<String, Bool> = [], previous = context.lastTypedProgram;
+	/**
+	 * What unchanged cached functions, and the generated functions they call, still take from the previous typed program:
+	 * generic owners and the other generated classes (no source declares them) they refer to, and the static fields they read.
+	 */
+	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>, lowerToIr:Bool,
+			declared:Map<String, Bool>):Null<RetainedFromPrevious> {
+		var result:Map<String, Bool> = [],
+			retainedEnums:Map<String, Bool> = [],
+			staticFields:Map<String, Bool> = [],
+			previous = context.lastTypedProgram;
 		if (previous == null)
-			return result;
+			return null;
 		var known:Map<String, Bool> = [
 			for (entry in previous.classes)
+				if (entry.specializationOrigin != null || !declared.exists(entry.name)) entry.name => true
+		], knownEnums:Map<String, Bool> = [
+			for (entry in previous.enums)
 				if (entry.specializationOrigin != null) entry.name => true
-		];
-		if (!known.keys().hasNext())
-			return result;
+			];
+		if (!known.keys().hasNext() && !knownEnums.keys().hasNext())
+			return {
+				program: previous,
+				classes: result,
+				enums: retainedEnums,
+				staticFields: staticFields
+			};
 		// A type-only request has no complete IR graph to inspect.
 		if (!lowerToIr)
-			return known;
+			return {
+				program: previous,
+				classes: known,
+				enums: knownEnums,
+				staticFields: null
+			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [];
 		for (module in modules) {
@@ -715,15 +736,66 @@ class FrontendCompilation {
 				if (fn.physicalOwner != null)
 					physicalMethods.set(name, fn.physicalOwner);
 		}
-		var pending = [
-			for (name in owners.keys())
-				if (!selected.exists(name) && functions.exists(name)) name
-		], visited:Map<String, Bool> = [];
+		// Every function that stays in the program counts, not only those a source function reaches: later IR passes rewrite
+		// the cached bodies (a call to a key path helper is inlined into its callers), so the helpers and generated bodies
+		// left behind are the ones that still name the classes and static fields they need. The methods of a generated class
+		// and the helpers of an enum specialization are the exception: they name their own type, so they count only once
+		// something else retains it.
+		var membersByOwner:Map<String, Array<String>> = [],
+			membersByEnum:Map<String, Array<String>> = [],
+			enumsByHash:Map<String, String> = [];
+		function addMember(table:Map<String, Array<String>>, owner:String, member:String):Void {
+			var members = table.get(owner);
+			if (members == null) {
+				members = [];
+				table.set(owner, members);
+			}
+			members.push(member);
+		}
+		for (name in knownEnums.keys()) {
+			var separator = name.indexOf(EnumRuntimeType.SEPARATOR);
+			if (separator >= 0)
+				enumsByHash.set(name.substr(separator + EnumRuntimeType.SEPARATOR.length), name);
+		}
+		var pending:Array<String> = [];
+		for (name in functions.keys()) {
+			if (selected.exists(name))
+				continue;
+			var owner = physicalMethods.get(name),
+				helperOf = StringTools.startsWith(name, "$enum") ? enumsByHash.get(name.substr(name.lastIndexOf(":") + 1)) : null;
+			if (owner != null)
+				addMember(membersByOwner, owner, name);
+			else if (helperOf != null)
+				addMember(membersByEnum, helperOf, name);
+			else
+				pending.push(name);
+		}
+		function retain(className:String):Void {
+			if (result.exists(className))
+				return;
+			result.set(className, true);
+			var members = membersByOwner.get(className);
+			if (members != null)
+				for (member in members)
+					pending.push(member);
+		}
+		function retainEnum(enumName:String):Void {
+			if (retainedEnums.exists(enumName))
+				return;
+			retainedEnums.set(enumName, true);
+			var members = membersByEnum.get(enumName);
+			if (members != null)
+				for (member in members)
+					pending.push(member);
+		}
 		function visitType(type:IrType):Void {
 			switch type {
 				case Obj(name):
 					if (known.exists(name))
-						result.set(name, true);
+						retain(name);
+				case Enum(name):
+					if (knownEnums.exists(name))
+						retainEnum(name);
 				case Array(element), Iterator(element), Nullable(element):
 					visitType(element);
 				case Function(arguments, value):
@@ -734,16 +806,7 @@ class FrontendCompilation {
 			}
 		}
 		while (pending.length > 0) {
-			var name = pending.pop();
-			if (visited.exists(name))
-				continue;
-			visited.set(name, true);
-			var fn = functions.get(name);
-			if (fn == null)
-				continue;
-			var physical = physicalMethods.get(name);
-			if (physical != null && known.exists(physical))
-				result.set(physical, true);
+			var fn = functions.get(pending.pop());
 			for (argument in fn.arguments)
 				visitType(argument.type);
 			visitType(fn.result);
@@ -758,14 +821,22 @@ class FrontendCompilation {
 					switch instruction {
 						case TypeValue(_, type):
 							visitType(type);
-						case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
-							if (functions.exists(target) && !selected.exists(target))
-								pending.push(target);
+						case GlobalGet(_, field), GlobalSet(field, _):
+							var separator = field.lastIndexOf(".");
+							if (separator > 0 && known.exists(field.substr(0, separator))) {
+								retain(field.substr(0, separator));
+								staticFields.set(field, true);
+							}
 						default:
 					}
 				}
 		}
-		return result;
+		return {
+			program: previous,
+			classes: result,
+			enums: retainedEnums,
+			staticFields: staticFields
+		};
 	}
 
 	/** Body-only semantic reuse keeps every previous declaration, so it is valid only for an identical declaration set. */

@@ -41,7 +41,7 @@ class ProgramTyper {
 	}
 
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
-			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts, ?retainedOwners:Map<String, Bool>):MeasuredTypedProgram {
+			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts, ?retained:RetainedFromPrevious):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -204,19 +204,17 @@ class ProgramTyper {
 				if (classDecl.isExtern != true
 					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
 			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
-		if (cachedMetadata != null) {
-			session.enumRepresentations.restore(cachedMetadata.enums);
-			if (retainedOwners == null)
-				retainedOwners = [];
-			session.representation.restoreGenericOwnerAliases(cachedMetadata.genericOwnerAliases, retainedOwners);
-			for (cached in typedClasses)
-				if (cached.specializationOrigin != null
-					&& cached.specializationArguments != null
-					&& retainedOwners.exists(cached.name)
-					&& session.classDecls.exists(cached.specializationOrigin))
-					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
-			typedClasses = [for (cached in typedClasses) if (cached.specializationOrigin == null) cached];
+		// Unchanged code keeps the generic owners and generated classes it uses, whether or not the declaration metadata of the
+		// previous program is reused. Owners are asked for again and typed from the current declarations, so a program that
+		// gained or changed declarations still has every owner its unchanged callers refer to. With reused metadata the
+		// generated classes are already among the cached ones.
+		if (retained != null) {
+			var carried = takeFromPrevious(retained);
+			if (cachedMetadata == null)
+				typedClasses = typedClasses.concat(carried);
 		}
+		if (cachedMetadata != null)
+			typedClasses = [for (cached in typedClasses) if (cached.specializationOrigin == null) cached];
 		if (cachedMetadata == null)
 			for (enumDecl in typedEnums)
 				for (caseDecl in enumDecl.cases)
@@ -437,6 +435,48 @@ class ProgramTyper {
 				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
 		};
+	}
+
+	/**
+		Ask again for the enum and class specializations of the previous program and return its other retained generated
+		classes. A class no source declares (a key path cache) keeps only the static fields retained code reads, so a cache
+		does not collect fields for paths nothing uses any more.
+	**/
+	function takeFromPrevious(retained:RetainedFromPrevious):Array<TypedClass> {
+		var previous = retained.program, carried:Array<TypedClass> = [];
+		session.enumRepresentations.restore(previous.enums, retained.enums);
+		session.representation.restoreGenericOwnerAliases(previous.genericOwnerAliases, retained.classes);
+		for (cached in previous.classes) {
+			if (!retained.classes.exists(cached.name))
+				continue;
+			if (cached.specializationOrigin != null) {
+				if (cached.specializationArguments != null
+					&& session.classDecls.exists(cached.specializationOrigin)
+					&& session.representation.typeNamesExist(cached.specializationArguments))
+					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
+			} else if (!session.classDecls.exists(cached.name)) {
+				var staticFields = retained.staticFields;
+				carried.push({
+					name: cached.name,
+					genericParameters: cached.genericParameters,
+					isValue: cached.isValue,
+					isFlat: cached.isFlat,
+					isPortable: cached.isPortable,
+					isNativeValue: cached.isNativeValue,
+					nativeLayouts: cached.nativeLayouts,
+					base: cached.base,
+					interfaces: cached.interfaces,
+					fields: [
+						for (field in cached.fields) if (!field.isStatic
+							|| staticFields == null
+							|| staticFields.exists(cached.name + "." + field.name)) field
+					],
+					methods: cached.methods,
+					span: cached.span
+				});
+			}
+		}
+		return carried;
 	}
 
 	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {

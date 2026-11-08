@@ -285,6 +285,33 @@ class TypeRepresentation {
 		return result;
 	}
 
+	/** Whether every class, enum and interface named in `types` is declared, so a specialization of them can still be made. */
+	public function typeNamesExist(types:Array<CompilerType>):Bool {
+		for (type in types)
+			switch type {
+				case TInstance(kind, name, arguments):
+					var declared = switch kind {
+						case NominalKind.Class: session.classDecls.exists(name);
+						case NominalKind.Enum: session.enumDecls.exists(name);
+						case NominalKind.Interface: session.interfaceDecls.exists(name);
+						default: true;
+					};
+					if (!declared || !typeNamesExist(arguments))
+						return false;
+				case TNullable(element), TArray(element), TIterator(element):
+					if (!typeNamesExist([element]))
+						return false;
+				case TMap(key, value):
+					if (!typeNamesExist([key, value]))
+						return false;
+				case TFunction(arguments, result):
+					if (!typeNamesExist(arguments) || !typeNamesExist([result]))
+						return false;
+				default:
+			}
+		return true;
+	}
+
 	/** Preserve aliases referenced by unchanged cached callers during incremental typing. */
 	public function restoreGenericOwnerAliases(previous:Map<String, String>, retained:Map<String, Bool>):Void
 		for (signature => name in previous) if (retained.exists(name)) ownerAliases.set(signature, name);
