@@ -98,7 +98,27 @@ class CompilationPipeline {
 			frontendGraphDoneAt = frontend.frontendGraphDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
-		var backend = BackendAssembly.assemble(context, ir, regenerated, frontend.relocated, token);
+		// A build whose pipeline inputs equal the last plain build's reuses its module too, unless HAXEON_CHECK_REUSE=1 assembles
+		// it again to compare.
+		var backendKey = BackendAssembly.environmentKey(context),
+			reusedFrom = frontend.reused,
+			previousBackend = reusedFrom != null
+				&& reusedFrom.backend != null
+				&& reusedFrom.backendEnvironment == backendKey ? reusedFrom.backend : null,
+			checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			backendReused = previousBackend != null && !checkingReuse,
+			backend = backendReused ? BackendAssembly.reused(previousBackend,
+				irAssemblyDoneAt) : BackendAssembly.assemble(context, ir, regenerated, frontend.relocated, token);
+		if (previousBackend != null && checkingReuse) {
+			var difference = BackendAssembly.difference(previousBackend, backend);
+			if (difference != null)
+				throw 'HAXEON_CHECK_REUSE: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
+		}
+		var snapshot = context.pipelineSnapshot;
+		if (snapshot != null && !backendReused) {
+			snapshot.backend = backend;
+			snapshot.backendEnvironment = backendKey;
+		}
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
 			candidateAssembler = backend.assembler,
@@ -185,15 +205,15 @@ class CompilationPipeline {
 				abiPlanningMs: abiPlanningDoneAt - irAssemblyDoneAt,
 				backendAssemblyMs: backendAssemblyDoneAt - abiPlanningDoneAt,
 				backendAssemblerCopyMs: backend.assemblerCopyMs,
-				backendCachePreparationMs: assembly.cachePreparationMs,
-				backendLoweringMs: assembly.loweringMs,
-				backendPublicationMs: assembly.publicationMs,
+				backendCachePreparationMs: backendReused ? 0.0 : assembly.cachePreparationMs,
+				backendLoweringMs: backendReused ? 0.0 : assembly.loweringMs,
+				backendPublicationMs: backendReused ? 0.0 : assembly.publicationMs,
 				backendSnapshotMs: backend.snapshotAttachmentMs,
-				backendVerificationMs: assembly.verificationMs,
-				backendMetadataMs: assembly.metadataMs,
-				backendFunctionLoweringMs: assembly.functionLoweringMs,
-				backendDebugAssemblyMs: assembly.debugAssemblyMs,
-				backendFinalizationMs: assembly.lowerFinalizationMs,
+				backendVerificationMs: backendReused ? 0.0 : assembly.verificationMs,
+				backendMetadataMs: backendReused ? 0.0 : assembly.metadataMs,
+				backendFunctionLoweringMs: backendReused ? 0.0 : assembly.functionLoweringMs,
+				backendDebugAssemblyMs: backendReused ? 0.0 : assembly.debugAssemblyMs,
+				backendFinalizationMs: backendReused ? 0.0 : assembly.lowerFinalizationMs,
 				patchEncodingMs: patchEncodingDoneAt - backendAssemblyDoneAt,
 				finalizeMs: finishedAt - patchEncodingDoneAt,
 				modules: names.length,
@@ -204,7 +224,8 @@ class CompilationPipeline {
 				changedFunctions: assembly.changedFunctions.length,
 				moduleFunctions: assembly.module.functions.length,
 				moduleNatives: assembly.module.natives.length,
-				patchBytes: patchBytes == null ? 0 : patchBytes.length
+				patchBytes: patchBytes == null ? 0 : patchBytes.length,
+				reuse: reusedFrom == null ? "none (" + frontend.reuseMiss + ")" : backendReused ? "ir+module" : "ir"
 			}
 		};
 	}

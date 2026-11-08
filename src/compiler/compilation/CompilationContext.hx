@@ -47,6 +47,7 @@ class CompilationContext {
 	public var developmentMetadata(get, never):Bool;
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
+	public var pipelineSnapshot(get, set):Null<PipelineSnapshot>;
 
 	public function new(owner:Compiler, ?buildSemanticModels = true) {
 		this.owner = owner;
@@ -193,6 +194,21 @@ class CompilationContext {
 
 	public static function copyIndices(source:Map<String, Int>):Map<String, Int>
 		return Compiler.copyIndices(source);
+
+	function get_pipelineSnapshot():Null<PipelineSnapshot>
+		return owner.pipelineSnapshot;
+
+	function set_pipelineSnapshot(value:Null<PipelineSnapshot>):Null<PipelineSnapshot> {
+		owner.pipelineSnapshot = value;
+		return value;
+	}
+
+	/** The compile-time defines, as one comparable text (they select targets, inlining and instrumentation). */
+	public function definesKey():String {
+		var names = [for (name in owner.defines.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) name + "=" + owner.defines.get(name)].join("\n");
+	}
 
 	function get_assembler():HlModuleAssembler
 		return owner.assembler;

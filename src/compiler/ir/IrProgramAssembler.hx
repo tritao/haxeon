@@ -43,6 +43,9 @@ class IrProgramAssembler {
 		var names = [for (classDecl in typed.classes) if (!classDecl.isNativeValue) classDecl.name];
 		for (anonymous in typed.anonymousTypes)
 			names.push(anonymous.name);
+		// The order reaches the generated reflection functions, and a typed program lists its classes in the order they were typed in:
+		// a warm build and a fresh one must see the same list.
+		names.sort(Reflect.compare);
 		return names;
 	}
 

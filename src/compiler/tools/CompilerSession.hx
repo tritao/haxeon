@@ -37,14 +37,40 @@ class CompilerSession {
 		unrecordedPublication = null;
 		configuration = null;
 		writerCache = new HlWriterCache();
+		encodedModule = null;
+		encodedWasm = null;
 		sourceTexts = [];
 	}
 
-	public function encodeHashLink(code:HlCode):haxe.io.Bytes
-		return HlWriter.encode(code, writerCache);
+	/**
+	 * The bytes of the module last written, with the module they encode. Encoding is a function of the module alone, so a build
+	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
+	 */
+	var encodedModule:Null<{code:HlCode, bytes:haxe.io.Bytes}>;
+
+	var encodedWasm:Null<{ir:compiler.ir.Ir.IrProgram, options:String, bytes:haxe.io.Bytes}>;
+
+	public function encodeHashLink(code:HlCode):haxe.io.Bytes {
+		var known = encodedModule;
+		if (known == null || known.code != code) {
+			known = {code: code, bytes: HlWriter.encode(code, writerCache)};
+			encodedModule = known;
+		}
+		return known.bytes;
+	}
 
 	public function writeHashLink(code:HlCode, path:String):Void
-		HlWriter.writeFile(code, path, writerCache);
+		File.saveBytes(path, encodeHashLink(code));
+
+	/** The Wasm module for `ir` and `options`; the previous one when this is the program and the options it was made from. */
+	public function wasmModule(ir:compiler.ir.Ir.IrProgram, options:String, encode:() -> haxe.io.Bytes):haxe.io.Bytes {
+		var known = encodedWasm;
+		if (known == null || known.ir != ir || known.options != options) {
+			known = {ir: ir, options: options, bytes: encode()};
+			encodedWasm = known;
+		}
+		return known.bytes;
+	}
 
 	/** Wasm guests import their host services through this stdlib interface. */
 	static function hostInterfaces(target:String):{interfaces:Array<String>, projections:Array<String>}
@@ -96,7 +122,10 @@ class CompilerSession {
 			for (path in request.paths) {
 				var before = sourceTexts.get(path);
 				var after = readChanged(path);
-				if (before != null && after != before && hasStructuralDeclaration(path, before, after, Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
+				if (before != null
+					&& after != before
+					&& hasStructuralDeclaration(path, before, after,
+						Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 					reset();
 					break;
 				}
@@ -118,7 +147,9 @@ class CompilerSession {
 				}
 				if (Path.isAbsolute(path)) {
 					var changed = readChanged(path);
-					if (changed != state.source.text && hasStructuralDeclaration(path, state.source.text, changed, Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
+					if (changed != state.source.text
+						&& hasStructuralDeclaration(path, state.source.text, changed,
+							Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
 						// Rebuild that semantic graph until transitive shape invalidation is complete.
 						reset();

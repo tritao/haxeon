@@ -80,6 +80,48 @@ class IrGenerator {
 	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
 	static inline final ReactiveRuntimeClass:String = "haxeon.reactive.ReactiveRuntime";
 
+	/**
+	 * Everything the IR passes read from this class, as one comparable text: the program state `bindEnumConstructors` and
+	 * `bindClasses` derive from the typed program, and the target flags. The state a build produces while generating (generated
+	 * objects, flat and inline value objects, serials) is not an input and is not part of it.
+	 */
+	public static function inputState():String {
+		var out = new StringBuf();
+		function section(label:String, keys:Array<String>, render:String->String):Void {
+			keys.sort(Reflect.compare);
+			out.add(label + "{");
+			for (key in keys)
+				out.add(key.length + ":" + key + "=" + render(key) + ",");
+			out.add("}\n");
+		}
+		function flag(value:Bool):String
+			return value ? "1" : "0";
+		function text(value:String):String
+			return value == null ? "-" : value.length + ":" + value;
+		section("enumConstructorCounts", [for (key in enumConstructorCounts.keys()) key], key -> Std.string(enumConstructorCounts.get(key)));
+		section("enumEquatableTypes", [for (key in enumEquatableTypes.keys()) key], key -> flag(enumEquatableTypes.get(key)));
+		section("enumPayloadTypes", [for (key in enumPayloadTypes.keys()) key], key -> flag(enumPayloadTypes.get(key)));
+		section("valueClasses", [for (key in valueClasses.keys()) key], key -> flag(valueClasses.get(key)));
+		section("classBases", [for (key in classBases.keys()) key], key -> text(classBases.get(key)));
+		section("genericOwnerAliases", [for (key in genericOwnerAliases.keys()) key], key -> text(genericOwnerAliases.get(key)));
+		section("genericClasses", [for (key in genericClasses.keys()) key], key -> flag(genericClasses.get(key)));
+		section("genericOwnerOrigins", [for (key in genericOwnerOrigins.keys()) key], key -> text(genericOwnerOrigins.get(key)));
+		section("equatableTypes", [for (key in equatableTypes.keys()) key], key -> flag(equatableTypes.get(key)));
+		section("observableClasses", [for (key in observableClasses.keys()) key], key -> flag(observableClasses.get(key)));
+		section("observableStateOwners", [for (key in observableStateOwners.keys()) key], key -> text(observableStateOwners.get(key)));
+		section("observableFieldBits", [for (key in observableFieldBits.keys()) key], key -> {
+			var bits = observableFieldBits.get(key), names = [for (name in bits.keys()) name];
+			names.sort(Reflect.compare);
+			[for (name in names) name + ":" + bits.get(name)].join(";");
+		});
+		section("typedInterfaceContracts", [for (key in typedInterfaceContracts.keys()) key], key -> Std.string(typedInterfaceContracts.get(key)));
+		out.add("flags{" + [
+			headerlessValueClasses, dynamicObjectLiterals, nativeArrayChecks, nativeStringFastPaths, nativeReflectionDispatch, loweringScopedDisposal,
+			observableConstructorInitialization
+		].map(flag).join("") + "}");
+		return out.toString();
+	}
+
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
 		enumConstructorCounts = [];
@@ -464,14 +506,23 @@ class IrGenerator {
 	}
 
 	public static function generateFunction(fn:TypedFunction):IrFunction {
+		// The serials only keep one function's temporaries apart, so each function counts from zero: its IR must not depend on how many
+		// functions were generated before it, or a function generated again would never equal its earlier IR.
+		var arrayPlaces = arrayValuePlaceSerial, observableAccesses = observableAccessSerial;
+		arrayValuePlaceSerial = 0;
+		observableAccessSerial = 0;
 		try {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
+			arrayValuePlaceSerial = arrayPlaces;
+			observableAccessSerial = observableAccesses;
 			return fn.isInline == true
 				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
 					retention) : built;
 		} catch (error:String) {
+			arrayValuePlaceSerial = arrayPlaces;
+			observableAccessSerial = observableAccesses;
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}
 	}
