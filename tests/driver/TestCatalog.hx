@@ -231,6 +231,7 @@ class TestCatalog {
 		"SharedEqualityHelperEditMain",
 		"SharedWireHelperEditMain",
 		"CompilerSessionMain",
+		"CompilerInputsMain",
 		"CompilerKeepAliveMain"
 	];
 	static final runtimeMains = [
