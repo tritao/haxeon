@@ -77,6 +77,9 @@ class ModuleState {
 	 */
 	public var purityQueries:Map<String, Map<String, Bool>> = [];
 
+	/** The key path literals each typed function uses; a literal's helpers stay only while one is used. */
+	public var keyPathUses:Map<String, Map<String, Bool>> = [];
+
 	public var noReturnQueries:Map<String, Map<String, Bool>> = [];
 
 	/** Foreign default-argument syntax embedded in each cached function, by source snapshot. */
@@ -172,6 +175,7 @@ class ModuleState {
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.purityQueries = copyNestedMap(purityQueries);
+		result.keyPathUses = copyNestedMap(keyPathUses);
 		result.noReturnQueries = copyNestedMap(noReturnQueries);
 		result.defaultArgumentSources = copyNestedMap(defaultArgumentSources);
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);

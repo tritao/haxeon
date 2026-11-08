@@ -117,8 +117,18 @@ class KeyPathTyping {
 			case TInstance(NominalKind.Class, owner, _) if (session.signatures.exists(owner + ".new")): owner + ".new";
 			default: session.currentContext.functionName;
 		};
-		session.keyPathDefinitions.set(name, {name: name, root: root, value: value, fields: fields, writable: writable,
-			rootWriteback: rootWriteback, writeError: writeError, span: span, origin: origin});
+		session.keyPathDefinitions.set(name, {
+			name: name,
+			root: root,
+			value: value,
+			fields: fields,
+			writable: writable,
+			rootWriteback: rootWriteback,
+			writeError: writeError,
+			span: span,
+			origin: origin
+		});
+		session.recordKeyPathUse(session.currentContext.name, name);
 		return new TypedExpression(TCall(name, []), TKeyPath(root, value, writable), span);
 	}
 

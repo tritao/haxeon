@@ -383,6 +383,18 @@ class TypingSession {
 
 	public final noReturnQueries:Map<String, Map<String, Bool>> = [];
 
+	/** The key path literals (`$keypath.literal:...`) each function being typed uses, by that function's name. */
+	public final keyPathUses:Map<String, Map<String, Bool>> = [];
+
+	public function recordKeyPathUse(user:String, literal:String):Void {
+		var literals = keyPathUses.get(user);
+		if (literals == null) {
+			literals = [];
+			keyPathUses.set(user, literals);
+		}
+		literals.set(literal, true);
+	}
+
 	/** Constants substituted into each typed body, including its omitted call arguments. */
 	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
 

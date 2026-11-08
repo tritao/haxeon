@@ -50,10 +50,7 @@ class TypedMetadataMergeMain {
 				StringTools.replace(promiseSource, "public function cancel()",
 					"public function again():Void future.finish(Cancelled); public function cancel()")));
 		attempt(failures, "after editing a function that shares a key path with an unchanged one", files -> files.set("Edit.hx", editSource + " "));
-		// The prune keeps a shared key path helper while its recorded origin is unchanged, even after its last user is gone, so
-		// the cache keeps the field that helper reads (a fresh compile has neither). The two scenarios that end a key path's
-		// last use tolerate that; everything else must match, and nothing may be lost.
-		attempt(failures, "after an edited function stops using a key path", files -> files.set("Edit.hx", editWithoutHeightSource), true);
+		attempt(failures, "after an edited function stops using a key path", files -> files.set("Edit.hx", editWithoutHeightSource));
 		attempt(failures, "after adding a module", files -> {
 			files.set("Extra.hx", "class Extra { public static function value():Int return 1; }");
 			files.set("Main.hx", mainUsing(true, true, true));
@@ -66,7 +63,7 @@ class TypedMetadataMergeMain {
 		attempt(failures, "after removing the module that reads a key path", files -> {
 			files.remove("Edit.hx");
 			files.set("Main.hx", mainUsing(false, true, false));
-		}, true);
+		});
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: typed metadata of unchanged modules is kept, and an incremental compile equals a from-scratch one");
@@ -86,7 +83,7 @@ class TypedMetadataMergeMain {
 			"Main.hx" => mainSource
 		];
 
-	static function attempt(failures:Array<String>, label:String, change:Map<String, String>->Void, keepsStaleKeyPathFields = false):Void {
+	static function attempt(failures:Array<String>, label:String, change:Map<String, String>->Void):Void {
 		try {
 			var files = initialSources(), compiler = newCompiler(files);
 			expectExitCode(compiler, "first compile");
@@ -101,10 +98,8 @@ class TypedMetadataMergeMain {
 			expectExitCode(compiler, "second compile");
 			var fresh = newCompiler(files);
 			expectExitCode(fresh, "fresh compile");
-			var incremental = describeSpecializations(compiler, !keepsStaleKeyPathFields),
-				scratch = describeSpecializations(fresh, !keepsStaleKeyPathFields);
-			if (keepsStaleKeyPathFields)
-				requireKeyPathFieldsOf(compiler, fresh);
+			var incremental = describeSpecializations(compiler),
+				scratch = describeSpecializations(fresh);
 			if (incremental != scratch)
 				throw 'specializations differ from a fresh compile\nincremental:\n$incremental\nfresh:\n$scratch';
 		} catch (error:Dynamic) {
@@ -133,21 +128,8 @@ class TypedMetadataMergeMain {
 		}
 	}
 
-	/** Every static field of a key path cache in `fresh` is in the same cache of `compiler`, which may hold more. */
-	static function requireKeyPathFieldsOf(compiler:Compiler, fresh:Compiler):Void {
-		var have:Map<String, Bool> = [];
-		for (entry in compiler.lastTypedProgram.classes)
-			for (field in entry.fields)
-				have.set(entry.name + "." + field.name, true);
-		for (entry in fresh.lastTypedProgram.classes)
-			if (entry.name.indexOf(".$keypaths$") >= 0)
-				for (field in entry.fields)
-					if (!have.exists(entry.name + "." + field.name))
-						throw 'key path field ${entry.name}.${field.name} is missing';
-	}
-
 	/** The specialized owner classes with their fields and methods, the specialized enums and the owner aliases, sorted. */
-	static function describeSpecializations(compiler:Compiler, withKeyPaths:Bool):String {
+	static function describeSpecializations(compiler:Compiler):String {
 		var program = compiler.lastTypedProgram, lines:Array<String> = [];
 		if (program == null)
 			throw "no typed program";
@@ -156,7 +138,7 @@ class TypedMetadataMergeMain {
 			if (seen.exists(entry.name))
 				throw 'class ${entry.name} is in the program twice';
 			seen.set(entry.name, true);
-			if (withKeyPaths && entry.name.indexOf(".$keypaths$") >= 0)
+			if (entry.name.indexOf(".$keypaths$") >= 0)
 				lines.push('keypaths ${entry.name} fields=${[for (field in entry.fields) field.name].join(",")}');
 			if (entry.specializationOrigin != null)
 				lines.push('class ${entry.name} fields=${[for (field in entry.fields) field.name].join(",")} methods=${[for (method in entry.methods) method.name].join(",")}');

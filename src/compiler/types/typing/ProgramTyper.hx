@@ -418,6 +418,7 @@ class ProgramTyper {
 			inlineConstantDependencies: session.inlineConstantDependencies,
 			defaultArgumentSources: session.defaultArgumentSources,
 			noReturnQueries: session.noReturnQueries,
+			keyPathUses: session.keyPathUses,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),

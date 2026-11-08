@@ -1,6 +1,6 @@
 # Typed metadata merge: warm rebuilds and the cold-build frontend restart
 
-Status: steps 1-3 done; key path helper lifetime and the final report remain (2026-11-08). Branch `typer-metadata-merge`.
+Status: steps 1-3 and the key path helper lifetime done; the seeding experiment and the final report remain (2026-11-08). Branch `typer-metadata-merge`.
 
 ## Findings from step 1 (refined root cause)
 
@@ -49,12 +49,12 @@ final sources. Mutation checks: with the enum filter removed the removal scenari
 from owner methods too it fails (owners pile up).
 
 Key path caches: a retained cache class is copied from the previous program (fields in a new array), so a retyped function that
-asks for the same cache finds that copy by name and adds its field to it: one class, fields united. After the prune,
-`dropUnusedKeyPathFields` leaves one static field per `$keypath.literal:` helper still in the program. Debt: the prune keeps a
-shared helper while its recorded origin is unchanged (the origin of a key path helper is the first function that typed it,
-here `Node.new`, not the function that uses it), so a key path whose last user was edited away or removed keeps its helper
-and its field until that origin changes; a fresh compile has neither. This is how the prune already behaved with reused
-metadata; two scenarios tolerate it (the cache may hold more fields than a fresh one, never fewer).
+asks for the same cache finds that copy by name and adds its field to it: one class, fields united. A key path helper is shared
+and recorded under one origin (the root's constructor, `Node.new`), which used to keep it after its last user was edited away.
+Each typed function now records the key path literals it uses (`TypingSession.keyPathUses`, kept in `ModuleState.keyPathUses`
+and dropped with the function), and after the prune `pruneUnusedKeyPathHelpers` removes a literal's helper and its `:read` and
+`:write` accessors when no function that stays uses the literal. `dropUnusedKeyPathFields` then leaves one static field per
+helper in the program, so the cache equals a fresh compile's. The scenarios that end a key path's last use require exact equality.
 
 Cost of `retainedFromPrevious` on `app` (31,841 functions, every instruction of every non-selected function): 354-357 ms
 per pass on the warm builds (loaded machine). Below the 0.5 s bar, so no per-function summaries yet; the restart pass will

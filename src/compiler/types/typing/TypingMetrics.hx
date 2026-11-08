@@ -28,6 +28,10 @@ typedef MeasuredTypedProgram = {
 	final purityQueries:Map<String, Map<String, Bool>>;
 
 	final noReturnQueries:Map<String, Map<String, Bool>>;
+
+	/** The key path literals each freshly typed function uses, by function name. */
+	final keyPathUses:Map<String, Map<String, Bool>>;
+
 	final inlineConstantDependencies:Map<String, Map<String, Bool>>;
 	final defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>>;
 }

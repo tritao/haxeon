@@ -157,6 +157,7 @@ class FrontendCompilation {
 		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
+			keyPathUses:Map<String, Map<String, Bool>>,
 			inlineConstantDependencies:Map<String, Map<String, Bool>>,
 			defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>>;
 		try {
@@ -191,6 +192,7 @@ class FrontendCompilation {
 			runtimeDependencies = typedResult.runtimeDependencies;
 			purityQueries = typedResult.purityQueries;
 			noReturnQueries = typedResult.noReturnQueries;
+			keyPathUses = typedResult.keyPathUses;
 			inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			defaultArgumentSources = typedResult.defaultArgumentSources;
 			// The declarations did not show a module that changes a representation (a map met only inside a body), so what was
@@ -316,6 +318,11 @@ class FrontendCompilation {
 				state.noReturnQueries.set(fn.name, noReturnRecord);
 			else
 				state.noReturnQueries.remove(fn.name);
+			var keyPathRecord = keyPathUses.get(fn.name);
+			if (keyPathRecord != null)
+				state.keyPathUses.set(fn.name, keyPathRecord);
+			else
+				state.keyPathUses.remove(fn.name);
 			if (indexSemantics && state.semanticModel != null)
 				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
 			// A lambda names the function it is written in as its origin, so it is retyped with that function.
@@ -469,21 +476,10 @@ class FrontendCompilation {
 			for (cached in retired.keys())
 				valid.remove(cached);
 			var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
-			if (removed.length > 0) {
-				state = context.writableState(name, rollbackModules);
-				for (cached in removed) {
-					state.typedFunctions.remove(cached);
-					state.typedSourceRevisions.remove(cached);
-					state.purityQueries.remove(cached);
-					state.noReturnQueries.remove(cached);
-					state.defaultArgumentSources.remove(cached);
-					state.pendingIrFunctions.remove(cached);
-					state.irFunctions.remove(cached);
-					state.irSourceRevisions.remove(cached);
-					state.irVersions.remove(cached);
-				}
-			}
+			if (removed.length > 0)
+				removeCachedFunctions(context.writableState(name, rollbackModules), removed);
 		}
+		pruneUnusedKeyPathHelpers(context, names, rollbackModules);
 		var allocationAfterModulePrune = AllocationMeter.sample();
 		retyped = uniqueSorted(retyped);
 		var allocationAfterPrune = AllocationMeter.sample();
@@ -717,6 +713,57 @@ class FrontendCompilation {
 			allocationPhases: allocationPhases
 		};
 		}
+
+	static function removeCachedFunctions(state:ModuleState, names:Array<String>):Void
+		for (cached in names) {
+			state.typedFunctions.remove(cached);
+			state.typedSourceRevisions.remove(cached);
+			state.purityQueries.remove(cached);
+			state.noReturnQueries.remove(cached);
+			state.keyPathUses.remove(cached);
+			state.defaultArgumentSources.remove(cached);
+			state.pendingIrFunctions.remove(cached);
+			state.irFunctions.remove(cached);
+			state.irSourceRevisions.remove(cached);
+			state.irVersions.remove(cached);
+		}
+
+	/**
+	 * A key path literal helper, and the read and write accessors made with it, stay only while a function that stays in the
+	 * program uses the literal. The helper is shared and recorded under one origin (the root's constructor), so the origin alone
+	 * would keep it after its last user is edited away or removed.
+	 */
+	static function pruneUnusedKeyPathHelpers(context:CompilationContext, names:Array<String>, rollbackModules:Map<String, ModuleState>):Void {
+		var used:Map<String, Bool> = [];
+		for (name in names) {
+			var state = context.modules.get(name);
+			if (state != null)
+				for (literals in state.keyPathUses)
+					for (literal in literals.keys())
+						used.set(literal, true);
+		}
+		for (name in names) {
+			var state = context.modules.get(name);
+			if (state == null)
+				continue;
+			var unused = [
+				for (cached in state.typedFunctions.keys())
+					if (StringTools.startsWith(cached, compiler.types.typing.KeyPathTyping.LITERAL_PREFIX)
+						&& !used.exists(keyPathLiteralOf(cached))) cached
+			];
+			if (unused.length > 0)
+				removeCachedFunctions(context.writableState(name, rollbackModules), unused);
+		}
+	}
+
+	/** The literal a helper belongs to: a literal's own name ends in its access kind, an accessor adds one more (`:read` or `:write`). */
+	static function keyPathLiteralOf(helper:String):String {
+		var accessor = StringTools.endsWith(helper, ":read") || StringTools.endsWith(helper, ":write");
+		if (!accessor)
+			return helper;
+		var base = helper.substr(0, helper.lastIndexOf(":"));
+		return StringTools.endsWith(base, ":read") || StringTools.endsWith(base, ":write") ? base : helper;
+	}
 
 	static function uniqueSorted(names:Array<String>):Array<String> {
 		names.sort(Reflect.compare);
