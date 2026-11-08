@@ -203,7 +203,7 @@ class CompilerDriver {
 	}
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
-	/** The modules the compile read, as JSON: `[name, path, sha256 of the text the compiler used]`, sorted by name. */
+	/** The modules the compile read, as JSON: `[name, path, sha256 of the module's text]` (for the generated identity table, of its file), sorted by name. */
 	static function inputsReport(session:compiler.Compiler, names:Array<String>):String {
 		var sorted = names.copy();
 		sorted.sort(Reflect.compare);
@@ -212,7 +212,9 @@ class CompilerDriver {
 			var state = session.modules.get(name);
 			if (state == null)
 				throw "Compiled module has no source: " + name;
-			rows.push([name, state.source.path, build.execution.ContentDigest.makeHex(Bytes.ofString(state.source.text))]);
+			// The identity table's text is generated from every other module during the compile; its file is the input.
+			var text = name == compiler.modules.CodeIdentityTable.MODULE ? File.getContent(state.source.path) : state.source.text;
+			rows.push([name, state.source.path, build.execution.ContentDigest.makeHex(Bytes.ofString(text))]);
 		}
 		return Json.stringify(rows);
 	}
