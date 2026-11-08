@@ -173,6 +173,35 @@ reason (it needs a global fixpoint over all functions), the doc will say which a
 Session lifetime: caches live with the compiler worker session, like `IrInlineCache`. A new session starts cold and
 produces the same bytes. They are rebuilt (not patched) when the compiler is rebuilt, which restarts the worker anyway.
 
+## Approved order and safety rules (dev-71)
+
+Each item is its own commit, full suite before each commit. After each: compile-count for cold / no-op / edit.
+
+1. Pass allocation fixes, no caching: the merged passes that rebuild every function (`IrInlineEnumLowering`,
+   `IrValueInterfaceBoxes`, the enum/value/typed-interface dispatch passes) return the same `IrFunction` and blocks when
+   they change nothing. Helps cold builds too.
+2. Program-level shortcut extended to the backend: if the raw pipeline input digest and the lowering environment both equal
+   the previous build's, reuse the previous final IR and the previous module bytes; no pass, no lowering, only write the
+   bytes (also to a new output path). Test: warm no-op output == cold output.
+3. Relocatable lowering:
+   a. relocatable lowering + link step, cold path only; no output byte changes (byte equality against the pre-change
+      compiler on cnckit/tests in the same install path, and on the test programs);
+   b. plain warm builds reuse lowered functions; warm == cold test (no-op, body edit, signature edit, generic
+      specialization edit, added/removed function, an added constant or string that shifts tables);
+   c. port live patching onto the same relocatables (all Live*, Profiler*Lsp and HotReload tests keep passing);
+   d. per-function verification.
+4. IR pass ports, ordered by what they save in the edit case. Each skipped pass gets the reason it is not reusable.
+
+Safety:
+
+- `LoweringView` is the only way `HlLower` sees other entities. It must not hold the `IrProgram` or the object maps, so an
+  unrecorded fact cannot be read.
+- Check mode (`HAXEON_CHECK_REUSE=1`): every reused entry (lowered function, later pass outputs) is also recomputed and
+  compared; the build throws, naming the function and what differed. It runs in the warm == cold test and once on the app
+  warm builds before each pass port. A test aid, not a fallback.
+- Worker RSS after a warm app build is reported before and after the caches.
+- Wasm: as planned, the decision is reported.
+
 ## Steps
 
 1. This document (profile + plan). Send to dev-71 before coding.
