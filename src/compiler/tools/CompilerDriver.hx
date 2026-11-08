@@ -214,7 +214,11 @@ class CompilerDriver {
 				throw "Compiled module has no source: " + name;
 			// The identity table's text is generated from every other module during the compile; its file is the input.
 			var text = name == compiler.modules.CodeIdentityTable.MODULE ? File.getContent(state.source.path) : state.source.text;
-			rows.push([name, state.source.path, build.execution.ContentDigest.makeHex(Bytes.ofString(text))]);
+			rows.push([
+				name,
+				state.source.path,
+				build.execution.ContentDigest.makeHex(Bytes.ofString(text))
+			]);
 		}
 		return Json.stringify(rows);
 	}
