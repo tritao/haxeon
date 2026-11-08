@@ -23,13 +23,13 @@ class ModuleAnalyzer {
 	final buildSemanticModels:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
-	final declarationOwners:Map<String, String>;
+	final declarationOwners:DeclarationOwners;
 	// Import resolution reads the declarations of modules that are not parsed yet, once per imported declaration. Each such
 	// parse is kept here until the module's own parse adopts it.
 	final lookupParses:Map<String, LookupParse> = [];
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
-			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:Map<String, String>) {
+			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
@@ -37,7 +37,7 @@ class ModuleAnalyzer {
 		this.buildSemanticModels = buildSemanticModels;
 		this.defines = defines;
 		this.sourceLoader = sourceLoader;
-		this.declarationOwners = declarationOwners == null ? [] : declarationOwners;
+		this.declarationOwners = declarationOwners == null ? new DeclarationOwners() : declarationOwners;
 		if (declarationOwners == null)
 			for (name => state in modules)
 				if (state.ast != null)
@@ -57,9 +57,7 @@ class ModuleAnalyzer {
 			state.conditionalDefines = parsed.defines;
 			state.tokens = parsed.tokens;
 			state.ast = parsed.ast;
-			for (declaration => owner in [for (declaration => owner in declarationOwners) declaration => owner])
-				if (owner == state.name)
-					declarationOwners.remove(declaration);
+			declarationOwners.release(state.name);
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
@@ -462,8 +460,7 @@ class ModuleAnalyzer {
 	}
 
 	inline function indexDeclaration(name:String, moduleName:String):Void {
-		if (!declarationOwners.exists(name))
-			declarationOwners.set(name, moduleName);
+		declarationOwners.claim(name, moduleName);
 	}
 
 	function hasSourceModuleImport(imports:Array<String>):Bool {

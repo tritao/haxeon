@@ -263,7 +263,7 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 	var cachedSemanticProgram:Null<SemanticProgram>;
 	var reachabilityCache:Map<String, ReachabilityCache> = [];
-	var declarationOwners:Map<String, String> = [];
+	var declarationOwners = new compiler.semantic.DeclarationOwners();
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
 		semanticWorkspace = new SemanticWorkspace(modules);
@@ -640,9 +640,7 @@ class Compiler {
 		if (!modules.exists(name))
 			return false;
 		modules.remove(name);
-		for (declaration => owner in [for (declaration => owner in declarationOwners) declaration => owner])
-			if (owner == name)
-				declarationOwners.remove(declaration);
+		declarationOwners.release(name);
 		graph.rebuild(modules);
 		sourceGeneration++;
 		return true;
@@ -916,7 +914,7 @@ class Compiler {
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
 		candidate.cachedSemanticProgram = snapshot.semanticProgram;
 		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
-		candidate.declarationOwners = [for (declaration => owner in declarationOwners) declaration => owner];
+		candidate.declarationOwners = declarationOwners.copy();
 		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
 		return candidate;
 	}
