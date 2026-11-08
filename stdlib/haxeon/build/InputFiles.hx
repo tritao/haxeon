@@ -30,6 +30,7 @@ class InputFiles {
 	static var noted:Null<Map<String, Bool>>;
 	static var written:Null<Map<String, Bool>>;
 	static var ignored:Null<Array<String>>;
+	static var ignoredExact:Null<Map<String, Bool>>;
 
 	/** Whether this run records its reads: the program was started with the flag. Decided on first use, whenever that is. */
 	public static function isRecording():Bool {
@@ -43,6 +44,7 @@ class InputFiles {
 					noted = [];
 					written = [];
 					ignored = ["/proc/", "/sys/", "/dev/"];
+					ignoredExact = [];
 				}
 		}
 		return on;
@@ -52,10 +54,22 @@ class InputFiles {
 	public static function arguments():Array<String>
 		return [for (argument in Sys.args()) if (!StringTools.startsWith(argument, FLAG)) argument];
 
-	/** Reads below `prefix` (a directory) are not inputs: a cache's own files. */
+	/**
+	 * A cache's own directory is not an input: nothing below `prefix` (a directory) is, nor the directory itself or the ones
+	 * above it, which the cache creates when it first writes (a query about whether they exist must not make an output stale).
+	 */
 	public static function ignorePrefix(prefix:String):Void {
-		if (isRecording() && ignored != null)
-			ignored.push(absolute(prefix) + "/");
+		var exact = ignoredExact;
+		if (!isRecording() || ignored == null || exact == null)
+			return;
+		var full = absolute(prefix);
+		ignored.push(full + "/");
+		var parts = full.split("/");
+		while (parts.length > 1) {
+			exact.set(parts.join("/"), true);
+			parts.pop();
+		}
+		exact.set("/", true);
 	}
 
 	/** One file that is not an input: the document a runner hands the program, already part of the cache's key. */
@@ -153,6 +167,8 @@ class InputFiles {
 		if (!isRecording() || ignored == null || noted == null || entries == null)
 			return;
 		var full = absolute(path);
+		if (ignoredExact != null && ignoredExact.exists(full))
+			return;
 		for (prefix in ignored)
 			if (StringTools.startsWith(full, prefix))
 				return;
