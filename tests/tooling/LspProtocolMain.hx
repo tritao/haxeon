@@ -547,8 +547,12 @@ class LspProtocolMain {
 		var openedDocumentDiagnostics = false;
 		for (message in opened) {
 			var notification:Dynamic = Json.parse(message);
-			if (notification.method == "textDocument/publishDiagnostics" && notification.params.uri == uri)
-				openedDocumentDiagnostics = true;
+			if (notification.method == "textDocument/publishDiagnostics") {
+				if (notification.params.uri == uri)
+					openedDocumentDiagnostics = true;
+				else
+					throw "LSP didOpen published diagnostics for a file outside the open document and workspace";
+			}
 		}
 		if (!openedDocumentDiagnostics)
 			throw "LSP didOpen did not publish diagnostics";
@@ -1127,11 +1131,8 @@ class LspProtocolMain {
 			method: "textDocument/didChange",
 			params: {textDocument: {uri: choiceUri, version: 5}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
 		}));
-		if (closedDependent.length != 1)
-			throw "closed dependent diagnostic was not published";
-		var closedMessage:Dynamic = Json.parse(closedDependent[0]);
-		if (closedMessage.params.uri != consumerUri || Reflect.hasField(closedMessage.params, "version"))
-			throw "closed document diagnostic incorrectly included an LSP version";
+		if (closedDependent.length != 0)
+			throw "LSP published diagnostics for a closed file outside the workspace";
 		var scheduledService = new LanguageService(),
 			scheduledProtocol = new LspProtocol(scheduledService),
 			scheduledMessages:Array<String> = [],
@@ -1846,8 +1847,12 @@ class LspProtocolMain {
 			foundDiagnostic = false;
 		for (raw in messages) {
 			var message:Dynamic = Json.parse(raw);
-			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
-				foundDiagnostic = true;
+			if (message.method == "textDocument/publishDiagnostics") {
+				if (!StringTools.startsWith(message.params.uri, "file://" + base + "/"))
+					throw "LSP published diagnostics for a file outside the workspace";
+				if (message.params.uri == uri && message.params.diagnostics.length > 0)
+					foundDiagnostic = true;
+			}
 		}
 		if (!foundDiagnostic)
 			throw "manifest-backed document did not diagnose a type error";
