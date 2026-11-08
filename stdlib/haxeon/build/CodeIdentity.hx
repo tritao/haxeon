@@ -68,6 +68,43 @@ class CodeIdentity {
 		#end
 	}
 
+	/**
+	 * A fingerprint of the content of the shared libraries this process has loaded whose file names start with `namePrefix`
+	 * (their names and SHA-256 digests, not their locations). Unlike `nativeBuild` it asks the loader what is mapped, so it does
+	 * not depend on where the program file or the working directory is: a program run from a temporary directory, with its
+	 * libraries found through the library path, is identified the same as one run beside them. Call it after the first call
+	 * into the library, which is what loads it. Null where the loaded libraries cannot be listed (anything but Linux) or none
+	 * match.
+	 */
+	public static function loadedLibrariesContent(namePrefix:String):Null<String> {
+		#if wasm
+		return null;
+		#else
+		if (Sys.systemName() != "Linux" || !FileSystem.exists("/proc/self/maps"))
+			return null;
+		var seen = new Map<String, Bool>();
+		var entries:Array<String> = [];
+		for (line in File.getContent("/proc/self/maps").split("\n")) {
+			var slash = line.indexOf("/");
+			if (slash < 0)
+				continue;
+			var path = line.substr(slash);
+			var name = Path.withoutDirectory(path);
+			if (!StringTools.startsWith(name, namePrefix) || seen.exists(path) || !FileSystem.exists(path))
+				continue;
+			seen.set(path, true);
+			var digest = Sha256.make(File.getBytes(path)), hex = "";
+			for (index in 0...digest.length)
+				hex += StringTools.hex(digest.get(index), 2);
+			entries.push(name + ":" + hex.toLowerCase());
+		}
+		if (entries.length == 0)
+			return null;
+		entries.sort(Reflect.compare);
+		return Sha256.encode(entries.join("\n"));
+		#end
+	}
+
 	static function computeNativeBuild(packageName:String):Null<String> {
 		#if wasm
 		return null;
