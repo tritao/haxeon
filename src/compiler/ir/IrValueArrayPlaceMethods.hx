@@ -74,7 +74,7 @@ class IrValueArrayPlaceMethods {
 			result.push(specialize(entry.name, original, entry.path));
 		}
 		var writes = [for (name in valueWrites.keys()) name]; writes.sort(Reflect.compare);
-		var bridge = new IrValueArrayBridge(element, objects, helpers);
+		var bridge = new IrValueArrayBridge(element, element, objects, helpers);
 		var reads = [for (name in scalarReads.keys()) name]; reads.sort(Reflect.compare);
 		for (name in reads) {
 			var request = scalarReads.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),

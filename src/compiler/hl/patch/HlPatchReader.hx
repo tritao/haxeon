@@ -222,7 +222,7 @@ class HlPatchReader {
 			return tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global, fields, methods, bindings);
 		}
 		if (tag == HlType.Virtual)
-			return Virtual([for (_ in 0...readUnsigned(input)) {name: readIndex(input), type: readIndex(input)}]);
+			return Virtual(readIndex(input), [for (_ in 0...readUnsigned(input)) {name: readIndex(input), type: readIndex(input)}]);
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
 		if (tag == HlType.Ref || tag == HlType.Null || tag == HlType.Packed)

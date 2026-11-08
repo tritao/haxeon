@@ -164,7 +164,7 @@ class ValueArrayAccessMain {
 		var optionalPairType:IrType = Nullable(pairType), optionalPairArrayType:IrType = Array(optionalPairType);
 		var optionalPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(optionalPairType);
 		var optionalPairHelpers = new IrValueArraySlotHelpers(optionalPairType, optionalPairShape);
-		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
+		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
 		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects), optionalPairType, optionalPairHelpers);
 		var optionalPairBridgeFunctions = optionalPairBridge.functions().concat(optionalPairComponents.functions()),
 			optionalPairHelperFunctions = optionalPairHelpers.functions();
@@ -182,12 +182,12 @@ class ValueArrayAccessMain {
 		var nestedPairType:IrType = Obj("LaneNestedPair"), nestedPairArrayType:IrType = Array(nestedPairType);
 		var nestedPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(nestedPairType);
 		var nestedPairHelpers = new IrValueArraySlotHelpers(nestedPairType, nestedPairShape);
-		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
+		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
 		var nestedPairBridgeFunctions = nestedPairBridge.functions(), nestedPairHelperFunctions = nestedPairHelpers.functions();
 		var outerType:IrType = Obj("LaneOuter"), outerArrayType:IrType = Array(outerType);
 		var outerShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(outerType);
 		var outerHelpers = new IrValueArraySlotHelpers(outerType, outerShape);
-		var outerBridge = new IrValueArrayBridge(outerType, IrObjectTable.of(objects), outerHelpers);
+		var outerBridge = new IrValueArrayBridge(outerType, outerType, IrObjectTable.of(objects), outerHelpers);
 		var outerBridgeFunctions = outerBridge.functions(), outerHelperFunctions = outerHelpers.functions();
 		var bridgeArray = builder.call(pairFactory.allocateName(), [builder.constInt(1)], pairArrayType);
 		var bridgeSource = builder.newObject("LanePair");
@@ -197,7 +197,7 @@ class ValueArrayAccessMain {
 		var bridgeAccepted = builder.call(pairBridge.acceptsName(), [dynamicPair], Bool);
 		var bridgeRejected = builder.call(pairBridge.acceptsName(), [builder.toDyn(owner)], Bool);
 		var bridgeNullRejected = builder.call(pairBridge.acceptsName(), [builder.constNull(Dyn)], Bool);
-		builder.call(pairBridge.writeName(), [bridgeArray, index, dynamicPair], Void);
+		builder.call(pairBridge.writeName(), [bridgeArray, index, dynamicPair, builder.constBool(false)], Void);
 		builder.fieldSet(bridgeSource, "value", builder.constInt(271));
 		var bridgeResult = builder.safeCast(builder.call(pairBridge.readName(), [bridgeArray, index], Dyn), pairType);
 		var bridgeValue = builder.fieldGet(bridgeResult, "value", I32), bridgeLabel = builder.fieldGet(bridgeResult, "label", Obj("LaneOwner"));
@@ -210,7 +210,7 @@ class ValueArrayAccessMain {
 			builder.constInt(optionalPairShape.scalarWordBits), builder.constBool(false)], optionalPairArrayType);
 		var optionalBridgeNullAccepted = builder.call(optionalPairBridge.acceptsName(), [builder.constNull(Dyn)], Bool);
 		var optionalBridgeAccepted = builder.call(optionalPairBridge.acceptsName(), [dynamicPair], Bool);
-		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, dynamicPair], Void);
+		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, dynamicPair, builder.constBool(false)], Void);
 		var optionalBridgeResult = builder.safeCast(builder.call(optionalPairBridge.readName(), [optionalBridgeArray, index], Dyn), pairType);
 		var optionalBridgeValue = builder.fieldGet(optionalBridgeResult, "value", I32);
 		var optionalBridgeLabel = builder.fieldGet(optionalBridgeResult, "label", Obj("LaneOwner"));
@@ -219,7 +219,7 @@ class ValueArrayAccessMain {
 		var optionalSnapshotValue = builder.call(rewrittenOptionalSnapshot.name, [optionalBridgeArray, optionalSnapshotClosure], I32);
 		var afterOptionalSnapshot = builder.call("std.gc_total_allocated", [], F64);
 		var optionalSnapshotCurrent = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [optionalBridgeArray, index], I32);
-		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, builder.constNull(Dyn)], Void);
+		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, builder.constNull(Dyn), builder.constBool(false)], Void);
 		var optionalBridgeNull = builder.call(optionalPairBridge.readName(), [optionalBridgeArray, index], Dyn);
 		var optionalBridgeCleared = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])),
 			[optionalBridgeArray, index], Obj("LaneOwner"));
@@ -261,14 +261,14 @@ class ValueArrayAccessMain {
 		builder.fieldSet(nestedBridgeSource, "nested", bridgeSource);
 		builder.fieldSet(nestedBridgeSource, "optional", builder.toDyn(builder.constInt(93), Nullable(I32)));
 		var dynamicNested = builder.toDyn(nestedBridgeSource);
-		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested], Void);
+		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)], Void);
 		var nestedBridgeResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [nestedBridgeArray, index], Dyn), nestedPairType);
 		var nestedBridgePair = builder.fieldGet(nestedBridgeResult, "nested", pairType);
 		var nestedBridgeValue = builder.fieldGet(nestedBridgePair, "value", I32), nestedBridgeLabel = builder.fieldGet(nestedBridgePair, "label", Obj("LaneOwner"));
 		var nestedBridgeOptional = builder.fieldGet(nestedBridgeResult, "optional", Nullable(I32));
 		var nestedBridgePayload = builder.safeCast(nestedBridgeOptional, I32);
 		builder.fieldSet(nestedBridgeSource, "optional", builder.constNull(Nullable(I32)));
-		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested], Void);
+		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)], Void);
 		var nestedBridgeNullResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [nestedBridgeArray, index], Dyn), nestedPairType);
 		var nestedBridgeNull = builder.fieldGet(nestedBridgeNullResult, "optional", Nullable(I32));
 		var outerBridgeArray = builder.call("__value_array_alloc_outer", [builder.constInt(1), builder.typeValue(outerType),
@@ -281,7 +281,7 @@ class ValueArrayAccessMain {
 		builder.fieldSet(outerSource, "nested", outerInner);
 		builder.fieldSet(outerSource, "maybe", builder.toDyn(outerInner, Nullable(Obj("LaneInner"))));
 		var dynamicOuter = builder.toDyn(outerSource);
-		var outerReadType:IrType = Function([outerArrayType, I32], Dyn), outerWriteType:IrType = Function([outerArrayType, I32, Dyn], Void);
+		var outerReadType:IrType = Function([outerArrayType, I32], Dyn), outerWriteType:IrType = Function([outerArrayType, I32, Dyn, Bool], Void);
 		builder.call("__value_array_set_bridge_outer", [outerBridgeArray, builder.staticClosure(outerBridge.readName(), outerReadType),
 			builder.staticClosure(outerBridge.writeName(), outerWriteType), builder.staticClosure(outerBridge.acceptsName(), pairAcceptsType)], Void);
 		builder.call("__array_set_any", [outerBridgeArray, index, dynamicOuter], Void);

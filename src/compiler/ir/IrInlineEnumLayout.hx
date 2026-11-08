@@ -31,6 +31,7 @@ class IrInlineEnumLayout {
 	final target:IrValueLaneTarget;
 	final canonical:Bool;
 	final classificationObjects:Null<Array<IrObject>>;
+	final eligible:Null<Map<String, Bool>>;
 	final results:Map<String, IrInlineEnumShape> = [];
 	final rejected:Map<String, Bool> = [];
 	final valueCopies:Map<String, String> = [];
@@ -38,7 +39,7 @@ class IrInlineEnumLayout {
 
 	/** classificationObjects retains the canonical Flat layouts independently of the selected target ABI. */
 	public function new(enums:Array<IrEnum>, objects:Array<IrObject>, pointerBits:Int, target:IrValueLaneTarget,
-			?classificationObjects:Array<IrObject>, canonical:Bool = false) {
+			?classificationObjects:Array<IrObject>, canonical:Bool = false, ?eligible:Map<String, Bool>) {
 		if (classificationObjects != null) {
 			var values = [for (object in classificationObjects) if (object.isValue) object.name => true];
 			for (object in objects) if (object.isValue && !values.exists(object.name))
@@ -50,10 +51,12 @@ class IrInlineEnumLayout {
 		this.target = target;
 		this.canonical = canonical;
 		this.classificationObjects = classificationObjects;
+		this.eligible = eligible;
 	}
 
 	/** Recursive and disproportionately large enum payloads remain boxed. */
 	public function shape(name:String):Null<IrInlineEnumShape> {
+		if (eligible != null && !eligible.exists(name)) return reject(name);
 		if (rejected.exists(name)) return null;
 		var existing = results.get(name);
 		if (existing != null) return existing;

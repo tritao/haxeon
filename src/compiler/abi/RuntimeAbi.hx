@@ -42,11 +42,15 @@ class RuntimeAbi {
 		for (declaration in program.interfaces)
 			interfaces.set(declaration.name,
 				'bases=${declaration.bases.join(",")};methods=${[for (method in declaration.methods) method.name + signature(method.arguments, method.result)].join(",")}');
-		for (declaration in program.enums)
-			enums.set(declaration.name, [
+		for (declaration in program.enums) {
+			var schema = [
 				for (constructor in declaration.cases)
 					constructor.name + "(" + [for (parameter in constructor.params) typeKey(parameter)].join(",") + ")"
-			].join(";"));
+			].join(";");
+			var storage = declaration.inlineStorage;
+			if (storage != null) schema = "inline=" + storage + ";" + schema;
+			enums.set(declaration.name, schema);
+		}
 		for (field in program.staticFields)
 			globals.set(field.name, typeKey(field.type));
 		return {

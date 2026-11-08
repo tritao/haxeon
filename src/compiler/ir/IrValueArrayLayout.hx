@@ -1,24 +1,35 @@
 package compiler.ir;
 
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Array-specific storage around a value's scalar/reference lanes. */
 class IrValueArrayLayout {
+	public final element:IrType;
+	public final storage:IrType;
 	public final lanes:IrValueLaneShape;
 	/** Non-null struct arrays need to distinguish grown, unwritten slots from initialized values. */
 	public final hasValidity:Bool;
 
-	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget) {
+	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, ?enums:Array<IrEnum>) {
+		this.element = element;
 		var name = switch element {
-			case Obj(value): hasValidity = true; value;
-			case Nullable(Obj(value)): hasValidity = false; value;
+			case Obj(value): hasValidity = true; storage = element; value;
+			case Nullable(Obj(value)): hasValidity = false; storage = element; value;
+			case Nullable(Enum(_)): throw "Nullable enums must use their canonical Enum IR type";
+			case Enum(value):
+				var resolved = enums == null ? null : IrInlineEnumStorage.resolve(enums, objects, value);
+				if (resolved == null) throw 'Enum "$value" has no inline storage';
+				// Enum null is tag zero, not an additional optional wrapper or validity bit.
+				hasValidity = false; storage = resolved;
+				switch resolved { case Obj(name): name; default: throw "Invalid enum value record"; };
 			default: throw 'A value array requires a struct element';
 		};
 		var object = objects.get(name);
 		if (object == null || !object.isValue) throw 'Array element "$name" is not a struct';
-		lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(element);
+		lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(storage);
 	}
 
 	/** Validity bits follow the payload in the same scalar lane; growth moves them when capacity changes. */

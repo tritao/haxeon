@@ -407,10 +407,148 @@ also preserve a source whose only live root is its payload reference slot. These
 enum activation: concrete generic enum metadata, logical container/closure ABIs and genuine escape adapters remain
 required before typed source enum storage changes.
 
+Logical enum arrays now have an explicit IR storage association: `Array<E>` retains `E` in its public descriptor,
+while its typed element accessors transport the private tag/scalar/reference record. Null uses tag zero without an
+additional optional wrapper. Dynamic array reads materialize the nominal boxed enum; checked writes unpack it back
+into the lanes. Source `Null<E>` already lowers to the same null-capable `Enum(E)` IR type; the array factory rejects
+a redundant `Nullable(Enum(E))` wrapper instead of treating it as a second array representation. Native-created ordinary enum arrays migrate through the same validated forwarding-header protocol
+as struct arrays, preserving aliases. Wasm GC validates both the logical enum type and its actual backing array type
+before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
+reference-array operations on enum lane arrays as well as struct lane arrays.
+
+The assembled-program array pass discovers registered inline enum elements alongside structs. Container and iterator
+types keep the nominal enum descriptor; typed element operations use the registered private value storage. The pass
+checks that distinction on reads, writes, insertion/removal and iterator results. Recursive or oversized enums without
+inline storage retain ordinary reference arrays, including when both representations occur in the same program.
+
+Interface methods with value arguments or results use the typed value-call ABI even for nongeneric contracts.
+Direct calls and bound methods, including inherited contracts, share dispatchers selected from physical layouts.
+The same policy applies to structs and inline enum storage; ordinary reference-only interface calls keep their
+reference ABI. Source IR stays immutable across this normalization, and regenerating a dispatcher recomputes its
+implementation set.
+
+Typed scalar closures use the same private callable ABI as direct scalar functions for traced reference leaves and
+raw result slots. The verifier requires exact component types and actual verified function targets; a native symbol
+cannot claim that ABI by borrowing its naming prefix. Dynamic and reflective escapes still require their logical
+adapters. Wasm's typed-call null-check helpers retain the private ABI when they forward these components.
+
+Declared and reflective enum equality helpers participate in the same scalar/reference value-call ABI as other
+generated value functions. Their naming policy is owned by `EnumEqualityGenerator` and shared by HashLink's scalar
+argument rewrite and the Wasm value ABI. Eligible inline enum equality and checked unboxing retain value packets in
+leaves across those calls; genuine Dynamic materialization still creates the nominal boxed enum. This transport rule
+does not enable source inline storage by itself or relax place-snapshot ownership checks.
+
+Dynamic writes and insertions snapshot all checked scalar and reference leaves before changing the destination.
+The shared lane policy then prepares capacity and any missing reference backing in one storage transaction, shifts
+an insertion if needed, and commits those leaves. A failed conversion preserves the original length, contents and
+aliases. Absent optional payloads clear their storage through the presence setter; inactive leaves are not stored,
+including type handles, which have no typed null value. This removes the temporary one-element staging array on
+HashLink, Wasm32 and Wasm GC. Once capacity and reference backing exist, repeated dynamic stores and insertions allocate
+zero objects; genuine Dynamic input/output boxes remain escape costs.
+
+These are tested logical-array ABI helpers, not source-level inline enum activation. The fixtures exercise typed
+copy isolation, array-only reference roots across collection, null and payload Dynamic round trips, native-array
+migration and alias writes. Typed read/write copies allocate zero objects at 8 and 1,024 calls on all three targets;
+constructing and iterating arrays of 8 versus 1,024 elements allocates four objects in either case: the header,
+two backing lanes and iterator. Storage does not add an element box. Both inlining modes are covered. Canonical IR version 15 retains the logical/storage association
+with an explicit presence flag and rejects obsolete serialized versions. The live-patch ABI includes the storage
+association: changing between boxed and lane storage requires a domain reload even when the enum cases are unchanged.
+Body edits with unchanged storage remain patchable. Closure ABI rewriting preserves the enum's
+storage association and recursion classification, including when an unrelated nullable field triggers Wasm nullable
+erasure. Source lowering, logical enum closure adapters and complete
+source-field reflection adapters still need to be connected before widening the closed source subset to those escapes.
+
 This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
-express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums; inline
-enum lowering remains pending.
+express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums. The first source inline subset excludes any use whose logical equality adapter is not yet connected.
+
+### Source inline enum activation: remaining blockers
+
+The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
+first subset is closed and non-generic; unsupported uses select boxed storage for the whole enum, including uses in
+uncalled typed bodies. This conservative program-wide classification can be widened without changing the language
+semantics. The remaining inventory below distinguishes widening work from the first activation. Sizes describe scope, not elapsed time: **S** is a local change, **M** is a cross-cutting
+compiler change, and **L** spans multiple semantic/runtime boundaries. Update this list as each item lands.
+
+| ID | Remaining work | Size | Needed for the first subset? |
+|---|---|---|---|
+| E1 | Widen the conservative all-typed-use classification to reachable uses while preserving transitive escape checks through enclosing values, owners, containers and callbacks. | M | First subset implemented |
+| E2 | Supply independent canonical native Flat layouts for enum payloads and enclosing fields, then complete live reload checks when a source edit changes an enum representation; production constructors, matches, nulls, joins and snapshots are connected for closed non-native payloads. | M | First subset implemented; native Flat layouts excluded |
+| E3 | Complete allocation-free ordinary class/virtual/bound value calls, including inheritance, without introducing globally sized per-class typed tables. | L | Only for enums crossing those call forms |
+| E4 | Carry nullable struct result presence/scalar/reference leaves through escaping typed closures when those structs contain enums; the reproduced HashLink path still boxes. | M | Only for enums crossing that call form |
+| E6 | Complete nominal Dynamic, reflection, thrown-value and native escape adapters without extra temporary packets. | L | No; exclude unsupported escapes initially |
+| E7 | Connect logical enum descriptors through source closure signatures, reflected fields and erased container views without exposing private packet types; array/iterator lane associations are tested already. | M | Only for uses admitted by the first subset |
+| E8 | Carry enum value representations through generic owners/functions and their erased semantic descriptors; concrete payload schemas are retained already, but schema retention alone does not specialize their transport. | L | No; exclude unsupported generic uses initially |
+| E9 | Gate activated source forms on all targets/inlining modes, cached/edited builds and GC roots, and show a real editor allocation decrease without action or RSS regressions. | M | Yes |
+
+The first activation need not wait for E3/E4 and E6–E8 in their entirety. Start with a bounded, documented eligibility rule for
+finite concrete enums whose admitted uses have verified value storage and call ABIs and no unsupported Dynamic,
+reflection or native escape. A boundary through an enclosing object, container or closure counts too. An enum outside
+that eligibility rule keeps the existing boxed representation consistently; do not insert per-call boxing fallbacks
+into an otherwise inline typed path or add a feature flag/parallel implementation. By-value recursion and the
+disproportionately large-case rule above remain the permanent layout exclusions. Record the exact initial eligibility
+rule with E1/E2, then widen it one blocker at a time and keep this inventory current.
+
+The existing tag/scalar/reference planner, case access, declared equality/hash generation, logical array storage,
+checked lane verifier and constant-time interface dispatch are foundations to reuse, not additional activation projects.
+UI enum conversion follows source activation as its own measured commits; it is not a prerequisite for the first
+allocation improvement. Unrelated generic-owner correctness work is not an activation prerequisite unless an admitted
+enum use actually crosses that boundary.
+
+Host export staging for E5 is implemented: `Compiler.setExportedFunctions` declares host roots before source layout
+selection, using the same `Expose` retention as `@:expose`. The CLI supplies `--export` roots there and includes them
+in session identity; changing the roots invalidates compilation without modifying cached source IR. Equivalent root
+sets do not invalidate it. The cross-target host-root fixture returns a cached nominal enum at 8/1,024 calls with zero
+allocations in both inlining modes. Native declarations are checked by signature, including enclosing object/container/callback types; unrelated C natives do not prevent activation.
+Source `Null<E>` already uses the enum's tag-zero representation; E4 concerns an enclosing nullable struct, not an
+extra presence wrapper around the enum itself.
+
+### First source inline subset
+
+A non-generic enum is inline when its finite, proportionate layout is supported and every typed use in the assembled
+program has a verified lane representation. Construction, matching, nullable/tag tests, direct functions, typed
+nonescaping closures, ordinary fields, static fields and typed arrays/iterators use the existing value ABIs. Scalar and
+reference leaves travel together. Reading a field, element or argument snapshots the complete value; static assignments
+snapshot all leaves before publishing any of them. A null enum is an initialized tag-zero packet, never a null pointer
+to a private record; the IR verifier rejects that pointer form. Enum joins can read every incoming packet safely even
+on branch edges, since tag-zero packets also exist.
+
+The initial classification excludes concrete generic enum instances, unsupported ordinary/bound class value methods,
+non-null raw enum comparisons, enum-bearing native/host signatures, Dynamic/reflection/type-descriptor/exception
+escapes (including enclosing values), callable payload signatures and callable array/iterator elements requiring nominal
+adapters. Native Flat struct payloads and enum-bearing native fields wait for independent canonical layout input and recalculated physical offsets; a boxed field's old native offsets must never be reused for a larger packet. These exclusions apply to the
+whole enum; there is no switch or per-call boxing fallback. Arrays retain their nominal element descriptors and use the
+existing lane association and checked logical reflection bridges. Closure environments are internal typed storage, not
+bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
+generated after classification. Private enum packets are excluded from that public layout registry.
+
+After lowering, `IrVerifier` rejects a selected enum's nominal value carrier in every object/static field, native/C-native
+or interface/function signature, instruction output or operand, phi input, terminator and debug binding. The scan covers
+all bodies even during selective incremental verification. Only the generated box/unbox adapters, identified against
+the selected declaration and canonical adapter signature (including their existing scalar/optional ABI clones), may
+contain boxed enum temporaries. An arbitrary helper prefix does not grant that exception.
+
+Arrays and iterators retain logical `Enum(E)` element descriptors while transporting reference handles to lane storage;
+that exception does not admit an array or iterator of callbacks taking/returning nominal `E` values. A nominal enum type
+token is metadata, not a value: its uses are limited to matching array allocation/retyping descriptors and the array
+bridge's exact-type check; unused tokens left by allocation rewriting carry no value. Any other use fails verification.
+Public enum case schemas remain nominal descriptors. These invariants turn a missed eligibility/lowering case into a
+compiler error instead of allowing mismatched storage to reach a backend.
+
+The logical IR-only frontend still assembles nominal types without selecting a target representation. The production
+compiler supplies its target and host export roots to assembly before selecting the physical enum layout. Cached
+source functions remain nominal and unmodified; changing an escape reselects storage on the assembled copy.
+`SourceInlineEnumMain` checks cold and edited builds, including adding and removing Dynamic and registered-reflection escapes, on all three
+targets with inlining off and on. Its allocation fixture prepares reference payloads and a typed closure before the
+window, then exercises construction, null joins, static and object fields, copies and closure results at 8 and 1,024
+iterations. Explicit array iteration and element copies are checked separately from the allocation window, which does
+not include allocation of the iterator itself. E9's real-editor decrease remains a required measurement before the UI
+conversion milestone; a synthetic zero-allocation fixture alone does not close it.
+
+Typed closure references may also travel through ordinary class and interface method arguments without boxing their
+enum payloads. The Wasm planner admits this only when every possible receiver implementation has the exact callback
+signature; a mismatching implementation is not a typed transport. This closes the reproduced `rpc-lifecycle` Wasm32
+adapter-generation failure without admitting a new Dynamic escape or changing the representation classification.
 
 ### Enum equality checkpoint measurements (candidate)
 
@@ -553,6 +691,10 @@ are checked at compile time and struct-bound calls dispatch without boxing. `hax
 static rules as `==`, including identity for class references.
 Class instances used as keys in `haxe.ds.ObjectMap` use identity; declaring value conformance on a class is not a way
 to select map equality.
+
+String-keyed runtime maps preserve `null` as a distinct key, separate from `""` and `"null"`. Replacement, growth, copying,
+key/value iteration and removal retain that distinction. Use `exists` to distinguish an absent key from a stored null
+value. Queries of a missing null key do not allocate.
 
 Synthesis retains the existing field-conformance rule. A class-valued field cannot supply value conformance; a struct
 that needs such a field in its equality supplies an explicit `equals`, using `==` for the reference comparison. A
@@ -853,7 +995,9 @@ for every array or element. Empty HashLink value arrays allocate their backing l
 working-set cost of reserving storage for arrays that remain empty. Ordinary typed accesses do not call these accessors.
 An unwritten slot of a non-null value array reads as null through a dynamic view, matching existing dynamic-array behavior.
 
-Explicit typed iterators retain the array and an index, and read values through the lane accessors. Their generated
+Explicit typed iterators retain the array and an index, and read values through the lane accessors.
+Iterator creation keeps the concrete array type through typing; it does not erase an enum array through a Dynamic view first. This applies to
+array iterators and the array views used by map iterators, including nullable enum elements. Their generated
 structural adapters use the scalar value calling convention, so iterating does not allocate a box per element, even
 with inlining disabled. Dynamic iteration and reflection materialize a value at the escape. HashLink array string
 conversion uses the array representation's read accessor, including for arrays nested in other arrays; it must not

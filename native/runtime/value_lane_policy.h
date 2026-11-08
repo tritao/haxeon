@@ -1,5 +1,7 @@
 /* Generated from compiler.ir.IrValueLaneRuntime. Do not edit. */
+static int32_t realtime_lane_capacity_for(varray * v0, int32_t v1);
 static void realtime_lane_reserve(varray * v0, int32_t v1);
+static int32_t realtime_lane_prepare_write(varray * v0, int32_t v1, bool v2, bool v3);
 static void realtime_lane_ensure(varray * v0, int32_t v1);
 static void realtime_lane_clear_element(varray * v0, int32_t v1);
 static void realtime_lane_clear_range(varray * v0, int32_t v1, int32_t v2);
@@ -13,7 +15,7 @@ static varray * realtime_lane_concat(varray * v0, varray * v1);
 static varray * realtime_lane_splice(varray * v0, int32_t v1, int32_t v2);
 static void realtime_lane_reverse(varray * v0);
 
-static void realtime_lane_reserve(varray * v0, int32_t v1) {
+static int32_t realtime_lane_capacity_for(varray * v0, int32_t v1) {
 	int32_t v2;
 	bool v3;
 	int32_t v4;
@@ -38,7 +40,7 @@ block_0:
 	v3 = v1 <= v2;
 	if (v3) { goto block_1; } else { goto block_2; }
 block_1:
-	return;
+	return v2;
 block_2:
 	v4 = 4;
 	v5 = v2 < v4;
@@ -61,8 +63,7 @@ block_7:
 	v14 = v13 < v8;
 	if (v14) { goto block_9; } else { goto block_10; }
 block_8:
-	realtime_lane_storage_replace_capacity(v0, v8);
-	goto block_1;
+	return v8;
 block_9:
 	p16 = v1; v16 = p16; goto block_11;
 block_10:
@@ -70,6 +71,99 @@ block_10:
 	p16 = v15; v16 = p16; goto block_11;
 block_11:
 	p8 = v16; v8 = p8; goto block_6;
+}
+
+static void realtime_lane_reserve(varray * v0, int32_t v1) {
+	int32_t v2;
+	bool v3;
+	goto block_0;
+block_0:
+	v2 = realtime_lane_capacity_for(v0, v1);
+	v3 = false;
+	realtime_lane_storage_replace_capacity(v0, v2, v3);
+	return;
+}
+
+static int32_t realtime_lane_prepare_write(varray * v0, int32_t v1, bool v2, bool v3) {
+	int32_t v4;
+	int32_t v5;
+	bool v6;
+	int32_t v15;
+	bool v16;
+	int32_t v32;
+	int32_t p32;
+	int32_t v10;
+	int32_t v11;
+	int32_t v12;
+	int32_t v14;
+	int32_t v7;
+	vdynamic * v9;
+	int32_t v20;
+	bool v21;
+	int32_t v17;
+	vdynamic * v19;
+	bool v25;
+	int32_t v22;
+	vdynamic * v24;
+	int32_t v26;
+	int32_t v27;
+	int32_t v28;
+	int32_t p28;
+	int32_t v29;
+	goto block_0;
+block_0:
+	v4 = realtime_lane_storage_length(v0);
+	if (v2) { goto block_1; } else { goto block_2; }
+block_1:
+	v5 = 2147483647;
+	v6 = v4 < v5;
+	if (v6) { goto block_4; } else { goto block_5; }
+block_2:
+	v15 = 0;
+	v16 = v15 <= v1;
+	if (v16) { goto block_6; } else { goto block_7; }
+block_3:
+	return v32;
+block_4:
+	v10 = 1;
+	v11 = (int32_t)((uint32_t)v4 + (uint32_t)v10);
+	v12 = realtime_lane_capacity_for(v0, v11);
+	realtime_lane_storage_replace_capacity(v0, v12, v3);
+	v14 = realtime_lane_insert(v0, v1);
+	p32 = v14; v32 = p32; goto block_3;
+block_5:
+	v7 = 2;
+	realtime_lane_storage_fail(v7);
+	v9 = NULL;
+	hl_throw(v9); abort();
+block_6:
+	v20 = 2147483647;
+	v21 = v1 < v20;
+	if (v21) { goto block_8; } else { goto block_9; }
+block_7:
+	v17 = 0;
+	realtime_lane_storage_fail(v17);
+	v19 = NULL;
+	hl_throw(v19); abort();
+block_8:
+	v25 = v1 < v4;
+	if (v25) { goto block_10; } else { goto block_11; }
+block_9:
+	v22 = 0;
+	realtime_lane_storage_fail(v22);
+	v24 = NULL;
+	hl_throw(v24); abort();
+block_10:
+	p28 = v4; v28 = p28; goto block_12;
+block_11:
+	v26 = 1;
+	v27 = (int32_t)((uint32_t)v1 + (uint32_t)v26);
+	p28 = v27; v28 = p28; goto block_12;
+block_12:
+	v29 = realtime_lane_capacity_for(v0, v28);
+	realtime_lane_storage_replace_capacity(v0, v29, v3);
+	realtime_lane_ensure(v0, v1);
+	p32 = v1; v32 = p32; goto block_3;
 }
 
 static void realtime_lane_ensure(varray * v0, int32_t v1) {

@@ -412,7 +412,7 @@ class HlSymbolTable {
 					if (typeIndices.exists(baseKey)) {
 						var baseIndex = typeIndices.get(baseKey);
 						switch types[baseIndex] {
-							case Virtual(baseFields):
+							case Virtual(_, baseFields):
 								if (slot < baseFields.length)
 									fields[slot] = baseFields[slot];
 							default:
@@ -437,12 +437,23 @@ class HlSymbolTable {
 				throw 'Interface "$name" has an unassigned virtual slot';
 			} else
 				completeFields.push(field);
+		var contract = [name];
+		for (base in interfaceDecl.bases) {
+			var baseIndex = internType(IrType.Virtual(base));
+			switch types[baseIndex] {
+				case Virtual(baseIdentity, _): contract.push(strings[baseIdentity]);
+				default: throw 'Base interface "$base" has no virtual identity';
+			}
+		}
+		for (method in interfaceDecl.methods)
+			contract.push(method.name + ":" + Std.string(method.arguments) + "->" + Std.string(method.result));
+		var identity = internString(name + "#" + haxe.crypto.Sha256.encode(contract.join("\n")));
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
-			types[index] = Virtual(completeFields);
+			types[index] = Virtual(identity, completeFields);
 			pendingTypes.remove(key);
 		} else {
-			types.push(Virtual(completeFields));
+			types.push(Virtual(identity, completeFields));
 			typeIndices.set(key, index);
 		}
 		interfaceMethodIndices.set(name, slots);
@@ -454,7 +465,7 @@ class HlSymbolTable {
 	 * fields added later, in instances that already exist (see `assignReservedField`).
 	 */
 	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>,
-			reserve:Int = 0):Int {
+			reserve:Int = 0, ?typedEntries:Array<compiler.ir.Ir.IrObjectMethod>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
@@ -508,6 +519,12 @@ class HlSymbolTable {
 			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
+		if (typedEntries != null) for (entry in typedEntries) {
+			var typedIndex = functionIndices.get(entry.functionName);
+			if (typedIndex == null) throw 'Unknown typed interface entry "${entry.functionName}"';
+			methods.push({name: internString(entry.name), functionIndex: typedIndex, prototype: compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE});
+		}
+
 		var definition:HlTypeDef = object.isValue ? Structure(internString(object.name), global, fields, methods,
 			[]) : Object(internString(object.name), base, global, fields, methods, []);
 		if (pendingTypes.exists(key)) {
@@ -701,7 +718,13 @@ class HlSymbolTable {
 			return globalIndices.get(name);
 		ensureWritable();
 		var index = globals.length;
-		globals.push(internType(type));
+		// HFUN globals are raw-function slots: the VM initializes them with a code pointer, not a closure.
+		// Data globals hold nullable closure references. HNULL retains the signature without adding a box.
+		var storage = switch type {
+			case Function(_, _): Nullable(type);
+			default: type;
+		};
+		globals.push(internType(storage));
 		globalIndices.set(name, index);
 		if (StringTools.startsWith(name, STRING_CONSTANT_PREFIX))
 			stringConstants.push({global: index, value: name.substr(STRING_CONSTANT_PREFIX.length)});

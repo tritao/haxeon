@@ -54,6 +54,8 @@ class IrNullableErasure {
 			for (entry in program.enums)
 				{
 					name: entry.name,
+					isRecursive: entry.isRecursive,
+					inlineStorage: entry.inlineStorage,
 					cases: [
 						for (enumCase in entry.cases)
 							{name: enumCase.name, params: [for (type in enumCase.params) IrTypeTools.erase(type)]}

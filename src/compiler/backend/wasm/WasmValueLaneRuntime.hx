@@ -34,6 +34,7 @@ class WasmValueLaneRuntime {
 
 	public static function operation(symbol:String):Null<String> return switch symbol {
 		case "__value_array_ensure": "ensure";
+		case "__value_array_prepare_write": "prepare-write";
 		case "__value_array_clear": "clear-element";
 		case "__value_array_resize": "resize";
 		case "__value_array_insert_empty": "insert";

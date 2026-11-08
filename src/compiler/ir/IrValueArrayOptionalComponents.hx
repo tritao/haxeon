@@ -19,7 +19,7 @@ class IrValueArrayOptionalComponents {
 		this.element = element;
 		this.wrapper = Obj(IrOptionalScalarFlow.wrapperName(name));
 		this.helpers = helpers;
-		this.bridge = new IrValueArrayBridge(element, objects, helpers);
+		this.bridge = new IrValueArrayBridge(element, element, objects, helpers);
 		this.slots = new IrInlineValueLayout(objects).slots(element);
 		this.suffix = haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
 	}

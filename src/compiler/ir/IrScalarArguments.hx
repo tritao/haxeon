@@ -8,6 +8,16 @@ import compiler.ir.SourceProvenance.Located;
 class IrScalarArguments {
 	public static inline final PREFIX = "$scalar-arguments:";
 
+	/** Raw result slots and traced leaf carriers may cross only the verified private callable ABI. */
+	public static function isPrivateClosureType(type:IrType):Bool return switch type {
+		case Function(arguments, result):
+			var found = IrHlScalarRef.element(result) != null || IrValueLaneReference.isCarrier(result);
+			for (argument in arguments)
+				if (IrHlScalarRef.element(argument) != null || IrValueLaneReference.isCarrier(argument)) found = true;
+			found;
+		default: false;
+	};
+
 	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var methods:Map<String, Null<String>> = [];
@@ -29,9 +39,11 @@ class IrScalarArguments {
 				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
 				&& !StringTools.startsWith(fn.name, IrInlineEnumCaseAccess.HELPER_PREFIX)
 				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
+				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.ADAPTER_PREFIX)
 				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
 				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
 				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
+				&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
 				&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
 				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
 				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;

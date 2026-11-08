@@ -65,7 +65,9 @@ typedef FrontendResult = {
 class FrontendCompilation {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>, ?pendingSignatures:Map<String, Bool>,
-			?pendingStructural:Map<String, Bool>, ?carried:{regenerated:Array<String>, retyped:Array<String>
+			?pendingStructural:Map<String, Bool>, ?carried:{
+			regenerated:Array<String>,
+			retyped:Array<String>
 		}):FrontendResult {
 		seedRepresentationModules(context);
 		var allocationAtStart = AllocationMeter.sample();
@@ -611,7 +613,7 @@ class FrontendCompilation {
 		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
 			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
 			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
-			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks);
+			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks, context.valueArrayTarget(), context.exportedFunctions());
 		var cNativeNames = [for (native in irCNatives) native.name].join(","),
 			ownPrints:Map<String, String> = [];
 		for (fn in cached)
@@ -949,7 +951,8 @@ class FrontendCompilation {
 				continue;
 			}
 			var fields = [
-				for (field in entry.fields) if (!field.isStatic || read.exists(entry.name + "." + field.name)) field
+				for (field in entry.fields)
+					if (!field.isStatic || read.exists(entry.name + "." + field.name)) field
 			];
 			if (fields.length == 0)
 				continue;

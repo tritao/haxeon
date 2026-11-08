@@ -55,8 +55,22 @@ class SearchPickerTests {
 		// These defaults must compile and run without an application's settings package.
 		var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
 		var delay = new haxeon.ui.widgets.overlays.TooltipHoverDelay(scheduler, function(value) visible = value);
-		delay.start(); scheduler.advance(0.4); check(!visible, "Shared tooltip ignored its initial delay");
-		scheduler.advance(0.41); check(visible, "Shared tooltip delay never completed"); delay.dispose();
+		var revision = scheduler.revision;
+		delay.start();
+		check(scheduler.revision == revision && scheduler.rebuildingCount == 0 && !scheduler.needsFrame,
+			"Waiting tooltip invalidated the view before its deadline");
+		check(scheduler.waitSeconds() == 0.8, "Tooltip did not expose its wake deadline");
+		scheduler.advance(0.4); check(!visible, "Shared tooltip ignored its initial delay");
+		check(scheduler.revision == revision && scheduler.rebuildingCount == 0,
+			"Counting down a tooltip rebuilt its owner");
+		scheduler.advance(0.41); check(visible, "Shared tooltip delay never completed");
+		check(scheduler.revision > revision && scheduler.activeCount == 0,
+			"Tooltip deadline did not invalidate its visible state");
+		revision = scheduler.revision;
+		delay.start(); delay.cancel();
+		check(!visible && scheduler.revision == revision && scheduler.activeCount == 0,
+			"Cancelling a waiting tooltip scheduled an unrelated rebuild");
+		delay.dispose();
 		var placement = haxeon.ui.widgets.overlays.Tooltip.place(390, 40, 0, 400);
 		check(390 + placement.x + placement.width + 20 <= 394, "Shared tooltip escaped its bounds");
 		var runtime = Runtime.start();

@@ -78,6 +78,7 @@ class CompilerSession {
 			identity = Json.stringify({
 				target: request.target,
 				buildMode: request.buildMode,
+				exports: request.exports,
 				live: request.live,
 				importMemory: request.importMemory,
 				sharedMemory: request.sharedMemory == true,
@@ -175,6 +176,7 @@ class CompilerSession {
 			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, ["stdlib"])));
 		for (path in request.paths)
 			sourceTexts.set(path, read(path));
+		compiler.setExportedFunctions(request.exports);
 		return compiler;
 	}
 

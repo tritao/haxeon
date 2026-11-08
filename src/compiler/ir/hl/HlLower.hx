@@ -121,6 +121,7 @@ class HlLower {
 	final debugCache:Null<HlDebugMetadataCache>;
 	final developmentMetadata:Bool;
 
+	var typedInterfaces:HlTypedInterfaceTables;
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
 	var debugMs = 0.0;
@@ -152,6 +153,7 @@ class HlLower {
 	}
 
 	function lowerProgram(program:IrProgram):HlCode {
+		typedInterfaces = new HlTypedInterfaceTables(program);
 		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
@@ -217,6 +219,10 @@ class HlLower {
 		if (baseline != null)
 			for (native in program.natives)
 				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library, native.symbol);
+		if (Lambda.exists(program.functions, fn -> compiler.ir.IrTypedInterfaceDispatch.isDispatchEntry(fn.name))) {
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef], IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std", "typed_method_slot");
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.ENTRY_NATIVE, [IrType.Dyn, IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE)], IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), "std", "typed_method_entry");
+		}
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
@@ -326,7 +332,7 @@ class HlLower {
 				if (ready && fieldsReady) {
 					objects.set(object.name, object);
 					var slots = interfaceSlotsFor(object);
-					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object)));
+					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object), typedInterfaces.entries.get(object.name)));
 					progressed = true;
 				} else
 					remaining.push(object);
@@ -1098,6 +1104,36 @@ class HlLower {
 				position: assignment.position,
 				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length, lastScopeLocations)
 			});
+		}
+		var key = typedInterfaces.keys.get(fn.name);
+		if (key != null) {
+			var handleType = IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE),
+				handle = temporaryRegister(handleType, registerTypes),
+				keyRegister = temporaryRegister(IrType.TypeRef, registerTypes),
+				receiver = temporaryRegister(IrType.Dyn, registerTypes),
+				entry = temporaryRegister(IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), registerTypes),
+				callable = temporaryRegister(IrType.Function([IrType.Dyn].concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result), registerTypes),
+				result = temporaryRegister(fn.result, registerTypes),
+				global = symbols.internGlobal("$typed-method-slot:" + key, handleType),
+				fallback = "$typed-table:fallback", initialize = "$typed-table:initialize", ready = "$typed-table:ready";
+			var fast:Array<HlInstruction> = [
+				HlInstruction.GlobalGet(handle, global), HlInstruction.JumpNull(handle, initialize), HlInstruction.Jump(ready),
+				HlInstruction.Label(initialize), HlInstruction.LoadType(keyRegister, internType(IrType.Abstract(key))),
+				HlInstruction.Call1(handle, requireFunction(HlTypedInterfaceTables.SLOT_NATIVE), keyRegister), HlInstruction.GlobalSet(global, handle),
+				HlInstruction.Label(ready), HlInstruction.ToDyn(receiver, 0),
+				HlInstruction.Call2(entry, requireFunction(HlTypedInterfaceTables.ENTRY_NATIVE), receiver, handle), HlInstruction.JumpNull(entry, fallback),
+				HlInstruction.UnsafeCast(callable, entry),
+				HlInstruction.CallClosure(result, callable, [receiver].concat([for (i in 1...fn.arguments.length) i])),
+				HlInstruction.Return(result), HlInstruction.Label(fallback)
+			];
+			var first = debugLocations.length == 0 ? debugLocation(SourceProvenance.generated("typed interface method table")) : debugLocations[0];
+			debugLocations = [for (_ in fast) first].concat(debugLocations);
+			instructions = fast.concat(instructions);
+			for (i in 0...scopedAssignments.length) {
+				var assignment = scopedAssignments[i];
+				scopedAssignments[i] = {name: assignment.name, position: assignment.position < 0 ? assignment.position : assignment.position + fast.length,
+					scopeEnd: assignment.scopeEnd < 0 ? assignment.scopeEnd : assignment.scopeEnd + fast.length};
+			}
 		}
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, scopedAssignments);

@@ -72,9 +72,11 @@ class WasmScalarAbi {
 				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
 			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
+					&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
 					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
+					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.ADAPTER_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
 					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
@@ -300,6 +302,21 @@ class WasmScalarAbi {
 						if (arguments[index].id == value.id && !IrVerifier.sameType(value.type, expected[index])) safe = false;
 					safe;
 				}
+			case MethodCall(_, receiver, method, arguments, _):
+				// A typed virtual call transports the same closure reference. Its scalar callable ABI is safe
+				// only when every possible implementation accepts the exact declared signature at that position.
+				var index = WasmProgramIndex.of(program), targets = switch receiver.type {
+					case Obj(name): index.subtypesOf(name);
+					case Virtual(name): index.implementorsOf(name);
+					default: [];
+				}, safe = targets.length > 0;
+				for (object in targets) {
+					var name = index.findMethod(object.name, method), target = name == null ? null : originals.get(name);
+					if (target == null || target.arguments.length != arguments.length + 1) { safe = false; break; }
+					for (position in 0...arguments.length)
+						if (arguments[position].id == value.id && !IrVerifier.sameType(value.type, target.arguments[position + 1].type)) safe = false;
+				}
+				safe;
 			case CallClosure(_, closure, arguments):
 				switch closure.type {
 					case Function(expected, _):

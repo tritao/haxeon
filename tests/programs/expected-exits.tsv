@@ -26,6 +26,7 @@ contextual-callbacks	42
 generic-contextual-callback	42
 nullable-map-get	42
 enum-array-pattern	42
+enum-array-iterator-escape	42
 anonymous-function	42
 enum-abstract	42
 enum-argument-string	42
@@ -524,3 +525,12 @@ array-insert-negative-index	42
 struct-array-lane-policy	42
 struct-array-word-access	42
 reactive-write-scope	42
+struct-array-dynamic-store	42
+value-argument-snapshots	42
+function-global-null	42
+interface-value-carriers	42
+interface-value-dispatch-table	42
+host-enum-export	42
+source-inline-enum	42
+closure-method-value-arguments	42
+map-null-string-keys	42

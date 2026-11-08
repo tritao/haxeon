@@ -18,7 +18,7 @@ class HlTypeDefStateCodec {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HTD");
-		output.writeByte(1);
+		output.writeByte(2);
 		writeList(output, types);
 		return output.getBytes();
 	}
@@ -27,7 +27,7 @@ class HlTypeDefStateCodec {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "HTD" || input.readByte() != 1)
+			if (input.readString(3) != "HTD" || input.readByte() != 2)
 				throw "Invalid HashLink type state";
 			var result = readList(input, stringCount, globalCount);
 			if (input.position != bytes.length)
@@ -91,8 +91,9 @@ class HlTypeDefStateCodec {
 						output.writeInt32(method.prototype);
 					}
 					writeInts(output, bindings);
-				case Virtual(fields):
+				case Virtual(name, fields):
 					output.writeByte(4);
+					output.writeInt32(name);
 					output.writeInt32(fields.length);
 					for (field in fields) {
 						output.writeInt32(field.name);
@@ -142,10 +143,11 @@ class HlTypeDefStateCodec {
 						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
 					Structure(name, global, fields, methods, readInts(input));
 				case 4:
+					var name = input.readInt32();
 					var fields:Array<HlVirtualField> = [];
 					for (_ in 0...readCount(input))
 						fields.push({name: input.readInt32(), type: input.readInt32()});
-					Virtual(fields);
+					Virtual(name, fields);
 				case 5:
 					var name = input.readInt32(), global = input.readInt32();
 					var constructors:Array<HlEnumConstructor> = [];
@@ -186,7 +188,7 @@ class HlTypeDefStateCodec {
 					}
 					for (method in methods) {
 						validateStringReference(method.name, strings);
-						if (method.functionIndex < 0 || method.prototype < 0)
+						if (method.functionIndex < 0 || method.prototype < 0 && method.prototype != compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE)
 							throw "Invalid HashLink object method";
 					}
 					for (binding in bindings)
@@ -208,7 +210,8 @@ class HlTypeDefStateCodec {
 					for (binding in bindings)
 						if (binding < 0)
 							throw "Invalid HashLink structure binding";
-				case Virtual(fields):
+				case Virtual(name, fields):
+					validateStringReference(name, strings);
 					for (field in fields) {
 						validateStringReference(field.name, strings);
 						validateTypeReference(field.type, types.length);

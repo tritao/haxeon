@@ -99,7 +99,7 @@ static int32_t realtime_lane_storage_length(varray *value);
 static int32_t realtime_lane_storage_capacity(varray *value);
 static bool realtime_lane_storage_has_validity(varray *value);
 static void realtime_lane_storage_publish_length(varray *value, int32_t length);
-static void realtime_lane_storage_replace_capacity(varray *value, int32_t capacity);
+static void realtime_lane_storage_replace_capacity(varray *value, int32_t capacity, bool references);
 static varray *realtime_lane_storage_new_like(varray *value, int32_t length);
 static bool realtime_lane_storage_compatible(varray *left, varray *right);
 static void realtime_lane_storage_fail(int32_t error);
@@ -114,8 +114,9 @@ static void realtime_lane_storage_write_validity(varray *value, int32_t index, b
 #include "value_lane_policy.h"
 
 /* Allocate/copy/publish the physical lanes as one exception-safe storage transaction. */
-static void realtime_lane_storage_replace_capacity(varray *value, int32_t next) {
+static void realtime_lane_storage_replace_capacity(varray *value, int32_t next, bool references_required) {
 	realtime_value_array *array = realtime_value_array_require(value);
+	if( next == array->array.capacity ) return; /* Native reference lanes are allocated eagerly. */
 	int scalar_bytes = realtime_value_array_scalar_bytes(array, next);
 	int reference_bytes = realtime_value_array_reference_bytes(array, next);
 	int old_capacity = array->array.capacity, size = array->array.size;
@@ -159,7 +160,7 @@ failed:
 
 HL_PRIM varray *HL_NAME(__value_array_alloc)(int length, hl_type *element, int scalar_stride_bits, int reference_stride,
 	int word_bits, bool has_validity) {
-	if( length < 0 || element == NULL || element->kind != HSTRUCT || scalar_stride_bits < 0 || (scalar_stride_bits & 7)
+	if( length < 0 || element == NULL || (element->kind != HSTRUCT && element->kind != HENUM) || scalar_stride_bits < 0 || (scalar_stride_bits & 7)
 		|| reference_stride < 0 || (word_bits != 32 && word_bits != 64) )
 		hl_error("Invalid inline value array layout");
 	realtime_value_array *array = (realtime_value_array*)hl_gc_alloc_gen_owner(&realtime_value_array_type,
@@ -217,11 +218,11 @@ HL_PRIM bool HL_NAME(__value_array_dynamic_accepts)(varray *value, vdynamic *inp
 HL_PRIM void HL_NAME(__value_array_dynamic_write)(varray *value, int index, vdynamic *input) {
 	realtime_value_array *array = realtime_value_array_require(value);
 	if( array->dynamic_write == NULL ) hl_error("Missing inline value array write bridge");
-	hl_call3(void, array->dynamic_write, varray*, value, int, index, vdynamic*, input);
+	hl_call4(void, array->dynamic_write, varray*, value, int, index, vdynamic*, input, bool, false);
 }
 
 static vdynamic *realtime_value_array_escape_element(varray *source, vdynamic **values, int index, hl_type *element) {
-	if( source->at->kind == HDYN || values[index] == NULL ) return values[index];
+	if( hl_is_dynamic(source->at) || values[index] == NULL ) return values[index];
 	/* A native Array<S> contains raw HSTRUCT pointers, which have no Dynamic header of their own. */
 	vdynamic *boxed = hl_alloc_dynamic(element);
 	hl_gc_store_ref(&boxed->v.ptr, values[index], element);
@@ -264,6 +265,10 @@ HL_PRIM varray *HL_NAME(__value_array_retype)(varray *value, hl_type *element, i
 	value->capacity = candidate->capacity;
 	value->t = &realtime_value_array_forward_type;
 	return value;
+}
+
+HL_PRIM int HL_NAME(__value_array_prepare_write)(varray *value, int index, bool inserting, bool references) {
+	return realtime_lane_prepare_write(value, index, inserting, references);
 }
 
 HL_PRIM void HL_NAME(__value_array_ensure)(varray *value, int index) {
@@ -430,12 +435,9 @@ static realtime_value_array *realtime_value_array_new_like(realtime_value_array 
 
 /* Conversion may throw or run a collection; do not expose a partially written destination element. */
 HL_PRIM void HL_NAME(__value_array_dynamic_store)(varray *value, int index, vdynamic *input) {
-	realtime_value_array *array = realtime_value_array_require(value);
+	realtime_value_array_require(value);
 	if( index < 0 || index == INT_MAX ) hl_error("Array index out of bounds");
-	realtime_value_array *temporary = realtime_value_array_new_like(array, 1);
-	HL_NAME(__value_array_dynamic_write)(&temporary->array, 0, input);
-	HL_NAME(__value_array_ensure)(value, index);
-	realtime_lane_move(&array->array, index, &temporary->array, 0, 1);
+	HL_NAME(__value_array_dynamic_write)(value, index, input);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_copy)(varray *value) {
@@ -458,10 +460,8 @@ HL_PRIM int HL_NAME(__value_array_insert_empty)(varray *value, int position) {
 /* Convert before moving the original elements, so an exception leaves every existing alias unchanged. */
 HL_PRIM void HL_NAME(__value_array_dynamic_insert)(varray *value, int position, vdynamic *input) {
 	realtime_value_array *array = realtime_value_array_require(value);
-	realtime_value_array *temporary = realtime_value_array_new_like(array, 1);
-	HL_NAME(__value_array_dynamic_write)(&temporary->array, 0, input);
-	int inserted = HL_NAME(__value_array_insert_empty)(value, position);
-	realtime_lane_move(&array->array, inserted, &temporary->array, 0, 1);
+	if( array->dynamic_write == NULL ) hl_error("Missing inline value array write bridge");
+	hl_call4(void, array->dynamic_write, varray*, value, int, position, vdynamic*, input, bool, true);
 }
 
 HL_PRIM varray *HL_NAME(__value_array_splice)(varray *value, int position, int length) {

@@ -12,7 +12,32 @@ import haxeon.ui.style.StyleImpact;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
+function checkAnimationDeadlines():Int {
+  var scheduler = new haxeon.ui.animation.AnimationScheduler(), visible = false;
+  var delay = new haxeon.ui.widgets.overlays.TooltipHoverDelay(scheduler, value -> visible = value);
+  var revision = scheduler.revision;
+  delay.start();
+  if (scheduler.revision != revision || scheduler.rebuildingCount != 0 || scheduler.needsFrame
+      || scheduler.waitSeconds() != 0.8) return 12;
+  scheduler.advance(0.4);
+  if (visible || scheduler.revision != revision || scheduler.rebuildingCount != 0) return 13;
+  scheduler.advance(0.41);
+  if (!visible || scheduler.revision <= revision || scheduler.activeCount != 0) return 14;
+  revision = scheduler.revision;
+  delay.start(); delay.cancel();
+  if (visible || scheduler.revision != revision || scheduler.activeCount != 0) return 15;
+  delay.durationSeconds = 0;
+  delay.start();
+  if (scheduler.rebuildingCount != 1 || !scheduler.needsFrame || scheduler.revision <= revision) return 16;
+  scheduler.advance(0);
+  if (!visible || scheduler.activeCount != 0) return 17;
+  delay.dispose();
+  return 0;
+}
+
 function main():Int {
+  var deadline = checkAnimationDeadlines();
+  if (deadline != 0) return deadline;
   var declared = StyleValue.background(Color.rgba(0.1, 0.2, 0.3, 1));
   var generic = StyleValue.color(StyleProperty.Background, Color.rgba(0.1, 0.2, 0.3, 1));
   if (!declared.sameAs(generic) || !generic.sameAs(declared)) return 4;

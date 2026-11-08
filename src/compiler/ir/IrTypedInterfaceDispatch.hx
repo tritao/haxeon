@@ -1,10 +1,81 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.SourceProvenance.Located;
 
-/** Closed-world typed entry points for generic interface calls and bound methods. */
+/** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 class IrTypedInterfaceDispatch {
 	public static inline final PREFIX = "$typed-interface:";
+	public static inline final ADAPTER_PREFIX = "$typed-interface-entry:";
+
+	/** The same entry can be lowered through optional-flow and component-argument ABIs. */
+	public static function originalEntryName(name:String):String {
+		while (true) {
+			if (StringTools.startsWith(name, IrScalarArguments.PREFIX)) name = name.substr(IrScalarArguments.PREFIX.length);
+			else if (StringTools.startsWith(name, IrOptionalScalarFlow.PREFIX)) name = name.substr(IrOptionalScalarFlow.PREFIX.length);
+			else return name;
+		}
+	}
+
+	/** Dispatch entries stay outlined so a backend can use its class method table. */
+	public static function isDispatchEntry(name:String):Bool
+		return StringTools.startsWith(originalEntryName(name), PREFIX);
+
+	public static function isAdapterEntry(name:String):Bool
+		return StringTools.startsWith(originalEntryName(name), ADAPTER_PREFIX);
+
+	public static function adapterName(dispatch:String, object:String):String
+		return ADAPTER_PREFIX + dispatch.length + ":" + dispatch + ":" + object.length + ":" + object;
+
+
+	/** Select the value ABI after physical value layouts are known, including nongeneric contracts. */
+	public static function rewriteValueCalls(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>):Array<IrFunction> {
+		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true],
+			contracts:Map<String, Bool> = [for (entry in interfaces) entry.name => true];
+		function isValue(type:IrType):Bool return switch type { case Obj(name): values.exists(name); default: false; };
+		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
+			return isValue(result) || Lambda.exists(arguments, isValue);
+		var rewritten:Array<IrFunction> = [];
+		for (fn in functions) {
+			var blocks:Array<IrBlock> = [], changed = false;
+			for (block in fn.blocks) {
+				var target = new IrBlock(block.id);
+				for (located in block.instructions) {
+					var replaced = false;
+					var instruction = switch located.value {
+						case MethodCall(output, receiver, method, arguments, _):
+							switch receiver.type {
+								case Virtual(name):
+									var carriesValue = isValue(output.type);
+									for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
+									if (!carriesValue) located.value;
+									else {
+										replaced = true;
+										Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments));
+									}
+								default: located.value;
+							}
+						case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
+							var separator = name.lastIndexOf(".");
+							if (separator < 0 || !contracts.exists(name.substr(0, separator))) located.value;
+							else switch [receiver.type, output.type] {
+								case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
+									replaced = true;
+									InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver);
+								default: located.value;
+							}
+						default: located.value;
+					};
+					if (!replaced) target.instructions.push(located);
+					else { changed = true; target.instructions.push(new Located(instruction, located.provenance)); }
+				}
+				target.terminator = block.terminator;
+				blocks.push(target);
+			}
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+		}
+		return rewritten;
+	}
 
 	public static function callName(interfaceName:String, method:String, arguments:Array<IrType>, result:IrType):String {
 		var signature = Std.string(arguments) + ":" + Std.string(result);
@@ -33,7 +104,8 @@ class IrTypedInterfaceDispatch {
 		}
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			byFunction:Map<String, IrFunction> = [for (fn in functions) fn.name => fn];
+			byFunction:Map<String, IrFunction> = [for (fn in functions) fn.name => fn],
+			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;
 			if (visited.exists(actual)) return false;
@@ -81,6 +153,13 @@ class IrTypedInterfaceDispatch {
 			if (parts.length != 3 || signature == null || signature.arguments.length == 0) throw 'Invalid typed interface dispatch "$name"';
 			var interfaceName = parts[0], method = parts[1], receiverType = signature.arguments[0];
 			if (!IrVerifier.sameType(receiverType, Virtual(interfaceName))) throw 'Invalid typed interface receiver for "$name"';
+			var existing = byFunction.get(name);
+			if (existing != null) {
+				if (!IrVerifier.sameType(existing.result, signature.result) || existing.arguments.length != signature.arguments.length)
+					throw 'Conflicting typed interface dispatch "$name"';
+				for (index in 0...signature.arguments.length)
+					if (!IrVerifier.sameType(existing.arguments[index].type, signature.arguments[index])) throw 'Conflicting typed interface dispatch "$name"';
+			}
 			var candidates = [for (object in objects) if (!object.isValue && implementsInterface(object, interfaceName)) object];
 			candidates.sort((a, b) -> { var order = depth(b) - depth(a); return order == 0 ? Reflect.compare(a.name, b.name) : order; });
 			var builder = new IrBuilder(), receiver = builder.argument("receiver", receiverType),
@@ -92,31 +171,43 @@ class IrTypedInterfaceDispatch {
 				var owner = valueName == null ? candidate : byName.get(valueName);
 				var implementation = owner == null ? null : findMethod(owner, method);
 				if (implementation == null || implementation.arguments.length != arguments.length + 1) continue;
-				var matched = builder.createBlock(), next = builder.createBlock(), type = Obj(candidate.name);
-				builder.branch(builder.call("__std_is_of_type", [dynamicReceiver, builder.typeValue(type)], Bool), matched, next);
-				builder.select(matched);
-				// Incompatible concrete carriers indicate an invalid erased cast. Do not emit a
-				// boxing conversion in an unreachable branch of a value-specialized dispatcher.
+				var entryName = adapterName(name, candidate.name), entry = new IrBuilder(),
+					dynamicValue = entry.argument("receiver", Dyn),
+					entryArgs = [for (index in 0...arguments.length) entry.argument('argument$index', arguments[index].type)];
 				var compatible = true;
-				for (index in 0...arguments.length)
-					if (!carriersCompatible(arguments[index].type, implementation.arguments[index + 1].type)) compatible = false;
+				for (index in 0...entryArgs.length)
+					if (!carriersCompatible(entryArgs[index].type, implementation.arguments[index + 1].type)) compatible = false;
 				if (!carriersCompatible(signature.result, implementation.result)) compatible = false;
-				if (!compatible) {
-					builder.throwValue(builder.toDyn(builder.constString('Invalid implementation for $interfaceName.$method')));
-					builder.select(next);
-					continue;
+				if (!compatible) entry.throwValue(entry.toDyn(entry.constString('Invalid implementation for $interfaceName.$method')));
+				else {
+					var concrete = entry.safeCast(dynamicValue, Obj(candidate.name)),
+						target = valueName == null ? concrete : entry.fieldGet(concrete, "value", Obj(valueName)),
+						adapted = [for (index in 0...entryArgs.length)
+							GenericOwnerErasure.convert(entry, entryArgs[index], implementation.arguments[index + 1].type, byName)],
+						result = entry.call(implementation.name, [target].concat(adapted), implementation.result);
+					entry.returnValue((switch signature.result { case Void: true; default: false; }) ? result :
+						GenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
-				var concrete = builder.safeCast(dynamicReceiver, type),
-					target = valueName == null ? concrete : builder.fieldGet(concrete, "value", Obj(valueName));
-				var adapted = [for (index in 0...arguments.length)
-					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type, byName)];
-				var result = builder.call(implementation.name, [target].concat(adapted), implementation.result);
-				builder.returnValue((switch signature.result { case Void: true; default: false; })
-					? result : GenericOwnerErasure.convert(builder, result, signature.result, byName));
+				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks),
+					entryIndex = functionIndices.get(entryName);
+				if (entryIndex == null) {
+					functionIndices.set(entryName, functions.length);
+					functions.push(entryFunction);
+				} else functions[entryIndex] = entryFunction;
+				var matched = builder.createBlock(), next = builder.createBlock();
+				builder.branch(builder.call("__std_is_of_type", [dynamicReceiver, builder.typeValue(Obj(candidate.name))], Bool), matched, next);
+				builder.select(matched);
+				builder.returnValue(builder.call(entryName, [dynamicReceiver].concat(arguments), signature.result));
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks));
+			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks);
+			if (existing == null) functions.push(generated);
+			else {
+				var index = functionIndices.get(name);
+				if (index == null) throw 'Missing typed interface dispatcher index "$name"';
+				functions[index] = generated;
+			}
 		}
 	}
 }

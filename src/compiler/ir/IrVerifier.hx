@@ -10,11 +10,13 @@ class IrVerifier {
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	public static function verifyValueArraysLowered(program:IrProgram):Void {
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
+			valueEnums:Map<String, Bool> = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => true],
 			ordinaryRefNatives:Map<String, Bool> = [];
 		function ordinaryRef(name:String):Bool return StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_ref");
 		for (native in program.natives) if (ordinaryRef(native.symbol)) ordinaryRefNatives.set(native.name, true);
 		function laneArray(type:IrType):Bool return switch type {
 			case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
+			case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name);
 			default: false;
 		};
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) {
@@ -27,6 +29,102 @@ class IrVerifier {
 				default: false;
 			};
 			if (invalid) throw 'IR verification failed for ${fn.name}: ordinary array operation on inline value lanes';
+		}
+	}
+
+	/** Physical values must not retain an inline enum's nominal boxed carrier. */
+	public static function verifyInlineEnumsLowered(program:IrProgram):Void {
+		var selected:Map<String, IrEnum> = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => declaration];
+		if (!selected.keys().hasNext()) return;
+		function forbidden(type:IrType):Null<String> return switch type {
+			case Enum(name): selected.exists(name) ? name : null;
+			case Array(element), Iterator(element): switch element {
+				// Containers retain their logical element descriptor; their values are lane handles.
+				case Enum(_), Nullable(Enum(_)): null;
+				default: forbidden(element);
+			};
+			case Nullable(element): forbidden(element);
+			case Function(arguments, result):
+				var found = forbidden(result);
+				for (argument in arguments) if (found == null) found = forbidden(argument);
+				found;
+			default: null;
+		};
+		function check(type:IrType, where:String):Void {
+			var name = forbidden(type);
+			if (name != null) throw 'IR inline enum "$name" retains nominal value storage in $where';
+		}
+		var escapes:Map<String, Bool> = [], functions = [for (fn in program.functions) fn.name => fn],
+			nativeSymbols = [for (native in program.natives) native.name => native.symbol];
+		for (name => declaration in selected) {
+			var storage:IrType = Obj(declaration.inlineStorage);
+			for (box in [true, false]) {
+				var entry = box ? IrInlineEnumEscapes.boxName(name) : IrInlineEnumEscapes.unboxName(name), fn = functions.get(entry);
+				if (fn != null && fn.arguments.length == 1 && sameType(fn.arguments[0].type, box ? storage : Dyn)
+					&& sameType(fn.result, box ? Dyn : storage)) escapes.set(entry, true);
+			}
+		}
+		for (object in program.objects) for (field in object.fields) check(field.type, 'field ${object.name}.${field.name}');
+		for (field in program.staticFields) check(field.type, 'static field ${field.name}');
+		for (contract in program.interfaces) for (method in contract.methods) {
+			for (argument in method.arguments) check(argument, 'interface ${contract.name}.${method.name}');
+			check(method.result, 'interface result ${contract.name}.${method.name}');
+		}
+		for (native in program.natives) {
+			for (argument in native.arguments) check(argument, 'native ${native.name}');
+			check(native.result, 'native result ${native.name}');
+		}
+		for (native in program.cNatives) {
+			for (argument in native.arguments) check(argument, 'C native ${native.name}');
+			check(native.result, 'C native result ${native.name}');
+		}
+		for (fn in program.functions) {
+			var original = IrTypedInterfaceDispatch.originalEntryName(fn.name);
+			if (escapes.exists(original)) continue;
+			for (argument in fn.arguments) check(argument.type, 'argument ${fn.name}');
+			check(fn.result, 'result ${fn.name}');
+			var descriptors:Map<Int, IrType> = [];
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case TypeValue(out, type) if (forbidden(type) != null): descriptors.set(out.id, type);
+				default:
+			}
+			function descriptorUse(value:IrValue, instruction:Null<IrInstruction>):Void {
+				var type = descriptors.get(value.id);
+				if (type == null) return;
+				var valid = false;
+				if (instruction != null) switch instruction {
+					case Call(out, callee, arguments):
+						var symbol = nativeSymbols.get(callee);
+						if (symbol == null) symbol = callee;
+						if (arguments.length > 1 && arguments[1].id == value.id) {
+							if (symbol == "__value_array_alloc" || symbol == "__value_array_retype" || symbol == "__array_alloc_typed_ref")
+								valid = switch out.type {case Array(element): sameType(element, type); default:false;};
+							else if (symbol == "__std_is_exact_type") {
+								var bridge = "$value-array:bridge:" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type)) + ":accepts";
+								valid = original == bridge && fn.arguments.length == 1 && sameType(fn.arguments[0].type, Dyn) && sameType(fn.result, Bool);
+							}
+						}
+					default:
+				}
+				if (!valid) check(type, 'non-array descriptor use ${fn.name}');
+			}
+			for (binding in fn.debugBindings) { check(binding.value.type, 'debug binding ${fn.name}'); descriptorUse(binding.value, null); }
+			for (block in fn.blocks) {
+				for (located in block.instructions) {
+					var instruction = located.value, out = IrOperands.output(instruction);
+					if (out != null) check(out.type, 'instruction output ${fn.name}');
+					for (input in IrOperands.inputs(instruction)) { check(input.type, 'instruction operand ${fn.name}'); descriptorUse(input, instruction); }
+					switch instruction {
+						case Phi(_, inputs): for (input in inputs) { check(input.value.type, 'phi input ${fn.name}'); descriptorUse(input.value, null); }
+						case MakeEnum(_, name, _, _) if (selected.exists(name)): check(Enum(name), 'boxed constructor ${fn.name}');
+						default:
+					}
+				}
+				if (block.terminator != null) switch block.terminator.value {
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): check(value.type, 'terminator ${fn.name}'); descriptorUse(value, null);
+					default:
+				}
+			}
 		}
 	}
 
@@ -80,11 +178,14 @@ class IrVerifier {
 				throw 'Duplicate IR interface "${interfaceDecl.name}"';
 			interfaces.set(interfaceDecl.name, interfaceDecl);
 		}
+		var objectTable = IrObjectTable.of(objects);
 		for (enumDecl in program.enums) {
 			if (enums.exists(enumDecl.name))
 				throw 'Duplicate IR enum "${enumDecl.name}"';
+			IrInlineEnumStorage.validate(enumDecl, objectTable);
 			enums.set(enumDecl.name, enumDecl);
 		}
+		verifyInlineEnumsLowered(program);
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
 			if (globals.exists(field.name))
@@ -93,12 +194,19 @@ class IrVerifier {
 		}
 		// Carrier results are permitted only for an actual reference leaf in a lane array.
 		var carrierSlots:Map<String, Bool> = [];
-		var laneValues = new IrInlineValueLayout(IrObjectTable.of(objects));
+		var laneValues = new IrInlineValueLayout(objectTable);
 		for (fn in program.functions) {
 			var access = IrValueArraySlotHelpers.carrierAccess(fn.name);
 			if (access == null) continue;
 			var fieldFound = false;
-			for (slot in laneValues.slots(access.element))
+			var stored = switch access.element {
+				case Enum(name), Nullable(Enum(name)):
+					var resolved = IrInlineEnumStorage.resolve(program.enums, objectTable, name);
+					if (resolved == null) throw "Lane carrier accessor requires inline enum storage";
+					resolved;
+				default: access.element;
+			};
+			for (slot in laneValues.slots(stored))
 				if (!slot.isPresence && IrValueLaneReference.isCarrier(slot.type) && sameCarrierPath(slot.path, access.path)) fieldFound = true;
 			if (!fieldFound || fn.arguments.length != (access.write ? 3 : 2)
 				|| !sameType(fn.arguments[0].type, Array(access.element)) || !sameType(fn.arguments[1].type, I32)
@@ -294,12 +402,12 @@ class IrVerifier {
 		}
 
 		switch instruction {
-			case StaticClosure(output, name), InstanceClosure(output, name, _) if (scalarClosureType(output.type)
-				&& !StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+			case StaticClosure(output, name), InstanceClosure(output, name, _) if (IrScalarArguments.isPrivateClosureType(output.type)
+				&& !scalarFunctions.exists(name)):
 				throw "A scalar closure must target a verified scalar function";
-			case ToDyn(_, value) if (scalarClosureType(value.type)):
+			case ToDyn(_, value) if (IrScalarArguments.isPrivateClosureType(value.type)):
 				throw "A scalar closure cannot cross a Dynamic boundary without an adapter";
-			case SafeCast(output, value) if (scalarClosureType(output.type) || scalarClosureType(value.type)):
+			case SafeCast(output, value) if (IrScalarArguments.isPrivateClosureType(output.type) || IrScalarArguments.isPrivateClosureType(value.type)):
 				throw "A scalar closure cannot cross a cast boundary without an adapter";
 			default:
 		}
@@ -316,6 +424,7 @@ class IrVerifier {
 			case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
 			case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
 				|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
+			case CallClosure(_, closure, args) if (IrScalarArguments.isPrivateClosureType(closure.type) && scalarClosureArgument(closure.type, args, input)):
 			case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
 			case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
 			default: throw "A value lane reference cannot escape its operation";
@@ -326,7 +435,7 @@ class IrVerifier {
 		}
 		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
 			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
-			case Call(_, name, _) if (StringTools.startsWith(name, IrScalarArguments.PREFIX)):
+			case Call(_, name, _) if (scalarFunctions.exists(name)):
 			case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
 			default: throw "A scalar stack reference cannot escape its call";
 		}
@@ -344,16 +453,6 @@ class IrVerifier {
 				var found = false;
 				for (index in 0...arguments.length)
 					if (arguments[index].id == input.id && index < expected.length && sameType(expected[index], input.type)) found = true;
-				found;
-			default: false;
-		};
-
-	static function scalarClosureType(type:IrType):Bool
-		return switch type {
-			case Function(arguments, result):
-				var found = IrHlScalarRef.element(result) != null;
-				for (argument in arguments)
-					if (IrHlScalarRef.element(argument) != null) found = true;
 				found;
 			default: false;
 		};
@@ -411,6 +510,13 @@ class IrVerifier {
 			case ConstBool(out, _):
 				expect(out, Bool);
 			case ConstNull(out):
+				switch out.type {
+					case Obj(name) if (StringTools.startsWith(name, IrInlineEnumLayout.VALUE_PREFIX)):
+						var declaration = enums.get(name.substr(IrInlineEnumLayout.VALUE_PREFIX.length));
+						if (declaration != null && declaration.inlineStorage == name)
+							throw "IR inline enum null must use a tag-zero packet";
+					default:
+				}
 				if (!isReference(out.type))
 					throw 'IR null constant must produce a reference value';
 			case TypeValue(out, _):

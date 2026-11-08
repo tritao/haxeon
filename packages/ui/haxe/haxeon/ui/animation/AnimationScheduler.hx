@@ -23,7 +23,7 @@ class AnimationScheduler {
 				return handle;
 		var handle = new AnimationHandle(this, animation);
 		active.push(handle);
-		if (!handle.retained) revision++;
+		if (!handle.retained && handle.delaySeconds() <= 0.0) revision++;
 		requestFrame();
 		return handle;
 	}
@@ -49,7 +49,7 @@ class AnimationScheduler {
 			return;
 		if (active.remove(handle)) {
 			handle.deactivate();
-			if (!handle.retained) revision++;
+			if (!handle.retained && handle.delaySeconds() <= 0.0) revision++;
 		}
 	}
 
@@ -57,11 +57,14 @@ class AnimationScheduler {
 		if (!finite(deltaSeconds) || deltaSeconds < 0.0)
 			throw "Animation time must be finite and non-negative";
 		if (active.length == 0) return;
-		var hadActive = rebuildingCount > 0;
+		var hadActive = false;
 		var current = active.copy();
-		for (handle in current)
-			if (active.indexOf(handle) >= 0 && !handle.advance(deltaSeconds))
-				removeHandle(handle);
+		for (handle in current) {
+			if (active.indexOf(handle) < 0) continue;
+			// Waiting does not change the view. Crossing a deadline does, even if the animation schedules another wait.
+			if (!handle.retained && handle.delaySeconds() <= deltaSeconds) hadActive = true;
+			if (!handle.advance(deltaSeconds)) removeHandle(handle);
+		}
 		if (needsFrame)
 			requestFrame();
 		if (hadActive)
@@ -82,12 +85,12 @@ class AnimationScheduler {
 	inline function get_activeCount():Int
 		return active.length;
 
-	/** Active animations whose frames rebuild the view; RetainedAnimation ones do not. */
+	/** Animations that change the view now; retained updates and pending deadlines do not rebuild it. */
 	public var rebuildingCount(get, never):Int;
 	function get_rebuildingCount():Int {
 		var count = 0;
 		for (handle in active)
-			if (!handle.retained) count++;
+			if (!handle.retained && handle.delaySeconds() <= 0.0) count++;
 		return count;
 	}
 

@@ -508,7 +508,8 @@ class IrProgramAssembler {
 
 	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
-			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache):IrProgram {
+			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
+			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -534,6 +535,7 @@ class IrProgramAssembler {
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
 		if (objects != null && interfaces != null) {
+			allFunctions = IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces);
 			var beforeTypedInterfaces = allFunctions.length;
 			IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces);
 			if (allFunctions.length > beforeTypedInterfaces) {
@@ -544,6 +546,32 @@ class IrProgramAssembler {
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
 			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());
+		if (exportedFunctions != null && exportedFunctions.length > 0) {
+			var exported = [for (name in exportedFunctions) name => true];
+			allFunctions = [
+				for (fn in allFunctions)
+					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose) : fn
+			];
+		}
+		if (valueTarget != null) {
+			// Choose source enum storage before optional-flow and reflection helpers choose their ABI.
+			var enumInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
+			enumInput.functions = allFunctions;
+			enumInput.objects = objects == null ? [] : objects;
+			enumInput.interfaces = interfaces == null ? [] : interfaces;
+			enumInput.staticFields = staticFields == null ? [] : staticFields;
+			enumInput.natives = natives == null ? [] : natives;
+			enumInput.cNatives = cNatives == null ? [] : cNatives;
+			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
+				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
+			var enumOutput = IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects);
+			allFunctions = enumOutput.functions;
+			objects = enumOutput.objects;
+			interfaces = enumOutput.interfaces;
+			staticFields = enumOutput.staticFields;
+			natives = enumOutput.natives;
+			enums = enumOutput.enums;
+		}
 		if (objects != null) {
 			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
@@ -553,7 +581,7 @@ class IrProgramAssembler {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
 			for (object in objects)
-				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) && !known.exists(object.name)) {
+				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) && !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX) && !known.exists(object.name)) {
 					reflectableObjects.push(object.name);
 					known.set(object.name, true);
 				}

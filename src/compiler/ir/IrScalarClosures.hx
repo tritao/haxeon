@@ -198,6 +198,8 @@ class IrScalarClosures {
 			for (entry in program.enums)
 				{
 					name: entry.name,
+					isRecursive: entry.isRecursive,
+					inlineStorage: entry.inlineStorage,
 					cases: [
 						for (item in entry.cases)
 							{name: item.name, params: [for (type in item.params) mapType(type)]}

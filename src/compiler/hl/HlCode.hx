@@ -2,7 +2,9 @@ package compiler.hl;
 
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
-	public static inline final VERSION = 7;
+	public static inline final VERSION = 8;
+	/** Private value-ABI metadata, excluded from source methods and reflection. */
+	public static inline final TYPED_METHOD_PROTOTYPE = -2;
 
 	public var ints:Array<Int> = [];
 	public var floats:Array<Float> = [];
@@ -70,7 +72,7 @@ enum HlTypeDef {
 	Function(arguments:Array<Int>, result:Int);
 	Object(name:Int, base:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
 	Structure(name:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
-	Virtual(fields:Array<HlVirtualField>);
+	Virtual(name:Int, fields:Array<HlVirtualField>);
 	Enum(name:Int, global:Int, constructors:Array<HlEnumConstructor>);
 }
 

@@ -465,7 +465,7 @@ class WasmLinearModuleBuilder {
 	}
 
 	function lowerFunctions():haxe.io.Bytes {
-		return WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
+		var metadata = WasmGcRoots.encodeAndVisit(program, function(fn, rootPoints) {
 			if (!reachable.exists(fn.name)
 				|| (fn.name == "__entry" && preferredEntry != "__entry")
 				|| fn.name == WasmLinearClosureAdapters.SIGNATURE_FUNCTION)
@@ -476,6 +476,8 @@ class WasmLinearModuleBuilder {
 					globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses,
 					runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
 		});
+		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots);
+		return metadata;
 	}
 
 	function publishMetadata(gcRootMetadata:haxe.io.Bytes):Void {
