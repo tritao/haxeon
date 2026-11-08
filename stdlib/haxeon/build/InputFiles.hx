@@ -59,8 +59,10 @@ class InputFiles {
 	 * above it, which the cache creates when it first writes (a query about whether they exist must not make an output stale).
 	 */
 	public static function ignorePrefix(prefix:String):Void {
+		if (!isRecording())
+			return;
 		var exact = ignoredExact;
-		if (!isRecording() || ignored == null || exact == null)
+		if (ignored == null || exact == null)
 			return;
 		var full = absolute(prefix);
 		ignored.push(full + "/");
