@@ -360,7 +360,7 @@ class IrOptionalFieldStorage {
 		for (block in fn.blocks) {
 			var replacement = new IrBlock(block.id);
 			for (located in block.instructions) {
-				var instruction = located.value;
+				var instruction = located.value, rewrittenInstruction = false;
 				switch instruction {
 					case Call(out, name, arguments) if (StringTools.startsWith(name, COPY_PREFIX)):
 						var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
@@ -398,6 +398,7 @@ class IrOptionalFieldStorage {
 							replacement.instructions.push(new Located(FieldSet(destination, IrInlineValueLayout.slotName(target.field, target.slots[index]),
 								snapshot[index]), located.provenance));
 						instruction = ConstVoid(out);
+						rewrittenInstruction = true;
 						changed = true;
 					case FieldGet(out, object, field):
 						var plan = find(object.type, field);
@@ -408,6 +409,7 @@ class IrOptionalFieldStorage {
 								replacement.instructions.push(new Located(Upcast(receiver, object), located.provenance));
 							}
 							instruction = Call(out, accessorName(plan, false), [receiver]);
+							rewrittenInstruction = true;
 							changed = true;
 						}
 					case FieldSet(object, field, value):
@@ -420,11 +422,12 @@ class IrOptionalFieldStorage {
 							}
 							var unused = new IrValue(next++, "$optional-field-write", Void);
 							instruction = Call(unused, accessorName(plan, true), [receiver, value]);
+							rewrittenInstruction = true;
 							changed = true;
 						}
 					default:
 				}
-				replacement.instructions.push(instruction == located.value ? located : new Located(instruction, located.provenance));
+				replacement.instructions.push(rewrittenInstruction ? new Located(instruction, located.provenance) : located);
 			}
 			replacement.terminator = block.terminator;
 			blocks.push(replacement);

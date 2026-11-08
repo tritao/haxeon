@@ -31,7 +31,7 @@ class IrNullableScalarFields {
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {
-				var instruction = located.value;
+				var instruction = located.value, rewrittenInstruction = false;
 				switch instruction {
 					case FieldSet(owner, name, value):
 						var field = findField(owner.type, name);
@@ -40,11 +40,12 @@ class IrNullableScalarFields {
 							var normalized = new IrValue(next++, "$nullable-scalar", field.type);
 							copy.instructions.push(new Located(Call(normalized, helper, [value]), located.provenance));
 							instruction = FieldSet(owner, name, normalized);
+							rewrittenInstruction = true;
 							changed = true;
 						}
 					default:
 				}
-				copy.instructions.push(instruction == located.value ? located : new Located(instruction, located.provenance));
+				copy.instructions.push(rewrittenInstruction ? new Located(instruction, located.provenance) : located);
 			}
 			copy.terminator = block.terminator;
 			blocks.push(copy);
