@@ -95,11 +95,19 @@ function fileSystemRename(path:String, newPath:String):Bool
 
 /** Supported filesystem queries backed by the stable runtime ABI. */
 class FileSystem {
-	public static inline function exists(path:String):Bool
-		return fileSystemExists(path);
+	public static function exists(path:String):Bool {
+		var result = fileSystemExists(path);
+		if (haxeon.build.InputFiles.isRecording())
+			haxeon.build.InputFiles.existsQuery(path, result);
+		return result;
+	}
 
-	public static inline function isDirectory(path:String):Bool
-		return fileSystemIsDirectory(path);
+	public static function isDirectory(path:String):Bool {
+		var result = fileSystemIsDirectory(path);
+		if (haxeon.build.InputFiles.isRecording())
+			haxeon.build.InputFiles.directoryQuery(path, result);
+		return result;
+	}
 
 	public static inline function fullPath(path:String):String
 		return fileSystemFullPath(path);
@@ -107,8 +115,19 @@ class FileSystem {
 	public static inline function absolutePath(path:String):String
 		return fileSystemFullPath(path);
 
-	public static inline function readDirectory(path:String):Array<String>
-		return fileSystemReadDirectory(path);
+	public static function readDirectory(path:String):Array<String> {
+		if (!haxeon.build.InputFiles.isRecording())
+			return fileSystemReadDirectory(path);
+		var names:Null<Array<String>> = null;
+		try
+			names = fileSystemReadDirectory(path)
+		catch (error:Dynamic) {
+			haxeon.build.InputFiles.listingFailed(path);
+			throw error;
+		}
+		haxeon.build.InputFiles.listingRead(path, names);
+		return names;
+	}
 
 	/** Lists child names and their directory kinds using one native enumeration. */
 	public static function readDirectoryEntries(path:String):Array<FileSystemEntry> {
@@ -119,6 +138,8 @@ class FileSystem {
 			entries.push(new FileSystemEntry(raw[index], raw[index + 1] == "d"));
 			index += 2;
 		}
+		if (haxeon.build.InputFiles.isRecording())
+			haxeon.build.InputFiles.listingRead(path, [for (entry in entries) entry.name]);
 		return entries;
 	}
 

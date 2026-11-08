@@ -59,18 +59,47 @@ function fileSaveBytes(path:String, bytes:Bytes):Void
 
 /** Supported whole-file operations backed by the stable runtime ABI. */
 class File {
-	public static inline function getContent(path:String):String
-		return fileGetContent(path);
+	/** While `haxeon.build.InputFiles` is recording, every read is noted for the cache that depends on it. */
+	public static function getContent(path:String):String {
+		if (!haxeon.build.InputFiles.isRecording())
+			return fileGetContent(path);
+		var text:Null<String> = null;
+		try
+			text = fileGetContent(path)
+		catch (error:Dynamic) {
+			haxeon.build.InputFiles.readFailed(path);
+			throw error;
+		}
+		haxeon.build.InputFiles.textRead(path, text);
+		return text;
+	}
 
-	public static inline function getBytes(path:String):Bytes
-		return fileGetBytes(path);
+	public static function getBytes(path:String):Bytes {
+		if (!haxeon.build.InputFiles.isRecording())
+			return fileGetBytes(path);
+		var bytes:Null<Bytes> = null;
+		try
+			bytes = fileGetBytes(path)
+		catch (error:Dynamic) {
+			haxeon.build.InputFiles.readFailed(path);
+			throw error;
+		}
+		haxeon.build.InputFiles.bytesRead(path, bytes);
+		return bytes;
+	}
 
-	public static inline function saveContent(path:String, content:String):Void
+	public static function saveContent(path:String, content:String):Void {
+		haxeon.build.InputFiles.wrote(path);
 		fileSaveContent(path, content);
+	}
 
-	public static inline function appendContent(path:String, content:String):Void
+	public static function appendContent(path:String, content:String):Void {
+		haxeon.build.InputFiles.wrote(path);
 		fileAppendContent(path, content);
+	}
 
-	public static inline function saveBytes(path:String, bytes:Bytes):Void
+	public static function saveBytes(path:String, bytes:Bytes):Void {
+		haxeon.build.InputFiles.wrote(path);
 		fileSaveBytes(path, bytes);
+	}
 }
