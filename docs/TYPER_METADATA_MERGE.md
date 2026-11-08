@@ -102,6 +102,30 @@ Pick the long-term clean design: metadata tracked per declaring module, so mergi
 changed modules", not ad-hoc patching. Write down the design in this file before coding it.
 Gate: the step-1 test passes; the warm second `app` build succeeds; the full driver suite has no new failures.
 
+### 3. Make the frontend restart a continuation (attempted 2026-11-08, not landed)
+
+The continuation (dependency check after publication, empty change sets and carried `regenerated`/`retyped` for pass 2, a
+`continuation` flag so `SemanticAssembly.run` does not treat pass 2 as a first build; saved as `step3-wip-v2.patch` in the
+scratch directory) works for the restart reasons that only add a module a function calls (`DynamicOps`, `Reflect`,
+`ObservableSource`, ...): pass 2 types only what is new. It cannot land because of one reason on `app`:
+`$type-dependency:haxeon.ui.TextLayout needs haxeon.collections.HashMap`. The specialized map owner exists only while the
+`HashMap` module is in the program, so adding the module changes the representation of an existing class field
+(`TextLayout.graphemeGeometry`). Everything typed against the old representation is stale, nothing in the change tracking
+knows (no declaration changed; `indexSemantics` is off in the CLI, so there are no semantic dependencies either), and pass 2
+fails IR verification (`Unknown or mismatched IR field haxeon.ui.TextLayout.graphemeGeometry`). It also shows that the type
+dependency is recorded late (after the bodies, or when `TextLayout` is typed with `HashMap` present), so a cheap early restart
+before the bodies are typed is not possible without more work.
+
+What the experiment established: the 10,332 functions pass 2 selects as "module snapshot" refreshes are harmless (they were
+never typed in pass 1: FFI struct methods, so they can never be "typed at the current revision"); the restart costs 15.1 s of
+80 s (semantic 3.2 s, typing 11.9 s) and the continuation would bring that to well under 1 s.
+
+Options, to be decided: (a) seed the representation-defining modules before pass 1 from a declaration-level scan of the class
+field and signature types (a map type that needs the specialized owner), so no restart is needed; (b) keep the old restart
+only for reasons that change a representation (`$type-dependency:` and `HashMap`) and continue for the others, which on `app`
+still restarts once; (c) persist the discovered dependencies per project, so the next cold build starts with them. (a) is the
+cleanest; it needs the typing session's `requiresSpecializedMap` before bodies are typed.
+
 ### 3. Make the frontend restart a continuation
 Rebuild the experiment cleanly (no traces): the dependency check after publication in `FrontendCompilation.run`,
 empty change sets for pass 2, carried `regenerated`/`retyped` sets, and a continuation flag for
