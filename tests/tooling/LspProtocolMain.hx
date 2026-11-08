@@ -544,7 +544,13 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		if (opened.length != 1 || Json.parse(opened[0]).method != "textDocument/publishDiagnostics")
+		var openedDocumentDiagnostics = false;
+		for (message in opened) {
+			var notification:Dynamic = Json.parse(message);
+			if (notification.method == "textDocument/publishDiagnostics" && notification.params.uri == uri)
+				openedDocumentDiagnostics = true;
+		}
+		if (!openedDocumentDiagnostics)
 			throw "LSP didOpen did not publish diagnostics";
 		if (service.compiler.publicationStatus().hasPendingRevision)
 			throw "LSP document analysis published a runtime candidate";
