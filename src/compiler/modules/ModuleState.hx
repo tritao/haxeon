@@ -34,6 +34,12 @@ typedef SemanticDependency = {
 class ModuleState {
 	public final name:String;
 	public var source:SourceFile;
+
+	/**
+	 * The text the caller supplied for this module, such as the file as read from disk. It is what an incoming copy of the
+	 * file is compared with, and differs from `source.text` when the compiler generates the text it compiles.
+	 */
+	public var loadedText:String;
 	public var revision:Int = 1;
 	public var parseVersion:Int = 0;
 	public var typeVersion:Int = 0;
@@ -102,6 +108,7 @@ class ModuleState {
 	public function new(name, source) {
 		this.name = name;
 		this.source = source;
+		this.loadedText = source.text;
 	}
 
 	public function parsedAst():AstProgram {
@@ -111,7 +118,14 @@ class ModuleState {
 		return result;
 	}
 
+	/** The caller supplied new text for the module. */
 	public function update(source:SourceFile):Void {
+		loadedText = source.text;
+		render(source);
+	}
+
+	/** The compiler replaces the text it compiles; the text the caller supplied stays as it was. */
+	public function render(source:SourceFile):Void {
 		this.source = source;
 		revision++;
 		tokens = [];
@@ -126,6 +140,7 @@ class ModuleState {
 
 	public function copy():ModuleState {
 		var result = new ModuleState(name, source);
+		result.loadedText = loadedText;
 		result.revision = revision;
 		result.parseVersion = parseVersion;
 		result.typeVersion = typeVersion;

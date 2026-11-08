@@ -25,6 +25,11 @@ The "metadata merge" of the plan is therefore about carrying specialization stat
 specializations) into the non-reuse path, not about the cost of declaration metadata: with a small `selected` set the
 "metadata" phase is cheap, since it is mostly the typing of the selected bodies.
 
+Design of fix (A): `ModuleState` keeps `loadedText`, the text the caller supplied (the file as read from disk), apart from
+`source`, the text that is compiled. `Compiler.update` and `refreshLoadedSource` compare an incoming file with
+`loadedText` for every module; the generated identity table renders into `source` through `ModuleState.render` and leaves
+`loadedText` alone. `Compiler` knows nothing about the table.
+
 Scenarios in `tests/compiler/TypedMetadataMergeMain.hx` (each followed by a disk re-read of all loaded modules):
 - second compile without an edit: fixed by (A); passes.
 - after editing the module that makes the specialization / binds the method: pass (the specialization is recreated).

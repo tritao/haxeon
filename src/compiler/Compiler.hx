@@ -607,7 +607,7 @@ class Compiler {
 		var name = moduleName == null ? ModulePath.fromFile(path) : moduleName;
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
-			if (current.source.path == path && sameSourceText(name, current.source.text, source))
+			if (current.source.path == path && current.loadedText == source)
 				return current;
 		}
 		var file = new SourceFile(path, source);
@@ -628,17 +628,11 @@ class Compiler {
 		var state = modules.get(name);
 		if (state == null)
 			throw 'Cannot refresh unloaded module "$name"';
-		if (!sameSourceText(name, state.source.text, source)) {
+		if (state.loadedText != source) {
 			state.update(new SourceFile(state.source.path, source));
 			sourceGeneration++;
 		}
 	}
-
-	/** The generated identity table is rendered into its module, so its template read again from disk is the same source. */
-	static function sameSourceText(name:String, current:String, incoming:String):Bool
-		return current == incoming
-			|| name == compiler.modules.CodeIdentityTable.MODULE
-			&& compiler.modules.CodeIdentityTable.isRenderingOf(current, incoming);
 
 	/** Remove a source module and invalidate graph/cached compilation state. */
 	public function remove(path:String):Bool {
@@ -687,7 +681,7 @@ class Compiler {
 						break;
 					}
 			if (affected)
-				state.update(new SourceFile(state.source.path, state.source.text));
+				state.render(new SourceFile(state.source.path, state.source.text));
 		}
 		sourceGeneration++;
 	}
