@@ -898,7 +898,9 @@ class FrontendCompilation {
 			}
 		}
 		while (pending.length > 0) {
-			var fn = functions.get(pending.pop());
+			var name = pending.pop(), fn = functions.get(name);
+			if (fn == null)
+				throw 'Missing function $name during inline enum reflection reachability';
 			for (argument in fn.arguments)
 				visitType(argument.type);
 			visitType(fn.result);
