@@ -173,8 +173,11 @@ Branch `typer-metadata-merge`, on top of `d78093d3` (main with the perf commits)
 - `9ad82bec` A module remembers the text it was loaded from, apart from the text it compiles (`ModuleState.loadedText`).
 - `d72c5615` Typing keeps what unchanged code still uses of the previous program, reused metadata or not.
 - `3e65a97a` Key path caches settle after the prune; name parsing sits next to the names.
-- `2f6cbb4d`, then the final step 3 commit: restart reasons by kind, the continuation, and `HashMap` seeded in place of the scan.
-- the key path helper lifetime (`pruneUnusedKeyPathHelpers`, exact equality in the tests).
+- `f614ffee` Plan: the step 3 findings after the first attempt.
+- `2f6cbb4d` The frontend restart finds representation modules from declarations and continues for the rest (restart kinds, the
+  continuation, the declaration scan).
+- `8f662f48` A key path helper stays only while a function that stays uses the literal (exact equality in the tests).
+- `1accac20` HashMap is part of every program, so a representation never waits for a module (replaces the scan; the plan's final form).
 
 `app` (materia at e11c35e2f^; the current `app` on main needs `haxeon.build.InputFiles` from uncommitted stdlib edits). Objects and
 bytes are `compile-count` / `compile-bytes`; times are noisy (the machine was loaded):
