@@ -68,6 +68,7 @@ import haxeon.ui.core.CommandResult;
 import haxeon.ui.docking.DockDropZone;
 import haxeon.ui.widgets.docking.DockDropTarget;
 import haxeon.ui.docking.DockNode;
+import haxeon.ui.docking.DockNodeTools;
 import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockWorkspaceStorage;
 import haxeon.ui.docking.DockWorkspaceCommands;
@@ -6557,6 +6558,18 @@ class FrameworkSmoke {
 		persisted.unregister("removed");
 		if (!persisted.restoreJson(persistedJson) || persisted.isOpen("removed") ||
 			!persisted.isOpen("known") || persisted.activePanelId != "known")
+			return false;
+		var transientTabs = ["start", "one", "two"],
+			transientRoot = DockNode.Split(DockSplitAxis.Horizontal, 0.72,
+				DockNode.Tabs(transientTabs, "start"), DockNode.Panel("start")),
+			filteredRoot = DockNodeTools.copyExcluding(transientRoot, ["start"]),
+			expectedFiltered = DockNode.Tabs(["one", "two"], "one");
+		if (!DockNodeTools.same(filteredRoot, expectedFiltered))
+			return false;
+		var filteredSnapshot = new haxeon.ui.docking.DockWorkspaceSnapshot(transientRoot, "start",
+			haxeon.ui.docking.DockWorkspaceSnapshot.CurrentVersion, ["start"]);
+		transientTabs[1] = "changed";
+		if (!DockNodeTools.same(filteredSnapshot.root, expectedFiltered))
 			return false;
 		var fallback = new DockWorkspaceModel();
 		fallback.register(new DockPanelDescriptor("fallback", "Fallback", false));
