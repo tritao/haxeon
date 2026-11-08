@@ -225,7 +225,6 @@ class TestCatalog {
 		"LiveLoweringReuseMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
-		"CodeIdentityObjectMain",
 		"IdentityPathMain",
 		"RuntimeLibraryMain",
 		"EqualityHelperEditMain",
