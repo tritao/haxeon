@@ -28,7 +28,12 @@ class WasmLinearClosureAdapters {
 
 	final program:IrProgram;
 	final signatureIds:Map<String, Int> = [];
-	function new(program:IrProgram) this.program = program;
+	final inlineEnums:Map<String, String> = [];
+	function new(program:IrProgram) {
+		this.program = program;
+		for (declaration in program.enums) if (declaration.inlineStorage != null)
+			inlineEnums.set(declaration.inlineStorage, declaration.name);
+	}
 
 	public function signatureId(type:IrType):Int {
 		var id = signatureIds.get(Std.string(type));
@@ -105,7 +110,7 @@ class WasmLinearClosureAdapters {
 			var targetsNow = [for (key in targetTypes.keys()) key], sourcesNow = [for (key in sourceTypes.keys()) key];
 			for (target in targetsNow) for (source in sourcesNow)
 				if (source != target && arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
-					var fn = adapter(sourceTypes.get(source), source, targetTypes.get(target), target);
+					var fn = adapters.adapter(sourceTypes.get(source), source, targetTypes.get(target), target);
 					for (block in fn.blocks) for (located in block.instructions) switch located.value {
 						case SafeCast(output, _): switch output.type {
 							case Function(_, _):
@@ -129,7 +134,7 @@ class WasmLinearClosureAdapters {
 		for (pair in pairs) {
 			var targetType = targetTypes.get(pair.target);
 			for (source in pair.sources) if (source != "varargs")
-				program.functions.push(adapter(sourceTypes.get(source), source, targetType, pair.target));
+				program.functions.push(adapters.adapter(sourceTypes.get(source), source, targetType, pair.target));
 			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
 		}
 		return adapters;
@@ -212,7 +217,7 @@ class WasmLinearClosureAdapters {
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
-	static function adapter(sourceType:IrType, source:String, targetType:IrType, target:String):IrFunction {
+	function adapter(sourceType:IrType, source:String, targetType:IrType, target:String):IrFunction {
 		var builder = new IrBuilder(), original = builder.argument("closure", Dyn), targetTypes = arguments(targetType), targetArguments = [
 			for (index in 0...targetTypes.length)
 				builder.argument('argument$index', targetTypes[index])
@@ -225,14 +230,25 @@ class WasmLinearClosureAdapters {
 		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks);
 	}
 
-	static function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+	function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		if (Type.enumEq(value.type, type))
 			return value;
 		if ((switch (value.type) { case I32: true; default: false; }) && (switch (type) { case Bool: true; default: false; }))
 			return builder.equal(builder.equal(value, builder.constInt(0)), builder.constBool(false));
+		var dynamicValue = (switch (value.type) { case Dyn: true; default: false; }) ? value : toDynamic(builder, value);
 		if ((switch (type) { case Dyn: true; default: false; }))
-			return builder.toDyn(value);
-		return builder.safeCast((switch (value.type) { case Dyn: true; default: false; }) ? value : builder.toDyn(value), type);
+			return dynamicValue;
+		return fromDynamic(builder, dynamicValue, type);
+	}
+
+	function toDynamic(builder:IrBuilder, value:IrValue):IrValue {
+		var enumName = switch value.type { case Obj(name): inlineEnums.get(name); default: null; };
+		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
+	}
+
+	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
+		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}
 
 	static function zero(builder:IrBuilder, type:IrType):IrValue
