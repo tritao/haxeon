@@ -1774,7 +1774,16 @@ class LspProtocolMain {
 
 	static function haxeonManifestWorkspace():Void {
 		var base = sys.FileSystem.fullPath("out") + "/lsp-haxeon-workspace-" + Date.now().getTime() + "-" + Std.random(0x7fffffff);
+		try {
+			haxeonManifestWorkspaceAt(base);
+		} catch (failure:Dynamic) {
+			deleteTree(base);
+			throw failure;
+		}
 		deleteTree(base);
+	}
+
+	static function haxeonManifestWorkspaceAt(base:String):Void {
 		for (directory in [
 			base,
 			base + "/app",
@@ -2068,8 +2077,6 @@ class LspProtocolMain {
 			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
 
 		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");
-
-		deleteTree(base);
 	}
 
 	static function request(protocol:LspProtocol, message:String):Dynamic {
