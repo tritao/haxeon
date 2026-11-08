@@ -5582,7 +5582,7 @@ class FrameworkSmoke {
 		var firstItemNode = firstItem;
 		if (firstItemNode == null ||
 			firstItemNode.computedStyle.getColor(StyleProperty.Background).red !=
-			uiContext.buildContext.theme.tokens.selectionField.red)
+			uiContext.buildContext.theme.tokens.selectionHover.red)
 			return false;
 		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		var settledFirst:Null<RenderNode> = settledMenu.find(firstItemNode.id);
