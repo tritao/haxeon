@@ -49,10 +49,21 @@ private typedef ArrayValuePath = {final name:String; final type:CompilerType;}
 private typedef ArrayValuePlace = {final array:TypedExpression; final index:TypedExpression; final root:TypedExpression; final elementType:CompilerType; final path:Array<ArrayValuePath>;}
 private typedef CleanupRegion = {final body:Array<TypedStatement>; final span:compiler.Source.SourceSpan; final trapDepth:Int; final loopDepth:Int; final scopedDisposal:Bool;}
 
+/** What generating one function keeps while it goes: the open cleanup regions, the optional places its locals name, and the counters that keep its temporaries apart. */
+private class FunctionScratch {
+	public var cleanupRegions:Array<CleanupRegion> = [];
+	public var loweringScopedDisposal = false;
+	public var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
+	public var arrayValuePlaceSerial = 0;
+	public var observableAccessSerial = 0;
+	public var observableConstructorInitialization:Bool;
+
+	public function new(isConstructor:Bool)
+		observableConstructorInitialization = isConstructor;
+}
+
 /** Lowers typed syntax to a mutable-local CFG; SsaBuilder owns all SSA policy. */
 class IrGenerator {
-	static var cleanupRegions:Array<CleanupRegion> = [];
-	static var loweringScopedDisposal:Bool = false;
 	static var enumConstructorCounts:Map<String, Int> = [];
 	static var enumEquatableTypes:Map<String, Bool> = [];
 	static var enumPayloadTypes:Map<String, Bool> = [];
@@ -69,12 +80,17 @@ class IrGenerator {
 	static var generatedObjects:Array<IrObject> = [];
 	static var flatValueObjects:Map<String, IrObject> = [];
 	static var inlineValueObjects:Map<String, IrObject> = [];
-	static var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
 	/** The target of the program being generated. Bound once per build, like the program facts below, until the generator stops being static. */
-	static var generatingFor:TargetProfile = TargetProfile.portable;
-	static var arrayValuePlaceSerial = 0;
-	static var observableAccessSerial = 0;
-	static var observableConstructorInitialization = false;
+	static var generatingFor:Null<TargetProfile> = null;
+
+	/** The state of the function being generated; a fresh one per function (see `generateCfg`). */
+	static var scratch = new FunctionScratch(false);
+
+	static function boundProfile():TargetProfile {
+		if (generatingFor == null)
+			throw "IrGenerator used without a bound TargetProfile";
+		return generatingFor;
+	}
 	static inline final ObservableStateField:String = "$haxeonObservableState";
 	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
 	static inline final ReactiveRuntimeClass:String = "haxeon.reactive.ReactiveRuntime";
@@ -114,10 +130,7 @@ class IrGenerator {
 			[for (name in names) name + ":" + bits.get(name)].join(";");
 		});
 		section("typedInterfaceContracts", [for (key in typedInterfaceContracts.keys()) key], key -> Std.string(typedInterfaceContracts.get(key)));
-		out.add("target{" + generatingFor.key() + "}\n");
-		out.add("flags{" + [
-			loweringScopedDisposal, observableConstructorInitialization
-		].map(flag).join("") + "}");
+		out.add("target{" + boundProfile().key() + "}");
 		return out.toString();
 	}
 
@@ -403,7 +416,7 @@ class IrGenerator {
 		var accumulated:CfgValue = values[0], index = 1;
 		while (index < values.length) {
 			// A concat native takes at most 8 operands, one of which is the running result.
-			var take = generatingFor.nativeStringFastPaths ? Std.int(Math.min(values.length - index, 7)) : 1;
+			var take = boundProfile().nativeStringFastPaths ? Std.int(Math.min(values.length - index, 7)) : 1;
 			var group:Array<CfgValue> = [accumulated];
 			for (offset in 0...take)
 				group.push(values[index + offset]);
@@ -477,29 +490,36 @@ class IrGenerator {
 	}
 
 	public static function generateFunction(fn:TypedFunction):IrFunction {
-		// The serials only keep one function's temporaries apart, so each function counts from zero: its IR must not depend on how many
-		// functions were generated before it, or a function generated again would never equal its earlier IR.
-		var arrayPlaces = arrayValuePlaceSerial, observableAccesses = observableAccessSerial;
-		arrayValuePlaceSerial = 0;
-		observableAccessSerial = 0;
 		try {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
-			arrayValuePlaceSerial = arrayPlaces;
-			observableAccessSerial = observableAccesses;
 			return fn.isInline == true
 				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
 					retention) : built;
 		} catch (error:String) {
-			arrayValuePlaceSerial = arrayPlaces;
-			observableAccessSerial = observableAccesses;
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}
 	}
 
+	/**
+	 * Every function is generated with scratch state of its own (`FunctionScratch`): its IR must not depend on how many functions were
+	 * generated before it, or a function generated again would never equal its earlier IR.
+	 */
 	public static function generateCfg(fn:TypedFunction):CfgFunction {
-		localOptionalPlaces = [];
+		var outer = scratch;
+		scratch = new FunctionScratch(fn.isConstructor);
+		try {
+			var cfg = generateFunctionCfg(fn);
+			scratch = outer;
+			return cfg;
+		} catch (error:Dynamic) {
+			scratch = outer;
+			throw error;
+		}
+	}
+
+	static function generateFunctionCfg(fn:TypedFunction):CfgFunction {
 		var builder = new CfgBuilder(), localTypes:Map<String, IrType> = [];
 		for (name => cellClass in fn.cells) {
 			var cellType:IrType = Obj(cellClass);
@@ -529,13 +549,7 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", builder.load(name, localTypes.get(name)));
 					builder.store('$' + 'cell:$name', cell);
 				}
-		var previousObservableConstructorInitialization = observableConstructorInitialization;
-		var previousCleanupRegions = cleanupRegions;
-		cleanupRegions = [];
-		observableConstructorInitialization = fn.isConstructor;
 		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
-		cleanupRegions = previousCleanupRegions;
-		observableConstructorInitialization = previousObservableConstructorInitialization;
 		if (!builder.isTerminated()) {
 			if ((switch (lowerType(fn.result)) { case Void: true; default: false; }))
 				builder.returnVoid();
@@ -565,13 +579,13 @@ class IrGenerator {
 	/** Protect the remaining statements from the registration point through block exit. */
 	static function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool,
 			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
-		var previous = loweringScopedDisposal;
-		loweringScopedDisposal = scopedDisposal;
+		var previous = scratch.loweringScopedDisposal;
+		scratch.loweringScopedDisposal = scopedDisposal;
 		try lowerStatements(body, builder, localTypes, span.end) catch (error:Dynamic) {
-			loweringScopedDisposal = previous;
+			scratch.loweringScopedDisposal = previous;
 			throw error;
 		}
-		loweringScopedDisposal = previous;
+		scratch.loweringScopedDisposal = previous;
 	}
 
 	static function lowerCleanupRegion(body:Array<TypedStatement>, remainder:Array<TypedStatement>, span:compiler.Source.SourceSpan,
@@ -579,9 +593,9 @@ class IrGenerator {
 		var handler = builder.createBlock(), after = builder.createBlock();
 		builder.beginTry(handler, after);
 		var region:CleanupRegion = {body: body, span: span, trapDepth: builder.trapDepth(), loopDepth: builder.loopContexts.length, scopedDisposal: scopedDisposal};
-		cleanupRegions.push(region);
+		scratch.cleanupRegions.push(region);
 		lowerStatements(remainder, builder, localTypes, scopeEnd);
-		cleanupRegions.pop();
+		scratch.cleanupRegions.pop();
 		var continues = !builder.isTerminated();
 		if (continues) {
 			builder.endTry();
@@ -619,7 +633,7 @@ class IrGenerator {
 
 	/** Emit the applicable cleanups on a return or loop exit, closing only traps crossed by that exit. */
 	static function emitExitCleanups(builder:CfgBuilder, localTypes:Map<String, IrType>, loopDepth:Int, destinationTrapDepth:Int):Void {
-		var original = cleanupRegions, depth = builder.trapDepth(), index = original.length;
+		var original = scratch.cleanupRegions, depth = builder.trapDepth(), index = original.length;
 		while (index > 0) {
 			index--;
 			var region = original[index];
@@ -627,12 +641,12 @@ class IrGenerator {
 				break;
 			builder.closeTrapsBetween(depth, region.trapDepth - 1);
 			depth = region.trapDepth - 1;
-			cleanupRegions = original.slice(0, index);
+			scratch.cleanupRegions = original.slice(0, index);
 			lowerCleanupBody(region.body, region.span, region.scopedDisposal, builder, localTypes);
 			if (builder.isTerminated())
 				break;
 		}
-		cleanupRegions = original;
+		scratch.cleanupRegions = original;
 		if (!builder.isTerminated())
 			builder.closeTrapsBetween(depth, destinationTrapDepth);
 	}
@@ -678,7 +692,7 @@ class IrGenerator {
 						if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
 						var getter = optionalPlaceGetter(place, declaring, lowerType(initializer.type));
 						initializeLocal(name, builder.call(getter, [receiver], lowerType(initializer.type)), builder, localTypes);
-						localOptionalPlaces.set(name, {
+						scratch.localOptionalPlaces.set(name, {
 							owner: new TypedExpression(TLocal(owner.name), place.owner.type, place.owner.span),
 							field: place.field, path: place.path, checkedDepth: place.path.length + 1
 						});
@@ -710,7 +724,7 @@ class IrGenerator {
 					} else if (observableBit != null) {
 						var operands = lowerOperands([object, value], builder, localTypes);
 						if (!builder.isTerminated()) {
-							if (observableConstructorInitialization && isCurrentObject(object))
+							if (scratch.observableConstructorInitialization && isCurrentObject(object))
 								builder.fieldSet(operands[0], name, operands[1]);
 							else {
 								var before = builder.fieldGet(operands[0], name, lowerType(value.type));
@@ -722,10 +736,10 @@ class IrGenerator {
 						copy = optionalFieldCopy(value), targetOwner = optionalStoredFieldOwner(lowerType(object.type), name);
 					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
 						var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
-							arrayName = '$' + 'array-value-place-array:${arrayValuePlaceSerial}',
-							indexName = '$' + 'array-value-place-index:${arrayValuePlaceSerial}',
-							rootName = '$' + 'array-value-place-value:${arrayValuePlaceSerial}',
-							rootObjectName = '$' + 'array-value-place-object:${arrayValuePlaceSerial++}',
+							arrayName = '$' + 'array-value-place-array:${scratch.arrayValuePlaceSerial}',
+							indexName = '$' + 'array-value-place-index:${scratch.arrayValuePlaceSerial}',
+							rootName = '$' + 'array-value-place-value:${scratch.arrayValuePlaceSerial}',
+							rootObjectName = '$' + 'array-value-place-object:${scratch.arrayValuePlaceSerial++}',
 							rootType = lowerType(arrayPlace.elementType),
 							valueType = switch arrayPlace.elementType {
 								case TNullable(inner): inner;
@@ -760,7 +774,7 @@ class IrGenerator {
 						var replacement = new TypedExpression(TLocal(rootObjectName), rootCompilerType, arrayPlace.root.span),
 							target = replaceArrayValueRoot(object, arrayPlace, replacement),
 							receiver = lowerExpression(target, builder, localTypes),
-							receiverName = '$' + 'array-value-place-receiver:${arrayValuePlaceSerial - 1}';
+							receiverName = '$' + 'array-value-place-receiver:${scratch.arrayValuePlaceSerial - 1}';
 						localTypes.set(receiverName, receiver.type);
 						builder.store(receiverName, receiver);
 						var assigned = lowerExpression(value, builder, localTypes);
@@ -840,7 +854,7 @@ class IrGenerator {
 					if (!builder.isTerminated()) {
 						// Cleanup can branch, so a CFG temporary from the return expression cannot be reused in its join block.
 						var savedReturn:Null<String> = null;
-						if (cleanupRegions.length > 0) {
+						if (scratch.cleanupRegions.length > 0) {
 							savedReturn = '$' + 'cleanup-return:${builder.currentBlock().id}';
 							localTypes.set(savedReturn, returnValue.type);
 							builder.store(savedReturn, returnValue);
@@ -1335,7 +1349,7 @@ class IrGenerator {
 	static function isHeaderlessValueClass(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isHeaderlessValueClass(representation);
-			case TInstance(NominalKind.Class, name, _): generatingFor.headerlessValueClasses && valueClasses.exists(Std.string(name));
+			case TInstance(NominalKind.Class, name, _): boundProfile().headerlessValueClasses && valueClasses.exists(Std.string(name));
 			default: false;
 		};
 
@@ -1474,7 +1488,7 @@ class IrGenerator {
 		var casted = builder.safeCast(value, target);
 		return switch target {
 			case Array(Dyn), Array(Nullable(_)): casted;
-			case Array(element) if (generatingFor.nativeArrayChecks):
+			case Array(element) if (boundProfile().nativeArrayChecks):
 				var checked = builder.call("__array_check_cast", [builder.safeCast(builder.toDyn(casted), Array(Dyn)), builder.typeValue(element)], Array(Dyn));
 				builder.safeCast(builder.toDyn(checked), target);
 			default: casted;
@@ -1584,7 +1598,7 @@ class IrGenerator {
 	/** Find a field place inside a nullable value field without materializing an independent value copy. */
 	static function optionalFieldPlace(expression:TypedExpression):Null<OptionalFieldPlace> {
 		return switch expression.expression {
-			case TLocal(name) if (localOptionalPlaces.exists(name)): localOptionalPlaces.get(name);
+			case TLocal(name) if (scratch.localOptionalPlaces.exists(name)): scratch.localOptionalPlaces.get(name);
 			case TCellLocal(name, cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
 				optionalCellPlace(name, cellClass, false, expression.span);
 			case TCellCaptured(name, cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
@@ -1658,7 +1672,7 @@ class IrGenerator {
 			localTypes:Map<String, IrType>):CfgValue {
 		var operands = lowerOperands([place.array, place.index], builder, localTypes), rootType = lowerType(place.elementType),
 			valueType = switch place.elementType { case TNullable(inner): inner; default: place.elementType; },
-			rootName = '$' + 'array-place-binding:${arrayValuePlaceSerial++}';
+			rootName = '$' + 'array-place-binding:${scratch.arrayValuePlaceSerial++}';
 		var previous = builder.beginGenerated(ArrayValuePlaceReason);
 		var root = elementGet(builder, operands[0], operands[1], rootType);
 		builder.restoreSource(previous);
@@ -2249,7 +2263,7 @@ class IrGenerator {
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
-			case TCall("__std_string" | "Std.string", [argument]) if (generatingFor.nativeStringFastPaths && stringifiedPrimitive(argument) != null):
+			case TCall("__std_string" | "Std.string", [argument]) if (boundProfile().nativeStringFastPaths && stringifiedPrimitive(argument) != null):
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
 					throw "The Std.string fast path lost its primitive operand";
@@ -2537,7 +2551,7 @@ class IrGenerator {
 				var constructed = builder.load(objectName, objectType);
 				(switch (resultType) { case Dyn: true; default: false; }) ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
-				if (isDynamic && generatingFor.dynamicObjectLiterals) {
+				if (isDynamic && boundProfile().dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
 						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, IrType.Dyn);
@@ -2882,8 +2896,8 @@ class IrGenerator {
 				} else if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
 					// Preserve the evaluated array and index as the receiver's place, before evaluating method arguments.
 					var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
-						rootType = lowerType(arrayPlace.root.type), rootName = '$' + 'array-method-place-root:${arrayValuePlaceSerial++}',
-						receiverName = '$' + 'array-method-place-receiver:${arrayValuePlaceSerial - 1}';
+						rootType = lowerType(arrayPlace.root.type), rootName = '$' + 'array-method-place-root:${scratch.arrayValuePlaceSerial++}',
+						receiverName = '$' + 'array-method-place-receiver:${scratch.arrayValuePlaceSerial - 1}';
 					var previous = builder.beginGenerated(ArrayValuePlaceReason);
 					var root = elementGet(builder, operands[0], operands[1], rootType);
 					builder.restoreSource(previous);
@@ -2912,7 +2926,7 @@ class IrGenerator {
 					else {
 						var typedInterface = typedInterfaceForCall(object.type, method, lowerType(expression.type), [for (argument in callArgs) argument.type]);
 						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type),
-							loweringScopedDisposal || temporaryValueCopy(object));
+							scratch.loweringScopedDisposal || temporaryValueCopy(object));
 						else builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
 							lowerType(expression.type)), [receiver].concat(callArgs), lowerType(expression.type));
 					}
@@ -3677,7 +3691,7 @@ class IrGenerator {
 
 	static function lowerObservableFieldRead(object:TypedExpression, field:String, fieldBit:Int, resultType:IrType,
 			builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var serial = observableAccessSerial++,
+		var serial = scratch.observableAccessSerial++,
 			receiverValue = lowerExpression(object, builder, localTypes),
 			receiverName = '$' + 'observable-read-owner:$serial',
 			sourceName = '$' + 'observable-read-source:$serial',
@@ -3734,7 +3748,7 @@ class IrGenerator {
 
 	static function lowerObservableFieldWrite(receiver:CfgValue, field:String, fieldBit:Int, fieldType:CompilerType,
 			before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var serial = observableAccessSerial++, receiverName = '$' + 'observable-write-owner:$serial',
+		var serial = scratch.observableAccessSerial++, receiverName = '$' + 'observable-write-owner:$serial',
 			beforeName = '$' + 'observable-write-before:$serial', afterName = '$' + 'observable-write-after:$serial',
 			beforeType = before.type, afterType = after.type;
 		localTypes.set(receiverName, receiver.type);
@@ -3874,7 +3888,7 @@ class IrGenerator {
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
-		if (generatingFor.nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
+		if (boundProfile().nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
 			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
@@ -3902,7 +3916,7 @@ class IrGenerator {
 	 */
 	static function elementGet(builder:CfgBuilder, array:CfgValue, index:CfgValue, type:IrType):CfgValue {
 		var element = arrayElementType(array);
-		if (!generatingFor.nativeArrayChecks || element == null)
+		if (!boundProfile().nativeArrayChecks || element == null)
 			return builder.arrayGet(array, index, type);
 		if (IrTypeTools.isDynamic(element)) {
 			var value = builder.call("__array_get_any", [array, index], Dyn);
@@ -3917,14 +3931,14 @@ class IrGenerator {
 
 	/** Writes one element; Array<Dynamic> writes convert to the storage element type. */
 	static function elementSet(builder:CfgBuilder, array:CfgValue, index:CfgValue, value:CfgValue):Void {
-		if (generatingFor.nativeArrayChecks && IrTypeTools.isDynamic(arrayElementType(array)))
+		if (boundProfile().nativeArrayChecks && IrTypeTools.isDynamic(arrayElementType(array)))
 			builder.call("__array_set_any", [array, index, builder.toDyn(value)], Void);
 		else
 			builder.arraySet(array, index, value);
 	}
 
 	static function arrayNativeName(element:CompilerType, operation:String):String
-		return generatingFor.nativeArrayChecks
+		return boundProfile().nativeArrayChecks
 			&& IrTypeTools.isDynamic(lowerType(element)) ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
 
 
@@ -3937,7 +3951,7 @@ class IrGenerator {
 
 	/** Dynamic reactive values use ordinary dynamic equality, with a reflexive Float NaN case. */
 	static function lowerDynamicChangeEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var id = arrayValuePlaceSerial++, leftName = '$' + 'change-left:$id', rightName = '$' + 'change-right:$id',
+		var id = scratch.arrayValuePlaceSerial++, leftName = '$' + 'change-left:$id', rightName = '$' + 'change-right:$id',
 			resultName = '$' + 'change-result:$id', equalBlock = builder.createBlock(), leftTypeBlock = builder.createBlock(),
 			rightTypeBlock = builder.createBlock(), leftNanBlock = builder.createBlock(), rightNanBlock = builder.createBlock(),
 			unequalBlock = builder.createBlock(), done = builder.createBlock();
@@ -3963,7 +3977,7 @@ class IrGenerator {
 
 	/** Map Float equivalence includes NaNs while preserving null and signed-zero behavior. */
 	static function lowerFloatMapKeyEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var id = arrayValuePlaceSerial++, resultName = '$' + 'float-map-key-equality:$id',
+		var id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'float-map-key-equality:$id',
 			leftName = '$' + 'float-map-key-left:$id', rightName = '$' + 'float-map-key-right:$id',
 			equalBlock = builder.createBlock(), checkLeft = builder.createBlock(), checkRight = builder.createBlock(),
 			unequalBlock = builder.createBlock(), done = builder.createBlock();
@@ -3987,7 +4001,7 @@ class IrGenerator {
 	/** Typed nullable scalar equality compares payloads, preserving IEEE float equality and null semantics. */
 	static function lowerNullableScalarEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
 		var inner = switch left.type { case Nullable(value): value; default: throw "Expected nullable scalar"; },
-			id = arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id',
+			id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id',
 			leftName = '$' + 'nullable-equality-left:$id', rightName = '$' + 'nullable-equality-right:$id',
 			absent = builder.createBlock(), present = builder.createBlock(), compare = builder.createBlock(),
 			missing = builder.createBlock(), done = builder.createBlock();
@@ -4007,7 +4021,7 @@ class IrGenerator {
 	/** Compare typed struct elements with their declared equality, without entering a dynamic array view. */
 	static function lowerValueArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
 			arguments:Array<CfgValue>):CfgValue {
-		var array = arguments[0], needle = arguments[1], id = arrayValuePlaceSerial++,
+		var array = arguments[0], needle = arguments[1], id = scratch.arrayValuePlaceSerial++,
 			arrayName = '$' + 'value-index-array:$id', needleName = '$' + 'value-index-needle:$id',
 			indexName = '$' + 'value-index-position:$id', resultName = '$' + 'value-index-result:$id',
 			check = builder.createBlock(), body = builder.createBlock(), found = builder.createBlock(),
@@ -4032,7 +4046,7 @@ class IrGenerator {
 
 	static function lowerValueArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
 			arguments:Array<CfgValue>):CfgValue {
-		var array = arguments[0], id = arrayValuePlaceSerial++, arrayName = '$' + 'value-remove-array:$id',
+		var array = arguments[0], id = scratch.arrayValuePlaceSerial++, arrayName = '$' + 'value-remove-array:$id',
 			foundName = '$' + 'value-remove-position:$id', resultName = '$' + 'value-remove-result:$id',
 			found = builder.createBlock(), inBounds = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
 		localTypes.set(arrayName, array.type); localTypes.set(foundName, I32); localTypes.set(resultName, Bool);
@@ -4062,7 +4076,7 @@ class IrGenerator {
 		// The any-array natives return Array<Dynamic>, even when the source array has a nullable element type.
 		// Preserve that ABI in IR, then restore the semantic type at the call boundary.
 		switch resultType {
-			case Array(Nullable(_)) if (generatingFor.nativeArrayChecks && IrTypeTools.isDynamic(lowerType(element))):
+			case Array(Nullable(_)) if (boundProfile().nativeArrayChecks && IrTypeTools.isDynamic(lowerType(element))):
 				var value = builder.call(nativeName, arguments, Array(Dyn));
 				return referenceResultCast(builder, value, resultType);
 			default:
