@@ -4011,3 +4011,63 @@ pending real-app decrease.
 Records: `haxeon-flat-work/enum-first-batch-gates/{artifact-comparison,paired-vm-manifest,final-tier2-progress}.json`,
 `paired-{actions,census,rss,web-core,web32-load}.jsonl` and the final gate logs. Raw captures and completed parity
 guests were deleted after recording their results.
+
+### Final batch validation after the 614024b2 rebase
+
+Control is Haxeon `614024b2`; candidate is `acdb8b7c`; the frozen outer app source is
+`2de94628c`. The outer source includes the local CAD collision-thickness fix and the read-only scene appearance
+change. The HashLink editor module hashes differ (`3946280685dbdb7e5646dc95683b3b9714a6ad7e17f1855488f2d7e60f407403`
+control, `ce3c52a1403c9b20a555cb64f005b28717f0c347bdb510fa6995de96b82bdb43` candidate; each about 97 MiB), so
+paired measurements were run. The table is one alternating control/candidate pair; allocation is the existing
+HashLink KiB counter, quantized by allocator buffer refills, and time is median frame time in milliseconds.
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console → telemetry | 74.5 | 74.4 | 1.00 | 1.01 |
+| hierarchy → sensors | 112.5 | 110.3 | 1.45 | 1.46 |
+| sensors → hierarchy | 77.8 | 79.6 | 1.11 | 1.12 |
+| telemetry → console | 92.9 | 88.8 | 1.07 | 1.07 |
+| hover away | 13.6 | 13.6 | 0.43 | 0.42 |
+| hover enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover field | 10.9 | 12.4 | 0.43 | 0.43 |
+| hover inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover other | 10.0 | 10.0 | 0.42 | 0.41 |
+| idle | 0.2 | 0.3 | 0.01 | 0.01 |
+| idle focused | 0.2 | 0.3 | 0.01 | 0.01 |
+| scroll inspector | 21.7 | 21.7 | 0.72 | 0.71 |
+| type backspace | 16.2 | 16.2 | 0.41 | 0.41 |
+| type character | 16.1 | 16.1 | 0.41 | 0.41 |
+
+The refill counter's `sensors → hierarchy` increase does not represent more allocated bytes in the selected action
+window: an exact census measured 1,806 objects / 138,136 bytes on control and 1,778 / 137,008 on candidate
+(-28 objects, -1,128 bytes). The same check for `hover field` measured 689 / 59,800 and 689 / 59,664
+(-136 bytes), despite the displayed 1.5 KiB increase. These two KiB readings crossed refill boundaries at different
+points. `idle` and `idle focused` each display +0.1 KiB; those windows did not receive an exact census, so the
+quantized readings alone do not establish a byte regression.
+
+Selection stress measured 2.79 → 2.41 ms per frame. Its 30-cycle exact census fell from 343,622 objects /
+24,092,200 bytes to 298,806 / 20,782,656 (-44,816 objects, -3,309,544 bytes). Largest byte reductions were arrays
+(-964,560), `LayoutStyle` (-815,280), `RenderNode` (-435,120), and `LayoutNode` (-172,800).
+
+Three paired headless runs (500 cycles) passed the memory gate. Median RSS growth windows in MiB were control
+`[30.62, 2.81, 0.94, 5.16]`, candidate `[30.16, 3.28, 0.94, 5.47]`; later windows are slightly higher on
+candidate. RSS after warmup was 8.91 → 9.84 MiB and frame p95 was 1.45 → 1.46 ms. The paired increases are recorded
+as findings; no run was retried.
+
+The Showcase Wasm GC guest changed from 5,820,369 bytes (SHA-256
+`e1278bce01b44055ba663184c2372fbe68214728ec202c7c2bffc8e60410024b`) to 5,855,816 bytes (`f79f290013151cda95e043e07b56c9dbcfd90e2634ccd3df26f34743c833ad8a`), +35,447 bytes. Its host Wasm
+(2,259,510 bytes) and JavaScript (177,128 bytes) are byte-identical. The opt-in Wasm GC object count tied in all
+four 120-frame scenes: full 4,440, static 4,440, text-heavy 4,440, editing 8,724. Each used 120 warmup frames;
+all had zero frames over budget. Guest frame median/p95 milliseconds were full 1.5/2.1 → 1.5/1.9, static
+1.3/1.8 → 1.3/1.8, text-heavy 1.4/2.0 → 1.4/2.2, and editing 1.6/2.3 → 1.5/2.3. The four runs are a single
+paired capture, not timing medians across repeated captures.
+
+The one-build compiler phase observations recorded BodyTyped (`bodies`) at 451.88 ms control and 120.38 ms
+candidate. Tier 2 passed: compiler suite (837 tests, zero failures), self-hosting fixed point, all ten UI scripts,
+Wasm backend parity, 521 cross-target fixtures (14 skipped), six UI snapshots, app suite, nine retention scenarios,
+editor budgets, and the headless memory gate. The Wasm GC UI snapshot is included in the parity gate.
+
+The app `MainWeb` guest remains an open build issue: control and candidate both fail at
+`compiler.tools.CompilerDriver.compile` with `Duplicate IR function "$enum-equals:278a341efefc3146f489368a235f5603"`.
+The Showcase Wasm GC build and browser scenes pass on both versions. A temporary portable HXI was used to isolate
+the duplicate-function error from the separate missing `machinekit-pendant.hxi` Wasm32 interface diagnostic.
