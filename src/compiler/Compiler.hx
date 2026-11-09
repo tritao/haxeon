@@ -286,10 +286,6 @@ class Compiler {
 	var objectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
-
-	/** Whether this compiler has completed a build (so the next one is a warm build). */
-	public function hasCompiled():Bool
-		return compiledOnce;
 	final publication = new CompilerPublication();
 	var rehydrationBaseline:Null<Map<String, Bytes>>;
 	var sourceGeneration = 0;
