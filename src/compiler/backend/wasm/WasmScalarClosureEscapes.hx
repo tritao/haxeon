@@ -101,8 +101,19 @@ class WasmScalarClosureEscapes {
 
 	function needsAdapter(type:IrType):Bool {
 		var signature = functionType(type);
-		return signature != null && (scalar.exists(Std.string(type)) || scalar.exists(Std.string(signature)));
+		return signature != null && (scalar.exists(Std.string(type)) || scalar.exists(Std.string(signature)) || hasInlineEnumSignature(signature));
 	}
+
+	/** Reflection can synthesize a Dynamic closure escape after the language-level enum pass. */
+	function hasInlineEnumSignature(type:IrType):Bool return switch type {
+		case Function(arguments, result): Lambda.exists(arguments, isInlineEnumStorage) || isInlineEnumStorage(result);
+		default: false;
+	};
+
+	function isInlineEnumStorage(type:IrType):Bool return switch type {
+		case Obj(name): inlineEnums.exists(name);
+		default: false;
+	};
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
