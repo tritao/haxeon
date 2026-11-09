@@ -479,10 +479,39 @@ type IDs, without a lookup allocation or an added header field. `Reflect.compare
 invalid-comparison result when either operand is an enum, including when the other operand is null. These checks
 apply to canonical escape boxes; typed inline packets keep their scalar/reference lanes.
 
+### Payload-free enums are scalar tags
+
+An enum whose constructors all have zero parameters always uses a nominal four-byte tag in locals, parameters,
+results, class and struct fields, generic fields, and arrays. Payload-enum escape eligibility does not apply to
+these types: there is no payload or reference to spill. Constructor indices are encoded as index plus one;
+zero represents null, including `Null<E>`, without another wrapper or presence bit. Such fields are Flat and
+Portable; a record containing an enum tag and an Int occupies eight bytes with four-byte alignment.
+
+The IR retains the enum's nominal identity separately from its I32 carrier. An enum tag is not an Int and tags
+of different enums are not interchangeable. Typed array access uses four-byte scalar lanes and preserves the
+nominal element descriptor, including through iterator and Dynamic views. A genuine Dynamic or reflection escape
+returns the enum's cached boxed case; checked unboxing verifies the exact enum type before reading its index.
+HashLink also records a distinct `HENUMTAG` type whose value occupies four bytes. Its descriptor retains the boxed
+enum type and case-cache global indices. Native boxed-enum payload reflection and formatting therefore retain the logical enum type instead
+of treating the stored tag as an Int. Cache slots are ordinary module globals, rooted and remapped with the module;
+no untracked cache allocation outlives it. Closure signatures retain this nominal descriptor while using the I32 ABI.
+Reflected class and anonymous-record fields use logical get/set adapters, so reflective writes cannot store an
+integer or a case of another enum in a tag field. Escaping closures use the same checked box/unbox boundary.
+
+`EnumTagStorageMain` checks the nominal IR carrier, its codec, lane layout and malformed-IR rejection.
+`SourceEnumTagMain` checks source-level fields, Flat sizes, nullable tags, arrays/iterators, reflection get/set,
+wrong-type casts, closures and generic fields on HashLink, Wasm32 and Wasm GC with inlining off and on.
+Repeated typed operations and warmed Dynamic round trips allocate zero objects at 8 and 1,024 iterations.
+`EnumTagPatchMain` covers native scalar descriptors across symbol persistence and live body patches, including
+retained fields and fresh module loads. Wasm's existing Dynamic formatter supports nullary case names but does not
+format payload enums; extending that formatter is a separate follow-up, not part of tag storage.
+Enums with any payload constructor keep the classification and widening inventory below; their nullary cases
+still reuse cached boxed instances when the enum is classified boxed.
+
 ### Source inline enum activation: remaining blockers
 
 The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
-first subset is closed and non-generic; unsupported uses select boxed storage for the whole enum, including uses in
+first payload subset is closed and non-generic; unsupported uses select boxed storage for the whole payload enum, including uses in
 uncalled typed bodies. This conservative program-wide classification can be widened without changing the language
 semantics. The remaining inventory below distinguishes widening work from the first activation. Sizes describe scope, not elapsed time: **S** is a local change, **M** is a cross-cutting
 compiler change, and **L** spans multiple semantic/runtime boundaries. Update this list as each item lands.

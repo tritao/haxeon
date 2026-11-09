@@ -9,7 +9,7 @@ class IrEnumRuntimeSpecializations {
 			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>, cNatives:Array<IrCNative>):Array<IrEnum> {
 		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item], required:Map<String, Bool> = [], pending:Array<String> = [];
 		function visit(type:IrType):Void switch type {
-			case Enum(name):
+			case Enum(name), EnumTag(name):
 				var base = EnumRuntimeType.declaration(name);
 				if (base != name && !required.exists(name)) { required.set(name, true); pending.push(name); }
 			case Array(element), Iterator(element), Nullable(element): visit(element);

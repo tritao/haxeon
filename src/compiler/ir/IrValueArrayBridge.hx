@@ -30,12 +30,14 @@ class IrValueArrayBridge {
 			readIndex = read.argument("index", I32);
 		var loaded = readValue(read, readArray, readIndex, storage, []);
 		read.returnValue(switch valueType(element) {
+			case EnumTag(name): read.call(IrEnumTagStorage.boxName(name), [loaded], Dyn);
 			case Enum(name): read.call(IrInlineEnumEscapes.boxName(name), [loaded], Dyn);
 			default: read.toDyn(loaded);
 		});
 		var write = new IrBuilder(), writeArray = write.argument("array", arrayType), writeIndex = write.argument("index", I32),
 			input = write.argument("value", Dyn), inserting = write.argument("insert", Bool);
 		var converted = switch valueType(element) {
+			case EnumTag(name): write.call(IrEnumTagStorage.unboxName(name), [input], storage);
 			case Enum(name): write.call(IrInlineEnumEscapes.unboxName(name), [input], storage);
 			default: write.safeCast(input, element);
 		};
@@ -62,9 +64,10 @@ class IrValueArrayBridge {
 		}
 		write.call("__value_array_mark", [writeArray, position], Void);
 		write.returnValue(write.constVoid());
-		var accepts = new IrBuilder(), value = accepts.argument("value", Dyn), type = accepts.typeValue(valueType(element));
+		var accepts = new IrBuilder(), value = accepts.argument("value", Dyn), logical = switch valueType(element) { case EnumTag(name): Enum(name); default: valueType(element); },
+			type = accepts.typeValue(logical);
 		var matches = accepts.call("__std_is_exact_type", [value, type], Bool);
-		if (isOptional(element) || switch element { case Enum(_): true; default: false; }) {
+		if (isOptional(element) || switch element { case Enum(_), EnumTag(_): true; default: false; }) {
 			var nil = accepts.equal(value, accepts.constNull(Dyn)), absent = accepts.createBlock(), present = accepts.createBlock();
 			accepts.branch(nil, absent, present);
 			accepts.select(absent); accepts.returnValue(accepts.constBool(true));

@@ -31,6 +31,8 @@ enum IrType {
 	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);
+	/** Payload-free enum storage: constructor index + 1 in I32; zero is the null value. */
+	EnumTag(name:String);
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);

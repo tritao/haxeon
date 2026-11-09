@@ -94,10 +94,11 @@ class IrValueArrayElementRewrite {
 								removed.set(raw.id, true); position++; changed = true;
 							case Call(out, conversion, [source]) if (source.id == raw.id && Type.enumEq(out.type, helpers.storage) && uses.get(raw.id) == 1
 									&& (StringTools.startsWith(conversion, IrCheckedDynamicCasts.PREFIX)
-										|| StringTools.startsWith(conversion, IrValueInterfaceBoxes.UNBOX_PREFIX))):
+										|| StringTools.startsWith(conversion, IrValueInterfaceBoxes.UNBOX_PREFIX)
+										|| (switch element { case EnumTag(enumName): conversion == IrEnumTagStorage.unboxName(enumName); default: false; }))):
 								instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(), args);
 								removed.set(raw.id, true); position++; changed = true;
-							default: throw "Invalid checked value array removal conversion";
+							default: throw 'Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}';
 						}
 					case Call(raw, "__array_splice_any", args) if (args.length == 3 && Type.enumEq(args[0].type, arrayType)):
 						if (position + 2 >= block.instructions.length) throw "Missing checked nullable array splice conversion";

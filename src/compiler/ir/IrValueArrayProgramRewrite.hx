@@ -16,6 +16,7 @@ private class ValueArrayFunctionIndex {
 			case Obj(name): "value:" + name;
 			case Nullable(Obj(name)): "nullable:" + name;
 			case Enum(name): "enum:" + name;
+			case EnumTag(name): "enum-tag:" + name;
 			default: null;
 		};
 
@@ -85,6 +86,8 @@ class IrValueArrayProgramRewrite {
 			switch type {
 				case Array(element):
 					switch element {
+						case EnumTag(_):
+							elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
 						case Enum(name) if (inlineEnums.exists(name)):
 							elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
 						case Obj(name) | Nullable(Obj(name)) if (values.exists(name)):
@@ -450,7 +453,7 @@ class IrValueArrayProgramRewrite {
 								if (uses.get(raw.id) != 1
 									|| uses.get(boxed.id) != 1
 									|| !typeValues.exists(arguments[1].id)
-									|| !Type.enumEq(typeValues.get(arguments[1].id), element))
+									|| !Type.enumEq(typeValues.get(arguments[1].id), switch element { case EnumTag(name): Enum(name); default: element; }))
 									throw "Typed array allocation escapes or has an incompatible element type";
 								instruction = Call(out, allocator, [arguments[0]]);
 								position += 2;

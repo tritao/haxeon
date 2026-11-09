@@ -349,7 +349,7 @@ class HlLower {
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
 		for (enumDecl in program.enums)
-			symbols.reserveEnum(enumDecl.name);
+			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces) {
 			symbols.reserveInterface(interfaceDecl.name);
 			interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
@@ -882,7 +882,10 @@ class HlLower {
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
-						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						switch output.type {
+							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
+							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						}
 					case TypeValue(output, type):
 						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
 					case ToDyn(output, value):
@@ -1193,6 +1196,8 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
 						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
+					case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(constructor + 1)));
 					case MakeEnum(output, typeName, constructor, arguments):
 						var destination = defineRegister(output, registers, registerTypes),
 							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
@@ -1201,6 +1206,10 @@ class HlLower {
 							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
 						else
 							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+					case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+						var one = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(value, registers), one));
 					case EnumIndex(output, value):
 						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case EnumField(output, value, constructor, field):

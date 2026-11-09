@@ -684,6 +684,7 @@ class FrontendCompilation {
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
 			];
 			compiler.ir.IrNullableScalarFlow.rewrite(ir);
+			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
 			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope);
 			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.

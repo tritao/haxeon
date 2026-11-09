@@ -7,6 +7,7 @@ import compiler.types.typing.EnumRuntimeType;
 
 /** Dispatch Dynamic enum operations by the concrete runtime enum descriptor. */
 class IrEnumDynamicDispatch {
+	public static inline final UNBOX_PREFIX = "$enum-dynamic-unbox:";
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
@@ -116,7 +117,7 @@ class IrEnumDynamicDispatch {
 	}
 
 	static function isEnum(type:IrType):Bool return switch type { case Enum(_): true; default: false; };
-	static function unboxName(type:IrType):String return "$enum-dynamic-unbox:" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
+	public static function unboxName(type:IrType):String return UNBOX_PREFIX + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
 	static function typeTestName(type:IrType, exact:Bool):String
 		return "$enum-dynamic-test:" + (exact ? "exact:" : "instance:") + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
 

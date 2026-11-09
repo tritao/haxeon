@@ -608,7 +608,7 @@ class HlModuleAssembler {
 	 */
 	function reserveProgramTypes(program:IrProgram):Void {
 		for (enumDecl in program.enums)
-			symbols.reserveEnum(enumDecl.name);
+			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces)
 			symbols.reserveInterface(interfaceDecl.name);
 		for (object in program.objects)

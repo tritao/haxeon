@@ -4308,3 +4308,61 @@ does not allocate. A separate exact HashLink census constructing 1,024 initializ
 827,392 bytes to 4,096 / 794,624. `RenderNode` remains 296 bytes, `LayoutNode` 120, `LayoutStyle` 344 and `WidgetId` 16;
 the complete difference is the 2,048 integer boxes. These are representation probes; editor/Web allocation and
 binary-size deltas are measured on the next batch head.
+
+### Payload-free enum tag storage (2026-11-09)
+
+Payload-free source enums now use a nominal I32 carrier on every compiled target, including class fields that
+previously forced boxed enum storage. Constructor index plus one encodes the value; zero encodes null. Enum identity
+survives in the type, array descriptor and checked escape adapters. A genuine Dynamic/reflection escape uses the
+cached boxed case introduced above; typed operations do not need a box or a private value object.
+
+The source fixture deliberately combines class and anonymous-record reflection, nullable fields, Flat records,
+arrays and iterators, closures called through Dynamic, specialized generic fields and reference-valued maps.
+It also checks that a tag array cannot cast to Array<Int>, and that two concrete instantiations of a phantom generic
+enum cannot cast to each other. Both inlining modes agree:
+
+| Measurement | HashLink | Wasm32 | Wasm GC |
+|---|---:|---:|---:|
+| Flat record: enum tag + Int | 8 B / alignment 4 | 8 B / alignment 4 | 8 B / alignment 4 |
+| Typed operations and warmed Dynamic round trips, 8 / 1,024 iterations | 0 / 0 objects | 0 / 0 objects | 0 / 0 objects |
+| Construct/populate an array, 8 versus 1,024 elements | 2 / 2 objects | constant object count | constant object count |
+
+HashLink's two array constructions allocate 152 / 4,392 bytes. Those totals include the header, retained geometric
+growth policy and allocator rounding; they are not an element-size calculation. The independent IR lane test checks
+that each element occupies exactly 32 scalar bits and zero reference slots. Native field metadata checks four-byte
+enum fields, and source sizeof/alignof/offsetof checks the complete Flat record on each target. Captures are deleted
+after reading their exact type totals.
+
+HashLink retains a distinct four-byte native enum-tag descriptor, including in boxed recursive enum payloads.
+The native formatter and `enum_parameters` return the logical case (`Wrap(On)`, not `Wrap(2)`); dynamic closure
+calls return the shared case instead of a private integer-shaped box. A tag plus Int in a class occupies 16 bytes
+including the eight-byte object header. Descriptor persistence rejects invalid case counts, boxed types and cache
+indices, and a retained object's tag field survives a live body patch and a fresh module load.
+
+`EnumTagStorageMain` additionally executes the nominal scalar carrier, serialized IR, and a boxed native-ABI stub
+on all three targets with inlining off/on. The post-array verifier rejects ordinary reads, writes and iterator
+creation on tag lanes. Full editor/Web allocation, RSS and size comparisons belong to this batch's Tier 3 checkpoint;
+these representation fixtures do not substitute for that comparison.
+
+A serial self-host build pair at the pre-native-metadata checkpoint uses the same 661 compiler/stdlib source files, with both control and candidate
+compiler executables built by stock Haxe. BodyTyped (`bodies`) is 74.81 → 64.89 ms; IR assembly is 7,469.60 →
+6,103.33 ms. These are single paired observations, not an asserted timing improvement. The measured body phase did
+not grow, so this change does not add generator cursors solely for the earlier fixed-point typing concern. The
+source-input digest and phase numbers are retained with the measurement records; the generated modules are deleted.
+
+The native-metadata checkpoint also reaches a self-hosting fixed point. Concurrent gate observations report
+BodyTyped at 239.23 / 82.83 / 56.37 ms for seed / stage 1 / stage 2; these are not a paired timing comparison.
+The initial native-metadata suite exposed a host-interpreter inference bug in the new receiver check: comparing
+a fetched Dynamic receiver with zero inferred an Int even for class receivers. Branch-specific checks fix the
+cause, and a direct reference-receiver regression test accompanies the existing tag-zero rejection test.
+
+Tier 1 on the native-metadata source: **843 passed, zero failed** with eight workers; all source/tag fixtures pass
+on HashLink, Wasm32 and Wasm GC with inlining off/on, and self-hosting reaches a fixed point. Tier 2 and paired
+editor/Web comparisons remain required before publishing this batch.
+
+A final serial pair builds the same 661 compiler/stdlib sources with the stock-Haxe-built control and candidate
+compilers: BodyTyped **64.32 → 65.04 ms**, IR assembly **5,235.14 → 5,978.75 ms**. This single pair identifies no
+material body-typing growth; the extra representation work is in IR assembly. The final source-input SHA-256 is
+`8a5c235144e5691cbde206818f4c37edd3515cb11ec937f2ce7af48b581ef824`. Generated comparison modules are deleted
+once these numbers are recorded. The VM reader additionally rejects forged case-cache global indices before
+hot-reload hashing can use them; the live-patch fixture exercises that malformed-bytecode path.

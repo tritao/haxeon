@@ -123,6 +123,7 @@ class WasmLinearModuleBuilder {
 		// Interface/cast adapters may have been generated after the initial
 		// signature rewrite. Keep their checked closure casts on the target ABI too.
 		adapters.rewriteSignatureChecks();
+		compiler.ir.IrEnumTagLowering.escapes(logical);
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		IrVerifier.verify(logical);

@@ -365,7 +365,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			offset = allocateLocal(I32),
 			body:Array<WasmInstruction> = objectPayloadLocation(objectName, objectLocal, native.offset, data, offset);
 		var load:Array<WasmInstruction>;
-		if ((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) {
+		if ((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) {
 			if (native.size == 1 || native.size == 2 || native.size == 4)
 				load = loadBytesI32(data, offset, native.size, native.signed);
 			else
@@ -408,7 +408,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			body = [LocalGet(valueLocal), I32WrapI64, LocalSet(bits)];
 		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 8)
 			body = [LocalGet(valueLocal), LocalSet(bits)];
-		else if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; }))
+		else if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; }))
 			&& (native.size == 1 || native.size == 2 || native.size == 4))
 			body = [LocalGet(valueLocal), LocalSet(bits)];
 		else
@@ -549,6 +549,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
+		switch value.type {
+			case EnumTag(name): return [LocalGet(valueLocal), Call(WasmModuleSupport.requiredFunctionIndex(gc.functions,
+				compiler.ir.IrEnumTagStorage.boxName(name))), LocalSet(destination)];
+			default:
+		}
 		var boxed = switch value.type {
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback"): plan.boxedPrimitiveType(value.type);
 			default: null;
@@ -573,6 +578,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
+		switch output.type {
+			case EnumTag(name):
+				if (compiler.ir.IrVerifier.sameType(output.type, value.type)) return [LocalGet(valueLocal), LocalSet(destination)];
+				return [LocalGet(valueLocal), Call(WasmModuleSupport.requiredFunctionIndex(gc.functions,
+					compiler.ir.IrEnumTagStorage.unboxName(name))), LocalSet(destination)];
+			default:
+		}
 		var boxType = switch output.type {
 			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback") if ((switch (value.type) { case Dyn: true; default: false; })): plan.boxedPrimitiveType(output.type);
 			default: null;
@@ -689,7 +701,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				[LocalGet(leftLocal), LocalGet(rightLocal), F64Eq, LocalSet(output)];
 			case Abstract("native_pointer"):
 				nativePointerRaw(leftLocal).concat(nativePointerRaw(rightLocal)).concat([I32Eq, LocalSet(output)]);
-			case I32, Bool, TypeRef, RawPtr, Abstract("native_callback"):
+			case I32, EnumTag(_), Bool, TypeRef, RawPtr, Abstract("native_callback"):
 				[LocalGet(leftLocal), LocalGet(rightLocal), I32Eq, LocalSet(output)];
 			case Dyn, Nullable(_), Abstract(_), Virtual(_):
 				[

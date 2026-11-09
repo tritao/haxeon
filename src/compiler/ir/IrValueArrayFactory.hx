@@ -72,7 +72,7 @@ class IrValueArrayFactory {
 	}
 
 	function layoutArguments(builder:IrBuilder):Array<IrValue> {
-		var base = switch element { case Nullable(inner): inner; default: element; }, shape = layout.lanes;
+		var base = switch element { case Nullable(inner): inner; case EnumTag(name): Enum(name); default: element; }, shape = layout.lanes;
 		return [builder.typeValue(base), builder.constInt(shape.scalarStrideBits), builder.constInt(shape.references),
 			builder.constInt(shape.scalarWordBits), builder.constBool(layout.hasValidity)];
 	}

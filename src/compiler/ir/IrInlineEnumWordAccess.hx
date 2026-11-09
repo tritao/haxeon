@@ -73,6 +73,9 @@ class IrInlineEnumWordAccess {
 	}
 
 	function encode(builder:IrBuilder, value:IrValue):IrValue return switch value.type {
+		case EnumTag(_):
+			var encoded = builder.call(IrScalarWordBits.PACK, [value], I32);
+			bits == 32 ? encoded : builder.intToInt64(encoded);
 		case I32: bits == 32 ? value : builder.intToInt64(value);
 		case RawPtr, TypeRef, Abstract("native_callback"):
 			var encoded = builder.call(IrScalarWordBits.PACK, [value], I64);
@@ -90,6 +93,8 @@ class IrInlineEnumWordAccess {
 	};
 
 	function decode(builder:IrBuilder, value:IrValue, type:IrType):IrValue return switch type {
+		case EnumTag(_): builder.call(IrScalarWordBits.UNPACK,
+			[bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], type);
 		case I32: bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32);
 		case RawPtr, TypeRef, Abstract("native_callback"):
 			builder.call(IrScalarWordBits.UNPACK, [bits == 64 ? value : builder.intToInt64(value)], type);

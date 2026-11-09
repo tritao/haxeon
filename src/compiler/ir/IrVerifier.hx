@@ -17,6 +17,7 @@ class IrVerifier {
 		function laneArray(type:IrType):Bool return switch type {
 			case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
 			case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name);
+			case Array(EnumTag(_)): true;
 			default: false;
 		};
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) {
@@ -221,6 +222,7 @@ class IrVerifier {
 			enums.set(enumDecl.name, enumDecl);
 		}
 		verifyInlineEnumsLowered(program, memo);
+		IrEnumTagStorage.verify(program);
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
 			if (globals.exists(field.name))
@@ -632,7 +634,7 @@ class IrVerifier {
 							throw "IR inline enum null must use a tag-zero packet";
 					default:
 				}
-				if (!isReference(out.type))
+				if (!isReference(out.type) && !(switch out.type { case EnumTag(_): true; default: false; }))
 					throw 'IR null constant must produce a reference value';
 			case TypeValue(out, _):
 				expect(out, TypeRef);
@@ -713,7 +715,7 @@ class IrVerifier {
 				require(values, b);
 				if (!sameType(a.type, b.type)
 					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
-						&& !isReference(a.type)))
+						&& !isReference(a.type) && !(switch a.type { case EnumTag(_): true; default: false; })))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (IrScalarWordBits.matches(name)) {
@@ -750,7 +752,7 @@ class IrVerifier {
 				}
 				if (name == IrReceiverCheck.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
-					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || !isReference(args[0].type)) throw "Invalid receiver check";
+					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || (!isReference(args[0].type) && !(switch args[0].type { case EnumTag(_): true; default: false; }))) throw "Invalid receiver check";
 					require(values, args[0]);
 					return;
 				}
@@ -937,7 +939,7 @@ class IrVerifier {
 				expect(out, I32);
 				require(values, value);
 				switch value.type {
-					case Enum(_):
+					case Enum(_), EnumTag(_):
 					default: throw 'IR enum index requires an enum value';
 				}
 			case EnumField(out, value, constructor, field):
@@ -976,6 +978,7 @@ class IrVerifier {
 	static function isEnumType(type:IrType, name:String, enums:IrVerifyTable<IrEnum>):Bool
 		return switch type {
 			case Enum(value): value == name && enums.exists(name);
+			case EnumTag(value): value == name && enums.exists(name);
 			default: false;
 		};
 
@@ -1083,6 +1086,10 @@ class IrVerifier {
 					case Enum(b): a == b;
 					default: false;
 				};
+			case EnumTag(a): switch right {
+					case EnumTag(b): a == b;
+					default: false;
+				};
 			case Abstract(a): switch right {
 					case Abstract(b): a == b;
 					default: false;
@@ -1137,7 +1144,7 @@ class IrVerifier {
 	static function abiCompatible(actual:IrType, expected:IrType):Bool
 		return switch expected {
 			case Array(Dyn): switch actual {
-					case Array(element): isReference(element);
+					case Array(element): isReference(element) || (switch element { case EnumTag(_): true; default: false; });
 					default: false;
 				};
 			case Dyn: isReference(actual);

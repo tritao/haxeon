@@ -93,6 +93,7 @@ class ObjectReflection {
 	static function needsLogicalReflection(type:IrType, values:Map<String, Bool>):Bool
 		return switch type {
 			case Obj(name): values.exists(name);
+			case EnumTag(_): true;
 			case Nullable(inner): needsLogicalReflection(inner, values);
 			case Function(arguments, result):
 				Lambda.exists(arguments, argument -> needsLogicalReflection(argument, values)) || needsLogicalReflection(result, values);

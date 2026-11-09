@@ -72,10 +72,26 @@ class IrValueArrayElements {
 		unshift.returnValue(unshiftLength);
 		var pop = new IrBuilder(), popArray = pop.argument("array", arrayType), popLength = new IrValue(1000000, "$array-length", I32);
 		pop.currentBlock().instructions.push(new Located(ArraySize(popLength, popArray), SourceProvenance.generated("value-array-pop")));
+		switch storage {
+			case EnumTag(_):
+				var absent = pop.createBlock(), present = pop.createBlock();
+				pop.branch(pop.equal(popLength, pop.constInt(0)), absent, present);
+				pop.select(absent); pop.returnValue(pop.constNull(storage)); pop.select(present);
+			default:
+		}
 		var popIndex = pop.sub(popLength, pop.constInt(1)), popValue = pop.call(getName(), [popArray, popIndex], storage);
 		pop.call("__value_array_remove_at", [popArray, popIndex], Void); pop.returnValue(popValue);
 		var shift = new IrBuilder(), shiftArray = shift.argument("array", arrayType), shiftIndex = shift.constInt(0),
-			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], storage);
+			shiftValue:IrValue;
+		switch storage {
+			case EnumTag(_):
+				var length = new IrValue(1000000, "$array-length", I32), absent = shift.createBlock(), present = shift.createBlock();
+				shift.currentBlock().instructions.push(new Located(ArraySize(length, shiftArray), SourceProvenance.generated("value-array-shift")));
+				shift.branch(shift.equal(length, shift.constInt(0)), absent, present);
+				shift.select(absent); shift.returnValue(shift.constNull(storage)); shift.select(present);
+			default:
+		}
+		shiftValue = shift.call(getName(), [shiftArray, shiftIndex], storage);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void); shift.returnValue(shiftValue);
 		var result = [new IrFunction(getName(), get.arguments, storage, get.blocks), new IrFunction(setName(), set.arguments, Void, set.blocks),
 			new IrFunction(pushName(), push.arguments, I32, push.blocks), new IrFunction(insertName(), insert.arguments, Void, insert.blocks),

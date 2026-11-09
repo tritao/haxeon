@@ -248,11 +248,19 @@ class IrScalarClosures {
 		};
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type {
+			case EnumTag(name): return builder.call(IrEnumTagStorage.boxName(name), [value], Dyn);
+			default:
+		}
 		var enumName = inlineEnum(type);
 		return enumName == null ? builder.toDyn(value) : builder.call(IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type {
+			case EnumTag(name): return builder.call(IrEnumTagStorage.unboxName(name), [value], type);
+			default:
+		}
 		var enumName = inlineEnum(type);
 		return enumName == null ? builder.safeCast(value, type) : builder.call(IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}

@@ -1074,7 +1074,7 @@ class ProgramTyper {
 				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
 			for (field in declaration.fields)
-				if (!field.isStatic) {name: field.name, type: field.type, span: field.span}
+				if (!field.isStatic) {name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations, field.type) ? TInt : field.type, span: field.span}
 		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);

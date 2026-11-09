@@ -59,6 +59,7 @@ class WasmScalarClosureEscapes {
 		result.interfaces = program.interfaces; result.enums = program.enums; result.staticFields = program.staticFields;
 		result.positionalFingerprints = program.positionalFingerprints; result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces; result.positionalSources = program.positionalSources;
+		compiler.ir.IrEnumTagLowering.escapes(result);
 		return result;
 	}
 
@@ -112,15 +113,18 @@ class WasmScalarClosureEscapes {
 
 	function isInlineEnumStorage(type:IrType):Bool return switch type {
 		case Obj(name): inlineEnums.exists(name);
+		case EnumTag(_): true;
 		default: false;
 	};
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type { case EnumTag(name): return builder.call(compiler.ir.IrEnumTagStorage.boxName(name), [value], Dyn); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type { case EnumTag(name): return builder.call(compiler.ir.IrEnumTagStorage.unboxName(name), [value], type); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}

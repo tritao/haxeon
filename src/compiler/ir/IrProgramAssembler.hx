@@ -565,6 +565,8 @@ class IrProgramAssembler {
 			enumInput.cNatives = cNatives == null ? [] : cNatives;
 			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
+			IrEnumTagLowering.run(enumInput);
+			IrEnumTagLowering.escapes(enumInput);
 			var enumOutput = IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects);
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
@@ -745,7 +747,7 @@ class IrProgramAssembler {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
-		if (needsExactTypeTestRuntime)
+		if (needsExactTypeTestRuntime && !hasNative(natives, "__std_is_exact_type"))
 			program.natives.push({
 				name: "__std_is_exact_type",
 				library: "haxeon_runtime",
@@ -955,6 +957,7 @@ class IrProgramAssembler {
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
+		IrEnumTagLowering.escapes(program);
 		return program;
 	}
 

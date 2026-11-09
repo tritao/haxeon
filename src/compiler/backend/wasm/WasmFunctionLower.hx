@@ -652,6 +652,8 @@ class WasmFunctionLower {
 				emit(body, [I32Const(value ? 1 : 0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstFloat(output, value):
 				emit(body, [F64Const(value), LocalSet(requiredLocal(values, output.id))]);
+			case ConstNull(output) if (switch output.type { case EnumTag(_): true; default: false; }):
+				emit(body, [I32Const(0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstNull(output):
 				emit(body, context.representation.values.nullValue(output.type, requiredLocal(values, output.id)));
 			case ConstVoid(_):
@@ -977,6 +979,8 @@ class WasmFunctionLower {
 				if (address == null)
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
+			case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+				emit(body, [I32Const(constructor + 1), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
 				var represented = context.representation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
@@ -1012,6 +1016,9 @@ class WasmFunctionLower {
 					if (cache != null)
 						emit(body, [LocalGet(requiredLocal(values, output.id)), GlobalSet(cache), End]);
 				}
+			case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+				emit(body, [LocalGet(requiredLocal(values, value.id)), I32Eqz, If(null)].concat(trapOrThrow(1)).concat([
+					End, LocalGet(requiredLocal(values, value.id)), I32Const(1), I32Sub, LocalSet(requiredLocal(values, output.id))]));
 			case EnumIndex(output, value):
 				var represented = context.representation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
@@ -1363,14 +1370,16 @@ class WasmFunctionLower {
 				}
 				if (name == compiler.ir.IrReceiverCheck.NAME) {
 					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, arguments[0].id)),
-						gcRepresentation == null ? I32Eqz : RefIsNull, If(null)];
+						gcRepresentation == null || (switch arguments[0].type { case EnumTag(_): true; default: false; }) ? I32Eqz : RefIsNull, If(null)];
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
 				if (compiler.ir.IrScalarWordBits.matches(name)) {
 					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
 					body.push(LocalGet(requiredLocal(values,arguments[0].id)));
-					body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
+					if (!((switch output.type { case I32, EnumTag(_): true; default: false; })
+						&& (switch arguments[0].type { case I32, EnumTag(_): true; default: false; })))
+						body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
 					body.push(LocalSet(requiredLocal(values,output.id)));
 					return;
 				}

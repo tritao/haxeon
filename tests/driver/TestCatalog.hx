@@ -32,6 +32,8 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"ValueLaneRuntimeMain",
+		"EnumTagStorageMain",
+		"SourceEnumTagMain",
 		"GeneratedDependencyCompletionMain",
 		"KeyPathTypingMain",
 		"KeyPathSpecMain",
@@ -259,6 +261,7 @@ class TestCatalog {
 		"CompilerKeepAliveMain"
 	];
 	static final runtimeMains = [
+		"EnumTagPatchMain",
 		"WorkerNullAccessMain",
 		"RuntimeDomainMain",
 		"GcAllocationPathsMain",

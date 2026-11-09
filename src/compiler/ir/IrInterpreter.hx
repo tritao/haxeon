@@ -118,7 +118,7 @@ class IrInterpreter {
 			case PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 				throw "IR interpreter cannot execute unmanaged native memory operations";
 			case ConstBool(_, value): value;
-			case ConstNull(_): null;
+			case ConstNull(output): switch output.type { case EnumTag(_): 0; default: null; };
 			case TypeValue(_, type): new InterpTypeRef(type);
 			case ToDyn(_, input): value(values, input);
 			case IntToInt64(_, input): haxe.Int64.ofInt(value(values, input));
@@ -229,8 +229,20 @@ class IrInterpreter {
 			case Call(_, name, arguments) if (name == IrReferenceIdentity.NAME):
 				value(values,arguments[0]) == value(values,arguments[1]);
 			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME):
-				if (value(values, arguments[0]) == null) throw "Null access";
+				switch arguments[0].type {
+					case EnumTag(_):
+						var tag:Int = value(values, arguments[0]);
+						if (tag == 0) throw "Null access";
+					default:
+						if (value(values, arguments[0]) == null) throw "Null access";
+				}
 				null;
+			case Call(output, name, arguments) if (IrScalarWordBits.matches(name)
+				&& arguments.length == 1 && IrScalarWordBits.valid(name, arguments[0].type, output.type)):
+				switch [arguments[0].type, output.type] {
+					case [EnumTag(_), I32] | [I32, EnumTag(_)]: value(values, arguments[0]);
+					default: throw "IR interpreter cannot execute native scalar word transport";
+				};
 			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
 				value(values, arguments[0]);
 			case Call(output, name, arguments):
@@ -276,9 +288,19 @@ class IrInterpreter {
 				}
 				execute(target, args);
 			case ToVirtual(_, input), Upcast(_, input): value(values, input);
-			case MakeEnum(_, typeName, constructor, arguments):
-				new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);
-			case EnumIndex(_, input): cast(value(values, input), InterpEnum).constructor;
+			case MakeEnum(output, typeName, constructor, arguments):
+				switch output.type {
+					case EnumTag(_): constructor + 1;
+					default: new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);
+				};
+			case EnumIndex(_, input):
+				switch input.type {
+					case EnumTag(_):
+						var tag:Int = value(values, input);
+						if (tag == 0) throw "Null access";
+						tag - 1;
+					default: cast(value(values, input), InterpEnum).constructor;
+				};
 			case EnumField(_, input, _, field): cast(value(values, input), InterpEnum).fields[field];
 			default: throw 'IR interpreter does not yet execute ${Std.string(instruction)}';
 		};
@@ -715,7 +737,7 @@ class IrInterpreter {
 
 	static function defaultValue(type:compiler.ir.Ir.IrType):Dynamic
 		return switch type {
-			case I32: 0;
+			case I32, EnumTag(_): 0;
 			case I64: haxe.Int64.ofInt(0);
 			case Bool: false;
 			case F32, F64: 0.0;

@@ -87,6 +87,8 @@ typedef HlFunctionIdentity = {
 /** HashLink type-table entry whose references are indices into {@link HlCode.types}. */
 enum HlTypeDef {
 	Simple(kind:HlType);
+	/** Four-byte nominal enum tag; cache globals are ordinary GC roots. */
+	EnumTag(boxedType:Int, cacheGlobals:Array<Int>);
 	Parameterized(kind:HlType, parameter:Int);
 	Abstract(name:Int);
 	Function(arguments:Array<Int>, result:Int);

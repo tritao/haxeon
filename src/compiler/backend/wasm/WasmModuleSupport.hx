@@ -34,7 +34,8 @@ class WasmModuleSupport {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case MakeEnum(_, name, constructor, arguments) if (arguments.length == 0):
+							case MakeEnum(output, name, constructor, arguments) if (arguments.length == 0
+								&& (switch output.type { case Enum(_): true; default: false; })):
 								used.set(enumCaseKey(name, constructor), true);
 							case _:
 						}
@@ -450,7 +451,7 @@ class WasmModuleSupport {
 
 	public static function requireValueType(type:IrType):WasmValueType
 		return switch type {
-			case I32, Bool: I32;
+			case I32, Bool, EnumTag(_): I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
