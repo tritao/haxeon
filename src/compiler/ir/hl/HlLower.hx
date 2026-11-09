@@ -22,6 +22,8 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.ir.hl.HlScalarValueLocals.HlScalarValueLocal;
+import compiler.hl.incremental.HlSymbolRequest;
+import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.ir.SourceProvenance;
 import compiler.compilation.AllocationMeter;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
@@ -36,6 +38,15 @@ typedef HlLowerMetrics = {
 }
 
 typedef MeasuredHlCode = {
+	/** Each function lowered by this call with the requests and facts its code depends on, when asked to record them. */
+	final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction>;
+
+	/** How many functions were linked from the cache instead of lowered. */
+	final reusedFunctions:Int;
+
+	/** How many of them got other indices than they were lowered with. */
+	final movedFunctions:Int;
+
 	final code:HlCode;
 	final metrics:HlLowerMetrics;
 }
@@ -46,7 +57,33 @@ class HlLower {
 	final symbols:HlSymbolTable;
 	final functionIndices:Map<String, Int> = [];
 	final objectTypeIndices:Map<String, Int> = [];
-	final objects:Map<String, IrObject> = [];
+
+	/** Everything lowering a function may learn about an object type; see `HlLoweringView`. */
+	var view:HlLoweringView;
+
+	/** The requests the function being lowered makes, when lowering records them. */
+	var requests:Null<Array<HlSymbolRequest>>;
+
+	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
+	final recordLowering:Bool;
+
+	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
+	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
+
+	/** How many functions this build took from the cache. */
+	public var reusedFunctions = 0;
+
+	/** How many of those got other indices than they were lowered with. */
+	public var movedFunctions = 0;
+
+	final checkingLinks:Bool;
+
+	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
+	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
+
+	/** The owner `Class.field` was found on, by `Class.field`, for the field slot request. */
+	final fieldOwners:Map<String, String> = [];
+
 	final interfaceBases:Map<String, Array<String>> = [];
 
 	final enumTypeIndices:Map<String, Int> = [];
@@ -71,8 +108,8 @@ class HlLower {
 	}
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>,
-			?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0, developmentMetadata:Bool = true):MeasuredHlCode {
+			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
+			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -89,10 +126,14 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata),
+			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata,
+				recordLowering, loweredCache),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
+			lowered: lowerer.lowered,
+			reusedFunctions: lowerer.reusedFunctions,
+			movedFunctions: lowerer.movedFunctions,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("backend-verification", allocationAtStart, allocationAfterVerification)
@@ -117,6 +158,7 @@ class HlLower {
 
 	/** Objects a native signature reaches, which keep the layout the natives were built against (see `reservedSlots`). */
 	var nativeVisible:Map<String, Bool> = [];
+
 	final regenerated:Map<String, Bool> = [];
 	final debugCache:Null<HlDebugMetadataCache>;
 	final developmentMetadata:Bool;
@@ -130,8 +172,12 @@ class HlLower {
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
-			developmentMetadata:Bool = true) {
+			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache) {
 		this.symbols = symbols;
+		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
+		this.checkingLinks = cachedFunctions == null && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+		this.loweredCache = loweredCache;
+		this.recordLowering = recordLowering || checkingLinks || loweredCache != null;
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
@@ -154,6 +200,7 @@ class HlLower {
 
 	function lowerProgram(program:IrProgram):HlCode {
 		typedInterfaces = new HlTypedInterfaceTables(program);
+		view = new HlLoweringView(typedInterfaces.keys);
 		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
@@ -220,8 +267,10 @@ class HlLower {
 			for (native in program.natives)
 				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library, native.symbol);
 		if (Lambda.exists(program.functions, fn -> compiler.ir.IrTypedInterfaceDispatch.isDispatchEntry(fn.name))) {
-			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef], IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std", "typed_method_slot");
-			ensureNative(runtimeNatives, HlTypedInterfaceTables.ENTRY_NATIVE, [IrType.Dyn, IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE)], IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), "std", "typed_method_entry");
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef], IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std",
+				"typed_method_slot");
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.ENTRY_NATIVE, [IrType.Dyn, IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE)],
+				IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), "std", "typed_method_entry");
 		}
 		if (selected != null)
 			for (name in selected)
@@ -231,7 +280,10 @@ class HlLower {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case CallClosure(_, closure, _) if ((switch (closure.type) { case IrType.Dyn: true; default: false; })):
+							case CallClosure(_, closure, _) if ((switch (closure.type) {
+								case IrType.Dyn: true;
+								default: false;
+							})):
 								ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
 								ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32], IrType.Bytes);
 							case PointerOffset(_, _, _):
@@ -330,9 +382,10 @@ class HlLower {
 					if (!objectTypeReady(field.type))
 						fieldsReady = false;
 				if (ready && fieldsReady) {
-					objects.set(object.name, object);
+					view.define(object);
 					var slots = interfaceSlotsFor(object);
-					objectTypeIndices.set(object.name, symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object), typedInterfaces.entries.get(object.name)));
+					objectTypeIndices.set(object.name,
+						symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object), typedInterfaces.entries.get(object.name)));
 					progressed = true;
 				} else
 					remaining.push(object);
@@ -349,17 +402,50 @@ class HlLower {
 			lowerNative(native);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
+		var environment = checkingLinks ? symbols.copy() : null;
+		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 		for (fn in program.functions) {
 			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
 				code.functions.push(cached);
-			else
+			else {
+				// A function whose IR is the one the last build lowered, and whose outside facts still hold, keeps its code: linking
+				// it replays its requests, which gives it this build's indices and makes the tables as lowering it would have.
+				var entry = loweredCache == null ? null : loweredCache.entries.get(fn.name);
+				if (entry != null && (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
+					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
+					if (linked.fn != null) {
+						code.functions.push(linked.fn);
+						entries.set(fn.name, entry.source == fn ? entry : entry.from(fn));
+						this.lowered.set(fn.name, entry);
+						reusedFunctions++;
+						if (linked.fn != entry.fn)
+							movedFunctions++;
+						continue;
+					}
+				}
 				try {
-					code.functions.push(lowerFunction(PhiEdges.split(fn)));
+					if (recordLowering) {
+						requests = [];
+						view.beginFunction();
+					}
+					var lowered = lowerFunction(PhiEdges.split(fn));
+					code.functions.push(lowered);
+					if (recordLowering) {
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests, view.endFunction());
+						this.lowered.set(fn.name, entry);
+						entries.set(fn.name, entry);
+						requests = null;
+					}
 				} catch (error:String) {
 					throw 'HashLink lowering failed for ${fn.name}: $error';
 				}
+			}
 		}
+		if (loweredCache != null)
+			loweredCache.entries = entries;
+		if (environment != null && reusedFunctions == 0)
+			verifyLinking(program, environment);
 		var functionsDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctions = AllocationMeter.sample();
 		// The VM uses function identities for stack-trace and profiler names in every mode.
@@ -370,7 +456,8 @@ class HlLower {
 			flags: 0,
 			payload: HlWriter.encodeFunctionIdentities(identities)
 		});
-		var allocationAfterIdentities = AllocationMeter.sample(), allocationAfterSpanGroups = allocationAfterIdentities;
+		var allocationAfterIdentities = AllocationMeter.sample(),
+			allocationAfterSpanGroups = allocationAfterIdentities;
 		if (developmentMetadata) {
 			var spanGroups:Array<compiler.hl.HlWriter.HlOpcodeSourceSpanGroup> = [];
 			for (index in 0...code.functions.length) {
@@ -411,7 +498,8 @@ class HlLower {
 				payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
 			});
 		}
-		if (debugCache != null) debugCache.endGeneration();
+		if (debugCache != null)
+			debugCache.endGeneration();
 		var debugDoneAt = Sys.time() * 1000.0;
 		var allocationAfterDebug = AllocationMeter.sample();
 
@@ -444,6 +532,35 @@ class HlLower {
 		functionsMs = functionsDoneAt - metadataDoneAt;
 		debugMs = debugDoneAt - functionsDoneAt;
 		finalizationMs = finalizedAt - debugDoneAt;
+	}
+
+	/**
+	 * Checks the link step against the lowering that just ran: the requests of every function, replayed in order against the tables as
+	 * they stood before the functions, must give back the very tables lowering made, and every function must keep its indices.
+	 */
+	function verifyLinking(program:IrProgram, environment:HlSymbolTable):Void {
+		for (fn in program.functions) {
+			var lowered = this.lowered.get(fn.name);
+			if (lowered == null)
+				throw 'HAXEON_CHECK_REUSE: no lowering was recorded for ${fn.name}';
+			var linked = compiler.hl.incremental.HlLink.link(lowered, environment, functionIndices, view);
+			if (linked.fn == null)
+				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}';
+			if (linked.fn != lowered.fn)
+				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with moved its indices';
+		}
+		function same(what:String, expected:Array<Dynamic>, actual:Array<Dynamic>):Void {
+			if (expected.length != actual.length)
+				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+			for (index in 0...expected.length)
+				if (Std.string(expected[index]) != Std.string(actual[index]))
+					throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
+		}
+		same("the integer", symbols.ints, environment.ints);
+		same("the float", symbols.floats, environment.floats);
+		same("the string", symbols.strings, environment.strings);
+		same("the global", symbols.globals, environment.globals);
+		same("the type", symbols.types, environment.types);
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -556,7 +673,9 @@ class HlLower {
 		code.natives.push({
 			library: internString(native.library),
 			name: internString(native.symbol),
-			type: internFunctionType(StringTools.startsWith(native.name, "$scalar-closure:receiver:") && native.symbol == "__closure_receiver_if_match" ? [Dyn, Dyn] : native.arguments, native.result),
+			type: internFunctionType(StringTools.startsWith(native.name, "$scalar-closure:receiver:")
+				&& native.symbol == "__closure_receiver_if_match" ? [Dyn, Dyn] : native.arguments,
+				native.result),
 			functionIndex: requireFunction(native.name),
 		});
 	}
@@ -580,7 +699,7 @@ class HlLower {
 					case _:
 				}
 			}
-		var scalarOptionals = new HlScalarValueLocals(fn, objects, type -> temporaryRegister(type, registerTypes));
+		var scalarOptionals = new HlScalarValueLocals(fn, view, type -> temporaryRegister(type, registerTypes));
 		var uses:Map<Int, Int> = [];
 		function countUse(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
@@ -692,7 +811,7 @@ class HlLower {
 					case ConstInt(output, value):
 						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
 					case ConstFloat(output, value):
-						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes), symbols.internFloat(value)));
+						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes), internFloat(value)));
 					case ConstString(output, value):
 						lowerStringLiteral(defineRegister(output, registers, registerTypes), value, registerTypes, instructions);
 					case StaticDataAddress(output, _):
@@ -758,10 +877,10 @@ class HlLower {
 						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers), preserveExceptionStack));
 					case Catch(_):
 					case GlobalGet(output, name):
-						var global = symbols.requireGlobalIndex(name);
+						var global = requireGlobal(name);
 						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes), global));
 					case GlobalSet(name, source):
-						var global = symbols.requireGlobalIndex(name);
+						var global = requireGlobal(name);
 						instructions.push(HlInstruction.GlobalSet(global, requireRegister(source, registers)));
 					case Add(output, left, right):
 						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
@@ -818,12 +937,14 @@ class HlLower {
 							var functionIndex = requireFunction(functionName);
 							var args = [for (argument in arguments) requireRegister(argument, registers)];
 							if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
-								for (index in 0...arguments.length) switch arguments[index].type {
-									case Function(_, _):
-										var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
-										instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index])); args[index] = dynamicClosure;
-									default:
-								}
+								for (index in 0...arguments.length)
+									switch arguments[index].type {
+										case Function(_, _):
+											var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
+											instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
+											args[index] = dynamicClosure;
+										default:
+									}
 							switch args.length {
 								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
 								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
@@ -842,7 +963,10 @@ class HlLower {
 					case IteratorNext(output, iterator):
 						var destination = defineRegister(output, registers, registerTypes),
 							nextNative = iteratorNextNative(output.type);
-						if ((switch (nextNative.result) { case IrType.Dyn: true; default: false; })) {
+						if ((switch (nextNative.result) {
+							case IrType.Dyn: true;
+							default: false;
+						})) {
 							var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
 							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name), requireRegister(iterator, registers)));
 							instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
@@ -855,7 +979,10 @@ class HlLower {
 						for (type in native.arguments)
 							if (unsupportedCDispatchArgument(type))
 								throw 'Ordinary C function "$functionName" uses an unsupported executable argument type $type';
-						if ((switch (native.result) { case Void: false; default: true; }) && unsupportedCDispatchResult(native.result))
+						if ((switch (native.result) {
+							case Void: false;
+							default: true;
+						}) && unsupportedCDispatchResult(native.result))
 							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
 						var callArguments = [
 							temporaryRegister(IrType.RawPtr, registerTypes),
@@ -898,7 +1025,10 @@ class HlLower {
 						instructions.push(HlInstruction.CallN(dynamicResult,
 							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
 							callArguments));
-						if ((switch (native.result) { case Void: true; default: false; }))
+						if ((switch (native.result) {
+							case Void: true;
+							default: false;
+						}))
 							defineRegister(output, registers, registerTypes);
 						else if (pointerResult || bytesResult || aggregateResult || utf8Result)
 							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
@@ -911,7 +1041,10 @@ class HlLower {
 							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
-						if ((switch (closure.type) { case IrType.Dyn: true; default: false; })) {
+						if ((switch (closure.type) {
+							case IrType.Dyn: true;
+							default: false;
+						})) {
 							var callable = temporaryRegister(IrType.Bool, registerTypes),
 								error = temporaryRegister(IrType.Bytes, registerTypes),
 								valid = "$callable:" + instructions.length;
@@ -954,7 +1087,7 @@ class HlLower {
 							switch field.type {
 								case Bool: instructions.push(HlInstruction.LoadBool(target, false));
 								case I32, I64: instructions.push(HlInstruction.LoadInt(target, internInt(0)));
-								case F32, F64: instructions.push(HlInstruction.LoadFloat(target, symbols.internFloat(0.0)));
+								case F32, F64: instructions.push(HlInstruction.LoadFloat(target, internFloat(0.0)));
 								default: instructions.push(HlInstruction.LoadNull(target));
 							}
 						}
@@ -967,8 +1100,11 @@ class HlLower {
 					case FieldGet(output, object, fieldName):
 						var destination = defineRegister(output, registers, registerTypes),
 							nativeLayout = objectFieldNativeLayout(object, fieldName),
-							storageType = symbols.internNativeFieldStorageType(output.type, nativeLayout);
-						if ((switch (output.type) { case I64: true; default: false; }) && storageType != null) {
+							storageType = internNativeStorage(output.type, nativeLayout);
+						if ((switch (output.type) {
+							case I64: true;
+							default: false;
+						}) && storageType != null) {
 							var stored = temporaryRegisterType(storageType, registerTypes);
 							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers), requireObjectField(object, fieldName)));
 							instructions.push(HlInstruction.ToInt(destination, stored));
@@ -1000,7 +1136,7 @@ class HlLower {
 						var receiver = requireRegister(object, registers),
 							field = requireObjectField(object, fieldName),
 							source = requireRegister(value, registers),
-							nativeStorageType = symbols.internNativeFieldStorageType(value.type, objectFieldNativeLayout(object, fieldName));
+							nativeStorageType = internNativeStorage(value.type, objectFieldNativeLayout(object, fieldName));
 						if (nativeStorageType != null) {
 							var storageSource = temporaryRegisterType(nativeStorageType, registerTypes);
 							instructions.push(HlInstruction.ToInt(storageSource, source));
@@ -1105,34 +1241,47 @@ class HlLower {
 				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length, lastScopeLocations)
 			});
 		}
-		var key = typedInterfaces.keys.get(fn.name);
+		var key = view.typedInterfaceKey(fn.name);
 		if (key != null) {
 			var handleType = IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE),
 				handle = temporaryRegister(handleType, registerTypes),
 				keyRegister = temporaryRegister(IrType.TypeRef, registerTypes),
 				receiver = temporaryRegister(IrType.Dyn, registerTypes),
 				entry = temporaryRegister(IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), registerTypes),
-				callable = temporaryRegister(IrType.Function([IrType.Dyn].concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result), registerTypes),
+				callable = temporaryRegister(IrType.Function([IrType.Dyn].concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result),
+					registerTypes),
 				result = temporaryRegister(fn.result, registerTypes),
-				global = symbols.internGlobal("$typed-method-slot:" + key, handleType),
-				fallback = "$typed-table:fallback", initialize = "$typed-table:initialize", ready = "$typed-table:ready";
+				global = internGlobalSlot("$typed-method-slot:" + key, handleType),
+				fallback = "$typed-table:fallback",
+				initialize = "$typed-table:initialize",
+				ready = "$typed-table:ready";
 			var fast:Array<HlInstruction> = [
-				HlInstruction.GlobalGet(handle, global), HlInstruction.JumpNull(handle, initialize), HlInstruction.Jump(ready),
-				HlInstruction.Label(initialize), HlInstruction.LoadType(keyRegister, internType(IrType.Abstract(key))),
-				HlInstruction.Call1(handle, requireFunction(HlTypedInterfaceTables.SLOT_NATIVE), keyRegister), HlInstruction.GlobalSet(global, handle),
-				HlInstruction.Label(ready), HlInstruction.ToDyn(receiver, 0),
-				HlInstruction.Call2(entry, requireFunction(HlTypedInterfaceTables.ENTRY_NATIVE), receiver, handle), HlInstruction.JumpNull(entry, fallback),
+				HlInstruction.GlobalGet(handle, global),
+				HlInstruction.JumpNull(handle, initialize),
+				HlInstruction.Jump(ready),
+				HlInstruction.Label(initialize),
+				HlInstruction.LoadType(keyRegister, internType(IrType.Abstract(key))),
+				HlInstruction.Call1(handle, requireFunction(HlTypedInterfaceTables.SLOT_NATIVE), keyRegister),
+				HlInstruction.GlobalSet(global, handle),
+				HlInstruction.Label(ready),
+				HlInstruction.ToDyn(receiver, 0),
+				HlInstruction.Call2(entry, requireFunction(HlTypedInterfaceTables.ENTRY_NATIVE), receiver, handle),
+				HlInstruction.JumpNull(entry, fallback),
 				HlInstruction.UnsafeCast(callable, entry),
 				HlInstruction.CallClosure(result, callable, [receiver].concat([for (i in 1...fn.arguments.length) i])),
-				HlInstruction.Return(result), HlInstruction.Label(fallback)
+				HlInstruction.Return(result),
+				HlInstruction.Label(fallback)
 			];
 			var first = debugLocations.length == 0 ? debugLocation(SourceProvenance.generated("typed interface method table")) : debugLocations[0];
 			debugLocations = [for (_ in fast) first].concat(debugLocations);
 			instructions = fast.concat(instructions);
 			for (i in 0...scopedAssignments.length) {
 				var assignment = scopedAssignments[i];
-				scopedAssignments[i] = {name: assignment.name, position: assignment.position < 0 ? assignment.position : assignment.position + fast.length,
-					scopeEnd: assignment.scopeEnd < 0 ? assignment.scopeEnd : assignment.scopeEnd + fast.length};
+				scopedAssignments[i] = {
+					name: assignment.name,
+					position: assignment.position < 0 ? assignment.position : assignment.position + fast.length,
+					scopeEnd: assignment.scopeEnd < 0 ? assignment.scopeEnd : assignment.scopeEnd + fast.length
+				};
 			}
 		}
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
@@ -1197,7 +1346,10 @@ class HlLower {
 			var index = locations.length - 1;
 			while (index >= 0) {
 				var location = locations[index];
-				if (location.start != null && location.start >= binding.scopeStart && location.start < binding.scopeEnd && location.path == binding.path) {
+				if (location.start != null
+					&& location.start >= binding.scopeStart
+					&& location.start < binding.scopeEnd
+					&& location.path == binding.path) {
 					lastInScope = index;
 					break;
 				}
@@ -1375,7 +1527,7 @@ class HlLower {
 	 * allocates nothing.
 	 */
 	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void
-		instructions.push(HlInstruction.GlobalGet(destination, symbols.internStringConstant(value)));
+		instructions.push(HlInstruction.GlobalGet(destination, internStringLiteral(value)));
 
 	var enumConstantUses = 0;
 
@@ -1385,7 +1537,7 @@ class HlLower {
 	 * adds simply starts out null.
 	 */
 	function lowerEnumConstant(destination:Int, typeName:String, constructor:Int, instructions:Array<HlInstruction>):Void {
-		var global = symbols.internEnumConstant(typeName, constructor),
+		var global = internEnumValue(typeName, constructor),
 			id = enumConstantUses++,
 			make = "__enum_make_" + id,
 			done = "__enum_done_" + id;
@@ -1482,12 +1634,12 @@ class HlLower {
 	 * The source object stays rooted; no interior reference is retained across a fast-path call.
 	 */
 	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType, instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
-		var pointers = temporaryRegisterType(symbols.internReference(IrType.RawPtr), registerTypes);
+		var pointers = temporaryRegisterType(internReference(IrType.RawPtr), registerTypes);
 		var offset = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.UnsafeCast(pointers, object));
 		instructions.push(HlInstruction.LoadInt(offset, internInt(pointerSlots)));
 		instructions.push(HlInstruction.RefOffset(pointers, pointers, offset));
-		var field = temporaryRegisterType(symbols.internReference(type), registerTypes);
+		var field = temporaryRegisterType(internReference(type), registerTypes);
 		instructions.push(HlInstruction.UnsafeCast(field, pointers));
 		if (intSlots != 0) {
 			instructions.push(HlInstruction.LoadInt(offset, internInt(intSlots)));
@@ -1500,10 +1652,12 @@ class HlLower {
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
 		if (compiler.ir.IrScalarWordBits.matches(name)) {
-			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
+			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
+				throw "Invalid scalar word transport signature";
 			var scalar = name == compiler.ir.IrScalarWordBits.PACK ? arguments[0].type : output.type;
-			if (compiler.ir.IrVerifier.sameType(scalar,IrType.Abstract("native_callback"))) throw "HashLink callbacks belong in the reference lane";
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output,registers,registerTypes),requireRegister(arguments[0],registers)));
+			if (compiler.ir.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
+				throw "HashLink callbacks belong in the reference lane";
+			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
@@ -1513,20 +1667,27 @@ class HlLower {
 		if (name == compiler.ir.IrReferenceIdentity.NAME) {
 			var pointers:Array<Int> = [];
 			for (arg in arguments) {
-				var source = requireRegister(arg,registers);
+				var source = requireRegister(arg, registers);
 				switch arg.type {
 					case Virtual(_):
-						var concrete = temporaryRegister(IrType.Dyn,registerTypes);
-						instructions.push(HlInstruction.ToDyn(concrete,source)); source = concrete;
+						var concrete = temporaryRegister(IrType.Dyn, registerTypes);
+						instructions.push(HlInstruction.ToDyn(concrete, source));
+						source = concrete;
 					default:
 				}
-				var pointer = temporaryRegister(IrType.RawPtr,registerTypes);
-				instructions.push(HlInstruction.UnsafeCast(pointer,source)); pointers.push(pointer);
+				var pointer = temporaryRegister(IrType.RawPtr, registerTypes);
+				instructions.push(HlInstruction.UnsafeCast(pointer, source));
+				pointers.push(pointer);
 			}
-			var result = defineRegister(output,registers,registerTypes), yes = '__reference_true_${output.id}', done = '__reference_done_${output.id}';
-			instructions.push(HlInstruction.JumpEqual(pointers[0],pointers[1],yes));
-			instructions.push(HlInstruction.LoadBool(result,false)); instructions.push(HlInstruction.Jump(done));
-			instructions.push(HlInstruction.Label(yes)); instructions.push(HlInstruction.LoadBool(result,true)); instructions.push(HlInstruction.Label(done));
+			var result = defineRegister(output, registers, registerTypes),
+				yes = '__reference_true_${output.id}',
+				done = '__reference_done_${output.id}';
+			instructions.push(HlInstruction.JumpEqual(pointers[0], pointers[1], yes));
+			instructions.push(HlInstruction.LoadBool(result, false));
+			instructions.push(HlInstruction.Jump(done));
+			instructions.push(HlInstruction.Label(yes));
+			instructions.push(HlInstruction.LoadBool(result, true));
+			instructions.push(HlInstruction.Label(done));
 			return true;
 		}
 		if (name == compiler.ir.IrReceiverCheck.NAME) {
@@ -1573,7 +1734,7 @@ class HlLower {
 			instructions.push(HlInstruction.Setref(sizeRef, destination));
 			// OSetref performs the managed store/write barrier without OSetArray's native bounds helper.
 			var data = temporaryRegister(IrType.RawPtr, registerTypes);
-			var slot = temporaryRegisterType(symbols.internReference(arguments[1].type), registerTypes);
+			var slot = temporaryRegisterType(internReference(arguments[1].type), registerTypes);
 			instructions.push(HlInstruction.RefData(data, args[0]));
 			instructions.push(HlInstruction.UnsafeCast(slot, data));
 			instructions.push(HlInstruction.RefOffset(slot, slot, size));
@@ -1660,29 +1821,88 @@ class HlLower {
 		return StringTools.startsWith(result, "13") || StringTools.startsWith(result, "14");
 	}
 
+	// Everything below that asks the symbol tables or the function layout for an index also notes the question and the answer, when
+	// the function being lowered is recorded: those requests are what lets another build give the function other indices.
 	function internInt(value:Int):Int {
-		return symbols.internInt(value);
+		var index = symbols.internInt(value);
+		if (requests != null)
+			requests.push(ConstInt(value, index));
+		return index;
+	}
+
+	function internFloat(value:Float):Int {
+		var index = symbols.internFloat(value);
+		if (requests != null)
+			requests.push(ConstFloat(value, index));
+		return index;
 	}
 
 	function internString(value:String):Int {
-		return symbols.internString(value);
+		var index = symbols.internString(value);
+		if (requests != null)
+			requests.push(ConstString(value, index));
+		return index;
 	}
 
 	function internType(type:IrType):Int {
-		return switch type {
-			case Function(arguments, result): symbols.internFunction(arguments, result);
-			default: symbols.internType(type);
-		};
+		var index = HlRemap.typeIndex(symbols, type);
+		if (requests != null)
+			requests.push(TypeOf(type, index));
+		return index;
 	}
 
-	function internFunctionType(arguments:Array<IrType>, result:IrType):Int {
-		return symbols.internFunction(arguments, result);
+	function internFunctionType(arguments:Array<IrType>, result:IrType):Int
+		return internType(IrType.Function(arguments, result));
+
+	function internReference(type:IrType):Int {
+		var index = symbols.internReference(type);
+		if (requests != null)
+			requests.push(RefTo(type, index));
+		return index;
+	}
+
+	function internNativeStorage(type:IrType, layout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
+		var index = symbols.internNativeFieldStorageType(type, layout);
+		if (requests != null && layout != null)
+			requests.push(NativeStorage(type, layout, index));
+		return index;
+	}
+
+	function internGlobalSlot(name:String, type:IrType):Int {
+		var index = symbols.internGlobal(name, type);
+		if (requests != null)
+			requests.push(GlobalSlot(name, type, index));
+		return index;
+	}
+
+	function requireGlobal(name:String):Int {
+		var index = symbols.requireGlobalIndex(name);
+		if (requests != null)
+			requests.push(GlobalByName(name, index));
+		return index;
+	}
+
+	function internStringLiteral(value:String):Int {
+		var index = symbols.internStringConstant(value);
+		if (requests != null)
+			requests.push(StringLiteral(value, index));
+		return index;
+	}
+
+	function internEnumValue(enumName:String, constructor:Int):Int {
+		var index = symbols.internEnumConstant(enumName, constructor);
+		if (requests != null)
+			requests.push(EnumValue(enumName, constructor, index));
+		return index;
 	}
 
 	function requireObjectType(name:String):Int {
 		if (!objectTypeIndices.exists(name))
 			throw 'Unknown IR object "$name"';
-		return objectTypeIndices.get(name);
+		var index = objectTypeIndices.get(name);
+		if (requests != null)
+			requests.push(TypeOf(IrType.Obj(name), index));
+		return index;
 	}
 
 	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
@@ -1714,11 +1934,14 @@ class HlLower {
 	 */
 	function requireObjectFieldByType(typeName:String, name:String):Int {
 		var key = typeName + "." + name, cached = fieldIndices.get(key);
-		if (cached != null)
+		if (cached != null) {
+			if (requests != null)
+				requests.push(FieldSlot(fieldOwners.get(key), name, cached));
 			return cached;
+		}
 		var owner = typeName;
 		while (true) {
-			var descriptor = objects.get(owner);
+			var descriptor = view.object(owner);
 			if (descriptor == null)
 				throw 'Unknown IR object "$owner"';
 			var declares = false;
@@ -1736,6 +1959,9 @@ class HlLower {
 			throw 'IR field "$owner.$name" has no slot in its HashLink type';
 		var resolved:Int = index;
 		fieldIndices.set(key, resolved);
+		fieldOwners.set(key, owner);
+		if (requests != null)
+			requests.push(FieldSlot(owner, name, resolved));
 		return resolved;
 	}
 
@@ -1744,7 +1970,10 @@ class HlLower {
 	 * inline, not objects natives lay out, and not closure environments, whose captures a patch cannot change.
 	 */
 	function reservedSlots(object:IrObject):Int {
-		if (fieldReserve <= 0 || object.isValue || object.nativeLayout != null || StringTools.startsWith(object.name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)
+		if (fieldReserve <= 0
+			|| object.isValue
+			|| object.nativeLayout != null
+			|| StringTools.startsWith(object.name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)
 			|| nativeVisible.exists(object.name))
 			return 0;
 		for (field in object.fields)
@@ -1759,7 +1988,9 @@ class HlLower {
 	 * (`append_type` in module.c), so reserved slots there would not match the library's declared signature.
 	 */
 	public static function nativeVisibleObjects(objects:Array<IrObject>, natives:Array<Array<IrNative>>):Map<String, Bool> {
-		var byName:Map<String, IrObject> = [], visible:Map<String, Bool> = [], pending:Array<IrType> = [];
+		var byName:Map<String, IrObject> = [],
+			visible:Map<String, Bool> = [],
+			pending:Array<IrType> = [];
 		for (object in objects)
 			byName.set(object.name, object);
 		for (group in natives)
@@ -1800,7 +2031,7 @@ class HlLower {
 	}
 
 	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
-		var descriptor = objects.get(typeName);
+		var descriptor = view.object(typeName);
 		if (descriptor == null)
 			return null;
 		for (field in descriptor.fields)
@@ -1815,7 +2046,7 @@ class HlLower {
 			case Obj(objectName): objectName;
 			default: return null;
 		};
-		var descriptor = objects.get(typeName);
+		var descriptor = view.object(typeName);
 		if (descriptor == null || !descriptor.isValue)
 			return null;
 		for (method in descriptor.methods)
@@ -1835,11 +2066,13 @@ class HlLower {
 			default: return null;
 		};
 		var slots = symbols.objectMethodSlots(typeName);
+		if (requests != null)
+			requests.push(MethodSlotKnown(typeName, name, HlRemap.methodSlotAnswer(symbols, typeName, name)));
 		if (slots == null || slots.exists(name))
 			return null;
 		var owner:Null<String> = typeName;
 		while (owner != null) {
-			var descriptor = objects.get(owner);
+			var descriptor = view.object(owner);
 			if (descriptor == null)
 				return null;
 			for (method in descriptor.methods)
@@ -1854,10 +2087,16 @@ class HlLower {
 		var typeName = switch value.type {
 			case Obj(value): value;
 			case Virtual(value):
-				return symbols.requireInterfaceMethodIndex(value, name);
+				var slot = symbols.requireInterfaceMethodIndex(value, name);
+				if (requests != null)
+					requests.push(InterfaceSlot(value, name, slot));
+				return slot;
 			default: throw 'IR value ${value.id} is not an object';
 		};
-		return symbols.requireObjectMethodIndex(typeName, name);
+		var slot = symbols.requireObjectMethodIndex(typeName, name);
+		if (requests != null)
+			requests.push(MethodSlot(typeName, name, slot));
+		return slot;
 	}
 
 	/** Every interface `object` implements, directly or through interface bases, that its base class does not already provide.
@@ -1867,8 +2106,8 @@ class HlLower {
 	function interfaceSlotsFor(object:IrObject):Array<String> {
 		var inherited:Map<String, Bool> = [];
 		var baseName = object.base == null ? "" : Std.string(object.base);
-		while (baseName.length > 0 && objects.exists(baseName)) {
-			var base = objects.get(baseName);
+		while (baseName.length > 0 && view.hasObject(baseName)) {
+			var base = view.object(baseName);
 			if (base == null)
 				break;
 			for (name in closeInterfaces(base.interfaces))
@@ -1911,6 +2150,9 @@ class HlLower {
 	function requireFunction(name:String):Int {
 		if (!functionIndices.exists(name))
 			throw 'Unknown IR function "$name"';
-		return functionIndices.get(name);
+		var index = functionIndices.get(name);
+		if (requests != null)
+			requests.push(FunctionRef(name, index));
+		return index;
 	}
 }

@@ -265,42 +265,8 @@ class IrScalarClosures {
 			default: false;
 		};
 
-	function needsRewrite(fn:IrFunction):Bool {
-		if (changesType(fn.result))
-			return true;
-		for (argument in fn.arguments)
-			if (changesType(argument.type))
-				return true;
-		for (binding in fn.debugBindings)
-			if (changesType(binding.value.type))
-				return true;
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && changesType(output.type))
-					return true;
-				for (input in IrOperands.inputs(located.value))
-					if (changesType(input.type))
-						return true;
-				switch located.value {
-					case TypeValue(_, type) if (changesType(type)):
-						return true;
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (changesType(input.value.type))
-								return true;
-					default:
-				}
-			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (changesType(value.type)):
-						return true;
-					default:
-				}
-		}
-		return false;
-	}
+	function needsRewrite(fn:IrFunction):Bool
+		return IrTypePositions.any(fn, changesType);
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		if (!needsRewrite(fn))

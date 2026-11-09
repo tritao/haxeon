@@ -394,6 +394,7 @@ class ProgramTyper {
 		equalityNames.sort(Reflect.compare);
 		for (name in equalityNames)
 			typedFunctions.push(equalities.get(name));
+		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null, program.classes);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var bodiesDoneAt = Sys.time() * 1000.0;
@@ -443,6 +444,34 @@ class ProgramTyper {
 		classes. A class no source declares (a key path cache) keeps only the static fields retained code reads, so a cache
 		does not collect fields for paths nothing uses any more.
 	**/
+	/**
+	 * A unit this build did not type keeps the anonymous types it registered when it was typed, as long as it still exists: the
+	 * program lists them, and so does a fresh build, which types every unit. A class's field initializers are the unit
+	 * `Class.__init`.
+	 */
+	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>):Void {
+		if (previous == null)
+			return;
+		var classNames:Map<String, Bool> = [for (classDecl in classes) classDecl.name => true],
+			suffix = ".__init",
+			registry = new AnonymousTypeRegistry(session);
+		for (unit => types in previous.anonymousUnits) {
+			if (session.typedUnits.exists(unit) || session.anonymousUnits.exists(unit))
+				continue;
+			var exists = session.signatures.exists(unit)
+				|| StringTools.endsWith(unit, suffix)
+				&& classNames.exists(unit.substr(0, unit.length - suffix.length));
+			if (!exists)
+				continue;
+			var uses:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
+			for (entry in types) {
+				uses.set(entry.name, entry.fields);
+				registry.register(TAnonymous(entry.name, entry.fields));
+			}
+			session.anonymousUnits.set(unit, uses);
+		}
+	}
+
 	function takeFromPrevious(retained:RetainedFromPrevious):Array<TypedClass> {
 		var previous = retained.program, carried:Array<TypedClass> = [];
 		session.enumRepresentations.restore(previous.enums, retained.enums);

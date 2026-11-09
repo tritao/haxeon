@@ -145,7 +145,12 @@ class IrInlineEnumLowering {
 			helpers.set(name, new IrFunction(name, b.arguments, value.type, b.blocks));
 			return name;
 		}
+		// Every rewrite below starts from a value whose type is, or contains, an inline enum; so does every check that throws.
 		for (fn in program.functions) {
+			if (!IrTypePositions.any(fn, containsMapped)) {
+				result.functions.push(fn);
+				continue;
+			}
 			var values:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [];
 			for (block in fn.blocks)
 				for (i in block.instructions)

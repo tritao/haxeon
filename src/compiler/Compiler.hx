@@ -113,6 +113,7 @@ typedef CompileResult = {
 
 	/** The modules of the compiled program (every module the frontend reached), sorted by name. */
 	final moduleNames:Array<String>;
+
 	final runtimeIdentity:Bytes;
 
 	/** No runtime publication is required; revision stays at the acknowledged baseline. */
@@ -185,6 +186,15 @@ typedef CompileMetrics = {
 	final moduleFunctions:Int;
 	final moduleNatives:Int;
 	final patchBytes:Int;
+
+	/** What an unchanged build reused: "none", "ir" (the final IR) or "ir+module" (the module as well), or "result" for a cached result. */
+	final reuse:String;
+
+	/** How many functions the module took from the last plain build's lowering instead of lowering them again. */
+	final linkedFunctions:Int;
+
+	/** How many of those were given other indices than they were lowered with. */
+	final movedFunctions:Int;
 }
 
 /** Non-mutating validation outcome for a prospective source update. */
@@ -231,12 +241,22 @@ class Compiler {
 	public var inlineCache:compiler.ir.IrInliner.IrInlineCache = new compiler.ir.IrInliner.IrInlineCache();
 
 	/**
+	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
+	 * reuses both. It follows the candidate like `inlineCache` does: a failed build leaves the previous one in place.
+	 */
+	public var pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot> = null;
+
+	/** The lowered functions of the last plain build (see `HlLoweredCache`); follows the candidate like `inlineCache`. */
+	public var loweredCache:compiler.hl.incremental.HlLoweredCache = new compiler.hl.incremental.HlLoweredCache();
+
+	/**
 	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
 	 * address the running module by stable slots, symbol indices and function ids. When false, every compile
 	 * assembles from a fresh assembler, so the module is a function of the source alone and never carries dead
 	 * functions, strings or ids from earlier revisions. Frontend caches stay incremental either way.
 	 */
 	public var livePatching = true;
+
 	/** Emit metadata used by development tooling in addition to runtime data. */
 	public var developmentMetadata = true;
 
@@ -379,7 +399,8 @@ class Compiler {
 	 * build. False when the compiler no longer holds that state.
 	 */
 	public function retractPublication(revision:Int):Bool {
-		var latest = assembler.lastRevision(), candidate = publication.retract(revision);
+		var latest = assembler.lastRevision(),
+			candidate = publication.retract(revision);
 		if (candidate == null)
 			return false;
 		restore(candidate.snapshot);
@@ -592,19 +613,26 @@ class Compiler {
 
 	/** Host-visible signatures are layout inputs, not just late backend export names. */
 	public function setExportedFunctions(names:Array<String>):Void {
-		if (sameExportedFunctions(names, exportedFunctions)) return;
+		if (sameExportedFunctions(names, exportedFunctions))
+			return;
 		var next = names.copy();
 		next.sort(Reflect.compare);
 		var unique:Array<String> = [];
-		for (name in next) if (unique.length == 0 || unique[unique.length - 1] != name) unique.push(name);
-		if (sameExportedFunctions(unique, exportedFunctions)) return;
+		for (name in next)
+			if (unique.length == 0 || unique[unique.length - 1] != name)
+				unique.push(name);
+		if (sameExportedFunctions(unique, exportedFunctions))
+			return;
 		exportedFunctions = unique;
 		sourceGeneration++;
 	}
 
 	static function sameExportedFunctions(first:Array<String>, second:Array<String>):Bool {
-		if (first.length != second.length) return false;
-		for (index in 0...first.length) if (first[index] != second[index]) return false;
+		if (first.length != second.length)
+			return false;
+		for (index in 0...first.length)
+			if (first[index] != second[index])
+				return false;
 		return true;
 	}
 
@@ -674,7 +702,8 @@ class Compiler {
 	public static function defineMap(values:Array<String>):Map<String, String> {
 		var result:Map<String, String> = [];
 		for (value in values) {
-			var separator = value.indexOf("="), name = separator < 0 ? value : value.substr(0, separator);
+			var separator = value.indexOf("="),
+				name = separator < 0 ? value : value.substr(0, separator);
 			result.set(name, separator < 0 ? "1" : value.substr(separator + 1));
 		}
 		return result;
@@ -854,7 +883,10 @@ class Compiler {
 					changedFunctions: 0,
 					moduleFunctions: cached.metrics.moduleFunctions,
 					moduleNatives: cached.metrics.moduleNatives,
-					patchBytes: 0
+					patchBytes: 0,
+					reuse: "result",
+					linkedFunctions: 0,
+					movedFunctions: 0
 				}
 			};
 		}
@@ -934,6 +966,8 @@ class Compiler {
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
 		candidate.inlineCache = inlineCache.copy();
+		candidate.pipelineSnapshot = pipelineSnapshot;
+		candidate.loweredCache = loweredCache.copy();
 		candidate.publishedAbi = snapshot.publishedAbi;
 		candidate.compiledOnce = snapshot.compiledOnce;
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
@@ -953,6 +987,8 @@ class Compiler {
 		objectCache = candidate.objectCache;
 		lastTypedProgram = candidate.lastTypedProgram;
 		inlineCache = candidate.inlineCache;
+		pipelineSnapshot = candidate.pipelineSnapshot;
+		loweredCache = candidate.loweredCache;
 		publishedAbi = candidate.publishedAbi;
 		compiledOnce = candidate.compiledOnce;
 		rehydrationBaseline = candidate.rehydrationBaseline;
@@ -989,9 +1025,17 @@ class Compiler {
 
 	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
 		for (fn in functions) {
-			switch fn.result { case InferredType: return false; default: }
+			switch fn.result {
+				case InferredType:
+					return false;
+				default:
+			}
 			for (argument in fn.arguments)
-				switch argument.type { case InferredType: return false; default: }
+				switch argument.type {
+					case InferredType:
+						return false;
+					default:
+				}
 		}
 		return true;
 	}
@@ -1016,7 +1060,9 @@ class Compiler {
 		var version = defines.get("compiler-version");
 		if (version == null)
 			version = compiler.modules.CodeIdentityTable.compilerVersion();
-		var lines = [for (name => value in defines) if (name != "compiler-version") name + "=" + value];
+		var lines = [
+			for (name => value in defines) if (name != "compiler-version") name + "=" + value
+		];
 		lines.sort(Reflect.compare);
 		return "compiler:" + version + "\n" + lines.join("\n");
 	}

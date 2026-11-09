@@ -39,10 +39,64 @@ class BackendAssembly {
 	 */
 	public static var liveFieldReserve:Int = 4;
 
+	/** What the assembly reads besides the IR: an assembly made in an equal environment from an equal IR is the same module. */
+	public static function environmentKey(context:CompilationContext):String
+		return [
+			"live:" + context.livePatching,
+			"wasm:" + context.isWasmTarget(),
+			"development:" + context.developmentMetadata,
+			"fieldReserve:" + liveFieldReserve
+		].join(",");
+
+	/** An earlier result for this build: the module and everything derived from it stay, the timings are this build's (none). */
+	public static function reused(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult
+		return {
+			assembly: previous.assembly,
+			assembler: previous.assembler,
+			abi: previous.abi,
+			reloadReasons: previous.reloadReasons,
+			patchBytes: previous.patchBytes,
+			abiPlanningDoneAt: at,
+			backendAssemblyDoneAt: at,
+			patchEncodingDoneAt: at,
+			assemblerCopyMs: 0.0,
+			snapshotAttachmentMs: 0.0,
+			allocationPhases: []
+		};
+
+	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
+	public static function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
+		return moduleDifference(previous.assembly.module, fresh.assembly.module);
+
+	/** What the lowering was done for besides the IR; entries made for another environment are not used (see `HlLoweredCache`). */
+	static function loweringEnvironment(assembler:HlModuleAssembler, context:CompilationContext):String
+		return "fieldReserve:"
+			+ assembler.fieldReserve
+			+ ",development:"
+			+ assembler.developmentMetadata
+			+ ",wasm:"
+			+ context.isWasmTarget();
+
+	/** Why two modules differ, or null when they encode to the same bytes. */
+	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
+		var left = HlWriter.encode(previous), right = HlWriter.encode(fresh);
+		if (left.compare(right) == 0)
+			return null;
+		var functions = previous.functions, others = fresh.functions;
+		if (functions.length != others.length)
+			return "function count " + functions.length + " -> " + others.length;
+		for (index in 0...functions.length)
+			if (HlWriter.encodeFunction(functions[index]).compare(HlWriter.encodeFunction(others[index])) != 0)
+				return 'function ${functions[index].functionIndex} differs';
+		return "module tables or debug sections differ";
+	}
+
 	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
-		var nextAbi = RuntimeAbi.describe(ir), previousAbi = context.publishedAbi, baseAssembler = context.assembler;
+		var nextAbi = RuntimeAbi.describe(ir),
+			previousAbi = context.publishedAbi,
+			baseAssembler = context.assembler;
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
@@ -57,8 +111,8 @@ class BackendAssembly {
 		}
 		// Patch planning describes what a running module must do to adopt this build. Without live patching there is no
 		// running module, and the plan would only mix session history into the build.
-		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi, !context.isWasmTarget(),
-				!context.isWasmTarget() && baseAssembler.isPublished()) : PatchDecision.Patch,
+		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi,
+			!context.isWasmTarget(), !context.isWasmTarget() && baseAssembler.isPublished()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -71,10 +125,17 @@ class BackendAssembly {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
+		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
+		var loweredCache = context.livePatching ? null : context.loweredCache;
+		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null,
+			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
+		if (loweredCache != null) {
+			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
+			candidateAssembler.loweredCache = loweredCache;
+		}
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
@@ -85,8 +146,23 @@ class BackendAssembly {
 			reloadReasons.push(reason);
 		var assembledAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
-		if (candidateAssembler.developmentMetadata) attachSourceSnapshots(context, assembly.module);
-		if (!context.isWasmTarget()) compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
+		if (candidateAssembler.developmentMetadata)
+			attachSourceSnapshots(context, assembly.module);
+		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
+			// The module with functions linked from the last build must be the module lowering every function gives.
+			var fresh = new HlModuleAssembler();
+			fresh.fieldReserve = candidateAssembler.fieldReserve;
+			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
+			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+			if (fresh.developmentMetadata)
+				attachSourceSnapshots(context, freshAssembly.module);
+			var difference = moduleDifference(assembly.module, freshAssembly.module);
+			if (difference != null)
+				throw 'HAXEON_CHECK_REUSE: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
+		}
+		if (!context.isWasmTarget())
+			compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)
@@ -97,11 +173,12 @@ class BackendAssembly {
 			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
 				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
-				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals,
-				assembly.objectLayout, [
+				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals, assembly.objectLayout, [
 					for (guard in assembly.guards)
-						if (candidateAssembler.cache.stableIds.exists(guard.name))
-							{stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0, description: guard.description}
+						if (candidateAssembler.cache.stableIds.exists(guard.name)) {
+							stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
+							description: guard.description
+						}
 				], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {

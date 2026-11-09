@@ -30,6 +30,7 @@ import compiler.semantic.SemanticDependencyCollector;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstType;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.compilation.PipelineSnapshot.PipelineInputs;
 
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
@@ -59,6 +60,12 @@ typedef FrontendResult = {
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
 	final allocationPhases:Array<PhaseAllocation>;
+
+	/** The earlier build whose final IR this one equals, when every input of the IR pipeline matched (see `PipelineSnapshot`). */
+	final reused:Null<PipelineSnapshot>;
+
+	/** Why no earlier build could be reused, when there was one to compare with; null otherwise. */
+	final reuseMiss:Null<String>;
 }
 
 /** Builds and validates the reachable source graph through complete IR assembly. */
@@ -559,7 +566,9 @@ class FrontendCompilation {
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
-				allocationPhases: allocationPhases
+				allocationPhases: allocationPhases,
+				reused: null,
+				reuseMiss: null
 			};
 		var cachedNames:Array<String> = [];
 		for (moduleName in names) {
@@ -570,6 +579,13 @@ class FrontendCompilation {
 				cachedNames.push(functionName);
 		}
 		cachedNames.sort(Reflect.compare);
+		// A generated helper can be cached by more than one module (the one that asked for it first and the one that owns it now);
+		// the program has it once, as a fresh build does.
+		var distinctNames:Array<String> = [];
+		for (name in cachedNames)
+			if (distinctNames.length == 0 || distinctNames[distinctNames.length - 1] != name)
+				distinctNames.push(name);
+		cachedNames = distinctNames;
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
@@ -610,60 +626,86 @@ class FrontendCompilation {
 				&& !context.isWasmTarget()
 				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(typedNew, name -> published.publishedObject(name),
 					(name, field) -> published.publishedField(name, field)) : [];
-		var ir = IrGenerator.assemble(cached, irNatives, [for (name in objectNames) resolvedObjects.get(name)], IrGenerator.interfacesFrom(typedNew),
-			IrGenerator.enumsFrom(typedNew), IrGenerator.staticFieldsFrom(typedNew),
-			IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers), entryPoint, irCNatives,
-			IrProgramAssembler.reflectableObjectsFrom(typedNew), context.inlineCache().staticChecks, context.valueArrayTarget(), context.exportedFunctions());
-		var cNativeNames = [for (native in irCNatives) native.name].join(","),
-			ownPrints:Map<String, String> = [];
-		for (fn in cached)
-			if (PositionalName.is(fn.name))
-				ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
-		context.inlineCache().finishPositionalFingerprints();
-		ir.positionalFingerprints = PositionalName.nested(ownPrints);
-		if (context.livePatching) {
-			var texts:Map<String, String> = [for (state in context.modules) state.source.path => state.source.text];
+		var generated = {
+			objects: [for (name in objectNames) resolvedObjects.get(name)],
+			interfaces: IrGenerator.interfacesFrom(typedNew),
+			enums: IrGenerator.enumsFrom(typedNew),
+			staticFields: IrGenerator.staticFieldsFrom(typedNew),
+			initializers: IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers),
+			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
+		};
+		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
+		// the passes run anyway and the result is compared with the reused one.
+		var inputs = pipelineInputs(context, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects, generated.interfaces,
+			generated.enums, generated.staticFields, entryPoint, generated.reflectable),
+			previousPipeline = context.pipelineSnapshot,
+			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
+			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null, ir:IrProgram, inlinerChanged:Array<String>;
+		if (matchesPrevious && !checkingReuse) {
+			ir = previousPipeline.ir;
+			inlinerChanged = [];
+		} else {
+			ir = IrGenerator.assemble(cached, irNatives, generated.objects, generated.interfaces, generated.enums, generated.staticFields,
+				generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks, context.valueArrayTarget(),
+				context.exportedFunctions());
+			var cNativeNames = [for (native in irCNatives) native.name].join(","),
+				ownPrints:Map<String, String> = [];
 			for (fn in cached)
-				if (PositionalName.is(fn.name)) {
-					var place = PositionalName.placeOf(fn),
-						parsed = PositionalName.parsePlace(place);
-					if (place == null || parsed == null || !texts.exists(parsed.path))
-						continue;
-					ir.positionalPlaces.set(fn.name, place);
-					ir.positionalSources.set(parsed.path, texts.get(parsed.path));
+				if (PositionalName.is(fn.name))
+					ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
+			context.inlineCache().finishPositionalFingerprints();
+			ir.positionalFingerprints = PositionalName.nested(ownPrints);
+			if (context.livePatching) {
+				var texts:Map<String, String> = [for (state in context.modules) state.source.path => state.source.text];
+				for (fn in cached)
+					if (PositionalName.is(fn.name)) {
+						var place = PositionalName.placeOf(fn),
+							parsed = PositionalName.parsePlace(place);
+						if (place == null || parsed == null || !texts.exists(parsed.path))
+							continue;
+						ir.positionalPlaces.set(fn.name, place);
+						ir.positionalSources.set(parsed.path, texts.get(parsed.path));
+					}
+			}
+			var semantic = context.cachedSemanticProgram;
+			if (context.livePatching && !context.isWasmTarget() && semantic != null)
+				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
+			var valueArrayTarget = context.valueArrayTarget();
+			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
+			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
+			// further value joins, so it needs a second pass after that rewrite.
+			if (context.isWasmTarget()) {
+				compiler.ir.IrValueConstructors.rewrite(ir);
+				compiler.ir.IrValuePhiScalarization.rewrite(ir);
+				if (valueArrayTarget == Wasm32 || valueArrayTarget == WasmGc) {
+					compiler.ir.IrScalarArguments.rewrite(ir, true);
+					compiler.ir.IrValuePhiScalarization.rewrite(ir);
 				}
-		}
-		var semantic = context.cachedSemanticProgram;
-		if (context.livePatching && !context.isWasmTarget() && semantic != null)
-			ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
-		var valueArrayTarget = context.valueArrayTarget();
-		compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
-		// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
-		// further value joins, so it needs a second pass after that rewrite.
-		if (context.isWasmTarget()) {
-			compiler.ir.IrValueConstructors.rewrite(ir);
-			compiler.ir.IrValuePhiScalarization.rewrite(ir);
-			if (valueArrayTarget == Wasm32 || valueArrayTarget == WasmGc) {
-				compiler.ir.IrScalarArguments.rewrite(ir, true);
+			}
+			if (!context.isWasmTarget()) {
+				compiler.ir.IrValueConstructors.rewrite(ir);
+				compiler.ir.IrValuePhiScalarization.rewrite(ir);
+				compiler.ir.IrScalarArguments.rewrite(ir);
+				compiler.ir.IrScalarClosures.rewrite(ir);
 				compiler.ir.IrValuePhiScalarization.rewrite(ir);
 			}
+			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
+			ir.functions = [
+				for (fn in ir.functions)
+					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
+			];
+			compiler.ir.IrNullableScalarFlow.rewrite(ir);
+			IrInliner.packedValueFields = !context.isWasmTarget();
+			// Compare and publish the final IR even when only load/store forwarding is enabled.
+			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
+			if (matchesPrevious) {
+				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);
+				if (difference != null)
+					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
+			}
+			context.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
 		}
-		if (!context.isWasmTarget()) {
-			compiler.ir.IrValueConstructors.rewrite(ir);
-			compiler.ir.IrValuePhiScalarization.rewrite(ir);
-			compiler.ir.IrScalarArguments.rewrite(ir);
-			compiler.ir.IrScalarClosures.rewrite(ir);
-			compiler.ir.IrValuePhiScalarization.rewrite(ir);
-		}
-		var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-		ir.functions = [
-			for (fn in ir.functions)
-				compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
-		];
-		compiler.ir.IrNullableScalarFlow.rewrite(ir);
-		IrInliner.packedValueFields = !context.isWasmTarget();
-		// Compare and publish the final IR even when only load/store forwarding is enabled.
-		var inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
 		// Regenerating a function's IR does not change it when the typed function is the same: a semantic invalidation
 		// regenerates every function of a module whose declarations moved. Only functions whose final IR differs from the
 		// published one, or that were typed again, need lowering and patching; the rest keep their lowered form.
@@ -681,7 +723,8 @@ class FrontendCompilation {
 				regenerated.push(name);
 			}
 		regenerated.sort(Reflect.compare);
-		var relocated = [for (name in context.inlineCache().relocated) if (!listed.exists(name)) name];
+		var relocated = matchesPrevious
+			&& !checkingReuse ? [] : [for (name in context.inlineCache().relocated) if (!listed.exists(name)) name];
 		var irAssemblyDoneAt = Sys.time() * 1000.0;
 		allocationPhases.push(AllocationMeter.delta("ir-assembly", allocationAfterTyping, AllocationMeter.sample()));
 		return {
@@ -708,9 +751,47 @@ class FrontendCompilation {
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
-			allocationPhases: allocationPhases
+			allocationPhases: allocationPhases,
+			reused: reusedPipeline,
+			reuseMiss: reuseMiss
 		};
 		}
+
+	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
+	static function pipelineInputs(context:CompilationContext, instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>,
+			functions:Array<IrFunction>, initializers:Array<IrFunction>, natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>,
+			objects:Array<IrObject>, interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>,
+			staticFields:Array<compiler.ir.Ir.IrStaticField>, entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
+		var objectNames:Map<String, Bool> = [for (object in objects) object.name => true];
+		var tables = new IrProgram(entryPoint == null ? "" : entryPoint);
+		tables.natives = natives;
+		tables.cNatives = cNatives;
+		tables.objects = objects;
+		tables.interfaces = interfaces;
+		tables.enums = enums;
+		tables.staticFields = staticFields;
+		var environment = [
+			"defines:" + context.definesKey(),
+			"target:" + Std.string(context.valueArrayTarget()),
+			"wasm:" + context.isWasmTarget(),
+			"live:" + context.livePatching,
+			"development:" + context.developmentMetadata,
+			"inline:" + context.inlineEnabled(),
+			"instrument:" + (instrumentScope == null ? "-" : Std.string(instrumentScope)),
+			"exports:" + context.exportedFunctions().join(","),
+			// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no
+			// pass gives such a name an object later.
+			"reflectable:" + (reflectable == null ? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
+			"entry:" + entryPoint,
+			"generator:" + IrGenerator.inputState()
+		].join("\n");
+		return {
+			functions: functions,
+			initializers: initializers,
+			tables: compiler.ir.codec.CanonicalIrCodec.encodeTables(tables),
+			environment: environment
+		};
+	}
 
 	/**
 	 * The modules whose presence changes how types are represented are part of every program that can have them, so no body is

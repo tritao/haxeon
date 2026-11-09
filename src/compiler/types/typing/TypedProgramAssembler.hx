@@ -47,8 +47,8 @@ class TypedProgramAssembler {
 					ValueEqualityGenerator.request(session, type, origin, classDecl.span);
 			}
 			for (field in classDecl.fields)
-				register(field.type, RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX +
-					(classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
+				register(field.type,
+					RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX + (classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
 		}
 		for (interfaceDecl in interfaces)
 			for (method in interfaceDecl.methods) {
@@ -79,12 +79,23 @@ class TypedProgramAssembler {
 			functions: functions,
 			closurePlan: session.closureConversion.plan(),
 			anonymousTypes: orderedAnonymousTypes(),
+			anonymousUnits: anonymousUnits(),
 			natives: natives
 		};
 	}
 
 	public function runtimeDependencies():Array<{var functionName:String; var target:String;}>
 		return session.runtimeDependencyTracker.ordered();
+
+	function anonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
+		var result:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
+		for (unit => uses in session.anonymousUnits) {
+			var names = [for (name in uses.keys()) name];
+			names.sort(Reflect.compare);
+			result.set(unit, [for (name in names) {name: name, fields: uses.get(name)}]);
+		}
+		return result;
+	}
 
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
 		var names = [for (name in session.anonymousTypes.keys()) name];

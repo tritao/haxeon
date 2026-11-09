@@ -75,6 +75,28 @@ class TypingSession {
 	public final dynamicStructureConversions:Map<String, Bool> = [];
 
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
+
+	/**
+	 * The anonymous types registered while each unit was typed: a function, or the field initializers of a class (`Class.__init`).
+	 * A nested body (a lambda) belongs to the unit it is written in. A build that types a unit again records it afresh; one that does
+	 * not keeps the earlier record in the program (see `ProgramTyper.keepAnonymousUnits`), so a type only unchanged code uses stays.
+	 */
+	public final anonymousUnits:Map<String, Map<String, Array<compiler.types.Type.AnonymousField>>> = [];
+
+	/** The units whose bodies this session typed. */
+	public final typedUnits:Map<String, Bool> = [];
+
+	public function recordAnonymousUse(name:String, fields:Array<compiler.types.Type.AnonymousField>):Void {
+		if (bodyContexts.length < 2)
+			return;
+		var unit = bodyContexts[1].name, uses = anonymousUnits.get(unit);
+		if (uses == null) {
+			uses = [];
+			anonymousUnits.set(unit, uses);
+		}
+		uses.set(name, fields);
+	}
+
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
 	public final genericSpecializations:GenericSpecializationRegistry;
 	public final nativeAbiTarget:String;
@@ -468,6 +490,8 @@ class TypingSession {
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String, ?sourceFunctionName:String):TypingContext {
 		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name) ? currentContext.lexicalOwner : parentPath(name),
 			body = new TypingContext(name, typeSubstitutions, owner, sourceFunctionName);
+		if (bodyContexts.length == 1)
+			typedUnits.set(name, true);
 		bodyContexts.push(body);
 		return body;
 	}

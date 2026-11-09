@@ -65,22 +65,24 @@ class CompilerDriver {
 			if (!isWasm)
 				deleteIfExists(request.output + ".live.full");
 			if (isWasm) {
+				var options:compiler.backend.Backend.BackendOptions = {
+					target: wasmTarget,
+					debugNames: true,
+					developmentMetadata: request.buildMode == "development",
+					importMemory: request.importMemory,
+					sharedMemory: request.sharedMemory == true,
+					memoryBase: request.memoryBase,
+					memoryContract: memoryContract,
+					wasmMemoryStats: request.wasmMemoryStats,
+					wasmGcAllocationCount: request.wasmGcAllocationCount,
+					wasmGcStress: request.wasmGcStress,
+					wasmRuntimeNeutral: request.wasmRuntimeNeutral,
+					exports: request.exports
+				}
 				var backend:Backend = new WasmBackend(),
-					backendResult = backend.compile(result.ir, {
-						target: wasmTarget,
-						debugNames: true,
-						developmentMetadata: request.buildMode == "development",
-						importMemory: request.importMemory,
-						sharedMemory: request.sharedMemory == true,
-						memoryBase: request.memoryBase,
-						memoryContract: memoryContract,
-						wasmMemoryStats: request.wasmMemoryStats,
-						wasmGcAllocationCount: request.wasmGcAllocationCount,
-						wasmGcStress: request.wasmGcStress,
-						wasmRuntimeNeutral: request.wasmRuntimeNeutral,
-						exports: request.exports
-					});
-				outputBytes = backendResult.bytes;
+					encode = () -> backend.compile(result.ir, options).bytes;
+				// The same program compiled with the same options is the same module (a build that reused its IR gets the earlier bytes).
+				outputBytes = session == null ? encode() : session.wasmModule(result.ir, Json.stringify(options), encode);
 			} else {
 				outputIndices = result.functionIndices;
 				if (!deferFullModule)
@@ -248,9 +250,9 @@ class CompilerDriver {
 
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
-		return "compiler phases (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate=" + milliseconds(metrics.candidateSetupMs)
-			+ " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts) + " (graph="
-			+ milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs) + " dependencies="
+		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions + ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate="
+			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts)
+			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs) + " dependencies="
 			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs) + " semantic="
 			+ milliseconds(metrics.semanticAssemblyMs) + " (alias-setup=" + milliseconds(metrics.semanticAliasMs) + " canonicalization="
 			+ milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse=" + milliseconds(metrics.semanticContributionReuseMs)
