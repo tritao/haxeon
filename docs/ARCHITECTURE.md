@@ -65,3 +65,50 @@ constructs in the serialized bytecode module or patch.
 The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
 see [`WASM_BACKEND.md`](WASM_BACKEND.md) for the representation
 boundary, linear-memory and collector contracts, GC target, and test commands.
+
+## Warm builds: what landed (M0 and M1 of ADR 0003)
+
+The current plan and the measurements are in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) and
+[`COMPILER_MEMORY.md`](COMPILER_MEMORY.md). This section is the short record.
+
+### Layers of a plain build
+
+typed program, then IR (`IrGenerator`), then whole-program IR passes and `IrInliner`, then verification, then HashLink lowering
+(`HlLower`), then the writer. Each stage keeps what the next build can reuse:
+
+- **Pipeline shortcut.** When the typed-function IR, the canonical tables and the environment text (target, defines,
+  `ProgramFacts.inputState`) equal the last plain build's, the final IR and the module bytes are reused (`reused: ir+module`).
+  A miss says why (`--timings`).
+- **Per-function verification.** `IrVerifier` reads the rest of the program only through `IrVerifyTable`s. `IrVerifyMemo` records what
+  each accepted function read, so a build verifies the functions that changed and the ones whose reads changed.
+- **Relocatable lowering.** `HlLower` records, for every function, the requests it made to the symbol tables and the facts it read about
+  object types (through `HlLoweringView`, the only way lowering sees another entity). `HlLink` replays them against the next build's tables
+  and gives the function its indices, so a function whose IR and facts are unchanged is linked, not lowered again.
+  `HlLoweredCache` holds the entries.
+- **Live patching** uses the same cache with trust instead of replay: append-only tables and stable slots keep a kept function's operands
+  valid, so an entry not named in `regenerated` is kept as it is (`HlModuleAssembler.livePatching`).
+
+### What generation reads
+
+- `TargetProfile` (`HashLink` or `Wasm`): `packedValueFields`, `headerlessValueClasses`, `dynamicObjectLiterals`, `nativeArrayChecks`,
+  `nativeStringFastPaths`, `nativeReflectionDispatch`. Immutable; `key()` is part of every cache key that depends on the target.
+- `ProgramFacts.of(typed)`: enum constructor counts, value classes, class bases, generic owners, equatable and observable facts, interface
+  contracts. Derived on every build.
+- `IrGenerator` is an instance over `(facts, profile)`, with `withObjects(objects)` giving it the program's object tables as input and a
+  fresh `FunctionScratch` per function. No generator state outlives a build. Left static on purpose: the `HAXEON_*` switches, a debug-location
+  memo, and the Wasm caches (a follow-up).
+
+### Session caches and the commit point
+
+The inline cache, the pipeline snapshot, the lowered cache, the reachability cache, the declaration owners and the modules belong to
+the last successful build. A build works on copies (`createCandidate`) and `adoptCandidate` replaces them together; a failed or rejected
+build (including a failed artifact write) restores all of them with the modules (`CompilerSnapshot`). The verify memo is shared because an
+acceptance holds only while its reads do.
+
+### Check mode
+
+`HAXEON_CHECK_REUSE=1` recomputes what a build reused and fails, naming the function, when the two differ: the shortcut is re-run, every
+linked function is compared with a fresh lowering, the final IR is verified in full after the memoized run, and in a live build every kept
+function is lowered again (`HlFunctionEquality`: type, slot, registers, opcodes with labels compared one to one, debug data). Functions
+frozen on purpose (retired by a signature change, or dropped from the program) are skipped. The full driver suite and `test-hot-reload` pass
+with it. It is a test aid, never a fallback.
