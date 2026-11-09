@@ -1536,7 +1536,7 @@ class UiContext {
 	}
 
 	function updateCursor():Void {
-		var next = events.cursorShape();
+		var next = nativeCursorShape(events.cursorShape());
 		if (next == currentCursor)
 			return;
 		currentCursor = next;
@@ -1608,7 +1608,6 @@ class UiContext {
 			case UiCursorShape.DiagonalResizeNesw: CursorShape.NeswResize;
 			case UiCursorShape.Move: CursorShape.Move;
 			case UiCursorShape.NotAllowed: CursorShape.NotAllowed;
-			case _: CursorShape.Arrow;
 		};
 	}
 

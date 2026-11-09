@@ -4282,3 +4282,29 @@ and materialized `.so` version aliases loading the simulation handle registry tw
 The setup now creates that directory and preserves private version aliases with identical library bytes. A stale
 copied CAD library also lacked `cad_cut_many`; the replacement completed native build has source/ABI inputs identical
 to the frozen checkout. These setup fixes change no product source or assertions; their failures remain recorded.
+
+### Cursor intent as a closed enum (2026-11-09)
+
+The UI's platform-independent `CursorShape` now uses a plain `Equatable` enum. `UiContext` maps every intent through
+its exhaustive native-cursor mapping before comparing or invoking the native cursor handler; window-decoration
+regions use the same mapping. The UI intent no longer implicitly converts to or from an integer. The native
+platform cursor constants remain the boundary contract, separate from the UI enum's constructor order.
+
+The all-target value fixture checks all ten mappings, array storage and nullable render-node cursor fields, and
+rejects integer conversions in both directions. All 60 value/parity checks pass with inlining off/on, as do all
+839 compiler tests. No compiler sources change.
+
+An isolated probe repeatedly writes and reads `RenderNode.cursor` and `windowDecorationCursor` on a preallocated
+node, after warming both referenced cases. Both inlining modes agree:
+
+| Target | Writes to both fields | Integer representation | Plain enum |
+|---|---:|---:|---:|
+| HashLink | 1,024 iterations | 2,048 objects / 32,768 bytes | 0 objects / 0 bytes |
+| Wasm32 | 8 / 1,024 iterations | 16 / 2,048 objects | 0 / 0 objects |
+| Wasm GC | 8 / 1,024 iterations | 16 / 2,048 objects | 0 / 0 objects |
+
+The old nullable integer fields box each assignment. The enum stores cached case values, so assigning an intent
+does not allocate. A separate exact HashLink census constructing 1,024 initialized nodes falls from 6,144 objects /
+827,392 bytes to 4,096 / 794,624. `RenderNode` remains 296 bytes, `LayoutNode` 120, `LayoutStyle` 344 and `WidgetId` 16;
+the complete difference is the 2,048 integer boxes. These are representation probes; editor/Web allocation and
+binary-size deltas are measured on the next batch head.
