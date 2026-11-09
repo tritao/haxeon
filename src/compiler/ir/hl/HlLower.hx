@@ -82,6 +82,9 @@ class HlLower {
 	/** HAXEON_CHECK_REUSE=1 on a build that trusts its cache: every kept function is lowered again and compared. */
 	final checkingTrust:Bool;
 
+	/** Kept functions check mode could not lower again, with the missing object or field. */
+	final skippedKept:Array<String> = [];
+
 	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
 	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 
@@ -449,11 +452,16 @@ class HlLower {
 					}
 				} catch (error:String) {
 					throw 'HashLink lowering failed for ${fn.name}: $error';
+				} catch (missing:HlMissingEntity) {
+					throw 'HashLink lowering failed for ${fn.name}: $missing';
 				}
 			}
 		}
 		if (loweredCache != null)
 			loweredCache.entries = entries;
+		if (skippedKept.length > 0)
+			Sys.stderr()
+				.writeString('HAXEON_CHECK_REUSE: ${skippedKept.length} kept functions could not be lowered again, their objects or fields are gone: ${skippedKept.join(", ")}\n');
 		if (environment != null && reusedFunctions == 0)
 			verifyLinking(program, environment);
 		var functionsDoneAt = Sys.time() * 1000.0;
@@ -544,27 +552,31 @@ class HlLower {
 	 * and add nothing to the tables; if not, the set of regenerated functions was wrong.
 	 */
 	function verifyKept(fn:IrFunction, kept:HlFunction):Void {
-		var sizes = [
-			symbols.ints.length,
-			symbols.floats.length,
-			symbols.strings.length,
-			symbols.types.length,
-			symbols.globals.length
-		];
-		// A function whose pieces the program no longer holds (a removed lambda whose code stored closures still run, a removed
-		// field) keeps its old code on purpose and cannot be lowered against this build: there is nothing to compare.
-		var fresh = try lowerFunction(PhiEdges.split(fn)) catch (error:String) return;
-		var now = [
-			symbols.ints.length,
-			symbols.floats.length,
-			symbols.strings.length,
-			symbols.types.length,
-			symbols.globals.length
-		];
-		if (now.join(",") != sizes.join(","))
-			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals ${sizes.join(",")} -> ${now.join(",")})';
-		if (Std.string(fresh) != Std.string(kept))
-			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} lowers to other code than its cached lowering';
+		function sizes():String
+			return [
+				symbols.ints.length,
+				symbols.floats.length,
+				symbols.strings.length,
+				symbols.types.length,
+				symbols.globals.length
+			].join(",");
+		var before = sizes();
+		var fresh:HlFunction;
+		try
+			fresh = lowerFunction(PhiEdges.split(fn))
+		catch (missing:HlMissingEntity) {
+			// Only an object type or field the program no longer holds excuses it: a removed lambda whose code stored closures still run
+			// keeps its old code on purpose, and there is nothing to compare it with. Lowering must have added nothing before it failed.
+			if (sizes() != before)
+				throw 'HAXEON_CHECK_REUSE: lowering kept function ${fn.name} added symbols (ints, floats, strings, types, globals $before -> ${sizes()}) before failing: $missing';
+			skippedKept.push('${fn.name} ($missing)');
+			return;
+		}
+		if (sizes() != before)
+			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals $before -> ${sizes()})';
+		var difference = compiler.hl.HlFunctionEquality.difference(kept, fresh);
+		if (difference != null)
+			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} lowers to other code than its cached lowering: $difference';
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -1883,7 +1895,7 @@ class HlLower {
 
 	function requireObjectType(name:String):Int {
 		if (!objectTypeIndices.exists(name))
-			throw 'Unknown IR object "$name"';
+			throw new HlMissingEntity('Unknown IR object "$name"');
 		var index = objectTypeIndices.get(name);
 		if (requests != null)
 			requests.push(TypeOf(IrType.Obj(name), index));
@@ -1928,7 +1940,7 @@ class HlLower {
 		while (true) {
 			var descriptor = view.object(owner);
 			if (descriptor == null)
-				throw 'Unknown IR object "$owner"';
+				throw new HlMissingEntity('Unknown IR object "$owner"');
 			var declares = false;
 			for (field in descriptor.fields)
 				if (field.name == name)
@@ -1936,7 +1948,7 @@ class HlLower {
 			if (declares)
 				break;
 			if (descriptor.base == null)
-				throw 'Unknown IR field "$typeName.$name"';
+				throw new HlMissingEntity('Unknown IR field "$typeName.$name"');
 			owner = Std.string(descriptor.base);
 		}
 		var index = symbols.objectFieldIndex(owner, name);

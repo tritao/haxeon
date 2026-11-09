@@ -239,6 +239,7 @@ class TestCatalog {
 		"LiveClosureHostMain",
 		"LiveStrictSignatureLambdaMain",
 		"LiveLoweringReuseMain",
+		"LiveKeptCheckMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",
