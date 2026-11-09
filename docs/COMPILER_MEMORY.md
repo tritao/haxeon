@@ -109,6 +109,12 @@ Done:
 - (a) `HlDebugLocation` is a class and the opcode source-span section is encoded from each function's locations, so the second per-opcode
   copy (`HlOpcodeSourceSpan` and the span cache) is gone. app: cold 789.5M -> 783.2M objects; edit peak 8.93 -> 8.31 GB.
 
+- (b) The opcode source-span and source-snapshot debug sections are not stored in `HlCode` any more: `HlDebugSection.lazy` keeps how to
+  produce them and `payload` encodes them when the module is written (74 MB and 19 MB per module that were kept, encoded a second time
+  into the module bytes). The census after an edit showed those buffers twice. app: cold peak 6.42 -> 5.77 GB, edit peak 8.31 -> 7.87 GB,
+  compile-count unchanged. The module, the cached result, the reuse snapshot and the encoded-bytes cache all refer to one module object
+  (`HAXEON_COMPILER_MEMORY_LOG` now logs that); the extra copy was in the module's own sections.
+
 Deferred (open items):
 - Fix 4, dropping tokens and syntax trees of typed modules, needs the editor/build session split (ADR 0003 option 9).
 - Fix 7, compacting `SourceSpan`, `Token` and AST spans, is parser-wide.

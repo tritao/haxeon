@@ -209,7 +209,8 @@ class HlWriter {
 		}
 		debugSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
 		var topFunctionDebug = [
-			for (entry in debugSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes + '}'
+			for (entry in debugSizes.slice(0, 30))
+				'{"index":' + entry.index + ',"bytes":' + entry.bytes + '}'
 		];
 		part = new HlWriter();
 		part.writeConstants(code);
@@ -360,8 +361,9 @@ class HlWriter {
 			writeUnsignedIndex(section.kind);
 			writeUnsignedIndex(section.version);
 			writeUnsignedIndex(section.flags);
-			writeUnsignedIndex(section.payload.length);
-			output.write(section.payload);
+			var payload = section.payload;
+			writeUnsignedIndex(payload.length);
+			output.write(payload);
 		}
 	}
 
@@ -814,8 +816,10 @@ class HlWriter {
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
 				case Trap(destination, target, preserveExceptionStack):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap, operands: [destination, targetPosition
-						- (result.length + 1)]};
+					{
+						opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap,
+						operands: [destination, targetPosition - (result.length + 1)]
+					};
 				case EndTrap(destination, preserveExceptionStack):
 					{opcode: preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap, operands: [destination]};
 				case Label(_): {opcode: HlOpcode.Label, operands: []};

@@ -48,7 +48,8 @@ class HlValidator {
 						requireFunctionIndex(code, method.functionIndex, "object method");
 						if (method.prototype < 0 && method.prototype != HlCode.TYPED_METHOD_PROTOTYPE)
 							throw 'Invalid object method prototype ${method.prototype}';
-						if (method.prototype == HlCode.TYPED_METHOD_PROTOTYPE && !StringTools.startsWith(code.strings[method.name], "$typed-method:"))
+						if (method.prototype == HlCode.TYPED_METHOD_PROTOTYPE
+							&& !StringTools.startsWith(code.strings[method.name], "$typed-method:"))
 							throw "Invalid private typed method key";
 					}
 				case Structure(name, global, fields, methods, bindings):
@@ -105,7 +106,7 @@ class HlValidator {
 			throw 'Entry point ${code.entryPoint} is not a function';
 		var debugSections:Map<String, Bool> = [];
 		for (section in code.debugSections) {
-			if (section.kind <= 0 || section.version <= 0 || section.flags < 0 || section.payload == null)
+			if (section.kind <= 0 || section.version <= 0 || section.flags < 0 || !section.hasPayload())
 				throw "Invalid HLB debug section";
 			var key = section.kind + ":" + section.version;
 			if (debugSections.exists(key))
@@ -187,7 +188,8 @@ class HlValidator {
 				case ToInt(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
-				case SafeCast(destination, source), UnsafeCast(destination, source), Ref(destination, source), Unref(destination, source), Setref(destination, source):
+				case SafeCast(destination, source), UnsafeCast(destination, source), Ref(destination, source), Unref(destination, source),
+					Setref(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
 				case RefOffset(destination, source, index):

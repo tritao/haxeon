@@ -17,12 +17,18 @@ import sys.io.File;
  */
 class CompilerMemoryCensus {
 	static var done = false;
+	static var builds = 0;
 
 	public static function run(session:CompilerSession):Void {
 		#if hl
 		var directory = Sys.getEnv("HAXEON_COMPILER_CENSUS"),
 			tool = Sys.getEnv("HAXEON_COMPILER_CENSUS_TOOL");
 		if (directory == null || tool == null || done)
+			return;
+		// HAXEON_COMPILER_CENSUS_BUILD=<n> takes the census after the n-th build of the worker (default the first), to see an edited state.
+		builds++;
+		var wanted = Sys.getEnv("HAXEON_COMPILER_CENSUS_BUILD");
+		if (builds < (wanted == null ? 1 : Std.parseInt(wanted)))
 			return;
 		done = true;
 		FileSystem.createDirectory(directory);

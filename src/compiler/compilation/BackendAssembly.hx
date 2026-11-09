@@ -236,11 +236,7 @@ class BackendAssembly {
 		code.sourceSnapshots = [for (hash => content in byHash) {sourceHash: hash, content: content}];
 		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
-			code.debugSections.push({
-				kind: HlWriter.SOURCE_SNAPSHOTS,
-				version: 1,
-				flags: 0,
-				payload: HlWriter.encodeSourceSnapshots(code.sourceSnapshots)
-			});
+			code.debugSections.push(compiler.hl.HlCode.HlDebugSection.lazy(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
+				() -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots)));
 	}
 }

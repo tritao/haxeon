@@ -5,6 +5,7 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
+import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
@@ -109,7 +110,8 @@ class HlLower {
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache):MeasuredHlCode {
+			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false,
+			?loweredCache:compiler.hl.incremental.HlLoweredCache):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -450,12 +452,7 @@ class HlLower {
 		var allocationAfterFunctions = AllocationMeter.sample();
 		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
-		code.debugSections.push({
-			kind: HlWriter.FUNCTION_IDENTITIES,
-			version: 1,
-			flags: 0,
-			payload: HlWriter.encodeFunctionIdentities(identities)
-		});
+		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0, HlWriter.encodeFunctionIdentities(identities)));
 		var allocationAfterIdentities = AllocationMeter.sample(),
 			allocationAfterSpanGroups = allocationAfterIdentities;
 		if (developmentMetadata) {
@@ -466,12 +463,8 @@ class HlLower {
 				spanGroups.push({stableId: identity.stableId, locations: loweredFunction.debugLocations});
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
-			code.debugSections.push({
-				kind: HlWriter.OPCODE_SOURCE_SPANS,
-				version: 2,
-				flags: 0,
-				payload: HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)
-			});
+			// The groups only point at the functions' locations; the section is encoded when the module is written.
+			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, () -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();

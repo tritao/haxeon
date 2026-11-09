@@ -29,7 +29,41 @@ class HlCode {
 typedef HlConstant = {final global:Int; final fields:Array<Int>;}
 
 /** Independently versioned, length-delimited HLB debug metadata. */
-typedef HlDebugSection = {final kind:Int; final version:Int; final flags:Int; final payload:haxe.io.Bytes;}
+/**
+ * One HLB debug section. A section derived from what the module already holds (the opcode source spans, the source snapshots) is not
+ * stored: `lazy` keeps only how to produce it, and `payload` encodes it on each access, so a module that is kept between builds does not
+ * also keep tens of megabytes of encoded sections that the writer would encode again.
+ */
+final class HlDebugSection {
+	public final kind:Int;
+	public final version:Int;
+	public final flags:Int;
+	public var payload(get, never):haxe.io.Bytes;
+
+	final stored:Null<haxe.io.Bytes>;
+	final produce:Null<() -> haxe.io.Bytes>;
+
+	function new(kind:Int, version:Int, flags:Int, stored:Null<haxe.io.Bytes>, produce:Null<() -> haxe.io.Bytes>) {
+		this.kind = kind;
+		this.version = version;
+		this.flags = flags;
+		this.stored = stored;
+		this.produce = produce;
+	}
+
+	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes):HlDebugSection
+		return new HlDebugSection(kind, version, flags, payload, null);
+
+	public static function lazy(kind:Int, version:Int, flags:Int, produce:() -> haxe.io.Bytes):HlDebugSection
+		return new HlDebugSection(kind, version, flags, null, produce);
+
+	/** Whether the section has a payload at all, without producing a derived one. */
+	public function hasPayload():Bool
+		return stored != null || produce != null;
+
+	function get_payload():haxe.io.Bytes
+		return stored != null ? stored : produce();
+}
 
 /** UTF-8 source contents addressed by the hash carried in debug locations. */
 typedef HlSourceSnapshot = {

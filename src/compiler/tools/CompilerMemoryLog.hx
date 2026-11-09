@@ -9,7 +9,7 @@ import sys.io.File;
  * named by HAXEON_COMPILER_HEAP_DUMP_ON, to <file>.<last word of the output name>.
  */
 class CompilerMemoryLog {
-	public static function record(label:String):Void {
+	public static function record(label:String, ?session:CompilerSession):Void {
 		#if hl
 		var path = Sys.getEnv("HAXEON_COMPILER_MEMORY_LOG");
 		if (path == null)
@@ -21,7 +21,9 @@ class CompilerMemoryLog {
 		var collectedMs = (Sys.time() - startedAt) * 1000.0,
 			after = hl.Gc.stats();
 		var line = '$label heap-before=${gb(before.currentMemory)} live-after-major=${gb(after.currentMemory)} resident-before=$residentBefore resident-after=${residentGb()} '
-			+ 'allocated-total=${gb(after.totalAllocated)} major-ms=${Std.int(collectedMs)}\n';
+			+ 'allocated-total=${gb(after.totalAllocated)} major-ms=${Std.int(collectedMs)}';
+		if (session != null)
+			line += ' modules=' + moduleIdentities(session) + '\n';
 		var out = File.append(path);
 		out.writeString(line);
 		out.close();
@@ -35,6 +37,22 @@ class CompilerMemoryLog {
 					break;
 				}
 		#end
+	}
+
+	/** Whether the places that keep a module refer to one module object: the cached result, the reuse snapshot, the encoded-bytes cache. */
+	static function moduleIdentities(session:CompilerSession):String {
+		#if hl
+		@:privateAccess {
+			var compiler = session.compiler;
+			if (compiler == null)
+				return "no-compiler";
+			var result = compiler.cachedCompileResult == null ? null : compiler.cachedCompileResult.module,
+				snapshot = compiler.pipelineSnapshot == null || compiler.pipelineSnapshot.backend == null ? null : compiler.pipelineSnapshot.backend.assembly.module,
+				encoded = session.encodedModule == null ? null : session.encodedModule.code;
+			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
+		}
+		#end
+		return "";
 	}
 
 	static function gb(bytes:Float):String

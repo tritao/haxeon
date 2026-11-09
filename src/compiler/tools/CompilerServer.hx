@@ -252,7 +252,7 @@ class CompilerServer {
 			}
 			throw failure;
 		}
-		CompilerMemoryLog.record(request.output);
+		CompilerMemoryLog.record(request.output, session);
 		if (Sys.getEnv("HAXEON_COMPILER_CENSUS") != null)
 			sys.thread.Thread.create(function() CompilerMemoryCensus.run(session));
 		var markerDestination = request.output + ".live.full";
