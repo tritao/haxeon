@@ -1202,8 +1202,7 @@ class CallResolver {
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
 		if (name == "__reference_equal") {
-			var sourcePath = StringTools.replace(span.file.path, "\\", "/");
-			if (!(StringTools.startsWith(sourcePath, "stdlib/") || sourcePath.indexOf("/stdlib/") >= 0))
+			if (!span.file.isStandardLibrarySource)
 				fail("E1025", '"__reference_equal" is a stdlib-only primitive; compare class references with ==', span);
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);

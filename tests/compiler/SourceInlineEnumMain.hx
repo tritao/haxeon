@@ -61,7 +61,7 @@ class SourceInlineEnumMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-				c.addSourceRoot("stdlib");
+				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("first-" + target + inlining, "first", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				var result = c.compile("Main");
@@ -100,7 +100,7 @@ class SourceInlineEnumMain {
 
 	static function checkNativeMapEnum(target:String, inlining:Bool):Void {
 		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.configure("native-map-enum-" + target + inlining, "map-enum",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-array-iterator-escape.hx"));

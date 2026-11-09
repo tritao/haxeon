@@ -109,7 +109,7 @@ class TypedMetadataMergeMain {
 
 	static function newCompiler(files:Map<String, String>):Compiler {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		for (path => text in files)
 			compiler.update(path, text);
 		return compiler;

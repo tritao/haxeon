@@ -26,8 +26,9 @@ required with it for `Hashable`. Struct comparisons without `Equatable` are reje
 identity; classes cannot conform to `Equatable` or `Hashable`. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
 on `Diffable` declarations. `Diff.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
 it to a value.
-The compiler-only `__reference_equal` primitive is restricted to stdlib sources and backs identity-keyed collections;
-user code compares class references with `==`.
+The compiler-only `__reference_equal` primitive is available only to modules the source loader resolved from the
+compiler-registered standard-library root; a path that merely contains `stdlib` does not grant access. It backs
+identity-keyed collections; user code compares class references with `==`.
 Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
 HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
 value raises a catchable null-access error when cast to its non-null struct. A focused program covers these behaviours,

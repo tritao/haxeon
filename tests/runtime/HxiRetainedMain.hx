@@ -13,7 +13,7 @@ class HxiRetainedMain {
 		if (target == null)
 			target = "x86_64-linux-gnu";
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("retained.hxi",
 			'interface FixtureRetained @target("$target") @library("$library") {\n'
 			+ '\tstruct fixture_item @layout(8, 8) { name: utf8 @offset(0); }\n'

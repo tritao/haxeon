@@ -12,7 +12,7 @@ class RawBytePointerMain {
 
 	static function compiler():Compiler {
 		var result = new Compiler(null, CompilerIntrinsics.configuration());
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Main.hx", source);
 		return result;
 	}

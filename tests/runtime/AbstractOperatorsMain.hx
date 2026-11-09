@@ -9,7 +9,7 @@ class AbstractOperatorsMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", 'abstract Millimetres(Float) from Float to Float {
   public inline function new(value:Float) this = value;
   @:op(A + B) public static function add(a:Millimetres, b:Millimetres):Millimetres return new Millimetres((a : Float) + (b : Float));

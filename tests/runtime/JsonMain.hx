@@ -8,7 +8,7 @@ class JsonMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"import haxe.Json; function main():Int {\n"
 			+ "  var encoded = Json.stringify({ text: 'Olá 😀', number: 40, ok: true, items: [1, 2] });\n"

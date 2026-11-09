@@ -23,7 +23,7 @@ class AddedStaticCallerMain {
 			+ "}\n";
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
 		var build = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),

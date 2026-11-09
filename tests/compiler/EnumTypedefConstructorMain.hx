@@ -16,7 +16,7 @@ class EnumTypedefConstructorMain {
 	static function compiler(alias = 'SourceEdit'):Compiler {
 		var result = new Compiler();
 		CompilerIntrinsics.register(result);
-		result.addSourceRoot("stdlib");
+		result.addStandardLibrarySourceRoot("stdlib");
 		result.update("document/SourceEdit.hx", SOURCE);
 		result.update("document/OtherEdit.hx", OTHER);
 		result.update("document/Edits.hx", 'package document; typedef Edit = $alias;');
@@ -134,7 +134,7 @@ class EnumTypedefConstructorMain {
 		for (target in [Wasm32, WasmGc])
 			for (inlineEnabled in [false, true]) {
 				var isolated = new Compiler(null, CompilerIntrinsics.configuration());
-				isolated.addSourceRoot("stdlib");
+				isolated.addStandardLibrarySourceRoot("stdlib");
 				isolated.configure("enum-typedef-" + target + inlineEnabled, "enum-typedef",
 					CompilerDriver.targetDefines(target == Wasm32 ? "wasm32" : "wasm-gc").concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
 				for (name => state in source.modules)

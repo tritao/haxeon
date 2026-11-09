@@ -4,15 +4,18 @@ package compiler;
 class SourceFile {
 	public final path:String;
 	public final text:String;
+	/** True only when the configured source loader resolved this file from its standard-library root. */
+	public final isStandardLibrarySource:Bool;
 	public final bytes:haxe.io.Bytes;
 
 	final lineStarts:Array<Int>;
 	final hash:Int;
 	final secondHash:Int;
 
-	public function new(path:String, text:String) {
+	public function new(path:String, text:String, isStandardLibrarySource:Bool = false) {
 		this.path = path;
 		this.text = text;
+		this.isStandardLibrarySource = isStandardLibrarySource;
 		bytes = haxe.io.Bytes.ofString(text);
 		lineStarts = [0];
 		var contentHash:Int = cast 0x811C9DC5;

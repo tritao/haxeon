@@ -9,7 +9,7 @@ class HxiValueHandleMain {
 			library = Sys.args()[1],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("value-handles.hxi",
 			'interface ValueHandles @target("x86_64-linux-gnu") @library("$library") {\n'
 			+ '\thandle value_handle : u32 @destroy("native_fixture_value_handle_destroy");\n'

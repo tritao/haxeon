@@ -8,7 +8,7 @@ class EqualityMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", 'import haxeon.Equality;
 import haxeon.Hashing;
 struct Point implements Hashable {

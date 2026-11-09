@@ -21,7 +21,7 @@ class AndroidReload {
 			statePath = arguments[1],
 			bundlePath = arguments[2],
 			compiler = new Compiler(File.getBytes(statePath), CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result:CompileResult = compiler.compile(ModulePath.fromFile(sourcePath));
 		if (!result.requiresReload)

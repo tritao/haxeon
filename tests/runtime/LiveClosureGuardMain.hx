@@ -363,7 +363,7 @@ class LiveClosureGuardMain {
 		var compiler = new Compiler();
 		if (stdlib) {
 			CompilerIntrinsics.register(compiler);
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 		}
 		compiler.update("Main.hx", source);
 		var build = compiler.compile("Main");

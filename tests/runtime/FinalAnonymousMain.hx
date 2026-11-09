@@ -9,7 +9,7 @@ class FinalAnonymousMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
 	typedef Occurrence = { final pose:Frame; }
 	function main():Int { var value:Occurrence = {pose: {x: 2.0}}; value.pose.x = 3.0; return 42; }');

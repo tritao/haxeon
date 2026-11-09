@@ -11,7 +11,7 @@ class CxxThunkMain {
 			functionsPath = Sys.args()[3],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("Counter.hx", File.getContent(counterPath));
 		compiler.update("CxxThunkFixtureFunctions.hx", File.getContent(functionsPath));

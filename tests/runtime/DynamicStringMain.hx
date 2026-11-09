@@ -31,7 +31,7 @@ class DynamicStringMain {
 	static function configured():Compiler {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		return compiler;
 	}
 

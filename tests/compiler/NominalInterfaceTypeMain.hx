@@ -17,7 +17,7 @@ class NominalInterfaceTypeMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-				c.addSourceRoot("stdlib");
+				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("nominal-" + target + inlining, "nominal",
 					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				c.update("Main.hx", source);

@@ -38,7 +38,7 @@ class MethodClosureValueMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-				c.addSourceRoot("stdlib");
+				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("method-" + target + inlining, "method", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/closure-method-value-arguments.hx"));
 				var result = c.compile("Main");

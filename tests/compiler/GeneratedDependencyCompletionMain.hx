@@ -8,7 +8,7 @@ class GeneratedDependencyCompletionMain {
 		var source = File.getContent("tests/programs/enum-generated-dependencies.hx");
 		for (inlineEnabled in [false, true]) {
 			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("generated-dependencies", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
 			compiler.update("Main.hx", source);
 			for (_ in 0...2)

@@ -12,7 +12,7 @@ class ReadOnlyArrayMain {
 		reject('values.splice(0, 1)');
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", 'import haxe.ds.ReadOnlyArray;
 function main():Int {
   var source:Array<Int> = [10, 20, 30];
@@ -29,7 +29,7 @@ function main():Int {
 	static function reject(statement:String):Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			'import haxe.ds.ReadOnlyArray; function main():Int { var values:ReadOnlyArray<Int> = [1, 2]; ' + statement + '; return 42; }');
 		try {

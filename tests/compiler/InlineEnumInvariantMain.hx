@@ -25,7 +25,7 @@ class InlineEnumInvariantMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlineEnabled in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-				c.addSourceRoot("stdlib");
+				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("enum-invariant-" + target + inlineEnabled, "enum-invariant",
 					compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
 				c.update("Main.hx",

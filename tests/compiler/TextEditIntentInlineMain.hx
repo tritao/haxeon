@@ -16,7 +16,7 @@ class TextEditIntentInlineMain {
 
 	static function check(target:String, inlining:Bool):Void {
 		var driver = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		driver.addSourceRoot("stdlib");
+		driver.addStandardLibrarySourceRoot("stdlib");
 		driver.configure("text-intent-" + target + "-" + inlining, "text-intent",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-callback-escape.hx"));

@@ -10,7 +10,7 @@ class CxxHxiCallMain {
 			projectionPath = Sys.args()[2],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("DisplayList.hx", File.getContent(projectionPath));
 		compiler.update("Main.hx",

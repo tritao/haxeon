@@ -22,7 +22,7 @@ class EnumDynamicOrderMain {
 
 	static function checkTarget(target:String, inlining:Bool, temp:String):Void {
 		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.configure("enum-order-" + target + inlining, "enum-order",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-dynamic-equality.hx"));

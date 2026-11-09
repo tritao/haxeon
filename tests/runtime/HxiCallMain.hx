@@ -12,7 +12,7 @@ class HxiCallMain {
 		if (target == null)
 			target = "x86_64-linux-gnu";
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiProjection("fixture.hxmap",
 			'{"interface":"Fixture","resultPolicies":{"FixtureResult":{"successValue":"FORTY_TWO","errorType":"FixtureError","checkedSuffix":"_checked"}}}');
 		compiler.addFfiInterface("fixture.hxi",

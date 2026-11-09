@@ -13,7 +13,7 @@ class PrimitiveMapEffectsMain {
 
 	static function compiler(source:String):Compiler {
 		var result = new Compiler(null, CompilerIntrinsics.configuration());
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Support.hx", source);
 		result.update("Main.hx", mainSource);
 		return result;
@@ -37,7 +37,7 @@ class PrimitiveMapEffectsMain {
 			+ 'for (i in 0...2) if (flags.exists("x")) total += provider.value; return total; } } '
 			+ 'function main():Int return new View().run(["x"=>true]);';
 		var result = new Compiler(null, CompilerIntrinsics.configuration());
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Main.hx", source);
 		if (GeneratedProgramRunner.exitCode(result.compile("Main")) != 14)
 			throw "loop lost a fact across a typed map read";

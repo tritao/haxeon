@@ -38,7 +38,7 @@ class CodeIdentityTable {
 		if (text == state.source.text)
 			return;
 		state = context.writableState(MODULE, rollback);
-		state.render(new SourceFile(state.source.path, text));
+		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource));
 		context.parse(state, entry, body, signatures, structural);
 		context.addTypeDependencies(state);
 	}

@@ -614,6 +614,12 @@ class Compiler {
 		sourceGeneration++;
 	}
 
+	/** Register the compiler-owned standard library root separately from project source roots. */
+	public function addStandardLibrarySourceRoot(path:String):Void {
+		sourceLoader.addStandardLibraryRoot(path);
+		sourceGeneration++;
+	}
+
 	/** Add a package-scoped source root for a resolved local dependency. */
 	public function addPackageSourceRoot(packageName:String, path:String):Void {
 		sourceLoader.addPackageRoot(packageName, path);
@@ -629,12 +635,16 @@ class Compiler {
 	/** An explicit module identity keeps a standalone file's directory out of its package. */
 	public function update(path:String, source:String, ?moduleName:String):ModuleState {
 		var name = moduleName == null ? ModulePath.fromFile(path) : moduleName;
+		var isStandardLibrarySource = false;
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
-			if (current.source.path == path && current.loadedText == source)
-				return current;
+			if (current.source.path == path) {
+				if (current.loadedText == source)
+					return current;
+				isStandardLibrarySource = current.source.isStandardLibrarySource;
+			}
 		}
-		var file = new SourceFile(path, source);
+		var file = new SourceFile(path, source, isStandardLibrarySource);
 		var state:ModuleState;
 		if (modules.exists(name)) {
 			state = modules.get(name);
@@ -653,7 +663,7 @@ class Compiler {
 		if (state == null)
 			throw 'Cannot refresh unloaded module "$name"';
 		if (state.loadedText != source) {
-			state.update(new SourceFile(state.source.path, source));
+			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource));
 			sourceGeneration++;
 		}
 	}
@@ -705,7 +715,7 @@ class Compiler {
 						break;
 					}
 			if (affected)
-				state.render(new SourceFile(state.source.path, state.source.text));
+				state.render(new SourceFile(state.source.path, state.source.text, state.source.isStandardLibrarySource));
 		}
 		sourceGeneration++;
 	}

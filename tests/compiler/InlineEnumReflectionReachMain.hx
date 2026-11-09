@@ -16,7 +16,7 @@ class InlineEnumReflectionReachMain {
 
 	static function check(target:String, inlining:Bool):Void {
 		var driver = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		driver.addSourceRoot("stdlib");
+		driver.addStandardLibrarySourceRoot("stdlib");
 		driver.configure("inline-reflection-reach-" + target + "-" + inlining, "inline-reflection-reach",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-reflection-reach.hx"));

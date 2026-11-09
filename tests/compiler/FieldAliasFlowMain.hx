@@ -19,7 +19,7 @@ class FieldAliasFlowMain {
 		}
 		var dynamicCompiler = new Compiler();
 		CompilerIntrinsics.register(dynamicCompiler);
-		dynamicCompiler.addSourceRoot("stdlib");
+		dynamicCompiler.addStandardLibrarySourceRoot("stdlib");
 		dynamicCompiler.update("Main.hx", 'class Cell { public var item:Null<Int>; public function new() item=null; } '
 			+ 'function main():Int { var first=new Cell(); var alias:Dynamic=first; first.item=null; alias.item=42; '
 			+ 'return first.item == null ? 0 : first.item; }');

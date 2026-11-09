@@ -8,7 +8,7 @@ class ValueInterfaceHelperReuseMain {
  static function main() {
   for(target in ["hl", "wasm32", "wasm-gc"]) for(inlining in [false, true]) {
    var c=new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-   c.addSourceRoot("stdlib");
+   c.addStandardLibrarySourceRoot("stdlib");
    c.configure("interface-reuse-"+target+inlining,"interface-reuse",CompilerDriver.targetDefines(target).concat(["haxeon-inline="+(inlining?1:0)]));
    c.update("Main.hx",sys.io.File.getContent("tests/programs/value-interface-helper-reuse.hx"));
    var result=c.compile("Main"),temp=Sys.getEnv("TMPDIR");if(temp==null)temp="out";
