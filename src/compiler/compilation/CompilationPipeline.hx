@@ -116,8 +116,11 @@ class CompilationPipeline {
 		}
 		var snapshot = context.pipelineSnapshot;
 		if (snapshot != null && !backendReused) {
-			snapshot.backend = backend;
-			snapshot.backendEnvironment = backendKey;
+			// A new object: the one in the compiler is the last successful build's, and a build that fails must leave it as it is.
+			var next = new PipelineSnapshot(snapshot.inputs, snapshot.ir);
+			next.backend = backend;
+			next.backendEnvironment = backendKey;
+			context.pipelineSnapshot = next;
 		}
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,

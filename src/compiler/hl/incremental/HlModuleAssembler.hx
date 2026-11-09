@@ -170,6 +170,9 @@ class HlModuleAssembler {
 	/** The functions of the last plain build to link instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
 	public var loweredCache:Null<HlLoweredCache>;
 
+	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are linked from `loweredCache`. */
+	public var livePatching = false;
+
 	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
 	public var irVerified = false;
 
@@ -203,6 +206,7 @@ class HlModuleAssembler {
 		result.publishedTypes = publishedTypes;
 		result.publishedGlobals = publishedGlobals;
 		result.published = published.copy();
+		result.livePatching = livePatching;
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
@@ -874,14 +878,16 @@ class HlModuleAssembler {
 					throw 'Added function $name has no slot';
 				addedFunctions.push({slot: slot, name: name});
 			}
+		if (livePatching == (loweredCache != null))
+			throw 'a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}';
 		var liveCache = loweredCache;
-		if (liveCache == null) {
+		if (livePatching) {
 			if (!reuseLowered)
 				published = new HlLoweredCache();
 			liveCache = published;
 		}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relocated == null ? regenerated : regenerated.concat(relocated),
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, loweredCache == null),
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, livePatching),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

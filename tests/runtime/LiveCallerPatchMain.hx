@@ -54,6 +54,7 @@ class LiveCallerPatchMain {
 		var before = first.compile("Main").ir, after = second.compile("Main").ir;
 		var assembler = new compiler.hl.incremental.HlModuleAssembler();
 		assembler.fieldReserve = 0;
+		assembler.livePatching = true;
 		assembler.assemble(before, [for (fn in before.functions) fn.name], Patch);
 		var assembly = assembler.assemble(after, ["Main.scale"], Patch);
 		if (assembly.requiresReload)

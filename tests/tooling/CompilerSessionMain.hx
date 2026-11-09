@@ -102,7 +102,12 @@ class CompilerSessionMain {
 		catch (_:Dynamic)
 			writeFailed = true;
 		expect(writeFailed, "artifact-write errors must be reported");
+		// The failed build changed no state the next one starts from: it builds the module for 6 again, and an identical rebuild
+		// after the failure still writes the output.
+		FileSystem.deleteFile(output);
 		compile();
+		expect(FileSystem.exists(output), "a rebuild after a failed write must write the output");
+		compareFresh(6);
 
 		File.saveContent(value, "class Value { public static function get():Int { return 9; } }");
 		var edited = compile();

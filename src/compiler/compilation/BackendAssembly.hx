@@ -133,6 +133,7 @@ class BackendAssembly {
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
 		candidateAssembler.irVerified = !context.livePatching;
+		candidateAssembler.livePatching = context.livePatching;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
 			candidateAssembler.loweredCache = loweredCache;
@@ -155,6 +156,7 @@ class BackendAssembly {
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
+			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
 			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)

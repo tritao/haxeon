@@ -89,9 +89,14 @@ done is proportional to the change.
 - A link step assigns canonical indices and patches operands. It is the only code that touches `HlSymbolTable`:
   it replays each function's references in function order, so tables get the encounter order a cold lowering would give.
   Cold and warm both go through the link step, so byte identity holds by construction; the test checks it.
-- Live patching keeps its append-only tables: its link step is the existing `HlSymbolTable` interning in stable slot
-  order (same relocatables, different assigner). No second lowering path, no compat form: `HlFunction`-with-absolute-
-  operands is produced only by linking.
+- Live patching keeps its append-only tables and keeps its lowered functions by name (done in 3c). Plan A had it replay each
+  kept function's requests through an append-only assigner. That would only cost time: append-only tables and stable slots
+  keep a kept function's absolute operands valid, and the patch planner already decides which functions are regenerated.
+  So a live build puts its functions in the same `HlLoweredCache`, with no requests, and `HlLower` trusts every entry it is not
+  told to regenerate (`trustCache`); plain builds compare the IR and link. The two modes are chosen by
+  `HlModuleAssembler.livePatching`, and the assembler refuses a live build with a lowered cache and a plain one without.
+  Trust relies on the regenerated set being right, so `HAXEON_CHECK_REUSE=1` lowers each kept function again and throws,
+  naming it, if its code differs or the symbol tables grew. No second lowering path, no compat form.
 
 Cache entry: `LoweredEntry { relocatable function, facts }`.
 
@@ -339,7 +344,7 @@ M1, B is M2 together with M3 (structured identities of the families it ports).
 1. Done: pass allocation fixes (`fc02b21d`).
 2. Program-level shortcut including module bytes.
 3. Relocatable lowering: (a) link step on the cold path, byte-identical; (b) plain warm builds reuse lowered functions;
-   (c) live patching ported; (d) per-function verification.
+   (c) live patching on the shared cache (done: trusted by name instead of replaying requests, see Design A); (d) per-function verification.
 4. B (after review of this doc and after ADR M1): framework with the opaque step, then ports in the order of B.5.
 
 Gates for each step: full `HAXEON_NATIVE_READY=1 scripts/test-driver.sh 8`, and app cold / no-op / edit compile-count with
@@ -391,3 +396,47 @@ Not traced: `IrInitializationCalls.calls()` beyond its fixpoint header, and the 
 - **Worker memory.** The warm app worker reaches 9-12 GB; `earlyoom` ends it when free memory drops under 10%. The reuse caches add about
   0.4 GB (kept final IR, module and encoded bytes). Tracked separately.
 
+
+## M1: TargetProfile and GenerationContext (design, approved 2026-11-09)
+
+Inventory of the static state in `src/compiler/ir`, `ir/hl`, `hl` and `backend`:
+
+- `IrGenerator` program facts (written by `bindEnumConstructors` and `bindClasses` on every build; per build; not target-specific):
+  `enumConstructorCounts`, `enumEquatableTypes`, `enumPayloadTypes`, `valueClasses`, `classBases`, `genericClasses`,
+  `genericOwnerOrigins`, `genericOwnerAliases`, `equatableTypes`, `observableClasses`, `observableStateOwners`,
+  `observableFieldBits`, `typedInterfaceContracts`. Read by `IrGenerator` and `inputState()`; accessors `genericOwnerOrigin`
+  (`GenericOwnerErasure`) and `observableClassFieldCount` (`IrProgramAssembler`).
+- `IrGenerator` objects: `generatedObjects` (an output generation fills), `flatValueObjects`, `inlineValueObjects`.
+- `IrGenerator` target flags (set per build from the target): `headerlessValueClasses`, `dynamicObjectLiterals`,
+  `nativeStringFastPaths`, `nativeReflectionDispatch`, `nativeArrayChecks`; `IrInliner.packedValueFields`.
+- Per-function scratch (saved and restored inside `generateFunction`): `cleanupRegions`, `loweringScopedDisposal`,
+  `observableConstructorInitialization`, `localOptionalPlaces`, `arrayValuePlaceSerial`, `observableAccessSerial`.
+- Out of M1: the `HAXEON_*` switches (`IrInliner.enabled`, `IrLoadStoreForwarding.enabled`, `IrStrengthReduction.enabled`),
+  `HlLower.lastDebugLocation`, `HlRuntimeIdentity.sequence`.
+
+Shapes:
+
+- `TargetProfile`: immutable, `TargetKind` is `HashLink` or `Wasm` (C is added when a C value first differs). Holds the six flags
+  above and `key()`, which replaces the `wasm:` part of the pipeline environment text and the flags in `inputState()`.
+- `ProgramFacts.of(typed)`: the program-derived maps, immutable, built on every build as `bindClasses` is now. Caching it on
+  the typed program's identity belongs to M4.
+- Generated objects are an output, not context: generation returns the objects it made, and the flat/inline facts are built from
+  that result and passed on as input.
+- `FunctionScratch`: one per `generateFunction` call.
+
+Port order (one commit each; driver suite, byte-identical outputs, app counts, one checked app edit):
+1. `TargetProfile`, `packedValueFields` moves onto it. 2. The other target flags. 3. `FunctionScratch`. 4. `ProgramFacts`.
+5. Objects as generation output. 6. Delete the statics and the resets in `Frontend.hx`.
+
+Follow-up (not M1): the Wasm statics that are per-build caches, `WasmModuleSupport.hostCNativeProgram` / `hostCNatives` and
+`WasmProgramIndex.cached`, and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
+`WasmLinearRuntime` flags) belong in the same treatment after M1.
+
+## Commit point of a build (2026-11-09)
+
+A failed or rejected build leaves every cache as the last successful build left it. `CompilerSnapshot` holds the
+inline cache, the pipeline snapshot, the lowered cache, the reachability cache and the declaration owners next to the modules and
+types, and `restore` puts them back together; the candidate of a build only ever works on copies. Before this, a rejected
+publication (the artifact write failed) restored the modules and the assembler but kept the caches of the rejected build, so the next
+build compared against the rejected sources and kept a stale `main` in the live module (found by `HAXEON_CHECK_REUSE=1`).
+Test: `CompilerSessionMain` (build, failed write, rebuild runs the new value and still writes the output).

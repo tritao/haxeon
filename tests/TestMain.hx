@@ -928,6 +928,7 @@ class TestMain {
 			|| restoredFunctionCache.slots.length != functionCache.slots.length)
 			throw "HashLink function cache did not round trip deterministically";
 		var persistedAssembler = new HlModuleAssembler();
+		persistedAssembler.livePatching = true;
 		persistedAssembler.assemble(instructionProgram, [for (fn in instructionProgram.functions) fn.name], Patch);
 		var assemblerBytes = HlAssemblerStateCodec.encode(persistedAssembler),
 			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes);

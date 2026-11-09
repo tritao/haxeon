@@ -648,6 +648,7 @@ class HotReloadMain {
 		compiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
 		var program = compiler.compile("Main").ir,
 			assembler = new HlModuleAssembler();
+		assembler.livePatching = true;
 		assembler.assemble(program, [for (fn in program.functions) fn.name], Patch);
 		var cacheBytes = HlFunctionCacheStateCodec.encode(assembler.cache.exportState());
 		for (_ in 0...100)
@@ -682,6 +683,7 @@ class HotReloadMain {
 		editedCompiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
 		var edited = editedCompiler.compile("Main").ir;
 		// Both functions name the edited source snapshot, including the unchanged body.
+		restoredAssembler.livePatching = true;
 		var uninterrupted = uninterruptedAssembler.assemble(edited, ["Main.add", "main"], Patch),
 			restored = restoredAssembler.assemble(edited, ["Main.add", "main"], Patch);
 		if (uninterrupted.revision != restored.revision

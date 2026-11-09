@@ -954,7 +954,12 @@ class Compiler {
 			publishedAbi: publishedAbi,
 			compiledOnce: compiledOnce,
 			rehydrationBaseline: rehydrationBaseline,
-			semanticProgram: cachedSemanticProgram
+			semanticProgram: cachedSemanticProgram,
+			inlineCache: inlineCache,
+			pipelineSnapshot: pipelineSnapshot,
+			loweredCache: loweredCache,
+			reachabilityCache: reachabilityCache,
+			declarationOwners: declarationOwners
 		};
 	}
 
@@ -1027,6 +1032,11 @@ class Compiler {
 		compiledOnce = snapshot.compiledOnce;
 		rehydrationBaseline = snapshot.rehydrationBaseline;
 		cachedSemanticProgram = snapshot.semanticProgram;
+		inlineCache = snapshot.inlineCache;
+		pipelineSnapshot = snapshot.pipelineSnapshot;
+		loweredCache = snapshot.loweredCache;
+		reachabilityCache = snapshot.reachabilityCache;
+		declarationOwners = snapshot.declarationOwners;
 	}
 
 	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
@@ -1067,7 +1077,8 @@ class Compiler {
 		if (version == null)
 			version = compiler.modules.CodeIdentityTable.compilerVersion();
 		var lines = [
-			for (name => value in defines) if (name != "compiler-version") name + "=" + value
+			for (name => value in defines)
+				if (name != "compiler-version") name + "=" + value
 		];
 		lines.sort(Reflect.compare);
 		return "compiler:" + version + "\n" + lines.join("\n");

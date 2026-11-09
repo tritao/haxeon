@@ -19,6 +19,17 @@ typedef CompilerSnapshot = {
 	final compiledOnce:Bool;
 	final rehydrationBaseline:Null<Map<String, haxe.io.Bytes>>;
 	final semanticProgram:Null<SemanticProgram>;
+
+	/**
+	 * The caches that define "the previous build": the candidate of a build works on copies, so these are the objects the last
+	 * successful build left, and putting them back with the rest returns the compiler to exactly that state.
+	 */
+	final inlineCache:compiler.ir.IrInliner.IrInlineCache;
+
+	final pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot>;
+	final loweredCache:compiler.hl.incremental.HlLoweredCache;
+	final reachabilityCache:Map<String, compiler.Compiler.ReachabilityCache>;
+	final declarationOwners:compiler.semantic.DeclarationOwners;
 }
 
 /** Runtime revision and ABI last acknowledged by the host. */

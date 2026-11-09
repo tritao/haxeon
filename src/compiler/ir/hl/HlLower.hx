@@ -79,6 +79,9 @@ class HlLower {
 
 	final checkingLinks:Bool;
 
+	/** HAXEON_CHECK_REUSE=1 on a build that trusts its cache: every kept function is lowered again and compared. */
+	final checkingTrust:Bool;
+
 	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
 	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 
@@ -177,6 +180,7 @@ class HlLower {
 		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 		this.loweredCache = loweredCache;
+		this.checkingTrust = trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null);
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
@@ -407,6 +411,8 @@ class HlLower {
 		for (fn in program.functions) {
 			var kept = trustCache && !regenerated.exists(fn.name) && loweredCache != null ? loweredCache.entries.get(fn.name) : null;
 			if (kept != null) {
+				if (checkingTrust)
+					verifyKept(fn, kept.fn);
 				code.functions.push(kept.fn);
 				entries.set(fn.name, kept);
 			} else {
@@ -531,6 +537,34 @@ class HlLower {
 		same("the string", symbols.strings, environment.strings);
 		same("the global", symbols.globals, environment.globals);
 		same("the type", symbols.types, environment.types);
+	}
+
+	/**
+	 * A live build keeps a function because the caller says nothing it leans on changed. Lowering it again must give the same code
+	 * and add nothing to the tables; if not, the set of regenerated functions was wrong.
+	 */
+	function verifyKept(fn:IrFunction, kept:HlFunction):Void {
+		var sizes = [
+			symbols.ints.length,
+			symbols.floats.length,
+			symbols.strings.length,
+			symbols.types.length,
+			symbols.globals.length
+		];
+		// A function whose pieces the program no longer holds (a removed lambda whose code stored closures still run, a removed
+		// field) keeps its old code on purpose and cannot be lowered against this build: there is nothing to compare.
+		var fresh = try lowerFunction(PhiEdges.split(fn)) catch (error:String) return;
+		var now = [
+			symbols.ints.length,
+			symbols.floats.length,
+			symbols.strings.length,
+			symbols.types.length,
+			symbols.globals.length
+		];
+		if (now.join(",") != sizes.join(","))
+			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals ${sizes.join(",")} -> ${now.join(",")})';
+		if (Std.string(fresh) != Std.string(kept))
+			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} lowers to other code than its cached lowering';
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
