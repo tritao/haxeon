@@ -141,3 +141,43 @@ lowered-function cache 0.00, last assembler 0.07, inline cache 0.19.
 
 Setting the threshold per build through the runtime (cold 0.4, warm 0.2) raised the edit build's wall time by 3.4 s (GC time 2.5 s to 5.4 s) for a
 0.8 GB lower sampled peak, a difference that single samples could not separate from noise. Not kept; the launcher's `HL_GC_MARK_THRESHOLD=0.4` stands.
+
+## Page census by kind (2026-11-09, for the arena question)
+
+App, pre-merge tree (0405feb5 plus the step-0 pass fix), launcher environment, census of the worker's baseline state after a forced major GC,
+after the cold build and after the edit build (cold, no-op, no-op, edit in one worker). `scripts/hl-heap-tally.c` now also prints, per page
+kind, the page bytes and live bytes by the page's block size class, and the live pointer-free and raw blocks by size.
+
+| kind | after cold: page bytes / live / empty | after edit: page bytes / live / empty |
+|---|---|---|
+| scan | 3.66 / 2.15 / 1.51 GB | 4.27 / 2.48 / 1.79 GB |
+| pointer-free (noptr) | 1.67 / 0.73 / 0.94 GB | 2.52 / 1.08 / 1.44 GB |
+| raw | 0.38 / 0.07 / 0.31 GB | 0.50 / 0.13 / 0.37 GB |
+| empty pages | - | scan 11 MB, raw 21 MB, noptr 36 MB |
+
+Pointer-free plus raw pages hold 1.25 GB of empty space after the cold build and 1.81 GB after an edit. That is above the 1 GB the arena decision
+asked for, but where it sits matters:
+
+- Pointer-free empty space by block size class, after the edit: blocks under 256 B 0.82 GB (2^3 36 MB, 2^4 160, 2^5 178, 2^6 267, 2^7 179), 256 B to 4 KB
+  0.31 GB, 4 KB and up 0.34 GB. Live pointer-free blocks of 4 KB and more are about 0.52 GB (0.33 GB after cold); blocks under 128 B are 10M (cold)
+  to 13M (edit) objects of 8 to 127 bytes (strings, small buffers) holding about 0.3 GB.
+- Raw: 232 MB of the 370 MB empty space is in the 64 to 127 byte class (644k live blocks of about 66 B in 577 pages).
+- Scan: 0.58 GB empty in 16 to 31 byte blocks and 0.90 GB in 32 to 63 byte blocks, which is object-sized data, not buffers.
+- Largest live pointer-free blocks: 119 MiB (one block; the size of the encoded module), then 6.9 MiB (four after an edit, one after cold), 3.9 MiB,
+  2.3 MiB, two of 2.0 MiB. The dump has no allocation site, so the owner of the smaller ones is not known; nothing but the module bytes is named.
+
+So per-build byte buffers could account for at most about 0.35 GB of empty pointer-free space (the 4 KB and larger classes); the larger part of
+the empty space is many small blocks that die and leave pages part full, which an arena of large buffers does not touch.
+
+What an edit build allocates (bytes, from `--timings`; total about 12.0 GB): `ir-assembly` 5.3 GB (44%), `semantic` 1.8 GB, `typing-lowering` 1.7 GB,
+`encode` 1.3 GB (18.7M objects), `backend-assembly` 1.1 GB, `backend-functions` 0.8 GB, `write` 0.2 GB. The `encode` phase writes a module of about 100 MB
+and allocates 13 times that; it is the one phase that is mostly byte buffers.
+
+Could the worker use `runtime.memory.Arena`? Not as it is. `Arena` hands out `RawPtr<T>` values sized with `sizeof<T>`/`alignof<T>`, which only the Haxeon
+compiler understands, and the worker is built with the stock Haxe compiler (the test driver and the launcher run `haxe -hl`). It is also for GC-free native
+structs, not for `hl.Bytes` buffers. A byte-buffer arena would need a small native in `haxeon_runtime` (allocate a block, return `hl.Bytes` over it, free
+at the end of the build) and its owner must guarantee that nothing keeps a reference past the build.
+
+Not measured: allocation sites. The allocation profiler (`hlprof-live --sources alloc`, via `HAXEON_COMPILER_PROFILE_PORT`) attached to the worker but
+recorded no allocation samples, probably because the JIT's inline allocation path does not call the hook; I did not pursue it. The split between
+transient and retained is therefore by phase and by size class, not by site.
