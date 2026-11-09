@@ -17,11 +17,13 @@ class ChunkedOutput extends Output {
 	var segments:Array<Bytes> = [];
 	var lengths:Array<Int> = [];
 	var total = 0;
-	var chunk:Bytes;
+	static final NONE = Bytes.alloc(0);
+
+	var chunk:Bytes = NONE;
 	var used = 0;
+	var nextChunk = FIRST_CHUNK;
 
 	public function new() {
-		chunk = Bytes.alloc(FIRST_CHUNK);
 		bigEndian = false;
 	}
 
@@ -36,13 +38,22 @@ class ChunkedOutput extends Output {
 		segments.push(chunk);
 		lengths.push(used);
 		total += used;
-		chunk = Bytes.alloc(chunk.length >= MAX_CHUNK ? MAX_CHUNK : chunk.length * 2);
+		chunk = NONE;
 		used = 0;
 	}
 
-	override public function writeByte(c:Int):Void {
-		if (used == chunk.length)
+	/** The room for the next write, in a chunk allocated only when something is written to it. */
+	inline function room():Void {
+		if (used == chunk.length) {
 			closeChunk();
+			chunk = Bytes.alloc(nextChunk);
+			if (nextChunk < MAX_CHUNK)
+				nextChunk *= 2;
+		}
+	}
+
+	override public function writeByte(c:Int):Void {
+		room();
 		chunk.set(used++, c);
 	}
 
@@ -51,8 +62,7 @@ class ChunkedOutput extends Output {
 			throw haxe.io.Error.OutsideBounds;
 		var remaining = count, from = position;
 		while (remaining > 0) {
-			if (used == chunk.length)
-				closeChunk();
+			room();
 			var take = chunk.length - used;
 			if (take > remaining)
 				take = remaining;
