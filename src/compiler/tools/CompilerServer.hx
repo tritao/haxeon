@@ -252,6 +252,9 @@ class CompilerServer {
 			}
 			throw failure;
 		}
+		CompilerMemoryLog.record(request.output);
+		if (Sys.getEnv("HAXEON_COMPILER_CENSUS") != null)
+			sys.thread.Thread.create(function() CompilerMemoryCensus.run(session));
 		var markerDestination = request.output + ".live.full";
 		if (request.output != null && FileSystem.exists(markerDestination))
 			FileSystem.deleteFile(markerDestination);
