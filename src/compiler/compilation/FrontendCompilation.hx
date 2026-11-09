@@ -11,6 +11,7 @@ import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrInliner;
 import compiler.ir.IrProgramAssembler;
+import compiler.ir.IrVerifier;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
 import compiler.semantic.LambdaName;
@@ -699,6 +700,15 @@ class FrontendCompilation {
 			IrInliner.packedValueFields = !context.isWasmTarget();
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
 			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.inlineEnabled(), instrumentScope);
+			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
+			if (!context.livePatching) {
+				IrVerifier.verifyReusing(ir, context.verifyMemo);
+				if (checkingReuse)
+					try
+						IrVerifier.verify(ir)
+					catch (error:String)
+						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
+			}
 			if (matchesPrevious) {
 				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);
 				if (difference != null)

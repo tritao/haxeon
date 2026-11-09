@@ -167,6 +167,9 @@ class HlModuleAssembler {
 	/** The functions of the last plain build to link instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
 	public var loweredCache:Null<HlLoweredCache>;
 
+	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
+	public var irVerified = false;
+
 	/** How many functions the last `assemble` took from `loweredCache`. */
 	public var reusedFunctions = 0;
 
@@ -202,6 +205,7 @@ class HlModuleAssembler {
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
 		result.loweredCache = loweredCache;
+		result.irVerified = irVerified;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
@@ -869,7 +873,7 @@ class HlModuleAssembler {
 			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
 			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
-			loweredCache),
+			loweredCache, irVerified),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

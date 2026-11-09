@@ -49,6 +49,7 @@ class CompilationContext {
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
 	public var pipelineSnapshot(get, set):Null<PipelineSnapshot>;
 	public var loweredCache(get, never):compiler.hl.incremental.HlLoweredCache;
+	public var verifyMemo(get, never):compiler.ir.IrVerifyMemo;
 
 	public function new(owner:Compiler, ?buildSemanticModels = true) {
 		this.owner = owner;
@@ -198,6 +199,9 @@ class CompilationContext {
 
 	function get_loweredCache():compiler.hl.incremental.HlLoweredCache
 		return owner.loweredCache;
+
+	function get_verifyMemo():compiler.ir.IrVerifyMemo
+		return owner.verifyMemo;
 
 	function get_pipelineSnapshot():Null<PipelineSnapshot>
 		return owner.pipelineSnapshot;

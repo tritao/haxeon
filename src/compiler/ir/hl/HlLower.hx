@@ -111,22 +111,14 @@ class HlLower {
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
 			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false,
-			?loweredCache:compiler.hl.incremental.HlLoweredCache):MeasuredHlCode {
+			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
 		if (cachedFunctions == null || regenerated == null) {
-			// A plain build with a lowered-function cache verifies the functions the last build did not accept, or whose reads changed.
-			if (loweredCache == null)
+			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
+			if (!irVerified)
 				IrVerifier.verify(program);
-			else {
-				IrVerifier.verifyReusing(program, loweredCache.verified);
-				if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
-					try
-						IrVerifier.verify(program)
-					catch (error:String)
-						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
-			}
 		} else {
 			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
 			// hash included, so its cached lowering is still exact; re-lowering every function that touched a changed file

@@ -16,16 +16,11 @@ class HlLoweredCache {
 	/** What the entries were lowered for besides their IR (see `BackendAssembly.loweringEnvironment`). */
 	public var environment = "";
 
-	/** The functions the last verification accepted; a build verifies only the others (see `IrVerifyMemo`). Shared with the candidate copies. */
-	public final verified:compiler.ir.IrVerifyMemo;
-
-	public function new(?debug:HlDebugMetadataCache, ?verified:compiler.ir.IrVerifyMemo) {
+	public function new(?debug:HlDebugMetadataCache)
 		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
-		this.verified = verified == null ? new compiler.ir.IrVerifyMemo() : verified;
-	}
 
 	public function copy():HlLoweredCache {
-		var result = new HlLoweredCache(debug, verified);
+		var result = new HlLoweredCache(debug);
 		result.entries = [for (name => entry in entries) name => entry];
 		result.environment = environment;
 		return result;

@@ -250,6 +250,12 @@ class Compiler {
 	public var loweredCache:compiler.hl.incremental.HlLoweredCache = new compiler.hl.incremental.HlLoweredCache();
 
 	/**
+	 * What the last verification of the final IR accepted (see `IrVerifyMemo`). It belongs to the IR, not to a backend, so it is not
+	 * part of the lowered-function cache; candidate builds share it, since an acceptance holds only while the reads it recorded do.
+	 */
+	public final verifyMemo:compiler.ir.IrVerifyMemo = new compiler.ir.IrVerifyMemo();
+
+	/**
 	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
 	 * address the running module by stable slots, symbol indices and function ids. When false, every compile
 	 * assembles from a fresh assembler, so the module is a function of the source alone and never carries dead
