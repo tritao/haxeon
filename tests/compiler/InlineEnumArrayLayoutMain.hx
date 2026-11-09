@@ -55,8 +55,8 @@ class InlineEnumArrayLayoutMain {
 			}
 			var sourceOptional = compiler.types.Type.CompilerType.TNullable(
 				compiler.types.Type.CompilerType.TInstance(compiler.types.Type.NominalKind.Enum, declaration.name, []));
-			if (!IrVerifier.sameType(compiler.ir.IrGenerator.lowerType(sourceOptional), Enum(declaration.name))
-				|| !IrVerifier.sameType(compiler.ir.IrGenerator.lowerType(compiler.types.Type.CompilerType.TArray(sourceOptional)), Array(Enum(declaration.name))))
+			if (!IrVerifier.sameType(new compiler.ir.IrGenerator(compiler.ir.ProgramFacts.empty(), compiler.ir.TargetProfile.portable).lowerType(sourceOptional), Enum(declaration.name))
+				|| !IrVerifier.sameType(new compiler.ir.IrGenerator(compiler.ir.ProgramFacts.empty(), compiler.ir.TargetProfile.portable).lowerType(compiler.types.Type.CompilerType.TArray(sourceOptional)), Array(Enum(declaration.name))))
 				throw "Source Null<E> must use the enum's existing null-capable IR type";
 			var objectTable = IrObjectTable.of([for (object in program.objects) object.name => object]);
 			rejected(() -> { new IrValueArrayLayout(objectTable, Nullable(Enum(declaration.name)), 64, target, program.enums); }, "canonical Enum IR type");

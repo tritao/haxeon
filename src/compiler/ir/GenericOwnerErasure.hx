@@ -24,9 +24,9 @@ class GenericOwnerErasure {
 		return TYPE_TEST_PREFIX + (exact ? "exact:" : "instance:") + owner;
 
 	/** Generate only the operations that occur in typed code, before value-field lowering. */
-	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>):Void {
+	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>):Void {
 		generateMethodReferences(functions, objects);
-		generateTypeTests(functions, objects);
+		generateTypeTests(facts, functions, objects);
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions) switch instruction.value {
 			case Call(output, name, arguments) if (StringTools.startsWith(name, PREFIX)):
@@ -44,7 +44,7 @@ class GenericOwnerErasure {
 			if (parts.length != 3 || signature == null || signature.arguments.length == 0 || (switch (signature.arguments[0]) { case Dyn: false; default: true; }))
 				throw 'Invalid erased generic operation "$name"';
 			var owner = parts[0], operation = parts[1], member = parts[2],
-				candidates = [for (object in objects) if (!object.isValue && derivesFrom(object, owner, byName)) object];
+				candidates = [for (object in objects) if (!object.isValue && derivesFrom(facts, object, owner, byName)) object];
 			candidates.sort((a, b) -> depth(b, byName) - depth(a, byName));
 			var builder = new IrBuilder(), receiver = builder.argument("receiver", Dyn),
 				arguments = [for (index in 1...signature.arguments.length) builder.argument('argument$index', signature.arguments[index])];
@@ -77,7 +77,7 @@ class GenericOwnerErasure {
 	}
 
 	/** Regenerate type tests from the current layouts, including layouts added by an incremental edit. */
-	static function generateTypeTests(functions:Array<IrFunction>, objects:Array<IrObject>):Void {
+	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>):Void {
 		var requests:Map<String, Bool> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions) switch instruction.value {
 			case Call(_, name, _) if (StringTools.startsWith(name, TYPE_TEST_PREFIX)): requests.set(name, true);
@@ -88,7 +88,7 @@ class GenericOwnerErasure {
 		for (name in names) {
 			var parts = name.substr(TYPE_TEST_PREFIX.length).split(":"), exact = parts[0] == "exact";
 			if (parts.length != 2 || (!exact && parts[0] != "instance")) throw 'Invalid generic type test "$name"';
-			var owner = parts[1], candidates = [for (object in objects) if (IrGenerator.genericOwnerOrigin(object.name) == owner) object.name];
+			var owner = parts[1], candidates = [for (object in objects) if (facts.genericOwnerOrigin(object.name) == owner) object.name];
 			candidates.sort(Reflect.compare);
 			var builder = new IrBuilder(), value = builder.argument("value", Dyn), matched = builder.createBlock();
 			for (candidate in candidates) {
@@ -203,10 +203,10 @@ class GenericOwnerErasure {
 		return true;
 	}
 
-	static function derivesFrom(object:IrObject, owner:String, objects:Map<String, IrObject>):Bool {
+	static function derivesFrom(facts:ProgramFacts, object:IrObject, owner:String, objects:Map<String, IrObject>):Bool {
 		var current:Null<IrObject> = object;
 		while (current != null) {
-			if (IrGenerator.genericOwnerOrigin(current.name) == owner) return true;
+			if (facts.genericOwnerOrigin(current.name) == owner) return true;
 			current = current.base == null ? null : objects.get(current.base);
 		}
 		return false;

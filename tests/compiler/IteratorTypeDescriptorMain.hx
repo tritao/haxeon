@@ -80,7 +80,7 @@ class IteratorTypeDescriptorMain {
 		write.select(changed); write.returnValue(write.constInt(2));
 		write.select(after); write.returnValue(write.constInt(1));
 		program.functions.push(new IrFunction("erasedWrite", [], I32, write.blocks));
-		compiler.ir.GenericOwnerErasure.generate(program.functions, program.objects);
+		compiler.ir.GenericOwnerErasure.generate(compiler.ir.ProgramFacts.empty(), program.functions, program.objects);
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "interpreter lost an iterator element type";
 		if (new IrInterpreter(program).run("erasedWrite") != 42) throw "interpreter accepted an invalid erased iterator write";

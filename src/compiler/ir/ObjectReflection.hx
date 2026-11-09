@@ -3,7 +3,7 @@ package compiler.ir;
 import compiler.ir.Ir;
 
 private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjectField>; final methods:Array<{name:String, functionName:String, type:IrType}>;
-	final payload:Null<String>; final observable:Bool;}
+	final payload:Null<String>; final observable:Bool; final observableBits:Null<Map<String, Int>>;}
 
 /**
  * Field reflection over compiled object layouts, for runtimes that cannot look up object fields by
@@ -17,7 +17,7 @@ class ObjectReflection {
 	 * the functions its backend implementation calls: the backend finds a value's layout from the type id in its header
 	 * (linear Wasm), which costs the same however many layouts the program has.
 	 */
-	public static function generate(natives:Null<Array<IrNative>>, objects:Null<Array<IrObject>>, reflectable:Null<Array<String>>,
+	public static function generate(facts:ProgramFacts, natives:Null<Array<IrNative>>, objects:Null<Array<IrObject>>, reflectable:Null<Array<String>>,
 			functions:Array<IrFunction>, tableDispatch:Bool = false):Null<Array<IrNative>> {
 		if (natives == null)
 			return null;
@@ -26,7 +26,7 @@ class ObjectReflection {
 		for (native in natives) {
 			if (isHashLinkReflection(native.symbol) && objects != null && hasSpecialFields(objects)) {
 				if (layouts == null)
-					layouts = layoutsOf(objects, reflectable == null ? [] : reflectable, functions);
+					layouts = layoutsOf(facts, objects, reflectable == null ? [] : reflectable, functions);
 				var affected = affectedLayouts(layouts, objects);
 				if (affected.length > 0) {
 					var fallback = '$' + 'optional-reflect-native:' + native.name;
@@ -40,7 +40,7 @@ class ObjectReflection {
 				continue;
 			}
 			if (layouts == null)
-				layouts = layoutsOf(objects == null ? [] : objects, reflectable == null ? [] : reflectable, functions);
+				layouts = layoutsOf(facts, objects == null ? [] : objects, reflectable == null ? [] : reflectable, functions);
 			// Copying allocates a value of the matching layout, so it keeps the per-layout dispatcher instead of joining the table.
 			if (tableDispatch && native.symbol != "__reflect_object_copy") {
 				remaining.push({
@@ -151,7 +151,7 @@ class ObjectReflection {
 	}
 
 	/** Reflectable layouts with inherited fields first, ordered so subclasses are tested before their bases. */
-	static function layoutsOf(objects:Array<IrObject>, reflectable:Array<String>, functions:Array<IrFunction>):Array<ReflectedLayout> {
+	static function layoutsOf(facts:ProgramFacts, objects:Array<IrObject>, reflectable:Array<String>, functions:Array<IrFunction>):Array<ReflectedLayout> {
 		var functionsByName = [for (fn in functions) fn.name => fn];
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			result:Array<{layout:ReflectedLayout, depth:Int}> = [];
@@ -186,7 +186,7 @@ class ObjectReflection {
 				}
 			var names = [for (name in methods.keys()) name];
 			names.sort(Reflect.compare);
-			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)], payload: payload, observable: observable}, depth: chain.length});
+			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)], payload: payload, observable: observable, observableBits: facts.observableFieldBits.get(name)}, depth: chain.length});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];
@@ -257,7 +257,7 @@ class ObjectReflection {
 
 	static function guardObservableWrite(builder:IrBuilder, layout:ReflectedLayout, object:IrValue, field:String):Void {
 		if (!layout.observable) return;
-		var bit = IrGenerator.observableNamedFieldBit(layout.name, field);
+		var bit = layout.observableBits == null ? null : layout.observableBits.get(field);
 		if (bit == null) return;
 		var source = builder.fieldGet(object, "$haxeonObservableState", Obj("haxeon.reactive.ObservableSource"));
 		var status = builder.call("haxeon.reactive.ReactiveRuntime.observableWriteStatus", [source, builder.constInt(bit), builder.toDyn(object)], I32);

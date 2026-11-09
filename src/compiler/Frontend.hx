@@ -1,7 +1,7 @@
 package compiler;
 
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrGenerator;
+import compiler.ir.IrProgramAssembler;
 import compiler.ir.TargetProfile;
 import compiler.types.Typer;
 import compiler.Source.SourceFile;
@@ -17,6 +17,6 @@ class Frontend {
 	public static function compileFile(file:SourceFile):IrProgram {
 		var ast = new Parser(new Lexer(file).tokenize()).parseProgram();
 		// The convenience frontend has no target; keep its IR portable.
-		return IrGenerator.generate(Typer.type(ast), TargetProfile.portable);
+		return IrProgramAssembler.generate(Typer.type(ast), TargetProfile.portable);
 	}
 }

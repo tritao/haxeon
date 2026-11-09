@@ -31,9 +31,9 @@ class NullableStructIrMain {
 			holder = [for (object in physical.objects) if (object.name == "Holder") object][0];
 		if (holder == null || holder.fields.length != 2 || holder.fields[0].name != flag || holder.fields[1].name != payload)
 			throw "nullable field was not expanded into inline flag and payload slots";
-		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(typed, _ -> true, (_, field) -> field == flag);
+		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed, _ -> true, (_, field) -> field == flag);
 		if (alreadyPublished.length != 0) throw "an existing optional field was treated as a newly published field";
-		var added = IrProgramAssembler.liveInitializersFrom(typed, _ -> true, (_, _) -> false);
+		var added = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed, _ -> true, (_, _) -> false);
 		if (added.length != 1) throw "a new optional field did not get its live initializer";
 		var copied = Frontend.compile("struct Child { public var text:String; } "
 			+ "struct Value { public var nested:Null<Child>; public var n:Int; } "

@@ -300,7 +300,7 @@ class NativeLayoutMain {
 			&& changedFloat32Compile.retyped.indexOf("Main.main") >= 0,
 			"changing a nested Float32 default must round to its declared precision and invalidate descriptor callers");
 		if ([
-			for (object in compiler.ir.IrProgramAssembler.objectsFrom(typed))
+			for (object in compiler.ir.IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed))
 				if (object.name == "Pair" || object.name == "Outer") object
 		].length != 0)
 			throw "native value records must not be emitted as HashLink objects or HSTRUCT values";

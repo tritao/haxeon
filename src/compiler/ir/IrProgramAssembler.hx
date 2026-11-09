@@ -29,14 +29,13 @@ import compiler.ir.SourceProvenance.Located;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram {
-		IrGenerator.bindTarget(profile);
-		IrGenerator.bindEnumConstructors(typed.enums);
-		IrGenerator.bindClasses(typed.classes, typed.interfaces, typed.genericOwnerAliases);
-		var objects = objectsFrom(typed);
-		IrGenerator.bindFlatValueObjects(objects);
-		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
-		return assemble(profile, functions, nativesFrom(typed), objects, interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
-			staticInitializersFrom(typed, null, functions), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
+		var generator = new IrGenerator(ProgramFacts.of(typed), profile);
+		var objects = objectsFrom(generator, typed);
+		generator.bindFlatValueObjects(objects);
+		var functions = [for (fn in typed.functions) generator.generateFunction(fn)];
+		return assemble(generator, functions, nativesFrom(generator, typed), objects, interfacesFrom(generator, typed), enumsFrom(generator, typed),
+			staticFieldsFrom(generator, typed), staticInitializersFrom(generator, typed, null, functions), null, cNativesFrom(generator, typed),
+			reflectableObjectsFrom(typed));
 	}
 
 	/** Objects `Reflect` may inspect by field name: classes and anonymous records, not closure storage. */
@@ -50,19 +49,19 @@ class IrProgramAssembler {
 		return names;
 	}
 
-	public static function nativesFrom(typed:TypedProgram):Array<IrNative>
+	public static function nativesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrNative>
 		return [
 			for (native in typed.natives)
 				if ((switch (native.convention) { case HashLinkNative: true; default: false; })) {
 					name: native.name,
 					library: native.library,
 					symbol: native.symbol,
-					arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
-					result: IrGenerator.lowerType(native.result)
+					arguments: [for (argument in native.arguments) generator.lowerType(argument)],
+					result: generator.lowerType(native.result)
 				}
 		];
 
-	public static function cNativesFrom(typed:TypedProgram):Array<IrCNative> {
+	public static function cNativesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrCNative> {
 		var result:Array<IrCNative> = [];
 		for (native in typed.natives)
 			switch native.convention {
@@ -76,9 +75,9 @@ class IrProgramAssembler {
 						pointerRelease: null,
 						pointerLength: null,
 						pointerNullable: false,
-						arguments: [for (argument in native.arguments) IrGenerator.lowerType(argument)],
+						arguments: [for (argument in native.arguments) generator.lowerType(argument)],
 						argumentModes: [for (_ in native.arguments) Value],
-						result: IrGenerator.lowerType(native.result)
+						result: generator.lowerType(native.result)
 					});
 				case HashLinkNative:
 			}
@@ -90,7 +89,7 @@ class IrProgramAssembler {
 	 * order (classes in module dependency order), except that a field whose initializer reads another static
 	 * field, directly or through the functions it calls, runs after that field when `program` is given.
 	 */
-	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction> {
+	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction> {
 		var statements:Array<TypedStatement> = [],
 			spans:Array<compiler.Source.SourceSpan> = [],
 			globals:Array<String> = [];
@@ -107,14 +106,14 @@ class IrProgramAssembler {
 		if (statements.length == 0)
 			return [];
 		if (program != null) {
-			var order = initializationOrder(statements, spans, globals, program, objectsFrom(typed));
+			var order = initializationOrder(generator, statements, spans, globals, program, objectsFrom(generator, typed));
 			statements = [for (index in order) statements[index]];
 			spans = [for (index in order) spans[index]];
 		}
 		var functions:Array<IrFunction> = [];
 		for (offset in 0...Std.int((statements.length + 7) / 8)) {
 			var start = offset * 8;
-			functions.push(initializerFunction("__init$part" + offset, statements.slice(start, start + 8), spans[start]));
+			functions.push(initializerFunction(generator, "__init$part" + offset, statements.slice(start, start + 8), spans[start]));
 		}
 		var boot = new IrBuilder();
 		var lastCall = boot.call(functions[0].name, [], Void);
@@ -133,7 +132,7 @@ class IrProgramAssembler {
 	 * a field a constructor assigns keeps its zero value. `published(class)` tells whether the running module has the class,
 	 * `publishedField(class, field)` whether it has the field; a class it lacks needs no migration.
 	 */
-	public static function liveInitializersFrom(typed:TypedProgram, published:String->Bool, publishedField:(String, String)->Bool):Array<IrFunction> {
+	public static function liveInitializersFrom(generator:IrGenerator, typed:TypedProgram, published:String->Bool, publishedField:(String, String)->Bool):Array<IrFunction> {
 		var functions:Array<IrFunction> = [], values:Map<String, Bool> = [for (entry in typed.classes) if (entry.isValue) entry.name => true];
 		for (classDecl in typed.classes) {
 			if (classDecl.isValue || classDecl.isNativeValue || !published(classDecl.name))
@@ -141,7 +140,7 @@ class IrProgramAssembler {
 			var statements:Array<TypedStatement> = [];
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				var publishedName = switch IrGenerator.lowerType(field.type) {
+				var publishedName = switch generator.lowerType(field.type) {
 					case Nullable(Obj(name)) if (values.exists(name)):
 						IrInlineValueLayout.slotName(field.name, {path: [], type: Bool, isPresence: true, nativeLayout: null});
 					default: field.name;
@@ -152,7 +151,7 @@ class IrProgramAssembler {
 					initializer, field.span));
 			}
 			if (statements.length > 0)
-				functions.push(IrGenerator.generateFunction({
+				functions.push(generator.generateFunction({
 					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
 					owner: classDecl.name,
 					isStatic: false,
@@ -169,8 +168,8 @@ class IrProgramAssembler {
 		return functions;
 	}
 
-	static function initializerFunction(name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
-		return IrGenerator.generateFunction({
+	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
+		return generator.generateFunction({
 			name: name,
 			owner: null,
 			isStatic: true,
@@ -188,14 +187,14 @@ class IrProgramAssembler {
 	 * reads. The order is a stable depth-first topological sort, so independent fields keep their declaration
 	 * order. Cycles are diagnosed rather than executing an invalid order.
 	 */
-	static function initializationOrder(statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>, globals:Array<String>,
+	static function initializationOrder(generator:IrGenerator, statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>, globals:Array<String>,
 			program:Array<IrFunction>, objects:Array<IrObject>):Array<Int> {
 		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
 			references:Map<String, StaticReferences> = [];
 		var probes = [
 			for (index in 0...statements.length)
-				initializerFunction("__init$probe" + index, [statements[index]], spans[index])
+				initializerFunction(generator, "__init$probe" + index, [statements[index]], spans[index])
 		];
 		var execution = new IrInitializationCalls(program.concat(probes), objects);
 		function referencesOf(fn:IrFunction):StaticReferences {
@@ -280,7 +279,7 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	public static function enumsFrom(typed:TypedProgram):Array<IrEnum>
+	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum>
 		return [
 			for (enumDecl in typed.enums)
 				{
@@ -288,12 +287,12 @@ class IrProgramAssembler {
 					isRecursive: enumDecl.isRecursive,
 					cases: [
 						for (caseDecl in enumDecl.cases)
-							{name: caseDecl.name, params: [for (param in caseDecl.params) IrGenerator.lowerType(param)]}
+							{name: caseDecl.name, params: [for (param in caseDecl.params) generator.lowerType(param)]}
 					]
 				}
 		];
 
-	public static function interfacesFrom(typed:TypedProgram):Array<IrInterface> {
+	public static function interfacesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrInterface> {
 		return [
 			for (interfaceDecl in typed.interfaces)
 				{
@@ -303,18 +302,18 @@ class IrProgramAssembler {
 						for (method in interfaceDecl.methods)
 							{
 								name: method.name,
-								arguments: [for (argument in method.arguments) IrGenerator.lowerType(argument)],
-								result: IrGenerator.lowerType(method.result)
+								arguments: [for (argument in method.arguments) generator.lowerType(argument)],
+								result: generator.lowerType(method.result)
 							}
 					]
 				}
 		];
 	}
 
-	public static function objectsFrom(typed:TypedProgram):Array<IrObject> {
+	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrObject> {
 		var objects:Array<IrObject> = [],
 			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
-		IrGenerator.bindGeneratedObjects(objects);
+		generator.bindGeneratedObjects(objects);
 		for (classDecl in typed.classes)
 			classesByName.set(classDecl.name, classDecl);
 		for (classDecl in typed.classes)
@@ -332,15 +331,15 @@ class IrProgramAssembler {
 								inlineRecord: isFlatRecordField(field.type, classesByName, typed.nativeAbiTarget)
 							};
 						fields.push({
-							name: field.name, type: IrGenerator.lowerType(field.type), nativeLayout: fieldLayout,
+							name: field.name, type: generator.lowerType(field.type), nativeLayout: fieldLayout,
 							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null,
 							nullableScalarStorage: nullableScalarStorage(field.type, typed.nativeAbiTarget)
 						});
 					}
-				if (IrGenerator.observableStateOwner(classDecl.name) == classDecl.name)
+				if (generator.facts.observableStateOwner(classDecl.name) == classDecl.name)
 					fields.push({
 						name: "$haxeonObservableState",
-						type: IrGenerator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
+						type: generator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
 					});
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)
@@ -354,7 +353,7 @@ class IrProgramAssembler {
 						if (methodName == "toString" && methodDecl.arguments.length == 0 && (switch (methodDecl.result) { case TString: true; default: false; }))
 							methods.push({name: "__string", functionName: functionName});
 					}
-				if (IrGenerator.observableClassFieldCount(classDecl.name) != null)
+				if (generator.facts.observableClassFieldCount(classDecl.name) != null)
 					methods.push({name: "$haxeonObservableFieldCount", functionName: classDecl.name + ".$haxeonObservableFieldCount"});
 				objects.push({
 					name: classDecl.name,
@@ -372,7 +371,7 @@ class IrProgramAssembler {
 				isValue: false,
 				base: null,
 				interfaces: [],
-				fields: [{name: "value", type: IrGenerator.lowerType(cell.valueType)}],
+				fields: [{name: "value", type: generator.lowerType(cell.valueType)}],
 				methods: []
 			});
 		for (environment in typed.closurePlan.environments)
@@ -385,7 +384,7 @@ class IrProgramAssembler {
 					for (capture in environment.captures)
 						{
 							name: capture.field,
-							type: IrGenerator.lowerType(switch capture.source {
+							type: generator.lowerType(switch capture.source {
 								case CaptureCellLocal(_, cellClass), CaptureCellEnvironmentField(_, cellClass):
 									TInstance(NominalKind.Class, cellClass, []);
 								default: capture.storageType;
@@ -402,7 +401,7 @@ class IrProgramAssembler {
 				interfaces: [],
 				fields: [
 					for (field in anonymous.fields)
-						{name: field.name, type: IrGenerator.lowerType(field.type)}
+						{name: field.name, type: generator.lowerType(field.type)}
 				],
 				methods: []
 			});
@@ -499,18 +498,18 @@ class IrProgramAssembler {
 		return index;
 	}
 
-	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField> {
+	public static function staticFieldsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrStaticField> {
 		var result = [];
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
 				if (field.isStatic && !field.isInline)
-					result.push({name: classDecl.name + "." + field.name, type: IrGenerator.lowerType(field.type)});
+					result.push({name: classDecl.name + "." + field.name, type: generator.lowerType(field.type)});
 			}
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
 	}
 
-	public static function assemble(profile:TargetProfile, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
+	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
 			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram {
@@ -523,7 +522,7 @@ class IrProgramAssembler {
 			allFunctions.push(fn);
 		if (objects != null)
 			for (object in objects) {
-				var count = IrGenerator.observableClassFieldCount(object.name);
+				var count = generator.facts.observableClassFieldCount(object.name);
 				if (count == null) continue;
 				var builder = new IrBuilder();
 				builder.argument("this", Obj(object.name));
@@ -535,7 +534,7 @@ class IrProgramAssembler {
 		if (objects != null)
 			allFunctions = IrValueDynamicDispatch.rewrite(allFunctions, objects);
 		if (objects != null)
-			GenericOwnerErasure.generate(allFunctions, objects);
+			GenericOwnerErasure.generate(generator.facts, allFunctions, objects);
 		if (objects != null && interfaces != null)
 			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
 		if (objects != null && interfaces != null) {
@@ -549,7 +548,7 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, profile.nativeReflectionDispatch);
+			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch);
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
@@ -591,13 +590,13 @@ class IrProgramAssembler {
 				}
 		}
 		var beforeReflection = allFunctions.length;
-		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, profile.nativeReflectionDispatch);
+		natives = ObjectReflection.generate(generator.facts, natives, objects, reflectableObjects, allFunctions, generator.profile.nativeReflectionDispatch);
 		// Reflection helpers are generated after the ordinary cast pass. Check their dynamic
 		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
 			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
-				profile.nativeReflectionDispatch, existing, true));
+				generator.profile.nativeReflectionDispatch, existing, true));
 		}
 		if (objects != null) {
 			var optionalStorage = new IrOptionalFieldStorage(objects);
@@ -787,12 +786,12 @@ class IrProgramAssembler {
 			if (keyType == null)
 				throw 'Unknown compiler map key ABI "$mapName"';
 			var mapType:IrType = Abstract(mapName);
-			var keyIrType = IrGenerator.lowerType(keyType);
+			var keyIrType = generator.lowerType(keyType);
 			var valueIrType:IrType = Dyn;
 			if (!isReferenceMap) {
 				if (valueType == null)
 					throw 'Unknown compiler map ABI "$mapName"';
-				valueIrType = IrGenerator.lowerType(valueType);
+				valueIrType = generator.lowerType(valueType);
 			}
 			program.natives.push({
 				name: '__${mapName}_alloc',

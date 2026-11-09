@@ -72,7 +72,7 @@ class IrProgramAssemblerMain {
 		var wcharSource = new SourceFile("WChar.hx", 'struct FlatWChar { public var value:CWChar; } '
 			+ 'struct ManagedWChar { public var text:String; public var value:CWChar; }');
 		var wcharProgram = new Parser(new Lexer(wcharSource).tokenize()).parseProgram();
-		var windowsFields = IrProgramAssembler.objectsFrom(Typer.typeLibrary(wcharProgram, "x86_64-pc-windows-msvc"));
+		var windowsFields = objectsOf(Typer.typeLibrary(wcharProgram, "x86_64-pc-windows-msvc"));
 		var windowsFlat = findObjectField(findObject(windowsFields, "FlatWChar"), "value");
 		var windowsManaged = findObjectField(findObject(windowsFields, "ManagedWChar"), "value");
 		expect(windowsFlat.nativeLayout != null && windowsFlat.nativeLayout.size == 2 && !windowsFlat.nativeLayout.signed
@@ -123,11 +123,14 @@ class IrProgramAssemblerMain {
 
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
 			typed = Typer.type(new Parser(new Lexer(source).tokenize()).parseProgram()),
-			objects = IrProgramAssembler.objectsFrom(typed);
+			objects = objectsOf(typed);
 		expect(objects.length == 1 && objects[0].name == "Box" && objects[0].fields.length == 1, "typed object metadata should become IR metadata");
 
 		Sys.println("PASS: IR program assembly and runtime selection");
 	}
+
+	static function objectsOf(typed:compiler.types.TypedAst.TypedProgram):Array<compiler.ir.Ir.IrObject>
+		return IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed);
 
 	static function hasNative(program:compiler.ir.Ir.IrProgram, name:String):Bool {
 		for (native in program.natives)

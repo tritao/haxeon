@@ -696,7 +696,7 @@ class TestMain {
 			throw "Missing function annotations were not preserved for semantic inference";
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
-		var typed = Typer.type(ast), cfg = IrGenerator.generateCfg(typed.functions[0]), loads = 0, stores = 0;
+		var typed = Typer.type(ast), cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]), loads = 0, stores = 0;
 		for (block in cfg.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
@@ -1973,7 +1973,7 @@ class TestMain {
 		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",
 			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }")).tokenize()).parseProgram(),
 			captureTyped = Typer.type(captureProgram),
-			captureObjects = IrGenerator.objectsFrom(captureTyped);
+			captureObjects = compiler.ir.IrProgramAssembler.objectsFrom(IrGenerator.forProgram(captureTyped, compiler.ir.TargetProfile.portable), captureTyped);
 		if (captureTyped.classes.length != 0 || captureTyped.closurePlan.environments.length != 1)
 			throw "Semantic typing manufactured a runtime helper class";
 		if ([for (object in captureObjects) object.name].indexOf(captureTyped.closurePlan.environments[0].name) < 0)

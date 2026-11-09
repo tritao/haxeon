@@ -163,7 +163,7 @@ class FrontendCompilation {
 		var allocationAfterSemantic = AllocationMeter.sample();
 		var allocationAfterAnalysis = allocationAfterSemantic;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
-		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics;
+		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics, generator:IrGenerator;
 		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
@@ -191,9 +191,7 @@ class FrontendCompilation {
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typedNew = typedResult.program;
 			context.frontendPassFunctions.push(typedNew.functions.length);
-			IrGenerator.bindEnumConstructors(typedNew.enums);
-			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces, typedNew.genericOwnerAliases);
-			IrGenerator.bindTarget(context.targetProfile());
+			generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
 			typerMetrics = typedResult.metrics;
 			runtimeDependencies = typedResult.runtimeDependencies;
 			purityQueries = typedResult.purityQueries;
@@ -260,12 +258,12 @@ class FrontendCompilation {
 		for (name in [for (name in objectCache.keys()) name])
 			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
 				objectCache.remove(name);
-		var typedObjects = IrGenerator.objectsFrom(typedNew);
+		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew);
 		for (object in typedObjects)
 			objectCache.set(object.name, object);
 		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
-		IrGenerator.bindGeneratedObjects(currentObjects);
-		IrGenerator.bindFlatValueObjects(currentObjects);
+		generator.bindGeneratedObjects(currentObjects);
+		generator.bindFlatValueObjects(currentObjects);
 		var allocationAfterObjects = AllocationMeter.sample();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
@@ -334,7 +332,7 @@ class FrontendCompilation {
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
-				state.irFunctions.set(fn.name, IrGenerator.generateFunction(fn));
+				state.irFunctions.set(fn.name, generator.generateFunction(fn));
 				state.irSourceRevisions.set(fn.name, state.revision);
 				state.pendingIrFunctions.remove(fn.name);
 				regenerated.push(fn.name);
@@ -500,7 +498,7 @@ class FrontendCompilation {
 					var fn = state.typedFunctions.get(functionName);
 					if (fn == null)
 						throw 'Pending IR function "$functionName" has no typed function';
-					state.irFunctions.set(functionName, IrGenerator.generateFunction(fn));
+					state.irFunctions.set(functionName, generator.generateFunction(fn));
 					if (!state.typedSourceRevisions.exists(functionName))
 						throw 'Pending IR function "$functionName" has no typed source revision';
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
@@ -602,7 +600,7 @@ class FrontendCompilation {
 		var objectNames = [for (name in resolvedObjects.keys()) name];
 		objectNames.sort(Reflect.compare);
 		var irNatives = context.irNatives();
-		for (native in IrProgramAssembler.nativesFrom(typedNew)) {
+		for (native in IrProgramAssembler.nativesFrom(generator, typedNew)) {
 			for (existing in irNatives)
 				if (existing.name == native.name)
 					throw 'Native "${native.name}" is declared more than once';
@@ -614,26 +612,26 @@ class FrontendCompilation {
 				if (![for (existing in irNatives) existing.name].contains(native.name))
 					irNatives.push(native);
 		var irCNatives = context.irCNatives();
-		for (native in IrProgramAssembler.cNativesFrom(typedNew))
+		for (native in IrProgramAssembler.cNativesFrom(generator, typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
 		// A live HashLink build initializes the fields it adds to running objects (see `IrProgramAssembler.liveInitializersFrom`).
 		var published = context.assembler,
 			liveInitializers = context.livePatching
 				&& !context.isWasmTarget()
-				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(typedNew, name -> published.publishedObject(name),
+				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew, name -> published.publishedObject(name),
 					(name, field) -> published.publishedField(name, field)) : [];
 		var generated = {
 			objects: [for (name in objectNames) resolvedObjects.get(name)],
-			interfaces: IrGenerator.interfacesFrom(typedNew),
-			enums: IrGenerator.enumsFrom(typedNew),
-			staticFields: IrGenerator.staticFieldsFrom(typedNew),
-			initializers: IrGenerator.staticInitializersFrom(typedNew, initializationClasses, cached).concat(liveInitializers),
+			interfaces: IrProgramAssembler.interfacesFrom(generator, typedNew),
+			enums: IrProgramAssembler.enumsFrom(generator, typedNew),
+			staticFields: IrProgramAssembler.staticFieldsFrom(generator, typedNew),
+			initializers: IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached).concat(liveInitializers),
 			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
 		};
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
 		// the passes run anyway and the result is compared with the reused one.
-		var inputs = pipelineInputs(context, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects, generated.interfaces,
+		var inputs = pipelineInputs(context, generator, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects, generated.interfaces,
 			generated.enums, generated.staticFields, entryPoint, generated.reflectable),
 			previousPipeline = context.pipelineSnapshot,
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
@@ -643,7 +641,7 @@ class FrontendCompilation {
 			ir = previousPipeline.ir;
 			inlinerChanged = [];
 		} else {
-			ir = IrGenerator.assemble(context.targetProfile(), cached, irNatives, generated.objects, generated.interfaces, generated.enums,
+			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
 				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
 				context.valueArrayTarget(), context.exportedFunctions());
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
@@ -763,7 +761,7 @@ class FrontendCompilation {
 		}
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
-	static function pipelineInputs(context:CompilationContext, instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>,
+	static function pipelineInputs(context:CompilationContext, generator:IrGenerator, instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>,
 			functions:Array<IrFunction>, initializers:Array<IrFunction>, natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>,
 			objects:Array<IrObject>, interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>,
 			staticFields:Array<compiler.ir.Ir.IrStaticField>, entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
@@ -788,7 +786,7 @@ class FrontendCompilation {
 			// pass gives such a name an object later.
 			"reflectable:" + (reflectable == null ? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
 			"entry:" + entryPoint,
-			"generator:" + IrGenerator.inputState()
+			"generator:" + generator.facts.inputState(generator.profile)
 		].join("\n");
 		return {
 			functions: functions,
