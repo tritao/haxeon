@@ -82,19 +82,13 @@ class ValueArrayAccessMain {
 		var nullableElementFrontend = compiler.Frontend.compile(nullableElementSource);
 		var nullableElementFile = new compiler.Source.SourceFile("<nullable-element-array>", nullableElementSource),
 			nullableElementAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableElementFile).tokenize()).parseProgram();
-		compiler.ir.IrGenerator.bindNativeArrayChecks(true);
-		var nullableElementChecked = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(nullableElementAst));
-		compiler.ir.IrGenerator.bindNativeArrayChecks(false);
+		var nullableElementChecked = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(nullableElementAst), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 		var nullableFile = new compiler.Source.SourceFile("<nullable-array>", nullableSource),
 			nullableAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableFile).tokenize()).parseProgram();
-		compiler.ir.IrGenerator.bindNativeArrayChecks(true);
-		var nullableCheckedFrontend = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(nullableAst));
-		compiler.ir.IrGenerator.bindNativeArrayChecks(false);
+		var nullableCheckedFrontend = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(nullableAst), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 		var typedFile = new compiler.Source.SourceFile("<typed-array>", frontendSource),
 			typedAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(typedFile).tokenize()).parseProgram();
-		compiler.ir.IrGenerator.bindNativeArrayChecks(true);
-		var typedFrontend = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(typedAst));
-		compiler.ir.IrGenerator.bindNativeArrayChecks(false);
+		var typedFrontend = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(typedAst), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 		var hasTypedAllocation = false;
 		for (fn in typedFrontend.functions) if (fn.name == "main") for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case Call(_, "__array_alloc_typed_ref", _): hasTypedAllocation = true;
@@ -1312,9 +1306,7 @@ class ValueArrayAccessMain {
 				if (test.checked) {
 					var file = new compiler.Source.SourceFile("<linear-dynamic-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
-					compiler.ir.IrGenerator.bindNativeArrayChecks(true);
-					linearDynamic = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(ast));
-					compiler.ir.IrGenerator.bindNativeArrayChecks(false);
+					linearDynamic = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(ast), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 				} else linearDynamic = compiler.Frontend.compile(test.source);
 				compiler.ir.IrValueArrayProgramRewrite.rewrite(linearDynamic, test.element, 32, Wasm32);
 				compiler.ir.IrValueConstructors.rewrite(linearDynamic);
@@ -1346,9 +1338,7 @@ class ValueArrayAccessMain {
 				if (test.checked) {
 					var file = new compiler.Source.SourceFile("<escape-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
-					compiler.ir.IrGenerator.bindNativeArrayChecks(true);
-					nullableWasm = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(ast));
-					compiler.ir.IrGenerator.bindNativeArrayChecks(false);
+					nullableWasm = compiler.ir.IrGenerator.generate(compiler.types.Typer.type(ast), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 				} else nullableWasm = compiler.Frontend.compile(test.source);
 				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(nullableWasm, 32, WasmGc);
 				compiler.ir.IrValueConstructors.rewrite(nullableWasm);

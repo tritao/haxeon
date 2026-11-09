@@ -28,13 +28,14 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
-	public static function generate(typed:TypedProgram):IrProgram {
+	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram {
+		IrGenerator.bindTarget(profile);
 		IrGenerator.bindEnumConstructors(typed.enums);
 		IrGenerator.bindClasses(typed.classes, typed.interfaces, typed.genericOwnerAliases);
 		var objects = objectsFrom(typed);
 		IrGenerator.bindFlatValueObjects(objects);
 		var functions = [for (fn in typed.functions) IrGenerator.generateFunction(fn)];
-		return assemble(functions, nativesFrom(typed), objects, interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
+		return assemble(profile, functions, nativesFrom(typed), objects, interfacesFrom(typed), enumsFrom(typed), staticFieldsFrom(typed),
 			staticInitializersFrom(typed, null, functions), null, cNativesFrom(typed), reflectableObjectsFrom(typed));
 	}
 
@@ -509,7 +510,7 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
+	public static function assemble(profile:TargetProfile, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
 			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram {
@@ -548,7 +549,7 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, IrGenerator.usesNativeReflectionDispatch());
+			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, profile.nativeReflectionDispatch);
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
@@ -590,13 +591,13 @@ class IrProgramAssembler {
 				}
 		}
 		var beforeReflection = allFunctions.length;
-		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, IrGenerator.usesNativeReflectionDispatch());
+		natives = ObjectReflection.generate(natives, objects, reflectableObjects, allFunctions, profile.nativeReflectionDispatch);
 		// Reflection helpers are generated after the ordinary cast pass. Check their dynamic
 		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
 			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
-				IrGenerator.usesNativeReflectionDispatch(), existing, true));
+				profile.nativeReflectionDispatch, existing, true));
 		}
 		if (objects != null) {
 			var optionalStorage = new IrOptionalFieldStorage(objects);

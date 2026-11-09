@@ -67,12 +67,11 @@ class IrGenerator {
 	static var observableStateOwners:Map<String, String> = [];
 	static var observableFieldBits:Map<String, Map<String, Int>> = [];
 	static var generatedObjects:Array<IrObject> = [];
-	static var headerlessValueClasses:Bool = true;
 	static var flatValueObjects:Map<String, IrObject> = [];
 	static var inlineValueObjects:Map<String, IrObject> = [];
 	static var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
-	static var dynamicObjectLiterals:Bool = true;
-	static var nativeArrayChecks:Bool = false;
+	/** The target of the program being generated. Bound once per build, like the program facts below, until the generator stops being static. */
+	static var generatingFor:TargetProfile = TargetProfile.portable;
 	static var arrayValuePlaceSerial = 0;
 	static var observableAccessSerial = 0;
 	static var observableConstructorInitialization = false;
@@ -115,12 +114,15 @@ class IrGenerator {
 			[for (name in names) name + ":" + bits.get(name)].join(";");
 		});
 		section("typedInterfaceContracts", [for (key in typedInterfaceContracts.keys()) key], key -> Std.string(typedInterfaceContracts.get(key)));
+		out.add("target{" + generatingFor.key() + "}\n");
 		out.add("flags{" + [
-			headerlessValueClasses, dynamicObjectLiterals, nativeArrayChecks, nativeStringFastPaths, nativeReflectionDispatch, loweringScopedDisposal,
-			observableConstructorInitialization
+			loweringScopedDisposal, observableConstructorInitialization
 		].map(flag).join("") + "}");
 		return out.toString();
 	}
+
+	public static function bindTarget(profile:TargetProfile):Void
+		generatingFor = profile;
 
 	/** Supply enum layout information needed by compiler-generated key adapters. */
 	public static function bindEnumConstructors(enums:Array<TypedEnum>):Void {
@@ -368,37 +370,6 @@ class IrGenerator {
 				flatValueObjects.set(object.name, object);
 	}
 
-	/** HashLink stores value classes as headerless structs; Wasm represents them as ordinary references. */
-	public static function bindHeaderlessValueClasses(enabled:Bool):Void
-		headerlessValueClasses = enabled;
-
-	public static function bindDynamicObjectLiterals(enabled:Bool):Void
-		dynamicObjectLiterals = enabled;
-
-	/** Exact array storage (HL and both Wasm backends): reference arrays share dynamic storage with checked typed reads,
-	 * `Array<Dynamic>` views dispatch on the storage element type, and array casts are checked.
-	 */
-	public static function bindNativeArrayChecks(enabled:Bool):Void
-		nativeArrayChecks = enabled;
-
-	/** HashLink runtime natives that concatenate several strings with one allocation and format an Int without boxing it. */
-	public static function bindNativeStringFastPaths(enabled:Bool):Void
-		nativeStringFastPaths = enabled;
-
-	static var nativeStringFastPaths = false;
-
-	/**
-	 * Wasm: field reflection over object layouts is dispatched by the backend through a table keyed on the class id in every
-	 * object's header, so the program carries one function per layout and no dispatcher of its own.
-	 */
-	public static function bindNativeReflectionDispatch(enabled:Bool):Void
-		nativeReflectionDispatch = enabled;
-
-	public static function usesNativeReflectionDispatch():Bool
-		return nativeReflectionDispatch;
-
-	static var nativeReflectionDispatch = false;
-
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
 	static function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
 		switch expression.expression {
@@ -432,7 +403,7 @@ class IrGenerator {
 		var accumulated:CfgValue = values[0], index = 1;
 		while (index < values.length) {
 			// A concat native takes at most 8 operands, one of which is the running result.
-			var take = nativeStringFastPaths ? Std.int(Math.min(values.length - index, 7)) : 1;
+			var take = generatingFor.nativeStringFastPaths ? Std.int(Math.min(values.length - index, 7)) : 1;
 			var group:Array<CfgValue> = [accumulated];
 			for (offset in 0...take)
 				group.push(values[index + offset]);
@@ -473,8 +444,8 @@ class IrGenerator {
 		};
 	}
 
-	public static function generate(typed:TypedProgram):IrProgram
-		return IrProgramAssembler.generate(typed);
+	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram
+		return IrProgramAssembler.generate(typed, profile);
 
 	public static function staticInitializersFrom(typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction>
 		return IrProgramAssembler.staticInitializersFrom(typed, classOrder, program);
@@ -491,11 +462,11 @@ class IrGenerator {
 	public static function staticFieldsFrom(typed:TypedProgram):Array<IrStaticField>
 		return IrProgramAssembler.staticFieldsFrom(typed);
 
-	public static function assemble(functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
+	public static function assemble(profile:TargetProfile, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
 			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram
-		return IrProgramAssembler.assemble(functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives,
+		return IrProgramAssembler.assemble(profile, functions, natives, objects, interfaces, enums, staticFields, staticInitializers, entryPoint, cNatives,
 			reflectableObjects, staticChecks, valueTarget, exportedFunctions);
 
 	static function lastSeparator(value:String):Int {
@@ -1364,7 +1335,7 @@ class IrGenerator {
 	static function isHeaderlessValueClass(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isHeaderlessValueClass(representation);
-			case TInstance(NominalKind.Class, name, _): headerlessValueClasses && valueClasses.exists(Std.string(name));
+			case TInstance(NominalKind.Class, name, _): generatingFor.headerlessValueClasses && valueClasses.exists(Std.string(name));
 			default: false;
 		};
 
@@ -1503,7 +1474,7 @@ class IrGenerator {
 		var casted = builder.safeCast(value, target);
 		return switch target {
 			case Array(Dyn), Array(Nullable(_)): casted;
-			case Array(element) if (nativeArrayChecks):
+			case Array(element) if (generatingFor.nativeArrayChecks):
 				var checked = builder.call("__array_check_cast", [builder.safeCast(builder.toDyn(casted), Array(Dyn)), builder.typeValue(element)], Array(Dyn));
 				builder.safeCast(builder.toDyn(checked), target);
 			default: casted;
@@ -2278,7 +2249,7 @@ class IrGenerator {
 			case TCall("__iterator_new", [source]): builder.iteratorNew(lowerExpression(iteratorArraySource(source), builder, localTypes));
 			case TCall("__iterator_has_next", [iterator]): builder.iteratorHasNext(lowerExpression(iterator, builder, localTypes));
 			case TCall("__iterator_next", [iterator]): builder.iteratorNext(lowerExpression(iterator, builder, localTypes), lowerType(expression.type));
-			case TCall("__std_string" | "Std.string", [argument]) if (nativeStringFastPaths && stringifiedPrimitive(argument) != null):
+			case TCall("__std_string" | "Std.string", [argument]) if (generatingFor.nativeStringFastPaths && stringifiedPrimitive(argument) != null):
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
 					throw "The Std.string fast path lost its primitive operand";
@@ -2566,7 +2537,7 @@ class IrGenerator {
 				var constructed = builder.load(objectName, objectType);
 				(switch (resultType) { case Dyn: true; default: false; }) ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
-				if (isDynamic && dynamicObjectLiterals) {
+				if (isDynamic && generatingFor.dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
 						objectName = '$' + 'dynamic-object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, IrType.Dyn);
@@ -3903,7 +3874,7 @@ class IrGenerator {
 	static function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
-		if (nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
+		if (generatingFor.nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
 			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
@@ -3931,7 +3902,7 @@ class IrGenerator {
 	 */
 	static function elementGet(builder:CfgBuilder, array:CfgValue, index:CfgValue, type:IrType):CfgValue {
 		var element = arrayElementType(array);
-		if (!nativeArrayChecks || element == null)
+		if (!generatingFor.nativeArrayChecks || element == null)
 			return builder.arrayGet(array, index, type);
 		if (IrTypeTools.isDynamic(element)) {
 			var value = builder.call("__array_get_any", [array, index], Dyn);
@@ -3946,14 +3917,14 @@ class IrGenerator {
 
 	/** Writes one element; Array<Dynamic> writes convert to the storage element type. */
 	static function elementSet(builder:CfgBuilder, array:CfgValue, index:CfgValue, value:CfgValue):Void {
-		if (nativeArrayChecks && IrTypeTools.isDynamic(arrayElementType(array)))
+		if (generatingFor.nativeArrayChecks && IrTypeTools.isDynamic(arrayElementType(array)))
 			builder.call("__array_set_any", [array, index, builder.toDyn(value)], Void);
 		else
 			builder.arraySet(array, index, value);
 	}
 
 	static function arrayNativeName(element:CompilerType, operation:String):String
-		return nativeArrayChecks
+		return generatingFor.nativeArrayChecks
 			&& IrTypeTools.isDynamic(lowerType(element)) ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
 
 
@@ -4091,7 +4062,7 @@ class IrGenerator {
 		// The any-array natives return Array<Dynamic>, even when the source array has a nullable element type.
 		// Preserve that ABI in IR, then restore the semantic type at the call boundary.
 		switch resultType {
-			case Array(Nullable(_)) if (nativeArrayChecks && IrTypeTools.isDynamic(lowerType(element))):
+			case Array(Nullable(_)) if (generatingFor.nativeArrayChecks && IrTypeTools.isDynamic(lowerType(element))):
 				var value = builder.call(nativeName, arguments, Array(Dyn));
 				return referenceResultCast(builder, value, resultType);
 			default:

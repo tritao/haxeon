@@ -193,11 +193,7 @@ class FrontendCompilation {
 			context.frontendPassFunctions.push(typedNew.functions.length);
 			IrGenerator.bindEnumConstructors(typedNew.enums);
 			IrGenerator.bindClasses(typedNew.classes, typedNew.interfaces, typedNew.genericOwnerAliases);
-			IrGenerator.bindHeaderlessValueClasses(!context.isWasmTarget());
-			IrGenerator.bindDynamicObjectLiterals(!context.isWasmTarget());
-			IrGenerator.bindNativeArrayChecks(true);
-			IrGenerator.bindNativeStringFastPaths(!context.isWasmTarget());
-			IrGenerator.bindNativeReflectionDispatch(context.isWasmTarget());
+			IrGenerator.bindTarget(context.targetProfile());
 			typerMetrics = typedResult.metrics;
 			runtimeDependencies = typedResult.runtimeDependencies;
 			purityQueries = typedResult.purityQueries;
@@ -647,9 +643,9 @@ class FrontendCompilation {
 			ir = previousPipeline.ir;
 			inlinerChanged = [];
 		} else {
-			ir = IrGenerator.assemble(cached, irNatives, generated.objects, generated.interfaces, generated.enums, generated.staticFields,
-				generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks, context.valueArrayTarget(),
-				context.exportedFunctions());
+			ir = IrGenerator.assemble(context.targetProfile(), cached, irNatives, generated.objects, generated.interfaces, generated.enums,
+				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
+				context.valueArrayTarget(), context.exportedFunctions());
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
