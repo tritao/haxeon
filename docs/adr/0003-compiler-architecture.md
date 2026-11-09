@@ -245,6 +245,28 @@ With layers 2 and 5 explicit, a package can be compiled against the stored inter
 signatures plus the summaries they export. It is then linked. This is the Roslyn model, and it bounds both cold and warm
 cost by package. It is not scheduled. Decisions 1–7 are designed so that it needs no further restructuring.
 
+### 12. The compiler worker is built by Haxeon (direction, added 2026-11-09)
+
+Today the compiler worker is built with stock Haxe and its standard library (`build.hxml`, `-cp src`). Self-hosting is
+tested in CI, but the worker that ships is not self-hosted. That costs us three things:
+
+- **Forks.** Code forks by build: the `#if haxeon` paths in `HlWriter`, and the GC setter declared by hand through
+  `@:hlNative` for the stock build.
+- **Unreachable stdlib.** The worker cannot use the Haxeon stdlib: not `runtime.memory.Arena`, not allocation regions
+  (ADR 0004, 6), not the shared runtime library.
+- **Workarounds.** General-purpose code the compiler needs has to live in a portable source root that both builds read
+  (`lib/haxeon-io`, for byte sinks and segmented bytes).
+
+Building the worker with Haxeon removes the forks, and stdlib improvements then reach the compiler directly.
+
+Go/no-go, measured against the stock-Haxe worker on the `app` builds (cold, no-op, edit) and the full driver suite:
+
+- worker build time;
+- compile time and peak memory;
+- test parity.
+
+Until then, shared general-purpose code stays in the portable root, never in `#if` forks.
+
 ## Migration
 
 Each step is its own series of commits. Every commit keeps the full driver suite green and the warm-equals-cold tests
