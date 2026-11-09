@@ -471,8 +471,9 @@ class UiContext {
 			reuse = hoverPaintNodes >= 0;
 		}
 		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty;
-		var patchOnly = !reuse && reconcileNewFocus && cacheKey != null &&
-			(localPatchPending || buildFeedbackPass == 0 && planInteractionPatches(cacheKey, frame));
+		var patchOnly = !reuse && localPatchPending && (!reconcileNewFocus || cacheKey != null);
+		if (!patchOnly && !reuse && reconcileNewFocus && cacheKey != null && buildFeedbackPass == 0)
+			patchOnly = planInteractionPatches(cacheKey, frame);
 		if (reuse) {
 			frameNumber++;
 			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
@@ -489,7 +490,8 @@ class UiContext {
 		// Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
 		previousNodesById.clear();
 		for (node in submittedNodes) previousNodesById.set(node.id.value, node);
-		// A patch-only frame keeps the submitted tree and rebuilds just the widgets that read the pointer change.
+		// A patch-only frame keeps the submitted tree and rebuilds just queued self-updating widgets. Internal feedback can
+		// use that path without a cache key because its outer build already ran; a new uncached submission still builds its root.
 		buildContext.resetObserved();
 		if (!patchOnly) {
 			buildContext.beginFrame();
@@ -641,7 +643,8 @@ class UiContext {
 		nextTopology = previousTopology;
 		// Geometry callbacks run after the tracked build. If one updates a signal read by that tree, rebuild before
 		// returning so the first submitted frame reflects the synchronized value.
-		var requestedBuildFeedback = resolvedBuildFeedback || buildContext.consumeBuildFeedback();
+		var callbackBuildFeedback = buildContext.consumeBuildFeedback();
+		var requestedBuildFeedback = resolvedBuildFeedback || callbackBuildFeedback;
 		if (requestedBuildFeedback || buildContext.rootDependenciesDirty() || buildContext.hasPendingPatches) {
 			if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
 			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
@@ -765,7 +768,7 @@ class UiContext {
 			styleInvalidation.compositeInvalidatedNodes, styleInvalidation.semanticsInvalidatedNodes,
 			styleInvalidation.hitGeometryInvalidatedNodes,
 				submitEndedAt - submitStartedAt, !nativeLayoutReused, nativeLayoutReused,
-				resolvedGeometryChangedNodes, resolvedGeometryReusedNodes);
+				resolvedGeometryChangedNodes, resolvedGeometryReusedNodes, buildFeedbackPass + 1);
 		lastFrameMetrics.setSubmitPhases(viewBuiltAt - viewStartedAt,
 			nativeLayoutStartedAt - viewBuiltAt, nativeLayoutEndedAt - nativeLayoutStartedAt,
 			submitEndedAt - nativeLayoutEndedAt);
