@@ -169,6 +169,29 @@ They are deleted.
 When a 64-bit target is needed, Linear32 becomes a linear model parameterized by pointer width, behind the same
 interface.
 
+### 6. Allocation regions are a runtime API (added 2026-11-09)
+
+HashLink's GC already keeps a registered owner's blocks in pages of their own (`dfd802296`: owner classes,
+`hl_gc_owner_live_count`, and `hl_gc_owner_release`, which frees a class's pages after a full collection and only when
+nothing in them is live). We add a per-thread current owner, `hl_gc_push_owner` and `hl_gc_pop_owner`, and a stdlib
+`Region` (create, run, live count, release).
+
+Allocations made inside a region share no page with long-lived data. Release is checked, so it can never leave a dangling
+reference; an escape only keeps pages alive and is reported. Uses:
+
+- the compiler's per-stage temporaries (IR passes first, then lowering and typing; outputs are allocated outside);
+- applications: per-frame or per-request work.
+
+On Wasm GC a region is a no-op hint, because the engine owns allocation. On Linear32 it can follow later.
+
+Rejected:
+
+- **Explicit allocator parameters per allocation** are invasive across generics, closures and the stdlib.
+- **Region types with static escape checking** are unsound or too restrictive with `Dynamic`, reflection and closures.
+- **Releasing without the liveness check** risks memory corruption.
+
+The compiler worker is built with stock Haxe, so the API is reached through `@:hlNative` declarations, not syntax.
+
 ## Migration
 
 Every step keeps the full driver suite green, the Wasm suites at their baseline or better, and HL/Wasm parity at its
