@@ -81,6 +81,8 @@ class ChunkedOutput extends Output {
 			return;
 		}
 		closeChunk();
+		// The writes after a shared segment start with a small chunk again: a full-sized one would mostly stay empty.
+		nextChunk = FIRST_CHUNK;
 		segments.push(source);
 		lengths.push(source.length);
 		total += source.length;
