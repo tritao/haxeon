@@ -82,8 +82,16 @@ class HlLower {
 	/** HAXEON_CHECK_REUSE=1 on a build that trusts its cache: every kept function is lowered again and compared. */
 	final checkingTrust:Bool;
 
+	/** Kept functions whose code is frozen on purpose (retired by a signature change, or dropped from the program): check mode leaves them be. */
+	final frozen:Null<String->Bool>;
+
 	/** Kept functions check mode could not lower again, with the missing object or field. */
 	final skippedKept:Array<String> = [];
+
+	/** Kept functions check mode skipped in this process, and whether it said so yet. */
+	public static var skippedKeptTotal = 0;
+
+	static var reportedSkips = false;
 
 	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
 	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
@@ -111,7 +119,7 @@ class HlLower {
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
-			trustCache:Bool = false):MeasuredHlCode {
+			trustCache:Bool = false, ?frozen:String->Bool):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -131,7 +139,7 @@ class HlLower {
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata, recordLowering,
-				loweredCache, trustCache),
+				loweredCache, trustCache, frozen),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -178,7 +186,8 @@ class HlLower {
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?regenerated:Array<String>,
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0, developmentMetadata:Bool = true,
-			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false) {
+			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false, ?frozen:String->Bool) {
+		this.frozen = frozen;
 		this.symbols = symbols;
 		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
@@ -414,7 +423,8 @@ class HlLower {
 		for (fn in program.functions) {
 			var kept = trustCache && !regenerated.exists(fn.name) && loweredCache != null ? loweredCache.entries.get(fn.name) : null;
 			if (kept != null) {
-				if (checkingTrust)
+				// A frozen function is the code of an earlier signature, or of a lambda the program dropped, kept for closures that still call it; its stale IR lowered against this build is not what it holds.
+				if (checkingTrust && (frozen == null || !frozen(fn.name)))
 					verifyKept(fn, kept.fn);
 				code.functions.push(kept.fn);
 				entries.set(fn.name, kept);
@@ -459,9 +469,15 @@ class HlLower {
 		}
 		if (loweredCache != null)
 			loweredCache.entries = entries;
-		if (skippedKept.length > 0)
-			Sys.stderr()
-				.writeString('HAXEON_CHECK_REUSE: ${skippedKept.length} kept functions could not be lowered again, their objects or fields are gone: ${skippedKept.join(", ")}\n');
+		if (skippedKept.length > 0) {
+			// Once per process, a few names: a test driver reads a child's stderr after it exits, and a line per build fills the pipe.
+			skippedKeptTotal += skippedKept.length;
+			if (!reportedSkips) {
+				reportedSkips = true;
+				Sys.stderr()
+					.writeString('HAXEON_CHECK_REUSE: kept functions could not be lowered again because their objects or fields are gone, e.g. ${skippedKept.slice(0, 3).join(", ")}\n');
+			}
+		}
 		if (environment != null && reusedFunctions == 0)
 			verifyLinking(program, environment);
 		var functionsDoneAt = Sys.time() * 1000.0;

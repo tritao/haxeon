@@ -887,7 +887,8 @@ class HlModuleAssembler {
 			liveCache = published;
 		}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relocated == null ? regenerated : regenerated.concat(relocated),
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, livePatching),
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, livePatching,
+			name -> RetiredName.is(name) || !present.exists(name)),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;
