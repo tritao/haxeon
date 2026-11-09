@@ -29,9 +29,7 @@ import compiler.ir.SourceProvenance.Located;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram {
-		var generator = new IrGenerator(ProgramFacts.of(typed), profile);
-		var objects = objectsFrom(generator, typed);
-		generator.bindFlatValueObjects(objects);
+		var bare = new IrGenerator(ProgramFacts.of(typed), profile), objects = objectsFrom(bare, typed), generator = bare.withObjects(objects);
 		var functions = [for (fn in typed.functions) generator.generateFunction(fn)];
 		return assemble(generator, functions, nativesFrom(generator, typed), objects, interfacesFrom(generator, typed), enumsFrom(generator, typed),
 			staticFieldsFrom(generator, typed), staticInitializersFrom(generator, typed, null, functions), null, cNativesFrom(generator, typed),
@@ -313,7 +311,6 @@ class IrProgramAssembler {
 	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrObject> {
 		var objects:Array<IrObject> = [],
 			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
-		generator.bindGeneratedObjects(objects);
 		for (classDecl in typed.classes)
 			classesByName.set(classDecl.name, classDecl);
 		for (classDecl in typed.classes)

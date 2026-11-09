@@ -66,9 +66,11 @@ private class FunctionScratch {
 class IrGenerator {
 	public final facts:ProgramFacts;
 	public final profile:TargetProfile;
-	var generatedObjects:Array<IrObject> = [];
-	var flatValueObjects:Map<String, IrObject> = [];
-	var inlineValueObjects:Map<String, IrObject> = [];
+
+	/** The program's objects by name, and those with a selected native layout (flat records copied as RawPtr aggregates); see `withObjects`. */
+	final inlineValueObjects:Map<String, IrObject> = [];
+
+	final flatValueObjects:Map<String, IrObject> = [];
 
 	/** The state of the function being generated; a fresh one per function (see `generateCfg`). */
 	var scratch = new FunctionScratch(false);
@@ -78,10 +80,23 @@ class IrGenerator {
 		return new IrGenerator(ProgramFacts.of(typed), profile);
 
 	/** A generator for one build: the facts of its program and the target it generates for. */
-	public function new(facts:ProgramFacts, profile:TargetProfile) {
+	public function new(facts:ProgramFacts, profile:TargetProfile, ?objects:Array<IrObject>) {
 		this.facts = facts;
 		this.profile = profile;
+		if (objects != null)
+			for (object in objects) {
+				inlineValueObjects.set(object.name, object);
+				if (object.isValue && object.nativeLayout != null)
+					flatValueObjects.set(object.name, object);
+			}
 	}
+
+	/**
+	 * The same generator once the program's objects are known. Generating the objects (`IrProgramAssembler.objectsFrom`) needs a
+	 * generator that has none yet; generating functions reads them, as input. Generation creates no objects of its own.
+	 */
+	public function withObjects(objects:Array<IrObject>):IrGenerator
+		return new IrGenerator(facts, profile, objects);
 
 	static inline final ObservableStateField:String = "$haxeonObservableState";
 	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
@@ -111,11 +126,6 @@ class IrGenerator {
 			default: false;
 		};
 
-	/** Bind the mutable object list before lowering fields, so synthetic collection layouts join the same program. */
-	public function bindGeneratedObjects(objects:Array<IrObject>):Void {
-		generatedObjects = objects;
-	}
-
 	/** Whether `source` is an object type extending the object type `target`, so the conversion cannot fail. */
 	function isUpcast(source:IrType, target:IrType):Bool {
 		var targetName = switch target {
@@ -142,15 +152,6 @@ class IrGenerator {
 		var owner = facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(TMap(key, value)));
 		if (owner == null) throw 'Missing specialized generic map owner for $key -> $value';
 		return owner;
-	}
-
-	/** Flat value objects also have a selected native field layout for RawPtr aggregate copies. */
-	public function bindFlatValueObjects(objects:Array<IrObject>):Void {
-		flatValueObjects = [];
-		inlineValueObjects = [for (object in objects) object.name => object];
-		for (object in objects)
-			if (object.isValue && object.nativeLayout != null)
-				flatValueObjects.set(object.name, object);
 	}
 
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */

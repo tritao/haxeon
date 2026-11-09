@@ -262,8 +262,7 @@ class FrontendCompilation {
 		for (object in typedObjects)
 			objectCache.set(object.name, object);
 		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
-		generator.bindGeneratedObjects(currentObjects);
-		generator.bindFlatValueObjects(currentObjects);
+		generator = generator.withObjects(currentObjects);
 		var allocationAfterObjects = AllocationMeter.sample();
 		var touchedModules:Map<String, Bool> = [],
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [],
