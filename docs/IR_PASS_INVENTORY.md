@@ -60,7 +60,7 @@ The "label" of a measured span can cover two passes where the code runs them bac
 | IrStaticNullChecks | (b) | functions reachable from `__init` (call graph) | bodies of the reachable functions | 0.4M | 0.3% |
 | GenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
 
-Totals: 7 passes are (a), 13 are (b), 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
+Counting the table's rows, about 7 passes are (a), 12 are (b) and 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
 last three are the candidate-pruning fixpoints). The inliner is already memoized and is left for last.
 
 Note on `IrValueConstructors`: it is "global" only in that it inlines small constructor bodies. It is (b) if the summary is the set of
