@@ -111,6 +111,17 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		cancelAnimation(); binding.changed = null; binding.scheduler = null; binding.owner = null;
 	}
 
+	@:allow(haxeon.ui.widgets.collections.ListView)
+	@:allow(haxeon.ui.widgets.collections.TreeView)
+	@:allow(haxeon.ui.widgets.collections.VirtualGrid)
+	@:allow(haxeon.ui.widgets.collections.VirtualList)
+	/** Seeds known fixed viewport axes without making content metrics available or clamping initial offsets. */
+	function seedViewport(viewportWidth:Float, viewportHeight:Float):Void {
+		if (hasMetrics) return;
+		if (viewportWidth > 0.0) this.viewportWidth = viewportWidth;
+		if (viewportHeight > 0.0) this.viewportHeight = viewportHeight;
+	}
+
 	@:allow(haxeon.ui.widgets.scroll.ScrollView)
 	@:allow(haxeon.ui.widgets.collections.TreeView)
 	function updateMetrics(viewportWidth:Float, viewportHeight:Float,

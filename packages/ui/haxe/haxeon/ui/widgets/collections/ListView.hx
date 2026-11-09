@@ -80,6 +80,8 @@ class ListView implements View {
 		this.viewportStyle = viewportStyle == null ? defaultViewportStyle(viewportHeight) :
 			viewportStyle.copy();
 		this.controller = controller == null ? new ScrollController() : controller;
+		this.controller.seedViewport(0.0,
+			this.viewportStyle.height.sizing == LayoutSizing.Fixed ? this.viewportStyle.height.value : 0.0);
 		this.fallbackViewportHeight = viewportHeight;
 		this.selectedIndex = selectedIndex;
 		this.onSelectionChanged = onSelectionChanged;

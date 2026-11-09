@@ -82,11 +82,14 @@ class VirtualGrid implements View {
 		this.virtualization = virtualization == null ? new VirtualizationPolicy() : virtualization;
 		materializedFirst = 0;
 		materializedLast = 0;
-		this.controller = controller == null ? new ScrollController() : controller;
-		this.fallbackViewportWidth = viewportWidth;
-		this.fallbackViewportHeight = viewportHeight;
 		this.viewportStyle = viewportStyle == null ? defaultViewportStyle(viewportWidth,
 			viewportHeight) : viewportStyle.copy();
+		this.controller = controller == null ? new ScrollController() : controller;
+		this.controller.seedViewport(
+			this.viewportStyle.width.sizing == LayoutSizing.Fixed ? this.viewportStyle.width.value : 0.0,
+			this.viewportStyle.height.sizing == LayoutSizing.Fixed ? this.viewportStyle.height.value : 0.0);
+		this.fallbackViewportWidth = viewportWidth;
+		this.fallbackViewportHeight = viewportHeight;
 	}
 
 	public function build(context:BuildContext):RenderNode {
